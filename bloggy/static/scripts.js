@@ -122,11 +122,54 @@ window.zoomMermaidOut = function(id) {
     }
 };
 
+function getCurrentTheme() {
+    return document.documentElement.classList.contains('dark') ? 'dark' : 'default';
+}
+
+function reinitializeMermaid() {
+    mermaid.initialize({ 
+        startOnLoad: false,
+        theme: getCurrentTheme(),
+        gantt: {
+            useWidth: 1200,
+            useMaxWidth: false
+        }
+    });
+    
+    // Find all mermaid wrappers and re-render them
+    document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
+        const originalCode = wrapper.getAttribute('data-mermaid-code');
+        if (originalCode) {
+            // Delete the old state so it can be recreated
+            delete mermaidStates[wrapper.id];
+            
+            // Decode HTML entities
+            const textarea = document.createElement('textarea');
+            textarea.innerHTML = originalCode;
+            const code = textarea.value;
+            
+            // Clear the wrapper
+            wrapper.innerHTML = '';
+            
+            // Re-add the pre element with mermaid code
+            const newPre = document.createElement('pre');
+            newPre.className = 'mermaid';
+            newPre.textContent = code;
+            wrapper.appendChild(newPre);
+        }
+    });
+    
+    // Re-run mermaid
+    mermaid.run().then(() => {
+        setTimeout(initMermaidInteraction, 100);
+    });
+}
+
 mermaid.initialize({ 
     startOnLoad: true,
-    theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+    theme: getCurrentTheme(),
     gantt: {
-        useWidth: 1200,  // Render Gantt charts at a larger base width
+        useWidth: 1200,
         useMaxWidth: false
     }
 });
@@ -141,4 +184,18 @@ document.body.addEventListener('htmx:afterSwap', function() {
     mermaid.run().then(() => {
         setTimeout(initMermaidInteraction, 100);
     });
+});
+
+// Watch for theme changes and re-render mermaid diagrams
+const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+            reinitializeMermaid();
+        }
+    });
+});
+
+observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['class']
 });

@@ -58,7 +58,60 @@ class ContentRenderer(FrankenRenderer):
         lang = getattr(token, 'language', '')
         code = self.render_raw_text(token)
         if lang == 'mermaid':
-            return f'<div class="mermaid-container my-4"><div id="mermaid-{hash(code) & 0xFFFFFF}" class="mermaid-wrapper p-4 overflow-hidden"><pre class="mermaid">{code}</pre></div></div>'
+            # Extract frontmatter from mermaid code block
+            frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n'
+            frontmatter_match = re.match(frontmatter_pattern, code, re.DOTALL)
+            
+            height = 'auto'
+            width = '100%'
+            min_height = '400px'
+            break_out = False
+            
+            if frontmatter_match:
+                frontmatter_content = frontmatter_match.group(1)
+                code_without_frontmatter = code[frontmatter_match.end():]
+                
+                # Parse YAML-like frontmatter (simple key: value pairs)
+                try:
+                    config = {}
+                    for line in frontmatter_content.strip().split('\n'):
+                        if ':' in line:
+                            key, value = line.split(':', 1)
+                            config[key.strip()] = value.strip()
+                    
+                    # Extract height and width if specified
+                    if 'height' in config:
+                        height = config['height']
+                        min_height = height
+                    if 'width' in config:
+                        width = config['width']
+                        # If width uses viewport units, break out of container
+                        if 'vw' in str(width):
+                            break_out = True
+                except Exception as e:
+                    print(f"Error parsing mermaid frontmatter: {e}")
+                
+                # Use code without frontmatter for rendering
+                code = code_without_frontmatter
+            
+            diagram_id = f"mermaid-{hash(code) & 0xFFFFFF}"
+            
+            # If we need to break out, use viewport-based positioning
+            container_style = f"width: {width};"
+            if break_out:
+                container_style = f"width: {width}; position: relative; left: 50%; transform: translateX(-50%);"
+            
+            # Escape the code for use in data attribute
+            escaped_code = code.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#39;')
+            
+            return f'''<div class="mermaid-container relative border-2 rounded-md my-4" style="{container_style}">
+                <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
+                    <button onclick="resetMermaidZoom('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
+                    <button onclick="zoomMermaidIn('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
+                    <button onclick="zoomMermaidOut('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
+                </div>
+                <div id="{diagram_id}" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: {min_height}; height: {height};" data-mermaid-code="{escaped_code}"><pre class="mermaid" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">{code}</pre></div>
+            </div>'''
         return super().render_block_code(token)
     
     def render_link(self, token):
@@ -68,29 +121,7 @@ class ContentRenderer(FrankenRenderer):
         ext = '' if is_internal else ' target="_blank" rel="noopener noreferrer"'
         return f'<a href="{href}"{hx}{ext} class="text-primary underline"{title}>{inner}</a>'
 
-sidenote_css = Style("""
-.sidenote-ref { 
-    color: rgb(221, 166, 55); background-color: rgba(221, 166, 55, 0.15);
-    display: inline-block; transition: transform 0.2s;
-    font-size: 0.6rem; vertical-align: top; line-height: 1;
-    padding: 0 0.15rem; border-radius: 0.2rem; margin-left: 0.1rem;
-}
-.sidenote-ref:after { content: "›"; }
-.dark .sidenote-ref { color: rgb(96, 165, 250); background-color: rgba(96, 165, 250, 0.15); }
-.sidenote { display: none; }
-@media (max-width: 1279px) {
-    .sidenote-ref:after { content: "⌃"; }
-    .sidenote-ref { transform: rotate(180deg); }
-    .sidenote-ref.open { transform: rotate(0deg); }
-    .sidenote.show { display: block; float: left; clear: both; width: 95%; margin: 0.75rem 2.5%; position: relative; }
-}
-@media (min-width: 1280px) {
-    .sidenote { display: block; float: right; clear: right; width: 14rem; margin-right: -16rem; margin-top: 0.25rem; margin-bottom: 0.75rem; }
-    .sidenote.hl { background-color: rgba(221, 166, 55, 0.1); }
-    .dark .sidenote.hl { background-color: rgba(96, 165, 250, 0.1); }
-}
-""")
-    
+
 def from_md(content, img_dir='/static/images'):
     content, footnotes = extract_footnotes(content)
     mods = {'pre': 'my-4', 'p': 'text-base leading-relaxed mb-6', 'li': 'text-base leading-relaxed',
@@ -98,7 +129,7 @@ def from_md(content, img_dir='/static/images'):
             'hr': 'border-t border-border my-8', 'h1': 'text-3xl font-bold mb-6 mt-8', 'h2': 'text-2xl font-semibold mb-4 mt-6', 
             'h3': 'text-xl font-semibold mb-3 mt-5', 'h4': 'text-lg font-semibold mb-2 mt-4'}
     html = mst.markdown(content, partial(ContentRenderer, FootnoteRef, img_dir=img_dir, footnotes=footnotes))
-    return Div(sidenote_css, NotStr(apply_classes(html, class_map_mods=mods)), cls="w-full")
+    return Div(Link(rel="stylesheet", href="/static/sidenote.css"), NotStr(apply_classes(html, class_map_mods=mods)), cls="w-full")
 
 # App configuration
 def get_root_folder(): return Path(os.getenv('BLOGGY_ROOT', '.')).resolve()

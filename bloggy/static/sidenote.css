@@ -1,0 +1,21 @@
+.sidenote-ref { 
+    color: rgb(221, 166, 55); background-color: rgba(221, 166, 55, 0.15);
+    display: inline-block; transition: transform 0.2s;
+    font-size: 0.6rem; vertical-align: top; line-height: 1;
+    padding: 0 0.15rem; border-radius: 0.2rem; margin-left: 0.1rem;
+}
+.sidenote-ref:after { content: "›"; }
+.dark .sidenote-ref { color: rgb(96, 165, 250); background-color: rgba(96, 165, 250, 0.15); }
+.sidenote { display: none; }
+@media (max-width: 1279px) {
+    .sidenote-ref:after { content: "⌃"; }
+    .sidenote-ref { transform: rotate(180deg); }
+    .sidenote-ref.open { transform: rotate(0deg); }
+    .sidenote.show { display: block; float: left; clear: both; width: 95%; margin: 0.75rem 2.5%; position: relative; }
+}
+@media (min-width: 1280px) {
+    .sidenote { display: block; float: right; clear: right; width: 14rem; margin-right: -16rem; margin-top: 0.25rem; margin-bottom: 0.75rem; }
+    .sidenote.hl { background-color: rgba(221, 166, 55, 0.1); }
+    .dark .sidenote.hl { background-color: rgba(96, 165, 250, 0.1); }
+}
+    
