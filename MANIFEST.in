@@ -1,5 +1,6 @@
 include settings.ini
 include LICENSE
-include CONTRIBUTING.md
 include README.md
+recursive-include bloggy/static *
 recursive-exclude * __pycache__
+recursive-exclude * *.py[co]

@@ -1,11 +1,59 @@
 [build-system]
-requires = ["setuptools>=64.0"]
+requires = ["setuptools>=64.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name="bloggy"
-requires-python=">=3.9"
-dynamic = [ "keywords", "description", "version", "dependencies", "optional-dependencies", "readme", "license", "authors", "classifiers", "entry-points", "scripts", "urls"]
+name = "bloggy"
+version = "0.1.0"
+description = "A lightweight, elegant blogging platform built with FastHTML"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Yeshwanth"},
+]
+keywords = ["fasthtml", "blog", "markdown", "htmx", "mermaid", "sidenotes"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: FastAPI",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "python-fasthtml>=0.6.9",
+    "mistletoe>=1.4.0",
+    "python-frontmatter>=1.1.0",
+    "uvicorn>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "black>=24.0.0",
+    "ruff>=0.5.0",
+]
+
+[project.scripts]
+bloggy = "bloggy.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/yeshwanth/bloggy"
+Repository = "https://github.com/yeshwanth/bloggy"
+Issues = "https://github.com/yeshwanth/bloggy/issues"
+
+[tool.setuptools]
+packages = ["bloggy"]
+
+[tool.setuptools.package-data]
+bloggy = ["static/*", "static/**/*"]
 
 [tool.uv]
-cache-keys = [{ file = "pyproject.toml" }, { file = "settings.ini" }, { file = "setup.py" }]
+cache-keys = [{file = "pyproject.toml"}]

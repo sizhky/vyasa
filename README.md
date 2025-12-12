@@ -279,16 +279,58 @@ graph LR
     style G fill:#d4edda
 ```
 
-## Getting Started
+## Installation
 
-1. Set your blog content root (optional):
+### From PyPI (recommended)
+
+```bash
+pip install bloggy
+```
+
+### From source
+
+```bash
+git clone https://github.com/yeshwanth/bloggy.git
+cd bloggy
+pip install -e .
+```
+
+## Quick Start
+
+1. Create a directory with your markdown files:
    ```bash
-   export BLOGGY_ROOT=/path/to/your/markdown/files
+   mkdir my-blog
+   cd my-blog
+   echo "# Hello World" > hello.md
    ```
 
-2. Run the app:
+2. Run Bloggy:
    ```bash
-   python -m bloggy.main
+   bloggy .
    ```
 
-3. Create markdown files in your content directory and they'll automatically appear in the post list!
+3. Open your browser at `http://127.0.0.1:5001`
+
+## Configuration
+
+### Environment Variables
+
+- `BLOGGY_ROOT`: Path to your markdown files (default: current directory)
+- `BLOGGY_TITLE`: Your blog's title (default: folder name)
+- `BLOGGY_HOST`: Server host (default: 127.0.0.1)
+- `BLOGGY_PORT`: Server port (default: 5001)
+
+### Example
+
+```bash
+export BLOGGY_ROOT=/path/to/your/markdown/files
+export BLOGGY_TITLE="My Awesome Blog"
+export BLOGGY_PORT=8000
+bloggy
+```
+
+Or pass the directory directly:
+
+```bash
+bloggy /path/to/your/markdown/files
+```

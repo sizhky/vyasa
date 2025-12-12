@@ -6,6 +6,8 @@ from fasthtml.jupyter import *
 from monsterui.all import *
 from starlette.staticfiles import StaticFiles
 
+slug_to_title = lambda s: ' '.join(word.capitalize() for word in s.replace('-', ' ').replace('_', ' ').split())
+
 # Markdown rendering setup
 try: FrankenRenderer
 except NameError:
@@ -133,6 +135,8 @@ def from_md(content, img_dir='/static/images'):
 
 # App configuration
 def get_root_folder(): return Path(os.getenv('BLOGGY_ROOT', '.')).resolve()
+def get_blog_title(): return os.getenv('BLOGGY_TITLE', slug_to_title(get_root_folder().name)).upper()
+
 hdrs = (
     *Theme.slate.headers(highlightjs=True),
     Link(rel="icon", href="/static/favicon.png"),
@@ -162,15 +166,43 @@ def theme_toggle():
                   _=theme_script, cls="p-1 hover:scale-110 shadow-none", type="button")
 
 def navbar():
-    return Div(A("Bloggy", href="/"), theme_toggle(),
+    return Div(A(get_blog_title(), href="/"), theme_toggle(),
                cls="flex items-center justify-between bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800")
 
-def layout(*content, htmx, title=None):
+def layout(*content, htmx, title=None, show_sidebar=False):
     if htmx and htmx.request: return (Title(title), *content)
+    
+    if show_sidebar:
+        # Layout with sidebar for blog posts
+        return Title(title), Div(cls="flex flex-col min-h-screen")(
+            Div(navbar(), cls="w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4"),
+            Div(cls="w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1")(
+                # Left sidebar - collapsible post list
+                Aside(
+                    Details(
+                        Summary(UkIcon("menu", cls="w-5 h-5 mr-2"), "Posts", cls="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none"),
+                        Div(
+                            Ul(*get_posts(), cls="mt-2 list-none"),
+                            cls="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800"
+                        ),
+                        open=True
+                    ),
+                    cls="hidden xl:block w-64 shrink-0 sticky top-24 h-fit"
+                ),
+                # Main content
+                Main(*content, cls="flex-1 min-w-0 px-6 py-8 space-y-8", id="main-content"),
+                # Right sidebar placeholder for TOC (to be implemented)
+                Aside(cls="hidden xl:block w-64 shrink-0")
+            ),
+            Footer(Div(f"Powered by Bloggy", cls="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right"), # right justified footer
+                   cls="w-full max-w-7xl mx-auto px-6 mt-auto mb-6")
+        )
+    
+    # Default layout without sidebar
     return Title(title), Div(cls="flex flex-col min-h-screen")(
         Div(navbar(), cls="w-full max-w-2xl mx-auto px-4 sticky top-0 z-50 mt-4"),
         Main(*content, cls="w-full max-w-2xl mx-auto px-6 py-8 space-y-8", id="main-content"),
-        Footer(Div("Powered by Bloggy", cls="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800"), 
+        Footer(Div("Powered by Bloggy", cls="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right"), 
                cls="w-full max-w-2xl mx-auto px-6 mt-auto mb-6")
     )
 
@@ -185,15 +217,18 @@ def build_post_tree(folder):
             if item.name.startswith('.'): continue
             sub_items = build_post_tree(item)
             if sub_items:
+                folder_title = slug_to_title(item.name)
                 items.append(Li(Details(
                     Summary(UkIcon("chevron-right", cls="folder-chevron w-4 h-4 mr-1 text-slate-400"),
                            Span(UkIcon("folder", cls="text-blue-500"), cls="w-5 flex justify-center mr-2"),
-                           item.name, cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"),
+                           folder_title, cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"),
                     Ul(*sub_items, cls="ml-6 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), open=False), cls="my-1"))
         elif item.suffix == '.md':
             slug = str(item.relative_to(root).with_suffix(''))
+            title = slug_to_title(item.stem)
             items.append(Li(A(Div(Span(cls="w-4 mr-1"), Span(UkIcon("file-text", cls="text-slate-400"), cls="w-5 flex justify-center mr-2"),
-                item.stem, cls="flex items-center"), href=f'/posts/{slug}', 
+                title, cls="flex items-center"), href=f'/posts/{slug}',
+                hx_get=f'/posts/{slug}', hx_target="#main-content", hx_push_url="true", hx_swap="innerHTML show:window:top",
                 cls="block py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors")))
     return items
 
@@ -203,14 +238,23 @@ def get_posts(): return build_post_tree(get_root_folder())
 def post_detail(path: str, htmx):
     file_path = get_root_folder() / f'{path}.md'
     content = from_md(open(file_path).read())
-    return layout(H1(f"Post: {path}", cls="text-4xl font-bold"), content, htmx=htmx, title=f"{path} - Bloggy")
+    blog_title = slug_to_title(path.split('/')[-1])
+    post_content = Div(H1(blog_title, cls="text-4xl font-bold"), content)
+    
+    # For HTMX requests, return just the content with Title
+    if htmx and htmx.request:
+        return Title(f"{blog_title} - {get_blog_title()}"), post_content
+    
+    # For full page loads, return complete layout with sidebar
+    return layout(post_content, htmx=htmx, title=f"{blog_title} - {get_blog_title()}", show_sidebar=True)
 
 @rt
 def index(htmx):
+    blog_title = get_blog_title()
     return layout(Div(
-        H1("Welcome to Bloggy!", cls="text-4xl font-bold tracking-tight mb-2"),
+        H1(f"Welcome to {blog_title}!", cls="text-4xl font-bold tracking-tight mb-2"),
         P("Your personal blogging platform.", cls="text-lg text-slate-600 dark:text-slate-400 mb-8"),
         Card(Div(H2("Posts", cls="text-xl font-semibold mb-2"), Hr(), cls="border-b border-slate-100 dark:border-slate-700"),
              Ul(*get_posts(), cls="mt-0 pt-0 list-none", style="margin-top:1rem;"),
              cls="p-6 shadow-sm hover:shadow-md transition-shadow bg-white dark:bg-slate-900 rounded-lg"),
-        cls="w-full"), htmx=htmx, title="Home - Bloggy")
+        cls="w-full"), htmx=htmx, title=f"Home - {blog_title}")
