@@ -1,9 +1,0 @@
-project:
-  output-dir: _docs
-
-website:
-  title: "bloggy"
-  site-url: "https://sizhky.github.io/bloggy"
-  description: ""
-  repo-branch: main
-  repo-url: "https://github.com/sizhky/bloggy"
