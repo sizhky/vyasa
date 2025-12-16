@@ -215,9 +215,9 @@ class ContentRenderer(FrankenRenderer):
         
         attr_str = ' ' + ' '.join(html_attrs) if html_attrs else ''
         
-        # Use <span> instead of <code> for semantic attributes like .variable
-        # Use <code> only if no semantic class is present
-        tag = 'span' if any(cls in ['variable', 'emphasis', 'keyword'] for cls in classes) else 'code'
+        # Always use <span> for inline code with attributes - the presence of attributes
+        # indicates styling/annotation intent rather than code semantics
+        tag = 'span'
         return f'<{tag}{attr_str}>{code}</{tag}>'
 
     def render_block_code(self, token):
@@ -399,7 +399,6 @@ def get_blog_title(): return get_config().get_blog_title()
 hdrs = (
     *Theme.slate.headers(highlightjs=True),
     Link(rel="icon", href="/static/favicon.png"),
-    Link(rel="stylesheet", href="/static/custom.css"),
     Script(src="https://unpkg.com/hyperscript.org@0.9.12"),
     Script(src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs", type="module"),
     Script("""
@@ -698,24 +697,26 @@ def build_toc_items(headings):
         ))
     return items
 
-def get_custom_css_links(current_path=None):
+def get_custom_css_links(current_path=None, section_class=None):
     """Check for custom.css or style.css in blog root and current post's directory
     
-    Returns list of Link elements for all found CSS files, ordered from root to specific
-    (so more specific styles can override general ones)
+    Returns list of Link/Style elements for all found CSS files, ordered from root to specific
+    (so more specific styles can override general ones). Folder-specific CSS is automatically
+    scoped to only apply within that folder's pages.
     """
     root = get_root_folder()
-    css_links = []
+    css_elements = []
     
-    # First, check root directory
+    # First, check root directory - applies globally
     for filename in ['custom.css', 'style.css']:
         css_file = root / filename
         if css_file.exists():
-            css_links.append(Link(rel="stylesheet", href=f"/posts/{filename}"))
+            css_elements.append(Link(rel="stylesheet", href=f"/posts/{filename}"))
             break  # Only one from root
     
     # Then check current post's directory (if provided)
-    if current_path:
+    # These are automatically scoped to only apply within the section
+    if current_path and section_class:
         from pathlib import Path
         post_dir = Path(current_path).parent if '/' in current_path else Path('.')
         
@@ -723,14 +724,22 @@ def get_custom_css_links(current_path=None):
             for filename in ['custom.css', 'style.css']:
                 css_file = root / post_dir / filename
                 if css_file.exists():
-                    css_links.append(Link(rel="stylesheet", href=f"/posts/{post_dir}/{filename}"))
+                    # Read CSS content and wrap all rules with section scope
+                    css_content = css_file.read_text()
+                    # Wrap the entire CSS in a section-specific scope
+                    scoped_css = Style(f"""
+                        #main-content.{section_class} {{
+                            {css_content}
+                        }}
+                    """)
+                    css_elements.append(scoped_css)
                     break  # Only one per directory
     
-    return css_links
+    return css_elements
 
 def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None):
-    # Inject custom CSS dynamically if it exists (from root and current directory)
-    custom_css_links = get_custom_css_links(current_path)
+    # Generate section class for CSS scoping (will be used by get_custom_css_links if needed)
+    section_class = f"section-{current_path.replace('/', '-')}" if current_path else None
     
     if show_sidebar:
         # Build TOC if content provided
@@ -750,7 +759,13 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         )
         
         # Container for main content only (for HTMX swapping)
-        main_content_container = Main(*content, cls="flex-1 min-w-0 px-6 py-8 space-y-8", id="main-content")
+        # Add section class to identify the section for CSS scoping
+        section_class = f"section-{current_path.replace('/', '-')}" if current_path else ""
+        
+        # Get custom CSS with folder-specific CSS automatically scoped
+        custom_css_links = get_custom_css_links(current_path, section_class)
+        
+        main_content_container = Main(*content, cls=f"flex-1 min-w-0 px-6 py-8 space-y-8 {section_class}", id="main-content")
         
         # Full layout with all sidebars
         content_with_sidebars = Div(cls="w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1")(

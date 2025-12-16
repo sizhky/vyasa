@@ -724,3 +724,30 @@ console.log(greet("World"));
 Hello, World!
 ```
 :::
+
+## Cascading Folder-Specific CSS
+
+To apply `folder-specific CSS styles`{.highlight} that cascade down to all subfolders, you can place a `custom.css` file in any directory. The styles defined in this file will automatically apply to all markdown files within that directory and its subdirectories.
+
+**Example:**
+
+:::tabs
+::tab{title="Rendered"}
+`hello`{.highlight}
+::tab{title="Markdown Source"}
+```markdown
+`hello`{.highlight}
+```
+::tab{title="custom.css"}
+```css
+/* custom.css in the folder */
+span.highlight {
+    background-color: #fff831;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-weight: bold;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 10rem;
+}
+```
+:::
