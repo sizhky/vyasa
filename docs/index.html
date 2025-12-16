@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Readme - BLOGGY</title>
+    
+    <!-- TailwindCSS and MonsterUI -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio,container-queries"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/css/uikit.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit-icons.min.js"></script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+    
+    <!-- Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    
+    <!-- Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    
+    <!-- Hyperscript for interactions -->
+    <script src="https://unpkg.com/hyperscript.org@0.9.12"></script>
+    
+    <!-- Static assets -->
+    <link rel="stylesheet" href="/static/sidenote.css">
+    
+    
+    <style>
+        body { font-family: 'IBM Plex Sans', sans-serif; margin: 0; padding: 0; }
+        code, pre { font-family: 'IBM Plex Mono', monospace; }
+        .folder-chevron { transition: transform 0.2s; display: inline-block; }
+        details[open] > summary > .folder-chevron { transform: rotate(90deg); }
+        details { border: none !important; box-shadow: none !important; }
+        h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
+        
+        /* Ultra thin scrollbar styles */
+        * { scrollbar-width: thin; scrollbar-color: rgb(203 213 225) transparent; }
+        *::-webkit-scrollbar { width: 3px; height: 3px; }
+        *::-webkit-scrollbar-track { background: transparent; }
+        *::-webkit-scrollbar-thumb { background-color: rgb(203 213 225); border-radius: 2px; }
+        *::-webkit-scrollbar-thumb:hover { background-color: rgb(148 163 184); }
+        .dark *::-webkit-scrollbar-thumb { background-color: rgb(71 85 105); }
+        .dark *::-webkit-scrollbar-thumb:hover { background-color: rgb(100 116 139); }
+        .dark * { scrollbar-color: rgb(71 85 105) transparent; }
+        
+        /* Tabs styles */
+        .tabs-container { 
+            margin: 2rem 0; 
+            border: 1px solid rgb(226 232 240); 
+            border-radius: 0.5rem; 
+            overflow: hidden; 
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+        }
+        .dark .tabs-container { 
+            border-color: rgb(51 65 85);
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3);
+        }
+        
+        .tabs-header { 
+            display: flex; 
+            background: rgb(248 250 252); 
+            border-bottom: 1px solid rgb(226 232 240);
+            gap: 0;
+        }
+        .dark .tabs-header { 
+            background: rgb(15 23 42); 
+            border-bottom-color: rgb(51 65 85);
+        }
+        
+        .tab-button { 
+            flex: 1; 
+            padding: 0.875rem 1.5rem; 
+            background: transparent; 
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer; 
+            font-weight: 500; 
+            font-size: 0.9375rem;
+            color: rgb(100 116 139); 
+            transition: all 0.15s ease;
+            position: relative;
+            margin-bottom: -1px;
+        }
+        .dark .tab-button { color: rgb(148 163 184); }
+        
+        .tab-button:hover:not(.active) { 
+            background: rgb(241 245 249); 
+            color: rgb(51 65 85);
+        }
+        .dark .tab-button:hover:not(.active) { 
+            background: rgb(30 41 59); 
+            color: rgb(226 232 240);
+        }
+        
+        .tab-button.active { 
+            color: rgb(15 23 42); 
+            border-bottom-color: rgb(15 23 42); 
+            background: white;
+            font-weight: 600;
+        }
+        .dark .tab-button.active { 
+            color: rgb(248 250 252); 
+            border-bottom-color: rgb(248 250 252); 
+            background: rgb(2 6 23);
+        }
+        
+        .tabs-content { 
+            background: white;
+            position: relative;
+        }
+        .dark .tabs-content { 
+            background: rgb(2 6 23);
+        }
+        
+        .tab-panel { 
+            padding: 1rem 1rem;
+            animation: fadeIn 0.2s ease-in;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .tab-panel.active { 
+            position: relative;
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        /* Remove extra margins from first/last elements in tabs */
+        .tab-panel > *:first-child { margin-top: 0 !important; }
+        .tab-panel > *:last-child { margin-bottom: 0 !important; }
+        
+        /* Ensure code blocks in tabs look good */
+        .tab-panel pre { 
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+        .tab-panel code { 
+            font-family: 'IBM Plex Mono', monospace;
+        }
+    </style>
+    
+</head>
+<body>
+    
+    <div id="page-container" class="flex flex-col min-h-screen">
+        <div class="w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4">
+            
+    <div class="flex items-center justify-between bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
+        <a href="/index.html">BLOGGY</a>
+        
+    <button onclick="toggleTheme()" class="p-1 hover:scale-110 shadow-none" type="button">
+        <span uk-icon="moon" class="dark:hidden"></span>
+        <span uk-icon="sun" class="hidden dark:block"></span>
+    </button>
+    
+    </div>
+    
+        </div>
+        <div class="w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1">
+            
+    <aside id="posts-sidebar" class="hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
+        <details open>
+            <summary class="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
+                <span uk-icon="menu" class="w-5 h-5 mr-2"></span>
+                Posts
+            </summary>
+            <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
+                <ul class="mt-2 list-none">
+  <li class="my-1">
+<details class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="chevron-right" class="folder-chevron w-4 h-4 text-slate-400"></uk-icon></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span>Demo</span></summary>      <ul class="ml-6 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+        <li class="my-1">
+<details class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="chevron-right" class="folder-chevron w-4 h-4 text-slate-400"></uk-icon></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span>Guides</span></summary>            <ul class="ml-6 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+              <li>
+<a href="/posts/demo/guides/api-authentication-2.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>API Authentication and Security</span></a>              </li>
+              <li>
+<a href="/posts/demo/guides/api-authentication.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>API Authentication and Security</span></a>              </li>
+            </ul>
+</details>        </li>
+        <li>
+<a href="/posts/demo/getting-started.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Getting Started with Our Platform</span></a>        </li>
+        <li>
+<a href="/posts/demo/markdown-features.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>A Small Demonstration of All The Markdown Features That Are Under The Sun, Without Worrying About If They Are Supported Or Not</span></a>        </li>
+      </ul>
+</details>  </li>
+  <li>
+<a href="/posts/CONTRIBUTING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Contributing</span></a>  </li>
+  <li>
+<a href="/posts/PUBLISHING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Publishing</span></a>  </li>
+  <li>
+<a href="/posts/STATIC_BUILD.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Static Build</span></a>  </li>
+</ul>
+
+            </div>
+        </details>
+    </aside>
+    
+            
+    <main id="main-content" class="flex-1 min-w-0 px-6 py-8 space-y-8">
+        <h1 class="text-4xl font-bold mb-8">Readme</h1><div class="w-full">
+  <link rel="stylesheet" href="/static/sidenote.css">
+<div><h1 id="bloggy" class="text-3xl font-bold mb-6 mt-8">Bloggy</h1>
+<p class="text-base leading-relaxed mb-6">A lightweight, elegant blogging platform built with FastHTML that renders Markdown files into beautiful web pages with advanced features.</p>
+<h2 id="architecture-overview" class="text-2xl font-semibold mb-4 mt-6">Architecture Overview</h2>
+<div class="mermaid-container relative border-2 rounded-md my-4" style="width: 80vw; position: relative; left: 50%; transform: translateX(-50%);">
+                <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
+                    <button onclick="resetMermaidZoom('mermaid-5426466')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
+                    <button onclick="zoomMermaidIn('mermaid-5426466')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
+                    <button onclick="zoomMermaidOut('mermaid-5426466')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
+                </div>
+                <div id="mermaid-5426466" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: 400px; height: auto;" data-mermaid-code='graph TB
+    subgraph "User Interface"
+        Browser[Web Browser]
+        Theme[Light/Dark Theme Toggle]
+    end
+    
+    subgraph "FastHTML Application"
+        App[FastHTML App&amp;lt;br/&amp;gt;core.py]
+        Router[URL Router]
+        Layout[Layout Engine]
+        
+        subgraph "Route Handlers"
+            Index[Index Route&amp;lt;br/&amp;gt;/]
+            PostDetail[Post Detail Route&amp;lt;br/&amp;gt;/posts/path]
+        end
+    end
+    
+    subgraph "Markdown Processing"
+        MDParser[Mistletoe Parser]
+        Renderer[ContentRenderer]
+        
+        subgraph "Custom Renderers"
+            Footnotes[Footnote Renderer&amp;lt;br/&amp;gt;Sidenotes]
+            Mermaid[Mermaid Diagram Renderer&amp;lt;br/&amp;gt;Zoom/Pan Controls]
+            Links[Link Renderer&amp;lt;br/&amp;gt;HTMX Integration]
+        end
+    end
+    
+    subgraph "File System"
+        MDFiles[Markdown Files&amp;lt;br/&amp;gt;.md]
+        Tree[Folder Tree Builder&amp;lt;br/&amp;gt;build_post_tree]
+    end
+    
+    subgraph "Frontend Assets"
+        Static[Static Files]
+        JS[scripts.js&amp;lt;br/&amp;gt;Mermaid + Interactions]
+        CSS[Styles&amp;lt;br/&amp;gt;TailwindCSS + MonsterUI]
+    end
+    
+    Browser --&amp;gt;|HTTP Request| Router
+    Theme --&amp;gt;|Toggle Dark Mode| JS
+    
+    Router --&amp;gt; Index
+    Router --&amp;gt; PostDetail
+    
+    Index --&amp;gt; Tree
+    Tree --&amp;gt; MDFiles
+    Index --&amp;gt; Layout
+    
+    PostDetail --&amp;gt; MDFiles
+    PostDetail --&amp;gt; MDParser
+    
+    MDParser --&amp;gt; Renderer
+    Renderer --&amp;gt; Footnotes
+    Renderer --&amp;gt; Mermaid
+    Renderer --&amp;gt; Links
+    
+    Footnotes --&amp;gt;|Marginal Notes| Layout
+    Mermaid --&amp;gt;|Interactive Diagrams| Layout
+    Links --&amp;gt;|HTMX Navigation| Layout
+    
+    Layout --&amp;gt; Browser
+    
+    JS --&amp;gt;|Theme Change| Mermaid
+    JS --&amp;gt;|Zoom/Pan/Reset| Mermaid
+    
+    Static --&amp;gt; CSS
+    Static --&amp;gt; JS
+    
+    App -.-&amp;gt;|Serves| Static
+    
+    style Browser fill:#e1f5ff
+    style App fill:#fff3cd
+    style MDParser fill:#d4edda
+    style Static fill:#f8d7da
+    style Mermaid fill:#cce5ff
+    style Footnotes fill:#cce5ff
+'><pre class="mermaid my-4" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">graph TB
+    subgraph "User Interface"
+        Browser[Web Browser]
+        Theme[Light/Dark Theme Toggle]
+    end
+    
+    subgraph "FastHTML Application"
+        App[FastHTML App&lt;br/&gt;core.py]
+        Router[URL Router]
+        Layout[Layout Engine]
+        
+        subgraph "Route Handlers"
+            Index[Index Route&lt;br/&gt;/]
+            PostDetail[Post Detail Route&lt;br/&gt;/posts/path]
+        end
+    end
+    
+    subgraph "Markdown Processing"
+        MDParser[Mistletoe Parser]
+        Renderer[ContentRenderer]
+        
+        subgraph "Custom Renderers"
+            Footnotes[Footnote Renderer&lt;br/&gt;Sidenotes]
+            Mermaid[Mermaid Diagram Renderer&lt;br/&gt;Zoom/Pan Controls]
+            Links[Link Renderer&lt;br/&gt;HTMX Integration]
+        end
+    end
+    
+    subgraph "File System"
+        MDFiles[Markdown Files&lt;br/&gt;.md]
+        Tree[Folder Tree Builder&lt;br/&gt;build_post_tree]
+    end
+    
+    subgraph "Frontend Assets"
+        Static[Static Files]
+        JS[scripts.js&lt;br/&gt;Mermaid + Interactions]
+        CSS[Styles&lt;br/&gt;TailwindCSS + MonsterUI]
+    end
+    
+    Browser --&gt;|HTTP Request| Router
+    Theme --&gt;|Toggle Dark Mode| JS
+    
+    Router --&gt; Index
+    Router --&gt; PostDetail
+    
+    Index --&gt; Tree
+    Tree --&gt; MDFiles
+    Index --&gt; Layout
+    
+    PostDetail --&gt; MDFiles
+    PostDetail --&gt; MDParser
+    
+    MDParser --&gt; Renderer
+    Renderer --&gt; Footnotes
+    Renderer --&gt; Mermaid
+    Renderer --&gt; Links
+    
+    Footnotes --&gt;|Marginal Notes| Layout
+    Mermaid --&gt;|Interactive Diagrams| Layout
+    Links --&gt;|HTMX Navigation| Layout
+    
+    Layout --&gt; Browser
+    
+    JS --&gt;|Theme Change| Mermaid
+    JS --&gt;|Zoom/Pan/Reset| Mermaid
+    
+    Static --&gt; CSS
+    Static --&gt; JS
+    
+    App -.-&gt;|Serves| Static
+    
+    style Browser fill:#e1f5ff
+    style App fill:#fff3cd
+    style MDParser fill:#d4edda
+    style Static fill:#f8d7da
+    style Mermaid fill:#cce5ff
+    style Footnotes fill:#cce5ff
+</pre></div>
+            </div>
+<h2 id="how-bloggy-works" class="text-2xl font-semibold mb-4 mt-6">How Bloggy Works</h2>
+<h3 id="1-request-flow" class="text-xl font-semibold mb-3 mt-5">1. Request Flow</h3>
+<div class="mermaid-container relative border-2 rounded-md my-4" style="width: 80vw; position: relative; left: 50%; transform: translateX(-50%);">
+                <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
+                    <button onclick="resetMermaidZoom('mermaid-10500923')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
+                    <button onclick="zoomMermaidIn('mermaid-10500923')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
+                    <button onclick="zoomMermaidOut('mermaid-10500923')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
+                </div>
+                <div id="mermaid-10500923" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: 400px; height: auto;" data-mermaid-code='sequenceDiagram
+    participant User
+    participant Browser
+    participant FastHTML
+    participant Router
+    participant FileSystem
+    participant Renderer
+    participant HTMX
+    
+    User-&amp;gt;&amp;gt;Browser: Visit /
+    Browser-&amp;gt;&amp;gt;FastHTML: GET /
+    FastHTML-&amp;gt;&amp;gt;Router: Route to index()
+    Router-&amp;gt;&amp;gt;FileSystem: Scan for .md files
+    FileSystem--&amp;gt;&amp;gt;Router: Return file tree
+    Router-&amp;gt;&amp;gt;Browser: Render post list + layout
+    
+    User-&amp;gt;&amp;gt;Browser: Click post link
+    Browser-&amp;gt;&amp;gt;HTMX: hx-get="/posts/demo"
+    HTMX-&amp;gt;&amp;gt;FastHTML: GET /posts/demo
+    FastHTML-&amp;gt;&amp;gt;Router: Route to post_detail()
+    Router-&amp;gt;&amp;gt;FileSystem: Read demo.md
+    FileSystem--&amp;gt;&amp;gt;Router: Markdown content
+    Router-&amp;gt;&amp;gt;Renderer: Parse &amp;amp; render markdown
+    
+    rect rgb(200, 220, 250)
+        Note over Renderer: Process custom syntax:&amp;lt;br/&amp;gt;- Footnotes [^1]&amp;lt;br/&amp;gt;- Mermaid diagrams&amp;lt;br/&amp;gt;- Internal links
+    end
+    
+    Renderer--&amp;gt;&amp;gt;Router: Rendered HTML
+    Router-&amp;gt;&amp;gt;HTMX: Return HTML fragment
+    HTMX-&amp;gt;&amp;gt;Browser: Swap content (#main-content)
+    Browser-&amp;gt;&amp;gt;User: Display post
+'><pre class="mermaid my-4" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">sequenceDiagram
+    participant User
+    participant Browser
+    participant FastHTML
+    participant Router
+    participant FileSystem
+    participant Renderer
+    participant HTMX
+    
+    User-&gt;&gt;Browser: Visit /
+    Browser-&gt;&gt;FastHTML: GET /
+    FastHTML-&gt;&gt;Router: Route to index()
+    Router-&gt;&gt;FileSystem: Scan for .md files
+    FileSystem--&gt;&gt;Router: Return file tree
+    Router-&gt;&gt;Browser: Render post list + layout
+    
+    User-&gt;&gt;Browser: Click post link
+    Browser-&gt;&gt;HTMX: hx-get="/posts/demo"
+    HTMX-&gt;&gt;FastHTML: GET /posts/demo
+    FastHTML-&gt;&gt;Router: Route to post_detail()
+    Router-&gt;&gt;FileSystem: Read demo.md
+    FileSystem--&gt;&gt;Router: Markdown content
+    Router-&gt;&gt;Renderer: Parse &amp; render markdown
+    
+    rect rgb(200, 220, 250)
+        Note over Renderer: Process custom syntax:&lt;br/&gt;- Footnotes [^1]&lt;br/&gt;- Mermaid diagrams&lt;br/&gt;- Internal links
+    end
+    
+    Renderer--&gt;&gt;Router: Rendered HTML
+    Router-&gt;&gt;HTMX: Return HTML fragment
+    HTMX-&gt;&gt;Browser: Swap content (#main-content)
+    Browser-&gt;&gt;User: Display post
+</pre></div>
+            </div>
+<h3 id="2-markdown-processing-pipeline" class="text-xl font-semibold mb-3 mt-5">2. Markdown Processing Pipeline</h3>
+<div class="mermaid-container relative border-2 rounded-md my-4" style="width: 80vw; position: relative; left: 50%; transform: translateX(-50%);">
+                <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
+                    <button onclick="resetMermaidZoom('mermaid-14149258')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
+                    <button onclick="zoomMermaidIn('mermaid-14149258')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
+                    <button onclick="zoomMermaidOut('mermaid-14149258')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
+                </div>
+                <div id="mermaid-14149258" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: 400px; height: auto;" data-mermaid-code="flowchart LR
+    A[Raw Markdown] --&amp;gt; B{Extract Footnotes}
+    B --&amp;gt;|Content| C[Mistletoe Parser]
+    B --&amp;gt;|Footnote Defs| D[Store in Dict]
+    
+    C --&amp;gt; E[Token Stream]
+    
+    E --&amp;gt; F{ContentRenderer}
+    
+    F --&amp;gt;|BlockCode + 'mermaid'| G[Mermaid Renderer]
+    F --&amp;gt;|Link| H[Link Renderer]
+    F --&amp;gt;|FootnoteRef| I[Footnote Renderer]
+    F --&amp;gt;|Other| J[Standard HTML]
+    
+    G --&amp;gt; K[Diagram with Controls]
+    H --&amp;gt; L{Internal Link?}
+    L --&amp;gt;|Yes| M[Add HTMX attrs]
+    L --&amp;gt;|No| N[Add target=_blank]
+    
+    I --&amp;gt; O[Sidenote Component]
+    D --&amp;gt; O
+    
+    K --&amp;gt; P[Apply CSS Classes]
+    M --&amp;gt; P
+    N --&amp;gt; P
+    O --&amp;gt; P
+    J --&amp;gt; P
+    
+    P --&amp;gt; Q[Final HTML]
+    
+    style G fill:#ffe6cc
+    style I fill:#d1ecf1
+    style L fill:#fff3cd
+"><pre class="mermaid my-4" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">flowchart LR
+    A[Raw Markdown] --&gt; B{Extract Footnotes}
+    B --&gt;|Content| C[Mistletoe Parser]
+    B --&gt;|Footnote Defs| D[Store in Dict]
+    
+    C --&gt; E[Token Stream]
+    
+    E --&gt; F{ContentRenderer}
+    
+    F --&gt;|BlockCode + 'mermaid'| G[Mermaid Renderer]
+    F --&gt;|Link| H[Link Renderer]
+    F --&gt;|FootnoteRef| I[Footnote Renderer]
+    F --&gt;|Other| J[Standard HTML]
+    
+    G --&gt; K[Diagram with Controls]
+    H --&gt; L{Internal Link?}
+    L --&gt;|Yes| M[Add HTMX attrs]
+    L --&gt;|No| N[Add target=_blank]
+    
+    I --&gt; O[Sidenote Component]
+    D --&gt; O
+    
+    K --&gt; P[Apply CSS Classes]
+    M --&gt; P
+    N --&gt; P
+    O --&gt; P
+    J --&gt; P
+    
+    P --&gt; Q[Final HTML]
+    
+    style G fill:#ffe6cc
+    style I fill:#d1ecf1
+    style L fill:#fff3cd
+</pre></div>
+            </div>
+<h3 id="3-mermaid-diagram-lifecycle" class="text-xl font-semibold mb-3 mt-5">3. Mermaid Diagram Lifecycle</h3>
+<div class="mermaid-container relative border-2 rounded-md my-4" style="width: 60vw; position: relative; left: 50%; transform: translateX(-50%);">
+                <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
+                    <button onclick="resetMermaidZoom('mermaid-8499696')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
+                    <button onclick="zoomMermaidIn('mermaid-8499696')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
+                    <button onclick="zoomMermaidOut('mermaid-8499696')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
+                </div>
+                <div id="mermaid-8499696" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: 400px; height: auto;" data-mermaid-code='stateDiagram-v2
+    [*] --&amp;gt; Rendered: Page Load
+    
+    state Rendered {
+        [*] --&amp;gt; Initialize
+        Initialize --&amp;gt; AddControls: Create buttons
+        AddControls --&amp;gt; StoreCode: Save original code
+        StoreCode --&amp;gt; EnableInteraction: Mouse events
+    }
+    
+    state EnableInteraction {
+        [*] --&amp;gt; Idle
+        Idle --&amp;gt; Panning: Mouse drag
+        Idle --&amp;gt; Zooming: Mouse wheel
+        Idle --&amp;gt; ButtonZoom: +/- buttons
+        ButtonZoom --&amp;gt; Idle
+        Zooming --&amp;gt; Idle
+        Panning --&amp;gt; Idle
+        
+        state "Reset Button" as Reset
+        Idle --&amp;gt; Reset: Click reset
+        Reset --&amp;gt; Idle: Restore defaults
+    }
+    
+    Rendered --&amp;gt; ThemeChange: Dark/Light toggle
+    
+    state ThemeChange {
+        [*] --&amp;gt; DetectTheme
+        DetectTheme --&amp;gt; GetOriginalCode: Read data attribute
+        GetOriginalCode --&amp;gt; ClearWrapper
+        ClearWrapper --&amp;gt; ReinitMermaid: New theme
+        ReinitMermaid --&amp;gt; ReRender: mermaid.run()
+    }
+    
+    ThemeChange --&amp;gt; Rendered: Re-rendered
+    
+    note right of ThemeChange
+        MutationObserver watches
+        HTML class changes
+    end note
+    
+    note right of EnableInteraction
+        Transform state stored
+        per diagram ID
+    end note
+'><pre class="mermaid my-4" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">stateDiagram-v2
+    [*] --&gt; Rendered: Page Load
+    
+    state Rendered {
+        [*] --&gt; Initialize
+        Initialize --&gt; AddControls: Create buttons
+        AddControls --&gt; StoreCode: Save original code
+        StoreCode --&gt; EnableInteraction: Mouse events
+    }
+    
+    state EnableInteraction {
+        [*] --&gt; Idle
+        Idle --&gt; Panning: Mouse drag
+        Idle --&gt; Zooming: Mouse wheel
+        Idle --&gt; ButtonZoom: +/- buttons
+        ButtonZoom --&gt; Idle
+        Zooming --&gt; Idle
+        Panning --&gt; Idle
+        
+        state "Reset Button" as Reset
+        Idle --&gt; Reset: Click reset
+        Reset --&gt; Idle: Restore defaults
+    }
+    
+    Rendered --&gt; ThemeChange: Dark/Light toggle
+    
+    state ThemeChange {
+        [*] --&gt; DetectTheme
+        DetectTheme --&gt; GetOriginalCode: Read data attribute
+        GetOriginalCode --&gt; ClearWrapper
+        ClearWrapper --&gt; ReinitMermaid: New theme
+        ReinitMermaid --&gt; ReRender: mermaid.run()
+    }
+    
+    ThemeChange --&gt; Rendered: Re-rendered
+    
+    note right of ThemeChange
+        MutationObserver watches
+        HTML class changes
+    end note
+    
+    note right of EnableInteraction
+        Transform state stored
+        per diagram ID
+    end note
+</pre></div>
+            </div>
+<h2 id="key-features" class="text-2xl font-semibold mb-4 mt-6">Key Features</h2>
+<h3 id="-advanced-markdown-features" class="text-xl font-semibold mb-3 mt-5">✨ Advanced Markdown Features</h3>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><strong>Footnotes as Sidenotes</strong>: <code class="uk-codespan px-1">[^1]</code> references become elegant margin notes on desktop, expandable on mobile</li>
+<li class="text-base leading-relaxed"><strong>Mermaid Diagrams</strong>: Full support for flowcharts, sequence diagrams, state diagrams, etc.</li>
+<li class="text-base leading-relaxed"><strong>Interactive Diagrams</strong>: Built-in zoom, pan, and reset controls for all mermaid diagrams</li>
+<li class="text-base leading-relaxed"><strong>Theme-aware Rendering</strong>: Diagrams automatically re-render when switching light/dark mode</li>
+</ul>
+<h3 id="-modern-ui" class="text-xl font-semibold mb-3 mt-5">🎨 Modern UI</h3>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><strong>Responsive Design</strong>: Works beautifully on all screen sizes</li>
+<li class="text-base leading-relaxed"><strong>Dark Mode</strong>: Automatic theme switching with localStorage persistence</li>
+<li class="text-base leading-relaxed"><strong>HTMX Navigation</strong>: Fast, SPA-like navigation without full page reloads</li>
+<li class="text-base leading-relaxed"><strong>Collapsible Folders</strong>: Organize posts in nested directories</li>
+</ul>
+<h3 id="-technical-highlights" class="text-xl font-semibold mb-3 mt-5">🚀 Technical Highlights</h3>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">Built on <strong>FastHTML</strong> for modern Python web development</li>
+<li class="text-base leading-relaxed">Uses <strong>Mistletoe</strong> for extensible Markdown parsing</li>
+<li class="text-base leading-relaxed"><strong>TailwindCSS</strong> + <strong>MonsterUI</strong> for styling</li>
+<li class="text-base leading-relaxed"><strong>Hyperscript</strong> for interactive behaviors</li>
+<li class="text-base leading-relaxed"><strong>Mermaid.js v11</strong> for diagram rendering</li>
+</ul>
+<h2 id="project-structure" class="text-2xl font-semibold mb-4 mt-6">Project Structure</h2>
+<div class="mermaid-container relative border-2 rounded-md my-4" style="width: 100%;">
+                <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
+                    <button onclick="resetMermaidZoom('mermaid-795916')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
+                    <button onclick="zoomMermaidIn('mermaid-795916')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
+                    <button onclick="zoomMermaidOut('mermaid-795916')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
+                </div>
+                <div id="mermaid-795916" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: 400px; height: auto;" data-mermaid-code="graph LR
+    subgraph bloggy/
+        A[__init__.py]
+        B[core.py&amp;lt;br/&amp;gt;Main App Logic]
+        C[main.py&amp;lt;br/&amp;gt;Entry Point]
+        
+        subgraph static/
+            D[scripts.js&amp;lt;br/&amp;gt;Mermaid + Interactions]
+            E[sidenote.css&amp;lt;br/&amp;gt;Footnote Styles]
+            F[favicon.png]
+        end
+    end
+    
+    subgraph demo/
+        G[*.md Files&amp;lt;br/&amp;gt;Your Blog Posts]
+        
+        subgraph guides/
+            H[*.md Files&amp;lt;br/&amp;gt;Nested Content]
+        end
+    end
+    
+    B --&amp;gt; D
+    B --&amp;gt; E
+    B --&amp;gt; F
+    B -.reads.-&amp;gt; G
+    B -.reads.-&amp;gt; H
+    
+    style B fill:#ffe6cc
+    style D fill:#d1ecf1
+    style G fill:#d4edda
+"><pre class="mermaid my-4" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">graph LR
+    subgraph bloggy/
+        A[__init__.py]
+        B[core.py&lt;br/&gt;Main App Logic]
+        C[main.py&lt;br/&gt;Entry Point]
+        
+        subgraph static/
+            D[scripts.js&lt;br/&gt;Mermaid + Interactions]
+            E[sidenote.css&lt;br/&gt;Footnote Styles]
+            F[favicon.png]
+        end
+    end
+    
+    subgraph demo/
+        G[*.md Files&lt;br/&gt;Your Blog Posts]
+        
+        subgraph guides/
+            H[*.md Files&lt;br/&gt;Nested Content]
+        end
+    end
+    
+    B --&gt; D
+    B --&gt; E
+    B --&gt; F
+    B -.reads.-&gt; G
+    B -.reads.-&gt; H
+    
+    style B fill:#ffe6cc
+    style D fill:#d1ecf1
+    style G fill:#d4edda
+</pre></div>
+            </div>
+<h2 id="installation" class="text-2xl font-semibold mb-4 mt-6">Installation</h2>
+<h3 id="from-pypi-recommended" class="text-xl font-semibold mb-3 mt-5">From PyPI (recommended)</h3>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install bloggy
+</code></pre>
+<h3 id="from-source" class="text-xl font-semibold mb-3 mt-5">From source</h3>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">git clone https://github.com/yeshwanth/bloggy.git
+cd bloggy
+pip install -e .
+</code></pre>
+<h2 id="quick-start" class="text-2xl font-semibold mb-4 mt-6">Quick Start</h2>
+<ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">
+<p class="text-base leading-relaxed mb-6">Create a directory with your markdown files:</p>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">mkdir my-blog
+cd my-blog
+echo "# Hello World" &gt; hello.md
+</code></pre>
+</li>
+<li class="text-base leading-relaxed">
+<p class="text-base leading-relaxed mb-6">Run Bloggy:</p>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">bloggy .
+</code></pre>
+</li>
+<li class="text-base leading-relaxed">
+<p class="text-base leading-relaxed mb-6">Open your browser at <code class="uk-codespan px-1">http://127.0.0.1:5001</code></p>
+</li>
+</ol>
+<h2 id="configuration" class="text-2xl font-semibold mb-4 mt-6">Configuration</h2>
+<p class="text-base leading-relaxed mb-6">Bloggy supports three ways to configure your blog (in priority order):</p>
+<ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><strong><code class="uk-codespan px-1">.bloggy</code> configuration file</strong> (TOML format)</li>
+<li class="text-base leading-relaxed"><strong>Environment variables</strong></li>
+<li class="text-base leading-relaxed"><strong>Default values</strong></li>
+</ol>
+<h3 id="using-a-codebloggycode-configuration-file" class="text-xl font-semibold mb-3 mt-5">Using a <code class="uk-codespan px-1">.bloggy</code> Configuration File</h3>
+<p class="text-base leading-relaxed mb-6">Create a <code class="uk-codespan px-1">.bloggy</code> file in your blog directory or current directory:</p>
+<pre class="my-4"><code class="language-toml uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Blog title (default: derives from root folder name)
+title = "My Awesome Blog"
+
+# Root folder containing markdown files (default: current directory)
+root = "."
+
+# Server host (default: 127.0.0.1)
+# Use "0.0.0.0" to make the server accessible from network
+host = "127.0.0.1"
+
+# Server port (default: 5001)
+port = 5001
+</code></pre>
+<p class="text-base leading-relaxed mb-6">All settings in the <code class="uk-codespan px-1">.bloggy</code> file are optional. See <code class="uk-codespan px-1">.bloggy.example</code> for a full example.</p>
+<h3 id="environment-variables" class="text-xl font-semibold mb-3 mt-5">Environment Variables</h3>
+<p class="text-base leading-relaxed mb-6">You can also use environment variables as a fallback:</p>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">BLOGGY_ROOT</code>: Path to your markdown files (default: current directory)</li>
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">BLOGGY_TITLE</code>: Your blog's title (default: folder name)</li>
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">BLOGGY_HOST</code>: Server host (default: 127.0.0.1)</li>
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">BLOGGY_PORT</code>: Server port (default: 5001)</li>
+</ul>
+<h3 id="examples" class="text-xl font-semibold mb-3 mt-5">Examples</h3>
+<p class="text-base leading-relaxed mb-6"><strong>Using a <code class="uk-codespan px-1">.bloggy</code> file:</strong></p>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Create a .bloggy file in your blog directory
+cd /path/to/your/blog
+cat &gt; .bloggy &lt;&lt; EOF
+title = "My Tech Blog"
+port = 8000
+EOF
+
+bloggy
+</code></pre>
+<p class="text-base leading-relaxed mb-6"><strong>Using environment variables:</strong></p>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">export BLOGGY_ROOT=/path/to/your/markdown/files
+export BLOGGY_TITLE="My Awesome Blog"
+export BLOGGY_PORT=8000
+bloggy
+</code></pre>
+<p class="text-base leading-relaxed mb-6"><strong>Passing directory as argument:</strong></p>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">bloggy /path/to/your/markdown/files
+</code></pre>
+<p class="text-base leading-relaxed mb-6"><strong>Configuration priority example:</strong></p>
+<p class="text-base leading-relaxed mb-6">If you have both a <code class="uk-codespan px-1">.bloggy</code> file with <code class="uk-codespan px-1">port = 8000</code> and an environment variable <code class="uk-codespan px-1">BLOGGY_PORT=9000</code>, the <code class="uk-codespan px-1">.bloggy</code> file takes precedence and port 8000 will be used.</p>
+</div></div>
+
+    </main>
+    
+            
+        <aside id="toc-sidebar" class="hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
+            <details open>
+                <summary class="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
+                    <span uk-icon="list" class="w-5 h-5 mr-2"></span>
+                    Contents
+                </summary>
+                <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
+                    <ul class="mt-2 list-none">
+  <li class="my-1">
+<a href="#bloggy" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-0">Bloggy</a>  </li>
+  <li class="my-1">
+<a href="#architecture-overview" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Architecture Overview</a>  </li>
+  <li class="my-1">
+<a href="#how-bloggy-works" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">How Bloggy Works</a>  </li>
+  <li class="my-1">
+<a href="#1-request-flow" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">1. Request Flow</a>  </li>
+  <li class="my-1">
+<a href="#2-markdown-processing-pipeline" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">2. Markdown Processing Pipeline</a>  </li>
+  <li class="my-1">
+<a href="#3-mermaid-diagram-lifecycle" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">3. Mermaid Diagram Lifecycle</a>  </li>
+  <li class="my-1">
+<a href="#key-features" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Key Features</a>  </li>
+  <li class="my-1">
+<a href="#-advanced-markdown-features" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">✨ Advanced Markdown Features</a>  </li>
+  <li class="my-1">
+<a href="#-modern-ui" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">🎨 Modern UI</a>  </li>
+  <li class="my-1">
+<a href="#-technical-highlights" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">🚀 Technical Highlights</a>  </li>
+  <li class="my-1">
+<a href="#project-structure" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Project Structure</a>  </li>
+  <li class="my-1">
+<a href="#installation" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Installation</a>  </li>
+  <li class="my-1">
+<a href="#from-pypi-recommended" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">From PyPI (recommended)</a>  </li>
+  <li class="my-1">
+<a href="#from-source" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">From source</a>  </li>
+  <li class="my-1">
+<a href="#quick-start" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Quick Start</a>  </li>
+  <li class="my-1">
+<a href="#configuration" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Configuration</a>  </li>
+  <li class="my-1">
+<a href="#using-a-bloggy-configuration-file" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Using a `.bloggy` Configuration File</a>  </li>
+  <li class="my-1">
+<a href="#environment-variables" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Environment Variables</a>  </li>
+  <li class="my-1">
+<a href="#examples" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Examples</a>  </li>
+</ul>
+
+                </div>
+            </details>
+        </aside>
+        
+        </div>
+        
+    <footer class="w-full max-w-7xl mx-auto px-6 mt-auto mb-6">
+        <div class="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right">
+            Powered by Bloggy
+        </div>
+    </footer>
+    
+    </div>
+    
+    
+    <!-- Mermaid diagrams -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+    <script src="/static/scripts.js" type="module"></script>
+    
+    
+    <script>
+        // Theme toggle functionality
+        (function() {
+            const stored = localStorage.getItem('__FRANKEN__');
+            const franken = stored ? JSON.parse(stored) : {mode: 'light'};
+            if (franken.mode === 'dark') {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+        
+        function toggleTheme() {
+            const html = document.documentElement;
+            html.classList.toggle('dark');
+            const stored = localStorage.getItem('__FRANKEN__');
+            const franken = stored ? JSON.parse(stored) : {mode: 'light'};
+            franken.mode = html.classList.contains('dark') ? 'dark' : 'light';
+            localStorage.setItem('__FRANKEN__', JSON.stringify(franken));
+        }
+        
+        // Tab switching functionality
+        function switchTab(tabsId, index) {
+            const container = document.querySelector('.tabs-container[data-tabs-id="' + tabsId + '"]');
+            if (!container) return;
+            
+            // Update buttons
+            const buttons = container.querySelectorAll('.tab-button');
+            buttons.forEach(function(btn, i) {
+                if (i === index) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            // Update panels
+            const panels = container.querySelectorAll('.tab-panel');
+            panels.forEach(function(panel, i) {
+                if (i === index) {
+                    panel.classList.add('active');
+                    panel.style.position = 'relative';
+                    panel.style.visibility = 'visible';
+                    panel.style.opacity = '1';
+                    panel.style.pointerEvents = 'auto';
+                } else {
+                    panel.classList.remove('active');
+                    panel.style.position = 'absolute';
+                    panel.style.visibility = 'hidden';
+                    panel.style.opacity = '0';
+                    panel.style.pointerEvents = 'none';
+                }
+            });
+        }
+        window.switchTab = switchTab;
+        
+        // Set tab container heights based on tallest panel
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                document.querySelectorAll('.tabs-container').forEach(container => {
+                    const panels = container.querySelectorAll('.tab-panel');
+                    let maxHeight = 0;
+                    
+                    panels.forEach(panel => {
+                        const wasActive = panel.classList.contains('active');
+                        panel.style.position = 'relative';
+                        panel.style.visibility = 'visible';
+                        panel.style.opacity = '1';
+                        panel.style.pointerEvents = 'auto';
+                        
+                        const height = panel.offsetHeight;
+                        if (height > maxHeight) maxHeight = height;
+                        
+                        if (!wasActive) {
+                            panel.style.position = 'absolute';
+                            panel.style.visibility = 'hidden';
+                            panel.style.opacity = '0';
+                            panel.style.pointerEvents = 'none';
+                        }
+                    });
+                    
+                    const tabsContent = container.querySelector('.tabs-content');
+                    if (tabsContent && maxHeight > 0) {
+                        tabsContent.style.minHeight = maxHeight + 'px';
+                    }
+                });
+            }, 100);
+            
+            // Initialize KaTeX rendering
+            if (window.renderMathInElement) {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+        
+        // Sidenote interactions
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('sidenote-ref')) {
+                const id = e.target.id.replace('snref-', 'sn-');
+                const sidenote = document.getElementById(id);
+                if (sidenote) {
+                    if (window.innerWidth >= 1280) {
+                        sidenote.classList.add('hl');
+                        setTimeout(() => sidenote.classList.remove('hl'), 1000);
+                    } else {
+                        e.target.classList.toggle('open');
+                        sidenote.classList.toggle('show');
+                    }
+                }
+            }
+        });
+    </script>
+    
+</body>
+</html>

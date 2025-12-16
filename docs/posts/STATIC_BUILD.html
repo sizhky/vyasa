@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Static Build - BLOGGY</title>
+    
+    <!-- TailwindCSS and MonsterUI -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio,container-queries"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/css/uikit.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit-icons.min.js"></script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+    
+    <!-- Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    
+    <!-- Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    
+    <!-- Hyperscript for interactions -->
+    <script src="https://unpkg.com/hyperscript.org@0.9.12"></script>
+    
+    <!-- Static assets -->
+    <link rel="stylesheet" href="/static/sidenote.css">
+    
+    
+    <style>
+        body { font-family: 'IBM Plex Sans', sans-serif; margin: 0; padding: 0; }
+        code, pre { font-family: 'IBM Plex Mono', monospace; }
+        .folder-chevron { transition: transform 0.2s; display: inline-block; }
+        details[open] > summary > .folder-chevron { transform: rotate(90deg); }
+        details { border: none !important; box-shadow: none !important; }
+        h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
+        
+        /* Ultra thin scrollbar styles */
+        * { scrollbar-width: thin; scrollbar-color: rgb(203 213 225) transparent; }
+        *::-webkit-scrollbar { width: 3px; height: 3px; }
+        *::-webkit-scrollbar-track { background: transparent; }
+        *::-webkit-scrollbar-thumb { background-color: rgb(203 213 225); border-radius: 2px; }
+        *::-webkit-scrollbar-thumb:hover { background-color: rgb(148 163 184); }
+        .dark *::-webkit-scrollbar-thumb { background-color: rgb(71 85 105); }
+        .dark *::-webkit-scrollbar-thumb:hover { background-color: rgb(100 116 139); }
+        .dark * { scrollbar-color: rgb(71 85 105) transparent; }
+        
+        /* Tabs styles */
+        .tabs-container { 
+            margin: 2rem 0; 
+            border: 1px solid rgb(226 232 240); 
+            border-radius: 0.5rem; 
+            overflow: hidden; 
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+        }
+        .dark .tabs-container { 
+            border-color: rgb(51 65 85);
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3);
+        }
+        
+        .tabs-header { 
+            display: flex; 
+            background: rgb(248 250 252); 
+            border-bottom: 1px solid rgb(226 232 240);
+            gap: 0;
+        }
+        .dark .tabs-header { 
+            background: rgb(15 23 42); 
+            border-bottom-color: rgb(51 65 85);
+        }
+        
+        .tab-button { 
+            flex: 1; 
+            padding: 0.875rem 1.5rem; 
+            background: transparent; 
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer; 
+            font-weight: 500; 
+            font-size: 0.9375rem;
+            color: rgb(100 116 139); 
+            transition: all 0.15s ease;
+            position: relative;
+            margin-bottom: -1px;
+        }
+        .dark .tab-button { color: rgb(148 163 184); }
+        
+        .tab-button:hover:not(.active) { 
+            background: rgb(241 245 249); 
+            color: rgb(51 65 85);
+        }
+        .dark .tab-button:hover:not(.active) { 
+            background: rgb(30 41 59); 
+            color: rgb(226 232 240);
+        }
+        
+        .tab-button.active { 
+            color: rgb(15 23 42); 
+            border-bottom-color: rgb(15 23 42); 
+            background: white;
+            font-weight: 600;
+        }
+        .dark .tab-button.active { 
+            color: rgb(248 250 252); 
+            border-bottom-color: rgb(248 250 252); 
+            background: rgb(2 6 23);
+        }
+        
+        .tabs-content { 
+            background: white;
+            position: relative;
+        }
+        .dark .tabs-content { 
+            background: rgb(2 6 23);
+        }
+        
+        .tab-panel { 
+            padding: 1rem 1rem;
+            animation: fadeIn 0.2s ease-in;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .tab-panel.active { 
+            position: relative;
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        /* Remove extra margins from first/last elements in tabs */
+        .tab-panel > *:first-child { margin-top: 0 !important; }
+        .tab-panel > *:last-child { margin-bottom: 0 !important; }
+        
+        /* Ensure code blocks in tabs look good */
+        .tab-panel pre { 
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+        .tab-panel code { 
+            font-family: 'IBM Plex Mono', monospace;
+        }
+    </style>
+    
+</head>
+<body>
+    
+    <div id="page-container" class="flex flex-col min-h-screen">
+        <div class="w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4">
+            
+    <div class="flex items-center justify-between bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
+        <a href="/index.html">BLOGGY</a>
+        
+    <button onclick="toggleTheme()" class="p-1 hover:scale-110 shadow-none" type="button">
+        <span uk-icon="moon" class="dark:hidden"></span>
+        <span uk-icon="sun" class="hidden dark:block"></span>
+    </button>
+    
+    </div>
+    
+        </div>
+        <div class="w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1">
+            
+    <aside id="posts-sidebar" class="hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
+        <details open>
+            <summary class="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
+                <span uk-icon="menu" class="w-5 h-5 mr-2"></span>
+                Posts
+            </summary>
+            <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
+                <ul class="mt-2 list-none">
+  <li class="my-1">
+<details class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="chevron-right" class="folder-chevron w-4 h-4 text-slate-400"></uk-icon></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span>Demo</span></summary>      <ul class="ml-6 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+        <li class="my-1">
+<details class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="chevron-right" class="folder-chevron w-4 h-4 text-slate-400"></uk-icon></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span>Guides</span></summary>            <ul class="ml-6 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+              <li>
+<a href="/posts/demo/guides/api-authentication-2.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>API Authentication and Security</span></a>              </li>
+              <li>
+<a href="/posts/demo/guides/api-authentication.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>API Authentication and Security</span></a>              </li>
+            </ul>
+</details>        </li>
+        <li>
+<a href="/posts/demo/getting-started.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Getting Started with Our Platform</span></a>        </li>
+        <li>
+<a href="/posts/demo/markdown-features.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>A Small Demonstration of All The Markdown Features That Are Under The Sun, Without Worrying About If They Are Supported Or Not</span></a>        </li>
+      </ul>
+</details>  </li>
+  <li>
+<a href="/posts/CONTRIBUTING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Contributing</span></a>  </li>
+  <li>
+<a href="/posts/PUBLISHING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Publishing</span></a>  </li>
+  <li>
+<a href="/posts/STATIC_BUILD.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Static Build</span></a>  </li>
+</ul>
+
+            </div>
+        </details>
+    </aside>
+    
+            
+    <main id="main-content" class="flex-1 min-w-0 px-6 py-8 space-y-8">
+        <h1 class="text-4xl font-bold mb-8">Static Build</h1><div class="w-full">
+  <link rel="stylesheet" href="/static/sidenote.css">
+<div><h1 id="bloggy-static-site-generator" class="text-3xl font-bold mb-6 mt-8">Bloggy Static Site Generator</h1>
+<p class="text-base leading-relaxed mb-6">Bloggy now supports generating completely standalone static websites from your markdown files! It's janky and need some polishing, but it works.</p>
+<h2 id="usage" class="text-2xl font-semibold mb-4 mt-6">Usage</h2>
+<h3 id="command-line" class="text-xl font-semibold mb-3 mt-5">Command Line</h3>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Build static site from demo directory
+bloggy build demo
+
+# Build to a custom output directory
+bloggy build demo -o my-static-site
+
+# Build from current directory
+bloggy build
+</code></pre>
+<h3 id="python-api" class="text-xl font-semibold mb-3 mt-5">Python API</h3>
+<pre class="my-4"><code class="language-python uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">from bloggy.build import build_static_site
+
+# Build static site
+output_dir = build_static_site(
+    input_dir='demo',      # Directory with markdown files
+    output_dir='dist'      # Output directory (default: ./dist)
+)
+</code></pre>
+<h2 id="what-gets-generated" class="text-2xl font-semibold mb-4 mt-6">What Gets Generated</h2>
+<p class="text-base leading-relaxed mb-6">The static site generator creates:</p>
+<ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">
+<p class="text-base leading-relaxed mb-6"><strong>HTML Files</strong>: Each markdown file becomes a standalone HTML page</p>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">index.html</code> from <code class="uk-codespan px-1">index.md</code> or <code class="uk-codespan px-1">README.md</code> in the root</li>
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">posts/*.html</code> for all other markdown files</li>
+</ul>
+</li>
+<li class="text-base leading-relaxed">
+<p class="text-base leading-relaxed mb-6"><strong>Static Assets</strong>: Copies from <code class="uk-codespan px-1">bloggy/static/</code>:</p>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">sidenote.css</code> - Sidenote styling</li>
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">scripts.js</code> - Interactive features (Mermaid zoom/pan)</li>
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">favicon.png</code> - Site icon</li>
+</ul>
+</li>
+<li class="text-base leading-relaxed">
+<p class="text-base leading-relaxed mb-6"><strong>Complete Standalone Site</strong>:</p>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">No Python runtime required</li>
+<li class="text-base leading-relaxed">No server needed</li>
+<li class="text-base leading-relaxed">Works with any static hosting (GitHub Pages, Netlify, Vercel, etc.)</li>
+</ul>
+</li>
+</ol>
+<h2 id="features-preserved" class="text-2xl font-semibold mb-4 mt-6">Features Preserved</h2>
+<p class="text-base leading-relaxed mb-6">All bloggy features work in the static site:</p>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">✅ <strong>Sidenotes/Footnotes</strong>: Interactive margin notes</li>
+<li class="text-base leading-relaxed">✅ <strong>Mermaid Diagrams</strong>: With zoom/pan/reset controls</li>
+<li class="text-base leading-relaxed">✅ <strong>Math Rendering</strong>: KaTeX for LaTeX equations</li>
+<li class="text-base leading-relaxed">✅ <strong>Syntax Highlighting</strong>: Code blocks with highlight.js</li>
+<li class="text-base leading-relaxed">✅ <strong>Dark/Light Theme</strong>: Theme toggle with localStorage</li>
+<li class="text-base leading-relaxed">✅ <strong>Tabs</strong>: Interactive tabbed content</li>
+<li class="text-base leading-relaxed">✅ <strong>Table of Contents</strong>: Sidebar navigation for each page</li>
+<li class="text-base leading-relaxed">✅ <strong>Post Navigation</strong>: Collapsible folder tree</li>
+<li class="text-base leading-relaxed">✅ <strong>Responsive Design</strong>: Mobile-friendly layout</li>
+</ul>
+<h2 id="how-it-works" class="text-2xl font-semibold mb-4 mt-6">How It Works</h2>
+<ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><strong>Discovers</strong> all <code class="uk-codespan px-1">.md</code> files in your directory</li>
+<li class="text-base leading-relaxed"><strong>Parses</strong> frontmatter and markdown content</li>
+<li class="text-base leading-relaxed"><strong>Renders</strong> markdown to HTML using the same rendering pipeline as the server</li>
+<li class="text-base leading-relaxed"><strong>Generates</strong> complete HTML pages with:
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">Navigation sidebar (all posts)</li>
+<li class="text-base leading-relaxed">Table of contents (per page)</li>
+<li class="text-base leading-relaxed">Theme toggle</li>
+<li class="text-base leading-relaxed">All interactive features</li>
+</ul>
+</li>
+<li class="text-base leading-relaxed"><strong>Copies</strong> static assets (CSS, JS, images)</li>
+<li class="text-base leading-relaxed"><strong>Outputs</strong> a fully functional static website</li>
+</ol>
+<h2 id="deployment" class="text-2xl font-semibold mb-4 mt-6">Deployment</h2>
+<h3 id="github-pages" class="text-xl font-semibold mb-3 mt-5">GitHub Pages</h3>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Build the site
+bloggy build demo -o docs
+
+# Push to GitHub and enable GitHub Pages from /docs folder
+git add docs
+git commit -m "Build static site"
+git push
+</code></pre>
+<h3 id="netlify" class="text-xl font-semibold mb-3 mt-5">Netlify</h3>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">bloggy build demo -o dist
+# Upload dist/ folder to Netlify
+</code></pre>
+<h3 id="local-preview" class="text-xl font-semibold mb-3 mt-5">Local Preview</h3>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">cd dist
+python -m http.server 8000
+# Open http://localhost:8000
+</code></pre>
+<h2 id="differences-from-server-mode" class="text-2xl font-semibold mb-4 mt-6">Differences from Server Mode</h2>
+<table class="uk-table uk-table-divider uk-table-hover uk-table-small w-full mb-6">
+<thead>
+<tr>
+<th align="left" class="!text-left p-2 font-semibold">Feature</th>
+<th align="left" class="!text-left p-2 font-semibold">Server Mode</th>
+<th align="left" class="!text-left p-2 font-semibold">Static Mode</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left" class="p-2">Navigation</td>
+<td align="left" class="p-2">HTMX (SPA-like)</td>
+<td align="left" class="p-2">Regular links (multi-page)</td>
+</tr>
+<tr>
+<td align="left" class="p-2">Rendering</td>
+<td align="left" class="p-2">On-demand</td>
+<td align="left" class="p-2">Pre-rendered</td>
+</tr>
+<tr>
+<td align="left" class="p-2">Python Required</td>
+<td align="left" class="p-2">✅ Yes</td>
+<td align="left" class="p-2">❌ No</td>
+</tr>
+<tr>
+<td align="left" class="p-2">Hot Reload</td>
+<td align="left" class="p-2">✅ Yes</td>
+<td align="left" class="p-2">❌ No (rebuild needed)</td>
+</tr>
+<tr>
+<td align="left" class="p-2">Hosting</td>
+<td align="left" class="p-2">Requires Python server</td>
+<td align="left" class="p-2">Any static host</td>
+</tr>
+<tr>
+<td align="left" class="p-2">Performance</td>
+<td align="left" class="p-2">Fast (cached)</td>
+<td align="left" class="p-2">Very fast (pre-rendered)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="configuration" class="text-2xl font-semibold mb-4 mt-6">Configuration</h2>
+<p class="text-base leading-relaxed mb-6">Uses the same <code class="uk-codespan px-1">.bloggy</code> configuration file as server mode:</p>
+<pre class="my-4"><code class="language-toml uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># .bloggy
+title = "My Blog"
+host = "127.0.0.1"  # Not used in static mode
+port = 5001         # Not used in static mode
+</code></pre>
+<h2 id="tips" class="text-2xl font-semibold mb-4 mt-6">Tips</h2>
+<ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><strong>Preview Before Building</strong>: Use <code class="uk-codespan px-1">bloggy demo</code> to preview your site with hot reload</li>
+<li class="text-base leading-relaxed"><strong>Rebuild After Changes</strong>: Static sites need rebuilding when content changes</li>
+<li class="text-base leading-relaxed"><strong>Check Output</strong>: Review <code class="uk-codespan px-1">dist/index.html</code> to verify the build</li>
+<li class="text-base leading-relaxed"><strong>Assets Path</strong>: Ensure images use relative paths or are in the static folder</li>
+</ol>
+<h2 id="example-workflow" class="text-2xl font-semibold mb-4 mt-6">Example Workflow</h2>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># 1. Write content
+vim my-blog/new-post.md
+
+# 2. Preview locally with hot reload
+bloggy my-blog
+
+# 3. Build static site when ready
+bloggy build my-blog -o site
+
+# 4. Deploy
+cd site
+python -m http.server 8000  # Test locally
+# Then deploy to your hosting provider
+</code></pre>
+</div></div>
+
+    </main>
+    
+            
+        <aside id="toc-sidebar" class="hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
+            <details open>
+                <summary class="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
+                    <span uk-icon="list" class="w-5 h-5 mr-2"></span>
+                    Contents
+                </summary>
+                <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
+                    <ul class="mt-2 list-none">
+  <li class="my-1">
+<a href="#bloggy-static-site-generator" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-0">Bloggy Static Site Generator</a>  </li>
+  <li class="my-1">
+<a href="#usage" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Usage</a>  </li>
+  <li class="my-1">
+<a href="#command-line" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Command Line</a>  </li>
+  <li class="my-1">
+<a href="#python-api" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Python API</a>  </li>
+  <li class="my-1">
+<a href="#what-gets-generated" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">What Gets Generated</a>  </li>
+  <li class="my-1">
+<a href="#features-preserved" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Features Preserved</a>  </li>
+  <li class="my-1">
+<a href="#how-it-works" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">How It Works</a>  </li>
+  <li class="my-1">
+<a href="#deployment" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Deployment</a>  </li>
+  <li class="my-1">
+<a href="#github-pages" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">GitHub Pages</a>  </li>
+  <li class="my-1">
+<a href="#netlify" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Netlify</a>  </li>
+  <li class="my-1">
+<a href="#local-preview" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Local Preview</a>  </li>
+  <li class="my-1">
+<a href="#differences-from-server-mode" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Differences from Server Mode</a>  </li>
+  <li class="my-1">
+<a href="#configuration" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Configuration</a>  </li>
+  <li class="my-1">
+<a href="#tips" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Tips</a>  </li>
+  <li class="my-1">
+<a href="#example-workflow" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Example Workflow</a>  </li>
+</ul>
+
+                </div>
+            </details>
+        </aside>
+        
+        </div>
+        
+    <footer class="w-full max-w-7xl mx-auto px-6 mt-auto mb-6">
+        <div class="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right">
+            Powered by Bloggy
+        </div>
+    </footer>
+    
+    </div>
+    
+    
+    <!-- Mermaid diagrams -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+    <script src="/static/scripts.js" type="module"></script>
+    
+    
+    <script>
+        // Theme toggle functionality
+        (function() {
+            const stored = localStorage.getItem('__FRANKEN__');
+            const franken = stored ? JSON.parse(stored) : {mode: 'light'};
+            if (franken.mode === 'dark') {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+        
+        function toggleTheme() {
+            const html = document.documentElement;
+            html.classList.toggle('dark');
+            const stored = localStorage.getItem('__FRANKEN__');
+            const franken = stored ? JSON.parse(stored) : {mode: 'light'};
+            franken.mode = html.classList.contains('dark') ? 'dark' : 'light';
+            localStorage.setItem('__FRANKEN__', JSON.stringify(franken));
+        }
+        
+        // Tab switching functionality
+        function switchTab(tabsId, index) {
+            const container = document.querySelector('.tabs-container[data-tabs-id="' + tabsId + '"]');
+            if (!container) return;
+            
+            // Update buttons
+            const buttons = container.querySelectorAll('.tab-button');
+            buttons.forEach(function(btn, i) {
+                if (i === index) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            // Update panels
+            const panels = container.querySelectorAll('.tab-panel');
+            panels.forEach(function(panel, i) {
+                if (i === index) {
+                    panel.classList.add('active');
+                    panel.style.position = 'relative';
+                    panel.style.visibility = 'visible';
+                    panel.style.opacity = '1';
+                    panel.style.pointerEvents = 'auto';
+                } else {
+                    panel.classList.remove('active');
+                    panel.style.position = 'absolute';
+                    panel.style.visibility = 'hidden';
+                    panel.style.opacity = '0';
+                    panel.style.pointerEvents = 'none';
+                }
+            });
+        }
+        window.switchTab = switchTab;
+        
+        // Set tab container heights based on tallest panel
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                document.querySelectorAll('.tabs-container').forEach(container => {
+                    const panels = container.querySelectorAll('.tab-panel');
+                    let maxHeight = 0;
+                    
+                    panels.forEach(panel => {
+                        const wasActive = panel.classList.contains('active');
+                        panel.style.position = 'relative';
+                        panel.style.visibility = 'visible';
+                        panel.style.opacity = '1';
+                        panel.style.pointerEvents = 'auto';
+                        
+                        const height = panel.offsetHeight;
+                        if (height > maxHeight) maxHeight = height;
+                        
+                        if (!wasActive) {
+                            panel.style.position = 'absolute';
+                            panel.style.visibility = 'hidden';
+                            panel.style.opacity = '0';
+                            panel.style.pointerEvents = 'none';
+                        }
+                    });
+                    
+                    const tabsContent = container.querySelector('.tabs-content');
+                    if (tabsContent && maxHeight > 0) {
+                        tabsContent.style.minHeight = maxHeight + 'px';
+                    }
+                });
+            }, 100);
+            
+            // Initialize KaTeX rendering
+            if (window.renderMathInElement) {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+        
+        // Sidenote interactions
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('sidenote-ref')) {
+                const id = e.target.id.replace('snref-', 'sn-');
+                const sidenote = document.getElementById(id);
+                if (sidenote) {
+                    if (window.innerWidth >= 1280) {
+                        sidenote.classList.add('hl');
+                        setTimeout(() => sidenote.classList.remove('hl'), 1000);
+                    } else {
+                        e.target.classList.toggle('open');
+                        sidenote.classList.toggle('show');
+                    }
+                }
+            }
+        });
+    </script>
+    
+</body>
+</html>

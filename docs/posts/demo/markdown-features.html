@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Small Demonstration of All The Markdown Features That Are Under The Sun, Without Worrying About If They Are Supported Or Not - BLOGGY</title>
+    
+    <!-- TailwindCSS and MonsterUI -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio,container-queries"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/css/uikit.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit-icons.min.js"></script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+    
+    <!-- Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    
+    <!-- Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    
+    <!-- Hyperscript for interactions -->
+    <script src="https://unpkg.com/hyperscript.org@0.9.12"></script>
+    
+    <!-- Static assets -->
+    <link rel="stylesheet" href="/static/sidenote.css">
+    
+    
+    <style>
+        body { font-family: 'IBM Plex Sans', sans-serif; margin: 0; padding: 0; }
+        code, pre { font-family: 'IBM Plex Mono', monospace; }
+        .folder-chevron { transition: transform 0.2s; display: inline-block; }
+        details[open] > summary > .folder-chevron { transform: rotate(90deg); }
+        details { border: none !important; box-shadow: none !important; }
+        h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
+        
+        /* Ultra thin scrollbar styles */
+        * { scrollbar-width: thin; scrollbar-color: rgb(203 213 225) transparent; }
+        *::-webkit-scrollbar { width: 3px; height: 3px; }
+        *::-webkit-scrollbar-track { background: transparent; }
+        *::-webkit-scrollbar-thumb { background-color: rgb(203 213 225); border-radius: 2px; }
+        *::-webkit-scrollbar-thumb:hover { background-color: rgb(148 163 184); }
+        .dark *::-webkit-scrollbar-thumb { background-color: rgb(71 85 105); }
+        .dark *::-webkit-scrollbar-thumb:hover { background-color: rgb(100 116 139); }
+        .dark * { scrollbar-color: rgb(71 85 105) transparent; }
+        
+        /* Tabs styles */
+        .tabs-container { 
+            margin: 2rem 0; 
+            border: 1px solid rgb(226 232 240); 
+            border-radius: 0.5rem; 
+            overflow: hidden; 
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+        }
+        .dark .tabs-container { 
+            border-color: rgb(51 65 85);
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3);
+        }
+        
+        .tabs-header { 
+            display: flex; 
+            background: rgb(248 250 252); 
+            border-bottom: 1px solid rgb(226 232 240);
+            gap: 0;
+        }
+        .dark .tabs-header { 
+            background: rgb(15 23 42); 
+            border-bottom-color: rgb(51 65 85);
+        }
+        
+        .tab-button { 
+            flex: 1; 
+            padding: 0.875rem 1.5rem; 
+            background: transparent; 
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer; 
+            font-weight: 500; 
+            font-size: 0.9375rem;
+            color: rgb(100 116 139); 
+            transition: all 0.15s ease;
+            position: relative;
+            margin-bottom: -1px;
+        }
+        .dark .tab-button { color: rgb(148 163 184); }
+        
+        .tab-button:hover:not(.active) { 
+            background: rgb(241 245 249); 
+            color: rgb(51 65 85);
+        }
+        .dark .tab-button:hover:not(.active) { 
+            background: rgb(30 41 59); 
+            color: rgb(226 232 240);
+        }
+        
+        .tab-button.active { 
+            color: rgb(15 23 42); 
+            border-bottom-color: rgb(15 23 42); 
+            background: white;
+            font-weight: 600;
+        }
+        .dark .tab-button.active { 
+            color: rgb(248 250 252); 
+            border-bottom-color: rgb(248 250 252); 
+            background: rgb(2 6 23);
+        }
+        
+        .tabs-content { 
+            background: white;
+            position: relative;
+        }
+        .dark .tabs-content { 
+            background: rgb(2 6 23);
+        }
+        
+        .tab-panel { 
+            padding: 1rem 1rem;
+            animation: fadeIn 0.2s ease-in;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .tab-panel.active { 
+            position: relative;
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        /* Remove extra margins from first/last elements in tabs */
+        .tab-panel > *:first-child { margin-top: 0 !important; }
+        .tab-panel > *:last-child { margin-bottom: 0 !important; }
+        
+        /* Ensure code blocks in tabs look good */
+        .tab-panel pre { 
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+        .tab-panel code { 
+            font-family: 'IBM Plex Mono', monospace;
+        }
+    </style>
+    
+</head>
+<body>
+    
+    <div id="page-container" class="flex flex-col min-h-screen">
+        <div class="w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4">
+            
+    <div class="flex items-center justify-between bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
+        <a href="/index.html">BLOGGY</a>
+        
+    <button onclick="toggleTheme()" class="p-1 hover:scale-110 shadow-none" type="button">
+        <span uk-icon="moon" class="dark:hidden"></span>
+        <span uk-icon="sun" class="hidden dark:block"></span>
+    </button>
+    
+    </div>
+    
+        </div>
+        <div class="w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1">
+            
+    <aside id="posts-sidebar" class="hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
+        <details open>
+            <summary class="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
+                <span uk-icon="menu" class="w-5 h-5 mr-2"></span>
+                Posts
+            </summary>
+            <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
+                <ul class="mt-2 list-none">
+  <li class="my-1">
+<details class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="chevron-right" class="folder-chevron w-4 h-4 text-slate-400"></uk-icon></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span>Demo</span></summary>      <ul class="ml-6 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+        <li class="my-1">
+<details class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="chevron-right" class="folder-chevron w-4 h-4 text-slate-400"></uk-icon></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span>Guides</span></summary>            <ul class="ml-6 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+              <li>
+<a href="/posts/demo/guides/api-authentication-2.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>API Authentication and Security</span></a>              </li>
+              <li>
+<a href="/posts/demo/guides/api-authentication.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>API Authentication and Security</span></a>              </li>
+            </ul>
+</details>        </li>
+        <li>
+<a href="/posts/demo/getting-started.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Getting Started with Our Platform</span></a>        </li>
+        <li>
+<a href="/posts/demo/markdown-features.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>A Small Demonstration of All The Markdown Features That Are Under The Sun, Without Worrying About If They Are Supported Or Not</span></a>        </li>
+      </ul>
+</details>  </li>
+  <li>
+<a href="/posts/CONTRIBUTING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Contributing</span></a>  </li>
+  <li>
+<a href="/posts/PUBLISHING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Publishing</span></a>  </li>
+  <li>
+<a href="/posts/STATIC_BUILD.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Static Build</span></a>  </li>
+</ul>
+
+            </div>
+        </details>
+    </aside>
+    
+            
+    <main id="main-content" class="flex-1 min-w-0 px-6 py-8 space-y-8">
+        <h1 class="text-4xl font-bold mb-8">A Small Demonstration of All The Markdown Features That Are Under The Sun, Without Worrying About If They Are Supported Or Not</h1><div class="w-full">
+  <link rel="stylesheet" href="/static/sidenote.css">
+<div><h2 id="headings" class="text-2xl font-semibold mb-4 mt-6">Headings</h2>
+<div class="tabs-container" data-tabs-id="258a515d">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('258a515d', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('258a515d', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><h2 class="text-2xl font-semibold mb-4 mt-6">Headings</h2>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">## Headings
+</code></pre>
+</div>
+</div>
+</div>
+<div class="tabs-container" data-tabs-id="d8b8d748">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('d8b8d748', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('d8b8d748', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><h3 class="text-xl font-semibold mb-3 mt-5">Setext Style</h3>
+<h1 class="text-3xl font-bold mb-6 mt-8">Heading Level 1</h1>
+<h2 class="text-2xl font-semibold mb-4 mt-6">Heading Level 2</h2>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">### Setext Style
+Heading Level 1
+===============
+Heading Level 2
+---------------
+</code></pre>
+</div>
+</div>
+</div>
+<div class="tabs-container" data-tabs-id="9398e179">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('9398e179', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('9398e179', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><h3 class="text-xl font-semibold mb-3 mt-5">ATX Style</h3>
+<h1 class="text-3xl font-bold mb-6 mt-8">Heading Level 1</h1>
+<h2 class="text-2xl font-semibold mb-4 mt-6">Heading Level 2</h2>
+<h3 class="text-xl font-semibold mb-3 mt-5">Heading Level 3</h3>
+<h4 class="text-lg font-semibold mb-2 mt-4">Heading Level 4</h4>
+<h5>Heading Level 5</h5>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">### ATX Style
+# Heading Level 1
+## Heading Level 2
+### Heading Level 3
+#### Heading Level 4
+##### Heading Level 5
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="paragraphs" class="text-2xl font-semibold mb-4 mt-6">Paragraphs</h2>
+<div class="tabs-container" data-tabs-id="0370ff88">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('0370ff88', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('0370ff88', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">This is a paragraph. It contains multiple sentences to demonstrate how paragraphs work in Markdown.</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">This is a paragraph. It contains multiple sentences to demonstrate how paragraphs work in Markdown.
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="line-breaks" class="text-2xl font-semibold mb-4 mt-6">Line Breaks</h2>
+<div class="tabs-container" data-tabs-id="ba4df050">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('ba4df050', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('ba4df050', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">Soft line break (just press Enter):
+This is the next line.</p>
+<p class="text-base leading-relaxed mb-6">Hard line break (use two spaces at the end of the line):<br>
+This is the next line.</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">Soft line break (just press Enter):
+This is the next line.
+<p class="text-base leading-relaxed mb-6">Hard line break (use two spaces at the end of the line):<br>
+This is the next line.
+</p></code></pre>
+</div>
+</div>
+</div>
+<h2 id="emphasis" class="text-2xl font-semibold mb-4 mt-6">Emphasis</h2>
+<div class="tabs-container" data-tabs-id="d238a2d4">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('d238a2d4', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('d238a2d4', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6"><em>Italics</em> using single asterisks.<br>
+<em>Italics</em> using single underscores.</p>
+<p class="text-base leading-relaxed mb-6"><strong>Bold</strong> using double asterisks.<br>
+<strong>Bold</strong> using double underscores.</p>
+<p class="text-base leading-relaxed mb-6"><em><strong>Bold and Italics</strong></em> using triple asterisks.<br>
+<em><strong>Bold and Italics</strong></em> using triple underscores.</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">*Italics* using single asterisks.  
+_Italics_ using single underscores.
+<p class="text-base leading-relaxed mb-6"><strong>Bold</strong> using double asterisks.<br>
+<strong>Bold</strong> using double underscores.</p>
+<p class="text-base leading-relaxed mb-6"><em><strong>Bold and Italics</strong></em> using triple asterisks.<br>
+<em><strong>Bold and Italics</strong></em> using triple underscores.
+</p></code></pre>
+</div>
+</div>
+</div>
+<h2 id="blockquotes" class="text-2xl font-semibold mb-4 mt-6">Blockquotes</h2>
+<div class="tabs-container" data-tabs-id="240843f1">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('240843f1', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('240843f1', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><blockquote class="uk-blockquote pl-4 border-l-4 border-primary italic mb-6">
+<p class="text-base leading-relaxed mb-6">This is a blockquote.</p>
+<blockquote class="uk-blockquote pl-4 border-l-4 border-primary italic mb-6">
+<p class="text-base leading-relaxed mb-6">Nested blockquote.</p>
+</blockquote>
+</blockquote>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">&gt; This is a blockquote.
+&gt;
+&gt; &gt; Nested blockquote.
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="lists" class="text-2xl font-semibold mb-4 mt-6">Lists</h2>
+<div class="tabs-container" data-tabs-id="1321edc7">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('1321edc7', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('1321edc7', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><h3 class="text-xl font-semibold mb-3 mt-5">Ordered List</h3>
+<ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">First item</li>
+<li class="text-base leading-relaxed">Second item</li>
+<li class="text-base leading-relaxed">Third item</li>
+</ol>
+<h3 class="text-xl font-semibold mb-3 mt-5">Unordered List</h3>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">First item</li>
+<li class="text-base leading-relaxed">Second item</li>
+<li class="text-base leading-relaxed">Third item</li>
+</ul>
+<h3 class="text-xl font-semibold mb-3 mt-5">Nested List</h3>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">Parent item
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">Child item
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">Grandchild item</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 class="text-xl font-semibold mb-3 mt-5">Task List</h3>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">[x] Completed task</li>
+<li class="text-base leading-relaxed">[ ] Incomplete task</li>
+</ul>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">### Ordered List
+<ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">First item</li>
+<li class="text-base leading-relaxed">Second item</li>
+<li class="text-base leading-relaxed">Third item</li>
+</ol>
+<h3 id="unordered-list" class="text-xl font-semibold mb-3 mt-5">Unordered List</h3>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">First item</li>
+<li class="text-base leading-relaxed">Second item</li>
+<li class="text-base leading-relaxed">Third item</li>
+</ul>
+<h3 id="nested-list" class="text-xl font-semibold mb-3 mt-5">Nested List</h3>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">Parent item
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">Child item
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">Grandchild item</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="task-list" class="text-xl font-semibold mb-3 mt-5">Task List</h3>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">[x] Completed task</li>
+<li class="text-base leading-relaxed">[ ] Incomplete task
+</li></ul></code></pre>
+
+</div>
+</div>
+</div>
+<h2 id="code" class="text-2xl font-semibold mb-4 mt-6">Code</h2>
+<div class="tabs-container" data-tabs-id="aa2a87c0">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('aa2a87c0', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('aa2a87c0', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><h3 class="text-xl font-semibold mb-3 mt-5">Inline Code</h3>
+<p class="text-base leading-relaxed mb-6">Use <code class="uk-codespan px-1">inline code</code> for short snippets.</p>
+<h3 class="text-xl font-semibold mb-3 mt-5">Indented Code Block</h3>
+<pre class="my-4"><code class="uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">def hello_world():
+    print("Hello, world!")
+</code></pre>
+<h3 class="text-xl font-semibold mb-3 mt-5">Fenced Code Block</h3>
+<pre class="my-4"><code class="language-python uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">def hello_world():
+    print("Hello, world!")
+</code></pre>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">### Inline Code
+<p class="text-base leading-relaxed mb-6">Use <code class="uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">inline code</code> for short snippets.</p>
+<h3 id="indented-code-block" class="text-xl font-semibold mb-3 mt-5">Indented Code Block</h3>
+<pre class="my-4"><code class="uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">def hello_world():
+    print("Hello, world!")
+</code></pre>
+<h3 id="fenced-code-block" class="text-xl font-semibold mb-3 mt-5">Fenced Code Block</h3>
+<p class="text-base leading-relaxed mb-6">```python
+def hello_world():
+print("Hello, world!")
+```
+</p></code></pre>
+</div>
+</div>
+</div>
+<h2 id="horizontal-rules" class="text-2xl font-semibold mb-4 mt-6">Horizontal Rules</h2>
+<div class="tabs-container" data-tabs-id="c9cc1a83">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('c9cc1a83', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('c9cc1a83', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><hr class="border-t border-border my-8">
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">---
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="links" class="text-2xl font-semibold mb-4 mt-6">Links</h2>
+<div class="tabs-container" data-tabs-id="77d84fa7">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('77d84fa7', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('77d84fa7', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><h3 class="text-xl font-semibold mb-3 mt-5">Inline Links</h3>
+<p class="text-base leading-relaxed mb-6"><a href="https://www.google.com" class="uk-link text-primary hover:text-primary-focus underline">Visit Google</a></p>
+<h3 class="text-xl font-semibold mb-3 mt-5">Reference-Style Links</h3>
+<p class="text-base leading-relaxed mb-6"><a href="https://www.google.com" class="uk-link text-primary hover:text-primary-focus underline">Visit Google</a></p>
+<h3 class="text-xl font-semibold mb-3 mt-5">Autolinks</h3>
+<p class="text-base leading-relaxed mb-6"><a href="https://www.example.com" class="uk-link text-primary hover:text-primary-focus underline">https://www.example.com</a></p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">### Inline Links
+<p class="text-base leading-relaxed mb-6"><a href="https://www.google.com" target="_blank" rel="noopener noreferrer" class="text-primary underline uk-link text-primary hover:text-primary-focus underline">Visit Google</a></p>
+<h3 id="reference-style-links" class="text-xl font-semibold mb-3 mt-5">Reference-Style Links</h3>
+<p class="text-base leading-relaxed mb-6"><a href="https://www.google.com" target="_blank" rel="noopener noreferrer" class="text-primary underline uk-link text-primary hover:text-primary-focus underline">Visit Google</a></p>
+<h3 id="autolinks" class="text-xl font-semibold mb-3 mt-5">Autolinks</h3>
+<p class="text-base leading-relaxed mb-6">&lt;https://www.example.com&gt;
+</p></code></pre>
+</div>
+</div>
+</div>
+<h2 id="images" class="text-2xl font-semibold mb-4 mt-6">Images</h2>
+<div class="tabs-container" data-tabs-id="e6ef11b6">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('e6ef11b6', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('e6ef11b6', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><h3 class="text-xl font-semibold mb-3 mt-5">Inline Image</h3>
+<p class="text-base leading-relaxed mb-6"><img src="https://via.placeholder.com/150" alt="Alt text" title="" class="max-w-full h-auto rounded-lg mb-6 max-w-full h-auto rounded-lg mb-6"></p>
+<h3 class="text-xl font-semibold mb-3 mt-5">Reference-Style Image</h3>
+<p class="text-base leading-relaxed mb-6"><img src="https://via.placeholder.com/150" alt="Alt text" title="" class="max-w-full h-auto rounded-lg mb-6 max-w-full h-auto rounded-lg mb-6"></p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">### Inline Image
+<p class="text-base leading-relaxed mb-6"><img src="https://via.placeholder.com/150" alt="Alt text" title="" class="max-w-full h-auto rounded-lg mb-6 max-w-full h-auto rounded-lg mb-6"></p>
+<h3 id="reference-style-image" class="text-xl font-semibold mb-3 mt-5">Reference-Style Image</h3>
+<p class="text-base leading-relaxed mb-6"><img src="https://via.placeholder.com/150" alt="Alt text" title="" class="max-w-full h-auto rounded-lg mb-6 max-w-full h-auto rounded-lg mb-6"></p>
+<p class="text-base leading-relaxed mb-6"></p></code></pre>
+</div>
+</div>
+</div>
+<h2 id="html" class="text-2xl font-semibold mb-4 mt-6">HTML</h2>
+<div class="tabs-container" data-tabs-id="cb55b225">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('cb55b225', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('cb55b225', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">This is <b>bold</b> and this is <i>italic</i>.</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">This is &lt;b&gt;bold&lt;/b&gt; and this is &lt;i&gt;italic&lt;/i&gt;.
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="strikethrough" class="text-2xl font-semibold mb-4 mt-6">Strikethrough</h2>
+<div class="tabs-container" data-tabs-id="58a95c99">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('58a95c99', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('58a95c99', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6"><del>This text is strikethrough.</del></p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">~~This text is strikethrough.~~
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="tables" class="text-2xl font-semibold mb-4 mt-6">Tables</h2>
+<div class="tabs-container" data-tabs-id="7dbc16f4">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('7dbc16f4', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('7dbc16f4', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small w-full mb-6">
+<thead>
+<tr>
+<th align="left" class="!text-left p-2 font-semibold">Column 1</th>
+<th align="left" class="!text-left p-2 font-semibold">Column 2</th>
+<th align="left" class="!text-left p-2 font-semibold">Column 3</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left" class="p-2">Row 1</td>
+<td align="left" class="p-2">Data</td>
+<td align="left" class="p-2">Data</td>
+</tr>
+<tr>
+<td align="left" class="p-2">Row 2</td>
+<td align="left" class="p-2">Data</td>
+<td align="left" class="p-2">Data</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">| Column 1 | Column 2 | Column 3 |
+|----------|----------|----------|
+| Row 1    | Data     | Data     |
+| Row 2    | Data     | Data     |
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="footnotes" class="text-2xl font-semibold mb-4 mt-6">Footnotes</h2>
+<p class="text-base leading-relaxed mb-6">This is a footnote reference<span aria-hidden="true" class="hidden"> (</span><span role="doc-noteref" aria-label="Sidenote 1" _="on click if window.innerWidth &gt;= 1280 then add .hl to #sn-1 then wait 1s then remove .hl from #sn-1 else toggle .open on me then toggle .show on #sn-1" id="snref-1" class="sidenote-ref cursor-pointer"></span><span role="doc-footnote" aria-labelledby="snref-1" id="sn-1" class="sidenote text-sm leading-relaxed border-l-2 border-amber-400 dark:border-blue-400 pl-3 text-neutral-500 dark:text-neutral-400 transition-all duration-500 w-full my-2 xl:my-0">This is the footnote text.</span><span aria-hidden="true" class="hidden">)</span>.</p>
+<p class="text-base leading-relaxed mb-6"><strong>Markdown Source:</strong></p>
+<pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">This is a footnote reference[^1].
+
+[ ^1]: This is the footnote text. (Do not put a space after the opening bracketh)
+</code></pre>
+<h2 id="definition-lists" class="text-2xl font-semibold mb-4 mt-6">Definition Lists</h2>
+<div class="tabs-container" data-tabs-id="ad27d124">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('ad27d124', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('ad27d124', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">Term<br>
+: Definition</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">Term  
+: Definition
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="abbreviations" class="text-2xl font-semibold mb-4 mt-6">Abbreviations</h2>
+<div class="tabs-container" data-tabs-id="a1d8cd6f">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('a1d8cd6f', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('a1d8cd6f', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">The HTML abbreviation is HTML. It stands for <em>HyperText Markup Language</em>.</p>
+<p class="text-base leading-relaxed mb-6">*[HTML]: HyperText Markup Language</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">The HTML abbreviation is HTML. It stands for *HyperText Markup Language*.
+<p class="text-base leading-relaxed mb-6">*[HTML]: HyperText Markup Language
+</p></code></pre>
+</div>
+</div>
+</div>
+<h2 id="superscript-and-subscript" class="text-2xl font-semibold mb-4 mt-6">Superscript and Subscript</h2>
+<div class="tabs-container" data-tabs-id="8abb5935">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('8abb5935', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('8abb5935', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">E = mc<sup>2</sup><br>
+H<sub>2</sub>O</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">E = mc&lt;sup&gt;2&lt;/sup&gt;  
+H&lt;sub&gt;2&lt;/sub&gt;O
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="highlight-text" class="text-2xl font-semibold mb-4 mt-6">Highlight Text</h2>
+<div class="tabs-container" data-tabs-id="aeb0d892">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('aeb0d892', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('aeb0d892', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">==Highlighted text==</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">==Highlighted text==
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="insertion-and-deletion" class="text-2xl font-semibold mb-4 mt-6">Insertion and Deletion</h2>
+<div class="tabs-container" data-tabs-id="b59b02dc">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('b59b02dc', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('b59b02dc', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">{++Inserted text++}<br>
+{--Deleted text--}</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">{++Inserted text++}  
+{--Deleted text--}
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="comments" class="text-2xl font-semibold mb-4 mt-6">Comments</h2>
+<div class="tabs-container" data-tabs-id="00cf9b53">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('00cf9b53', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('00cf9b53', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><!-- This is a comment -->
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">&lt;!-- This is a comment --&gt;
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="emoji" class="text-2xl font-semibold mb-4 mt-6">Emoji</h2>
+<div class="tabs-container" data-tabs-id="4d6f0e30">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('4d6f0e30', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('4d6f0e30', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">:smile: :+1: :heart:</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">:smile: :+1: :heart:
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="table-of-contents" class="text-2xl font-semibold mb-4 mt-6">Table of Contents</h2>
+<div class="tabs-container" data-tabs-id="c0dc5dc1">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('c0dc5dc1', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('c0dc5dc1', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">[TOC]</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">[TOC]
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="heading-ids" class="text-2xl font-semibold mb-4 mt-6">Heading IDs</h2>
+<div class="tabs-container" data-tabs-id="4bb7f5aa">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('4bb7f5aa', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('4bb7f5aa', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><h3 class="text-xl font-semibold mb-3 mt-5">Custom Heading {#custom-id}</h3>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">### Custom Heading {#custom-id}
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="raw-html-blocks" class="text-2xl font-semibold mb-4 mt-6">Raw HTML Blocks</h2>
+<div class="tabs-container" data-tabs-id="347d10fc">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('347d10fc', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('347d10fc', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><div style="color: red;">This is red text.</div>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">&lt;div style="color: red;"&gt;This is red text.&lt;/div&gt;
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="embedded-media" class="text-2xl font-semibold mb-4 mt-6">Embedded Media</h2>
+<div class="tabs-container" data-tabs-id="e0dccaf8">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('e0dccaf8', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('e0dccaf8', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><h3 class="text-xl font-semibold mb-3 mt-5">Video</h3>
+<video controls>
+  <source src="movie.mp4" type="video/mp4">
+</source></video>
+<h3 class="text-xl font-semibold mb-3 mt-5">Audio</h3>
+<audio controls>
+  <source src="audio.mp3" type="audio/mpeg">
+</source></audio>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">### Video
+<p class="text-base leading-relaxed mb-6">&lt;video controls&gt;
+&lt;source src="movie.mp4" type="video/mp4"&gt;
+&lt;/video&gt;</p>
+<h3 id="audio" class="text-xl font-semibold mb-3 mt-5">Audio</h3>
+<p class="text-base leading-relaxed mb-6">&lt;audio controls&gt;
+&lt;source src="audio.mp3" type="audio/mpeg"&gt;
+&lt;/audio&gt;
+</p></code></pre>
+</div>
+</div>
+</div>
+<h2 id="mathematical-notation" class="text-2xl font-semibold mb-4 mt-6">Mathematical Notation</h2>
+<div class="tabs-container" data-tabs-id="ba825add">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('ba825add', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('ba825add', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><h3 class="text-xl font-semibold mb-3 mt-5">Inline Math</h3>
+<p class="text-base leading-relaxed mb-6">$E = mc^2$</p>
+<h3 class="text-xl font-semibold mb-3 mt-5">Block Math</h3>
+<p class="text-base leading-relaxed mb-6">$$
+\int_a^b f(x) dx = F(b) - F(a)
+$$</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">### Inline Math
+<p class="text-base leading-relaxed mb-6">$E = mc^2$</p>
+<h3 id="block-math" class="text-xl font-semibold mb-3 mt-5">Block Math</h3>
+<p class="text-base leading-relaxed mb-6">$$
+\int_a^b f(x) dx = F(b) - F(a)
+$$
+</p></code></pre>
+</div>
+</div>
+</div>
+<h2 id="diagrams" class="text-2xl font-semibold mb-4 mt-6">Diagrams</h2>
+<pre class="my-4"><code class="uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">```mermaid
+---
+width: 65vw
+---
+gantt
+    title A Gantt Diagram
+    dateFormat  YYYY-MM-DD
+    section Section
+    A task           :a1, 2014-01-01, 30d
+    Another task     :after a1  , 20d
+    section Another
+    Task in sec      :2014-01-12  , 12d
+    another task      : 24d
+```
+</code></pre>
+<p class="text-base leading-relaxed mb-6">will render to</p>
+<div class="mermaid-container relative border-2 rounded-md my-4" style="width: 65vw; position: relative; left: 50%; transform: translateX(-50%);">
+                <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
+                    <button onclick="resetMermaidZoom('mermaid-13895717')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
+                    <button onclick="zoomMermaidIn('mermaid-13895717')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
+                    <button onclick="zoomMermaidOut('mermaid-13895717')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
+                </div>
+                <div id="mermaid-13895717" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: 400px; height: auto;" data-mermaid-code="gantt
+    title A Gantt Diagram
+    dateFormat  YYYY-MM-DD
+    section Section
+    A task           :a1, 2014-01-01, 30d
+    Another task     :after a1  , 20d
+    section Another
+    Task in sec      :2014-01-12  , 12d
+    another task      : 24d
+"><pre class="mermaid my-4" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">gantt
+    title A Gantt Diagram
+    dateFormat  YYYY-MM-DD
+    section Section
+    A task           :a1, 2014-01-01, 30d
+    Another task     :after a1  , 20d
+    section Another
+    Task in sec      :2014-01-12  , 12d
+    another task      : 24d
+</pre></div>
+            </div>
+<h2 id="smart-typography" class="text-2xl font-semibold mb-4 mt-6">Smart Typography</h2>
+<div class="tabs-container" data-tabs-id="fdfd8109">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('fdfd8109', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('fdfd8109', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">"Curly quotes"<br>
+-- En-dash<br>
+--- Em-dash</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">"Curly quotes"  
+-- En-dash  
+--- Em-dash
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="custom-containers" class="text-2xl font-semibold mb-4 mt-6">Custom Containers</h2>
+<div class="tabs-container" data-tabs-id="92d205b3">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('92d205b3', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('92d205b3', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><blockquote class="uk-blockquote pl-4 border-l-4 border-primary italic mb-6">
+<p class="text-base leading-relaxed mb-6">[!NOTE]
+This is a note.</p>
+</blockquote>
+<blockquote class="uk-blockquote pl-4 border-l-4 border-primary italic mb-6">
+<p class="text-base leading-relaxed mb-6">[!WARNING]
+This is a warning.</p>
+</blockquote>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">&gt; [!NOTE]
+&gt; This is a note.
+<p class="text-base leading-relaxed mb-6">&gt; [!WARNING]
+&gt; This is a warning.
+</p></code></pre>
+</div>
+</div>
+</div>
+<h2 id="collapsible-sections" class="text-2xl font-semibold mb-4 mt-6">Collapsible Sections</h2>
+<div class="tabs-container" data-tabs-id="384b9fed">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('384b9fed', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('384b9fed', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><details>
+<summary>Click to expand</summary>
+<p class="text-base leading-relaxed mb-6">Hidden content here.</p>
+</details>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">&lt;details&gt;
+&lt;summary&gt;Click to expand&lt;/summary&gt;
+<p class="text-base leading-relaxed mb-6">Hidden content here.</p>
+<p class="text-base leading-relaxed mb-6">&lt;/details&gt;
+</p></code></pre>
+</div>
+</div>
+</div>
+<h2 id="keyboard-input" class="text-2xl font-semibold mb-4 mt-6">Keyboard Input</h2>
+<div class="tabs-container" data-tabs-id="3475d799">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('3475d799', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('3475d799', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">Press <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy.</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">Press &lt;kbd&gt;Ctrl&lt;/kbd&gt; + &lt;kbd&gt;C&lt;/kbd&gt; to copy.
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="line-block" class="text-2xl font-semibold mb-4 mt-6">Line Block</h2>
+<div class="tabs-container" data-tabs-id="b814708c">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('b814708c', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('b814708c', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">| Roses are red<br>
+| Violets are blue</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">| Roses are red  
+| Violets are blue
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="citation" class="text-2xl font-semibold mb-4 mt-6">Citation</h2>
+<div class="tabs-container" data-tabs-id="bae08b18">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('bae08b18', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('bae08b18', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">This is a citation [@doe2025].</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">This is a citation [@doe2025].
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="page-break" class="text-2xl font-semibold mb-4 mt-6">Page Break</h2>
+<div class="tabs-container" data-tabs-id="0157dc2d">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('0157dc2d', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('0157dc2d', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">\pagebreak</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">\pagebreak
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="escaping-characters" class="text-2xl font-semibold mb-4 mt-6">Escaping Characters</h2>
+<div class="tabs-container" data-tabs-id="6c715a15">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('6c715a15', 0)">Rendered</button>
+<button class="tab-button " onclick="switchTab('6c715a15', 1)">Markdown Source</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><p class="text-base leading-relaxed mb-6">*Not italicized*</p>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-markdown uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">\*Not italicized\*
+</code></pre>
+</div>
+</div>
+</div>
+<h2 id="tabbed-content" class="text-2xl font-semibold mb-4 mt-6">Tabbed Content</h2>
+<p class="text-base leading-relaxed mb-6">You can create tabbed sections to show multiple versions of content, like code in different languages or rendered output vs source code.</p>
+<p class="text-base leading-relaxed mb-6"><strong>Syntax:</strong></p>
+<p class="text-base leading-relaxed mb-6">To create tabs, use the following markdown syntax:</p>
+<pre class="my-4"><code class="uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">:::tabs
+::tab{title="Python"}
+```python
+def greet(name):
+    return f"Hello, {name}!"
+print(greet("World"))
+```
+::tab{title="JavaScript"}
+```javascript
+function greet(name) {
+    return `Hello, ${name}!`;
+}
+console.log(greet("World"));
+```
+::tab{title="Output"}
+```
+Hello, World!
+```
+:::
+</code></pre>
+<p class="text-base leading-relaxed mb-6"><strong>Example:</strong></p>
+<div class="tabs-container" data-tabs-id="18ee9062">
+<div class="tabs-header">
+<button class="tab-button active" onclick="switchTab('18ee9062', 0)">Python</button>
+<button class="tab-button " onclick="switchTab('18ee9062', 1)">JavaScript</button>
+<button class="tab-button " onclick="switchTab('18ee9062', 2)">Output</button>
+</div>
+<div class="tabs-content">
+<div class="tab-panel active" data-tab-index="0"><pre class="my-4"><code class="language-python uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">def greet(name):
+    return f"Hello, {name}!"
+<p class="text-base leading-relaxed mb-6">print(greet("World"))
+</p></code></pre>
+</div>
+<div class="tab-panel " data-tab-index="1"><pre class="my-4"><code class="language-javascript uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">function greet(name) {
+    return `Hello, ${name}!`;
+}
+<p class="text-base leading-relaxed mb-6">console.log(greet("World"));
+</p></code></pre>
+</div>
+<div class="tab-panel " data-tab-index="2"><pre class="my-4"><code class="uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">Hello, World!
+</code></pre>
+</div>
+</div>
+</div>
+</div></div>
+
+    </main>
+    
+            
+        <aside id="toc-sidebar" class="hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
+            <details open>
+                <summary class="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
+                    <span uk-icon="list" class="w-5 h-5 mr-2"></span>
+                    Contents
+                </summary>
+                <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
+                    <ul class="mt-2 list-none">
+  <li class="my-1">
+<a href="#headings" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Headings</a>  </li>
+  <li class="my-1">
+<a href="#headings" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Headings</a>  </li>
+  <li class="my-1">
+<a href="#setext-style" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Setext Style</a>  </li>
+  <li class="my-1">
+<a href="#atx-style" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">ATX Style</a>  </li>
+  <li class="my-1">
+<a href="#heading-level-1" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-0">Heading Level 1</a>  </li>
+  <li class="my-1">
+<a href="#heading-level-2" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Heading Level 2</a>  </li>
+  <li class="my-1">
+<a href="#heading-level-3" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Heading Level 3</a>  </li>
+  <li class="my-1">
+<a href="#heading-level-4" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-9">Heading Level 4</a>  </li>
+  <li class="my-1">
+<a href="#heading-level-5" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-12">Heading Level 5</a>  </li>
+  <li class="my-1">
+<a href="#paragraphs" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Paragraphs</a>  </li>
+  <li class="my-1">
+<a href="#line-breaks" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Line Breaks</a>  </li>
+  <li class="my-1">
+<a href="#emphasis" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Emphasis</a>  </li>
+  <li class="my-1">
+<a href="#blockquotes" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Blockquotes</a>  </li>
+  <li class="my-1">
+<a href="#lists" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Lists</a>  </li>
+  <li class="my-1">
+<a href="#ordered-list" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Ordered List</a>  </li>
+  <li class="my-1">
+<a href="#unordered-list" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Unordered List</a>  </li>
+  <li class="my-1">
+<a href="#nested-list" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Nested List</a>  </li>
+  <li class="my-1">
+<a href="#task-list" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Task List</a>  </li>
+  <li class="my-1">
+<a href="#code" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Code</a>  </li>
+  <li class="my-1">
+<a href="#inline-code" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Inline Code</a>  </li>
+  <li class="my-1">
+<a href="#indented-code-block" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Indented Code Block</a>  </li>
+  <li class="my-1">
+<a href="#fenced-code-block" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Fenced Code Block</a>  </li>
+  <li class="my-1">
+<a href="#horizontal-rules" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Horizontal Rules</a>  </li>
+  <li class="my-1">
+<a href="#links" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Links</a>  </li>
+  <li class="my-1">
+<a href="#inline-links" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Inline Links</a>  </li>
+  <li class="my-1">
+<a href="#reference-style-links" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Reference-Style Links</a>  </li>
+  <li class="my-1">
+<a href="#autolinks" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Autolinks</a>  </li>
+  <li class="my-1">
+<a href="#images" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Images</a>  </li>
+  <li class="my-1">
+<a href="#inline-image" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Inline Image</a>  </li>
+  <li class="my-1">
+<a href="#reference-style-image" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Reference-Style Image</a>  </li>
+  <li class="my-1">
+<a href="#html" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">HTML</a>  </li>
+  <li class="my-1">
+<a href="#strikethrough" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Strikethrough</a>  </li>
+  <li class="my-1">
+<a href="#tables" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Tables</a>  </li>
+  <li class="my-1">
+<a href="#footnotes" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Footnotes</a>  </li>
+  <li class="my-1">
+<a href="#definition-lists" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Definition Lists</a>  </li>
+  <li class="my-1">
+<a href="#abbreviations" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Abbreviations</a>  </li>
+  <li class="my-1">
+<a href="#superscript-and-subscript" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Superscript and Subscript</a>  </li>
+  <li class="my-1">
+<a href="#highlight-text" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Highlight Text</a>  </li>
+  <li class="my-1">
+<a href="#insertion-and-deletion" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Insertion and Deletion</a>  </li>
+  <li class="my-1">
+<a href="#comments" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Comments</a>  </li>
+  <li class="my-1">
+<a href="#emoji" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Emoji</a>  </li>
+  <li class="my-1">
+<a href="#table-of-contents" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Table of Contents</a>  </li>
+  <li class="my-1">
+<a href="#heading-ids" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Heading IDs</a>  </li>
+  <li class="my-1">
+<a href="#custom-heading-custom-id" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Custom Heading {#custom-id}</a>  </li>
+  <li class="my-1">
+<a href="#raw-html-blocks" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Raw HTML Blocks</a>  </li>
+  <li class="my-1">
+<a href="#embedded-media" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Embedded Media</a>  </li>
+  <li class="my-1">
+<a href="#video" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Video</a>  </li>
+  <li class="my-1">
+<a href="#audio" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Audio</a>  </li>
+  <li class="my-1">
+<a href="#mathematical-notation" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Mathematical Notation</a>  </li>
+  <li class="my-1">
+<a href="#inline-math" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Inline Math</a>  </li>
+  <li class="my-1">
+<a href="#block-math" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Block Math</a>  </li>
+  <li class="my-1">
+<a href="#diagrams" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Diagrams</a>  </li>
+  <li class="my-1">
+<a href="#smart-typography" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Smart Typography</a>  </li>
+  <li class="my-1">
+<a href="#custom-containers" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Custom Containers</a>  </li>
+  <li class="my-1">
+<a href="#collapsible-sections" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Collapsible Sections</a>  </li>
+  <li class="my-1">
+<a href="#keyboard-input" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Keyboard Input</a>  </li>
+  <li class="my-1">
+<a href="#line-block" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Line Block</a>  </li>
+  <li class="my-1">
+<a href="#citation" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Citation</a>  </li>
+  <li class="my-1">
+<a href="#page-break" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Page Break</a>  </li>
+  <li class="my-1">
+<a href="#escaping-characters" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Escaping Characters</a>  </li>
+  <li class="my-1">
+<a href="#tabbed-content" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Tabbed Content</a>  </li>
+</ul>
+
+                </div>
+            </details>
+        </aside>
+        
+        </div>
+        
+    <footer class="w-full max-w-7xl mx-auto px-6 mt-auto mb-6">
+        <div class="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right">
+            Powered by Bloggy
+        </div>
+    </footer>
+    
+    </div>
+    
+    
+    <!-- Mermaid diagrams -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+    <script src="/static/scripts.js" type="module"></script>
+    
+    
+    <script>
+        // Theme toggle functionality
+        (function() {
+            const stored = localStorage.getItem('__FRANKEN__');
+            const franken = stored ? JSON.parse(stored) : {mode: 'light'};
+            if (franken.mode === 'dark') {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+        
+        function toggleTheme() {
+            const html = document.documentElement;
+            html.classList.toggle('dark');
+            const stored = localStorage.getItem('__FRANKEN__');
+            const franken = stored ? JSON.parse(stored) : {mode: 'light'};
+            franken.mode = html.classList.contains('dark') ? 'dark' : 'light';
+            localStorage.setItem('__FRANKEN__', JSON.stringify(franken));
+        }
+        
+        // Tab switching functionality
+        function switchTab(tabsId, index) {
+            const container = document.querySelector('.tabs-container[data-tabs-id="' + tabsId + '"]');
+            if (!container) return;
+            
+            // Update buttons
+            const buttons = container.querySelectorAll('.tab-button');
+            buttons.forEach(function(btn, i) {
+                if (i === index) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            // Update panels
+            const panels = container.querySelectorAll('.tab-panel');
+            panels.forEach(function(panel, i) {
+                if (i === index) {
+                    panel.classList.add('active');
+                    panel.style.position = 'relative';
+                    panel.style.visibility = 'visible';
+                    panel.style.opacity = '1';
+                    panel.style.pointerEvents = 'auto';
+                } else {
+                    panel.classList.remove('active');
+                    panel.style.position = 'absolute';
+                    panel.style.visibility = 'hidden';
+                    panel.style.opacity = '0';
+                    panel.style.pointerEvents = 'none';
+                }
+            });
+        }
+        window.switchTab = switchTab;
+        
+        // Set tab container heights based on tallest panel
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                document.querySelectorAll('.tabs-container').forEach(container => {
+                    const panels = container.querySelectorAll('.tab-panel');
+                    let maxHeight = 0;
+                    
+                    panels.forEach(panel => {
+                        const wasActive = panel.classList.contains('active');
+                        panel.style.position = 'relative';
+                        panel.style.visibility = 'visible';
+                        panel.style.opacity = '1';
+                        panel.style.pointerEvents = 'auto';
+                        
+                        const height = panel.offsetHeight;
+                        if (height > maxHeight) maxHeight = height;
+                        
+                        if (!wasActive) {
+                            panel.style.position = 'absolute';
+                            panel.style.visibility = 'hidden';
+                            panel.style.opacity = '0';
+                            panel.style.pointerEvents = 'none';
+                        }
+                    });
+                    
+                    const tabsContent = container.querySelector('.tabs-content');
+                    if (tabsContent && maxHeight > 0) {
+                        tabsContent.style.minHeight = maxHeight + 'px';
+                    }
+                });
+            }, 100);
+            
+            // Initialize KaTeX rendering
+            if (window.renderMathInElement) {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+        
+        // Sidenote interactions
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('sidenote-ref')) {
+                const id = e.target.id.replace('snref-', 'sn-');
+                const sidenote = document.getElementById(id);
+                if (sidenote) {
+                    if (window.innerWidth >= 1280) {
+                        sidenote.classList.add('hl');
+                        setTimeout(() => sidenote.classList.remove('hl'), 1000);
+                    } else {
+                        e.target.classList.toggle('open');
+                        sidenote.classList.toggle('show');
+                    }
+                }
+            }
+        });
+    </script>
+    
+</body>
+</html>
