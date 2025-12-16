@@ -6,12 +6,34 @@ from .config import get_config, reload_config
 # Import app at module level, but config will be initialized before it's used
 from .core import app
 
+def build_command():
+    """CLI entry point for bloggy build command"""
+    import argparse
+    from .build import build_static_site
+    
+    parser = argparse.ArgumentParser(description='Build static site from markdown files')
+    parser.add_argument('directory', nargs='?', help='Path to markdown files directory')
+    parser.add_argument('-o', '--output', help='Output directory (default: ./dist)', default='dist')
+    
+    args = parser.parse_args(sys.argv[2:])  # Skip 'bloggy' and 'build'
+    
+    try:
+        output_dir = build_static_site(input_dir=args.directory, output_dir=args.output)
+        return 0
+    except Exception as e:
+        print(f"Error building static site: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        return 1
+
 def cli():
     """CLI entry point for bloggy command
     
     Usage:
         bloggy [directory]                    # Run locally on 127.0.0.1:5001
         bloggy [directory] --host 0.0.0.0     # Run on all interfaces
+        bloggy build [directory]              # Build static site
+        bloggy build [directory] -o output    # Build to custom output directory
         
     Environment variables:
         BLOGGY_ROOT: Path to markdown files
@@ -23,6 +45,10 @@ def cli():
     """
     import uvicorn
     import argparse
+    
+    # Check if first argument is 'build'
+    if len(sys.argv) > 1 and sys.argv[1] == 'build':
+        sys.exit(build_command())
     
     parser = argparse.ArgumentParser(description='Run Bloggy server')
     parser.add_argument('directory', nargs='?', help='Path to markdown files directory')
