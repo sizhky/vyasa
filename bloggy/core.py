@@ -716,14 +716,34 @@ def navbar():
     return Div(A(get_blog_title(), href="/"), theme_toggle(),
                cls="flex items-center justify-between bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800")
 
-def collapsible_sidebar(icon, title, items_list, is_open=True):
+def collapsible_sidebar(icon, title, items_list, is_open=True, show_reveal=False):
     """Reusable collapsible sidebar component with sticky header"""
+    # Build the summary content
+    summary_content = [
+        UkIcon(icon, cls="w-5 h-5 mr-2"),
+        Span(title, cls="flex-1")
+    ]
+    
+    # Add reveal button if requested
+    if show_reveal:
+        summary_content.append(
+            Button(
+                Span("📍", cls="text-lg"),
+                title="Reveal current file in sidebar",
+                cls="p-2 ml-auto hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors",
+                type="button",
+                id="reveal-in-sidebar-btn",
+                style="border: 1px solid #3b82f6; cursor: pointer; background: #dbeafe; color: #1e40af; min-width: 32px; min-height: 32px; display: flex; align-items: center; justify-content: center;"
+            )
+        )
+    
     return Details(
-        Summary(UkIcon(icon, cls="w-5 h-5 mr-2"), title, 
+        Summary(*summary_content,
                 cls="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10"),
         Div(
             Ul(*items_list, cls="mt-2 list-none"),
-            cls="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]"
+            cls="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]",
+            id="sidebar-scroll-container"
         ),
         open=is_open
     )
@@ -841,7 +861,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         content_with_sidebars = Div(cls="w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1")(
             # Left sidebar - collapsible post list (stays static, JS updates active state)
             Aside(
-                collapsible_sidebar("menu", "Posts", get_posts(), is_open=True),
+                collapsible_sidebar("menu", "Posts", get_posts(), is_open=True, show_reveal=True),
                 cls="hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
                 id="posts-sidebar"
             ),
@@ -924,11 +944,11 @@ def build_post_tree(folder):
                 folder_title = slug_to_title(item.name)
                 items.append(Li(Details(
                     Summary(
-                        Span(UkIcon("chevron-right", cls="folder-chevron w-4 h-4 text-slate-400"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
-                        Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
-                        Span(folder_title),
-                        cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"),
-                    Ul(*sub_items, cls="ml-6 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), open=False), cls="my-1"))
+                        Span(UkIcon("chevron-right", cls="folder-chevron w-4 h-4 text-slate-400"), cls="w-4 mr-1 flex items-center justify-center shrink-0"),
+                        Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-1 flex items-center justify-center shrink-0"),
+                        Span(folder_title, cls="truncate min-w-0", title=folder_title),
+                        cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"),
+                    Ul(*sub_items, cls="ml-2 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), open=False), cls="my-1"))
         elif item.suffix == '.md':
             # Skip the file being used for home page (index.md takes precedence over readme.md)
             if item.parent == root:
@@ -941,10 +961,10 @@ def build_post_tree(folder):
             items.append(Li(A(
                 Span(cls="w-4 mr-2 shrink-0"),
                 Span(UkIcon("file-text", cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
-                Span(title),
+                Span(title, cls="truncate min-w-0", title=title),
                 href=f'/posts/{slug}',
                 hx_get=f'/posts/{slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
-                cls="post-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors",
+                cls="post-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0",
                 data_path=slug)))
     return items
 

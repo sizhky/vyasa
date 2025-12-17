@@ -179,6 +179,46 @@ mermaid.run().then(() => {
     setTimeout(initMermaidInteraction, 100);
 });
 
+// Reveal current file in sidebar
+function revealInSidebar(event) {
+    if (event) {
+        event.stopPropagation(); // Prevent collapsing the sidebar
+        event.preventDefault(); // Prevent default button behavior
+    }
+    
+    const currentPath = window.location.pathname.replace(/^\/posts\//, '');
+    const activeLink = document.querySelector(`.post-link[data-path="${currentPath}"]`);
+    
+    if (activeLink) {
+        // Expand all parent details elements
+        let parent = activeLink.closest('details');
+        while (parent) {
+            parent.open = true;
+            parent = parent.parentElement.closest('details');
+        }
+        
+        // Scroll to the active link
+        const scrollContainer = document.getElementById('sidebar-scroll-container');
+        if (scrollContainer) {
+            const linkRect = activeLink.getBoundingClientRect();
+            const containerRect = scrollContainer.getBoundingClientRect();
+            const scrollTop = scrollContainer.scrollTop;
+            const offset = linkRect.top - containerRect.top + scrollTop - (containerRect.height / 2) + (linkRect.height / 2);
+            
+            scrollContainer.scrollTo({
+                top: offset,
+                behavior: 'smooth'
+            });
+        }
+        
+        // Highlight the active link temporarily
+        activeLink.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
+        setTimeout(() => {
+            activeLink.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
+        }, 1500);
+    }
+}
+
 // Update active post link in sidebar
 function updateActivePostLink() {
     const currentPath = window.location.pathname.replace(/^\/posts\//, '');
@@ -236,6 +276,13 @@ document.body.addEventListener('htmx:afterSwap', function() {
     });
     updateActivePostLink();
     updateActiveTocLink();
+    
+    // Reattach reveal button handler (in case sidebar was swapped)
+    const revealBtn = document.getElementById('reveal-in-sidebar-btn');
+    if (revealBtn) {
+        revealBtn.removeEventListener('click', revealInSidebar); // Remove old listener
+        revealBtn.addEventListener('click', revealInSidebar); // Add new listener
+    }
 });
 
 // Watch for theme changes and re-render mermaid diagrams
@@ -256,4 +303,10 @@ observer.observe(document.documentElement, {
 document.addEventListener('DOMContentLoaded', () => {
     updateActivePostLink();
     updateActiveTocLink();
+    
+    // Attach reveal button click handler
+    const revealBtn = document.getElementById('reveal-in-sidebar-btn');
+    if (revealBtn) {
+        revealBtn.addEventListener('click', revealInSidebar);
+    }
 });
