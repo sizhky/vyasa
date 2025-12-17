@@ -912,30 +912,28 @@ h1, h2, h3, h4, h5, h6 {
     background: transparent !important;
 }
 
-/* Scrolling background animation - Each layer moves independently */
+/* Scrolling background animation - 90s chaos */
 @keyframes bg-scroll {
     0% { 
         background-position: 
-            0 0,           /* stripes */
-            0 0,           /* conic gradient */
-            0 0,           /* star 1 */
-            100% 0,        /* star 2 */
-            0 100%,        /* star 3 */
-            100% 100%,     /* star 4 */
-            50% 0,         /* star 5 */
-            0 50%,         /* star 6 */
+            0 0,           /* construction stripes */
+            0 0,           /* checkered */
+            0 0,           /* cyan grid */
+            0 0,           /* magenta grid */
+            0 0,           /* color burst */
+            0 0,           /* dots 1 */
+            50% 50%,       /* dots 2 */
             0 0;           /* base */
     }
     100% { 
         background-position: 
-            200px 200px,   /* stripes move diagonal */
-            360deg 360deg, /* conic spins */
-            400px -400px,  /* star 1 diagonal */
-            -300px 300px,  /* star 2 opposite */
-            500px 500px,   /* star 3 diagonal */
-            -400px -400px, /* star 4 opposite */
-            250% 100%,     /* star 5 horizontal */
-            100% 250%,     /* star 6 vertical */
+            120px 120px,   /* stripes scroll diagonal */
+            20px 20px,     /* checkered shifts */
+            -100px 0,      /* cyan grid moves left */
+            0 100px,       /* magenta grid moves down */
+            360deg 360deg, /* color burst spins */
+            80px 80px,     /* dots 1 diagonal */
+            -30% -30%,     /* dots 2 opposite */
             0 0;           /* base stays */
     }
 }
@@ -948,86 +946,116 @@ html {
     color-scheme: light !important;
     
     background: 
-        /* Under construction stripes - Whiteish */
+        /* 90s UNDER CONSTRUCTION stripes - Yellow & White */
         repeating-linear-gradient(45deg, 
-            rgba(255, 255, 255, 0.9) 0px, 
-            rgba(255, 255, 255, 0.9) 20px, 
-            rgba(240, 240, 240, 0.7) 20px, 
-            rgba(240, 240, 240, 0.7) 40px
+            #ffff00 0px, 
+            #ffff00 15px, 
+            #ffffff 15px, 
+            #ffffff 30px
         ),
-        /* Spinning color wheel - Pastel colors */
-        repeating-conic-gradient(from 0deg, 
-            rgba(255, 200, 255, 0.3) 0deg, 
-            rgba(200, 255, 255, 0.3) 30deg, 
-            rgba(255, 255, 200, 0.3) 60deg, 
-            rgba(255, 220, 220, 0.3) 90deg, 
-            rgba(220, 255, 220, 0.3) 120deg,
-            rgba(220, 220, 255, 0.3) 150deg,
-            rgba(255, 200, 255, 0.3) 180deg
+        /* Checkered pattern overlay */
+        repeating-linear-gradient(0deg,
+            transparent 0px,
+            transparent 10px,
+            rgba(255, 255, 255, 0.1) 10px,
+            rgba(255, 255, 255, 0.1) 20px
         ),
-        /* Starfield with white/light stars */
-        radial-gradient(4px 4px at 20% 30%, rgba(255, 255, 255, 0.9), transparent),
-        radial-gradient(3px 3px at 60% 70%, rgba(230, 250, 255, 0.7), transparent),
-        radial-gradient(5px 5px at 50% 50%, rgba(255, 245, 255, 0.8), transparent),
-        radial-gradient(3px 3px at 80% 10%, rgba(255, 255, 230, 0.7), transparent),
-        radial-gradient(4px 4px at 15% 85%, rgba(245, 255, 245, 0.6), transparent),
-        radial-gradient(3px 3px at 90% 40%, rgba(255, 245, 245, 0.7), transparent),
-        /* Light base */
-        linear-gradient(135deg, #e8e8f0 0%, #f0f0f8 50%, #f8f8ff 100%) !important;
+        /* Neon grid lines */
+        repeating-linear-gradient(90deg,
+            transparent 0px,
+            transparent 49px,
+            rgba(0, 255, 255, 0.4) 49px,
+            rgba(0, 255, 255, 0.4) 50px
+        ),
+        repeating-linear-gradient(0deg,
+            transparent 0px,
+            transparent 49px,
+            rgba(255, 0, 255, 0.4) 49px,
+            rgba(255, 0, 255, 0.4) 50px
+        ),
+        /* Spinning color burst */
+        repeating-conic-gradient(from 45deg at 50% 50%, 
+            transparent 0deg,
+            rgba(255, 0, 0, 0.2) 10deg,
+            transparent 20deg,
+            rgba(0, 255, 0, 0.2) 30deg,
+            transparent 40deg,
+            rgba(0, 0, 255, 0.2) 50deg,
+            transparent 60deg
+        ),
+        /* Retro dots pattern */
+        radial-gradient(circle at 25% 25%, rgba(255, 0, 255, 0.3) 2px, transparent 2px),
+        radial-gradient(circle at 75% 75%, rgba(0, 255, 255, 0.3) 2px, transparent 2px),
+        /* 90s teal base */
+        linear-gradient(135deg, #008b8b 0%, #20b2aa 50%, #00ced1 100%) !important;
     background-size: 
-        100px 100px,
-        250px 250px,
-        200px 200px,
-        300px 300px,
-        250px 250px,
-        280px 280px,
-        220px 220px,
-        180px 180px,
-        100% 100% !important;
-    background-attachment: fixed !important;
-    animation: bg-scroll 30s linear infinite !important;
-}
-body {
-    /* Apply the same background to body */
-    background: 
-        /* Under construction stripes - Whiteish */
-        repeating-linear-gradient(45deg, 
-            rgba(255, 255, 255, 0.9) 0px, 
-            rgba(255, 255, 255, 0.9) 20px, 
-            rgba(240, 240, 240, 0.7) 20px, 
-            rgba(240, 240, 240, 0.7) 40px
-        ),
-        /* Spinning color wheel - Pastel colors */
-        repeating-conic-gradient(from 0deg, 
-            rgba(255, 200, 255, 0.3) 0deg, 
-            rgba(200, 255, 255, 0.3) 30deg, 
-            rgba(255, 255, 200, 0.3) 60deg, 
-            rgba(255, 220, 220, 0.3) 90deg, 
-            rgba(220, 255, 220, 0.3) 120deg,
-            rgba(220, 220, 255, 0.3) 150deg,
-            rgba(255, 200, 255, 0.3) 180deg
-        ),
-        /* Starfield with white/light stars */
-        radial-gradient(4px 4px at 20% 30%, rgba(255, 255, 255, 0.9), transparent),
-        radial-gradient(3px 3px at 60% 70%, rgba(230, 250, 255, 0.7), transparent),
-        radial-gradient(5px 5px at 50% 50%, rgba(255, 245, 255, 0.8), transparent),
-        radial-gradient(3px 3px at 80% 10%, rgba(255, 255, 230, 0.7), transparent),
-        radial-gradient(4px 4px at 15% 85%, rgba(245, 255, 245, 0.6), transparent),
-        radial-gradient(3px 3px at 90% 40%, rgba(255, 245, 245, 0.7), transparent),
-        /* Light base */
-        linear-gradient(135deg, #e8e8f0 0%, #f0f0f8 50%, #f8f8ff 100%) !important;
-    background-size: 
-        100px 100px,
-        250px 250px,
-        200px 200px,
-        300px 300px,
-        250px 250px,
-        280px 280px,
-        220px 220px,
-        180px 180px,
+        60px 60px,        /* construction stripes */
+        20px 20px,        /* checkered */
+        50px 50px,        /* cyan grid */
+        50px 50px,        /* magenta grid */
+        200px 200px,      /* color burst */
+        40px 40px,        /* dots 1 */
+        40px 40px,        /* dots 2 */
         100% 100% !important;
     background-attachment: scroll !important;
-    animation: bg-scroll 20s linear infinite !important;
+    animation: bg-scroll 15s linear infinite !important;
+}
+body {
+    /* Apply the same 90s background to body */
+    background: 
+        /* 90s UNDER CONSTRUCTION stripes - Yellow & White */
+        repeating-linear-gradient(45deg, 
+            #ffff00 0px, 
+            #ffff00 15px, 
+            #ffffff 15px, 
+            #ffffff 30px
+        ),
+        /* Checkered pattern overlay */
+        repeating-linear-gradient(0deg,
+            transparent 0px,
+            transparent 10px,
+            rgba(255, 255, 255, 0.1) 10px,
+            rgba(255, 255, 255, 0.1) 20px
+        ),
+        /* Neon grid lines */
+        repeating-linear-gradient(90deg,
+            transparent 0px,
+            transparent 49px,
+            rgba(0, 255, 255, 0.4) 49px,
+            rgba(0, 255, 255, 0.4) 50px
+        ),
+        repeating-linear-gradient(0deg,
+            transparent 0px,
+            transparent 49px,
+            rgba(255, 0, 255, 0.4) 49px,
+            rgba(255, 0, 255, 0.4) 50px
+        ),
+        /* Spinning color burst */
+        repeating-conic-gradient(from 45deg at 50% 50%, 
+            transparent 0deg,
+            rgba(255, 0, 0, 0.2) 10deg,
+            transparent 20deg,
+            rgba(0, 255, 0, 0.2) 30deg,
+            transparent 40deg,
+            rgba(0, 0, 255, 0.2) 50deg,
+            transparent 60deg
+        ),
+        /* Retro dots pattern */
+        radial-gradient(circle at 25% 25%, rgba(255, 0, 255, 0.3) 2px, transparent 2px),
+        radial-gradient(circle at 75% 75%, rgba(0, 255, 255, 0.3) 2px, transparent 2px),
+        /* 90s teal base */
+        linear-gradient(135deg, #008b8b 0%, #20b2aa 50%, #00ced1 100%) !important;
+    background-size: 
+        60px 60px,        /* construction stripes */
+        20px 20px,        /* checkered */
+        50px 50px,        /* cyan grid */
+        50px 50px,        /* magenta grid */
+        200px 200px,      /* color burst */
+        40px 40px,        /* dots 1 */
+        40px 40px,        /* dots 2 */
+        100% 100% !important;
+    background-attachment: scroll !important;
+    animation: bg-scroll 15s linear infinite !important;
 }
 #page-container {
     background: transparent !important;
