@@ -1045,9 +1045,70 @@ def build_post_tree(folder):
 
 def get_posts(): return build_post_tree(get_root_folder())
 
+def not_found(htmx=None):
+    """Custom 404 error page"""
+    blog_title = get_blog_title()
+    
+    content = Div(
+        # Large 404 heading
+        Div(
+            H1("404", cls="text-9xl font-bold text-slate-300 dark:text-slate-700 mb-4"),
+            cls="text-center"
+        ),
+        
+        # Main error message
+        H2("Page Not Found", cls="text-3xl font-bold text-slate-800 dark:text-slate-200 mb-4 text-center"),
+        
+        # Description
+        P(
+            "Oops! The page you're looking for doesn't exist. It might have been moved or deleted.",
+            cls="text-lg text-slate-600 dark:text-slate-400 mb-8 text-center max-w-2xl mx-auto"
+        ),
+        
+        # Action buttons
+        Div(
+            A(
+                UkIcon("home", cls="w-5 h-5 mr-2"),
+                "Go to Home",
+                href="/",
+                cls="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors mr-4"
+            ),
+            A(
+                UkIcon("arrow-left", cls="w-5 h-5 mr-2"),
+                "Go Back",
+                href="javascript:history.back()",
+                cls="inline-flex items-center px-6 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg font-medium transition-colors"
+            ),
+            cls="flex justify-center items-center gap-4 flex-wrap"
+        ),
+        
+        # Decorative element
+        Div(
+            P(
+                "💡 ",
+                Strong("Tip:"),
+                " Check the sidebar for available posts, or use the search to find what you're looking for.",
+                cls="text-sm text-slate-500 dark:text-slate-500 italic"
+            ),
+            cls="mt-12 text-center"
+        ),
+        
+        cls="flex flex-col items-center justify-center py-16 px-6 min-h-[60vh]"
+    )
+    
+    # Return with layout, including sidebar for easy navigation
+    # Store the result tuple to potentially wrap with status code
+    result = layout(content, htmx=htmx, title=f"404 - Page Not Found | {blog_title}", show_sidebar=True)
+    return result
+
 @rt('/posts/{path:path}')
 def post_detail(path: str, htmx):
     file_path = get_root_folder() / f'{path}.md'
+    
+    # Check if file exists
+    if not file_path.exists():
+        return not_found(htmx)
+    
     metadata, raw_content = parse_frontmatter(file_path)
     
     # Get title from frontmatter or filename
@@ -1104,3 +1165,9 @@ def index(htmx):
               " file in your blog directory to customize this page.", 
               cls="text-base text-slate-600 dark:text-slate-400"),
             cls="w-full"), htmx=htmx, title=f"Home - {blog_title}", show_sidebar=True)
+
+# Catch-all route for 404 pages (must be last)
+@rt('/{path:path}')
+def catch_all(path: str, htmx):
+    """Catch-all route for undefined URLs"""
+    return not_found(htmx)
