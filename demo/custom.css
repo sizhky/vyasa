@@ -1,0 +1,9 @@
+/* custom.css in the folder */
+span.highlight {
+    background-color: #fff831;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-weight: bold;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 2rem;
+}

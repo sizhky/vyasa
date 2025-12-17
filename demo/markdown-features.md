@@ -745,7 +745,7 @@ span.highlight {
     border-radius: 3px;
     font-weight: bold;
     font-family: 'Courier New', Courier, monospace;
-    font-size: 10rem;
+    font-size: 2rem;
 }
 ```
 :::

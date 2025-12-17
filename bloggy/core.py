@@ -712,8 +712,44 @@ def theme_toggle():
     return Button(UkIcon("moon", cls="dark:hidden"), UkIcon("sun", cls="hidden dark:block"), 
                   _=theme_script, cls="p-1 hover:scale-110 shadow-none", type="button")
 
-def navbar():
-    return Div(A(get_blog_title(), href="/"), theme_toggle(),
+def navbar(show_mobile_menus=False):
+    """Navbar with mobile menu buttons for file tree and TOC"""
+    left_section = Div(
+        A(get_blog_title(), href="/"),
+        cls="flex items-center gap-2"
+    )
+    
+    right_section = Div(
+        theme_toggle(),
+        cls="flex items-center gap-2"
+    )
+    
+    # Add mobile menu buttons if sidebars are present
+    if show_mobile_menus:
+        mobile_buttons = Div(
+            Button(
+                UkIcon("menu", cls="w-5 h-5"),
+                title="Toggle file tree",
+                id="mobile-posts-toggle",
+                cls="md:hidden p-2 hover:bg-slate-800 rounded transition-colors",
+                type="button"
+            ),
+            Button(
+                UkIcon("list", cls="w-5 h-5"),
+                title="Toggle table of contents",
+                id="mobile-toc-toggle",
+                cls="md:hidden p-2 hover:bg-slate-800 rounded transition-colors",
+                type="button"
+            ),
+            cls="flex items-center gap-1"
+        )
+        right_section = Div(
+            mobile_buttons,
+            theme_toggle(),
+            cls="flex items-center gap-2"
+        )
+    
+    return Div(left_section, right_section,
                cls="flex items-center justify-between bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800")
 
 def collapsible_sidebar(icon, title, items_list, is_open=True, show_reveal=False):
@@ -857,6 +893,43 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         
         main_content_container = Main(*content, cls=f"flex-1 min-w-0 px-6 py-8 space-y-8 {section_class}", id="main-content")
         
+        # Mobile overlay panels for posts and TOC
+        mobile_posts_panel = Div(
+            Div(
+                Button(
+                    UkIcon("x", cls="w-5 h-5"),
+                    id="close-mobile-posts",
+                    cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto",
+                    type="button"
+                ),
+                cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
+            ),
+            Div(
+                collapsible_sidebar("menu", "Posts", get_posts(), is_open=True, show_reveal=True),
+                cls="p-4 overflow-y-auto"
+            ),
+            id="mobile-posts-panel",
+            cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] md:hidden transform -translate-x-full transition-transform duration-300"
+        )
+        
+        mobile_toc_panel = Div(
+            Div(
+                Button(
+                    UkIcon("x", cls="w-5 h-5"),
+                    id="close-mobile-toc",
+                    cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto",
+                    type="button"
+                ),
+                cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
+            ),
+            Div(
+                collapsible_sidebar("list", "Contents", toc_items, is_open=True) if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
+                cls="p-4 overflow-y-auto"
+            ),
+            id="mobile-toc-panel",
+            cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] md:hidden transform translate-x-full transition-transform duration-300"
+        )
+        
         # Full layout with all sidebars
         content_with_sidebars = Div(cls="w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1")(
             # Left sidebar - collapsible post list (stays static, JS updates active state)
@@ -873,7 +946,9 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         
         # Layout with sidebar for blog posts
         body_content = Div(id="page-container", cls="flex flex-col min-h-screen")(
-            Div(navbar(), cls="w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4"),
+            Div(navbar(show_mobile_menus=True), cls="w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4"),
+            mobile_posts_panel,
+            mobile_toc_panel,
             content_with_sidebars,
             Footer(Div(f"Powered by Bloggy", cls="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right"), # right justified footer
                    cls="w-full max-w-7xl mx-auto px-6 mt-auto mb-6")

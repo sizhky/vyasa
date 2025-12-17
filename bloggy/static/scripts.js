@@ -277,6 +277,7 @@ document.body.addEventListener('htmx:afterSwap', function() {
     });
     updateActivePostLink();
     updateActiveTocLink();
+    initMobileMenus(); // Reinitialize mobile menu handlers
     
     // Reattach reveal button handler (in case sidebar was swapped)
     const revealBtn = document.getElementById('reveal-in-sidebar-btn');
@@ -300,10 +301,94 @@ observer.observe(document.documentElement, {
     attributeFilter: ['class']
 });
 
+// Mobile menu toggle functionality
+function initMobileMenus() {
+    const postsToggle = document.getElementById('mobile-posts-toggle');
+    const tocToggle = document.getElementById('mobile-toc-toggle');
+    const postsPanel = document.getElementById('mobile-posts-panel');
+    const tocPanel = document.getElementById('mobile-toc-panel');
+    const closePostsBtn = document.getElementById('close-mobile-posts');
+    const closeTocBtn = document.getElementById('close-mobile-toc');
+    
+    // Open posts panel
+    if (postsToggle) {
+        postsToggle.addEventListener('click', () => {
+            if (postsPanel) {
+                postsPanel.classList.remove('-translate-x-full');
+                postsPanel.classList.add('translate-x-0');
+                // Close TOC panel if open
+                if (tocPanel) {
+                    tocPanel.classList.remove('translate-x-0');
+                    tocPanel.classList.add('translate-x-full');
+                }
+            }
+        });
+    }
+    
+    // Open TOC panel
+    if (tocToggle) {
+        tocToggle.addEventListener('click', () => {
+            if (tocPanel) {
+                tocPanel.classList.remove('translate-x-full');
+                tocPanel.classList.add('translate-x-0');
+                // Close posts panel if open
+                if (postsPanel) {
+                    postsPanel.classList.remove('translate-x-0');
+                    postsPanel.classList.add('-translate-x-full');
+                }
+            }
+        });
+    }
+    
+    // Close posts panel
+    if (closePostsBtn) {
+        closePostsBtn.addEventListener('click', () => {
+            if (postsPanel) {
+                postsPanel.classList.remove('translate-x-0');
+                postsPanel.classList.add('-translate-x-full');
+            }
+        });
+    }
+    
+    // Close TOC panel
+    if (closeTocBtn) {
+        closeTocBtn.addEventListener('click', () => {
+            if (tocPanel) {
+                tocPanel.classList.remove('translate-x-0');
+                tocPanel.classList.add('translate-x-full');
+            }
+        });
+    }
+    
+    // Close panels on link click (for better mobile UX)
+    if (postsPanel) {
+        postsPanel.addEventListener('click', (e) => {
+            if (e.target.tagName === 'A' || e.target.closest('a')) {
+                setTimeout(() => {
+                    postsPanel.classList.remove('translate-x-0');
+                    postsPanel.classList.add('-translate-x-full');
+                }, 100);
+            }
+        });
+    }
+    
+    if (tocPanel) {
+        tocPanel.addEventListener('click', (e) => {
+            if (e.target.tagName === 'A' || e.target.closest('a')) {
+                setTimeout(() => {
+                    tocPanel.classList.remove('translate-x-0');
+                    tocPanel.classList.add('translate-x-full');
+                }, 100);
+            }
+        });
+    }
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     updateActivePostLink();
     updateActiveTocLink();
+    initMobileMenus();
     
     // Attach reveal button click handler
     const revealBtn = document.getElementById('reveal-in-sidebar-btn');
