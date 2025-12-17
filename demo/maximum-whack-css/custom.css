@@ -1,0 +1,923 @@
+/* 🎪🎮🦖 ULTRA MEGA SUPREME WHACK MODE - 90s INTERNET EDITION 🦖🎮🎪 */
+/* Buckle up, we're going back to the Geocities era! */
+/* Every animation, every gradient, every Comic Sans dream comes true here */
+
+/* Note: The keyframes must be defined OUTSIDE any scope, so we close the wrapper first, 
+   define animations, then reopen it for the actual styles */
+}
+
+@keyframes rainbow-spin {
+    0% { filter: hue-rotate(0deg) saturate(200%); transform: rotate(0deg) scale(1); }
+    25% { filter: hue-rotate(90deg) saturate(300%); transform: rotate(5deg) scale(1.1); }
+    50% { filter: hue-rotate(180deg) saturate(400%); transform: rotate(-5deg) scale(1.2); }
+    75% { filter: hue-rotate(270deg) saturate(300%); transform: rotate(5deg) scale(1.1); }
+    100% { filter: hue-rotate(360deg) saturate(200%); transform: rotate(0deg) scale(1); }
+}
+
+@keyframes glitch {
+    0% { text-shadow: 2px 2px #ff00ff, -2px -2px #00ffff; transform: skew(0deg); }
+    20% { text-shadow: -2px 2px #ff0000, 2px -2px #00ff00; transform: skew(-5deg); }
+    40% { text-shadow: 2px -2px #ffff00, -2px 2px #ff00ff; transform: skew(5deg); }
+    60% { text-shadow: -2px -2px #00ffff, 2px 2px #ff0000; transform: skew(-3deg); }
+    80% { text-shadow: 2px 2px #00ff00, -2px -2px #ffff00; transform: skew(3deg); }
+    100% { text-shadow: 2px 2px #ff00ff, -2px -2px #00ffff; transform: skew(0deg); }
+}
+
+@keyframes bounce-crazy {
+    0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+    10% { transform: translateY(-20px) rotate(15deg) scale(1.3); }
+    20% { transform: translateY(0) rotate(-15deg) scale(0.9); }
+    30% { transform: translateY(-15px) rotate(25deg) scale(1.2); }
+    40% { transform: translateY(0) rotate(-25deg) scale(0.8); }
+    50% { transform: translateY(-25px) rotate(0deg) scale(1.4); }
+    60% { transform: translateY(0) rotate(20deg) scale(1.1); }
+    70% { transform: translateY(-10px) rotate(-20deg) scale(1); }
+    80% { transform: translateY(0) rotate(10deg) scale(0.95); }
+    90% { transform: translateY(-5px) rotate(-10deg) scale(1.05); }
+}
+
+@keyframes seizure-warning {
+    0%, 100% { background: linear-gradient(45deg, #ff0000, #00ff00, #0000ff, #ffff00); }
+    25% { background: linear-gradient(135deg, #ff00ff, #00ffff, #ff0000, #00ff00); }
+    50% { background: linear-gradient(225deg, #0000ff, #ffff00, #ff00ff, #00ffff); }
+    75% { background: linear-gradient(315deg, #00ff00, #0000ff, #ffff00, #ff0000); }
+}
+
+@keyframes vibrate {
+    0%, 100% { transform: translate(0, 0); }
+    10% { transform: translate(-2px, 2px); }
+    20% { transform: translate(2px, -2px); }
+    30% { transform: translate(-2px, -2px); }
+    40% { transform: translate(2px, 2px); }
+    50% { transform: translate(-2px, -2px); }
+    60% { transform: translate(2px, 2px); }
+    70% { transform: translate(-2px, 2px); }
+    80% { transform: translate(2px, -2px); }
+    90% { transform: translate(-2px, -2px); }
+}
+@keyframes pulse-explosion {
+    0% { box-shadow: 0 0 0 0 rgba(255, 0, 255, 0.7); transform: scale(1); }
+    50% { box-shadow: 0 0 0 30px rgba(0, 255, 255, 0); transform: scale(1.5); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 255, 0, 0); transform: scale(1); }
+}
+
+@keyframes marquee {
+    0% { transform: translateX(100%); }
+    100% { transform: translateX(-100%); }
+}
+
+@keyframes blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+
+@keyframes rotate-3d {
+    0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
+    33% { transform: rotateX(360deg) rotateY(0deg) rotateZ(0deg); }
+    66% { transform: rotateX(360deg) rotateY(360deg) rotateZ(0deg); }
+    100% { transform: rotateX(360deg) rotateY(360deg) rotateZ(360deg); }
+}
+
+@keyframes fire {
+    0% { text-shadow: 0 0 5px #ff0000, 0 0 10px #ff6600, 0 0 15px #ff9900, 0 0 20px #ffcc00; }
+    50% { text-shadow: 0 0 10px #ff6600, 0 0 20px #ff9900, 0 0 30px #ffcc00, 0 0 40px #ffff00; }
+    100% { text-shadow: 0 0 5px #ff0000, 0 0 10px #ff6600, 0 0 15px #ff9900, 0 0 20px #ffcc00; }
+}
+
+@keyframes neon-glow {
+    0%, 100% { text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #0ff, 0 0 20px #0ff, 0 0 25px #0ff; }
+    50% { text-shadow: 0 0 10px #fff, 0 0 20px #ff00ff, 0 0 30px #ff00ff, 0 0 40px #ff00ff, 0 0 50px #ff00ff; }
+}
+
+@keyframes slide-diagonal {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    25% { transform: translate(50px, -50px) rotate(90deg); }
+    50% { transform: translate(0, 0) rotate(180deg); }
+    75% { transform: translate(-50px, 50px) rotate(270deg); }
+    100% { transform: translate(0, 0) rotate(360deg); }
+}
+
+@keyframes flip {
+    0% { transform: perspective(400px) rotateY(0); }
+    100% { transform: perspective(400px) rotateY(360deg); }
+}
+
+@keyframes wobble {
+    0%, 100% { transform: rotate(0deg); }
+    15% { transform: rotate(-15deg); }
+    30% { transform: rotate(15deg); }
+    45% { transform: rotate(-10deg); }
+    60% { transform: rotate(10deg); }
+    75% { transform: rotate(-5deg); }
+    90% { transform: rotate(5deg); }
+}
+
+@keyframes starfield {
+    0% { box-shadow: 0 0 0 #fff, 10px 20px 0 #fff, -20px 10px 0 #fff, 30px -10px 0 #fff; }
+    50% { box-shadow: 0 0 10px #0ff, 10px 20px 10px #f0f, -20px 10px 10px #ff0, 30px -10px 10px #0f0; }
+    100% { box-shadow: 0 0 0 #fff, 10px 20px 0 #fff, -20px 10px 0 #fff, 30px -10px 0 #fff; }
+}
+
+@keyframes matrix-rain {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 100px; }
+}
+
+@keyframes dissolve {
+    0%, 100% { filter: blur(0px) opacity(1); }
+    50% { filter: blur(20px) opacity(0.3); }
+}
+
+@keyframes warp-speed {
+    0% { transform: scale(1) translateZ(0); filter: blur(0); }
+    50% { transform: scale(3) translateZ(100px); filter: blur(5px); }
+    100% { transform: scale(1) translateZ(0); filter: blur(0); }
+}
+
+/* Now reopen the scope for all the actual styles */
+#main-content {
+
+span.variable {
+    color: #ff00ff;
+    font-weight: 900;
+    padding: 5px 10px;
+    background: linear-gradient(45deg, #ff0080, #8000ff, #00ff80, #ffff00);
+    background-size: 400% 400%;
+    animation: rainbow-spin 2s infinite, bounce-crazy 3s infinite;
+    display: inline-block;
+    border: 3px solid;
+    border-image: linear-gradient(45deg, red, blue, green, yellow) 1;
+    box-shadow: 0 0 20px rgba(255, 0, 255, 0.8), inset 0 0 10px rgba(0, 255, 255, 0.5);
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 10px rgba(255, 255, 0, 0.8);
+    transform-origin: center;
+    letter-spacing: 3px;
+}
+
+span.emphasis {
+    background: repeating-linear-gradient(
+        45deg,
+        #ff0000,
+        #ff7700 10%,
+        #ffff00 20%,
+        #00ff00 30%,
+        #0000ff 40%,
+        #8b00ff 50%,
+        #ff0000 60%
+    );
+    background-size: 200% 200%;
+    animation: seizure-warning 1s infinite, glitch 0.5s infinite;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 900;
+    font-size: 2em;
+    display: inline-block;
+    transform-origin: center;
+    filter: drop-shadow(0 0 10px rgba(255, 0, 255, 1)) brightness(1.5);
+}
+
+span.keyword {
+    color: #00ffff;
+    text-transform: uppercase;
+    font-size: 1.5em;
+    letter-spacing: 8px;
+    font-weight: 900;
+    background: linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff, #ff0000);
+    background-size: 200% 100%;
+    animation: rainbow-spin 3s linear infinite, vibrate 0.1s infinite;
+    padding: 10px 20px;
+    display: inline-block;
+    border-radius: 50% 10% 50% 10%;
+    box-shadow: 0 0 30px rgba(255, 255, 0, 1), inset 0 0 20px rgba(0, 255, 255, 0.5);
+    transform: rotate(-15deg);
+    font-family: 'Comic Sans MS', cursive, sans-serif;
+}
+
+span.highlight {
+    background: repeating-conic-gradient(
+        from 0deg at 50% 50%,
+        #ff0000 0deg,
+        #ffff00 60deg,
+        #00ff00 120deg,
+        #00ffff 180deg,
+        #0000ff 240deg,
+        #ff00ff 300deg,
+        #ff0000 360deg
+    );
+    animation: rainbow-spin 2s linear infinite, pulse-explosion 1s infinite, bounce-crazy 2s infinite;
+    padding: 20px 40px;
+    border-radius: 50%;
+    font-weight: 900;
+    font-family: 'Impact', 'Arial Black', sans-serif;
+    font-size: 5rem;
+    display: inline-block;
+    box-shadow: 0 0 50px rgba(255, 0, 255, 1),
+                0 0 100px rgba(0, 255, 255, 0.8),
+                inset 0 0 50px rgba(255, 255, 0, 0.6);
+    text-shadow: 3px 3px 0 #000,
+                 -3px -3px 0 #fff,
+                 3px -3px 0 #f00,
+                 -3px 3px 0 #0f0,
+                 0 0 20px rgba(255, 255, 255, 0.9);
+    border: 10px dashed;
+    border-color: #ff0000 #00ff00 #0000ff #ffff00;
+    transform-origin: center;
+    letter-spacing: 10px;
+    filter: saturate(200%) contrast(150%) brightness(120%);
+}
+
+/* BONUS WHACK: Make everything shake on hover */
+/* 🦖 DINO MODE - Make things prehistoric! */
+span.dino,
+span.dinosaur,
+span.trex {
+    font-size: 3em;
+    display: inline-block;
+    animation: wobble 2s infinite;
+    filter: hue-rotate(120deg);
+}
+
+span.dino::before,
+span.dinosaur::before,
+span.trex::before {
+    content: "🦖 ";
+    animation: bounce-crazy 1s infinite;
+}
+
+span.dino::after,
+span.dinosaur::after,
+span.trex::after {
+    content: " 🦕";
+    animation: bounce-crazy 1s infinite reverse;
+}
+
+/* 🤖 ROBOT MODE - Gundam transformation! */
+span.robot,
+span.gundam,
+span.mecha {
+    font-family: 'Courier New', monospace;
+    background: linear-gradient(45deg, #c0c0c0, #808080, #404040, #000);
+    background-size: 300% 300%;
+    animation: rainbow-spin 2s infinite, rotate-3d 5s infinite;
+    padding: 10px 20px;
+    display: inline-block;
+    border: 3px solid #00ff00;
+    box-shadow: 0 0 20px #00ff00, inset 0 0 20px rgba(0, 255, 0, 0.3);
+    text-shadow: 0 0 10px #00ff00;
+    font-weight: 900;
+    letter-spacing: 3px;
+}
+
+span.robot::before {
+    content: "🤖 ";
+}
+
+span.gundam::before {
+    content: "⚙️ ";
+}
+
+span.mecha::before {
+    content: "🦾 ";
+}
+
+/* 🔥 FIRE MODE */
+span.fire,
+span.flame,
+span.burning {
+    color: #ff0000;
+    font-weight: 900;
+    font-size: 2em;
+    animation: fire 1s infinite;
+    display: inline-block;
+    text-transform: uppercase;
+}
+
+span.fire::before,
+span.flame::before,
+span.burning::before {
+    content: "🔥 ";
+    animation: wobble 0.5s infinite;
+}
+
+/* ⚡ ELECTRIC MODE */
+span.electric,
+span.lightning,
+span.zap {
+    color: #ffff00;
+    animation: neon-glow 0.5s infinite, vibrate 0.1s infinite;
+    font-weight: 900;
+    font-size: 1.8em;
+    display: inline-block;
+}
+
+span.electric::before {
+    content: "⚡ ";
+}
+
+/* 💫 STAR MODE */
+span.star,
+span.sparkle,
+span.shine {
+    animation: starfield 2s infinite, rotate-3d 4s infinite;
+    display: inline-block;
+    background: radial-gradient(circle, #ffffff, #ffff00, #ff00ff);
+    padding: 8px 15px;
+    border-radius: 50%;
+}
+
+span.star::before {
+    content: "⭐ ";
+}
+
+span.sparkle::before {
+    content: "✨ ";
+}
+
+/* 🌈 RAINBOW MODE */
+span.rainbow,
+span.unicorn,
+span.magical {
+    background: linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff);
+    background-size: 200% 100%;
+    animation: rainbow-spin 2s linear infinite;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 900;
+    font-size: 2em;
+    display: inline-block;
+}
+
+span.unicorn::after {
+    content: " 🦄";
+    -webkit-text-fill-color: initial;
+    animation: bounce-crazy 1s infinite;
+}
+
+/* 👾 RETRO GAME MODE */
+span.retro,
+span.pixel,
+span.arcade,
+span.game {
+    font-family: 'Courier New', monospace;
+    background: #000;
+    color: #0f0;
+    padding: 5px 15px;
+    border: 3px solid #0f0;
+    box-shadow: 0 0 10px #0f0, inset 0 0 10px rgba(0, 255, 0, 0.2);
+    animation: blink 0.8s infinite;
+    font-weight: 900;
+    display: inline-block;
+}
+
+span.arcade::before,
+span.game::before {
+    content: "👾 ";
+}
+
+/* 🎸 ROCK MODE */
+span.rock,
+span.metal,
+span.headbang {
+    font-family: 'Impact', sans-serif;
+    color: #000;
+    background: linear-gradient(45deg, #ff0000, #000, #ff0000);
+    background-size: 200% 200%;
+    animation: rainbow-spin 1s infinite, wobble 0.5s infinite;
+    padding: 10px 20px;
+    transform: rotate(-5deg);
+    display: inline-block;
+    border: 3px solid #000;
+    box-shadow: 5px 5px 0 #ff0000;
+    font-size: 2em;
+    font-weight: 900;
+    letter-spacing: 3px;
+}
+
+span.rock::before {
+    content: "🎸 ";
+}
+
+span.metal::before {
+    content: "🤘 ";
+}
+
+/* 🌊 WATER MODE */
+span.water,
+span.ocean,
+span.wave {
+    color: #0066ff;
+    animation: wobble 2s infinite;
+    text-shadow: 2px 2px 4px rgba(0, 102, 255, 0.5);
+    font-weight: 700;
+    display: inline-block;
+}
+
+span.wave::before {
+    content: "🌊 ";
+}
+
+/* 🎪 CIRCUS MODE */
+span.circus,
+span.carnival,
+span.party {
+    font-family: 'Comic Sans MS', cursive;
+    background: repeating-linear-gradient(45deg, #ff0000 0px, #ffff00 10px, #00ff00 20px, #00ffff 30px, #0000ff 40px, #ff00ff 50px);
+    animation: rainbow-spin 1s infinite, bounce-crazy 2s infinite;
+    padding: 10px 20px;
+    border: 5px dotted #000;
+    border-radius: 20px;
+    font-size: 2em;
+    font-weight: 900;
+    display: inline-block;
+}
+
+span.circus::before,
+span.carnival::before,
+span.party::before {
+    content: "🎪 ";
+}
+
+/* 👽 ALIEN MODE */
+span.alien,
+span.ufo,
+span.space {
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    background: #000;
+    animation: warp-speed 3s infinite, neon-glow 1s infinite;
+    padding: 10px 20px;
+    border: 2px solid #00ff00;
+    border-radius: 10px;
+    display: inline-block;
+    font-weight: 900;
+}
+
+span.alien::before {
+    content: "👽 ";
+}
+
+span.ufo::before {
+    content: "🛸 ";
+}
+
+/* 🎮 GAMER MODE */
+span.gamer,
+span.xbox,
+span.playstation {
+    font-family: 'Impact', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 5px;
+    animation: pulse-explosion 2s infinite;
+    font-weight: 900;
+    display: inline-block;
+    text-transform: uppercase;
+}
+
+span.gamer::before {
+    content: "🎮 ";
+}
+
+/* 🍕 PIZZA MODE */
+span.pizza,
+span.food,
+span.yummy {
+    animation: rotate-3d 3s infinite;
+    display: inline-block;
+    font-size: 2em;
+}
+
+span.pizza::before {
+    content: "🍕 ";
+}
+
+/* 💎 DIAMOND MODE */
+span.diamond,
+span.gem,
+span.bling {
+    background: linear-gradient(45deg, #4FC3F7, #29B6F6, #03A9F4, #039BE5, #0288D1);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: starfield 1s infinite, rotate-3d 3s infinite;
+    font-weight: 900;
+    font-size: 2em;
+    display: inline-block;
+    filter: drop-shadow(0 0 10px rgba(3, 169, 244, 0.8));
+}
+
+span.diamond::before,
+span.gem::before,
+span.bling::before {
+    content: "💎 ";
+    -webkit-text-fill-color: initial;
+}
+
+/* 🎨 PAINT MODE */
+span.paint,
+span.art,
+span.creative {
+    background: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet);
+    background-size: 400% 100%;
+    animation: rainbow-spin 3s infinite;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 1.8em;
+    font-weight: 900;
+    display: inline-block;
+}
+
+span.paint::before,
+span.art::before {
+    content: "🎨 ";
+    -webkit-text-fill-color: initial;
+}
+
+/* 🌟 MATRIX MODE */
+span.matrix,
+span.hacker,
+span.code {
+    font-family: 'Courier New', monospace;
+    color: #00ff00;
+    background: #000;
+    animation: matrix-rain 2s infinite linear, glitch 1s infinite;
+    padding: 5px 15px;
+    border: 2px solid #00ff00;
+    text-shadow: 0 0 5px #00ff00;
+    display: inline-block;
+    font-weight: 900;
+}
+
+span.matrix::before,
+span.hacker::before {
+    content: "⚡ ";
+}
+
+/* 🦋 BUTTERFLY MODE */
+span.butterfly,
+span.flutter,
+span.fly {
+    animation: slide-diagonal 4s infinite, dissolve 2s infinite;
+    display: inline-block;
+    color: #ff69b4;
+    font-weight: 700;
+}
+
+span.butterfly::before {
+    content: "🦋 ";
+}
+
+/* 🎯 TARGET MODE */
+span.target,
+span.bullseye,
+span.aim {
+    background: radial-gradient(circle, #ff0000 20%, #ffff00 40%, #00ff00 60%, #0000ff 80%);
+    animation: pulse-explosion 1s infinite, rotate-3d 2s infinite;
+    padding: 10px 20px;
+    border-radius: 50%;
+    display: inline-block;
+    font-weight: 900;
+}
+
+span.target::before {
+    content: "🎯 ";
+}
+
+/* 🌙 MOON MODE */
+span.moon,
+span.night,
+span.dark {
+    color: #f0f0f0;
+    text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 30px #fff;
+    animation: neon-glow 3s infinite;
+    display: inline-block;
+    font-weight: 700;
+}
+
+span.moon::before {
+    content: "🌙 ";
+}
+
+/* ☀️ SUN MODE */
+span.sun,
+span.day,
+span.bright {
+    color: #ffff00;
+    animation: fire 1s infinite, pulse-explosion 2s infinite;
+    display: inline-block;
+    font-weight: 900;
+    font-size: 2em;
+}
+
+span.sun::before {
+    content: "☀️ ";
+}
+
+/* 🎵 MUSIC MODE */
+span.music,
+span.song,
+span.melody {
+    animation: bounce-crazy 1s infinite, rainbow-spin 2s infinite;
+    display: inline-block;
+    background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 1.5em;
+    font-weight: 900;
+}
+
+span.music::before,
+span.song::before {
+    content: "🎵 ";
+    -webkit-text-fill-color: initial;
+}
+
+/* 🚀 ROCKET MODE */
+span.rocket,
+span.launch,
+span.blast {
+    animation: warp-speed 2s infinite, fire 1s infinite;
+    display: inline-block;
+    font-size: 2em;
+    transform-origin: bottom left;
+}
+
+span.rocket::before,
+span.launch::before,
+span.blast::before {
+    content: "🚀 ";
+}
+
+/* 🎬 MOVIE MODE */
+span.movie,
+span.film,
+span.cinema {
+    font-family: 'Times New Roman', serif;
+    background: linear-gradient(45deg, #000, #ff0000, #000);
+    color: #ffd700;
+    padding: 10px 20px;
+    border: 3px solid #ffd700;
+    animation: blink 1.5s infinite, glitch 2s infinite;
+    display: inline-block;
+    font-weight: 900;
+}
+
+span.movie::before,
+span.film::before {
+    content: "🎬 ";
+}
+
+/* 🌋 VOLCANO MODE */
+span.volcano,
+span.lava,
+span.eruption {
+    color: #ff4500;
+    animation: fire 0.8s infinite, bounce-crazy 2s infinite;
+    font-size: 2em;
+    font-weight: 900;
+    display: inline-block;
+    text-shadow: 0 0 10px #ff4500, 0 0 20px #ff6347;
+}
+
+span.volcano::before {
+    content: "🌋 ";
+}
+
+/* 🎃 SPOOKY MODE */
+span.spooky,
+span.ghost,
+span.halloween {
+    color: #ff6600;
+    animation: wobble 1s infinite, neon-glow 2s infinite;
+    font-family: 'Courier New', monospace;
+    font-size: 1.8em;
+    font-weight: 900;
+    display: inline-block;
+}
+
+span.spooky::before,
+span.ghost::before,
+span.halloween::before {
+    content: "👻 ";
+}
+
+/* 🏆 WINNER MODE */
+span.winner,
+span.champion,
+span.trophy {
+    background: linear-gradient(45deg, #ffd700, #ffed4e, #ffd700);
+    color: #000;
+    padding: 10px 20px;
+    border-radius: 10px;
+    animation: pulse-explosion 1s infinite, bounce-crazy 2s infinite;
+    font-weight: 900;
+    font-size: 1.8em;
+    display: inline-block;
+    box-shadow: 0 0 20px #ffd700;
+}
+
+span.winner::before,
+span.champion::before,
+span.trophy::before {
+    content: "🏆 ";
+}
+
+/* 🌺 FLOWER MODE */
+span.flower,
+span.bloom,
+span.petal {
+    color: #ff69b4;
+    animation: rotate-3d 4s infinite;
+    display: inline-block;
+    filter: drop-shadow(0 0 10px rgba(255, 105, 180, 0.8));
+}
+
+span.flower::before,
+span.bloom::before {
+    content: "🌺 ";
+}
+
+/* 💣 BOMB MODE */
+span.bomb,
+span.explosive,
+span.boom {
+    animation: vibrate 0.1s infinite, pulse-explosion 0.5s infinite;
+    display: inline-block;
+    font-size: 2em;
+    font-weight: 900;
+}
+
+span.bomb::before,
+span.boom::before {
+    content: "💣 ";
+}
+
+/* 🎈 BALLOON MODE */
+span.balloon,
+span.float,
+span.drift {
+    animation: bounce-crazy 3s infinite;
+    display: inline-block;
+    color: #ff1493;
+}
+
+span.balloon::before {
+    content: "🎈 ";
+}
+
+/* 🔮 CRYSTAL MODE */
+span.crystal,
+span.mystic,
+span.magic {
+    background: linear-gradient(45deg, #9b59b6, #8e44ad, #9b59b6);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: neon-glow 2s infinite, rotate-3d 4s infinite;
+    font-weight: 900;
+    font-size: 1.8em;
+    display: inline-block;
+}
+
+span.crystal::before,
+span.mystic::before {
+    content: "🔮 ";
+    -webkit-text-fill-color: initial;
+}
+
+/* 🌀 SPIRAL MODE */
+span.spiral,
+span.vortex,
+span.swirl {
+    animation: rotate-3d 2s infinite, warp-speed 3s infinite;
+    display: inline-block;
+    font-weight: 900;
+    color: #00bfff;
+}
+
+span.spiral::before,
+span.vortex::before {
+    content: "🌀 ";
+}
+
+/* 🎆 FIREWORK MODE */
+span.firework,
+span.explosion,
+span.blast {
+    animation: pulse-explosion 0.8s infinite, rainbow-spin 1s infinite;
+    display: inline-block;
+    font-size: 2em;
+    font-weight: 900;
+}
+
+span.firework::before {
+    content: "🎆 ";
+}
+
+/* ULTRA MEGA GIGA TERA WHACK SUPREME: The body itself */
+body {
+    animation: vibrate 5s infinite;
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(255, 0, 0, 0.02) 0px,
+        rgba(0, 255, 0, 0.02) 50px,
+        rgba(0, 0, 255, 0.02) 100px,
+        rgba(255, 255, 0, 0.02) 150px
+    );
+}
+
+/* 🎭 PHRASES GET EXTRA WHACK - Works with multi-word spans! */
+span[class*="mega"],
+span[class*="ultra"],
+span[class*="super"],
+span[class*="hyper"] {
+    font-size: 2.5em !important;
+    animation-duration: 0.5s !important;
+    filter: saturate(300%) !important;
+}
+
+} /* Close the #main-content scope we opened */
+
+/* The system will add another closing brace for its wrapper */* ULTRA WHACK: Paragraphs get the treatment too */
+p:has(span.highlight) {
+    background: repeating-linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.1) 0px,
+        rgba(0, 255, 0, 0.1) 10px,
+        rgba(0, 0, 255, 0.1) 20px,
+        rgba(255, 255, 0, 0.1) 30px
+    );
+    padding: 20px;
+    border: 5px double rainbow;
+    border-image: linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet) 1;
+    animation: vibrate 0.2s infinite;
+}
+
+/* MEGA WHACK: Code blocks go wild */
+code {
+    background: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00);
+    background-size: 600% 600%;
+    animation: rainbow-spin 5s ease infinite;
+    padding: 5px 10px;
+    border-radius: 10px;
+    font-weight: 900;
+    box-shadow: 0 0 15px rgba(255, 0, 255, 0.8);
+    display: inline-block;
+    transform: skew(-5deg);
+}
+
+/* GIGA WHACK: Links become portals */
+a {
+    color: #ff00ff;
+    font-weight: 900;
+    text-decoration: none;
+    background: linear-gradient(90deg, transparent, rgba(255, 0, 255, 0.3), transparent);
+    background-size: 200% 100%;
+    animation: rainbow-spin 2s infinite;
+    padding: 5px 10px;
+    border-radius: 20px;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+    transition: all 0.3s ease;
+}
+
+a:hover {
+    transform: scale(1.5) rotate(15deg);
+    box-shadow: 0 0 30px rgba(255, 255, 0, 1);
+    animation: glitch 0.2s infinite, bounce-crazy 0.5s infinite;
+}
+
+/* TERA WHACK: Headings explode */
+h1, h2, h3, h4, h5, h6 {
+    background: linear-gradient(45deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 400% 400%;
+    animation: rainbow-spin 3s infinite, bounce-crazy 4s infinite;
+    font-weight: 900;
+    text-shadow: 3px 3px 10px rgba(0, 0, 0, 0.8);
+    filter: drop-shadow(0 0 20px rgba(255, 0, 255, 1));
+    letter-spacing: 5px;
+    transform-origin: left center;
+}
+
+/* ULTRA MEGA GIGA TERA WHACK SUPREME: The main content itself gets a subtle background */
+/* We add these properties to the already-open #main-content scope */
+& {
+    animation: vibrate 5s infinite !important;
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(255, 0, 0, 0.02) 0px,
+        rgba(0, 255, 0, 0.02) 50px,
+        rgba(0, 0, 255, 0.02) 100px,
+        rgba(255, 255, 0, 0.02) 150px
+    ) !important;
+}
+
+} /* Close the #main-content scope we opened after keyframes */
+
+/* The scoping system will add its own closing } for the wrapper */

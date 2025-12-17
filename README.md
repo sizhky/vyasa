@@ -242,63 +242,16 @@ stateDiagram-v2
 ## Key Features
 
 ### ✨ Advanced Markdown Features
-
-#### Core Text Formatting
-- **Headings**: Both ATX-style (`# Heading`) and Setext-style underlined headings
-- **Emphasis**: *Italics*, **bold**, and ***bold italics*** using asterisks or underscores
-- **Strikethrough**: ~~Strike through text~~ using double tildes
-- **Superscript & Subscript**: Use `^text^` for superscript (E=mc^2^) and `~text~` for subscript (H~2~O)
-- **Highlight**: ==Highlighted text== for emphasis
-- **Insertion & Deletion**: {++Inserted text++} and {--Deleted text--} for change tracking
-
-#### Links & References
-- **Inline Links**: `[text](url)` for direct links
-- **Reference-Style Links**: `[text][ref]` with separate definition
-- **Autolinks**: `<https://example.com>` for automatic linking
-- **Relative Links**: Full support for relative markdown links (`./file.md`, `../other.md`) that work seamlessly with navigation
-- **Internal Navigation**: Links between posts with HTMX-powered SPA-like navigation
-
-#### Lists & Tables
-- **Ordered Lists**: Numbered lists with automatic numbering
-- **Unordered Lists**: Bullet lists using `-`, `*`, or `+`
-- **Nested Lists**: Multi-level list hierarchies
-- **Task Lists**: `- [x]` for completed, `- [ ]` for incomplete tasks
-- **Tables**: Full table support with alignment options
-- **Definition Lists**: `Term\n: Definition` for glossary-style content
-
-#### Code & Syntax
-- **Inline Code**: `` `code` `` for short snippets
-- **Fenced Code Blocks**: ` ```language ` with syntax highlighting
-- **Indented Code Blocks**: 4-space indentation for code
-- **Pandoc-style Attributes**: Add classes to inline code with `` `text`{.class} `` syntax for semantic markup
-
-#### Rich Media & Diagrams
-- **Images**: Inline and reference-style images with alt text
-- **Mermaid Diagrams**: Full support for flowcharts, sequence diagrams, Gantt charts, state diagrams, etc.
+- **Footnotes as Sidenotes**: `[^1]` references become elegant margin notes on desktop, expandable on mobile
+- **Mermaid Diagrams**: Full support for flowcharts, sequence diagrams, state diagrams, etc.
 - **Interactive Diagrams**: Built-in zoom, pan, and reset controls for all mermaid diagrams
 - **Theme-aware Rendering**: Diagrams automatically re-render when switching light/dark mode
-- **Diagram Width Control**: Use YAML frontmatter in mermaid blocks to set width (e.g., `width: 65vw`)
-- **Embedded Media**: HTML5 `<video>` and `<audio>` elements
-- **Raw HTML**: Full HTML support for custom layouts and styling
-
-#### Advanced Features
-- **Footnotes as Sidenotes**: `[^1]` references become elegant margin notes on desktop, expandable on mobile
-- **Math Notation**: KaTeX support for inline `$E=mc^2$` and block `$$` math equations
 - **Tabbed Content**: Create multi-tab sections using `:::tabs` syntax for comparing code, showing examples, etc.
-- **Blockquotes**: Single and nested blockquotes with `>` syntax
-- **Custom Containers**: `> [!NOTE]` and `> [!WARNING]` for callouts
-- **Collapsible Sections**: `<details>` and `<summary>` for expandable content
-- **Horizontal Rules**: `---` for section dividers
+- **Relative Links**: Full support for relative markdown links (`./file.md`, `../other.md`) that work seamlessly with navigation
+- **Math Notation**: KaTeX support for inline `$E=mc^2$` and block `$$` math equations
+- **Superscript & Subscript**: Use `^text^` for superscript and `~text~` for subscript
+- **Pandoc-style Attributes**: Add classes to inline code with `` `text`{.class} `` syntax for semantic markup
 - **Cascading Custom CSS**: Add `custom.css` files at multiple levels (root, folders) for flexible styling
-- **Heading IDs**: Custom heading anchors with `{#custom-id}` syntax
-- **Smart Typography**: Automatic conversion of quotes, en-dashes, and em-dashes
-- **Keyboard Input**: `<kbd>` tags for keyboard shortcuts
-- **Line Blocks**: Preserve line breaks for poetry with `|` prefix
-- **Comments**: HTML comments `<!-- -->` for hidden notes
-- **Emoji**: `:smile:` `:+1:` `:heart:` shortcode support
-- **Abbreviations**: Define abbreviations with `*[HTML]: HyperText Markup Language`
-- **Escaping**: Backslash escaping for literal characters
-- **Table of Contents**: Auto-generated TOC with `[TOC]` marker
 
 ### 🎨 Modern UI
 - **Responsive Design**: Works beautifully on all screen sizes

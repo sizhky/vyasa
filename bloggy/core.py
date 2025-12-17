@@ -844,7 +844,15 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         # For HTMX requests, return main content + TOC with out-of-band swap (Posts sidebar stays static)
         if htmx and htmx.request:
             result = [Title(title)]
-            result.extend(custom_css_links)
+            # Add scoped CSS in a swappable container with out-of-band swap
+            # This ensures old scoped CSS gets replaced, preventing accumulation
+            if custom_css_links:
+                css_container = Div(*custom_css_links, id="scoped-css-container", hx_swap_oob="true")
+                result.append(css_container)
+            else:
+                # If no custom CSS for this page, send empty container to clear previous CSS
+                css_container = Div(id="scoped-css-container", hx_swap_oob="true")
+                result.append(css_container)
             result.extend([main_content_container, toc_sidebar])
             return tuple(result)
         
@@ -860,15 +868,30 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         # For HTMX requests without sidebar
         if htmx and htmx.request:
             result = [Title(title)]
-            result.extend(custom_css_links)
+            # Add scoped CSS in a swappable container with out-of-band swap
+            if custom_css_links:
+                css_container = Div(*custom_css_links, id="scoped-css-container", hx_swap_oob="true")
+                result.append(css_container)
+            else:
+                # If no custom CSS for this page, send empty container to clear previous CSS
+                css_container = Div(id="scoped-css-container", hx_swap_oob="true")
+                result.append(css_container)
             result.extend(content)
             return tuple(result)
     
     # For full page loads, return complete page
     result = [Title(title)]
-    result.extend(custom_css_links)
+    # Wrap custom CSS in a container so HTMX can swap it out later
+    if custom_css_links:
+        css_container = Div(*custom_css_links, id="scoped-css-container")
+        result.append(css_container)
+    else:
+        # Even if no CSS now, add empty container for future swaps
+        css_container = Div(id="scoped-css-container")
+        result.append(css_container)
     result.append(body_content)
     return tuple(result)
+
 def build_post_tree(folder):
     root = get_root_folder()
     items = []
