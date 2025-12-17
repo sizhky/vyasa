@@ -52,7 +52,8 @@ function initMermaidInteraction() {
             const mouseX = e.clientX - rect.left - rect.width / 2;
             const mouseY = e.clientY - rect.top - rect.height / 2;
             
-            const delta = e.deltaY > 0 ? 0.95 : 1.05;
+            const zoomIntensity = 0.01;
+            const delta = e.deltaY > 0 ? 1 - zoomIntensity : 1 + zoomIntensity; // Zoom out or in speed
             const newScale = Math.min(Math.max(0.1, state.scale * delta), 10);
             
             // Calculate how much to adjust translation to keep point under cursor fixed

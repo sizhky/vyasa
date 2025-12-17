@@ -728,12 +728,12 @@ def collapsible_sidebar(icon, title, items_list, is_open=True, show_reveal=False
     if show_reveal:
         summary_content.append(
             Button(
-                Span("📍", cls="text-lg"),
+                Span("↗", cls="text-sm font-normal"),
                 title="Reveal current file in sidebar",
-                cls="p-2 ml-auto hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors",
+                cls="p-1.5 ml-auto hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors",
                 type="button",
                 id="reveal-in-sidebar-btn",
-                style="border: 1px solid #3b82f6; cursor: pointer; background: #dbeafe; color: #1e40af; min-width: 32px; min-height: 32px; display: flex; align-items: center; justify-content: center;"
+                style="border: none; cursor: pointer; background: transparent; color: #64748b; min-width: 24px; min-height: 24px; display: flex; align-items: center; justify-content: center;"
             )
         )
     

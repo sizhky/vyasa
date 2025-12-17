@@ -250,7 +250,7 @@ stateDiagram-v2
 - **Relative Links**: Full support for relative markdown links (`./file.md`, `../other.md`) that work seamlessly with navigation
 - **Math Notation**: KaTeX support for inline `$E=mc^2$` and block `$$` math equations
 - **Superscript & Subscript**: Use `^text^` for superscript and `~text~` for subscript
-- **Pandoc-style Attributes**: Add classes to inline code with `` `text`{.class} `` syntax for semantic markup
+- **Pandoc-style Attributes**: Add classes to inline text with `` `text`{.class} `` syntax for semantic markup (renders as `<span>` tags)
 - **Cascading Custom CSS**: Add `custom.css` files at multiple levels (root, folders) for flexible styling
 
 ### 🎨 Modern UI
