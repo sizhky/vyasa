@@ -272,10 +272,10 @@ class ContentRenderer(FrankenRenderer):
             frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n'
             frontmatter_match = re.match(frontmatter_pattern, code, re.DOTALL)
             
+            # Default configuration for mermaid diagrams
             height = 'auto'
-            width = '100%'
+            width = '65vw'  # Default to viewport width for better visibility
             min_height = '400px'
-            break_out = False
             
             if frontmatter_match:
                 frontmatter_content = frontmatter_match.group(1)
@@ -295,9 +295,6 @@ class ContentRenderer(FrankenRenderer):
                         min_height = height
                     if 'width' in config:
                         width = config['width']
-                        # If width uses viewport units, break out of container
-                        if 'vw' in str(width):
-                            break_out = True
                 except Exception as e:
                     print(f"Error parsing mermaid frontmatter: {e}")
                 
@@ -306,15 +303,20 @@ class ContentRenderer(FrankenRenderer):
             
             diagram_id = f"mermaid-{hash(code) & 0xFFFFFF}"
             
-            # If we need to break out, use viewport-based positioning
-            container_style = f"width: {width};"
+            # Determine if we need to break out of normal content flow
+            # This is required for viewport-based widths to properly center
+            break_out = 'vw' in str(width).lower()
+            
+            # Build container style with proper positioning for viewport widths
             if break_out:
                 container_style = f"width: {width}; position: relative; left: 50%; transform: translateX(-50%);"
+            else:
+                container_style = f"width: {width};"
             
             # Escape the code for use in data attribute
             escaped_code = code.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#39;')
             
-            return f'''<div class="mermaid-container relative border-2 rounded-md my-4" style="{container_style}">
+            return f'''<div class="mermaid-container relative border-4 rounded-md my-4 shadow-2xl" style="{container_style}">
                 <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
                     <button onclick="resetMermaidZoom('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
                     <button onclick="zoomMermaidIn('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
@@ -760,7 +762,7 @@ def collapsible_sidebar(icon, title, items_list, is_open=True, show_reveal=False
         Span(title, cls="flex-1")
     ]
     
-    # Add reveal button if requested
+    # Add reveal button if requested (or placeholder to maintain consistent height)
     if show_reveal:
         summary_content.append(
             Button(
@@ -772,13 +774,22 @@ def collapsible_sidebar(icon, title, items_list, is_open=True, show_reveal=False
                 style="border: none; cursor: pointer; background: transparent; color: #64748b; min-width: 24px; min-height: 24px; display: flex; align-items: center; justify-content: center;"
             )
         )
+    else:
+        # Add invisible placeholder to maintain height consistency
+        summary_content.append(
+            Span(cls="w-6 h-6 ml-auto", style="visibility: hidden;")
+        )
+    
+    # Sidebar styling configuration
+    common_frost_style = "bg-white/10 dark:bg-slate-950/70 backdrop-blur-sm border border-slate-200 dark:border-slate-800"
+    summary_classes = f"flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-lg select-none list-none {common_frost_style} min-h-[56px]"
+    content_classes = f"p-3 {common_frost_style} rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-18rem)]"
     
     return Details(
-        Summary(*summary_content,
-                cls="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10"),
+        Summary(*summary_content, cls=summary_classes),
         Div(
-            Ul(*items_list, cls="mt-2 list-none"),
-            cls="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]",
+            Ul(*items_list, cls="list-none"),
+            cls=content_classes,
             id="sidebar-scroll-container"
         ),
         open=is_open
@@ -873,7 +884,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         
         # Right sidebar TOC component with out-of-band swap for HTMX
         toc_attrs = {
-            "cls": "hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
+            "cls": "hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
             "id": "toc-sidebar"
         }
         if htmx and htmx.request:
@@ -935,7 +946,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
             # Left sidebar - collapsible post list (stays static, JS updates active state)
             Aside(
                 collapsible_sidebar("menu", "Posts", get_posts(), is_open=True, show_reveal=True),
-                cls="hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
+                cls="hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
                 id="posts-sidebar"
             ),
             # Main content (swappable)
