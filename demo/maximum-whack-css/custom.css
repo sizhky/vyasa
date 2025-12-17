@@ -912,14 +912,37 @@ h1, h2, h3, h4, h5, h6 {
     background: transparent !important;
 }
 
-/* Scrolling background animation */
+/* Scrolling background animation - Each layer moves independently */
 @keyframes bg-scroll {
-    0% { background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; }
-    100% { background-position: 80px 80px, 200px 200px, -200px -200px, 300px -300px, -250px 250px, 280px -280px, -220px 220px, 180px -180px, -240px 240px; }
+    0% { 
+        background-position: 
+            0 0,           /* stripes */
+            0 0,           /* conic gradient */
+            0 0,           /* star 1 */
+            100% 0,        /* star 2 */
+            0 100%,        /* star 3 */
+            100% 100%,     /* star 4 */
+            50% 0,         /* star 5 */
+            0 50%,         /* star 6 */
+            0 0;           /* base */
+    }
+    100% { 
+        background-position: 
+            200px 200px,   /* stripes move diagonal */
+            360deg 360deg, /* conic spins */
+            400px -400px,  /* star 1 diagonal */
+            -300px 300px,  /* star 2 opposite */
+            500px 500px,   /* star 3 diagonal */
+            -400px -400px, /* star 4 opposite */
+            250% 100%,     /* star 5 horizontal */
+            100% 250%,     /* star 6 vertical */
+            0 0;           /* base stays */
+    }
 }
 
 /* Break out and style body - will only apply when this section is loaded */
 }
+
 html {
     /* Force light color scheme to prevent browser dark mode interference */
     color-scheme: light !important;
@@ -1003,8 +1026,8 @@ body {
         220px 220px,
         180px 180px,
         100% 100% !important;
-    background-attachment: fixed !important;
-    animation: bg-scroll 30s linear infinite !important;
+    background-attachment: scroll !important;
+    animation: bg-scroll 20s linear infinite !important;
 }
 #page-container {
     background: transparent !important;
