@@ -787,7 +787,7 @@ def collapsible_sidebar(icon, title, items_list, is_open=True, show_reveal=False
     content_classes = f"p-3 {common_frost_style} rounded-lg border border-black dark:border-black overflow-y-auto max-h-[calc(100vh-18rem)]"
     
     return Details(
-        Summary(*summary_content, cls=summary_classes),
+        Summary(*summary_content, cls=summary_classes, style="margin: 0 0 0.5rem 0;"),
         Div(
             Ul(*items_list, cls="list-none"),
             cls=content_classes,

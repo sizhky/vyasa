@@ -7,11 +7,21 @@ function initMermaidInteraction() {
         const svg = wrapper.querySelector('svg');
         if (!svg || mermaidStates[wrapper.id]) return;
         
+        // DEBUG: Log initial state
+        console.group(`🔍 initMermaidInteraction: ${wrapper.id}`);
+        console.log('Theme:', getCurrentTheme());
+        console.log('Wrapper computed style height:', window.getComputedStyle(wrapper).height);
+        console.log('Wrapper inline style:', wrapper.getAttribute('style'));
+        
         // Scale SVG to fit container (maintain aspect ratio, fit to width or height whichever is smaller)
         const wrapperRect = wrapper.getBoundingClientRect();
         const svgRect = svg.getBoundingClientRect();
+        console.log('Wrapper rect:', { width: wrapperRect.width, height: wrapperRect.height });
+        console.log('SVG rect:', { width: svgRect.width, height: svgRect.height });
+        
         const scaleX = (wrapperRect.width - 32) / svgRect.width;  // 32 for p-4 padding (16px each side)
         const scaleY = (wrapperRect.height - 32) / svgRect.height;
+        console.log('Scale factors:', { scaleX, scaleY });
         
         // For very wide diagrams (like Gantt charts), prefer width scaling even if it exceeds height
         const aspectRatio = svgRect.width / svgRect.height;
@@ -19,9 +29,11 @@ function initMermaidInteraction() {
         if (aspectRatio > 3) {
             // Wide diagram: scale to fit width, allowing vertical scroll if needed
             initialScale = scaleX;
+            console.log('Wide diagram detected (aspect ratio > 3):', aspectRatio, 'Using scaleX:', initialScale);
         } else {
             // Normal diagram: fit to smaller dimension, but allow upscaling up to 3x
             initialScale = Math.min(scaleX, scaleY, 3);
+            console.log('Normal diagram (aspect ratio <=3):', aspectRatio, 'Using min scale:', initialScale);
         }
         
         const state = {
@@ -33,6 +45,8 @@ function initMermaidInteraction() {
             startY: 0
         };
         mermaidStates[wrapper.id] = state;
+        console.log('Final state:', state);
+        console.groupEnd();
         
         function updateTransform() {
             svg.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`;
@@ -213,6 +227,17 @@ function getCurrentTheme() {
 }
 
 function reinitializeMermaid() {
+    console.group('🔄 reinitializeMermaid called');
+    console.log('Switching to theme:', getCurrentTheme());
+    console.log('Is initial load?', isInitialLoad);
+    
+    // Skip if this is the initial load (let it render naturally first)
+    if (isInitialLoad) {
+        console.log('Skipping reinitialize on initial load');
+        console.groupEnd();
+        return;
+    }
+    
     mermaid.initialize({ 
         startOnLoad: false,
         theme: getCurrentTheme(),
@@ -226,6 +251,15 @@ function reinitializeMermaid() {
     document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
         const originalCode = wrapper.getAttribute('data-mermaid-code');
         if (originalCode) {
+            console.log(`Processing wrapper: ${wrapper.id}`);
+            console.log('BEFORE clear - wrapper height:', window.getComputedStyle(wrapper).height);
+            console.log('BEFORE clear - wrapper rect:', wrapper.getBoundingClientRect());
+            
+            // Preserve the current computed height before clearing (height should already be set explicitly)
+            const currentHeight = wrapper.getBoundingClientRect().height;
+            console.log('Preserving height:', currentHeight);
+            wrapper.style.height = currentHeight + 'px';
+            
             // Delete the old state so it can be recreated
             delete mermaidStates[wrapper.id];
             
@@ -236,6 +270,8 @@ function reinitializeMermaid() {
             
             // Clear the wrapper
             wrapper.innerHTML = '';
+            console.log('AFTER clear - wrapper height:', window.getComputedStyle(wrapper).height);
+            console.log('AFTER clear - wrapper rect:', wrapper.getBoundingClientRect());
             
             // Re-add the pre element with mermaid code
             const newPre = document.createElement('pre');
@@ -247,10 +283,15 @@ function reinitializeMermaid() {
     
     // Re-run mermaid
     mermaid.run().then(() => {
-        setTimeout(initMermaidInteraction, 100);
+        console.log('Mermaid re-render complete, calling initMermaidInteraction in 100ms');
+        setTimeout(() => {
+            initMermaidInteraction();
+            console.groupEnd();
+        }, 100);
     });
 }
 
+console.log('🚀 Initial Mermaid setup - Theme:', getCurrentTheme());
 mermaid.initialize({ 
     startOnLoad: true,
     theme: getCurrentTheme(),
@@ -260,9 +301,24 @@ mermaid.initialize({
     }
 });
 
+// Track if this is the initial load
+let isInitialLoad = true;
+
 // Initialize interaction after mermaid renders
 mermaid.run().then(() => {
-    setTimeout(initMermaidInteraction, 100);
+    console.log('Initial mermaid render complete');
+    setTimeout(() => {
+        console.log('Calling initial initMermaidInteraction');
+        initMermaidInteraction();
+        
+        // After initial render, set explicit heights on all wrappers so theme switching works
+        document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
+            const currentHeight = wrapper.getBoundingClientRect().height;
+            console.log(`Setting initial height for ${wrapper.id}:`, currentHeight);
+            wrapper.style.height = currentHeight + 'px';
+        });
+        isInitialLoad = false;
+    }, 100);
 });
 
 // Reveal current file in sidebar
