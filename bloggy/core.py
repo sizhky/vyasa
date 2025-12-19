@@ -712,6 +712,16 @@ static_dir = Path(__file__).parent / "static"
 if static_dir.exists(): app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 rt = app.route
 
+# Progressive sidebar loading: lazy posts sidebar endpoint
+@rt("/_sidebar/posts")
+def posts_sidebar_lazy():
+    html = _cached_posts_sidebar_html(_posts_sidebar_fingerprint())
+    return Aside(
+        NotStr(html),
+        cls="hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
+        id="posts-sidebar"
+    )
+
 # Route to serve static files (images, SVGs, etc.) from blog posts
 @rt("/posts/{path:path}.{ext:static}")
 def serve_post_static(path: str, ext: str):
@@ -1033,11 +1043,18 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         )
         # Full layout with all sidebars
         content_with_sidebars = Div(cls="w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1")(
-            # Left sidebar - collapsible post list (stays static, JS updates active state)
+            # Left sidebar - lazy load with HTMX, show loader placeholder
             Aside(
-                NotStr(_cached_posts_sidebar_html(_posts_sidebar_fingerprint())),
+                Div(
+                    UkIcon("loader", cls="w-5 h-5 animate-spin"),
+                    Span("Loading posts…", cls="ml-2 text-sm"),
+                    cls="flex items-center justify-center h-32 text-slate-400"
+                ),
                 cls="hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
-                id="posts-sidebar"
+                id="posts-sidebar",
+                hx_get="/_sidebar/posts",
+                hx_trigger="load",
+                hx_swap="outerHTML"
             ),
             # Main content (swappable)
             main_content_container,
