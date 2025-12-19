@@ -885,35 +885,17 @@ def _cached_posts_sidebar_html(fingerprint):
         "Posts",
         get_posts(),
         is_open=False,
-        show_reveal=True
+        data_sidebar="posts"
     )
     return to_xml(sidebar)
 
-def collapsible_sidebar(icon, title, items_list, is_open=False, show_reveal=False):
+def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=None):
     """Reusable collapsible sidebar component with sticky header"""
     # Build the summary content
     summary_content = [
         UkIcon(icon, cls="w-5 h-5 mr-2"),
         Span(title, cls="flex-1")
     ]
-    
-    # Add reveal button if requested (or placeholder to maintain consistent height)
-    if show_reveal:
-        summary_content.append(
-            Button(
-                Span("↗", cls="text-sm font-normal"),
-                title="Reveal current file in sidebar",
-                cls="p-1.5 ml-auto hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors",
-                type="button",
-                id="reveal-in-sidebar-btn",
-                style="border: none; cursor: pointer; background: transparent; color: #64748b; min-width: 24px; min-height: 24px; display: flex; align-items: center; justify-content: center;"
-            )
-        )
-    else:
-        # Add invisible placeholder to maintain height consistency
-        summary_content.append(
-            Span(cls="w-6 h-6 ml-auto", style="visibility: hidden;")
-        )
     
     # Sidebar styling configuration
     common_frost_style = "bg-white/10 dark:bg-slate-950/70 backdrop-blur-lg border border-slate-900/20 dark:border-slate-700/20 shadow-lg"
@@ -927,7 +909,8 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, show_reveal=Fals
             cls=content_classes,
             id="sidebar-scroll-container"
         ),
-        open=is_open
+        open=is_open,
+        data_sidebar=data_sidebar
     )
 
 def is_active_toc_item(anchor):

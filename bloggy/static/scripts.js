@@ -322,25 +322,27 @@ mermaid.run().then(() => {
 });
 
 // Reveal current file in sidebar
-function revealInSidebar(event) {
-    if (event) {
-        event.stopPropagation(); // Prevent collapsing the sidebar
-        event.preventDefault(); // Prevent default button behavior
+function revealInSidebar(rootElement = document) {
+    if (!window.location.pathname.startsWith('/posts/')) {
+        return;
     }
-    
+
     const currentPath = window.location.pathname.replace(/^\/posts\//, '');
-    const activeLink = document.querySelector(`.post-link[data-path="${currentPath}"]`);
+    const activeLink = rootElement.querySelector(`.post-link[data-path="${currentPath}"]`);
     
     if (activeLink) {
-        // Expand all parent details elements
+        // Expand all parent details elements within this sidebar
         let parent = activeLink.closest('details');
-        while (parent) {
+        while (parent && rootElement.contains(parent)) {
             parent.open = true;
+            if (parent === rootElement) {
+                break;
+            }
             parent = parent.parentElement.closest('details');
         }
         
         // Scroll to the active link
-        const scrollContainer = document.getElementById('sidebar-scroll-container');
+        const scrollContainer = rootElement.querySelector('#sidebar-scroll-container');
         if (scrollContainer) {
             const linkRect = activeLink.getBoundingClientRect();
             const containerRect = scrollContainer.getBoundingClientRect();
@@ -359,6 +361,22 @@ function revealInSidebar(event) {
             activeLink.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
         }, 1500);
     }
+}
+
+function initPostsSidebarAutoReveal() {
+    const postSidebars = document.querySelectorAll('details[data-sidebar="posts"]');
+    postSidebars.forEach((sidebar) => {
+        if (sidebar.dataset.revealBound === 'true') {
+            return;
+        }
+        sidebar.dataset.revealBound = 'true';
+        sidebar.addEventListener('toggle', () => {
+            if (!sidebar.open) {
+                return;
+            }
+            revealInSidebar(sidebar);
+        });
+    });
 }
 
 // Update active post link in sidebar
@@ -419,13 +437,7 @@ document.body.addEventListener('htmx:afterSwap', function() {
     updateActivePostLink();
     updateActiveTocLink();
     initMobileMenus(); // Reinitialize mobile menu handlers
-    
-    // Reattach reveal button handler (in case sidebar was swapped)
-    const revealBtn = document.getElementById('reveal-in-sidebar-btn');
-    if (revealBtn) {
-        revealBtn.removeEventListener('click', revealInSidebar); // Remove old listener
-        revealBtn.addEventListener('click', revealInSidebar); // Add new listener
-    }
+    initPostsSidebarAutoReveal();
 });
 
 // Watch for theme changes and re-render mermaid diagrams
@@ -530,10 +542,5 @@ document.addEventListener('DOMContentLoaded', () => {
     updateActivePostLink();
     updateActiveTocLink();
     initMobileMenus();
-    
-    // Attach reveal button click handler
-    const revealBtn = document.getElementById('reveal-in-sidebar-btn');
-    if (revealBtn) {
-        revealBtn.addEventListener('click', revealInSidebar);
-    }
+    initPostsSidebarAutoReveal();
 });
