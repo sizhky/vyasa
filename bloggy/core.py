@@ -712,7 +712,8 @@ def get_auth_middleware():
     config = get_config()
     user, pwd = config.get_auth()
     if user and pwd:
-        return [user_pwd_auth({user: pwd}, skip=[r"/static.*", r"/login", r"/public.*", r"/favicon.*"])]
+        # Skip /login for auth middleware so browser popup does not appear
+        return [user_pwd_auth({user: pwd}, skip=[r"/static.*", r"^/login$", r"/public.*", r"/favicon.*"])]
     return []
 
 app = FastHTML(hdrs=hdrs, middleware=get_auth_middleware())
@@ -725,14 +726,40 @@ if static_dir.exists():
 rt = app.route
 
 
-@rt("/login")
-def login():
-    # Simple login page (shown if not authenticated)
-    return Div([
-        H2("Login Required"),
-        P("Please authenticate using HTTP Basic Auth."),
-        P("Tip: You can set credentials via .bloggy, env vars, or CLI --user/--password."),
-    ], cls="prose mx-auto mt-24 text-center")
+from starlette.requests import Request
+from starlette.responses import RedirectResponse
+
+@rt("/login", methods=["GET", "POST"])
+async def login(request: Request):
+    config = get_config()
+    user, pwd = config.get_auth()
+    error = None
+    if request.method == "POST":
+        form = await request.form()
+        username = form.get("username", "")
+        password = form.get("password", "")
+        if username == user and password == pwd:
+            request.session["auth"] = username
+            return RedirectResponse("/", status_code=303)
+        else:
+            error = "Invalid username or password."
+    return Div(
+        H2("Login", cls="uk-h2"),
+        P("Enter your credentials to access the site."),
+        Form(
+            Div(
+                Label("Username", htmlFor="username", cls="uk-label"),
+                Input(type="text", name="username", required=True, id="username", cls="uk-input input input-bordered w-full"),
+                cls="mb-4"),
+            Div(
+                Label("Password", htmlFor="password", cls="uk-label"),
+                Input(type="password", name="password", required=True, id="password", cls="uk-input input input-bordered w-full"),
+                cls="mb-4"),
+            Button("Login", type="submit", cls="uk-btn btn btn-primary w-full"),
+            enctype="multipart/form-data", method="post", cls="max-w-sm mx-auto"),
+        P(error, cls="text-red-500 mt-4") if error else None,
+        P("Tip: You can set credentials via .bloggy, env vars, or CLI --user/--password.", cls="mt-4 text-sm text-gray-500"),
+        cls="prose mx-auto mt-24 text-center")
 
 # Progressive sidebar loading: lazy posts sidebar endpoint
 @rt("/_sidebar/posts")
