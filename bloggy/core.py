@@ -78,17 +78,27 @@ except NameError:
                 src = f'{self.img_dir}/{src}'
             return tpl.format(src, token.children[0].content if token.children else '', title)
 
-def span_token(name, pat, attr, prec=5, parse_inner=False):
+def span_token(name, pat, attr, prec=5):
     class T(mst.span_token.SpanToken):
-        precedence,parse_group,pattern = prec,1,re.compile(pat)
-        def __init__(self, match): 
+        precedence, parse_inner, parse_group, pattern = prec, False, 1, re.compile(pat)
+        def __init__(self, match):
             setattr(self, attr, match.group(1))
-            self.children = ()
+            # Optional second parameter
+            if hasattr(match, 'lastindex') and match.lastindex and match.lastindex >= 2:
+                if name == 'YoutubeEmbed':
+                    self.caption = match.group(2) if match.group(2) else None
+                elif name == 'MermaidEmbed':
+                    self.option = match.group(2) if match.group(2) else None
     T.__name__ = name
-    T.parse_inner = parse_inner
     return T
 
 FootnoteRef = span_token('FootnoteRef', r'\[\^([^\]]+)\](?!:)', 'target')
+YoutubeEmbed = span_token(
+    'YoutubeEmbed',
+    r'\[yt:([a-zA-Z0-9_-]+)(?:\|(.+))?\]',
+    'video_id',
+    6
+)
 
 # Superscript and Subscript tokens with higher precedence
 class Superscript(mst.span_token.SpanToken):
@@ -216,6 +226,27 @@ class ContentRenderer(FrankenRenderer):
             return f'<li class="task-list-item flex items-start" style="list-style: none; margin: 0.5rem 0;">{checkbox}<span class="flex-1">{content}</span></li>\n'
         
         return f'<li>{inner}</li>\n'
+    
+    def render_youtube_embed(self, token):
+        video_id = token.video_id
+        caption = getattr(token, 'caption', None)
+
+        iframe = f'''
+        <div class="relative w-full aspect-video my-6 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800">
+            <iframe
+                src="https://www.youtube.com/embed/{video_id}"
+                title="YouTube video"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen
+                class="absolute inset-0 w-full h-full">
+            </iframe>
+        </div>
+        '''
+
+        if caption:
+            return iframe + f'<p class="text-sm text-slate-500 dark:text-slate-400 text-center mt-2">{caption}</p>'
+        return iframe
     
     def render_footnote_ref(self, token):
         self.fn_counter += 1
@@ -434,7 +465,7 @@ def postprocess_tabs(html, tab_data_store, img_dir, current_path, footnotes):
         for i, (_, tab_content) in enumerate(tabs):
             active = 'active' if i == 0 else ''
             # Render each tab's content as fresh markdown
-            with ContentRenderer(InlineCodeAttr, Strikethrough, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, current_path=current_path) as renderer:
+            with ContentRenderer(YoutubeEmbed, InlineCodeAttr, Strikethrough, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, current_path=current_path) as renderer:
                 doc = mst.Document(tab_content)
                 rendered = renderer.render(doc)
             html_parts.append(f'<div class="tab-panel {active}" data-tab-index="{i}">{rendered}</div>')
@@ -469,7 +500,7 @@ def from_md(content, img_dir=None, current_path=None):
             'h3': 'text-xl font-semibold mb-3 mt-5', 'h4': 'text-lg font-semibold mb-2 mt-4'}
     
     # Register custom tokens with renderer context manager
-    with ContentRenderer(InlineCodeAttr, Strikethrough, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, current_path=current_path) as renderer:
+    with ContentRenderer(YoutubeEmbed, InlineCodeAttr, Strikethrough, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, current_path=current_path) as renderer:
         doc = mst.Document(content)
         html = renderer.render(doc)
     
