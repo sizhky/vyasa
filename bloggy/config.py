@@ -1,7 +1,7 @@
 """Configuration management for Bloggy.
 
 Supports loading configuration from:
-1. .bloggy file (TOML format) in the current directory or blog root
+1. .bloggy file (TOML or YAML format) in the current directory or blog root
 2. Environment variables (as fallback)
 3. Default values
 
@@ -55,9 +55,51 @@ class BloggyConfig:
                 with open(config_file, 'rb') as f:
                     self._config = tomllib.load(f)
                 print(f"✓ Loaded configuration from: {config_file}")
-            except Exception as e:
-                print(f"Warning: Failed to load {config_file}: {e}")
-                self._config = {}
+            except Exception as toml_error:
+                self._config = self._load_non_toml_config(config_file)
+                if self._config:
+                    print(f"✓ Loaded configuration from: {config_file} (non-TOML)")
+                else:
+                    print(f"Warning: Failed to load {config_file}: {toml_error}")
+                    self._config = {}
+
+    def _load_non_toml_config(self, config_file: Path) -> dict:
+        try:
+            content = config_file.read_text(encoding="utf-8")
+        except Exception:
+            return {}
+
+        parsed = None
+        try:
+            import yaml
+            parsed = yaml.safe_load(content)
+        except Exception:
+            parsed = None
+
+        if isinstance(parsed, dict):
+            return parsed
+
+        return self._parse_simple_config(content)
+
+    def _parse_simple_config(self, content: str) -> dict:
+        config = {}
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if ":" not in stripped:
+                continue
+            key, value = stripped.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            if not key:
+                continue
+            lowered = value.lower()
+            if lowered in ("true", "false"):
+                config[key] = lowered == "true"
+            else:
+                config[key] = value
+        return config
     
     def get(self, key: str, env_var: str, default: any = None) -> any:
         """Get configuration value with priority: config file > env var > default.

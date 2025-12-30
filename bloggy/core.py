@@ -62,6 +62,183 @@ def get_post_title(file_path):
     metadata, _ = parse_frontmatter(file_path)
     return metadata.get('title', slug_to_title(file_path.stem))
 
+@lru_cache(maxsize=128)
+def _cached_bloggy_config(path_str, mtime):
+    path = Path(path_str)
+    try:
+        content = path.read_text(encoding="utf-8")
+    except Exception:
+        return {}
+
+    parsed = None
+    try:
+        import yaml
+        parsed = yaml.safe_load(content)
+    except Exception:
+        parsed = None
+
+    if isinstance(parsed, dict):
+        return parsed
+    return _parse_bloggy_simple(content)
+
+def _parse_bloggy_simple(content):
+    config = {}
+    current_key = None
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("-") and current_key == "order":
+            value = stripped[1:].strip()
+            if value:
+                config.setdefault("order", []).append(value)
+            continue
+        if ":" in stripped:
+            key, value = stripped.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            current_key = key
+            if not value:
+                if key == "order":
+                    config.setdefault("order", [])
+                continue
+            if key == "order":
+                config[key] = _parse_bloggy_list(value)
+            else:
+                config[key] = _parse_bloggy_scalar(value)
+            continue
+        current_key = None
+    return config
+
+def _parse_bloggy_list(value):
+    raw = value.strip()
+    if raw.startswith("[") and raw.endswith("]"):
+        raw = raw[1:-1]
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+def _parse_bloggy_scalar(value):
+    lowered = value.lower()
+    if lowered in ("true", "false"):
+        return lowered == "true"
+    return value
+
+def _normalize_bloggy_config(parsed):
+    config = {
+        "order": [],
+        "sort": "name_asc",
+        "folders_first": True,
+    }
+    if not isinstance(parsed, dict):
+        return config
+
+    order = parsed.get("order")
+    if order is not None:
+        if isinstance(order, (list, tuple)):
+            config["order"] = [str(item).strip() for item in order if str(item).strip()]
+        else:
+            config["order"] = _parse_bloggy_list(str(order))
+
+    sort = parsed.get("sort")
+    if isinstance(sort, str) and sort in ("name_asc", "name_desc", "mtime_asc", "mtime_desc"):
+        config["sort"] = sort
+
+    folders_first = parsed.get("folders_first")
+    if isinstance(folders_first, bool):
+        config["folders_first"] = folders_first
+    elif isinstance(folders_first, str):
+        lowered = folders_first.lower()
+        if lowered in ("true", "false"):
+            config["folders_first"] = lowered == "true"
+
+    return config
+
+def get_bloggy_config(folder):
+    bloggy_path = folder / ".bloggy"
+    if not bloggy_path.exists():
+        return _normalize_bloggy_config({})
+    try:
+        mtime = bloggy_path.stat().st_mtime
+    except OSError:
+        return _normalize_bloggy_config({})
+    parsed = _cached_bloggy_config(str(bloggy_path), mtime)
+    config = _normalize_bloggy_config(parsed)
+    logger.debug(
+        "[DEBUG] .bloggy config for %s: order=%s sort=%s folders_first=%s",
+        folder,
+        config.get("order"),
+        config.get("sort"),
+        config.get("folders_first"),
+    )
+    return config
+
+def order_bloggy_entries(entries, config):
+    if not entries:
+        return []
+
+    order_list = [name.strip().rstrip("/") for name in config.get("order", []) if str(name).strip()]
+    if not order_list:
+        sorted_entries = _sort_bloggy_entries(entries, config.get("sort"), config.get("folders_first", True))
+        logger.debug(
+            "[DEBUG] .bloggy order empty; sorted entries: %s",
+            [item.name for item in sorted_entries],
+        )
+        return sorted_entries
+
+    exact_map = {}
+    stem_map = {}
+    for item in entries:
+        exact_map.setdefault(item.name, item)
+        if item.suffix == ".md":
+            stem_map.setdefault(item.stem, item)
+
+    ordered = []
+    used = set()
+    for name in order_list:
+        if name in exact_map:
+            item = exact_map[name]
+        elif name in stem_map:
+            item = stem_map[name]
+        else:
+            item = None
+        if item and item not in used:
+            ordered.append(item)
+            used.add(item)
+
+    remaining = [item for item in entries if item not in used]
+    remaining_sorted = _sort_bloggy_entries(
+        remaining,
+        config.get("sort"),
+        config.get("folders_first", True)
+    )
+    logger.debug(
+        "[DEBUG] .bloggy ordered=%s remaining=%s",
+        [item.name for item in ordered],
+        [item.name for item in remaining_sorted],
+    )
+    return ordered + remaining_sorted
+
+def _sort_bloggy_entries(entries, sort_method, folders_first):
+    method = sort_method or "name_asc"
+    reverse = method.endswith("desc")
+    by_mtime = method.startswith("mtime")
+
+    def sort_key(item):
+        if by_mtime:
+            try:
+                return item.stat().st_mtime
+            except OSError:
+                return 0
+        return item.name.lower()
+
+    if folders_first:
+        folders = [item for item in entries if item.is_dir()]
+        files = [item for item in entries if not item.is_dir()]
+        folders_sorted = sorted(folders, key=sort_key, reverse=reverse)
+        files_sorted = sorted(files, key=sort_key, reverse=reverse)
+        return folders_sorted + files_sorted
+
+    return sorted(entries, key=sort_key, reverse=reverse)
+
 # Markdown rendering setup
 try: FrankenRenderer
 except NameError:
@@ -646,7 +823,7 @@ hdrs = (
     Link(rel="preconnect", href="https://fonts.gstatic.com", crossorigin=""),
     Link(rel="stylesheet", href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono&display=swap"),
     Style("body { font-family: 'IBM Plex Sans', sans-serif; } code, pre { font-family: 'IBM Plex Mono', monospace; }"),
-    Style(".folder-chevron { transition: transform 0.2s; display: inline-block; } details[open] > summary > .folder-chevron { transform: rotate(90deg); } details { border: none !important; box-shadow: none !important; }"),
+    Style(".folder-chevron { display: inline-block; width: 0.45rem; height: 0.45rem; border-right: 2px solid rgb(148 163 184); border-bottom: 2px solid rgb(148 163 184); transform: rotate(-45deg); transition: transform 0.2s; } details.is-open > summary .folder-chevron { transform: rotate(45deg); } details { border: none !important; box-shadow: none !important; }"),
     Style("h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }"),  # Offset for sticky navbar
     Style("""
         /* Ultra thin scrollbar styles */
@@ -1231,8 +1408,28 @@ def build_post_tree(folder):
     start_time = time.time()
     root = get_root_folder()
     items = []
-    try: 
-        entries = sorted(folder.iterdir(), key=lambda x: (not x.is_dir(), x.name))
+    try:
+        index_file = find_index_file() if folder == root else None
+        entries = []
+        for item in folder.iterdir():
+            if item.name == ".bloggy":
+                continue
+            if item.is_dir():
+                if item.name.startswith('.'):
+                    continue
+                entries.append(item)
+            elif item.suffix == '.md':
+                # Skip the file being used for home page (index.md takes precedence over readme.md)
+                if index_file and item.resolve() == index_file.resolve():
+                    continue
+                entries.append(item)
+        config = get_bloggy_config(folder)
+        entries = order_bloggy_entries(entries, config)
+        logger.debug(
+            "[DEBUG] build_post_tree entries for %s: %s",
+            folder,
+            [item.name for item in entries],
+        )
         logger.debug(f"[DEBUG] Scanning directory: {folder.relative_to(root) if folder != root else '.'} - found {len(entries)} entries")
     except (OSError, PermissionError): 
         return items
@@ -1245,18 +1442,13 @@ def build_post_tree(folder):
                 folder_title = slug_to_title(item.name)
                 items.append(Li(Details(
                     Summary(
-                        Span(UkIcon("chevron-right", cls="folder-chevron w-4 h-4 text-slate-400"), cls="w-4 mr-1 flex items-center justify-center shrink-0"),
-                        Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-1 flex items-center justify-center shrink-0"),
+                        Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                        Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                         Span(folder_title, cls="truncate min-w-0", title=folder_title),
                         cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"),
-                    Ul(*sub_items, cls="ml-2 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), open=False), cls="my-1"))
+                    Ul(*sub_items, cls="ml-2 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"),
+                    data_folder="true"), cls="my-1"))
         elif item.suffix == '.md':
-            # Skip the file being used for home page (index.md takes precedence over readme.md)
-            if item.parent == root:
-                index_file = find_index_file()
-                if index_file and item.resolve() == index_file.resolve():
-                    continue
-            
             slug = str(item.relative_to(root).with_suffix(''))
             title_start = time.time()
             title = get_post_title(item)
@@ -1279,7 +1471,9 @@ def build_post_tree(folder):
 def _posts_tree_fingerprint():
     root = get_root_folder()
     try:
-        return max((p.stat().st_mtime for p in root.rglob("*.md")), default=0)
+        md_mtime = max((p.stat().st_mtime for p in root.rglob("*.md")), default=0)
+        bloggy_mtime = max((p.stat().st_mtime for p in root.rglob(".bloggy")), default=0)
+        return max(md_mtime, bloggy_mtime)
     except Exception:
         return 0
 

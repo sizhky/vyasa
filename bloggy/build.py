@@ -14,7 +14,8 @@ from .core import (
     parse_frontmatter, get_post_title, slug_to_title, 
     from_md, extract_toc, build_toc_items, text_to_anchor,
     build_post_tree, ContentRenderer, extract_footnotes,
-    preprocess_super_sub, preprocess_tabs
+    preprocess_super_sub, preprocess_tabs,
+    get_bloggy_config, order_bloggy_entries
 )
 from .config import get_config, reload_config
 
@@ -27,8 +28,16 @@ def generate_static_html(title, body_content, blog_title):
     <style>
         body { font-family: 'IBM Plex Sans', sans-serif; margin: 0; padding: 0; }
         code, pre { font-family: 'IBM Plex Mono', monospace; }
-        .folder-chevron { transition: transform 0.2s; display: inline-block; }
-        details[open] > summary > .folder-chevron { transform: rotate(90deg); }
+        .folder-chevron {
+            display: inline-block;
+            width: 0.45rem;
+            height: 0.45rem;
+            border-right: 2px solid rgb(148 163 184);
+            border-bottom: 2px solid rgb(148 163 184);
+            transform: rotate(-45deg);
+            transition: transform 0.2s;
+        }
+        details.is-open > summary .folder-chevron { transform: rotate(45deg); }
         details { border: none !important; box-shadow: none !important; }
         h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
         
@@ -323,8 +332,32 @@ def generate_static_html(title, body_content, blog_title):
 def build_post_tree_static(folder, root_folder):
     """Build post tree with static .html links instead of HTMX"""
     items = []
-    try: 
-        entries = sorted(folder.iterdir(), key=lambda x: (not x.is_dir(), x.name))
+    try:
+        index_file = None
+        if folder == root_folder:
+            for candidate in root_folder.iterdir():
+                if candidate.is_file() and candidate.suffix == '.md' and candidate.stem.lower() == 'index':
+                    index_file = candidate
+                    break
+            if index_file is None:
+                for candidate in root_folder.iterdir():
+                    if candidate.is_file() and candidate.suffix == '.md' and candidate.stem.lower() == 'readme':
+                        index_file = candidate
+                        break
+
+        entries = []
+        for item in folder.iterdir():
+            if item.name == ".bloggy":
+                continue
+            if item.is_dir():
+                if item.name.startswith('.'):
+                    continue
+                entries.append(item)
+            elif item.suffix == '.md':
+                if index_file and item.resolve() == index_file.resolve():
+                    continue
+                entries.append(item)
+        entries = order_bloggy_entries(entries, get_bloggy_config(folder))
     except (OSError, PermissionError): 
         return items
     
@@ -337,18 +370,13 @@ def build_post_tree_static(folder, root_folder):
                 folder_title = slug_to_title(item.name)
                 items.append(Li(Details(
                     Summary(
-                        Span(UkIcon("chevron-right", cls="folder-chevron w-4 h-4 text-slate-400"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                        Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                         Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                         Span(folder_title, cls="truncate min-w-0", title=folder_title),
                         cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"),
-                    Ul(*sub_items, cls="ml-2 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), open=False), cls="my-1"))
+                    Ul(*sub_items, cls="ml-2 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"),
+                    data_folder="true"), cls="my-1"))
         elif item.suffix == '.md':
-            # Skip the file being used for home page
-            if item.parent == root_folder:
-                # Check if this is index.md or readme.md (case insensitive)
-                if item.stem.lower() in ['index', 'readme']:
-                    continue
-            
             slug = str(item.relative_to(root_folder).with_suffix(''))
             title = get_post_title(item)
             
