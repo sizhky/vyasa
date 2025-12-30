@@ -69,6 +69,7 @@ except NameError:
         def __init__(self, *args, img_dir=None, **kwargs):
             super().__init__(*args, **kwargs)
             self.img_dir = img_dir
+
         def render_image(self, token):
             tpl = '<img src="{}" alt="{}"{}  class="max-w-full h-auto rounded-lg mb-6">'
             title = f' title="{token.title}"' if hasattr(token, 'title') else ''
@@ -411,62 +412,41 @@ class ContentRenderer(FrankenRenderer):
     
     def render_link(self, token):
         href, inner, title = token.target, self.render_inner(token), f' title="{token.title}"' if token.title else ''
-        
-        # Check if it's an external link (http://, https://, mailto:, etc.)
+        # ...existing code...
         is_external = href.startswith(('http://', 'https://', 'mailto:', 'tel:', '//', '#'))
-        
-        # Check if it's an absolute internal link starting with /
         is_absolute_internal = href.startswith('/') and not href.startswith('//')
-        
-        # Handle relative links (e.g., ./file.md, ../other/file.md, file.md)
         is_relative = not is_external and not is_absolute_internal
-        
-        # Always try to resolve relative links
         if is_relative:
-            # Resolve relative link based on current post path
             from pathlib import Path
-            
             original_href = href
-            
-            # Remove .md extension if present
             if href.endswith('.md'):
                 href = href[:-3]
-            
             if self.current_path:
-                # Get the root folder first
                 root = get_root_folder().resolve()
-                
-                # Build the full path to current file from root
                 current_file_full = root / self.current_path
                 current_dir = current_file_full.parent
-                
-                # Resolve the relative path from current directory
                 resolved = (current_dir / href).resolve()
-                
                 logger.debug(f"DEBUG: original_href={original_href}, current_path={self.current_path}, current_dir={current_dir}, resolved={resolved}, root={root}")
-                
                 try:
-                    # Get relative path from root
                     rel_path = resolved.relative_to(root)
                     href = f'/posts/{rel_path}'
                     is_absolute_internal = True
                     logger.debug(f"DEBUG: SUCCESS - rel_path={rel_path}, final href={href}")
                 except ValueError as e:
-                    # Path is outside root folder, treat as external
                     is_external = True
                     logger.debug(f"DEBUG: FAILED - ValueError: {e}")
             else:
-                # If no current_path, can't properly resolve relative links
-                # Treat as external to avoid broken links
                 is_external = True
                 logger.debug(f"DEBUG: No current_path, treating as external")
-        
-        # Determine if this should have HTMX attributes (internal links without file extensions)
         is_internal = is_absolute_internal and '.' not in href.split('/')[-1]
-        
         hx = f' hx-get="{href}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top"' if is_internal else ''
         ext = '' if (is_internal or is_absolute_internal) else ' target="_blank" rel="noopener noreferrer"'
-        return f'<a href="{href}"{hx}{ext} class="text-primary underline"{title}>{inner}</a>'
+        # Amber/gold link styling, stands out and is accessible
+        link_class = (
+            "text-amber-600 dark:text-amber-400 underline underline-offset-2 "
+            "hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors"
+        )
+        return f'<a href="{href}"{hx}{ext} class="{link_class}"{title}>{inner}</a>'
 
 
 def postprocess_tabs(html, tab_data_store, img_dir, current_path, footnotes):
@@ -518,6 +498,26 @@ def from_md(content, img_dir=None, current_path=None):
     content, footnotes = extract_footnotes(content)
     content = preprocess_super_sub(content)  # Preprocess superscript/subscript
     content, tab_data_store = preprocess_tabs(content)  # Preprocess tabs and get tab data
+
+    # Preprocess: convert single newlines within paragraphs to '  \n' (markdown softbreak)
+    # This preserves double newlines (paragraphs) and code blocks
+    def _preserve_newlines(md):
+        import re
+        # Don't touch code blocks (fenced or indented)
+        code_block = re.compile(r'(```[\s\S]*?```|~~~[\s\S]*?~~~)', re.MULTILINE)
+        blocks = []
+        def repl(m):
+            blocks.append(m.group(0))
+            return f"__CODEBLOCK_{len(blocks)-1}__"
+        md = code_block.sub(repl, md)
+        # Replace single newlines not preceded/followed by another newline with '  \n'
+        md = re.sub(r'(?<!\n)\n(?!\n)', '  \n', md)
+        # Restore code blocks
+        for i, block in enumerate(blocks):
+            md = md.replace(f"__CODEBLOCK_{i}__", block)
+        return md
+    content = _preserve_newlines(content)
+
     mods = {'pre': 'my-4', 'p': 'text-base leading-relaxed mb-6', 'li': 'text-base leading-relaxed',
             'ul': 'uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base', 'ol': 'uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base', 
             'hr': 'border-t border-border my-8', 'h1': 'text-3xl font-bold mb-6 mt-8', 'h2': 'text-2xl font-semibold mb-4 mt-6', 
