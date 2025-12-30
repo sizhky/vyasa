@@ -5,20 +5,9 @@
 - [ ] Large text in mermaid blocks is janky
 
 ### Docs
-- [ ] Optional Login functionality
-- [ ] Auto reveal post on Posts click
 
-```mermaid
----
-aspect_ratio: 4:3
----
-gantt
-    dateFormat  YYYY-MM-DD
-    title Adding Gantt diagram functionality to mermaid
-
-    section A section
-    Completed tasks           :done,    des1, 2014-01-06,2014-01-08
-    Active task               :active,  des2, 2014-01-09, 3d
-    Future task               :         des3, after des2, 5d
-    Future task2              :         des4, after des3, 5d
-```
+### Navigation
+- [ ] Bloggy home page should be customizable. Currently it is either index.md or readme.md
+- [ ] Bloggy home page could be just a list of recent posts if configured that way
+- [ ] Add "next post" and "previous post" links at the bottom of each
+- [ ] Control the order of posts (by date, by title, manually) in .bloggy file
