@@ -803,6 +803,15 @@ hdrs = (
         .dark *::-webkit-scrollbar-thumb { background-color: rgb(71 85 105); }
         .dark *::-webkit-scrollbar-thumb:hover { background-color: rgb(100 116 139); }
         .dark * { scrollbar-color: rgb(71 85 105) transparent; }
+
+        /* Sidebar active link highlight */
+        .sidebar-highlight {
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+            transition: box-shadow 10s ease, background-color 10s ease;
+        }
+        .sidebar-highlight.fade-out {
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0);
+        }
         
         /* Tabs styles */
         .tabs-container { 
@@ -1093,14 +1102,17 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
     """Reusable collapsible sidebar component with sticky header"""
     # Build the summary content
     summary_content = [
-        UkIcon(icon, cls="w-5 h-5 mr-2"),
-        Span(title, cls="flex-1")
+        Span(
+            UkIcon(icon, cls="w-5 h-5 block"),
+            cls="flex items-center justify-center w-5 h-5 shrink-0 leading-none"
+        ),
+        Span(title, cls="flex-1 leading-none")
     ]
     
     # Sidebar styling configuration
-    common_frost_style = "bg-white/10 dark:bg-slate-950/70 backdrop-blur-lg border border-slate-900/20 dark:border-slate-700/20 shadow-lg"
-    summary_classes = f"flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-lg select-none list-none {common_frost_style} min-h-[56px]"
-    content_classes = f"p-3 {common_frost_style} rounded-lg border border-black dark:border-black overflow-y-auto max-h-[calc(100vh-18rem)]"
+    common_frost_style = "bg-white/20 dark:bg-slate-950/70 backdrop-blur-lg border border-slate-900/10 dark:border-slate-700/25 ring-1 ring-white/20 dark:ring-slate-900/30 shadow-[0_24px_60px_-40px_rgba(15,23,42,0.45)] dark:shadow-[0_28px_70px_-45px_rgba(2,6,23,0.85)]"
+    summary_classes = f"flex items-center gap-2 font-semibold cursor-pointer py-2.5 px-3 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-lg select-none list-none {common_frost_style} min-h-[56px]"
+    content_classes = f"p-3 {common_frost_style} rounded-lg overflow-y-auto max-h-[calc(100vh-18rem)]"
     
     return Details(
         Summary(*summary_content, cls=summary_classes, style="margin: 0 0 0.5rem 0;"),

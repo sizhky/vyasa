@@ -375,10 +375,16 @@ function revealInSidebar(rootElement = document) {
         }
         
         // Highlight the active link temporarily
-        activeLink.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
-        setTimeout(() => {
-            activeLink.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
-        }, 1500);
+        activeLink.classList.remove('fade-out');
+        activeLink.classList.add('sidebar-highlight');
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                activeLink.classList.add('fade-out');
+                setTimeout(() => {
+                    activeLink.classList.remove('sidebar-highlight', 'fade-out');
+                }, 10000);
+            }, 1000);
+        });
     }
 }
 

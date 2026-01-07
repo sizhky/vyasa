@@ -89,8 +89,20 @@ def cli():
     print(f"Serving at: http://{host}:{port}")
     if host == '0.0.0.0':
         print(f"Server accessible from network at: http://<your-ip>:{port}")
+    
+    # Configure reload to watch markdown files in the blog directory
+    reload_kwargs = {}
+    if reload:
+        blog_root = config.get_root_folder()
+        reload_kwargs = {
+            "reload": True,
+            "reload_dirs": [str(blog_root)],
+            "reload_includes": ["*.md"]
+        }
+    else:
+        reload_kwargs = {"reload": False}
 
-    uvicorn.run("bloggy.main:app", host=host, port=port, reload=reload)
+    uvicorn.run("bloggy.main:app", host=host, port=port, **reload_kwargs)
 
 if __name__ == "__main__":
     cli()
