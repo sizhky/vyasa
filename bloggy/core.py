@@ -666,7 +666,8 @@ def from_md(content, img_dir=None, current_path=None):
     mods = {'pre': 'my-4', 'p': 'text-base leading-relaxed mb-6', 'li': 'text-base leading-relaxed',
             'ul': 'uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base', 'ol': 'uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base', 
             'hr': 'border-t border-border my-8', 'h1': 'text-3xl font-bold mb-6 mt-8', 'h2': 'text-2xl font-semibold mb-4 mt-6', 
-            'h3': 'text-xl font-semibold mb-3 mt-5', 'h4': 'text-lg font-semibold mb-2 mt-4'}
+            'h3': 'text-xl font-semibold mb-3 mt-5', 'h4': 'text-lg font-semibold mb-2 mt-4',
+            'table': 'uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle my-6'}
     
     # Register custom tokens with renderer context manager
     with ContentRenderer(YoutubeEmbed, InlineCodeAttr, Strikethrough, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, current_path=current_path) as renderer:
@@ -916,6 +917,21 @@ hdrs = (
         }
         .tab-panel code { 
             font-family: 'IBM Plex Mono', monospace;
+        }
+    """),
+    # Custom table stripe styling for punchier colors
+    Style("""
+        .uk-table-striped tbody tr:nth-of-type(odd) {
+            background-color: rgba(71, 85, 105, 0.08);
+        }
+        .dark .uk-table-striped tbody tr:nth-of-type(odd) {
+            background-color: rgba(148, 163, 184, 0.12);
+        }
+        .uk-table-striped tbody tr:hover {
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+        .dark .uk-table-striped tbody tr:hover {
+            background-color: rgba(59, 130, 246, 0.15);
         }
     """),
     # Script("if(!localStorage.__FRANKEN__) localStorage.__FRANKEN__ = JSON.stringify({mode: 'light'})"))

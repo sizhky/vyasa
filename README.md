@@ -5,6 +5,15 @@ title: Bloggy - A FastHTML Blogging Platform
 
 A lightweight, elegant blogging platform built with FastHTML that renders Markdown files into beautiful web pages with advanced features.
 
+Simple Table
+
+| Feature                     | Description                                      |
+|-----------------------------|--------------------------------------------------|
+| FastHTML Integration        | Built on FastHTML for high performance and ease of use |
+| Advanced Markdown Support   | Footnotes as sidenotes, YouTube embeds, task lists, Mermaid diagrams, math notation, tabbed content, and more |
+| Modern UI                   | Responsive design, dark mode, three-panel layout, HTMX navigation |
+| Interactive Diagrams       | Zoomable, pannable Mermaid diagrams with fullscreen support |
+
 ## Architecture Overview
 
 ```mermaid
