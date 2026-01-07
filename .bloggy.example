@@ -19,6 +19,12 @@ host = "127.0.0.1"
 # Server port (default: 5001)
 port = 5001
 
+# Login credentials for basic authentication (optional)
+# Can also be set via environment variables BLOGGY_USER and BLOGGY_PASSWORD
+# or command line arguments --user and --password
+# username = "admin"
+# password = "secret"
+
 # Sidebar ordering for this folder
 # Items in order are listed first. Remaining items follow sort and folders_first.
 # Use exact names (including extensions) for files, and folder names for folders.
