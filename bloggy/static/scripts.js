@@ -346,7 +346,8 @@ function revealInSidebar(rootElement = document) {
         return;
     }
 
-    const currentPath = window.location.pathname.replace(/^\/posts\//, '');
+    // Decode the URL path to handle special characters and spaces
+    const currentPath = decodeURIComponent(window.location.pathname.replace(/^\/posts\//, ''));
     const activeLink = rootElement.querySelector(`.post-link[data-path="${currentPath}"]`);
     
     if (activeLink) {
@@ -390,11 +391,18 @@ function revealInSidebar(rootElement = document) {
 
 function initPostsSidebarAutoReveal() {
     const postSidebars = document.querySelectorAll('details[data-sidebar="posts"]');
+    
     postSidebars.forEach((sidebar) => {
         if (sidebar.dataset.revealBound === 'true') {
             return;
         }
         sidebar.dataset.revealBound = 'true';
+        
+        // Reveal immediately if sidebar is already open
+        if (sidebar.open) {
+            revealInSidebar(sidebar);
+        }
+        
         sidebar.addEventListener('toggle', () => {
             if (!sidebar.open) {
                 return;
@@ -472,7 +480,7 @@ window.addEventListener('scroll', () => {
 });
 
 // Re-run mermaid on HTMX content swaps
-document.body.addEventListener('htmx:afterSwap', function() {
+document.body.addEventListener('htmx:afterSwap', function(event) {
     mermaid.run().then(() => {
         setTimeout(initMermaidInteraction, 100);
     });
