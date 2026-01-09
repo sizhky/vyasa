@@ -588,6 +588,38 @@ function initMobileMenus() {
     }
 }
 
+// Keyboard shortcuts for toggling sidebars
+function initKeyboardShortcuts() {
+    // Prewarm the selectors to avoid lazy compilation delays
+    const postsSidebars = document.querySelectorAll('details[data-sidebar="posts"]');
+    const tocSidebar = document.querySelector('#toc-sidebar details');
+    
+    document.addEventListener('keydown', (e) => {
+        // Skip if user is typing in an input field
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+            return;
+        }
+        
+        // Z: Toggle posts panel
+        if (e.key === 'z' || e.key === 'Z') {
+            e.preventDefault();
+            const postsSidebars = document.querySelectorAll('details[data-sidebar="posts"]');
+            postsSidebars.forEach(sidebar => {
+                sidebar.open = !sidebar.open;
+            });
+        }
+        
+        // X: Toggle TOC panel
+        if (e.key === 'x' || e.key === 'X') {
+            e.preventDefault();
+            const tocSidebar = document.querySelector('#toc-sidebar details');
+            if (tocSidebar) {
+                tocSidebar.open = !tocSidebar.open;
+            }
+        }
+    });
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     updateActivePostLink();
@@ -595,4 +627,5 @@ document.addEventListener('DOMContentLoaded', () => {
     initMobileMenus();
     initPostsSidebarAutoReveal();
     initFolderChevronState();
+    initKeyboardShortcuts();
 });

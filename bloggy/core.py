@@ -1133,11 +1133,12 @@ def _cached_posts_sidebar_html(fingerprint):
         "Posts",
         get_posts(),
         is_open=sidebars_open,
-        data_sidebar="posts"
+        data_sidebar="posts",
+        shortcut_key="Z"
     )
     return to_xml(sidebar)
 
-def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=None):
+def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=None, shortcut_key=None):
     """Reusable collapsible sidebar component with sticky header"""
     # Build the summary content
     summary_content = [
@@ -1147,6 +1148,15 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
         ),
         Span(title, cls="flex-1 leading-none")
     ]
+    
+    # Add keyboard shortcut indicator if provided
+    if shortcut_key:
+        summary_content.append(
+            Kbd(
+                shortcut_key,
+                cls="kbd-key px-2.5 py-1.5 text-xs font-mono font-semibold bg-gradient-to-b from-slate-50 to-slate-200 dark:from-slate-700 dark:to-slate-900 text-slate-800 dark:text-slate-200 rounded-md border-2 border-slate-300 dark:border-slate-600 shadow-[0_2px_0_0_rgba(0,0,0,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)] dark:shadow-[0_2px_0_0_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.1)]"
+            )
+        )
     
     # Sidebar styling configuration
     common_frost_style = "bg-white/20 dark:bg-slate-950/70 backdrop-blur-lg border border-slate-900/10 dark:border-slate-700/25 ring-1 ring-white/20 dark:ring-slate-900/30 shadow-[0_24px_60px_-40px_rgba(15,23,42,0.45)] dark:shadow-[0_28px_70px_-45px_rgba(2,6,23,0.85)]"
@@ -1158,10 +1168,12 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
         Div(
             Ul(*items_list, cls="list-none"),
             cls=content_classes,
-            id="sidebar-scroll-container"
+            id="sidebar-scroll-container",
+            style="will-change: auto;"
         ),
         open=is_open,
-        data_sidebar=data_sidebar
+        data_sidebar=data_sidebar,
+        style="will-change: auto;"
     )
 
 def is_active_toc_item(anchor):
@@ -1266,7 +1278,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 "hx_swap_oob": "true",
             }
             toc_sidebar = Aside(
-                collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open) if toc_items else Div(),
+                collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(),
                 **toc_attrs
             )
 
@@ -1319,7 +1331,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
             "id": "toc-sidebar"
         }
         toc_sidebar = Aside(
-            collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open) if toc_items else Div(),
+            collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(),
             **toc_attrs
         )
         # Container for main content only (for HTMX swapping)
@@ -1361,7 +1373,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
             ),
             Div(
-                collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open) if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
+                collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
                 cls="p-4 overflow-y-auto"
             ),
             id="mobile-toc-panel",
