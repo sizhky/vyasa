@@ -1127,11 +1127,12 @@ def _posts_sidebar_fingerprint():
 
 @lru_cache(maxsize=1)
 def _cached_posts_sidebar_html(fingerprint):
+    sidebars_open = get_config().get_sidebars_open()
     sidebar = collapsible_sidebar(
         "menu",
         "Posts",
         get_posts(),
-        is_open=False,
+        is_open=sidebars_open,
         data_sidebar="posts"
     )
     return to_xml(sidebar)
@@ -1258,13 +1259,14 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
             t_toc = time.time()
             logger.debug(f"[LAYOUT] TOC built in {(t_toc - t_section)*1000:.2f}ms")
 
+            sidebars_open = get_config().get_sidebars_open()
             toc_attrs = {
                 "cls": "hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
                 "id": "toc-sidebar",
                 "hx_swap_oob": "true",
             }
             toc_sidebar = Aside(
-                collapsible_sidebar("list", "Contents", toc_items, is_open=False) if toc_items else Div(),
+                collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open) if toc_items else Div(),
                 **toc_attrs
             )
 
@@ -1311,12 +1313,13 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         t_toc = time.time()
         logger.debug(f"[LAYOUT] TOC built in {(t_toc - t_section)*1000:.2f}ms")
         # Right sidebar TOC component with out-of-band swap for HTMX
+        sidebars_open = get_config().get_sidebars_open()
         toc_attrs = {
             "cls": "hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
             "id": "toc-sidebar"
         }
         toc_sidebar = Aside(
-            collapsible_sidebar("list", "Contents", toc_items, is_open=False) if toc_items else Div(),
+            collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open) if toc_items else Div(),
             **toc_attrs
         )
         # Container for main content only (for HTMX swapping)
@@ -1358,7 +1361,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
             ),
             Div(
-                collapsible_sidebar("list", "Contents", toc_items, is_open=False) if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
+                collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open) if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
                 cls="p-4 overflow-y-auto"
             ),
             id="mobile-toc-panel",

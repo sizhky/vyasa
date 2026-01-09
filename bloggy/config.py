@@ -112,6 +112,14 @@ class BloggyConfig:
         user = self.get('username', 'BLOGGY_USER', None)
         pwd = self.get('password', 'BLOGGY_PASSWORD', None)
         return user, pwd
+    
+    def get_sidebars_open(self) -> bool:
+        """Get whether sidebars should be open by default."""
+        value = self.get('sidebars_open', 'BLOGGY_SIDEBARS_OPEN', True)
+        # Handle string values from environment variables
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
 
 
 
