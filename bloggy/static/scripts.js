@@ -444,10 +444,6 @@ function initSearchPlaceholderCycle(rootElement = document) {
 function initSidebarSearchPersistence(rootElement = document) {
     const inputs = rootElement.querySelectorAll('input[data-search-key]');
     inputs.forEach((input) => {
-        if (input.dataset.searchPersistBound === 'true') {
-            return;
-        }
-        input.dataset.searchPersistBound = 'true';
         const key = input.dataset.searchKey;
         if (!key) {
             return;
@@ -456,29 +452,44 @@ function initSidebarSearchPersistence(rootElement = document) {
         const urlQuery = params.get('q');
         const stored = localStorage.getItem(`bloggy.search.${key}`) || '';
         const nextValue = (urlQuery || stored || '').trim();
-        if (nextValue) {
-            input.value = nextValue;
-            if (window.htmx && typeof window.htmx.trigger === 'function') {
-                window.htmx.trigger(input, 'input');
-                window.htmx.trigger(input, 'change');
-            } else {
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
+
+        if (input.dataset.searchPersistBound === 'true') {
+            if (nextValue && input.value !== nextValue && document.activeElement !== input) {
+                input.value = nextValue;
             }
+        } else {
+            input.dataset.searchPersistBound = 'true';
+            if (nextValue && input.value !== nextValue) {
+                input.value = nextValue;
+                if (window.htmx && typeof window.htmx.trigger === 'function') {
+                    window.htmx.trigger(input, 'input');
+                    window.htmx.trigger(input, 'change');
+                } else {
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+            input.addEventListener('input', () => {
+                localStorage.setItem(`bloggy.search.${key}`, input.value || '');
+            });
         }
-        input.addEventListener('input', () => {
-            localStorage.setItem(`bloggy.search.${key}`, input.value || '');
-        });
+
         const resultsContainer = input.closest('.posts-search-block')?.querySelector('#posts-search-results');
         if (resultsContainer) {
-            const params = new URLSearchParams(window.location.search);
-            const urlQuery = params.get('q');
-            const queryValue = (urlQuery || input.value || '').trim();
+            const queryValue = (nextValue || input.value || '').trim();
             if (queryValue) {
-                fetch(`/_sidebar/posts/search?q=${encodeURIComponent(queryValue)}`)
-                    .then(response => response.text())
-                    .then(html => { resultsContainer.innerHTML = html; })
-                    .catch(() => {});
+                if (resultsContainer.dataset.lastQuery !== queryValue) {
+                    resultsContainer.dataset.lastQuery = queryValue;
+                    fetch(`/_sidebar/posts/search?q=${encodeURIComponent(queryValue)}`)
+                        .then(response => response.text())
+                        .then(html => { resultsContainer.innerHTML = html; })
+                        .then(() => {
+                            if (window.htmx && typeof window.htmx.process === 'function') {
+                                window.htmx.process(resultsContainer);
+                            }
+                        })
+                        .catch(() => {});
+                }
             }
         }
     });

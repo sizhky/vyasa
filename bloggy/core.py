@@ -1099,7 +1099,7 @@ def serve_post_markdown(path: str):
     return Response(status_code=404)
 
 @rt("/search/gather")
-def gather_search_results(q: str = "", htmx=None):
+def gather_search_results(htmx, q: str = ""):
     import html
     matches, regex_error = _find_search_matches(q, limit=200)
     if not matches:
@@ -1175,7 +1175,14 @@ def theme_toggle():
 def navbar(show_mobile_menus=False):
     """Navbar with mobile menu buttons for file tree and TOC"""
     left_section = Div(
-        A(get_blog_title(), href="/"),
+        A(
+            get_blog_title(),
+            href="/",
+            hx_get="/",
+            hx_target="#main-content",
+            hx_push_url="true",
+            hx_swap="outerHTML show:window:top settle:0.1s"
+        ),
         cls="flex items-center gap-2"
     )
     
@@ -1289,6 +1296,10 @@ def _render_posts_search_results(query):
             Span(UkIcon("layers", cls="w-4 h-4 text-slate-400"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
             Span("Gather all search results for LLM", cls="truncate min-w-0 text-xs text-slate-600 dark:text-slate-300"),
             href=gather_href,
+            hx_get=gather_href,
+            hx_target="#main-content",
+            hx_push_url="true",
+            hx_swap="outerHTML show:window:top settle:0.1s",
             cls="post-search-link flex items-center py-1 px-2 rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"
         ),
         cls="bg-transparent"
@@ -1774,6 +1785,10 @@ def not_found(htmx=None):
                 UkIcon("home", cls="w-5 h-5 mr-2"),
                 "Go to Home",
                 href="/",
+                hx_get="/",
+                hx_target="#main-content",
+                hx_push_url="true",
+                hx_swap="outerHTML show:window:top settle:0.1s",
                 cls="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors mr-4"
             ),
             A(
