@@ -1196,7 +1196,7 @@ def _render_posts_search_results(query):
         items.append(Li(
             A(
                 Span(UkIcon("search", cls="w-4 h-4 text-slate-400"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
-                Span(display, cls="truncate min-w-0 font-mono text-xs text-slate-600 dark:text-slate-300"),
+                Span(display, cls="truncate min-w-0 font-mono text-xs text-slate-600 dark:text-slate-300", title=display),
                 href=f'/posts/{slug}',
                 hx_get=f'/posts/{slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
                 cls="post-search-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"
