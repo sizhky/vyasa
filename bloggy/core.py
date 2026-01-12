@@ -1125,6 +1125,76 @@ def _posts_sidebar_fingerprint():
     except Exception:
         return 0
 
+def _search_post_files(query, limit=40):
+    query = (query or "").strip().lower()
+    if not query:
+        return []
+    root = get_root_folder()
+    index_file = find_index_file()
+    results = []
+    for item in root.rglob("*.md"):
+        if index_file and item.resolve() == index_file.resolve():
+            continue
+        rel = item.relative_to(root).with_suffix("")
+        haystack = f"{item.name} {rel.as_posix()}".lower()
+        if query in haystack:
+            results.append(item)
+            if len(results) >= limit:
+                break
+    return results
+
+def _render_posts_search_results(query):
+    trimmed = (query or "").strip()
+    if not trimmed:
+        return Ul(
+            Li("Type to search file names.", cls="text-xs text-slate-500 dark:text-slate-400"),
+            cls="posts-search-results-list space-y-1"
+        )
+
+    matches = _search_post_files(trimmed)
+    if not matches:
+        return Ul(
+            Li(f'No matches for "{trimmed}".', cls="text-xs text-slate-500 dark:text-slate-400"),
+            cls="posts-search-results-list space-y-1"
+        )
+
+    root = get_root_folder()
+    items = []
+    for item in matches:
+        slug = str(item.relative_to(root).with_suffix(""))
+        display = item.relative_to(root).with_suffix("").as_posix()
+        items.append(Li(
+            A(
+                Span(UkIcon("search", cls="w-4 h-4 text-slate-400"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                Span(display, cls="truncate min-w-0 font-mono text-xs text-slate-600 dark:text-slate-300"),
+                href=f'/posts/{slug}',
+                hx_get=f'/posts/{slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
+                cls="post-search-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"
+            )
+        ))
+    return Ul(*items, cls="posts-search-results-list space-y-1")
+
+def _posts_search_block():
+    return Div(
+        Input(
+            type="search",
+            name="q",
+            placeholder="Search file names…",
+            autocomplete="off",
+            hx_get="/_sidebar/posts/search",
+            hx_trigger="input changed delay:300ms",
+            hx_target="next .posts-search-results",
+            hx_swap="innerHTML",
+            cls="w-full px-3 py-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        ),
+        Div(
+            _render_posts_search_results(""),
+            cls="posts-search-results mt-3"
+        ),
+        Div(cls="mt-4 h-px w-full bg-slate-200/80 dark:bg-slate-700/70"),
+        cls="posts-search-block"
+    )
+
 @lru_cache(maxsize=1)
 def _cached_posts_sidebar_html(fingerprint):
     sidebars_open = get_config().get_sidebars_open()
@@ -1134,11 +1204,12 @@ def _cached_posts_sidebar_html(fingerprint):
         get_posts(),
         is_open=sidebars_open,
         data_sidebar="posts",
-        shortcut_key="Z"
+        shortcut_key="Z",
+        extra_content=[_posts_search_block()]
     )
     return to_xml(sidebar)
 
-def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=None, shortcut_key=None):
+def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=None, shortcut_key=None, extra_content=None):
     """Reusable collapsible sidebar component with sticky header"""
     # Build the summary content
     summary_content = [
@@ -1163,10 +1234,12 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
     summary_classes = f"flex items-center gap-2 font-semibold cursor-pointer py-2.5 px-3 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-lg select-none list-none {common_frost_style} min-h-[56px]"
     content_classes = f"p-3 {common_frost_style} rounded-lg overflow-y-auto max-h-[calc(100vh-18rem)]"
     
+    extra_content = extra_content or []
     return Details(
         Summary(*summary_content, cls=summary_classes, style="margin: 0 0 0.5rem 0;"),
         Div(
-            Ul(*items_list, cls="list-none"),
+            *extra_content,
+            Ul(*items_list, cls="list-none pt-4"),
             cls=content_classes,
             id="sidebar-scroll-container",
             style="will-change: auto;"
@@ -1175,6 +1248,10 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
         data_sidebar=data_sidebar,
         style="will-change: auto;"
     )
+
+@rt("/_sidebar/posts/search")
+def posts_sidebar_search(q: str = ""):
+    return _render_posts_search_results(q)
 
 def is_active_toc_item(anchor):
     """Check if a TOC item is currently active based on URL hash"""
