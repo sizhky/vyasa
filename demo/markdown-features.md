@@ -483,6 +483,15 @@ H~2~O
 <audio controls>
   <source src="audio.mp3" type="audio/mpeg">
 </audio>
+
+### PDF (iframe)
+
+<iframe
+  src="https://www.holybooks.com/wp-content/uploads/Dante-Alighieri-The-Divine-Comedy.pdf"
+  width="100%"
+  height="600"
+  style="border: 1px solid #e2e8f0; border-radius: 8px;"
+></iframe>
 ::tab{title="Markdown Source"}
 ```markdown
 ### Video
@@ -496,6 +505,15 @@ H~2~O
 <audio controls>
   <source src="audio.mp3" type="audio/mpeg">
 </audio>
+
+### PDF (iframe)
+
+<iframe
+  src="https://www.holybooks.com/wp-content/uploads/Dante-Alighieri-The-Divine-Comedy.pdf"
+  width="100%"
+  height="600"
+  style="border: 1px solid #e2e8f0; border-radius: 8px;"
+></iframe>
 ```
 :::
 

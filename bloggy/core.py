@@ -1,4 +1,5 @@
 import re, frontmatter, mistletoe as mst, pathlib, os, tomllib
+from itertools import chain
 from urllib.parse import quote_plus
 from functools import partial
 from functools import lru_cache
@@ -1139,6 +1140,20 @@ def gather_search_results(htmx, q: str = ""):
         copy_parts.append(f"> {regex_error}\n")
     for idx, item in enumerate(matches):
         rel = item.relative_to(root).as_posix()
+        if item.suffix == ".pdf":
+            slug = item.relative_to(root).with_suffix("").as_posix()
+            pdf_href = f"/posts/{slug}.pdf"
+            sections.extend([
+                H2(rel, cls="text-xl font-semibold mb-2"),
+                P(
+                    "PDF file: ",
+                    A(rel, href=pdf_href, cls="text-blue-600 hover:underline"),
+                    cls="text-sm text-slate-600 dark:text-slate-300"
+                ),
+                Hr(cls="my-6 border-slate-200 dark:border-slate-800") if idx < len(matches) - 1 else None
+            ])
+            copy_parts.append(f"\n---\n\n## {rel}\n\n[PDF file]({pdf_href})\n")
+            continue
         try:
             raw_md = item.read_text(encoding="utf-8")
         except Exception:
@@ -1282,7 +1297,7 @@ def _find_search_matches_uncached(query, limit=40):
     root = get_root_folder()
     index_file = find_index_file()
     results = []
-    for item in root.rglob("*.md"):
+    for item in chain(root.rglob("*.md"), root.rglob("*.pdf")):
         if any(part.startswith('.') for part in item.relative_to(root).parts):
             continue
         if ".bloggy" in item.parts:
@@ -1336,7 +1351,10 @@ def _render_posts_search_results(query):
     ))
     for item in matches:
         slug = str(item.relative_to(root).with_suffix(""))
-        display = item.relative_to(root).with_suffix("").as_posix()
+        if item.suffix == ".pdf":
+            display = item.relative_to(root).as_posix()
+        else:
+            display = item.relative_to(root).with_suffix("").as_posix()
         items.append(Li(
             A(
                 Span(UkIcon("search", cls="w-4 h-4 text-slate-400"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
@@ -1535,7 +1553,7 @@ def get_custom_css_links(current_path=None, section_class=None):
     
     return css_elements
 
-def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None):
+def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True):
     import time
     layout_start_time = time.time()
     logger.debug("[LAYOUT] layout() start")
@@ -1547,20 +1565,23 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
     # HTMX short-circuit: build only swappable fragments, never build full page chrome/sidebars tree
     if htmx and getattr(htmx, "request", None):
         if show_sidebar:
-            toc_items = build_toc_items(extract_toc(toc_content)) if toc_content else []
-            t_toc = time.time()
-            logger.debug(f"[LAYOUT] TOC built in {(t_toc - t_section)*1000:.2f}ms")
+            toc_sidebar = None
+            t_toc = t_section
+            if show_toc:
+                toc_items = build_toc_items(extract_toc(toc_content)) if toc_content else []
+                t_toc = time.time()
+                logger.debug(f"[LAYOUT] TOC built in {(t_toc - t_section)*1000:.2f}ms")
 
-            sidebars_open = get_config().get_sidebars_open()
-            toc_attrs = {
-                "cls": "hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
-                "id": "toc-sidebar",
-                "hx_swap_oob": "true",
-            }
-            toc_sidebar = Aside(
-                collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(),
-                **toc_attrs
-            )
+                sidebars_open = get_config().get_sidebars_open()
+                toc_attrs = {
+                    "cls": "hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
+                    "id": "toc-sidebar",
+                    "hx_swap_oob": "true",
+                }
+                toc_sidebar = Aside(
+                    collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(),
+                    **toc_attrs
+                )
 
             custom_css_links = get_custom_css_links(current_path, section_class)
             t_css = time.time()
@@ -1575,7 +1596,12 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 result.append(Div(*custom_css_links, id="scoped-css-container", hx_swap_oob="true"))
             else:
                 result.append(Div(id="scoped-css-container", hx_swap_oob="true"))
-            result.extend([main_content_container, toc_sidebar])
+            if toc_sidebar:
+                result.extend([main_content_container, toc_sidebar])
+            else:
+                result.append(main_content_container)
+                result.append(Div(id="toc-sidebar", hx_swap_oob="true"))
+                result.append(Div(id="mobile-toc-panel", hx_swap_oob="true"))
 
             t_htmx = time.time()
             logger.debug(f"[LAYOUT] HTMX response assembled in {(t_htmx - t_main)*1000:.2f}ms")
@@ -1601,19 +1627,22 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
 
     if show_sidebar:
         # Build TOC if content provided
-        toc_items = build_toc_items(extract_toc(toc_content)) if toc_content else []
-        t_toc = time.time()
-        logger.debug(f"[LAYOUT] TOC built in {(t_toc - t_section)*1000:.2f}ms")
-        # Right sidebar TOC component with out-of-band swap for HTMX
-        sidebars_open = get_config().get_sidebars_open()
-        toc_attrs = {
-            "cls": "hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
-            "id": "toc-sidebar"
-        }
-        toc_sidebar = Aside(
-            collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(),
-            **toc_attrs
-        )
+        toc_sidebar = None
+        t_toc = t_section
+        if show_toc:
+            toc_items = build_toc_items(extract_toc(toc_content)) if toc_content else []
+            t_toc = time.time()
+            logger.debug(f"[LAYOUT] TOC built in {(t_toc - t_section)*1000:.2f}ms")
+            # Right sidebar TOC component with out-of-band swap for HTMX
+            sidebars_open = get_config().get_sidebars_open()
+            toc_attrs = {
+                "cls": "hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
+                "id": "toc-sidebar"
+            }
+            toc_sidebar = Aside(
+                collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(),
+                **toc_attrs
+            )
         # Container for main content only (for HTMX swapping)
         # Add section class to identify the section for CSS scoping
         section_class = f"section-{current_path.replace('/', '-')}" if current_path else ""
@@ -1642,23 +1671,25 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
             id="mobile-posts-panel",
             cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] md:hidden transform -translate-x-full transition-transform duration-300"
         )
-        mobile_toc_panel = Div(
-            Div(
-                Button(
-                    UkIcon("x", cls="w-5 h-5"),
-                    id="close-mobile-toc",
-                    cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto",
-                    type="button"
+        mobile_toc_panel = None
+        if show_toc:
+            mobile_toc_panel = Div(
+                Div(
+                    Button(
+                        UkIcon("x", cls="w-5 h-5"),
+                        id="close-mobile-toc",
+                        cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto",
+                        type="button"
+                    ),
+                    cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
                 ),
-                cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
-            ),
-            Div(
-                collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
-                cls="p-4 overflow-y-auto"
-            ),
-            id="mobile-toc-panel",
-            cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] md:hidden transform translate-x-full transition-transform duration-300"
-        )
+                Div(
+                    collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
+                    cls="p-4 overflow-y-auto"
+                ),
+                id="mobile-toc-panel",
+                cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] md:hidden transform translate-x-full transition-transform duration-300"
+            )
         # Full layout with all sidebars
         content_with_sidebars = Div(cls="w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1")(
             # Left sidebar - lazy load with HTMX, show loader placeholder
@@ -1677,7 +1708,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
             # Main content (swappable)
             main_content_container,
             # Right sidebar - TOC (swappable out-of-band)
-            toc_sidebar
+            toc_sidebar if toc_sidebar else None
         )
         t_sidebars = time.time()
         logger.debug(f"[LAYOUT] Sidebars container built in {(t_sidebars - t_main)*1000:.2f}ms")
@@ -1685,7 +1716,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         body_content = Div(id="page-container", cls="flex flex-col min-h-screen")(
             Div(navbar(show_mobile_menus=True), cls="w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4"),
             mobile_posts_panel,
-            mobile_toc_panel,
+            mobile_toc_panel if mobile_toc_panel else None,
             content_with_sidebars,
             Footer(Div(f"Powered by Bloggy", cls="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right"), # right justified footer
                    cls="w-full max-w-7xl mx-auto px-6 mt-auto mb-6")
@@ -1731,7 +1762,7 @@ def build_post_tree(folder):
                 if item.name.startswith('.'):
                     continue
                 entries.append(item)
-            elif item.suffix == '.md':
+            elif item.suffix in ('.md', '.pdf'):
                 # Skip the file being used for home page (index.md takes precedence over readme.md)
                 if index_file and item.resolve() == index_file.resolve():
                     continue
@@ -1776,6 +1807,17 @@ def build_post_tree(folder):
                 hx_get=f'/posts/{slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
                 cls="post-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0",
                 data_path=slug)))
+        elif item.suffix == '.pdf':
+            slug = str(item.relative_to(root).with_suffix(''))
+            title = slug_to_title(item.stem)
+            items.append(Li(A(
+                Span(cls="w-4 mr-2 shrink-0"),
+                Span(UkIcon("file-text", cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                Span(f"{title} (PDF)", cls="truncate min-w-0", title=title),
+                href=f'/posts/{slug}',
+                hx_get=f'/posts/{slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
+                cls="post-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0",
+                data_path=slug)))
     
     elapsed = (time.time() - start_time) * 1000
     logger.debug(f"[DEBUG] build_post_tree for {folder.relative_to(root) if folder != root else '.'} completed in {elapsed:.2f}ms")
@@ -1785,8 +1827,9 @@ def _posts_tree_fingerprint():
     root = get_root_folder()
     try:
         md_mtime = max((p.stat().st_mtime for p in root.rglob("*.md")), default=0)
+        pdf_mtime = max((p.stat().st_mtime for p in root.rglob("*.pdf")), default=0)
         bloggy_mtime = max((p.stat().st_mtime for p in root.rglob(".bloggy")), default=0)
-        return max(md_mtime, bloggy_mtime)
+        return max(md_mtime, pdf_mtime, bloggy_mtime)
     except Exception:
         return 0
 
@@ -1865,9 +1908,29 @@ def post_detail(path: str, htmx):
     logger.info(f"\n[DEBUG] ########## REQUEST START: /posts/{path} ##########")
     
     file_path = get_root_folder() / f'{path}.md'
+    pdf_path = get_root_folder() / f'{path}.pdf'
     
     # Check if file exists
     if not file_path.exists():
+        if pdf_path.exists():
+            post_title = f"{slug_to_title(Path(path).name)} (PDF)"
+            pdf_src = f"/posts/{path}.pdf"
+            pdf_content = Div(
+                Div(
+                    H1(post_title, cls="text-4xl font-bold mb-6")
+                ),
+                NotStr(
+                    f'<object data="{pdf_src}" type="application/pdf" '
+                    'class="w-full h-[calc(100vh-14rem)] rounded-lg border border-slate-200 '
+                    'dark:border-slate-700 bg-white dark:bg-slate-900">'
+                    '<p class="p-4 text-sm text-slate-600 dark:text-slate-300">'
+                    'PDF preview not available. '
+                    f'<a href="{pdf_src}" class="text-blue-600 hover:underline">Download PDF</a>.'
+                    '</p></object>'
+                )
+            )
+            return layout(pdf_content, htmx=htmx, title=f"{post_title} - {get_blog_title()}",
+                          show_sidebar=True, toc_content=None, current_path=path, show_toc=False)
         return not_found(htmx)
     
     metadata, raw_content = parse_frontmatter(file_path)

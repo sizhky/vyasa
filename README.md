@@ -286,6 +286,7 @@ stateDiagram-v2
 - **HTMX Navigation**: Fast, SPA-like navigation without full page reloads using `hx-get`, `hx-target`, and `hx-push-url`
 - **Collapsible Folders**: Organize posts in nested directories with chevron indicators and smooth expand/collapse
 - **Sidebar Search**: HTMX-powered filename search with results shown below the search bar (tree stays intact)
+- **PDF Posts**: PDFs show up in the sidebar and open inline in the main content area
 - **Auto-Generated TOC**: Table of contents automatically extracted from headings with scroll-based active highlighting
 - **TOC Autoscroll + Accurate Highlights**: Active TOC item stays in view and highlight logic handles duplicate headings
 - **Mobile Menus**: Slide-in panels for posts and TOC on mobile devices with smooth transitions

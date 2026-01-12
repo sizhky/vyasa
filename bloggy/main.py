@@ -90,14 +90,14 @@ def cli():
     if host == '0.0.0.0':
         print(f"Server accessible from network at: http://<your-ip>:{port}")
     
-    # Configure reload to watch markdown files in the blog directory
+    # Configure reload to watch markdown and PDF files in the blog directory
     reload_kwargs = {}
     if reload:
         blog_root = config.get_root_folder()
         reload_kwargs = {
             "reload": True,
             "reload_dirs": [str(blog_root)],
-            "reload_includes": ["*.md"]
+            "reload_includes": ["*.md", "*.pdf"]
         }
     else:
         reload_kwargs = {"reload": False}
