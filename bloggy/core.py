@@ -1159,6 +1159,10 @@ def _search_post_files(query, limit=40):
     index_file = find_index_file()
     results = []
     for item in root.rglob("*.md"):
+        if any(part.startswith('.') for part in item.relative_to(root).parts):
+            continue
+        if ".bloggy" in item.parts:
+            continue
         if index_file and item.resolve() == index_file.resolve():
             continue
         rel = item.relative_to(root).with_suffix("")
