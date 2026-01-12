@@ -418,6 +418,29 @@ function initFolderChevronState(rootElement = document) {
     });
 }
 
+function initSearchPlaceholderCycle(rootElement = document) {
+    const inputs = rootElement.querySelectorAll('input[data-placeholder-cycle]');
+    inputs.forEach((input) => {
+        if (input.dataset.placeholderCycleBound === 'true') {
+            return;
+        }
+        input.dataset.placeholderCycleBound = 'true';
+        const primary = input.dataset.placeholderPrimary || input.getAttribute('placeholder') || '';
+        const alt = input.dataset.placeholderAlt || '';
+        if (!alt) {
+            return;
+        }
+        let showAlt = false;
+        setInterval(() => {
+            if (input.value) {
+                return;
+            }
+            showAlt = !showAlt;
+            input.setAttribute('placeholder', showAlt ? alt : primary);
+        }, 2500);
+    });
+}
+
 document.addEventListener('toggle', (event) => {
     const details = event.target;
     if (!(details instanceof HTMLDetailsElement)) {
@@ -549,6 +572,7 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
     initMobileMenus(); // Reinitialize mobile menu handlers
     initPostsSidebarAutoReveal();
     initFolderChevronState();
+    initSearchPlaceholderCycle(event.target || document);
 });
 
 // Watch for theme changes and re-render mermaid diagrams
@@ -688,4 +712,5 @@ document.addEventListener('DOMContentLoaded', () => {
     initPostsSidebarAutoReveal();
     initFolderChevronState();
     initKeyboardShortcuts();
+    initSearchPlaceholderCycle(document);
 });

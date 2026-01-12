@@ -1,4 +1,5 @@
 import re, frontmatter, mistletoe as mst, pathlib, os, tomllib
+from urllib.parse import quote_plus
 from functools import partial
 from functools import lru_cache
 from pathlib import Path
@@ -1097,6 +1098,60 @@ def serve_post_markdown(path: str):
         return FileResponse(file_path, media_type="text/markdown; charset=utf-8")
     return Response(status_code=404)
 
+@rt("/search/gather")
+def gather_search_results(q: str = "", htmx=None):
+    import html
+    matches, regex_error = _find_search_matches(q, limit=200)
+    if not matches:
+        content = Div(
+            H1("Search Results", cls="text-3xl font-bold mb-6"),
+            P("No matching posts found.", cls="text-slate-600 dark:text-slate-400"),
+            P(regex_error, cls="text-amber-600 dark:text-amber-400 text-sm") if regex_error else None
+        )
+        return layout(content, htmx=htmx, title="Search Results", show_sidebar=True)
+
+    root = get_root_folder()
+    sections = []
+    copy_parts = ["# Search Results (LLM Gather)\n"]
+    if regex_error:
+        copy_parts.append(f"> {regex_error}\n")
+    for idx, item in enumerate(matches):
+        rel = item.relative_to(root).as_posix()
+        try:
+            raw_md = item.read_text(encoding="utf-8")
+        except Exception:
+            raw_md = ""
+        sections.extend([
+            H2(rel, cls="text-xl font-semibold mb-2"),
+            Pre(html.escape(raw_md), cls="text-xs font-mono whitespace-pre-wrap text-slate-700 dark:text-slate-300"),
+            Hr(cls="my-6 border-slate-200 dark:border-slate-800") if idx < len(matches) - 1 else None
+        ])
+        copy_parts.append(f"\n---\n\n## {rel}\n\n{raw_md}\n")
+
+    copy_text = "".join(copy_parts)
+    content = Div(
+        H1("Search Results (LLM Gather)", cls="text-3xl font-bold mb-6"),
+        P(regex_error, cls="text-amber-600 dark:text-amber-400 text-sm mb-4") if regex_error else None,
+        Button(
+            "Copy all results",
+            type="button",
+            onclick="(function(){const el=document.getElementById('gather-clipboard');const toast=document.getElementById('gather-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()",
+            cls="w-full text-lg font-semibold py-4 mb-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+        ),
+        Div(
+            "Copied!",
+            id="gather-toast",
+            cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"
+        ),
+        Textarea(
+            copy_text,
+            id="gather-clipboard",
+            cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"
+        ),
+        *sections
+    )
+    return layout(content, htmx=htmx, title="Search Results", show_sidebar=True)
+
 # Route to serve static files (images, SVGs, etc.) from blog posts
 @rt("/posts/{path:path}.{ext:static}")
 def serve_post_static(path: str, ext: str):
@@ -1168,10 +1223,24 @@ def _normalize_search_text(text):
     text = text.replace("-", " ").replace("_", " ")
     return " ".join(text.split())
 
-def _search_post_files(query, limit=40):
-    query = _normalize_search_text(query)
-    if not query:
-        return []
+def _parse_search_query(query):
+    trimmed = (query or "").strip()
+    if len(trimmed) >= 2 and trimmed.startswith("/") and trimmed.endswith("/"):
+        pattern = trimmed[1:-1].strip()
+        if not pattern:
+            return None, ""
+        try:
+            return re.compile(pattern, re.IGNORECASE), ""
+        except re.error:
+            return None, "Invalid regex. Showing normal matches instead."
+    return None, ""
+
+def _find_search_matches(query, limit=40):
+    trimmed = (query or "").strip()
+    if not trimmed:
+        return [], ""
+    regex, regex_error = _parse_search_query(trimmed)
+    query_norm = _normalize_search_text(trimmed) if not regex else ""
     root = get_root_folder()
     index_file = find_index_file()
     results = []
@@ -1183,12 +1252,17 @@ def _search_post_files(query, limit=40):
         if index_file and item.resolve() == index_file.resolve():
             continue
         rel = item.relative_to(root).with_suffix("")
-        haystack = _normalize_search_text(f"{item.name} {rel.as_posix()}")
-        if query in haystack:
+        if regex:
+            haystack = f"{item.name} {rel.as_posix()}"
+            is_match = regex.search(haystack)
+        else:
+            haystack = _normalize_search_text(f"{item.name} {rel.as_posix()}")
+            is_match = query_norm in haystack
+        if is_match:
             results.append(item)
             if len(results) >= limit:
                 break
-    return results
+    return results, regex_error
 
 def _render_posts_search_results(query):
     trimmed = (query or "").strip()
@@ -1198,15 +1272,26 @@ def _render_posts_search_results(query):
             cls="posts-search-results-list space-y-1 bg-white/0 dark:bg-slate-950/0"
         )
 
-    matches = _search_post_files(trimmed)
+    matches, regex_error = _find_search_matches(trimmed)
     if not matches:
         return Ul(
             Li(f'No matches for "{trimmed}".', cls="text-xs text-slate-500 dark:text-slate-400 bg-transparent"),
+            Li(regex_error, cls="text-[0.7rem] text-center text-amber-600 dark:text-amber-400") if regex_error else None,
             cls="posts-search-results-list space-y-1 bg-white/0 dark:bg-slate-950/0"
         )
 
     root = get_root_folder()
     items = []
+    gather_href = f"/search/gather?q={quote_plus(trimmed)}"
+    items.append(Li(
+        A(
+            Span(UkIcon("layers", cls="w-4 h-4 text-slate-400"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+            Span("Gather all search results for LLM", cls="truncate min-w-0 text-xs text-slate-600 dark:text-slate-300"),
+            href=gather_href,
+            cls="post-search-link flex items-center py-1 px-2 rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"
+        ),
+        cls="bg-transparent"
+    ))
     for item in matches:
         slug = str(item.relative_to(root).with_suffix(""))
         display = item.relative_to(root).with_suffix("").as_posix()
@@ -1219,6 +1304,8 @@ def _render_posts_search_results(query):
                 cls="post-search-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"
             )
         ))
+    if regex_error:
+        items.append(Li(regex_error, cls="text-[0.7rem] text-center text-amber-600 dark:text-amber-400 mt-1 bg-transparent"))
     return Ul(*items, cls="posts-search-results-list space-y-1 bg-white/0 dark:bg-slate-950/0")
 
 def _posts_search_block():
@@ -1229,6 +1316,9 @@ def _posts_search_block():
             name="q",
             placeholder="Search file names…",
             autocomplete="off",
+            data_placeholder_cycle="1",
+            data_placeholder_primary="Search file names…",
+            data_placeholder_alt="Search regex with /pattern/ syntax",
             hx_get="/_sidebar/posts/search",
             hx_trigger="input changed delay:300ms",
             hx_target="next .posts-search-results",
