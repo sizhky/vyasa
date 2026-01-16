@@ -20,7 +20,7 @@ from .core import (
 from .config import get_config, reload_config
 
 
-def generate_static_html(title, body_content, blog_title):
+def generate_static_html(title, body_content, blog_title, favicon_href):
     """Generate complete static HTML page"""
     
     # Static CSS (inline critical styles)
@@ -310,6 +310,7 @@ def generate_static_html(title, body_content, blog_title):
     <script src="https://unpkg.com/hyperscript.org@0.9.12"></script>
     
     <!-- Static assets -->
+    <link rel="icon" href="{favicon_href}">
     <link rel="stylesheet" href="/static/sidenote.css">
     
     {static_css}
@@ -392,7 +393,7 @@ def build_post_tree_static(folder, root_folder):
     return items
 
 
-def static_layout(content_html, blog_title, page_title, nav_tree, toc_items=None, current_path=None):
+def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, toc_items=None, current_path=None):
     """Generate complete static page layout"""
     
     # Theme toggle button
@@ -476,7 +477,7 @@ def static_layout(content_html, blog_title, page_title, nav_tree, toc_items=None
     </div>
     '''
     
-    return generate_static_html(page_title, body, blog_title)
+    return generate_static_html(page_title, body, blog_title, favicon_href)
 
 
 def build_static_site(input_dir=None, output_dir=None):
@@ -516,6 +517,8 @@ def build_static_site(input_dir=None, output_dir=None):
     
     # Build navigation tree with static .html links
     nav_tree = build_post_tree_static(root_folder, root_folder)
+    root_icon = root_folder / "static" / "icon.png"
+    favicon_href = "/static/icon.png" if root_icon.exists() else "/static/favicon.png"
     
     # Find all markdown files (only in the specified root folder, not parent directories)
     md_files = []
@@ -554,6 +557,7 @@ def build_static_site(input_dir=None, output_dir=None):
             blog_title=blog_title,
             page_title=f"{post_title} - {blog_title}",
             nav_tree=nav_tree,
+            favicon_href=favicon_href,
             toc_items=toc_items,
             current_path=str(relative_path.with_suffix(''))
         )
@@ -576,6 +580,10 @@ def build_static_site(input_dir=None, output_dir=None):
         static_dst = output_dir / 'static'
         print(f"\nCopying static assets...")
         shutil.copytree(static_src, static_dst, dirs_exist_ok=True)
+    if root_icon.exists():
+        static_dst = output_dir / 'static'
+        static_dst.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root_icon, static_dst / "icon.png")
     
     # Generate index.html if it doesn't exist
     index_path = output_dir / 'index.html'
@@ -595,6 +603,7 @@ def build_static_site(input_dir=None, output_dir=None):
             blog_title=blog_title,
             page_title=f"Home - {blog_title}",
             nav_tree=nav_tree,
+            favicon_href=favicon_href,
             toc_items=None
         )
         

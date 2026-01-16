@@ -7,3 +7,53 @@ span.abcd {
     font-family: 'Courier New', Courier, monospace;
     font-size: 2rem;
 }
+
+:root {
+    --bloggy-glow-size: 32px;
+    --bloggy-glow-size-hover: 128px;
+}
+
+@keyframes bloggy-rainbow-glow {
+    0% { box-shadow: 0 0 var(--bloggy-glow-size) rgba(255, 90, 90, 0.95); }
+    16% { box-shadow: 0 0 var(--bloggy-glow-size) rgba(255, 170, 80, 0.95); }
+    33% { box-shadow: 0 0 var(--bloggy-glow-size) rgba(255, 235, 80, 0.95); }
+    50% { box-shadow: 0 0 var(--bloggy-glow-size) rgba(90, 255, 140, 0.95); }
+    66% { box-shadow: 0 0 var(--bloggy-glow-size) rgba(90, 200, 255, 0.95); }
+    83% { box-shadow: 0 0 var(--bloggy-glow-size) rgba(170, 110, 255, 0.95); }
+    100% { box-shadow: 0 0 var(--bloggy-glow-size) rgba(255, 90, 90, 0.95); }
+}
+
+@keyframes bloggy-rainbow-glow-hover {
+    0% { box-shadow: 0 0 var(--bloggy-glow-size-hover) rgba(255, 90, 90, 0.95); }
+    16% { box-shadow: 0 0 var(--bloggy-glow-size-hover) rgba(255, 170, 80, 0.95); }
+    33% { box-shadow: 0 0 var(--bloggy-glow-size-hover) rgba(255, 235, 80, 0.95); }
+    50% { box-shadow: 0 0 var(--bloggy-glow-size-hover) rgba(90, 255, 140, 0.95); }
+    66% { box-shadow: 0 0 var(--bloggy-glow-size-hover) rgba(90, 200, 255, 0.95); }
+    83% { box-shadow: 0 0 var(--bloggy-glow-size-hover) rgba(170, 110, 255, 0.95); }
+    100% { box-shadow: 0 0 var(--bloggy-glow-size-hover) rgba(255, 90, 90, 0.95); }
+}
+
+.bloggy-icon {
+    box-shadow: 0 0 18px rgba(238, 115, 115, 0.85);
+    transform: scale(0.96);
+    transition: transform 200ms ease;
+    animation: bloggy-rainbow-glow 60s linear infinite;
+    z-index: 10;
+    position: relative;
+}
+
+.bloggy-icon:hover {
+    transform: scale(1.45);
+    animation: bloggy-rainbow-glow-hover 10s linear infinite;
+}
+
+.bloggy-caption {
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-size: 1.2rem;
+    color: #0f172a;
+    text-shadow: 0 1px 0 rgba(255, 200, 80, 0.7), 0 -1px 0 rgba(90, 200, 255, 0.7), 0 0 10px rgba(255, 180, 90, 0.35);
+    position: relative;
+    z-index: 5;
+}

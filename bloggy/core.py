@@ -835,10 +835,15 @@ def from_md(content, img_dir=None, current_path=None):
 # App configuration
 def get_root_folder(): return get_config().get_root_folder()
 def get_blog_title(): return get_config().get_blog_title()
+def get_favicon_href():
+    root_icon = get_root_folder() / "static" / "icon.png"
+    if root_icon.exists():
+        return "/static/icon.png"
+    return "/static/favicon.png"
 
 hdrs = (
     *Theme.slate.headers(highlightjs=True),
-    Link(rel="icon", href="/static/favicon.png"),
+    Link(rel="icon", href=get_favicon_href()),
     Script(src="https://unpkg.com/hyperscript.org@0.9.12"),
     Script(src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs", type="module"),
     Script("""
@@ -1196,8 +1201,23 @@ logger.info(f'{beforeware=}')
 
 app = FastHTML(hdrs=hdrs, before=beforeware) if beforeware else FastHTML(hdrs=hdrs)
 
-static_dir = Path(__file__).parent / "static"
+def _favicon_icon_path():
+    root_icon = get_root_folder() / "static" / "icon.png"
+    if root_icon.exists():
+        return root_icon
+    package_favicon = Path(__file__).parent / "static" / "favicon.png"
+    if package_favicon.exists():
+        return package_favicon
+    return None
 
+@app.route("/static/icon.png")
+async def favicon_icon():
+    path = _favicon_icon_path()
+    if path and path.exists():
+        return FileResponse(path)
+    return Response(status_code=404)
+
+static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
@@ -1205,7 +1225,7 @@ rt = app.route
 
 
 from starlette.requests import Request
-from starlette.responses import RedirectResponse
+from starlette.responses import RedirectResponse, FileResponse, Response
 
 @rt("/login", methods=["GET", "POST"])
 async def login(request: Request):

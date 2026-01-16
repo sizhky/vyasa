@@ -1,9 +1,21 @@
 ---
-title: Bloggy - A Blogging Platform for Markdown and Python Lovers
+title: Bloggy
 ---
-# Bloggy
 
-A lightweight, elegant blogging platform built with FastHTML that renders Markdown files into beautiful web pages with advanced features.
+<p align="center">
+  <img src="static/icon.png" alt="Bloggy icon" class="bloggy-icon" style="width: 256px;">
+</p>
+
+<p class="bloggy-caption" style="text-align: center;">
+  Markdown lovers write<br>
+  Python roots, JavaScript sparks<br>
+  Styles without limits
+</p>
+
+---
+
+Bloggy is a Python‑first blogging tool: drop in Markdown, get a site instantly.
+Simple by default, infinitely customizable for CSS lovers.
 
 ## Quick Start
 1. Install Bloggy:
