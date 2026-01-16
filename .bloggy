@@ -8,4 +8,4 @@ folders_first = false
 # layout_max_width = "75vw"
 
 # Abbreviations to capitalise in titles
-abbreviations = ["ai", "poc", ...]
+abbreviations = ["ai", "poc"]

@@ -597,7 +597,7 @@ All settings in the `.bloggy` file are optional. The configuration is managed by
 
 ### Layout Width Configuration
 
-Set a single `layout_max_width` to control overall width (applies to both sidebar and non-sidebar pages). Values accept Tailwind max-width classes (e.g. `max-w-7xl`) or raw CSS sizes (e.g. `90vw`, `1200px`). Default is `100vw`.
+Set a single `layout_max_width` to control overall width (applies to both sidebar and non-sidebar pages). Values accept Tailwind max-width classes (e.g. `max-w-7xl`) or raw CSS sizes (e.g. `90vw`, `1200px`). Default is `75vw`.
 
 ```toml
 layout_max_width = "90vw"
