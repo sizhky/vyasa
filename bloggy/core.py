@@ -188,7 +188,7 @@ def _width_class_and_style(value, kind):
             return val, ""
         if re.match(r'^\d+(\.\d+)?$', val):
             val = f"{val}px"
-        return "", f"max-width: {val};"
+        return "", f"--layout-max-width: {val};"
     return "", ""
 
 def _style_attr(style_value):
@@ -199,7 +199,7 @@ def _style_attr(style_value):
 def _resolve_layout_config(current_path):
     config = get_config()
     return {
-        "layout_max_width": _coerce_config_str(config.get("layout_max_width", "BLOGGY_LAYOUT_MAX_WIDTH", "max-w-7xl")),
+        "layout_max_width": _coerce_config_str(config.get("layout_max_width", "BLOGGY_LAYOUT_MAX_WIDTH", "100vw")),
     }
 
 def order_bloggy_entries(entries, config):
@@ -656,9 +656,16 @@ class ContentRenderer(FrankenRenderer):
     def render_link(self, token):
         href, inner, title = token.target, self.render_inner(token), f' title="{token.title}"' if token.title else ''
         # ...existing code...
-        is_external = href.startswith(('http://', 'https://', 'mailto:', 'tel:', '//', '#'))
+        is_hash = href.startswith('#')
+        is_external = href.startswith(('http://', 'https://', 'mailto:', 'tel:', '//'))
         is_absolute_internal = href.startswith('/') and not href.startswith('//')
         is_relative = not is_external and not is_absolute_internal
+        if is_hash:
+            link_class = (
+                "text-amber-600 dark:text-amber-400 underline underline-offset-2 "
+                "hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors"
+            )
+            return f'<a href="{href}" class="{link_class}"{title}>{inner}</a>'
         if is_relative:
             from pathlib import Path
             original_href = href
@@ -683,7 +690,7 @@ class ContentRenderer(FrankenRenderer):
                 logger.debug(f"DEBUG: No current_path, treating as external")
         is_internal = is_absolute_internal and '.' not in href.split('/')[-1]
         hx = f' hx-get="{href}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top"' if is_internal else ''
-        ext = '' if (is_internal or is_absolute_internal) else ' target="_blank" rel="noopener noreferrer"'
+        ext = '' if (is_internal or is_absolute_internal or is_hash) else ' target="_blank" rel="noopener noreferrer"'
         # Amber/gold link styling, stands out and is accessible
         link_class = (
             "text-amber-600 dark:text-amber-400 underline underline-offset-2 "
@@ -937,6 +944,15 @@ hdrs = (
         body.pdf-focus .pdf-viewer {
             height: calc(100vh - 6rem) !important;
         }
+
+        .layout-fluid {
+            --layout-breakpoint: 1280px;
+            --layout-blend: 240px;
+            max-width: calc(
+                100% - (100% - var(--layout-max-width))
+                * clamp(0, (100vw - var(--layout-breakpoint)) / var(--layout-blend), 1)
+            ) !important;
+        }
         
         /* Tabs styles */
         .tabs-container { 
@@ -1179,7 +1195,7 @@ def posts_sidebar_lazy():
     html = _cached_posts_sidebar_html(_posts_sidebar_fingerprint())
     return Aside(
         NotStr(html),
-        cls="hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
+        cls="hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
         id="posts-sidebar"
     )
 
@@ -1306,14 +1322,14 @@ def navbar(show_mobile_menus=False):
                 UkIcon("menu", cls="w-5 h-5"),
                 title="Toggle file tree",
                 id="mobile-posts-toggle",
-                cls="md:hidden p-2 hover:bg-slate-800 rounded transition-colors",
+                cls="xl:hidden p-2 hover:bg-slate-800 rounded transition-colors",
                 type="button"
             ),
             Button(
                 UkIcon("list", cls="w-5 h-5"),
                 title="Toggle table of contents",
                 id="mobile-toc-toggle",
-                cls="md:hidden p-2 hover:bg-slate-800 rounded transition-colors",
+                cls="xl:hidden p-2 hover:bg-slate-800 rounded transition-colors",
                 type="button"
             ),
             cls="flex items-center gap-1"
@@ -1634,6 +1650,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
     logger.debug(f"[LAYOUT] section_class computed in {(t_section - layout_start_time)*1000:.2f}ms")
     layout_config = _resolve_layout_config(current_path)
     layout_max_class, layout_max_style = _width_class_and_style(layout_config.get("layout_max_width"), "max")
+    layout_fluid_class = "layout-fluid" if layout_max_style else ""
 
     # HTMX short-circuit: build only swappable fragments, never build full page chrome/sidebars tree
     if htmx and getattr(htmx, "request", None):
@@ -1647,7 +1664,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
 
                 sidebars_open = get_config().get_sidebars_open()
                 toc_attrs = {
-                    "cls": "hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
+                    "cls": "hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
                     "id": "toc-sidebar",
                     "hx_swap_oob": "true",
                 }
@@ -1709,7 +1726,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
             # Right sidebar TOC component with out-of-band swap for HTMX
             sidebars_open = get_config().get_sidebars_open()
             toc_attrs = {
-                "cls": "hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
+                "cls": "hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
                 "id": "toc-sidebar"
             }
             toc_sidebar = Aside(
@@ -1742,7 +1759,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 cls="p-4 overflow-y-auto"
             ),
             id="mobile-posts-panel",
-            cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] md:hidden transform -translate-x-full transition-transform duration-300"
+            cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] xl:hidden transform -translate-x-full transition-transform duration-300"
         )
         mobile_toc_panel = None
         if show_toc:
@@ -1761,11 +1778,11 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                     cls="p-4 overflow-y-auto"
                 ),
                 id="mobile-toc-panel",
-                cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] md:hidden transform translate-x-full transition-transform duration-300"
+                cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] xl:hidden transform translate-x-full transition-transform duration-300"
             )
         # Full layout with all sidebars
         content_with_sidebars = Div(
-            cls=f"w-full {layout_max_class} mx-auto px-4 flex gap-6 flex-1".strip(),
+            cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 flex gap-6 flex-1".strip(),
             id="content-with-sidebars",
             **_style_attr(layout_max_style)
         )(
@@ -1776,7 +1793,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                     Span("Loading posts…", cls="ml-2 text-sm"),
                     cls="flex items-center justify-center h-32 text-slate-400"
                 ),
-                cls="hidden md:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
+                cls="hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
                 id="posts-sidebar",
                 hx_get="/_sidebar/posts",
                 hx_trigger="load",
@@ -1793,7 +1810,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         body_content = Div(id="page-container", cls="flex flex-col min-h-screen")(
             Div(
                 navbar(show_mobile_menus=True),
-                cls=f"w-full {layout_max_class} mx-auto px-4 sticky top-0 z-50 mt-4".strip(),
+                cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-50 mt-4".strip(),
                 id="site-navbar",
                 **_style_attr(layout_max_style)
             ),
@@ -1801,7 +1818,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
             mobile_toc_panel if mobile_toc_panel else None,
             content_with_sidebars,
             Footer(Div(f"Powered by Bloggy", cls="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right"), # right justified footer
-                   cls=f"w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(),
+                   cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(),
                    id="site-footer",
                    **_style_attr(layout_max_style))
         )
@@ -1811,18 +1828,18 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         body_content = Div(id="page-container", cls="flex flex-col min-h-screen")(
             Div(
                 navbar(),
-                cls=f"w-full {layout_max_class} mx-auto px-4 sticky top-0 z-50 mt-4".strip(),
+                cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-50 mt-4".strip(),
                 id="site-navbar",
                 **_style_attr(layout_max_style)
             ),
             Main(
                 *content,
-                cls=f"w-full {layout_max_class} mx-auto px-6 py-8 space-y-8".strip(),
+                cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 py-8 space-y-8".strip(),
                 id="main-content",
                 **_style_attr(layout_max_style)
             ),
             Footer(Div("Powered by Bloggy", cls="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right"), 
-                   cls=f"w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(),
+                   cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(),
                    id="site-footer",
                    **_style_attr(layout_max_style))
         )

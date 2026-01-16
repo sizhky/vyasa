@@ -5,4 +5,7 @@ sort = "name_asc"
 folders_first = false
 
 # Layout width configuration (optional)
-layout_max_width = "75vw"
+# layout_max_width = "75vw"
+
+# Abbreviations to capitalise in titles
+abbreviations = ["ai", "poc", ...]
