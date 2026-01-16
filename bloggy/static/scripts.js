@@ -378,7 +378,7 @@ const initialGanttWidth = getDynamicGanttWidth();
 console.log('Using initial Gantt width:', initialGanttWidth);
 
 mermaid.initialize({ 
-    startOnLoad: true,
+    startOnLoad: false,
     theme: getCurrentTheme(),
     gantt: {
         useWidth: initialGanttWidth,
@@ -390,20 +390,22 @@ mermaid.initialize({
 let isInitialLoad = true;
 
 // Initialize interaction after mermaid renders
-mermaid.run().then(() => {
-    console.log('Initial mermaid render complete');
-    setTimeout(() => {
-        console.log('Calling initial initMermaidInteraction');
-        initMermaidInteraction();
-        
-        // After initial render, set explicit heights on all wrappers so theme switching works
-        document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
-            const currentHeight = wrapper.getBoundingClientRect().height;
-            console.log(`Setting initial height for ${wrapper.id}:`, currentHeight);
-            wrapper.style.height = currentHeight + 'px';
-        });
-        isInitialLoad = false;
-    }, 100);
+document.addEventListener('DOMContentLoaded', () => {
+    mermaid.run().then(() => {
+        console.log('Initial mermaid render complete');
+        setTimeout(() => {
+            console.log('Calling initial initMermaidInteraction');
+            initMermaidInteraction();
+            
+            // After initial render, set explicit heights on all wrappers so theme switching works
+            document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
+                const currentHeight = wrapper.getBoundingClientRect().height;
+                console.log(`Setting initial height for ${wrapper.id}:`, currentHeight);
+                wrapper.style.height = currentHeight + 'px';
+            });
+            isInitialLoad = false;
+        }, 100);
+    });
 });
 
 // Reveal current file in sidebar
