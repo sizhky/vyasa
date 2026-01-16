@@ -191,7 +191,7 @@ Even `inline code` gets the rainbow treatment!
 
 [Click me if you dare](/) - This link is a portal to another dimension!
 
-[I'm also whack](/posts/demo/markdown-features) - Try hovering!
+[I'm also whack](/posts/demo/writing/markdown-features) - Try hovering!
 
 ## Lists of Whackness
 

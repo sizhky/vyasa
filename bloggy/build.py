@@ -56,7 +56,7 @@ def generate_static_html(title, body_content, blog_title):
             margin: 2rem 0; 
             border: 1px solid rgb(226 232 240); 
             border-radius: 0.5rem; 
-            overflow: hidden; 
+            overflow: visible; 
             box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
         }
         .dark .tabs-container { 
@@ -115,6 +115,7 @@ def generate_static_html(title, body_content, blog_title):
         .tabs-content { 
             background: white;
             position: relative;
+            overflow: visible;
         }
         .dark .tabs-content { 
             background: rgb(2 6 23);
@@ -130,6 +131,7 @@ def generate_static_html(title, body_content, blog_title):
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
+            overflow: visible;
         }
         .tab-panel.active { 
             position: relative;

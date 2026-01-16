@@ -385,23 +385,68 @@ def preprocess_tabs(content):
     
     def replace_tabs_block(match):
         tabs_content = match.group(1)
-        # Pattern to match ::tab{title="..."}
-        tab_pattern = re.compile(r'^::tab\{title="([^"]+)"\}\s*\n(.*?)(?=^::tab\{|\Z)', re.MULTILINE | re.DOTALL)
-        
+        # Pattern to match ::tab{title="..." ...}
+        tab_pattern = re.compile(r'^::tab\{([^\}]+)\}\s*\n(.*?)(?=^::tab\{|\Z)', re.MULTILINE | re.DOTALL)
+
+        def parse_attrs(raw_attrs):
+            attrs = {}
+            for key, value in re.findall(r'([a-zA-Z0-9_-]+)\s*=\s*"([^"]*)"', raw_attrs):
+                attrs[key] = value
+            return attrs
+
         tabs = []
         for tab_match in tab_pattern.finditer(tabs_content):
-            title = tab_match.group(1)
+            raw_attrs = tab_match.group(1)
             tab_content = tab_match.group(2).strip()
-            tabs.append((title, tab_content))
+            attrs = parse_attrs(raw_attrs)
+            title = attrs.get('title')
+            if not title:
+                continue
+            tabs.append({'title': title, 'content': tab_content, 'attrs': attrs})
         
         if not tabs:
             return match.group(0)  # Return original if no tabs found
+
+        title_map = {tab['title']: tab for tab in tabs}
+        index_map = {str(i): tab for i, tab in enumerate(tabs)}
+
+        def fence_wrap(content):
+            backtick_runs = re.findall(r'`+', content)
+            max_run = max((len(run) for run in backtick_runs), default=0)
+            fence_len = max(4, max_run + 1)
+            fence = '`' * fence_len
+            return f'{fence}\n{content}\n{fence}'
+
+        def resolve_tab_content(tab, stack=None):
+            stack = stack or set()
+            copy_from = tab.get('attrs', {}).get('copy-from')
+            if not copy_from:
+                return tab['content']
+            if copy_from in stack:
+                return tab['content']
+            source_tab = None
+            if copy_from.startswith('index:'):
+                index_key = copy_from.split(':', 1)[1].strip()
+                source_tab = index_map.get(index_key)
+            elif copy_from.isdigit():
+                source_tab = index_map.get(copy_from)
+            else:
+                source_tab = title_map.get(copy_from)
+            if not source_tab:
+                return tab['content']
+            stack.add(copy_from)
+            resolved = resolve_tab_content(source_tab, stack)
+            stack.remove(copy_from)
+            return fence_wrap(resolved)
+
+        for tab in tabs:
+            tab['content'] = resolve_tab_content(tab)
         
         # Generate unique ID for this tab group
         tab_id = hashlib.md5(match.group(0).encode()).hexdigest()[:8]
         
         # Store tab data for later processing
-        tab_data_store[tab_id] = tabs
+        tab_data_store[tab_id] = [(tab['title'], tab['content']) for tab in tabs]
         
         # Return a placeholder that won't be processed by markdown
         placeholder = f'<div class="tab-placeholder" data-tab-id="{tab_id}"></div>'
@@ -739,7 +784,7 @@ def postprocess_tabs(html, tab_data_store, img_dir, current_path, footnotes):
 def from_md(content, img_dir=None, current_path=None):
     # Resolve img_dir from current_path if not explicitly provided
     if img_dir is None and current_path:
-        # Convert current_path to URL path for images (e.g., demo/flat-land/chapter-01 -> /posts/demo/flat-land)
+        # Convert current_path to URL path for images (e.g., demo/books/flat-land/chapter-01 -> /posts/demo/books/flat-land)
         from pathlib import Path
         path_parts = Path(current_path).parts
         if len(path_parts) > 1:
@@ -961,7 +1006,7 @@ hdrs = (
             margin: 2rem 0; 
             border: 1px solid rgb(226 232 240); 
             border-radius: 0.5rem; 
-            overflow: hidden; 
+            overflow: visible; 
             box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
         }
         .dark .tabs-container { 
@@ -1020,6 +1065,7 @@ hdrs = (
         .tabs-content { 
             background: white;
             position: relative;
+            overflow: visible;
         }
         .dark .tabs-content { 
             background: rgb(2 6 23);
@@ -1035,6 +1081,7 @@ hdrs = (
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
+            overflow: visible;
         }
         .tab-panel.active { 
             position: relative;

@@ -1,6 +1,41 @@
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 
 const mermaidStates = {};
+const mermaidDebugEnabled = () => (
+    window.BLOGGY_DEBUG_MERMAID === true ||
+    localStorage.getItem('bloggyDebugMermaid') === '1'
+);
+const mermaidDebugLog = (...args) => {
+    if (mermaidDebugEnabled()) {
+        console.log('[bloggy][mermaid]', ...args);
+    }
+};
+const mermaidDebugSnapshot = (label) => {
+    if (!mermaidDebugEnabled()) {
+        return;
+    }
+    const wrappers = Array.from(document.querySelectorAll('.mermaid-wrapper'));
+    const withSvg = wrappers.filter(w => w.querySelector('svg'));
+    const interactive = wrappers.filter(w => w.dataset.mermaidInteractive === 'true');
+    const last = wrappers[wrappers.length - 1];
+    let lastRect = null;
+    if (last) {
+        const rect = last.getBoundingClientRect();
+        lastRect = {
+            id: last.id,
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+            hasSvg: !!last.querySelector('svg'),
+            interactive: last.dataset.mermaidInteractive === 'true'
+        };
+    }
+    mermaidDebugLog(label, {
+        total: wrappers.length,
+        withSvg: withSvg.length,
+        interactive: interactive.length,
+        last: lastRect
+    });
+};
 const GANTT_WIDTH = 1200;
 
 function handleCodeCopyClick(event) {
@@ -70,9 +105,42 @@ function handleCodeCopyClick(event) {
 document.addEventListener('click', handleCodeCopyClick, true);
 
 function initMermaidInteraction() {
-    document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
+    const wrappers = Array.from(document.querySelectorAll('.mermaid-wrapper'));
+    if (mermaidDebugEnabled()) {
+        const pending = wrappers.filter(w => !w.querySelector('svg'));
+        const last = wrappers[wrappers.length - 1];
+        mermaidDebugLog('initMermaidInteraction: total', wrappers.length, 'pending', pending.length);
+        if (last) {
+            mermaidDebugLog('initMermaidInteraction: last wrapper', last.id, 'hasSvg', !!last.querySelector('svg'));
+        }
+    }
+    wrappers.forEach((wrapper, idx) => {
         const svg = wrapper.querySelector('svg');
-        if (!svg || wrapper.dataset.mermaidInteractive === 'true') return;
+        const alreadyInteractive = wrapper.dataset.mermaidInteractive === 'true';
+        if (mermaidDebugEnabled()) {
+            mermaidDebugLog(
+                'initMermaidInteraction: wrapper',
+                idx,
+                wrapper.id,
+                'hasSvg',
+                !!svg,
+                'interactive',
+                alreadyInteractive
+            );
+        }
+        const getSvg = () => wrapper.querySelector('svg');
+        const applySvgState = (currentSvg) => {
+            if (!currentSvg) {
+                return;
+            }
+            currentSvg.style.pointerEvents = 'none';
+            currentSvg.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`;
+            currentSvg.style.transformOrigin = 'center center';
+        };
+        if (svg) {
+            svg.style.pointerEvents = 'none';
+        }
+        if (!svg || alreadyInteractive) return;
         
         // DEBUG: Log initial state
         console.group(`🔍 initMermaidInteraction: ${wrapper.id}`);
@@ -92,15 +160,27 @@ function initMermaidInteraction() {
         
         // For very wide diagrams (like Gantt charts), prefer width scaling even if it exceeds height
         const aspectRatio = svgRect.width / svgRect.height;
+        const maxUpscale = 1;
         let initialScale;
         if (aspectRatio > 3) {
-            // Wide diagram: scale to fit width, allowing vertical scroll if needed
-            initialScale = scaleX;
+            // Wide diagram: scale to fit width, but do not upscale by default
+            initialScale = Math.min(scaleX, maxUpscale);
             console.log('Wide diagram detected (aspect ratio > 3):', aspectRatio, 'Using scaleX:', initialScale);
         } else {
-            // Normal diagram: fit to smaller dimension, but allow upscaling up to 3x
-            initialScale = Math.min(scaleX, scaleY, 3);
+            // Normal diagram: fit to smaller dimension, but do not upscale by default
+            initialScale = Math.min(scaleX, scaleY, maxUpscale);
             console.log('Normal diagram (aspect ratio <=3):', aspectRatio, 'Using min scale:', initialScale);
+        }
+
+        if (mermaidDebugEnabled()) {
+            mermaidDebugLog('initMermaidInteraction: sizing', {
+                id: wrapper.id,
+                wrapperWidth: wrapperRect.width,
+                wrapperHeight: wrapperRect.height,
+                svgWidth: svgRect.width,
+                svgHeight: svgRect.height,
+                initialScale
+            });
         }
         
         const state = {
@@ -115,20 +195,43 @@ function initMermaidInteraction() {
         wrapper.dataset.mermaidInteractive = 'true';
         console.log('Final state:', state);
         console.groupEnd();
+
+        if (mermaidDebugEnabled() && !wrapper.dataset.mermaidDebugBound) {
+            wrapper.dataset.mermaidDebugBound = 'true';
+            const logEvent = (name, event) => {
+                const target = event.target && event.target.tagName ? event.target.tagName : 'unknown';
+                mermaidDebugLog(`${name} on ${wrapper.id}`, { type: event.type, target });
+            };
+            wrapper.addEventListener('pointerdown', (e) => logEvent('pointerdown', e));
+            wrapper.addEventListener('pointermove', (e) => logEvent('pointermove', e));
+            wrapper.addEventListener('pointerup', (e) => logEvent('pointerup', e));
+            wrapper.addEventListener('wheel', (e) => logEvent('wheel', e));
+        }
         
         function updateTransform() {
-            svg.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`;
-            svg.style.transformOrigin = 'center center';
+            applySvgState(getSvg());
         }
         
         // Apply initial scale
         updateTransform();
+
+        if (!wrapper.dataset.mermaidObserver) {
+            const observer = new MutationObserver(() => {
+                applySvgState(getSvg());
+            });
+            observer.observe(wrapper, { childList: true, subtree: true });
+            wrapper.dataset.mermaidObserver = 'true';
+        }
         
         // Mouse wheel zoom (zooms towards cursor position)
         wrapper.addEventListener('wheel', (e) => {
             e.preventDefault();
             
-            const rect = svg.getBoundingClientRect();
+            const currentSvg = getSvg();
+            if (!currentSvg) {
+                return;
+            }
+            const rect = currentSvg.getBoundingClientRect();
             
             // Mouse position relative to SVG's current position
             const mouseX = e.clientX - rect.left - rect.width / 2;
@@ -166,6 +269,14 @@ function initMermaidInteraction() {
             state.translateX = e.clientX - state.startX;
             state.translateY = e.clientY - state.startY;
             updateTransform();
+            if (mermaidDebugEnabled()) {
+                mermaidDebugLog('pan update', wrapper.id, {
+                    translateX: state.translateX,
+                    translateY: state.translateY,
+                    scale: state.scale,
+                    svgTransform: (getSvg() && getSvg().style.transform) || ''
+                });
+            }
         });
         
         const stopPanning = (e) => {
@@ -189,6 +300,13 @@ function scheduleMermaidInteraction({ maxAttempts = 12, delayMs = 80, onReady } 
     const check = () => {
         const wrappers = Array.from(document.querySelectorAll('.mermaid-wrapper'));
         const pending = wrappers.filter(wrapper => !wrapper.querySelector('svg'));
+        if (mermaidDebugEnabled()) {
+            const last = wrappers[wrappers.length - 1];
+            mermaidDebugLog('scheduleMermaidInteraction attempt', attempt, 'pending', pending.length);
+            if (last) {
+                mermaidDebugLog('scheduleMermaidInteraction last wrapper', last.id, 'hasSvg', !!last.querySelector('svg'));
+            }
+        }
         if (pending.length === 0 || attempt >= maxAttempts) {
             initMermaidInteraction();
             if (typeof onReady === 'function') {
@@ -356,6 +474,11 @@ function reinitializeMermaid() {
     });
     
     // Find all mermaid wrappers and re-render them
+    const shouldLockHeight = (wrapper) => {
+        const height = (wrapper.style.height || '').trim();
+        return height && height !== 'auto' && height !== 'initial' && height !== 'unset';
+    };
+
     document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
         const originalCode = wrapper.getAttribute('data-mermaid-code');
         if (originalCode) {
@@ -364,9 +487,11 @@ function reinitializeMermaid() {
             console.log('BEFORE clear - wrapper rect:', wrapper.getBoundingClientRect());
             
             // Preserve the current computed height before clearing (height should already be set explicitly)
-            const currentHeight = wrapper.getBoundingClientRect().height;
-            console.log('Preserving height:', currentHeight);
-            wrapper.style.height = currentHeight + 'px';
+            if (shouldLockHeight(wrapper)) {
+                const currentHeight = wrapper.getBoundingClientRect().height;
+                console.log('Preserving height:', currentHeight);
+                wrapper.style.height = currentHeight + 'px';
+            }
             
             // Delete the old state so it can be recreated
             delete mermaidStates[wrapper.id];
@@ -420,14 +545,23 @@ let isInitialLoad = true;
 
 // Initialize interaction after mermaid renders
 document.addEventListener('DOMContentLoaded', () => {
+    mermaidDebugSnapshot('before mermaid.run (DOMContentLoaded)');
     mermaid.run().then(() => {
+        mermaidDebugSnapshot('after mermaid.run (DOMContentLoaded)');
         console.log('Initial mermaid render complete');
         scheduleMermaidInteraction({
             onReady: () => {
                 console.log('Calling initial initMermaidInteraction');
                 
                 // After initial render, set explicit heights on all wrappers so theme switching works
+                const shouldLockHeight = (wrapper) => {
+                    const height = (wrapper.style.height || '').trim();
+                    return height && height !== 'auto' && height !== 'initial' && height !== 'unset';
+                };
                 document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
+                    if (!shouldLockHeight(wrapper)) {
+                        return;
+                    }
                     const currentHeight = wrapper.getBoundingClientRect().height;
                     console.log(`Setting initial height for ${wrapper.id}:`, currentHeight);
                     wrapper.style.height = currentHeight + 'px';
@@ -847,16 +981,18 @@ document.addEventListener('click', (event) => {
 
 // Re-run mermaid on HTMX content swaps
 document.body.addEventListener('htmx:afterSwap', function(event) {
+    mermaidDebugSnapshot('before mermaid.run (htmx:afterSwap)');
     document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
         if (!wrapper.id) {
             return;
         }
-        if (!wrapper.querySelector('svg')) {
-            delete mermaidStates[wrapper.id];
-            delete wrapper.dataset.mermaidInteractive;
-        }
+        // HTMX swaps can trigger a mermaid re-run that replaces SVGs.
+        // Clear interaction state so we always re-bind after mermaid.run().
+        delete mermaidStates[wrapper.id];
+        delete wrapper.dataset.mermaidInteractive;
     });
     mermaid.run().then(() => {
+        mermaidDebugSnapshot('after mermaid.run (htmx:afterSwap)');
         scheduleMermaidInteraction();
     });
     updateActivePostLink();

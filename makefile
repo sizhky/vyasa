@@ -1,4 +1,4 @@
-.PHONY: clean build test publish install dev bump-major bump-minor bump-patch
+.PHONY: clean build test publish install dev bump-major bump-minor bump-patch publish-patch publish-minor publish-major ppat pmin pmaj
 
 clean:
 	rm -rf dist/ build/ *.egg-info
@@ -41,3 +41,22 @@ publish-and-checkpoint: publish
 	zsh -i -c "checkpoint"
 
 pc: publish-and-checkpoint
+
+# Explicit publish + checkpoint shortcuts
+publish-patch: bump-patch build
+	python -m twine upload --repository sizhky dist/*
+	zsh -i -c "checkpoint"
+
+publish-minor: bump-minor build
+	python -m twine upload --repository sizhky dist/*
+	zsh -i -c "checkpoint"
+
+publish-major: bump-major build
+	python -m twine upload --repository sizhky dist/*
+	zsh -i -c "checkpoint"
+
+ppat: publish-patch
+
+pmin: publish-minor
+
+pmaj: publish-major

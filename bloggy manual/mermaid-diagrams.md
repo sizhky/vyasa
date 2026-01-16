@@ -1,4 +1,114 @@
+Bloggy renders Mermaid code blocks with zoom, pan, reset, and fullscreen controls.
+
+## Basic usage
+
+:::tabs
+::tab{title="Rendered"}
+```mermaid
+---
+width: 45 vw
+---
+graph TD
+    A[Draft] --> B{Review}
+    B -->|Approved| C[Publish]
+    B -->|Rejected| D[Revise]
+    D --> A
+    C --> E[Archive]
+    A --> F[Add Tags]
+    F --> B
+    
+    classDef draftStyle fill:#fbbf24,stroke:#f59e0b,stroke-width:3px,color:#000
+    classDef reviewStyle fill:#3b82f6,stroke:#2563eb,stroke-width:3px,color:#fff
+    classDef publishStyle fill:#10b981,stroke:#059669,stroke-width:3px,color:#fff
+    classDef reviseStyle fill:#ef4444,stroke:#dc2626,stroke-width:3px,color:#fff
+    classDef archiveStyle fill:#6b7280,stroke:#4b5563,stroke-width:2px,color:#fff
+    classDef tagStyle fill:#8b5cf6,stroke:#7c3aed,stroke-width:2px,color:#fff
+    
+    class A draftStyle
+    class B reviewStyle
+    class C publishStyle
+    class D reviseStyle
+    class E archiveStyle
+    class F tagStyle
+```
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
+
+
+## Frontmatter controls
+
+You can add a frontmatter block at the top of a Mermaid diagram:
+````
+```mermaid
+---
+width: 85vw
+height: 60vh
+min-height: 400px
+---
+graph LR
+    ...
+```
+````
+Supported keys:
+- `width` (default: `65vw`)
+- `height` (default: `auto`)
+- `min-height` (default: `400px`)
+- `aspect_ratio` (Gantt charts)
+
+## Interactions
+
+- Zoom with mouse wheel or the +/− buttons.
+- Pan by dragging (mouse or touch).
+- Reset zoom with the Reset button.
+- Fullscreen with the ⛶ button.
+
+The controls are wired to JavaScript functions in `bloggy/static/scripts.js`:
+- `openMermaidFullscreen(id)`: Creates modal with close button and ESC key handler
+- `resetMermaidZoom(id)`: Resets transform to `translate(0px, 0px) scale(1)`
+- `zoomMermaidIn(id)` / `zoomMermaidOut(id)`: Adjusts scale by 1.1x / 0.9x factors
+
+### Scripted Interaction & Resilience
+`bloggy/static/scripts.js` drives the interactive layer with sophisticated features:
+
+#### Mermaid Zoom & Pan
+- **Mouse wheel zoom**: Zooms toward cursor position with 1% intensity per wheel event (prevents jarring jumps)
+- **Mouse drag panning**: Click and drag to pan, cursor changes to `grabbing` during drag
+- **Smart initial scaling**: 
+  - Wide diagrams (aspect ratio > 3): Scale to fit width, allow vertical scroll
+  - Normal diagrams: Fit to smaller dimension (width or height), max 3x upscaling
+  - Accounts for padding: 32px total (16px each side from `p-4` class)
+- **State management**: Per-diagram state stored in `mermaidStates` object with scale, translateX, translateY, isPanning, startX, startY
+- **Transform origin**: Center-center for natural zoom behavior
+
+#### Theme-Aware Re-rendering
+- **MutationObserver** watches `<html>` class changes for dark mode toggle
+- `reinitializeMermaid()` function:
+  - Detects theme via `getCurrentTheme()` (checks for `.dark` class)
+  - Preserves wrapper height before clearing to prevent layout shifts
+  - Deletes old state and re-creates fresh diagram
+  - Decodes HTML entities from `data-mermaid-code` attribute
+  - Re-runs `mermaid.run()` and `initMermaidInteraction()` after 100ms delay
+  - Skips reinit on initial load (uses `isInitialLoad` flag)
+
+#### HTMX Integration
+- **`htmx:afterSwap` event listener**: Re-runs Mermaid, updates active links, reinitializes mobile menus
+- **Sidebar auto-reveal**: Expands parent `<details>` elements and scrolls active post into view
+- **Active link highlighting**: Adds blue ring and background to current post in sidebar
+- **TOC scroll tracking**: Updates active TOC link based on scroll position with `requestAnimationFrame` throttling
+
+#### Mobile Menu Handling
+- Slide-in panels for posts and TOC with `transform` transitions (`-translate-x-full` / `translate-x-full`)
+- Auto-close panels when link clicked (100ms delay for smooth transition)
+- Toggle buttons in navbar show/hide panels (only one open at a time)
+
+#### Additional Features
+- **Fullscreen modal**: Dark backdrop with blur, ESC key and background click to close
+- **Tab height stabilization**: Measures all tab panels, sets container to max height on load and after swaps
+- **Math rendering**: Auto-runs KaTeX after swaps and on initial load
+
 ## flowchart TD
+:::tabs
+::tab{title="Rendered"}
 ```mermaid
 ---
 width: 85vw
@@ -10,9 +120,12 @@ flowchart TD
     C -->|Two| E[iPhone]
     C -->|Three| F[fa:fa-car Car]
 ```
-
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
 
 ## classDiagram
+:::tabs
+::tab{title="Rendered"}
 ```mermaid
 ---
 width: 85vw
@@ -39,8 +152,12 @@ classDiagram
       +run()
     }
 ```
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
 
 ## sequenceDiagram
+:::tabs
+::tab{title="Rendered"}
 ```mermaid
 ---
 width: 85vw
@@ -51,8 +168,12 @@ sequenceDiagram
     John-->>-Alice: Hi Alice, I can hear you!
     John-->>-Alice: I feel great!
 ```
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
 
 ## erDiagram
+:::tabs
+::tab{title="Rendered"}
 ```mermaid
 ---
 width: 85vw
@@ -81,8 +202,12 @@ erDiagram
         float price
     }
 ```
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
 
 ## stateDiagram-v2
+:::tabs
+::tab{title="Rendered"}
 ```mermaid
 ---
 width: 85vw
@@ -95,9 +220,13 @@ stateDiagram-v2
     Moving --> Crash
     Crash --> [*]
 ```
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
 
 
 ## mindmap
+:::tabs
+::tab{title="Rendered"}
 ```mermaid
 ---
 width: 85vw
@@ -121,8 +250,12 @@ mindmap
       ## ---
       Mermaid
 ```
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
 
 ## sankey beta
+:::tabs
+::tab{title="Rendered"}
 ```mermaid
 ---
 width: 85vw
@@ -204,8 +337,12 @@ UK land based bioenergy,Bio-conversion,182.01
 Wave,Electricity grid,19.013
 Wind,Electricity grid,289.366
 ```
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
 
 ## radar-beta
+:::tabs
+::tab{title="Rendered"}
 ```mermaid
 ---
 width: 85vw
@@ -222,8 +359,12 @@ radar-beta
   max 100
   min 0
 ```
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
 
 ## treemap-beta
+:::tabs
+::tab{title="Rendered"}
 ```mermaid
 ---
 width: 85vw
@@ -237,8 +378,12 @@ treemap-beta
     "Leaf 2.1": 20
     "Leaf 2.2": 25
 ```
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
 
 ## timeline
+:::tabs
+::tab{title="Rendered"}
 ```mermaid
 ---
 width: 85vw
@@ -251,8 +396,12 @@ timeline
     2005 : YouTube
     2006 : Twitter
 ```
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
 
 ## C4Context
+:::tabs
+::tab{title="Rendered"}
 ```mermaid
 ---
 width: 85vw
@@ -291,8 +440,12 @@ C4Context
     Rel(SystemAA, SystemC, "Sends e-mails", "SMTP")
     Rel(SystemC, customerA, "Sends e-mails to")
 ```
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
 
 ## gantt
+:::tabs
+::tab{title="Rendered"}
 ```mermaid
 ---
 width: 85vw
@@ -307,8 +460,12 @@ gantt
     Task in sec      :2014-01-12  , 12d
     another task      : 24d
 ```
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
 
 ## architecture-beta
+:::tabs
+::tab{title="Rendered"}
 ```mermaid
 ---
 width: 85vw
@@ -325,4 +482,5 @@ architecture-beta
     disk1:T -- B:server
     disk2:T -- B:db
 ```
-
+::tab{title="Markdown Source" copy-from="Rendered"}
+:::
