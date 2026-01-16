@@ -1,4 +1,4 @@
-__version__ = "0.1.70"
+__version__ = "0.1.71"
 
 from .core import app, rt, get_root_folder, get_blog_title
 

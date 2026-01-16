@@ -335,18 +335,6 @@ Group related snippets with the `:::tabs` container and `::tab{title="Label"}` b
 
 The client script stabilizes the height on DOMContentLoaded and after HTMX swaps, ensuring smooth transitions without content jumps.
 
-````markdown
-:::tabs
-::tab{title="Rust"}
-```rust
-// tab content
-```
-::tab{title="Python"}
-```python
-# tab content
-```
-:::
-````
 
 ### Relative Links & Asset Helpers
 Relative references like `[Next chapter](../chapter-02.md)` automatically resolve to `/posts/...`, strip the `.md` extension, and gain `hx-get`, `hx-target="#main-content"`, `hx-push-url="true"`, and `hx-swap="innerHTML show:window:top"` attributes for seamless HTMX navigation. The renderer uses the current post's path to resolve relative links correctly, handling both `./` and `../` navigation. External links (starting with `http://`, `https://`, `mailto:`, etc.) automatically get `target="_blank"` and `rel="noopener noreferrer"` for security.
