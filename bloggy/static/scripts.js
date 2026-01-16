@@ -72,7 +72,7 @@ document.addEventListener('click', handleCodeCopyClick, true);
 function initMermaidInteraction() {
     document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
         const svg = wrapper.querySelector('svg');
-        if (!svg || mermaidStates[wrapper.id]) return;
+        if (!svg || wrapper.dataset.mermaidInteractive === 'true') return;
         
         // DEBUG: Log initial state
         console.group(`🔍 initMermaidInteraction: ${wrapper.id}`);
@@ -112,6 +112,7 @@ function initMermaidInteraction() {
             startY: 0
         };
         mermaidStates[wrapper.id] = state;
+        wrapper.dataset.mermaidInteractive = 'true';
         console.log('Final state:', state);
         console.groupEnd();
         
@@ -147,32 +148,58 @@ function initMermaidInteraction() {
             updateTransform();
         }, { passive: false });
         
-        // Pan with mouse drag
-        wrapper.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return;
+        // Pan with pointer drag (mouse + touch)
+        wrapper.style.cursor = 'grab';
+        wrapper.style.touchAction = 'none';
+        wrapper.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
             state.isPanning = true;
             state.startX = e.clientX - state.translateX;
             state.startY = e.clientY - state.translateY;
+            wrapper.setPointerCapture(e.pointerId);
             wrapper.style.cursor = 'grabbing';
             e.preventDefault();
         });
         
-        document.addEventListener('mousemove', (e) => {
+        wrapper.addEventListener('pointermove', (e) => {
             if (!state.isPanning) return;
             state.translateX = e.clientX - state.startX;
             state.translateY = e.clientY - state.startY;
             updateTransform();
         });
         
-        document.addEventListener('mouseup', () => {
-            if (state.isPanning) {
-                state.isPanning = false;
-                wrapper.style.cursor = 'grab';
+        const stopPanning = (e) => {
+            if (!state.isPanning) return;
+            state.isPanning = false;
+            try {
+                wrapper.releasePointerCapture(e.pointerId);
+            } catch {
+                // Ignore if pointer capture is not active
             }
-        });
+            wrapper.style.cursor = 'grab';
+        };
         
-        wrapper.style.cursor = 'grab';
+        wrapper.addEventListener('pointerup', stopPanning);
+        wrapper.addEventListener('pointercancel', stopPanning);
     });
+}
+
+function scheduleMermaidInteraction({ maxAttempts = 12, delayMs = 80, onReady } = {}) {
+    let attempt = 0;
+    const check = () => {
+        const wrappers = Array.from(document.querySelectorAll('.mermaid-wrapper'));
+        const pending = wrappers.filter(wrapper => !wrapper.querySelector('svg'));
+        if (pending.length === 0 || attempt >= maxAttempts) {
+            initMermaidInteraction();
+            if (typeof onReady === 'function') {
+                onReady();
+            }
+            return;
+        }
+        attempt += 1;
+        setTimeout(check, delayMs);
+    };
+    check();
 }
 
 window.resetMermaidZoom = function(id) {
@@ -343,6 +370,7 @@ function reinitializeMermaid() {
             
             // Delete the old state so it can be recreated
             delete mermaidStates[wrapper.id];
+            delete wrapper.dataset.mermaidInteractive;
             
             // Decode HTML entities
             const textarea = document.createElement('textarea');
@@ -364,11 +392,12 @@ function reinitializeMermaid() {
     
     // Re-run mermaid
     mermaid.run().then(() => {
-        console.log('Mermaid re-render complete, calling initMermaidInteraction in 100ms');
-        setTimeout(() => {
-            initMermaidInteraction();
-            console.groupEnd();
-        }, 100);
+        console.log('Mermaid re-render complete, scheduling initMermaidInteraction');
+        scheduleMermaidInteraction({
+            onReady: () => {
+                console.groupEnd();
+            }
+        });
     });
 }
 
@@ -393,18 +422,19 @@ let isInitialLoad = true;
 document.addEventListener('DOMContentLoaded', () => {
     mermaid.run().then(() => {
         console.log('Initial mermaid render complete');
-        setTimeout(() => {
-            console.log('Calling initial initMermaidInteraction');
-            initMermaidInteraction();
-            
-            // After initial render, set explicit heights on all wrappers so theme switching works
-            document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
-                const currentHeight = wrapper.getBoundingClientRect().height;
-                console.log(`Setting initial height for ${wrapper.id}:`, currentHeight);
-                wrapper.style.height = currentHeight + 'px';
-            });
-            isInitialLoad = false;
-        }, 100);
+        scheduleMermaidInteraction({
+            onReady: () => {
+                console.log('Calling initial initMermaidInteraction');
+                
+                // After initial render, set explicit heights on all wrappers so theme switching works
+                document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
+                    const currentHeight = wrapper.getBoundingClientRect().height;
+                    console.log(`Setting initial height for ${wrapper.id}:`, currentHeight);
+                    wrapper.style.height = currentHeight + 'px';
+                });
+                isInitialLoad = false;
+            }
+        });
     });
 });
 
@@ -818,7 +848,7 @@ document.addEventListener('click', (event) => {
 // Re-run mermaid on HTMX content swaps
 document.body.addEventListener('htmx:afterSwap', function(event) {
     mermaid.run().then(() => {
-        setTimeout(initMermaidInteraction, 100);
+        scheduleMermaidInteraction();
     });
     updateActivePostLink();
     updateActiveTocLink();
