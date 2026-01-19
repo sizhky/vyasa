@@ -35,7 +35,7 @@ Simple by default. Infinitely customizable for CSS lovers.[^1]
    cd my-blog
    echo "# Hello World" > hello.md
    mkdir -p posts
-   echo "# My First Post\nThis is a sample blog post." > posts/first-post
+   echo "# My First Post\nThis is a sample blog post." > posts/first-post.md
    ```
 
 3. Run Bloggy:
