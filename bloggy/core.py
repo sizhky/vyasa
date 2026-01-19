@@ -852,6 +852,19 @@ hdrs = (
     Link(rel="icon", href=get_favicon_href()),
     Script(src="https://unpkg.com/hyperscript.org@0.9.12"),
     Script(src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs", type="module"),
+    Style(
+        """
+        .chat-row-block {
+            padding: 14px 0;
+        }
+        .chat-panel {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 20px;
+        }
+        """
+    ),
     Script("""
         // Tab switching functionality (global scope)
         function switchTab(tabsId, index) {
@@ -1196,6 +1209,7 @@ if _auth_creds and _auth_creds[0] and _auth_creds[1]:
             r'^/login$',
             r'^/_sidebar/.*',
             r'^/static/.*',
+            r'^/chat/.*',
             r'.*\.css',
             r'.*\.js',
         ]
@@ -1205,7 +1219,33 @@ else:
 
 logger.info(f'{beforeware=}')
 
-app = FastHTML(hdrs=hdrs, before=beforeware) if beforeware else FastHTML(hdrs=hdrs)
+app = (
+    FastHTML(hdrs=hdrs, before=beforeware, exts="ws")
+    if beforeware
+    else FastHTML(hdrs=hdrs, exts="ws")
+)
+
+def _load_pylogue_routes():
+    try:
+        from pylogue.core import register_routes, EchoResponder
+        return register_routes, EchoResponder
+    except Exception:
+        pylogue_path = Path("/Users/yeshwanth/Code/Personal/pylogue/src/pylogue/core.py")
+        if not pylogue_path.exists():
+            logger.warning(f"Pylogue not found at {pylogue_path}")
+            return None, None
+        try:
+            import importlib.util
+
+            spec = importlib.util.spec_from_file_location("pylogue.core", pylogue_path)
+            if spec and spec.loader:
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                return module.register_routes, module.EchoResponder
+        except Exception as load_exc:
+            logger.warning(f"Failed to load pylogue from {pylogue_path}: {load_exc}")
+            return None, None
+    return None, None
 
 def _favicon_icon_path():
     root_icon = get_root_folder() / "static" / "icon.png"
@@ -1232,6 +1272,28 @@ rt = app.route
 
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, FileResponse, Response
+
+_pylogue_register, _PylogueResponder = _load_pylogue_routes()
+if _pylogue_register:
+    try:
+        from .agent import PydanticAIStreamingResponder
+        _chat_responder = PydanticAIStreamingResponder()
+        logger.info("Using PydanticAIStreamingResponder for /chat")
+    except Exception as exc:
+        logger.warning(f"Falling back to Pylogue responder: {exc}")
+        _chat_responder = _PylogueResponder()
+    _pylogue_register(
+        app,
+        responder=_chat_responder,
+        title="Bloggy Chat",
+        subtitle="Ask a question about this blog",
+        base_path="chat",
+        inject_headers=True
+    )
+
+    @rt("/chat")
+    def chat_redirect():
+        return RedirectResponse("/chat/", status_code=307)
 
 @rt("/login", methods=["GET", "POST"])
 async def login(request: Request):

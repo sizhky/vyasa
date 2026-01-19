@@ -1,3 +1,7 @@
+---
+title: Advanced Behavior
+description: Smaller details that are useful once you’re past the basics. The blog covers index/README behavior, smart 404 page, performance logging, and technical implementation details.
+---
 # Advanced Behavior
 
 Smaller details that are useful once you’re past the basics.
