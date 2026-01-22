@@ -560,7 +560,7 @@ def from_md(content, img_dir=None, current_path=None):
         def repl(m):
             code_blocks.append(m.group(0))
             return f"__BLOGGY_CODEBLOCK_{len(code_blocks)-1}__"
-        md = re.sub(r'(```[\s\S]*?```|~~~[\s\S]*?~~~)', repl, md)
+        md = re.sub(r'(```+|~~~+)[\s\S]*?\1', repl, md)
         # Protect inline code spans (including multi-backtick)
         def repl_inline(m):
             code_blocks.append(m.group(0))
@@ -587,7 +587,7 @@ def from_md(content, img_dir=None, current_path=None):
     def _preserve_newlines(md):
         import re
         # Don't touch code blocks (fenced or indented)
-        code_block = re.compile(r'(```[\s\S]*?```|~~~[\s\S]*?~~~)', re.MULTILINE)
+        code_block = re.compile(r'(```+|~~~+)[\s\S]*?\1', re.MULTILINE)
         blocks = []
         def repl(m):
             blocks.append(m.group(0))

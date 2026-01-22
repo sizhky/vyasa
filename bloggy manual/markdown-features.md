@@ -540,6 +540,27 @@ $$
 ```
 :::
 
+:::tabs
+::tab{title="Rendered"}
+### Escaping Dollar Signs
+
+\$5 should render as $5 (not math).
+
+\\$ should render as \\$.
+
+\\\$ should render as \\\$.
+::tab{title="Markdown Source"}
+```markdown
+### Escaping Dollar Signs
+
+\$5 should render as $5 (not math).
+
+\\$ should render as \\$.
+
+\\\$ should render as \\\$.
+```
+:::
+
 ## Diagrams
 ````
 ```mermaid
