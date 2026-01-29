@@ -2045,7 +2045,7 @@ def post_detail(path: str, htmx):
         Div(
             H1(post_title, cls="text-4xl font-bold"),
             copy_button,
-            cls="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-8"
+            cls="flex items-center gap-2 flex-wrap mb-8"
         ),
         Div(
             "Copied Raw Markdown!",

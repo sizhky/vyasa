@@ -84,6 +84,7 @@ See the full list in [Markdown Writing Features](bloggy%20manual/markdown-featur
 - **PDF Posts**: PDFs show up in the sidebar and open inline in the main content area
 - **Auto-Generated TOC**: Table of contents automatically extracted from headings with scroll-based active highlighting
 - **TOC Autoscroll + Accurate Highlights**: Active TOC item stays in view and highlight logic handles duplicate headings
+- **Inline Copy Button**: Copy raw markdown from a button placed right next to the post title
 - **Mobile Menus**: Slide-in panels for posts and TOC on mobile devices with smooth transitions
 - **Sticky Navigation**: Navbar stays at top while scrolling, with mobile menu toggles
 - **Active Link Highlighting**: Current post and TOC section highlighted with blue accents
