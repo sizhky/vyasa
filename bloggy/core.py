@@ -2057,7 +2057,7 @@ def build_post_tree(folder):
                     title_text,
                     href=f'/posts/{note_slug}',
                     hx_get=f'/posts/{note_slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
-                    cls="post-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0",
+                    cls="post-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 hover:underline transition-colors min-w-0",
                     data_path=note_slug)))
         elif item.suffix == '.md':
             slug = str(item.relative_to(root).with_suffix(''))
