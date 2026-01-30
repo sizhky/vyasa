@@ -51,6 +51,16 @@ port = 5001
 # Optional authentication credentials (enables Beforeware middleware)
 username = "admin"
 password = "hunter2"
+
+# Optional: require auth for all routes (default: true if any auth provider is configured)
+auth_required = true
+
+# Optional Google OAuth configuration
+[google_oauth]
+client_id = "your-google-client-id"
+client_secret = "your-google-client-secret"
+allowed_domains = ["example.com"] # optional
+allowed_emails = ["alice@example.com"] # optional
 ```
 
 All settings in the `.bloggy` file are optional. The configuration is managed by the `Config` class in `bloggy/config.py`.
@@ -100,6 +110,38 @@ You can also use environment variables as a fallback:
 - `BLOGGY_PORT`: Server port (default: 5001)
 - `BLOGGY_USER`: Optional username to enable session-based authentication
 - `BLOGGY_PASSWORD`: Optional password paired with `BLOGGY_USER`
+- `BLOGGY_AUTH_REQUIRED`: Require login for all routes (true/false)
+- `BLOGGY_GOOGLE_CLIENT_ID`: Google OAuth client id (optional)
+- `BLOGGY_GOOGLE_CLIENT_SECRET`: Google OAuth client secret (optional)
+- `BLOGGY_GOOGLE_ALLOWED_DOMAINS`: Comma-separated allowed email domains (optional)
+- `BLOGGY_GOOGLE_ALLOWED_EMAILS`: Comma-separated allowed emails (optional)
+
+### RBAC Configuration (optional)
+
+Use `rbac` to protect specific paths by role. This is ignored unless an auth provider is enabled.
+
+```toml
+[rbac]
+enabled = true
+default_roles = ["reader"]
+user_roles = { "alice@example.com" = ["admin"], "bob" = ["editor"] }
+role_users = { "admin" = ["alice@example.com"], "editor" = ["bob"] }
+
+[[rbac.rules]]
+pattern = "^/admin"
+roles = ["admin"]
+
+[[rbac.rules]]
+pattern = "^/private"
+roles = ["admin", "editor"]
+```
+
+Environment variable (optional):
+- `BLOGGY_RBAC_ENABLED`: Force enable/disable RBAC
+
+Notes:
+- If both `user_roles` and `role_users` are provided, roles are unioned at runtime.
+- Google OAuth requires the optional dependency `bloggy[auth]`.
 
 ### Examples
 
@@ -135,12 +177,21 @@ bloggy /path/to/your/markdown/files
 title = "Private Blog"
 username = "admin"
 password = "secret123"
+auth_required = true
+
+[google_oauth]
+client_id = "your-google-client-id"
+client_secret = "your-google-client-secret"
+allowed_domains = ["example.com"]
 ```
 
 ```bash
 # Or via environment variables
 export BLOGGY_USER="admin"
 export BLOGGY_PASSWORD="secret123"
+export BLOGGY_GOOGLE_CLIENT_ID="your-google-client-id"
+export BLOGGY_GOOGLE_CLIENT_SECRET="your-google-client-secret"
+export BLOGGY_GOOGLE_ALLOWED_DOMAINS="example.com"
 ```
 
 **Configuration priority example:**

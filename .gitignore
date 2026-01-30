@@ -98,6 +98,9 @@ celerybeat-schedule
 
 # dotenv
 .env
+.bloggy
+.bloggy.example
+.sesskey
 
 # virtualenv
 .venv

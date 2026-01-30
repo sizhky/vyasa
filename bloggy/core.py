@@ -988,24 +988,134 @@ hdrs = (
 
 
 # Session/cookie-based authentication using Beforeware (conditionally enabled)
-def user_auth_before(req, sess):
-    logger.info(f'Authenticating request for {req.url.path}')
-    auth = req.scope['auth'] = sess.get('auth', None)
-    if not auth:
-        sess['next'] = req.url.path
-        from starlette.responses import RedirectResponse
-        return RedirectResponse('/login', status_code=303)
-
-# Enable auth only if username and password are configured
 _config = get_config()
 _auth_creds = _config.get_auth()
-logger.info(f"Authentication enabled: {_auth_creds is not None and _auth_creds[0] and _auth_creds[1]}")
+_google_oauth_cfg = _config.get_google_oauth()
+_rbac_cfg = _config.get_rbac()
+_auth_required = _config.get_auth_required()
 
-if _auth_creds and _auth_creds[0] and _auth_creds[1]:
+_google_oauth = None
+_google_oauth_enabled = False
+if _google_oauth_cfg.get("client_id") and _google_oauth_cfg.get("client_secret"):
+    try:
+        from authlib.integrations.starlette_client import OAuth
+        _google_oauth = OAuth()
+        _google_oauth.register(
+            name="google",
+            client_id=_google_oauth_cfg["client_id"],
+            client_secret=_google_oauth_cfg["client_secret"],
+            server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+            client_kwargs={"scope": "openid email profile"},
+        )
+        _google_oauth_enabled = True
+    except Exception as exc:
+        logger.warning(f"Google OAuth disabled: {exc}")
+
+_local_auth_enabled = bool(_auth_creds and _auth_creds[0] and _auth_creds[1])
+_auth_enabled = _local_auth_enabled or _google_oauth_enabled
+if _auth_required is None:
+    _auth_required = _auth_enabled
+
+if _rbac_cfg.get("enabled") and not _auth_enabled:
+    logger.warning("RBAC configured without any auth provider; RBAC disabled.")
+    _rbac_cfg["enabled"] = False
+
+_rbac_rules = []
+if _rbac_cfg.get("enabled"):
+    for rule in _rbac_cfg.get("rules", []):
+        if not isinstance(rule, dict):
+            continue
+        pattern = rule.get("pattern")
+        roles = rule.get("roles")
+        if not pattern or not roles:
+            continue
+        try:
+            compiled = re.compile(pattern)
+        except re.error as exc:
+            logger.warning(f"Invalid RBAC pattern {pattern!r}: {exc}")
+            continue
+        roles_list = _config._coerce_list(roles)
+        if not roles_list:
+            continue
+        _rbac_rules.append((compiled, set(roles_list)))
+
+def _normalize_auth(auth):
+    if not auth:
+        return None
+    if isinstance(auth, dict):
+        return auth
+    return {"provider": "local", "username": str(auth)}
+
+def _resolve_roles(auth):
+    auth = _normalize_auth(auth) or {}
+    username = auth.get("username")
+    email = auth.get("email")
+    user_roles = _rbac_cfg.get("user_roles", {})
+    roles = []
+    if isinstance(user_roles, dict):
+        if email and email in user_roles:
+            roles.extend(_config._coerce_list(user_roles.get(email)))
+        if username and username in user_roles:
+            roles.extend(_config._coerce_list(user_roles.get(username)))
+    role_users = _rbac_cfg.get("role_users", {})
+    if isinstance(role_users, dict):
+        for role, users in role_users.items():
+            users_list = _config._coerce_list(users)
+            if email and email in users_list:
+                roles.append(role)
+            if username and username in users_list:
+                roles.append(role)
+    if not roles:
+        roles = _rbac_cfg.get("default_roles", []) or _google_oauth_cfg.get("default_roles", [])
+    roles = [r for r in roles if r]
+    if roles:
+        return list(dict.fromkeys(roles))
+    return []
+
+def _path_requires_roles(path):
+    for pattern, _roles in _rbac_rules:
+        if pattern.search(path):
+            return True
+    return False
+
+def _is_allowed(path, roles):
+    if not _rbac_rules:
+        return True
+    roles_set = set(roles or [])
+    for pattern, allowed_roles in _rbac_rules:
+        if pattern.search(path):
+            return bool(roles_set & allowed_roles)
+    return True
+
+def user_auth_before(req, sess):
+    logger.info(f'Authenticating request for {req.url.path}')
+    auth = sess.get('auth', None)
+    if not auth:
+        if _auth_required or _path_requires_roles(req.url.path):
+            sess['next'] = req.url.path
+            from starlette.responses import RedirectResponse
+            return RedirectResponse('/login', status_code=303)
+        req.scope['auth'] = None
+        return None
+    auth = _normalize_auth(auth)
+    if _rbac_rules:
+        auth["roles"] = auth.get("roles") or _resolve_roles(auth)
+        if not _is_allowed(req.url.path, auth["roles"]):
+            from starlette.responses import Response
+            return Response("Forbidden", status_code=403)
+    req.scope['auth'] = auth
+    return None
+
+logger.info(f"Authentication enabled: {_auth_enabled}")
+logger.info(f"RBAC enabled: {_rbac_cfg.get('enabled')}")
+
+if _auth_enabled or (_rbac_cfg.get("enabled") and _rbac_rules):
     beforeware = Beforeware(
         user_auth_before,
         skip=[
             r'^/login$',
+            r'^/login/google$',
+            r'^/auth/google/callback$',
             r'^/_sidebar/.*',
             r'^/static/.*',
             r'^/chat/.*',
@@ -1101,13 +1211,20 @@ async def login(request: Request):
     config = get_config()
     user, pwd = config.get_auth()
     logger.info(f"Login attempt for user: {user}")
-    error = None
+    error = request.query_params.get("error")
     if request.method == "POST":
+        if not _local_auth_enabled:
+            return RedirectResponse("/login?error=Local+login+disabled", status_code=303)
         form = await request.form()
         username = form.get("username", "")
         password = form.get("password", "")
         if username == user and password == pwd:
-            request.session["auth"] = username
+            roles = _resolve_roles({"provider": "local", "username": username})
+            request.session["auth"] = {
+                "provider": "local",
+                "username": username,
+                "roles": roles,
+            }
             next_url = request.session.pop("next", "/")
             return RedirectResponse(next_url, status_code=303)
         else:
@@ -1115,6 +1232,11 @@ async def login(request: Request):
 
     return Div(
         H2("Login", cls="uk-h2"),
+        A(
+            Span("Continue with Google", cls="text-sm font-semibold"),
+            href="/login/google",
+            cls="inline-flex items-center justify-center w-full px-4 py-2 mb-4 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors"
+        ) if _google_oauth_enabled else None,
         Form(
             Div(
                 Input(type="text", name="username", required=True, id="username", cls="uk-input input input-bordered w-full", placeholder="Username"),
@@ -1123,9 +1245,63 @@ async def login(request: Request):
                 Input(type="password", name="password", required=True, id="password", cls="uk-input input input-bordered w-full", placeholder="Password"),
                 cls="my-4"),
             Button("Login", type="submit", cls="uk-btn btn btn-primary w-full"),
-            enctype="multipart/form-data", method="post", cls="max-w-sm mx-auto"),
+            enctype="multipart/form-data", method="post", cls="max-w-sm mx-auto") if _local_auth_enabled else None,
         P(error, cls="text-red-500 mt-4") if error else None,
         cls="prose mx-auto mt-24 text-center")
+
+@rt("/login/google")
+async def login_google(request: Request):
+    if not _google_oauth_enabled:
+        return Response(status_code=404)
+    next_url = request.session.get("next") or request.query_params.get("next") or "/"
+    request.session["next"] = next_url
+    redirect_uri = str(request.base_url).rstrip("/") + "/auth/google/callback"
+    return await _google_oauth.google.authorize_redirect(request, redirect_uri)
+
+@rt("/auth/google/callback")
+async def google_auth_callback(request: Request):
+    if not _google_oauth_enabled:
+        return Response(status_code=404)
+    try:
+        token = await _google_oauth.google.authorize_access_token(request)
+        userinfo = await _google_oauth.google.parse_id_token(request, token)
+    except Exception as exc:
+        logger.warning(f"Google OAuth failed: {exc}")
+        return RedirectResponse("/login?error=Google+authentication+failed", status_code=303)
+
+    email = userinfo.get("email") if isinstance(userinfo, dict) else None
+    name = userinfo.get("name") if isinstance(userinfo, dict) else None
+    picture = userinfo.get("picture") if isinstance(userinfo, dict) else None
+
+    allowed_domains = _google_oauth_cfg.get("allowed_domains", [])
+    if allowed_domains:
+        if not email:
+            return RedirectResponse("/login?error=Google+account+not+allowed", status_code=303)
+        domain = email.split("@")[-1]
+        if domain not in allowed_domains:
+            return RedirectResponse("/login?error=Google+account+not+allowed", status_code=303)
+
+    allowed_emails = _google_oauth_cfg.get("allowed_emails", [])
+    if allowed_emails:
+        if not email or email not in allowed_emails:
+            return RedirectResponse("/login?error=Google+account+not+allowed", status_code=303)
+
+    auth = {
+        "provider": "google",
+        "email": email,
+        "name": name,
+        "picture": picture,
+    }
+    auth["roles"] = _resolve_roles(auth)
+    request.session["auth"] = auth
+    next_url = request.session.pop("next", "/")
+    return RedirectResponse(next_url, status_code=303)
+
+@rt("/logout")
+async def logout(request: Request):
+    request.session.pop("auth", None)
+    request.session.pop("next", None)
+    return RedirectResponse("/login", status_code=303)
 
 # Progressive sidebar loading: lazy posts sidebar endpoint
 @rt("/_sidebar/posts")
