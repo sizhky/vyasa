@@ -1635,6 +1635,20 @@ def _cached_posts_sidebar_html(fingerprint):
     )
     return to_xml(sidebar)
 
+def _preload_posts_cache():
+    try:
+        _cached_build_post_tree(_posts_tree_fingerprint())
+        _cached_posts_sidebar_html(_posts_sidebar_fingerprint())
+        logger.info("Preloaded posts sidebar cache.")
+    except Exception as exc:
+        logger.warning(f"Failed to preload posts sidebar cache: {exc}")
+
+# Warm cache on server startup to avoid first-request latency.
+if hasattr(app, "add_event_handler"):
+    app.add_event_handler("startup", _preload_posts_cache)
+elif hasattr(app, "on_event"):
+    app.on_event("startup")(_preload_posts_cache)
+
 def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=None, shortcut_key=None, extra_content=None, scroll_target="container"):
     """Reusable collapsible sidebar component with sticky header"""
     # Build the summary content
