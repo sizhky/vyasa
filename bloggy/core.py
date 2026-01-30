@@ -2211,7 +2211,7 @@ def post_detail(path: str, htmx):
     logger.debug(f"[DEBUG] Markdown rendering took {md_time:.2f}ms")
     
     copy_button = Button(
-        UkIcon("copy", cls="w-4 h-4"),
+        UkIcon("clipboard", cls="w-4 h-4"),
         type="button",
         title="Copy raw markdown",
         onclick="(function(){const el=document.getElementById('raw-md-clipboard');const toast=document.getElementById('raw-md-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()",
