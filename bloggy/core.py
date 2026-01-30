@@ -1335,7 +1335,7 @@ def serve_post_markdown(path: str):
     return Response(status_code=404)
 
 @rt("/search/gather")
-def gather_search_results(htmx, q: str = ""):
+def gather_search_results(htmx, q: str = "", request: Request = None):
     import html
     matches, regex_error = _find_search_matches(q, limit=200)
     if not matches:
@@ -1344,7 +1344,7 @@ def gather_search_results(htmx, q: str = ""):
             P("No matching posts found.", cls="text-slate-600 dark:text-slate-400"),
             P(regex_error, cls="text-amber-600 dark:text-amber-400 text-sm") if regex_error else None
         )
-        return layout(content, htmx=htmx, title="Search Results", show_sidebar=True)
+        return layout(content, htmx=htmx, title="Search Results", show_sidebar=True, auth=request.scope.get("auth") if request else None)
 
     root = get_root_folder()
     sections = []
@@ -1401,7 +1401,7 @@ def gather_search_results(htmx, q: str = ""):
         ),
         *sections
     )
-    return layout(content, htmx=htmx, title="Search Results", show_sidebar=True)
+    return layout(content, htmx=htmx, title="Search Results", show_sidebar=True, auth=request.scope.get("auth") if request else None)
 
 # Route to serve static files (images, SVGs, etc.) from blog posts
 @rt("/posts/{path:path}.{ext:static}")
@@ -1780,7 +1780,7 @@ def get_custom_css_links(current_path=None, section_class=None):
     
     return css_elements
 
-def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True):
+def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True, auth=None):
     import time
     layout_start_time = time.time()
     logger.debug("[LAYOUT] layout() start")
@@ -1791,6 +1791,26 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
     layout_config = _resolve_layout_config(current_path)
     layout_max_class, layout_max_style = _width_class_and_style(layout_config.get("layout_max_width"), "max")
     layout_fluid_class = "layout-fluid" if layout_max_style else ""
+
+    def _footer_node(outer_cls, outer_style):
+        logout_button = None
+        if auth:
+            logout_button = A(
+                "Logout",
+                href="/logout",
+                cls="text-sm text-white/80 hover:text-white underline"
+            )
+        footer_inner = Div(
+            Div(logout_button, cls="flex items-center") if logout_button else Div(),
+            Div(NotStr('Powered by <a href="https://github.com/sizhky/bloggy" class="underline hover:text-white/80" target="_blank" rel="noopener noreferrer">Bloggy</a> and ❤️')),
+            cls="flex items-center justify-between w-full"
+        )
+        return Footer(
+            Div(footer_inner, cls="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800"),
+            cls=outer_cls,
+            id="site-footer",
+            **outer_style
+        )
 
 
     # HTMX short-circuit: build only swappable fragments, never build full page chrome/sidebars tree
@@ -1958,10 +1978,10 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
             mobile_posts_panel,
             mobile_toc_panel if mobile_toc_panel else None,
             content_with_sidebars,
-            Footer(Div(NotStr('Powered by <a href="https://github.com/sizhky/bloggy" class="underline hover:text-white/80" target="_blank" rel="noopener noreferrer">Bloggy</a> and ❤️'), cls="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right"), # right justified footer
-                   cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(),
-                   id="site-footer",
-                   **_style_attr(layout_max_style))
+            _footer_node(
+                f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(),
+                _style_attr(layout_max_style)
+            )
         )
     else:
         # Default layout without sidebar
@@ -1979,10 +1999,10 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 id="main-content",
                 **_style_attr(layout_max_style)
             ),
-            Footer(Div(NotStr('Powered by <a href="https://github.com/sizhky/bloggy" class="underline hover:text-white/80" target="_blank" rel="noopener noreferrer">Bloggy</a> and ❤️'), cls="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right"), 
-                   cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(),
-                   id="site-footer",
-                   **_style_attr(layout_max_style))
+            _footer_node(
+                f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(),
+                _style_attr(layout_max_style)
+            )
         )
         t_body = time.time()
         logger.debug(f"[LAYOUT] Body content (no sidebar) built in {(t_body - layout_start_time)*1000:.2f}ms")
@@ -2122,7 +2142,7 @@ def get_posts():
     fingerprint = _posts_tree_fingerprint()
     return _cached_build_post_tree(fingerprint)
 
-def not_found(htmx=None):
+def not_found(htmx=None, auth=None):
     """Custom 404 error page"""
     blog_title = get_blog_title()
     
@@ -2179,11 +2199,11 @@ def not_found(htmx=None):
     
     # Return with layout, including sidebar for easy navigation
     # Store the result tuple to potentially wrap with status code
-    result = layout(content, htmx=htmx, title=f"404 - Page Not Found | {blog_title}", show_sidebar=True)
+    result = layout(content, htmx=htmx, title=f"404 - Page Not Found | {blog_title}", show_sidebar=True, auth=auth)
     return result
 
 @rt('/posts/{path:path}')
-def post_detail(path: str, htmx):
+def post_detail(path: str, htmx, request: Request):
     import time
     request_start = time.time()
     logger.info(f"\n[DEBUG] ########## REQUEST START: /posts/{path} ##########")
@@ -2223,8 +2243,8 @@ def post_detail(path: str, htmx):
                 )
             )
             return layout(pdf_content, htmx=htmx, title=f"{post_title} - {get_blog_title()}",
-                          show_sidebar=True, toc_content=None, current_path=path, show_toc=False)
-        return not_found(htmx)
+                          show_sidebar=True, toc_content=None, current_path=path, show_toc=False, auth=request.scope.get("auth"))
+        return not_found(htmx, auth=request.scope.get("auth"))
     
     metadata, raw_content = parse_frontmatter(file_path)
     
@@ -2266,7 +2286,7 @@ def post_detail(path: str, htmx):
     # Always return complete layout with sidebar and TOC
     layout_start = time.time()
     result = layout(post_content, htmx=htmx, title=f"{post_title} - {get_blog_title()}", 
-                  show_sidebar=True, toc_content=raw_content, current_path=path)
+                  show_sidebar=True, toc_content=raw_content, current_path=path, auth=request.scope.get("auth"))
     layout_time = (time.time() - layout_start) * 1000
     logger.debug(f"[DEBUG] Layout generation took {layout_time:.2f}ms")
     
@@ -2292,7 +2312,7 @@ def find_index_file():
     return None
 
 @rt
-def index(htmx):
+def index(htmx, request: Request):
     import time
     request_start = time.time()
     logger.info(f"\n[DEBUG] ########## REQUEST START: / (index) ##########")
@@ -2313,7 +2333,7 @@ def index(htmx):
         
         layout_start = time.time()
         result = layout(page_content, htmx=htmx, title=f"{page_title} - {blog_title}", 
-                      show_sidebar=True, toc_content=raw_content, current_path=index_path)
+                      show_sidebar=True, toc_content=raw_content, current_path=index_path, auth=request.scope.get("auth"))
         layout_time = (time.time() - layout_start) * 1000
         logger.debug(f"[DEBUG] Layout generation took {layout_time:.2f}ms")
         
@@ -2331,7 +2351,7 @@ def index(htmx):
               Strong("index.md"), " or ", Strong("README.md"), 
               " file in your blog directory to customize this page.", 
               cls="text-base text-slate-600 dark:text-slate-400"),
-            cls="w-full"), htmx=htmx, title=f"Home - {blog_title}", show_sidebar=True)
+            cls="w-full"), htmx=htmx, title=f"Home - {blog_title}", show_sidebar=True, auth=request.scope.get("auth"))
         layout_time = (time.time() - layout_start) * 1000
         logger.debug(f"[DEBUG] Layout generation took {layout_time:.2f}ms")
         
@@ -2342,6 +2362,6 @@ def index(htmx):
 
 # Catch-all route for 404 pages (must be last)
 @rt('/{path:path}')
-def catch_all(path: str, htmx):
+def catch_all(path: str, htmx, request: Request):
     """Catch-all route for undefined URLs"""
-    return not_found(htmx)
+    return not_found(htmx, auth=request.scope.get("auth"))
