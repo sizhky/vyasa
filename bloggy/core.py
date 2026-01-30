@@ -1005,6 +1005,7 @@ if _google_oauth_cfg.get("client_id") and _google_oauth_cfg.get("client_secret")
             client_id=_google_oauth_cfg["client_id"],
             client_secret=_google_oauth_cfg["client_secret"],
             server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+            userinfo_endpoint="https://openidconnect.googleapis.com/v1/userinfo",
             client_kwargs={"scope": "openid email profile"},
         )
         _google_oauth_enabled = True
@@ -1256,6 +1257,7 @@ async def login_google(request: Request):
     next_url = request.session.get("next") or request.query_params.get("next") or "/"
     request.session["next"] = next_url
     redirect_uri = str(request.base_url).rstrip("/") + "/auth/google/callback"
+    print(f"DEBUG: redirect_uri = {redirect_uri}")
     return await _google_oauth.google.authorize_redirect(request, redirect_uri)
 
 @rt("/auth/google/callback")
@@ -1264,7 +1266,17 @@ async def google_auth_callback(request: Request):
         return Response(status_code=404)
     try:
         token = await _google_oauth.google.authorize_access_token(request)
-        userinfo = await _google_oauth.google.parse_id_token(request, token)
+        userinfo = token.get("userinfo")
+        if not userinfo:
+            try:
+                userinfo = await _google_oauth.google.parse_id_token(request, token)
+            except Exception as exc:
+                logger.warning(f"Google OAuth id_token missing or invalid: {exc}")
+                try:
+                    userinfo = await _google_oauth.google.userinfo(token=token)
+                except Exception as userinfo_exc:
+                    logger.warning(f"Google OAuth userinfo fetch failed: {userinfo_exc}")
+                    raise
     except Exception as exc:
         logger.warning(f"Google OAuth failed: {exc}")
         return RedirectResponse("/login?error=Google+authentication+failed", status_code=303)
@@ -1765,6 +1777,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
     layout_config = _resolve_layout_config(current_path)
     layout_max_class, layout_max_style = _width_class_and_style(layout_config.get("layout_max_width"), "max")
     layout_fluid_class = "layout-fluid" if layout_max_style else ""
+
 
     # HTMX short-circuit: build only swappable fragments, never build full page chrome/sidebars tree
     if htmx and getattr(htmx, "request", None):
