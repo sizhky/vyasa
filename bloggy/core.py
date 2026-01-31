@@ -1,4 +1,6 @@
 import re, mistletoe as mst, pathlib, os
+import json
+from dataclasses import dataclass
 from itertools import chain
 from urllib.parse import quote_plus
 from functools import partial
@@ -29,6 +31,7 @@ from .layout_helpers import (
     _style_attr,
 )
 from loguru import logger
+from fastsql import Database
 
 # disable debug level logs to stdout
 logger.remove()
@@ -991,8 +994,185 @@ hdrs = (
 _config = get_config()
 _auth_creds = _config.get_auth()
 _google_oauth_cfg = _config.get_google_oauth()
-_rbac_cfg = _config.get_rbac()
 _auth_required = _config.get_auth_required()
+
+@dataclass
+class RbacConfigRow:
+    key: str
+    value: str
+
+_rbac_db = None
+_rbac_tbl = None
+
+def _get_rbac_db():
+    global _rbac_db, _rbac_tbl
+    if _rbac_db is None:
+        root = get_config().get_root_folder()
+        db_path = root / ".bloggy-rbac.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        _rbac_db = Database(f"sqlite:///{db_path}")
+        _rbac_tbl = _rbac_db.create(RbacConfigRow, pk="key", name="rbac_config")
+    return _rbac_db, _rbac_tbl
+
+def _normalize_rbac_cfg(cfg):
+    cfg = cfg or {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+    default_roles = _config._coerce_list(cfg.get("default_roles", []))
+    user_roles = cfg.get("user_roles", {})
+    if not isinstance(user_roles, dict):
+        user_roles = {}
+    role_users = cfg.get("role_users", {})
+    if not isinstance(role_users, dict):
+        role_users = {}
+    rules = cfg.get("rules", [])
+    if not isinstance(rules, list):
+        rules = []
+    cleaned_rules = []
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        pattern = rule.get("pattern")
+        roles = _config._coerce_list(rule.get("roles", []))
+        if pattern and roles:
+            cleaned_rules.append({"pattern": str(pattern), "roles": roles})
+    return {
+        "enabled": bool(cfg.get("enabled", False)),
+        "default_roles": default_roles,
+        "user_roles": user_roles,
+        "role_users": role_users,
+        "rules": cleaned_rules,
+    }
+
+def _rbac_db_load():
+    try:
+        _, tbl = _get_rbac_db()
+    except Exception as exc:
+        logger.warning(f"RBAC DB unavailable: {exc}")
+        return None
+    rows = tbl()
+    if not rows:
+        return None
+    data = {}
+    for row in rows:
+        try:
+            data[row.key] = json.loads(row.value)
+        except Exception:
+            data[row.key] = row.value
+    return _normalize_rbac_cfg(data)
+
+def _rbac_db_write(cfg):
+    try:
+        _, tbl = _get_rbac_db()
+    except Exception as exc:
+        logger.warning(f"RBAC DB unavailable: {exc}")
+        return
+    cfg = _normalize_rbac_cfg(cfg)
+    existing = {row.key for row in tbl()}
+    for key, value in cfg.items():
+        payload = json.dumps(value, sort_keys=True)
+        if key in existing:
+            tbl.update(key=key, value=payload)
+        else:
+            tbl.insert(RbacConfigRow(key=key, value=payload))
+    for key in existing - set(cfg.keys()):
+        try:
+            tbl.delete(key)
+        except Exception:
+            continue
+
+def _load_rbac_cfg_from_store():
+    cfg = _rbac_db_load()
+    if cfg:
+        return cfg
+    cfg = _normalize_rbac_cfg(_config.get_rbac())
+    if cfg.get("enabled") or cfg.get("rules") or cfg.get("role_users") or cfg.get("user_roles") or cfg.get("default_roles"):
+        _rbac_db_write(cfg)
+    return cfg
+
+def _set_rbac_cfg(cfg):
+    global _rbac_cfg, _rbac_rules
+    _rbac_cfg = _normalize_rbac_cfg(cfg)
+    if _rbac_cfg.get("enabled") and not _auth_enabled:
+        logger.warning("RBAC configured without any auth provider; RBAC disabled.")
+        _rbac_cfg["enabled"] = False
+    _rbac_rules = []
+    if _rbac_cfg.get("enabled"):
+        for rule in _rbac_cfg.get("rules", []):
+            pattern = rule.get("pattern")
+            roles = rule.get("roles")
+            if not pattern or not roles:
+                continue
+            try:
+                compiled = re.compile(pattern)
+            except re.error as exc:
+                logger.warning(f"Invalid RBAC pattern {pattern!r}: {exc}")
+                continue
+            roles_list = _config._coerce_list(roles)
+            if not roles_list:
+                continue
+            _rbac_rules.append((compiled, set(roles_list)))
+
+def _resolve_bloggy_config_path():
+    root_env = os.getenv("BLOGGY_ROOT")
+    if root_env:
+        root_path = Path(root_env) / ".bloggy"
+        if root_path.exists():
+            return root_path
+    cwd_path = Path.cwd() / ".bloggy"
+    if cwd_path.exists():
+        return cwd_path
+    return get_config().get_root_folder() / ".bloggy"
+
+def _toml_string(value: str) -> str:
+    return json.dumps(str(value))
+
+def _toml_list(items):
+    return "[" + ", ".join(_toml_string(item) for item in items) + "]"
+
+def _toml_inline_table(mapping):
+    if not mapping:
+        return "{}"
+    parts = []
+    for key in sorted(mapping.keys()):
+        parts.append(f"{_toml_string(key)} = {_toml_list(_config._coerce_list(mapping[key]))}")
+    return "{ " + ", ".join(parts) + " }"
+
+def _render_rbac_toml(cfg):
+    cfg = _normalize_rbac_cfg(cfg)
+    lines = [
+        "[rbac]",
+        f"enabled = {'true' if cfg.get('enabled') else 'false'}",
+        f"default_roles = {_toml_list(cfg.get('default_roles', []))}",
+        f"user_roles = {_toml_inline_table(cfg.get('user_roles', {}))}",
+        f"role_users = {_toml_inline_table(cfg.get('role_users', {}))}",
+        "",
+    ]
+    for rule in cfg.get("rules", []):
+        lines.extend([
+            "[[rbac.rules]]",
+            f"pattern = {_toml_string(rule.get('pattern'))}",
+            f"roles = {_toml_list(rule.get('roles', []))}",
+            "",
+        ])
+    return "\n".join(lines).rstrip() + "\n"
+
+def _write_rbac_to_bloggy(cfg):
+    cfg = _normalize_rbac_cfg(cfg)
+    path = _resolve_bloggy_config_path()
+    try:
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
+    except Exception:
+        text = ""
+    new_block = _render_rbac_toml(cfg)
+    if re.search(r"(?m)^\[rbac\]", text):
+        pattern = r"(?ms)^\[rbac\]\n.*?(?=^\[[^\[]|\Z)"
+        text = re.sub(pattern, new_block + "\n", text)
+    else:
+        if text and not text.endswith("\n"):
+            text += "\n"
+        text += "\n" + new_block
+    path.write_text(text, encoding="utf-8")
 
 _google_oauth = None
 _google_oauth_enabled = False
@@ -1017,28 +1197,8 @@ _auth_enabled = _local_auth_enabled or _google_oauth_enabled
 if _auth_required is None:
     _auth_required = _auth_enabled
 
-if _rbac_cfg.get("enabled") and not _auth_enabled:
-    logger.warning("RBAC configured without any auth provider; RBAC disabled.")
-    _rbac_cfg["enabled"] = False
-
-_rbac_rules = []
-if _rbac_cfg.get("enabled"):
-    for rule in _rbac_cfg.get("rules", []):
-        if not isinstance(rule, dict):
-            continue
-        pattern = rule.get("pattern")
-        roles = rule.get("roles")
-        if not pattern or not roles:
-            continue
-        try:
-            compiled = re.compile(pattern)
-        except re.error as exc:
-            logger.warning(f"Invalid RBAC pattern {pattern!r}: {exc}")
-            continue
-        roles_list = _config._coerce_list(roles)
-        if not roles_list:
-            continue
-        _rbac_rules.append((compiled, set(roles_list)))
+_rbac_cfg = _load_rbac_cfg_from_store()
+_set_rbac_cfg(_rbac_cfg)
 
 def _normalize_auth(auth):
     if not auth:
@@ -1111,10 +1271,14 @@ def _is_allowed(path, roles):
     if not _rbac_rules:
         return True
     roles_set = set(roles or [])
+    matched_any = False
+    allowed = False
     for pattern, allowed_roles in _rbac_rules:
         if pattern.search(path):
-            return bool(roles_set & allowed_roles)
-    return True
+            matched_any = True
+            if roles_set & allowed_roles:
+                allowed = True
+    return allowed if matched_any else True
 
 def user_auth_before(req, sess):
     logger.info(f'Authenticating request for {req.url.path}')
@@ -1342,6 +1506,116 @@ async def logout(request: Request):
     request.session.pop("auth", None)
     request.session.pop("next", None)
     return RedirectResponse("/login", status_code=303)
+
+def _parse_roles_text(text: str):
+    parts = re.split(r"[,\n]+", text or "")
+    return [part.strip() for part in parts if part.strip()]
+
+@rt("/admin/rbac", methods=["GET", "POST"])
+async def admin_rbac(htmx, request: Request):
+    auth = _get_auth_from_request(request)
+    roles = auth.get("roles") if auth else []
+    if not roles or "full" not in roles:
+        return Response("Forbidden", status_code=403)
+
+    error = None
+    success = None
+    cfg = _rbac_cfg
+
+    if request.method == "POST":
+        form = await request.form()
+        enabled = form.get("enabled") == "on"
+        default_roles = _parse_roles_text(form.get("default_roles", ""))
+        role_users_raw = form.get("role_users_json", "{}")
+        user_roles_raw = form.get("user_roles_json", "{}")
+        rules_raw = form.get("rules_json", "[]")
+        try:
+            role_users = json.loads(role_users_raw) if role_users_raw.strip() else {}
+            user_roles = json.loads(user_roles_raw) if user_roles_raw.strip() else {}
+            rules = json.loads(rules_raw) if rules_raw.strip() else []
+        except Exception as exc:
+            error = f"Invalid JSON: {exc}"
+        else:
+            if not isinstance(role_users, dict):
+                error = "Role users JSON must be an object."
+            elif not isinstance(user_roles, dict):
+                error = "User roles JSON must be an object."
+            elif not isinstance(rules, list):
+                error = "Rules JSON must be an array."
+            else:
+                new_cfg = {
+                    "enabled": bool(enabled),
+                    "default_roles": default_roles,
+                    "role_users": role_users,
+                    "user_roles": user_roles,
+                    "rules": rules,
+                }
+                try:
+                    _rbac_db_write(new_cfg)
+                    _write_rbac_to_bloggy(new_cfg)
+                    _set_rbac_cfg(new_cfg)
+                    _cached_build_post_tree.cache_clear()
+                    _cached_posts_sidebar_html.cache_clear()
+                    success = "RBAC settings saved."
+                    cfg = _rbac_cfg
+                except Exception as exc:
+                    error = f"Failed to save RBAC settings: {exc}"
+
+    default_roles_text = ", ".join(cfg.get("default_roles", []))
+    role_users_text = json.dumps(cfg.get("role_users", {}), indent=2, sort_keys=True)
+    user_roles_text = json.dumps(cfg.get("user_roles", {}), indent=2, sort_keys=True)
+    rules_text = json.dumps(cfg.get("rules", []), indent=2, sort_keys=True)
+    preview_text = _render_rbac_toml(cfg)
+
+    content = Div(
+        H1("RBAC Administration", cls="text-3xl font-bold"),
+        P("Edits save to SQLite immediately and also update the .bloggy file for transparency.", cls="text-slate-600 dark:text-slate-400"),
+        P("Rule patterns are matched against request paths (e.g. /posts/ai/...).", cls="text-slate-500 dark:text-slate-500 text-sm"),
+        Div(
+            P(error, cls="text-red-600") if error else None,
+            P(success, cls="text-emerald-600") if success else None,
+            cls="mt-4"
+        ),
+        Form(
+            Div(
+                Label(
+                    Input(type="checkbox", name="enabled", checked=cfg.get("enabled", False), cls="mr-2"),
+                    Span("Enable RBAC"),
+                    cls="flex items-center gap-2"
+                ),
+                cls="mt-6"
+            ),
+            Div(
+                Label("Default roles (comma separated)", cls="block text-sm font-medium mb-2"),
+                Input(type="text", name="default_roles", value=default_roles_text, cls="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60"),
+                cls="mt-6"
+            ),
+            Div(
+                Label("Role users JSON", cls="block text-sm font-medium mb-2"),
+                Textarea(role_users_text, name="role_users_json", rows="6", cls="w-full px-3 py-2 font-mono text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60"),
+                cls="mt-6"
+            ),
+            Div(
+                Label("User roles JSON", cls="block text-sm font-medium mb-2"),
+                Textarea(user_roles_text, name="user_roles_json", rows="6", cls="w-full px-3 py-2 font-mono text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60"),
+                cls="mt-6"
+            ),
+            Div(
+                Label("Rules JSON", cls="block text-sm font-medium mb-2"),
+                Textarea(rules_text, name="rules_json", rows="8", cls="w-full px-3 py-2 font-mono text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60"),
+                cls="mt-6"
+            ),
+            Button("Save RBAC", type="submit", cls="mt-6 px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"),
+            method="post",
+            cls="mt-4"
+        ),
+        Div(
+            H2("Preview (.bloggy)", cls="text-xl font-semibold mt-10"),
+            Pre(preview_text, cls="mt-3 p-4 rounded-md bg-slate-100 dark:bg-slate-900/60 text-xs overflow-x-auto"),
+        ),
+        cls="max-w-3xl mx-auto py-10 px-6"
+    )
+    return layout(content, htmx=htmx, title="RBAC Admin", show_sidebar=False, auth=auth)
 
 # Progressive sidebar loading: lazy posts sidebar endpoint
 @rt("/_sidebar/posts")
@@ -1880,6 +2154,24 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                     collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(),
                     **toc_attrs
                 )
+                mobile_toc_panel = Div(
+                    Div(
+                        Button(
+                            UkIcon("x", cls="w-5 h-5"),
+                            id="close-mobile-toc",
+                            cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto",
+                            type="button"
+                        ),
+                        cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
+                    ),
+                    Div(
+                        collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
+                        cls="p-4 overflow-y-auto"
+                    ),
+                    id="mobile-toc-panel",
+                    cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] xl:hidden transform translate-x-full transition-transform duration-300",
+                    hx_swap_oob="true"
+                )
 
             custom_css_links = get_custom_css_links(current_path, section_class)
             t_css = time.time()
@@ -1889,11 +2181,49 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
             t_main = time.time()
             logger.debug(f"[LAYOUT] Main content container built in {(t_main - t_css)*1000:.2f}ms")
 
+            roles = _get_roles_from_auth(auth)
+            roles_key = tuple(roles or [])
+            posts_sidebar = Aside(
+                Div(
+                    UkIcon("loader", cls="w-5 h-5 animate-spin"),
+                    Span("Loading posts…", cls="ml-2 text-sm"),
+                    cls="flex items-center justify-center h-32 text-slate-400"
+                ),
+                cls="hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
+                id="posts-sidebar",
+                hx_get="/_sidebar/posts",
+                hx_trigger="load",
+                hx_swap="outerHTML",
+                hx_swap_oob="true"
+            )
+            mobile_posts_panel = Div(
+                Div(
+                    Button(
+                        UkIcon("x", cls="w-5 h-5"),
+                        id="close-mobile-posts",
+                        cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto",
+                        type="button"
+                    ),
+                    cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
+                ),
+                Div(
+                    NotStr(_cached_posts_sidebar_html(_posts_sidebar_fingerprint(), roles_key)),
+                    cls="p-4 overflow-y-auto"
+                ),
+                id="mobile-posts-panel",
+                cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] xl:hidden transform -translate-x-full transition-transform duration-300",
+                hx_swap_oob="true"
+            )
+
             result = [Title(title)]
             if custom_css_links:
                 result.append(Div(*custom_css_links, id="scoped-css-container", hx_swap_oob="true"))
             else:
                 result.append(Div(id="scoped-css-container", hx_swap_oob="true"))
+            result.append(posts_sidebar)
+            result.append(mobile_posts_panel)
+            if show_toc:
+                result.append(mobile_toc_panel)
             if toc_sidebar:
                 result.extend([main_content_container, toc_sidebar])
             else:
