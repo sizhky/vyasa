@@ -1511,6 +1511,82 @@ def _parse_roles_text(text: str):
     parts = re.split(r"[,\n]+", text or "")
     return [part.strip() for part in parts if part.strip()]
 
+@rt("/admin/impersonate", methods=["GET", "POST"])
+async def admin_impersonate(htmx, request: Request):
+    auth = _get_auth_from_request(request)
+    roles = auth.get("roles") if auth else []
+    impersonator = auth.get("impersonator") if auth else None
+    impersonator_roles = impersonator.get("roles") if impersonator else []
+    if (not roles or "full" not in roles) and (not impersonator_roles or "full" not in impersonator_roles):
+        return Response("Forbidden", status_code=403)
+
+    error = None
+    success = None
+    impersonator = request.session.get("impersonator")
+    current_auth = request.session.get("auth")
+
+    if request.method == "POST":
+        form = await request.form()
+        action = form.get("action", "start")
+        if action == "stop":
+            if impersonator:
+                request.session["auth"] = impersonator
+                request.session.pop("impersonator", None)
+                success = "Impersonation stopped."
+            else:
+                error = "Not currently impersonating."
+        else:
+            email = (form.get("email") or "").strip()
+            if not email:
+                error = "Email is required."
+            else:
+                if not impersonator:
+                    request.session["impersonator"] = current_auth
+                imp_auth = {
+                    "provider": "impersonate",
+                    "email": email,
+                    "username": email,
+                }
+                if request.session.get("impersonator"):
+                    imp_auth["impersonator"] = request.session.get("impersonator")
+                imp_auth["roles"] = _resolve_roles(imp_auth)
+                request.session["auth"] = imp_auth
+                success = f"Now impersonating {email}."
+
+    impersonating_email = None
+    if impersonator and current_auth and current_auth.get("provider") == "impersonate":
+        impersonating_email = current_auth.get("email") or current_auth.get("username")
+
+    content = Div(
+        H1("Impersonate User", cls="text-3xl font-bold"),
+        P("Switch the current session to a different user for RBAC testing.", cls="text-slate-600 dark:text-slate-400"),
+        Div(
+            P(error, cls="text-red-600") if error else None,
+            P(success, cls="text-emerald-600") if success else None,
+            cls="mt-4"
+        ),
+        Div(
+            P(f"Currently impersonating: {impersonating_email}", cls="text-sm text-amber-600 dark:text-amber-400") if impersonating_email else None,
+            cls="mt-2"
+        ),
+        Form(
+            Div(
+                Label("User email", cls="block text-sm font-medium mb-2"),
+                Input(type="email", name="email", placeholder="user@domain.com", cls="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60"),
+                cls="mt-6"
+            ),
+            Div(
+                Button("Start Impersonation", type="submit", name="action", value="start", cls="mt-6 px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"),
+                Button("Stop Impersonation", type="submit", name="action", value="stop", cls="mt-6 ml-3 px-4 py-2 rounded-md bg-slate-200 text-slate-900 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"),
+                cls="flex items-center"
+            ),
+            method="post",
+            cls="mt-4"
+        ),
+        cls="max-w-xl mx-auto py-10 px-6"
+    )
+    return layout(content, htmx=htmx, title="Impersonate", show_sidebar=False, auth=auth, htmx_nav=False)
+
 @rt("/admin/rbac", methods=["GET", "POST"])
 async def admin_rbac(htmx, request: Request):
     auth = _get_auth_from_request(request)
@@ -1615,7 +1691,7 @@ async def admin_rbac(htmx, request: Request):
         ),
         cls="max-w-3xl mx-auto py-10 px-6"
     )
-    return layout(content, htmx=htmx, title="RBAC Admin", show_sidebar=False, auth=auth)
+    return layout(content, htmx=htmx, title="RBAC Admin", show_sidebar=False, auth=auth, htmx_nav=False)
 
 # Progressive sidebar loading: lazy posts sidebar endpoint
 @rt("/_sidebar/posts")
@@ -1734,16 +1810,21 @@ def theme_toggle():
     return Button(UkIcon("moon", cls="dark:hidden"), UkIcon("sun", cls="hidden dark:block"), 
                   _=theme_script, cls="p-1 hover:scale-110 shadow-none", type="button")
 
-def navbar(show_mobile_menus=False):
+def navbar(show_mobile_menus=False, htmx_nav=True):
     """Navbar with mobile menu buttons for file tree and TOC"""
+    home_link_attrs = {}
+    if htmx_nav:
+        home_link_attrs = {
+            "hx_get": "/",
+            "hx_target": "#main-content",
+            "hx_push_url": "true",
+            "hx_swap": "outerHTML show:window:top settle:0.1s",
+        }
     left_section = Div(
         A(
             get_blog_title(),
             href="/",
-            hx_get="/",
-            hx_target="#main-content",
-            hx_push_url="true",
-            hx_swap="outerHTML show:window:top settle:0.1s"
+            **home_link_attrs
         ),
         cls="flex items-center gap-2"
     )
@@ -2101,7 +2182,7 @@ def get_custom_css_links(current_path=None, section_class=None):
     
     return css_elements
 
-def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True, auth=None):
+def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True, auth=None, htmx_nav=True):
     import time
     layout_start_time = time.time()
     logger.debug("[LAYOUT] layout() start")
@@ -2116,8 +2197,13 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
     def _footer_node(outer_cls, outer_style):
         logout_button = None
         if auth:
+            display_name = auth.get("name") or auth.get("email") or auth.get("username") or "User"
+            impersonator = auth.get("impersonator")
+            if impersonator:
+                original = impersonator.get("name") or impersonator.get("email") or impersonator.get("username") or "User"
+                display_name = f"Impersonating {display_name} (as {original})"
             logout_button = A(
-                "Logout",
+                f"Logout {display_name}",
                 href="/logout",
                 cls="text-sm text-white/80 hover:text-white underline"
             )
@@ -2349,7 +2435,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         # Layout with sidebar for blog posts
         body_content = Div(id="page-container", cls="flex flex-col min-h-screen")(
             Div(
-                navbar(show_mobile_menus=True),
+                navbar(show_mobile_menus=True, htmx_nav=htmx_nav),
                 cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-50 mt-4".strip(),
                 id="site-navbar",
                 **_style_attr(layout_max_style)
@@ -2367,7 +2453,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         custom_css_links = get_custom_css_links(current_path, section_class) if current_path else []
         body_content = Div(id="page-container", cls="flex flex-col min-h-screen")(
             Div(
-                navbar(),
+                navbar(htmx_nav=htmx_nav),
                 cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-50 mt-4".strip(),
                 id="site-navbar",
                 **_style_attr(layout_max_style)
