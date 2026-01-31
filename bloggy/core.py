@@ -2263,51 +2263,22 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
             t_css = time.time()
             logger.debug(f"[LAYOUT] Custom CSS resolved in {(t_css - t_toc)*1000:.2f}ms")
 
-            main_content_container = Main(*content, cls=f"flex-1 min-w-0 px-6 py-8 space-y-8 {section_class}", id="main-content")
+            main_content_container = Main(
+                *content,
+                cls=f"flex-1 min-w-0 px-6 py-8 space-y-8 {section_class}",
+                id="main-content",
+                hx_boost="true",
+                hx_target="#main-content",
+                hx_swap="outerHTML show:window:top settle:0.1s",
+            )
             t_main = time.time()
             logger.debug(f"[LAYOUT] Main content container built in {(t_main - t_css)*1000:.2f}ms")
-
-            roles = _get_roles_from_auth(auth)
-            roles_key = tuple(roles or [])
-            posts_sidebar = Aside(
-                Div(
-                    UkIcon("loader", cls="w-5 h-5 animate-spin"),
-                    Span("Loading posts…", cls="ml-2 text-sm"),
-                    cls="flex items-center justify-center h-32 text-slate-400"
-                ),
-                cls="hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
-                id="posts-sidebar",
-                hx_get="/_sidebar/posts",
-                hx_trigger="load",
-                hx_swap="outerHTML",
-                hx_swap_oob="true"
-            )
-            mobile_posts_panel = Div(
-                Div(
-                    Button(
-                        UkIcon("x", cls="w-5 h-5"),
-                        id="close-mobile-posts",
-                        cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto",
-                        type="button"
-                    ),
-                    cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
-                ),
-                Div(
-                    NotStr(_cached_posts_sidebar_html(_posts_sidebar_fingerprint(), roles_key)),
-                    cls="p-4 overflow-y-auto"
-                ),
-                id="mobile-posts-panel",
-                cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] xl:hidden transform -translate-x-full transition-transform duration-300",
-                hx_swap_oob="true"
-            )
 
             result = [Title(title)]
             if custom_css_links:
                 result.append(Div(*custom_css_links, id="scoped-css-container", hx_swap_oob="true"))
             else:
                 result.append(Div(id="scoped-css-container", hx_swap_oob="true"))
-            result.append(posts_sidebar)
-            result.append(mobile_posts_panel)
             if show_toc:
                 result.append(mobile_toc_panel)
             if toc_sidebar:
@@ -2364,7 +2335,14 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         custom_css_links = get_custom_css_links(current_path, section_class)
         t_css = time.time()
         logger.debug(f"[LAYOUT] Custom CSS resolved in {(t_css - t_toc)*1000:.2f}ms")
-        main_content_container = Main(*content, cls=f"flex-1 min-w-0 px-6 py-8 space-y-8 {section_class}", id="main-content")
+        main_content_container = Main(
+            *content,
+            cls=f"flex-1 min-w-0 px-6 py-8 space-y-8 {section_class}",
+            id="main-content",
+            hx_boost="true",
+            hx_target="#main-content",
+            hx_swap="outerHTML show:window:top settle:0.1s",
+        )
         t_main = time.time()
         logger.debug(f"[LAYOUT] Main content container built in {(t_main - t_css)*1000:.2f}ms")
         # Mobile overlay panels for posts and TOC
@@ -2462,6 +2440,9 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 *content,
                 cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 py-8 space-y-8".strip(),
                 id="main-content",
+                hx_boost="true",
+                hx_target="#main-content",
+                hx_swap="outerHTML show:window:top settle:0.1s",
                 **_style_attr(layout_max_style)
             ),
             _footer_node(
