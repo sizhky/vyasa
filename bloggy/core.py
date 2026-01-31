@@ -1047,6 +1047,34 @@ def _normalize_auth(auth):
         return auth
     return {"provider": "local", "username": str(auth)}
 
+def _get_auth_from_request(request):
+    if not request:
+        return None
+    auth = None
+    try:
+        auth = request.scope.get("auth")
+    except Exception:
+        auth = None
+    if not auth:
+        try:
+            auth = request.session.get("auth")
+        except Exception:
+            auth = None
+    auth = _normalize_auth(auth) if auth else None
+    if auth and _rbac_rules:
+        auth["roles"] = auth.get("roles") or _resolve_roles(auth)
+    return auth
+
+def _get_roles_from_request(request):
+    auth = _get_auth_from_request(request)
+    return auth.get("roles") if auth else []
+
+def _get_roles_from_auth(auth):
+    auth = _normalize_auth(auth) if auth else None
+    if auth and _rbac_rules:
+        auth["roles"] = auth.get("roles") or _resolve_roles(auth)
+    return auth.get("roles") if auth else []
+
 def _resolve_roles(auth):
     auth = _normalize_auth(auth) or {}
     username = auth.get("username")
@@ -1236,7 +1264,7 @@ async def login(request: Request):
         A(
             Span("Continue with Google", cls="text-sm font-semibold"),
             href="/login/google",
-            cls="inline-flex items-center justify-center w-full px-4 py-2 mb-4 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors"
+            cls="inline-flex items-center justify-center px-4 py-2 my-6 rounded-md border border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-900 hover:border-slate-900 dark:bg-slate-800/80 dark:text-slate-100 dark:hover:bg-slate-900/80 transition-colors max-w-sm mx-auto"
         ) if _google_oauth_enabled else None,
         Form(
             Div(
@@ -1317,8 +1345,9 @@ async def logout(request: Request):
 
 # Progressive sidebar loading: lazy posts sidebar endpoint
 @rt("/_sidebar/posts")
-def posts_sidebar_lazy():
-    html = _cached_posts_sidebar_html(_posts_sidebar_fingerprint())
+def posts_sidebar_lazy(request: Request = None):
+    roles = _get_roles_from_request(request)
+    html = _cached_posts_sidebar_html(_posts_sidebar_fingerprint(), tuple(roles or []))
     return Aside(
         NotStr(html),
         cls="hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
@@ -1338,6 +1367,15 @@ def serve_post_markdown(path: str):
 def gather_search_results(htmx, q: str = "", request: Request = None):
     import html
     matches, regex_error = _find_search_matches(q, limit=200)
+    roles = _get_roles_from_request(request)
+    if roles is not None:
+        root = get_root_folder()
+        filtered = []
+        for item in matches:
+            slug = item.relative_to(root).with_suffix("")
+            if _is_allowed(f"/posts/{slug}", roles or []):
+                filtered.append(item)
+        matches = filtered
     if not matches:
         content = Div(
             H1("Search Results", cls="text-3xl font-bold mb-6"),
@@ -1530,7 +1568,7 @@ def _find_search_matches_uncached(query, limit=40):
                 break
     return tuple(results), regex_error
 
-def _render_posts_search_results(query):
+def _render_posts_search_results(query, roles=None):
     trimmed = (query or "").strip()
     if not trimmed:
         return Ul(
@@ -1539,6 +1577,14 @@ def _render_posts_search_results(query):
         )
 
     matches, regex_error = _find_search_matches(trimmed)
+    if roles is not None:
+        root = get_root_folder()
+        filtered = []
+        for item in matches:
+            slug = item.relative_to(root).with_suffix("")
+            if _is_allowed(f"/posts/{slug}", roles or []):
+                filtered.append(item)
+        matches = filtered
     if not matches:
         return Ul(
             Li(f'No matches for "{trimmed}".', cls="text-xs text-slate-500 dark:text-slate-400 bg-transparent"),
@@ -1616,13 +1662,13 @@ def _posts_search_block():
         cls="posts-search-block sticky top-0 z-10 bg-white/20 dark:bg-slate-950/70 mb-3"
     )
 
-@lru_cache(maxsize=1)
-def _cached_posts_sidebar_html(fingerprint):
+@lru_cache(maxsize=4)
+def _cached_posts_sidebar_html(fingerprint, roles_key):
     sidebars_open = get_config().get_sidebars_open()
     sidebar = collapsible_sidebar(
         "menu",
         "Library",
-        get_posts(),
+        get_posts(list(roles_key) if roles_key else []),
         is_open=sidebars_open,
         data_sidebar="posts",
         shortcut_key="Z",
@@ -1637,8 +1683,8 @@ def _cached_posts_sidebar_html(fingerprint):
 
 def _preload_posts_cache():
     try:
-        _cached_build_post_tree(_posts_tree_fingerprint())
-        _cached_posts_sidebar_html(_posts_sidebar_fingerprint())
+        _cached_build_post_tree(_posts_tree_fingerprint(), ())
+        _cached_posts_sidebar_html(_posts_sidebar_fingerprint(), ())
         logger.info("Preloaded posts sidebar cache.")
     except Exception as exc:
         logger.warning(f"Failed to preload posts sidebar cache: {exc}")
@@ -1696,8 +1742,9 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
     )
 
 @rt("/_sidebar/posts/search")
-def posts_sidebar_search(q: str = ""):
-    return _render_posts_search_results(q)
+def posts_sidebar_search(q: str = "", request: Request = None):
+    roles = _get_roles_from_request(request)
+    return _render_posts_search_results(q, roles=roles)
 
 def is_active_toc_item(anchor):
     """Check if a TOC item is currently active based on URL hash"""
@@ -1905,6 +1952,8 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         t_main = time.time()
         logger.debug(f"[LAYOUT] Main content container built in {(t_main - t_css)*1000:.2f}ms")
         # Mobile overlay panels for posts and TOC
+        roles = _get_roles_from_auth(auth)
+        roles_key = tuple(roles or [])
         mobile_posts_panel = Div(
             Div(
                 Button(
@@ -1916,7 +1965,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
             ),
             Div(
-                NotStr(_cached_posts_sidebar_html(_posts_sidebar_fingerprint())),
+                NotStr(_cached_posts_sidebar_html(_posts_sidebar_fingerprint(), roles_key)),
                 cls="p-4 overflow-y-auto"
             ),
             id="mobile-posts-panel",
@@ -2021,7 +2070,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
     logger.debug(f"[LAYOUT] FULL PAGE assembled in {(t_end - layout_start_time)*1000:.2f}ms")
     return tuple(result)
 
-def build_post_tree(folder):
+def build_post_tree(folder, roles=None):
     import time
     start_time = time.time()
     root = get_root_folder()
@@ -2059,20 +2108,26 @@ def build_post_tree(folder):
     for item in entries:
         if item.is_dir():
             if item.name.startswith('.'): continue
-            sub_items = build_post_tree(item)
+            sub_items = build_post_tree(item, roles=roles)
             folder_title = slug_to_title(item.name, abbreviations=abbreviations)
             note_file = find_folder_note_file(item)
             note_link = None
             note_slug = None
+            note_allowed = False
             if note_file:
                 note_slug = str(note_file.relative_to(root).with_suffix(''))
-                note_link = A(
-                    href=f'/posts/{note_slug}',
-                    hx_get=f'/posts/{note_slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
-                    cls="folder-note-link truncate min-w-0 hover:underline",
-                    title=f"Open {folder_title}",
-                    onclick="event.stopPropagation();",
-                )(folder_title)
+                note_path = f"/posts/{note_slug}"
+                note_allowed = _is_allowed(note_path, roles or [])
+                if note_allowed:
+                    note_link = A(
+                        href=f'/posts/{note_slug}',
+                        hx_get=f'/posts/{note_slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
+                        cls="folder-note-link truncate min-w-0 hover:underline",
+                        title=f"Open {folder_title}",
+                        onclick="event.stopPropagation();",
+                    )(folder_title)
+            if not sub_items and not note_allowed:
+                continue
             title_node = note_link if note_link else Span(folder_title, cls="truncate min-w-0", title=folder_title)
             if sub_items:
                 items.append(Li(Details(
@@ -2083,7 +2138,7 @@ def build_post_tree(folder):
                         cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"),
                     Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"),
                     data_folder="true"), cls="my-1"))
-            elif note_file and note_slug:
+            elif note_allowed and note_slug:
                 title_text = Span(folder_title, cls="truncate min-w-0", title=folder_title)
                 items.append(Li(A(
                     Span(cls="w-4 mr-2 shrink-0"),
@@ -2095,6 +2150,8 @@ def build_post_tree(folder):
                     data_path=note_slug)))
         elif item.suffix == '.md':
             slug = str(item.relative_to(root).with_suffix(''))
+            if not _is_allowed(f"/posts/{slug}", roles or []):
+                continue
             title_start = time.time()
             title = get_post_title(item, abbreviations=abbreviations)
             title_time = (time.time() - title_start) * 1000
@@ -2110,6 +2167,8 @@ def build_post_tree(folder):
                 data_path=slug)))
         elif item.suffix == '.pdf':
             slug = str(item.relative_to(root).with_suffix(''))
+            if not _is_allowed(f"/posts/{slug}", roles or []):
+                continue
             title = slug_to_title(item.stem, abbreviations=abbreviations)
             items.append(Li(A(
                 Span(cls="w-4 mr-2 shrink-0"),
@@ -2134,13 +2193,15 @@ def _posts_tree_fingerprint():
     except Exception:
         return 0
 
-@lru_cache(maxsize=1)
-def _cached_build_post_tree(fingerprint):
-    return build_post_tree(get_root_folder())
+@lru_cache(maxsize=4)
+def _cached_build_post_tree(fingerprint, roles_key):
+    roles = list(roles_key) if roles_key else []
+    return build_post_tree(get_root_folder(), roles=roles)
 
-def get_posts():
+def get_posts(roles=None):
     fingerprint = _posts_tree_fingerprint()
-    return _cached_build_post_tree(fingerprint)
+    roles_key = tuple(roles or [])
+    return _cached_build_post_tree(fingerprint, roles_key)
 
 def not_found(htmx=None, auth=None):
     """Custom 404 error page"""
