@@ -344,6 +344,14 @@ def find_folder_note_file(folder: Path) -> Path | None:
                 readme_file = item
             elif stem == folder_name:
                 named_file = item
-        return index_file or readme_file or named_file
+        result = index_file or readme_file or named_file
+        if folder_name == "demo":
+            import sys
+            print(f"[FOLDER NOTE DEBUG] Checking folder '{folder.name}' (normalized: '{folder_name}')", file=sys.stderr)
+            print(f"[FOLDER NOTE DEBUG]   index_file: {index_file}", file=sys.stderr)
+            print(f"[FOLDER NOTE DEBUG]   readme_file: {readme_file}", file=sys.stderr)
+            print(f"[FOLDER NOTE DEBUG]   named_file: {named_file}", file=sys.stderr)
+            print(f"[FOLDER NOTE DEBUG]   result: {result}", file=sys.stderr)
+        return result
     except OSError:
         return None
