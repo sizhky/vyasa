@@ -7,9 +7,9 @@ title: Bloggy
 </p>
 
 <p class="bloggy-caption" style="text-align: center;">
-  Markdown lovers write<br>
-  Python roots, JavaScript sparks<br>
-  Styles without limits
+  Markdown feeds Python<br>
+  Instant sites, no code juggling<br>
+  CSS reigns supreme
 </p>
 
 
