@@ -48,6 +48,56 @@ Simple by default. Infinitely customizable for CSS lovers.[^1]
 
 ## Key Features
 
+```mermaid
+mindmap
+  root((🚀 Bloggy Features))
+    📝 Markdown
+      Footnotes as Sidenotes
+      YouTube Embeds
+      Task Lists
+      Math Notation
+      Superscript & Subscript
+      Strikethrough
+      Relative Links
+      Plain-Text Headings
+      Pandoc-style Attributes
+      Title Abbreviations
+      Folder Notes
+    🎨 Interactive Elements
+      Mermaid Diagrams
+        Flowcharts
+        Sequence Diagrams
+        State Diagrams
+        Gantt Charts
+      Interactive Diagrams
+        Zoom & Pan
+        Fullscreen Mode
+        Dark Mode Support
+        Auto-scaling
+      Tabbed Content
+      Custom CSS Cascade
+     UI/UX
+      Responsive Design
+      Dark Mode
+      Three-Panel Layout
+      HTMX Navigation
+      Collapsible Folders
+      Sidebar Search
+      Auto-Generated TOC
+      Mobile Menus
+      Sticky Navigation
+      Active Link Highlighting
+      PDF Support
+      Copy Button
+    ⚙️ Technical
+      FastHTML Foundation
+      Configuration File Support
+      CLI Arguments
+      Environment Variables
+      Security & Auth
+      Advanced Customization
+```
+
 ### ✨ Advanced Markdown Features
 - **Footnotes as Sidenotes**: `[^1]` references become elegant margin notes on desktop, expandable on mobile with smooth animations
 - **YouTube Embeds**: Use `[yt:VIDEO_ID]` or `[yt:VIDEO_ID|Caption]` for responsive iframe cards with aspect-ratio containers
