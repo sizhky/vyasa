@@ -16,7 +16,7 @@ Missing posts render a friendly 404 page with links back into the sidebar.
 
 ## Performance
 
-Bloggy logs render timings to `/tmp/bloggy_core.log` for profiling.
+Vyasa logs render timings to `/tmp/vyasa_core.log` for profiling.
 
 ### 🚀 Technical Highlights
 - Built on **FastHTML** for modern Python web development with integrated HTMX
@@ -28,7 +28,7 @@ Bloggy logs render timings to `/tmp/bloggy_core.log` for profiling.
 - **Smart Link Resolution**: Automatically converts relative links to proper routes with HTMX attributes
 - **Frontmatter Caching**: LRU cache for parsed frontmatter based on file modification time
 - **Lazy Sidebar Loading**: Posts sidebar loaded progressively via HTMX endpoint for faster initial load
-- **Performance Logging**: Debug-level logging tracks render times and bottlenecks to `/tmp/bloggy_core.log`
+- **Performance Logging**: Debug-level logging tracks render times and bottlenecks to `/tmp/vyasa_core.log`
 - **Custom 404 Page**: Elegant error page with navigation options and helpful tips
 - **Static File Serving**: Serves images and assets from blog directories via `/posts/{path}.{ext}` routes
 - **Raw Markdown Access**: Append `.md` to any post URL (e.g. `/posts/demo.md`) to fetch source content
@@ -82,7 +82,7 @@ Bloggy logs render timings to `/tmp/bloggy_core.log` for profiling.
 
 ### Logging & Debugging
 - **Loguru**: Two handlers - stdout (INFO+) and file (DEBUG+)
-- **Log file**: `/tmp/bloggy_core.log` with 10 MB rotation, 10 days retention
+- **Log file**: `/tmp/vyasa_core.log` with 10 MB rotation, 10 days retention
 - **Performance tracking**: `time.time()` checkpoints throughout request handling
 - **Debug groups**: `console.group()` in JavaScript for Mermaid operations
 - **Request markers**: `########## REQUEST START/COMPLETE ##########` for easy grepping
@@ -101,14 +101,14 @@ Bloggy logs render timings to `/tmp/bloggy_core.log` for profiling.
 ## Advanced Features
 
 ### Index/README Files
-Place an `index.md` or `README.md` (case-insensitive) in your blog root directory to customize the home page. If neither exists, Bloggy shows a default welcome message. The index file:
+Place an `index.md` or `README.md` (case-insensitive) in your blog root directory to customize the home page. If neither exists, Vyasa shows a default welcome message. The index file:
 - Takes precedence over README if both exist
 - Renders with full sidebar and TOC support
 - Uses the file's frontmatter `title` or blog title as page title
 - Supports all markdown features (tabs, diagrams, footnotes, etc.)
 
 ### Smart 404 Page
-When a route doesn't exist, Bloggy shows a custom 404 page with:
+When a route doesn't exist, Vyasa shows a custom 404 page with:
 - Large "404" heading in gray
 - Helpful error message explaining the situation
 - Action buttons: "Go to Home" and "Go Back" with icons

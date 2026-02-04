@@ -1,12 +1,12 @@
 ---
-title: Bloggy
+title: Vyasa
 ---
 
 <p align="center">
-  <img src="static/icon.png" alt="Bloggy icon" class="bloggy-icon" style="width: 256px;">
+  <img src="static/icon.png" alt="Vyasa icon" class="vyasa-icon" style="width: 256px;">
 </p>
 
-<p class="bloggy-caption" style="text-align: center;">
+<p class="vyasa-caption" style="text-align: center;">
   Markdown feeds Python<br>
   Instant sites, no code juggling<br>
   CSS reigns supreme
@@ -15,17 +15,17 @@ title: Bloggy
 
 ---
 
-Bloggy is a Python-first blogging platform designed to turn your Markdown files into a fully-featured website in seconds. Write your content in clean, simple Markdown—no boilerplate, no configuration hassles—and watch your site come alive instantly. Whether you're a minimalist who wants it just to work or a CSS enthusiast ready to craft pixel-perfect designs, Bloggy adapts to your needs. Start with zero configuration and customize every pixel when you're ready.[^1]
+Vyasa is a Python-first blogging platform designed to turn your Markdown files into a fully-featured website in seconds. Write your content in clean, simple Markdown—no boilerplate, no configuration hassles—and watch your site come alive instantly. Whether you're a minimalist who wants it just to work or a CSS enthusiast ready to craft pixel-perfect designs, Vyasa adapts to your needs. Start with zero configuration and customize every pixel when you're ready.[^1]
 
-[^1]: If you're curious about how the intro was styled, [visit this page](https://github.com/sizhky/bloggy/blob/fa9a671931ad69b24139ba9d105bbadd8753b85b/custom.css#L36C1-L36C13).<br>
-    Check out the [Theming & CSS](bloggy%20manual/theming.md) guide for details on customizing your blog's appearance.
+[^1]: If you're curious about how the intro was styled, [visit this page](https://github.com/sizhky/vyasa/blob/fa9a671931ad69b24139ba9d105bbadd8753b85b/custom.css#L36C1-L36C13).<br>
+    Check out the [Theming & CSS](vyasa%20manual/theming.md) guide for details on customizing your blog's appearance.
 
 ---
 
 ## Quick Start
-1. Install Bloggy:
+1. Install Vyasa:
    ```bash
-   pip install bloggy
+   pip install vyasa
    ```
 
 2. Create a directory with your markdown files:
@@ -37,9 +37,9 @@ Bloggy is a Python-first blogging platform designed to turn your Markdown files 
    echo "# My First Post\nThis is a sample blog post." > posts/first-post.md
    ```
 
-3. Run Bloggy:
+3. Run Vyasa:
    ```bash
-   bloggy .
+   vyasa .
    ```
 
 4. Open your browser at `http://127.0.0.1:5001`
@@ -49,7 +49,7 @@ Bloggy is a Python-first blogging platform designed to turn your Markdown files 
 
 ```mermaid
 mindmap
-  root((🚀 Bloggy Features))
+  root((🚀 Vyasa Features))
     📝 Markdown
       Footnotes as Sidenotes
       YouTube Embeds
@@ -118,10 +118,10 @@ mindmap
 - **Strikethrough**: Use `~~text~~` for strikethrough formatting
 - **Pandoc-style Attributes**: Add classes to inline text with `` `text`{.class #id} `` syntax for semantic markup (renders as `<span>` tags, not `<code>`)
 - **Cascading Custom CSS**: Add `custom.css` or `style.css` files at multiple levels (root, folders) with automatic scoping
-- **Title Abbreviations**: Configure `.bloggy` `abbreviations` to force uppercase acronyms in sidebar and slug-based titles (e.g., `ai-features` $\to$ `AI Features`)
+- **Title Abbreviations**: Configure `.vyasa` `abbreviations` to force uppercase acronyms in sidebar and slug-based titles (e.g., `ai-features` $\to$ `AI Features`)
 - **Folder Notes**: `index.md`, `README.md`, or `<folder>.md` can act as a folder summary; clicking the folder name opens it
 
-See the full list in [Markdown Writing Features](bloggy%20manual/markdown-features.md).
+See the full list in [Markdown Writing Features](vyasa%20manual/markdown-features.md).
 
 ### 🎨 Modern UI
 - **Responsive Design**: Works beautifully on all screen sizes with mobile-first approach
@@ -153,34 +153,34 @@ See the full list in [Markdown Writing Features](bloggy%20manual/markdown-featur
 ### From PyPI (recommended)
 
 ```bash
-pip install bloggy
+pip install vyasa
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/yeshwanth/bloggy.git
-cd bloggy
+git clone https://github.com/yeshwanth/vyasa.git
+cd vyasa
 pip install -e .
 ```
 
 ## Configuration
 
-Bloggy supports four ways to configure your blog (in priority order):
+Vyasa supports four ways to configure your blog (in priority order):
 
-1. cli arguments (e.g. `bloggy /path/to/markdown`) - Highest priority
-1. **[`.bloggy` configuration file](bloggy%20manual/configuration.md)** (TOML format)
+1. cli arguments (e.g. `vyasa /path/to/markdown`) - Highest priority
+1. **[`.vyasa` configuration file](vyasa%20manual/configuration.md)** (TOML format)
 2. **Environment variables** - Fallback
 3. **Default values** - Final fallback
 
-## Bloggy Manual
+## Vyasa Manual
 
 Short, focused guides for deeper topics. Start with configuration and writing content, then dive into architecture and advanced details.
 
-- [Configuration & CLI](bloggy%20manual/configuration.md)
-- [Markdown Writing Features](bloggy%20manual/markdown-features.md)
-- [Mermaid Diagrams](bloggy%20manual/mermaid-diagrams.md)
-- [Architecture Overview](bloggy%20manual/architecture.md)
-- [Theming & CSS](bloggy%20manual/theming.md)
-- [Security & Auth](bloggy%20manual/security.md)
-- [Advanced Behavior](bloggy%20manual/advanced.md)
+- [Configuration & CLI](vyasa%20manual/configuration.md)
+- [Markdown Writing Features](vyasa%20manual/markdown-features.md)
+- [Mermaid Diagrams](vyasa%20manual/mermaid-diagrams.md)
+- [Architecture Overview](vyasa%20manual/architecture.md)
+- [Theming & CSS](vyasa%20manual/theming.md)
+- [Security & Auth](vyasa%20manual/security.md)
+- [Advanced Behavior](vyasa%20manual/advanced.md)

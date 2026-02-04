@@ -26,17 +26,17 @@ python -m build
 ```
 
 This creates:
-- `dist/bloggy-0.1.0-py3-none-any.whl` (wheel)
-- `dist/bloggy-0.1.0.tar.gz` (source distribution)
+- `dist/vyasa-0.1.0-py3-none-any.whl` (wheel)
+- `dist/vyasa-0.1.0.tar.gz` (source distribution)
 
 ## Test Locally
 
 ```bash
 # Install from the wheel
-pip install dist/bloggy-0.1.0-py3-none-any.whl
+pip install dist/vyasa-0.1.0-py3-none-any.whl
 
 # Test the CLI
-bloggy demo/
+vyasa demo/
 ```
 
 ## Publish to TestPyPI (recommended first)
@@ -47,7 +47,7 @@ python -m twine upload --repository testpypi dist/*
 
 Test installation from TestPyPI:
 ```bash
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ bloggy
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ vyasa
 ```
 
 ## Publish to PyPI
@@ -68,7 +68,7 @@ git push origin v0.1.0
 
 3. Test installation:
 ```bash
-pip install bloggy
+pip install vyasa
 ```
 
 ## Updating the Package
@@ -76,7 +76,7 @@ pip install bloggy
 1. Update version in:
    - `pyproject.toml`
    - `settings.ini`
-   - `bloggy/__init__.py`
+   - `vyasa/__init__.py`
 
 2. Update CHANGELOG.md
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Version bumping script for bloggy"""
+"""Version bumping script for vyasa"""
 import re
 import sys
 
 def bump_version(bump_type='patch'):
     """Bump version in all relevant files"""
-    files = ['pyproject.toml', 'bloggy/__init__.py', 'settings.ini']
+    files = ['pyproject.toml', 'vyasa/__init__.py', 'settings.ini']
     
     for filepath in files:
         try:

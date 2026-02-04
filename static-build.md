@@ -1,6 +1,6 @@
-# Bloggy Static Site Generator
+# Vyasa Static Site Generator
 
-Bloggy now supports generating completely standalone static websites from your markdown files! It's janky and need some polishing, but it works.
+Vyasa now supports generating completely standalone static websites from your markdown files! It's janky and need some polishing, but it works.
 
 ## Usage
 
@@ -8,19 +8,19 @@ Bloggy now supports generating completely standalone static websites from your m
 
 ```bash
 # Build static site from demo directory
-bloggy build demo
+vyasa build demo
 
 # Build to a custom output directory
-bloggy build demo -o my-static-site
+vyasa build demo -o my-static-site
 
 # Build from current directory
-bloggy build
+vyasa build
 ```
 
 ### Python API
 
 ```python
-from bloggy.build import build_static_site
+from vyasa.build import build_static_site
 
 # Build static site
 output_dir = build_static_site(
@@ -37,7 +37,7 @@ The static site generator creates:
    - `index.html` from `index.md` or `README.md` in the root
    - `posts/*.html` for all other markdown files
 
-2. **Static Assets**: Copies from `bloggy/static/`:
+2. **Static Assets**: Copies from `vyasa/static/`:
    - `sidenote.css` - Sidenote styling
    - `scripts.js` - Interactive features (Mermaid zoom/pan)
    - `favicon.png` - Site icon
@@ -49,7 +49,7 @@ The static site generator creates:
 
 ## Features Preserved
 
-All bloggy features work in the static site:
+All vyasa features work in the static site:
 
 - ✅ **Sidenotes/Footnotes**: Interactive margin notes
 - ✅ **Mermaid Diagrams**: With zoom/pan/reset controls
@@ -80,7 +80,7 @@ All bloggy features work in the static site:
 
 ```bash
 # Build the site
-bloggy build demo -o docs
+vyasa build demo -o docs
 
 # Push to GitHub and enable GitHub Pages from /docs folder
 git add docs
@@ -91,7 +91,7 @@ git push
 ### Netlify
 
 ```bash
-bloggy build demo -o dist
+vyasa build demo -o dist
 # Upload dist/ folder to Netlify
 ```
 
@@ -116,10 +116,10 @@ python -m http.server 8000
 
 ## Configuration
 
-Uses the same `.bloggy` configuration file as server mode:
+Uses the same `.vyasa` configuration file as server mode:
 
 ```toml
-# .bloggy
+# .vyasa
 title = "My Blog"
 host = "127.0.0.1"  # Not used in static mode
 port = 5001         # Not used in static mode
@@ -127,7 +127,7 @@ port = 5001         # Not used in static mode
 
 ## Tips
 
-1. **Preview Before Building**: Use `bloggy demo` to preview your site with hot reload
+1. **Preview Before Building**: Use `vyasa demo` to preview your site with hot reload
 2. **Rebuild After Changes**: Static sites need rebuilding when content changes
 3. **Check Output**: Review `dist/index.html` to verify the build
 4. **Assets Path**: Ensure images use relative paths or are in the static folder
@@ -139,10 +139,10 @@ port = 5001         # Not used in static mode
 vim my-blog/new-post.md
 
 # 2. Preview locally with hot reload
-bloggy my-blog
+vyasa my-blog
 
 # 3. Build static site when ready
-bloggy build my-blog -o site
+vyasa build my-blog -o site
 
 # 4. Deploy
 cd site

@@ -1,16 +1,16 @@
 # Theming & Customization Guide
 
-Use this guide to change **any part** of Bloggy's look and behavior. It covers where to place CSS, how scoping works, which elements to target, and how to change behavior safely.
+Use this guide to change **any part** of Vyasa's look and behavior. It covers where to place CSS, how scoping works, which elements to target, and how to change behavior safely.
 
 ## 1) Where to put your CSS
 
-Bloggy loads custom CSS in this order (later wins):
+Vyasa loads custom CSS in this order (later wins):
 
 1. **Framework CSS** (bundled in the app)
 2. **Root CSS**: `custom.css` or `style.css` at your **blog root**
 3. **Folder CSS**: `custom.css` or `style.css` inside a folder (scoped to that folder)
 
-Your **blog root** is determined by `BLOGGY_ROOT` or a `.bloggy` config file. If neither is set, Bloggy uses the current working directory.
+Your **blog root** is determined by `VYASA_ROOT` or a `.vyasa` config file. If neither is set, Vyasa uses the current working directory.
 
 ### Root-level CSS (site-wide)
 Create or edit:
@@ -23,13 +23,13 @@ This applies everywhere.
 ### Folder-level CSS (scoped)
 Place a `custom.css` or `style.css` in any content folder to style just that folder (and its subfolders).
 
-Bloggy wraps that CSS inside a scoped selector:
+Vyasa wraps that CSS inside a scoped selector:
 
 ```
 #main-content.section-your-folder { ... }
 ```
 
-This uses **CSS nesting**. Modern browsers support this. You can write normal selectors inside your folder CSS and Bloggy will nest them under the correct section automatically.
+This uses **CSS nesting**. Modern browsers support this. You can write normal selectors inside your folder CSS and Vyasa will nest them under the correct section automatically.
 
 ## 2) How to find the section scope class
 
@@ -51,7 +51,7 @@ Use these ids/classes to style specific elements.
 If an element isn't listed here, you can find its selector quickly:
 
 1. **Use DevTools first**: right‑click the element → *Inspect* → note the `id` or classes on the highlighted node.
-2. **Search in source**: open `bloggy/core.py` (live app) and `bloggy/build.py` (static build), then search for the element’s text or a nearby class name.
+2. **Search in source**: open `vyasa/core.py` (live app) and `vyasa/build.py` (static build), then search for the element’s text or a nearby class name.
 3. **Search for ids/classes**: in the repo, run a text search for the class or id you saw in DevTools.
 4. **Follow the builder**: most markup is created in `layout()` or `navbar()`; those functions assemble the page chrome and are the easiest places to trace where a class or id is set.
 5. **Look for generated HTML**: if the element is created from Markdown, check render functions like `render_footnote_ref()` and the tab/mermaid helpers in `core.py`.
@@ -301,8 +301,8 @@ For behavior changes (animations, interactions, logic), you have two options:
 ### Option A: Custom JS
 Edit:
 
-- `bloggy/static/scripts.js` for live app
-- `bloggy/build.py` (static build) if you need it in static exports
+- `vyasa/static/scripts.js` for live app
+- `vyasa/build.py` (static build) if you need it in static exports
 
 ### Option B: Inline HTML/JS in Markdown
 If you need per-post behavior, you can embed raw HTML in markdown:
@@ -318,9 +318,9 @@ If you need per-post behavior, you can embed raw HTML in markdown:
 
 If you want to move elements or change layout, edit these functions:
 
-- `bloggy/core.py::navbar()` for the header markup
-- `bloggy/core.py::layout()` for page structure and sidebars
-- `bloggy/build.py::static_layout()` for static builds
+- `vyasa/core.py::navbar()` for the header markup
+- `vyasa/core.py::layout()` for page structure and sidebars
+- `vyasa/build.py::static_layout()` for static builds
 
 ## 14) Troubleshooting
 
@@ -333,4 +333,4 @@ If your styles don't apply:
 
 ---
 
-You now have full control of Bloggy's look and behavior. Start global, then layer scoped CSS for sections, then override specific elements by id/class as needed.
+You now have full control of Vyasa's look and behavior. Start global, then layer scoped CSS for sections, then override specific elements by id/class as needed.

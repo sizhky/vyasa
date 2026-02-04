@@ -2,12 +2,12 @@ import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.mi
 
 const mermaidStates = {};
 const mermaidDebugEnabled = () => (
-    window.BLOGGY_DEBUG_MERMAID === true ||
-    localStorage.getItem('bloggyDebugMermaid') === '1'
+    window.VYASA_DEBUG_MERMAID === true ||
+    localStorage.getItem('vyasaDebugMermaid') === '1'
 );
 const mermaidDebugLog = (...args) => {
     if (mermaidDebugEnabled()) {
-        console.log('[bloggy][mermaid]', ...args);
+        console.log('[vyasa][mermaid]', ...args);
     }
 };
 const mermaidDebugSnapshot = (label) => {
@@ -730,8 +730,8 @@ function initPostsSearchPersistence(rootElement = document) {
         return;
     }
     input.dataset.searchPersistenceBound = 'true';
-    const termKey = 'bloggy:postsSearchTerm';
-    const resultsKey = 'bloggy:postsSearchResults';
+    const termKey = 'vyasa:postsSearchTerm';
+    const resultsKey = 'vyasa:postsSearchResults';
     const enhanceGatherLink = () => {
         const gatherLink = results.querySelector('a[href^="/search/gather"]');
         if (!gatherLink) {
@@ -849,8 +849,8 @@ function initSearchClearButtons(rootElement = document) {
                 results.innerHTML = '';
             }
             try {
-                localStorage.removeItem('bloggy:postsSearchTerm');
-                localStorage.removeItem('bloggy:postsSearchResults');
+                localStorage.removeItem('vyasa:postsSearchTerm');
+                localStorage.removeItem('vyasa:postsSearchResults');
             } catch (err) {
                 // Ignore storage failures.
             }

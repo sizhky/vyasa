@@ -1,4 +1,4 @@
-"""Static site generator for Bloggy
+"""Static site generator for Vyasa
 
 This module provides functionality to convert a folder of markdown files
 into a standalone static website with HTML, CSS, and JavaScript files.
@@ -15,7 +15,7 @@ from .core import (
     from_md, extract_toc, build_toc_items, text_to_anchor,
     build_post_tree, ContentRenderer, extract_footnotes,
     preprocess_super_sub, preprocess_tabs,
-    get_bloggy_config, order_bloggy_entries, _effective_abbreviations, find_folder_note_file
+    get_vyasa_config, order_vyasa_entries, _effective_abbreviations, find_folder_note_file
 )
 from .config import get_config, reload_config
 
@@ -249,7 +249,7 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
             }, 100);
             
             function replaceEscapedDollarPlaceholders(root) {
-                const placeholder = '@@BLOGGY_DOLLAR@@';
+                const placeholder = '@@VYASA_DOLLAR@@';
                 const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
                 const nodes = [];
                 let node;
@@ -367,7 +367,7 @@ def build_post_tree_static(folder, root_folder):
         entries = []
         folder_note = find_folder_note_file(folder)
         for item in folder.iterdir():
-            if item.name == ".bloggy":
+            if item.name == ".vyasa":
                 continue
             if item.is_dir():
                 if item.name.startswith('.'):
@@ -379,7 +379,7 @@ def build_post_tree_static(folder, root_folder):
                 if index_file and item.resolve() == index_file.resolve():
                     continue
                 entries.append(item)
-        entries = order_bloggy_entries(entries, get_bloggy_config(folder))
+        entries = order_vyasa_entries(entries, get_vyasa_config(folder))
         abbreviations = _effective_abbreviations(root_folder, folder)
     except (OSError, PermissionError): 
         return items
@@ -497,7 +497,7 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     footer = '''
     <footer class="w-full max-w-7xl mx-auto px-6 mt-auto mb-6">
         <div class="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right">
-            Powered by Bloggy
+            Powered by Vyasa
         </div>
     </footer>
     '''
@@ -525,14 +525,14 @@ def build_static_site(input_dir=None, output_dir=None):
     Build a complete static site from markdown files
     
     Args:
-        input_dir: Path to markdown files (defaults to BLOGGY_ROOT or current dir)
+        input_dir: Path to markdown files (defaults to VYASA_ROOT or current dir)
         output_dir: Path to output directory (defaults to ./dist)
     """
     
     # Initialize config
     if input_dir:
         import os
-        os.environ['BLOGGY_ROOT'] = str(Path(input_dir).resolve())
+        os.environ['VYASA_ROOT'] = str(Path(input_dir).resolve())
         reload_config()
     
     config = get_config()

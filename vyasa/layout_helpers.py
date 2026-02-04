@@ -36,5 +36,5 @@ def _style_attr(style_value):
 def _resolve_layout_config(current_path):
     config = get_config()
     return {
-        "layout_max_width": _coerce_config_str(config.get("layout_max_width", "BLOGGY_LAYOUT_MAX_WIDTH", "75vw")),
+        "layout_max_width": _coerce_config_str(config.get("layout_max_width", "VYASA_LAYOUT_MAX_WIDTH", "75vw")),
     }

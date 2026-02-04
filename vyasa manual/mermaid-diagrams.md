@@ -1,4 +1,4 @@
-Bloggy renders Mermaid code blocks with zoom, pan, reset, and fullscreen controls.
+Vyasa renders Mermaid code blocks with zoom, pan, reset, and fullscreen controls.
 
 ## Basic usage
 
@@ -62,13 +62,13 @@ Supported keys:
 - Reset zoom with the Reset button.
 - Fullscreen with the ⛶ button.
 
-The controls are wired to JavaScript functions in `bloggy/static/scripts.js`:
+The controls are wired to JavaScript functions in `vyasa/static/scripts.js`:
 - `openMermaidFullscreen(id)`: Creates modal with close button and ESC key handler
 - `resetMermaidZoom(id)`: Resets transform to `translate(0px, 0px) scale(1)`
 - `zoomMermaidIn(id)` / `zoomMermaidOut(id)`: Adjusts scale by 1.1x / 0.9x factors
 
 ### Scripted Interaction & Resilience
-`bloggy/static/scripts.js` drives the interactive layer with sophisticated features:
+`vyasa/static/scripts.js` drives the interactive layer with sophisticated features:
 
 #### Mermaid Zoom & Pan
 - **Mouse wheel zoom**: Zooms toward cursor position with 1% intensity per wheel event (prevents jarring jumps)
