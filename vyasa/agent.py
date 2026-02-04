@@ -5,7 +5,7 @@ import re
 from urllib.parse import quote
 from pydantic_ai import Agent, RunContext
 from .config import get_config
-from .helpers import list_bloggy_entries
+from .helpers import list_vyasa_entries
 
 try:
     from dotenv import load_dotenv
@@ -19,7 +19,7 @@ try:
 
     logfire.configure(
         environment="development",
-        service_name="bloggy",
+        service_name="vyasa",
     )
     logfire.instrument_pydantic_ai()
 except Exception:
@@ -27,7 +27,7 @@ except Exception:
 
 
 @dataclass
-class BloggyDeps:
+class VyasaDeps:
     root: Path
 
 
@@ -37,25 +37,25 @@ You talk only as much as needed and not a word more.
 You are a helpful AI assistant that helps people find answers from a blog.
 """
 
-bloggy_agent = Agent(
+vyasa_agent = Agent(
     "openai:gpt-5-mini",
-    deps_type=BloggyDeps,
+    deps_type=VyasaDeps,
     system_prompt=system_prompt,
 )
 
 
-@bloggy_agent.tool
-def list_bloggy_posts_tool(
-    ctx: RunContext[BloggyDeps],
+@vyasa_agent.tool
+def list_vyasa_posts_tool(
+    ctx: RunContext[VyasaDeps],
     path: str = ".",
     include_hidden: bool = False,
 ) -> dict:
     """List immediate folders and posts under a path (Use this tool for progressive disclosure)."""
-    return list_bloggy_entries(ctx.deps.root, relative=path, include_hidden=include_hidden)
+    return list_vyasa_entries(ctx.deps.root, relative=path, include_hidden=include_hidden)
 
-@bloggy_agent.tool
-def get_bloggy_post_content_tool(
-    ctx: RunContext[BloggyDeps],
+@vyasa_agent.tool
+def get_vyasa_post_content_tool(
+    ctx: RunContext[VyasaDeps],
     relative_path: str,
 ) -> str:
     """Get the content of a blog post given its relative path from the blog root.
@@ -79,10 +79,10 @@ class PydanticAIStreamingResponder:
     """Streaming responder using Pydantic AI's run_stream."""
 
     def __init__(self, agent=None, agent_deps=None):
-        self.agent = agent if agent is not None else bloggy_agent
+        self.agent = agent if agent is not None else vyasa_agent
         if agent_deps is None:
             config = get_config()
-            agent_deps = BloggyDeps(root=config.get_root_folder())
+            agent_deps = VyasaDeps(root=config.get_root_folder())
         self.agent_deps = agent_deps
         self.message_history = None
 
@@ -90,7 +90,7 @@ class PydanticAIStreamingResponder:
         import asyncio
 
         if self.agent is None:
-            self.agent = bloggy_agent
+            self.agent = vyasa_agent
         if self.agent is None:
             raise RuntimeError("PydanticAI agent is not initialized")
 
@@ -107,7 +107,7 @@ class PydanticAIStreamingResponder:
 
 
 def app_factory():
-    responder = PydanticAIStreamingResponder(agent=bloggy_agent)
+    responder = PydanticAIStreamingResponder(agent=vyasa_agent)
     return create_core_app(
         responder=responder,
         tag_line="PYDANTIC AI",

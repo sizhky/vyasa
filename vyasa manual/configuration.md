@@ -1,38 +1,38 @@
 # Configuration & CLI
 
-This guide centralizes the runtime flags, `.bloggy` settings, and environment variables.
+This guide centralizes the runtime flags, `.vyasa` settings, and environment variables.
 
 ## CLI
 
 ```bash
 # Run on a directory (default port 5001)
-bloggy .
+vyasa .
 
 # Custom host/port
-bloggy . --host 0.0.0.0 --port 8000
+vyasa . --host 0.0.0.0 --port 8000
 
 # Disable auto-reload
-bloggy . --no-reload
+vyasa . --no-reload
 
 # Enable auth
-bloggy . --user admin --password secret
+vyasa . --user admin --password secret
 
 # Build static site
-bloggy build . -o ./dist
+vyasa build . -o ./dist
 ```
 
 ## Configuration
 
-Bloggy supports four ways to configure your blog (in priority order):
+Vyasa supports four ways to configure your blog (in priority order):
 
-1. cli arguments (e.g. `bloggy /path/to/markdown`) - Highest priority
-1. **[`.bloggy` configuration file](#using-a-.bloggy-configuration-file)** (TOML format)
+1. cli arguments (e.g. `vyasa /path/to/markdown`) - Highest priority
+1. **[`.vyasa` configuration file](#using-a-.vyasa-configuration-file)** (TOML format)
 2. **Environment variables** - Fallback
 3. **Default values** - Final fallback
 
-### Using a `.bloggy` Configuration File
+### Using a `.vyasa` Configuration File
 
-Create a `.bloggy` file in your blog directory or current directory:
+Create a `.vyasa` file in your blog directory or current directory:
 
 ```toml
 # Blog title (default: derives from root folder name via slug_to_title)
@@ -63,7 +63,7 @@ allowed_domains = ["example.com"] # optional
 allowed_emails = ["alice@example.com"] # optional
 ```
 
-All settings in the `.bloggy` file are optional. The configuration is managed by the `Config` class in `bloggy/config.py`.
+All settings in the `.vyasa` file are optional. The configuration is managed by the `Config` class in `vyasa/config.py`.
 
 ### Layout Width Configuration
 
@@ -75,7 +75,7 @@ layout_max_width = "90vw"
 
 Environment variable equivalent:
 
-- `BLOGGY_LAYOUT_MAX_WIDTH`
+- `VYASA_LAYOUT_MAX_WIDTH`
 
 Responsive behavior:
 - At viewport widths below `1280px`, layout containers are effectively full width.
@@ -84,7 +84,7 @@ Responsive behavior:
 
 ### Custom Sidebar Ordering
 
-Place a `.bloggy` file in any folder to control the sidebar order for that folder. `.bloggy` uses TOML format. Use `order` to pin items first, then `sort` and `folders_first` for the remainder.
+Place a `.vyasa` file in any folder to control the sidebar order for that folder. `.vyasa` uses TOML format. Use `order` to pin items first, then `sort` and `folders_first` for the remainder.
 
 ```toml
 # Items listed in order are shown first. Use exact names (include extensions).
@@ -104,17 +104,17 @@ Notes:
 
 You can also use environment variables as a fallback:
 
-- `BLOGGY_ROOT`: Path to your markdown files (default: current directory)
-- `BLOGGY_TITLE`: Your blog's title (default: folder name converted via `slug_to_title()`)
-- `BLOGGY_HOST`: Server host (default: 127.0.0.1)
-- `BLOGGY_PORT`: Server port (default: 5001)
-- `BLOGGY_USER`: Optional username to enable session-based authentication
-- `BLOGGY_PASSWORD`: Optional password paired with `BLOGGY_USER`
-- `BLOGGY_AUTH_REQUIRED`: Require login for all routes (true/false)
-- `BLOGGY_GOOGLE_CLIENT_ID`: Google OAuth client id (optional)
-- `BLOGGY_GOOGLE_CLIENT_SECRET`: Google OAuth client secret (optional)
-- `BLOGGY_GOOGLE_ALLOWED_DOMAINS`: Comma-separated allowed email domains (optional)
-- `BLOGGY_GOOGLE_ALLOWED_EMAILS`: Comma-separated allowed emails (optional)
+- `VYASA_ROOT`: Path to your markdown files (default: current directory)
+- `VYASA_TITLE`: Your blog's title (default: folder name converted via `slug_to_title()`)
+- `VYASA_HOST`: Server host (default: 127.0.0.1)
+- `VYASA_PORT`: Server port (default: 5001)
+- `VYASA_USER`: Optional username to enable session-based authentication
+- `VYASA_PASSWORD`: Optional password paired with `VYASA_USER`
+- `VYASA_AUTH_REQUIRED`: Require login for all routes (true/false)
+- `VYASA_GOOGLE_CLIENT_ID`: Google OAuth client id (optional)
+- `VYASA_GOOGLE_CLIENT_SECRET`: Google OAuth client secret (optional)
+- `VYASA_GOOGLE_ALLOWED_DOMAINS`: Comma-separated allowed email domains (optional)
+- `VYASA_GOOGLE_ALLOWED_EMAILS`: Comma-separated allowed emails (optional)
 
 ### RBAC Configuration (optional)
 
@@ -137,18 +137,18 @@ roles = ["admin", "editor"]
 ```
 
 Environment variable (optional):
-- `BLOGGY_RBAC_ENABLED`: Force enable/disable RBAC
+- `VYASA_RBAC_ENABLED`: Force enable/disable RBAC
 
 Notes:
 - If both `user_roles` and `role_users` are provided, roles are unioned at runtime.
-- Google OAuth requires the optional dependency `bloggy[auth]`.
+- Google OAuth requires the optional dependency `vyasa[auth]`.
 
 ### Examples
 
-**Using a `.bloggy` file:**
+**Using a `.vyasa` file:**
 
 ```bash
-# Create a .bloggy file in your blog directory
+# Create a .vyasa file in your blog directory
 title = "My Tech Blog"
 port = 8000
 host = "0.0.0.0"
@@ -157,23 +157,23 @@ host = "0.0.0.0"
 **Using environment variables:**
 
 ```bash
-export BLOGGY_ROOT=/path/to/your/markdown/files
-export BLOGGY_TITLE="My Awesome Blog"
-export BLOGGY_PORT=8000
-export BLOGGY_HOST="0.0.0.0"
-bloggy
+export VYASA_ROOT=/path/to/your/markdown/files
+export VYASA_TITLE="My Awesome Blog"
+export VYASA_PORT=8000
+export VYASA_HOST="0.0.0.0"
+vyasa
 ```
 
 **Passing directory as argument:**
 
 ```bash
-bloggy /path/to/your/markdown/files
+vyasa /path/to/your/markdown/files
 ```
 
 **Enabling authentication:**
 
 ```.env
-# Via .bloggy file
+# Via .vyasa file
 title = "Private Blog"
 username = "admin"
 password = "secret123"
@@ -187,13 +187,13 @@ allowed_domains = ["example.com"]
 
 ```bash
 # Or via environment variables
-export BLOGGY_USER="admin"
-export BLOGGY_PASSWORD="secret123"
-export BLOGGY_GOOGLE_CLIENT_ID="your-google-client-id"
-export BLOGGY_GOOGLE_CLIENT_SECRET="your-google-client-secret"
-export BLOGGY_GOOGLE_ALLOWED_DOMAINS="example.com"
+export VYASA_USER="admin"
+export VYASA_PASSWORD="secret123"
+export VYASA_GOOGLE_CLIENT_ID="your-google-client-id"
+export VYASA_GOOGLE_CLIENT_SECRET="your-google-client-secret"
+export VYASA_GOOGLE_ALLOWED_DOMAINS="example.com"
 ```
 
 **Configuration priority example:**
 
-If you have both a `.bloggy` file with `port = 8000` and an environment variable `BLOGGY_PORT=9000`, the `.bloggy` file takes precedence and port 8000 will be used.
+If you have both a `.vyasa` file with `port = 8000` and an environment variable `VYASA_PORT=9000`, the `.vyasa` file takes precedence and port 8000 will be used.

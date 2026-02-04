@@ -1,4 +1,4 @@
-# Bloggy Manual
+# Vyasa Manual
 
 Short, focused guides for deeper topics. Start with configuration and writing content, then dive into architecture and advanced details.
 

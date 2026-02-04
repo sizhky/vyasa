@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Publishing - BLOGGY</title>
+    <title>Publishing - VYASA</title>
     
     <!-- TailwindCSS and MonsterUI -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio,container-queries"></script>
@@ -163,7 +163,7 @@
         <div class="w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4">
             
     <div class="flex items-center justify-between bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
-        <a href="/index.html">BLOGGY</a>
+        <a href="/index.html">VYASA</a>
         
     <button onclick="toggleTheme()" class="p-1 hover:scale-110 shadow-none" type="button">
         <span uk-icon="moon" class="dark:hidden"></span>
@@ -247,21 +247,21 @@ python -m build
 </code></pre>
 <p class="text-base leading-relaxed mb-6">This creates:</p>
 <ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed"><code class="uk-codespan px-1">dist/bloggy-0.1.0-py3-none-any.whl</code> (wheel)</li>
-<li class="text-base leading-relaxed"><code class="uk-codespan px-1">dist/bloggy-0.1.0.tar.gz</code> (source distribution)</li>
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">dist/vyasa-0.1.0-py3-none-any.whl</code> (wheel)</li>
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">dist/vyasa-0.1.0.tar.gz</code> (source distribution)</li>
 </ul>
 <h2 id="test-locally" class="text-2xl font-semibold mb-4 mt-6">Test Locally</h2>
 <pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Install from the wheel
-pip install dist/bloggy-0.1.0-py3-none-any.whl
+pip install dist/vyasa-0.1.0-py3-none-any.whl
 
 # Test the CLI
-bloggy demo/
+vyasa demo/
 </code></pre>
 <h2 id="publish-to-testpypi-recommended-first" class="text-2xl font-semibold mb-4 mt-6">Publish to TestPyPI (recommended first)</h2>
 <pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">python -m twine upload --repository testpypi dist/*
 </code></pre>
 <p class="text-base leading-relaxed mb-6">Test installation from TestPyPI:</p>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ bloggy
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ vyasa
 </code></pre>
 <h2 id="publish-to-pypi" class="text-2xl font-semibold mb-4 mt-6">Publish to PyPI</h2>
 <pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">python -m twine upload dist/*
@@ -281,7 +281,7 @@ git push origin v0.1.0
 <p class="text-base leading-relaxed mb-6">Test installation:</p>
 </li>
 </ol>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install bloggy
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install vyasa
 </code></pre>
 <h2 id="updating-the-package" class="text-2xl font-semibold mb-4 mt-6">Updating the Package</h2>
 <ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
@@ -290,7 +290,7 @@ git push origin v0.1.0
 <ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
 <li class="text-base leading-relaxed"><code class="uk-codespan px-1">pyproject.toml</code></li>
 <li class="text-base leading-relaxed"><code class="uk-codespan px-1">settings.ini</code></li>
-<li class="text-base leading-relaxed"><code class="uk-codespan px-1">bloggy/__init__.py</code></li>
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">vyasa/__init__.py</code></li>
 </ul>
 </li>
 <li class="text-base leading-relaxed">
@@ -363,7 +363,7 @@ password = pypi-YOUR-TESTPYPI-TOKEN-HERE
         
     <footer class="w-full max-w-7xl mx-auto px-6 mt-auto mb-6">
         <div class="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right">
-            Powered by Bloggy
+            Powered by Vyasa
         </div>
     </footer>
     

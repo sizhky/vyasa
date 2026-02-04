@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Readme - BLOGGY</title>
+    <title>Readme - VYASA</title>
     
     <!-- TailwindCSS and MonsterUI -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio,container-queries"></script>
@@ -163,7 +163,7 @@
         <div class="w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4">
             
     <div class="flex items-center justify-between bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
-        <a href="/index.html">BLOGGY</a>
+        <a href="/index.html">VYASA</a>
         
     <button onclick="toggleTheme()" class="p-1 hover:scale-110 shadow-none" type="button">
         <span uk-icon="moon" class="dark:hidden"></span>
@@ -215,7 +215,7 @@
     <main id="main-content" class="flex-1 min-w-0 px-6 py-8 space-y-8">
         <h1 class="text-4xl font-bold mb-8">Readme</h1><div class="w-full">
   <link rel="stylesheet" href="/static/sidenote.css">
-<div><h1 id="bloggy" class="text-3xl font-bold mb-6 mt-8">Bloggy</h1>
+<div><h1 id="vyasa" class="text-3xl font-bold mb-6 mt-8">Vyasa</h1>
 <p class="text-base leading-relaxed mb-6">A lightweight, elegant blogging platform built with FastHTML that renders Markdown files into beautiful web pages with advanced features.</p>
 <h2 id="architecture-overview" class="text-2xl font-semibold mb-4 mt-6">Architecture Overview</h2>
 <div class="mermaid-container relative border-2 rounded-md my-4" style="width: 80vw; position: relative; left: 50%; transform: translateX(-50%);">
@@ -380,7 +380,7 @@
     style Footnotes fill:#cce5ff
 </pre></div>
             </div>
-<h2 id="how-bloggy-works" class="text-2xl font-semibold mb-4 mt-6">How Bloggy Works</h2>
+<h2 id="how-vyasa-works" class="text-2xl font-semibold mb-4 mt-6">How Vyasa Works</h2>
 <h3 id="1-request-flow" class="text-xl font-semibold mb-3 mt-5">1. Request Flow</h3>
 <div class="mermaid-container relative border-2 rounded-md my-4" style="width: 80vw; position: relative; left: 50%; transform: translateX(-50%);">
                 <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
@@ -659,7 +659,7 @@
                     <button onclick="zoomMermaidOut('mermaid-795916')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
                 </div>
                 <div id="mermaid-795916" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: 400px; height: auto;" data-mermaid-code="graph LR
-    subgraph bloggy/
+    subgraph vyasa/
         A[__init__.py]
         B[core.py&amp;lt;br/&amp;gt;Main App Logic]
         C[main.py&amp;lt;br/&amp;gt;Entry Point]
@@ -689,7 +689,7 @@
     style D fill:#d1ecf1
     style G fill:#d4edda
 "><pre class="mermaid my-4" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">graph LR
-    subgraph bloggy/
+    subgraph vyasa/
         A[__init__.py]
         B[core.py&lt;br/&gt;Main App Logic]
         C[main.py&lt;br/&gt;Entry Point]
@@ -722,11 +722,11 @@
             </div>
 <h2 id="installation" class="text-2xl font-semibold mb-4 mt-6">Installation</h2>
 <h3 id="from-pypi-recommended" class="text-xl font-semibold mb-3 mt-5">From PyPI (recommended)</h3>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install bloggy
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install vyasa
 </code></pre>
 <h3 id="from-source" class="text-xl font-semibold mb-3 mt-5">From source</h3>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">git clone https://github.com/yeshwanth/bloggy.git
-cd bloggy
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">git clone https://github.com/yeshwanth/vyasa.git
+cd vyasa
 pip install -e .
 </code></pre>
 <h2 id="quick-start" class="text-2xl font-semibold mb-4 mt-6">Quick Start</h2>
@@ -739,8 +739,8 @@ echo "# Hello World" &gt; hello.md
 </code></pre>
 </li>
 <li class="text-base leading-relaxed">
-<p class="text-base leading-relaxed mb-6">Run Bloggy:</p>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">bloggy .
+<p class="text-base leading-relaxed mb-6">Run Vyasa:</p>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">vyasa .
 </code></pre>
 </li>
 <li class="text-base leading-relaxed">
@@ -748,14 +748,14 @@ echo "# Hello World" &gt; hello.md
 </li>
 </ol>
 <h2 id="configuration" class="text-2xl font-semibold mb-4 mt-6">Configuration</h2>
-<p class="text-base leading-relaxed mb-6">Bloggy supports three ways to configure your blog (in priority order):</p>
+<p class="text-base leading-relaxed mb-6">Vyasa supports three ways to configure your blog (in priority order):</p>
 <ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed"><strong><code class="uk-codespan px-1">.bloggy</code> configuration file</strong> (TOML format)</li>
+<li class="text-base leading-relaxed"><strong><code class="uk-codespan px-1">.vyasa</code> configuration file</strong> (TOML format)</li>
 <li class="text-base leading-relaxed"><strong>Environment variables</strong></li>
 <li class="text-base leading-relaxed"><strong>Default values</strong></li>
 </ol>
-<h3 id="using-a-codebloggycode-configuration-file" class="text-xl font-semibold mb-3 mt-5">Using a <code class="uk-codespan px-1">.bloggy</code> Configuration File</h3>
-<p class="text-base leading-relaxed mb-6">Create a <code class="uk-codespan px-1">.bloggy</code> file in your blog directory or current directory:</p>
+<h3 id="using-a-codevyasacode-configuration-file" class="text-xl font-semibold mb-3 mt-5">Using a <code class="uk-codespan px-1">.vyasa</code> Configuration File</h3>
+<p class="text-base leading-relaxed mb-6">Create a <code class="uk-codespan px-1">.vyasa</code> file in your blog directory or current directory:</p>
 <pre class="my-4"><code class="language-toml uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Blog title (default: derives from root folder name)
 title = "My Awesome Blog"
 
@@ -769,37 +769,37 @@ host = "127.0.0.1"
 # Server port (default: 5001)
 port = 5001
 </code></pre>
-<p class="text-base leading-relaxed mb-6">All settings in the <code class="uk-codespan px-1">.bloggy</code> file are optional. See <code class="uk-codespan px-1">.bloggy.example</code> for a full example.</p>
+<p class="text-base leading-relaxed mb-6">All settings in the <code class="uk-codespan px-1">.vyasa</code> file are optional. See <code class="uk-codespan px-1">.vyasa.example</code> for a full example.</p>
 <h3 id="environment-variables" class="text-xl font-semibold mb-3 mt-5">Environment Variables</h3>
 <p class="text-base leading-relaxed mb-6">You can also use environment variables as a fallback:</p>
 <ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed"><code class="uk-codespan px-1">BLOGGY_ROOT</code>: Path to your markdown files (default: current directory)</li>
-<li class="text-base leading-relaxed"><code class="uk-codespan px-1">BLOGGY_TITLE</code>: Your blog's title (default: folder name)</li>
-<li class="text-base leading-relaxed"><code class="uk-codespan px-1">BLOGGY_HOST</code>: Server host (default: 127.0.0.1)</li>
-<li class="text-base leading-relaxed"><code class="uk-codespan px-1">BLOGGY_PORT</code>: Server port (default: 5001)</li>
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">VYASA_ROOT</code>: Path to your markdown files (default: current directory)</li>
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">VYASA_TITLE</code>: Your blog's title (default: folder name)</li>
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">VYASA_HOST</code>: Server host (default: 127.0.0.1)</li>
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">VYASA_PORT</code>: Server port (default: 5001)</li>
 </ul>
 <h3 id="examples" class="text-xl font-semibold mb-3 mt-5">Examples</h3>
-<p class="text-base leading-relaxed mb-6"><strong>Using a <code class="uk-codespan px-1">.bloggy</code> file:</strong></p>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Create a .bloggy file in your blog directory
+<p class="text-base leading-relaxed mb-6"><strong>Using a <code class="uk-codespan px-1">.vyasa</code> file:</strong></p>
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Create a .vyasa file in your blog directory
 cd /path/to/your/blog
-cat &gt; .bloggy &lt;&lt; EOF
+cat &gt; .vyasa &lt;&lt; EOF
 title = "My Tech Blog"
 port = 8000
 EOF
 
-bloggy
+vyasa
 </code></pre>
 <p class="text-base leading-relaxed mb-6"><strong>Using environment variables:</strong></p>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">export BLOGGY_ROOT=/path/to/your/markdown/files
-export BLOGGY_TITLE="My Awesome Blog"
-export BLOGGY_PORT=8000
-bloggy
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">export VYASA_ROOT=/path/to/your/markdown/files
+export VYASA_TITLE="My Awesome Blog"
+export VYASA_PORT=8000
+vyasa
 </code></pre>
 <p class="text-base leading-relaxed mb-6"><strong>Passing directory as argument:</strong></p>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">bloggy /path/to/your/markdown/files
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">vyasa /path/to/your/markdown/files
 </code></pre>
 <p class="text-base leading-relaxed mb-6"><strong>Configuration priority example:</strong></p>
-<p class="text-base leading-relaxed mb-6">If you have both a <code class="uk-codespan px-1">.bloggy</code> file with <code class="uk-codespan px-1">port = 8000</code> and an environment variable <code class="uk-codespan px-1">BLOGGY_PORT=9000</code>, the <code class="uk-codespan px-1">.bloggy</code> file takes precedence and port 8000 will be used.</p>
+<p class="text-base leading-relaxed mb-6">If you have both a <code class="uk-codespan px-1">.vyasa</code> file with <code class="uk-codespan px-1">port = 8000</code> and an environment variable <code class="uk-codespan px-1">VYASA_PORT=9000</code>, the <code class="uk-codespan px-1">.vyasa</code> file takes precedence and port 8000 will be used.</p>
 </div></div>
 
     </main>
@@ -814,11 +814,11 @@ bloggy
                 <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
                     <ul class="mt-2 list-none">
   <li class="my-1">
-<a href="#bloggy" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-0">Bloggy</a>  </li>
+<a href="#vyasa" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-0">Vyasa</a>  </li>
   <li class="my-1">
 <a href="#architecture-overview" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Architecture Overview</a>  </li>
   <li class="my-1">
-<a href="#how-bloggy-works" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">How Bloggy Works</a>  </li>
+<a href="#how-vyasa-works" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">How Vyasa Works</a>  </li>
   <li class="my-1">
 <a href="#1-request-flow" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">1. Request Flow</a>  </li>
   <li class="my-1">
@@ -846,7 +846,7 @@ bloggy
   <li class="my-1">
 <a href="#configuration" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Configuration</a>  </li>
   <li class="my-1">
-<a href="#using-a-bloggy-configuration-file" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Using a `.bloggy` Configuration File</a>  </li>
+<a href="#using-a-vyasa-configuration-file" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Using a `.vyasa` Configuration File</a>  </li>
   <li class="my-1">
 <a href="#environment-variables" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Environment Variables</a>  </li>
   <li class="my-1">
@@ -861,7 +861,7 @@ bloggy
         
     <footer class="w-full max-w-7xl mx-auto px-6 mt-auto mb-6">
         <div class="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right">
-            Powered by Bloggy
+            Powered by Vyasa
         </div>
     </footer>
     

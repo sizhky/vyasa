@@ -20,8 +20,8 @@ from .helpers import (
     _unique_anchor,
     parse_frontmatter,
     get_post_title,
-    get_bloggy_config,
-    order_bloggy_entries,
+    get_vyasa_config,
+    order_vyasa_entries,
     _effective_abbreviations,
     find_folder_note_file,
 )
@@ -36,7 +36,7 @@ from fastsql import Database
 # disable debug level logs to stdout
 logger.remove()
 logger.add(sys.stdout, level="INFO")
-logfile = Path("/tmp/bloggy_core.log")
+logfile = Path("/tmp/vyasa_core.log")
 logger.add(logfile, rotation="10 MB", retention="10 days", level="DEBUG")
 
 # Markdown rendering setup
@@ -280,7 +280,7 @@ class ContentRenderer(FrankenRenderer):
         content = self.footnotes.get(target, f"[Missing footnote: {target}]")
         if "\n" in content:
             content = content.replace("\r\n", "\n")
-            placeholder = "__BLOGGY_PARA_BREAK__"
+            placeholder = "__VYASA_PARA_BREAK__"
             content = content.replace("\n\n", f"\n{placeholder}\n")
             content = content.replace("\n", "<br>\n")
             content = content.replace(f"\n{placeholder}\n", "\n\n")
@@ -564,22 +564,22 @@ def from_md(content, img_dir=None, current_path=None):
         code_blocks = []
         def repl(m):
             code_blocks.append(m.group(0))
-            return f"__BLOGGY_CODEBLOCK_{len(code_blocks)-1}__"
+            return f"__VYASA_CODEBLOCK_{len(code_blocks)-1}__"
         md = re.sub(r'(```+|~~~+)[\s\S]*?\1', repl, md)
         # Protect inline code spans (including multi-backtick)
         def repl_inline(m):
             code_blocks.append(m.group(0))
-            return f"__BLOGGY_CODEBLOCK_{len(code_blocks)-1}__"
+            return f"__VYASA_CODEBLOCK_{len(code_blocks)-1}__"
         md = re.sub(r'(`+)([^`]*?)\1', repl_inline, md)
         # Replace escaped dollars with a placeholder to avoid KaTeX auto-render
         def replace_escaped_dollar(m):
             slashes = m.group(1)
             # Remove one escaping backslash, keep the rest literal
-            return '\\' * (len(slashes) - 1) + '@@BLOGGY_DOLLAR@@'
+            return '\\' * (len(slashes) - 1) + '@@VYASA_DOLLAR@@'
         md = re.sub(r'(\\+)\$', replace_escaped_dollar, md)
         # Restore code blocks/spans
         for i, block in enumerate(code_blocks):
-            md = md.replace(f"__BLOGGY_CODEBLOCK_{i}__", block)
+            md = md.replace(f"__VYASA_CODEBLOCK_{i}__", block)
         return md
 
     content = _protect_escaped_dollar(content)
@@ -729,7 +729,7 @@ hdrs = (
     Script(src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"),
     Script("""
         function replaceEscapedDollarPlaceholders(root) {
-            const placeholder = '@@BLOGGY_DOLLAR@@';
+            const placeholder = '@@VYASA_DOLLAR@@';
             const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
             const nodes = [];
             let node;
@@ -1008,7 +1008,7 @@ def _get_rbac_db():
     global _rbac_db, _rbac_tbl
     if _rbac_db is None:
         root = get_config().get_root_folder()
-        db_path = root / ".bloggy-rbac.db"
+        db_path = root / ".vyasa-rbac.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
         _rbac_db = Database(f"sqlite:///{db_path}")
         _rbac_tbl = _rbac_db.create(RbacConfigRow, pk="key", name="rbac_config")
@@ -1113,16 +1113,16 @@ def _set_rbac_cfg(cfg):
                 continue
             _rbac_rules.append((compiled, set(roles_list)))
 
-def _resolve_bloggy_config_path():
-    root_env = os.getenv("BLOGGY_ROOT")
+def _resolve_vyasa_config_path():
+    root_env = os.getenv("VYASA_ROOT")
     if root_env:
-        root_path = Path(root_env) / ".bloggy"
+        root_path = Path(root_env) / ".vyasa"
         if root_path.exists():
             return root_path
-    cwd_path = Path.cwd() / ".bloggy"
+    cwd_path = Path.cwd() / ".vyasa"
     if cwd_path.exists():
         return cwd_path
-    return get_config().get_root_folder() / ".bloggy"
+    return get_config().get_root_folder() / ".vyasa"
 
 def _toml_string(value: str) -> str:
     return json.dumps(str(value))
@@ -1157,9 +1157,9 @@ def _render_rbac_toml(cfg):
         ])
     return "\n".join(lines).rstrip() + "\n"
 
-def _write_rbac_to_bloggy(cfg):
+def _write_rbac_to_vyasa(cfg):
     cfg = _normalize_rbac_cfg(cfg)
-    path = _resolve_bloggy_config_path()
+    path = _resolve_vyasa_config_path()
     try:
         text = path.read_text(encoding="utf-8") if path.exists() else ""
     except Exception:
@@ -1628,7 +1628,7 @@ async def admin_rbac(htmx, request: Request):
                 }
                 try:
                     _rbac_db_write(new_cfg)
-                    _write_rbac_to_bloggy(new_cfg)
+                    _write_rbac_to_vyasa(new_cfg)
                     _set_rbac_cfg(new_cfg)
                     _cached_build_post_tree.cache_clear()
                     _cached_posts_sidebar_html.cache_clear()
@@ -1645,7 +1645,7 @@ async def admin_rbac(htmx, request: Request):
 
     content = Div(
         H1("RBAC Administration", cls="text-3xl font-bold"),
-        P("Edits save to SQLite immediately and also update the .bloggy file for transparency.", cls="text-slate-600 dark:text-slate-400"),
+        P("Edits save to SQLite immediately and also update the .vyasa file for transparency.", cls="text-slate-600 dark:text-slate-400"),
         P("Rule patterns are matched against request paths (e.g. /posts/ai/...).", cls="text-slate-500 dark:text-slate-500 text-sm"),
         Div(
             P(error, cls="text-red-600") if error else None,
@@ -1686,7 +1686,7 @@ async def admin_rbac(htmx, request: Request):
             cls="mt-4"
         ),
         Div(
-            H2("Preview (.bloggy)", cls="text-xl font-semibold mt-10"),
+            H2("Preview (.vyasa)", cls="text-xl font-semibold mt-10"),
             Pre(preview_text, cls="mt-3 p-4 rounded-md bg-slate-100 dark:bg-slate-900/60 text-xs overflow-x-auto"),
         ),
         cls="max-w-3xl mx-auto py-10 px-6"
@@ -1906,7 +1906,7 @@ def _find_search_matches_uncached(query, limit=40):
     for item in chain(root.rglob("*.md"), root.rglob("*.pdf")):
         if any(part.startswith('.') for part in item.relative_to(root).parts):
             continue
-        if ".bloggy" in item.parts:
+        if ".vyasa" in item.parts:
             continue
         if index_file and item.resolve() == index_file.resolve():
             continue
@@ -2209,7 +2209,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
             )
         footer_inner = Div(
             Div(logout_button, cls="flex items-center") if logout_button else Div(),
-            Div(NotStr('Powered by <a href="https://github.com/sizhky/bloggy" class="underline hover:text-white/80" target="_blank" rel="noopener noreferrer">Bloggy</a> and ❤️')),
+            Div(NotStr('Powered by <a href="https://github.com/sizhky/vyasa" class="underline hover:text-white/80" target="_blank" rel="noopener noreferrer">Vyasa</a> and ❤️')),
             cls="flex items-center justify-between w-full"
         )
         return Footer(
@@ -2477,7 +2477,7 @@ def build_post_tree(folder, roles=None):
         entries = []
         folder_note = find_folder_note_file(folder)
         for item in folder.iterdir():
-            if item.name == ".bloggy":
+            if item.name == ".vyasa":
                 continue
             if item.is_dir():
                 if item.name.startswith('.'):
@@ -2490,8 +2490,8 @@ def build_post_tree(folder, roles=None):
                 if index_file and item.resolve() == index_file.resolve():
                     continue
                 entries.append(item)
-        config = get_bloggy_config(folder)
-        entries = order_bloggy_entries(entries, config)
+        config = get_vyasa_config(folder)
+        entries = order_vyasa_entries(entries, config)
         abbreviations = _effective_abbreviations(root, folder)
         logger.debug(
             "[DEBUG] build_post_tree entries for %s: %s",
@@ -2585,8 +2585,8 @@ def _posts_tree_fingerprint():
     try:
         md_mtime = max((p.stat().st_mtime for p in root.rglob("*.md")), default=0)
         pdf_mtime = max((p.stat().st_mtime for p in root.rglob("*.pdf")), default=0)
-        bloggy_mtime = max((p.stat().st_mtime for p in root.rglob(".bloggy")), default=0)
-        return max(md_mtime, pdf_mtime, bloggy_mtime)
+        vyasa_mtime = max((p.stat().st_mtime for p in root.rglob(".vyasa")), default=0)
+        return max(md_mtime, pdf_mtime, vyasa_mtime)
     except Exception:
         return 0
 

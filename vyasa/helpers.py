@@ -89,7 +89,7 @@ def get_post_title(file_path: str | Path, abbreviations=None) -> str:
     return metadata.get('title', slug_to_title(file_path.stem, abbreviations=abbreviations))
 
 @lru_cache(maxsize=128)
-def _cached_bloggy_config(path_str: str, mtime: float):
+def _cached_vyasa_config(path_str: str, mtime: float):
     path = Path(path_str)
     try:
         with path.open("rb") as f:
@@ -97,7 +97,7 @@ def _cached_bloggy_config(path_str: str, mtime: float):
     except Exception:
         return {}
 
-def _normalize_bloggy_config(parsed):
+def _normalize_vyasa_config(parsed):
     config = {
         "order": [],
         "sort": "name_asc",
@@ -154,26 +154,26 @@ def _normalize_bloggy_config(parsed):
     return config
 
 def _effective_abbreviations(root: Path, folder: Path | None = None):
-    root_config = get_bloggy_config(root)
+    root_config = get_vyasa_config(root)
     root_abbrevs = root_config.get("abbreviations") or []
     if folder is None or folder == root:
         return root_abbrevs
-    folder_config = get_bloggy_config(folder)
+    folder_config = get_vyasa_config(folder)
     folder_abbrevs = folder_config.get("abbreviations")
     return folder_abbrevs if folder_abbrevs is not None else root_abbrevs
 
-def get_bloggy_config(folder: Path):
-    bloggy_path = folder / ".bloggy"
-    if not bloggy_path.exists():
-        return _normalize_bloggy_config({})
+def get_vyasa_config(folder: Path):
+    vyasa_path = folder / ".vyasa"
+    if not vyasa_path.exists():
+        return _normalize_vyasa_config({})
     try:
-        mtime = bloggy_path.stat().st_mtime
+        mtime = vyasa_path.stat().st_mtime
     except OSError:
-        return _normalize_bloggy_config({})
-    parsed = _cached_bloggy_config(str(bloggy_path), mtime)
-    config = _normalize_bloggy_config(parsed)
+        return _normalize_vyasa_config({})
+    parsed = _cached_vyasa_config(str(vyasa_path), mtime)
+    config = _normalize_vyasa_config(parsed)
     logger.debug(
-        "[DEBUG] .bloggy config for %s: order=%s sort=%s folders_first=%s",
+        "[DEBUG] .vyasa config for %s: order=%s sort=%s folders_first=%s",
         folder,
         config.get("order"),
         config.get("sort"),
@@ -181,17 +181,17 @@ def get_bloggy_config(folder: Path):
     )
     return config
 
-def order_bloggy_entries(entries, config):
+def order_vyasa_entries(entries, config):
     if not entries:
         return []
 
     order_list = [name.strip().rstrip("/") for name in config.get("order", []) if str(name).strip()]
     if not order_list:
-        sorted_entries = _sort_bloggy_entries(entries, config.get("sort"), config.get("folders_first", True))
+        sorted_entries = _sort_vyasa_entries(entries, config.get("sort"), config.get("folders_first", True))
         if config.get("folders_always_first"):
             sorted_entries = _group_folders_first(sorted_entries)
         logger.debug(
-            "[DEBUG] .bloggy order empty; sorted entries: %s",
+            "[DEBUG] .vyasa order empty; sorted entries: %s",
             [item.name for item in sorted_entries],
         )
         return sorted_entries
@@ -217,7 +217,7 @@ def order_bloggy_entries(entries, config):
             used.add(item)
 
     remaining = [item for item in entries if item not in used]
-    remaining_sorted = _sort_bloggy_entries(
+    remaining_sorted = _sort_vyasa_entries(
         remaining,
         config.get("sort"),
         config.get("folders_first", True)
@@ -226,7 +226,7 @@ def order_bloggy_entries(entries, config):
     if config.get("folders_always_first"):
         combined = _group_folders_first(combined)
     logger.debug(
-        "[DEBUG] .bloggy ordered=%s remaining=%s",
+        "[DEBUG] .vyasa ordered=%s remaining=%s",
         [item.name for item in ordered],
         [item.name for item in remaining_sorted],
     )
@@ -237,7 +237,7 @@ def _group_folders_first(entries):
     files = [item for item in entries if not item.is_dir()]
     return folders + files
 
-def _sort_bloggy_entries(entries, sort_method, folders_first):
+def _sort_vyasa_entries(entries, sort_method, folders_first):
     method = sort_method or "name_asc"
     reverse = method.endswith("desc")
     by_mtime = method.startswith("mtime")
@@ -259,7 +259,7 @@ def _sort_bloggy_entries(entries, sort_method, folders_first):
 
     return sorted(entries, key=sort_key, reverse=reverse)
 
-def list_bloggy_posts(root: Path, include_hidden: bool = False) -> list[dict]:
+def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
     """List all posts in the blog root (md + pdf)."""
     root = root.resolve()
     root_parts = len(root.parts)
@@ -296,7 +296,7 @@ def list_bloggy_posts(root: Path, include_hidden: bool = False) -> list[dict]:
 
     return posts
 
-def list_bloggy_entries(root: Path, relative: str = ".", include_hidden: bool = False) -> dict:
+def list_vyasa_entries(root: Path, relative: str = ".", include_hidden: bool = False) -> dict:
     """List immediate entries (folders + md/pdf files) under a relative path."""
     root = root.resolve()
     target = (root / relative).resolve()

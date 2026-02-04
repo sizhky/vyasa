@@ -3,8 +3,8 @@ requires = ["setuptools>=64.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bloggy"
-version = "0.3.5"
+name = "vyasa"
+version = "0.3.6"
 description = "A lightweight, elegant blogging platform built with FastHTML"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -46,19 +46,19 @@ auth = [
 ]
 
 [project.scripts]
-bloggy = "bloggy.main:cli"
+vyasa = "vyasa.main:cli"
 
 [project.urls]
-Homepage = "https://github.com/yeshwanth/bloggy"
-Repository = "https://github.com/yeshwanth/bloggy"
-Issues = "https://github.com/yeshwanth/bloggy/issues"
+Homepage = "https://github.com/yeshwanth/vyasa"
+Repository = "https://github.com/yeshwanth/vyasa"
+Issues = "https://github.com/yeshwanth/vyasa/issues"
 
 [tool.setuptools]
-packages = ["bloggy"]
+packages = ["vyasa"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-bloggy = ["static/*", "static/**/*"]
+vyasa = ["static/*", "static/**/*"]
 
 [tool.uv]
 cache-keys = [{file = "pyproject.toml"}]

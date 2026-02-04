@@ -1,10 +1,10 @@
 # Security & Auth
 
-Bloggy supports optional basic authentication for local or internal deployments.
+Vyasa supports optional basic authentication for local or internal deployments.
 
 ## Authentication (optional)
 
-Set `username` and `password` in your `.bloggy` file or via `BLOGGY_USER` / `BLOGGY_PASSWORD` environment variables to enable session-based authentication. When enabled:
+Set `username` and `password` in your `.vyasa` file or via `VYASA_USER` / `VYASA_PASSWORD` environment variables to enable session-based authentication. When enabled:
 
 - **Beforeware middleware**: Intercepts all requests (except login page, static files, and CSS/JS)
 - **Login flow**: 
@@ -19,12 +19,12 @@ Authentication is completely optional—if no credentials configured, Beforeware
 
 ## Google OAuth (optional)
 
-Bloggy can also use Google OAuth for login if configured. This is fully optional and only activated when `client_id` and `client_secret` are set.
+Vyasa can also use Google OAuth for login if configured. This is fully optional and only activated when `client_id` and `client_secret` are set.
 
 Install OAuth dependency (optional):
 
 ```bash
-pip install "bloggy[auth]"
+pip install "vyasa[auth]"
 ```
 
 ```toml
@@ -37,10 +37,10 @@ allowed_emails = ["alice@example.com"] # optional
 
 Environment variables:
 
-- `BLOGGY_GOOGLE_CLIENT_ID`
-- `BLOGGY_GOOGLE_CLIENT_SECRET`
-- `BLOGGY_GOOGLE_ALLOWED_DOMAINS` (comma-separated)
-- `BLOGGY_GOOGLE_ALLOWED_EMAILS` (comma-separated)
+- `VYASA_GOOGLE_CLIENT_ID`
+- `VYASA_GOOGLE_CLIENT_SECRET`
+- `VYASA_GOOGLE_ALLOWED_DOMAINS` (comma-separated)
+- `VYASA_GOOGLE_ALLOWED_EMAILS` (comma-separated)
 
 When enabled:
 - Login page shows a **Continue with Google** button.

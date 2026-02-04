@@ -224,4 +224,4 @@ Watch them go absolutely **BONKERS**! 🎪🎨🌈✨💫🎉
 
 ---
 
-*This demonstration was created to show the full power of cascading custom CSS in Bloggy. Use responsibly (or don't, we're not your mom).*
+*This demonstration was created to show the full power of cascading custom CSS in Vyasa. Use responsibly (or don't, we're not your mom).*

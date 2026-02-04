@@ -1,11 +1,11 @@
-# Contributing to Bloggy
+# Contributing to Vyasa
 
-Thank you for your interest in contributing to Bloggy! This document provides guidelines for contributing to the project.
+Thank you for your interest in contributing to Vyasa! This document provides guidelines for contributing to the project.
 
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/bloggy.git`
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/vyasa.git`
 3. Create a virtual environment: `python -m venv venv`
 4. Activate it: `source venv/bin/activate` (Linux/Mac) or `venv\Scripts\activate` (Windows)
 5. Install in development mode: `pip install -e ".[dev]"`
@@ -14,7 +14,7 @@ Thank you for your interest in contributing to Bloggy! This document provides gu
 
 1. Create a new branch for your feature: `git checkout -b feature-name`
 2. Make your changes
-3. Test your changes locally by running: `bloggy demo/`
+3. Test your changes locally by running: `vyasa demo/`
 4. Commit your changes: `git commit -am "Add feature"`
 5. Push to your fork: `git push origin feature-name`
 6. Create a Pull Request
@@ -30,7 +30,7 @@ Thank you for your interest in contributing to Bloggy! This document provides gu
 
 Before submitting a PR:
 - Test the package installation: `pip install -e .`
-- Test the CLI: `bloggy your-markdown-folder/`
+- Test the CLI: `vyasa your-markdown-folder/`
 - Verify all markdown features work (footnotes, mermaid diagrams, etc.)
 - Test both light and dark themes
 

@@ -1,11 +1,11 @@
-"""Configuration management for Bloggy.
+"""Configuration management for Vyasa.
 
 Supports loading configuration from:
-1. .bloggy file (TOML format) in the current directory or blog root
+1. .vyasa file (TOML format) in the current directory or blog root
 2. Environment variables (as fallback)
 3. Default values
 
-Priority: .bloggy file > environment variables > defaults
+Priority: .vyasa file > environment variables > defaults
 """
 
 import os
@@ -14,38 +14,38 @@ from pathlib import Path
 from typing import Optional
 
 
-class BloggyConfig:
+class VyasaConfig:
 
-    """Configuration handler for Bloggy."""
+    """Configuration handler for Vyasa."""
     
     def __init__(self, config_path: Optional[Path] = None):
         """Initialize configuration.
         
         Args:
-            config_path: Optional path to .bloggy file. If not provided, will search
-                        in current directory and BLOGGY_ROOT.
+            config_path: Optional path to .vyasa file. If not provided, will search
+                        in current directory and VYASA_ROOT.
         """
         self._config = {}
         self._load_config(config_path)
     
     def _load_config(self, config_path: Optional[Path] = None):
-        """Load configuration from .bloggy file if it exists."""
-        # Try to find .bloggy file
+        """Load configuration from .vyasa file if it exists."""
+        # Try to find .vyasa file
         config_file = None
         
         if config_path and config_path.exists():
             config_file = config_path
         else:
-            # Search in BLOGGY_ROOT first (if set)
-            root = os.getenv('BLOGGY_ROOT')
+            # Search in VYASA_ROOT first (if set)
+            root = os.getenv('VYASA_ROOT')
             if root:
-                root_config = Path(root) / '.bloggy'
+                root_config = Path(root) / '.vyasa'
                 if root_config.exists():
                     config_file = root_config
             
             # Then search in current directory
             if not config_file:
-                cwd_config = Path.cwd() / '.bloggy'
+                cwd_config = Path.cwd() / '.vyasa'
                 if cwd_config.exists():
                     config_file = cwd_config
         
@@ -63,7 +63,7 @@ class BloggyConfig:
         """Get configuration value with priority: config file > env var > default.
         
         Args:
-            key: Key in the .bloggy config file
+            key: Key in the .vyasa config file
             env_var: Environment variable name
             default: Default value if not found
             
@@ -84,14 +84,14 @@ class BloggyConfig:
     
     def get_root_folder(self) -> Path:
         """Get the blog root folder path."""
-        root = self.get('root', 'BLOGGY_ROOT', '.')
+        root = self.get('root', 'VYASA_ROOT', '.')
         return Path(root).resolve()
     
     def get_blog_title(self) -> str:
         """Get the blog title."""
         from .core import slug_to_title  # Import here to avoid circular dependency
         
-        title = self.get('title', 'BLOGGY_TITLE', None)
+        title = self.get('title', 'VYASA_TITLE', None)
         if title:
             return title.upper()
         
@@ -100,17 +100,17 @@ class BloggyConfig:
     
     def get_host(self) -> str:
         """Get the server host."""
-        return self.get('host', 'BLOGGY_HOST', '127.0.0.1')
+        return self.get('host', 'VYASA_HOST', '127.0.0.1')
     
     def get_port(self) -> int:
         """Get the server port."""
-        port = self.get('port', 'BLOGGY_PORT', 5001)
+        port = self.get('port', 'VYASA_PORT', 5001)
         return int(port)
     
     def get_auth(self):
         """Get authentication credentials from config, env, or default (None)."""
-        user = self.get('username', 'BLOGGY_USER', None)
-        pwd = self.get('password', 'BLOGGY_PASSWORD', None)
+        user = self.get('username', 'VYASA_USER', None)
+        pwd = self.get('password', 'VYASA_PASSWORD', None)
         return user, pwd
 
     def _coerce_list(self, value):
@@ -125,7 +125,7 @@ class BloggyConfig:
 
     def get_auth_required(self):
         """Return auth_required if set, otherwise None."""
-        value = self.get('auth_required', 'BLOGGY_AUTH_REQUIRED', None)
+        value = self.get('auth_required', 'VYASA_AUTH_REQUIRED', None)
         if value is None:
             return None
         if isinstance(value, str):
@@ -138,17 +138,17 @@ class BloggyConfig:
         if not isinstance(cfg, dict):
             cfg = {}
 
-        client_id = cfg.get('client_id') or self.get('google_client_id', 'BLOGGY_GOOGLE_CLIENT_ID', None)
-        client_secret = cfg.get('client_secret') or self.get('google_client_secret', 'BLOGGY_GOOGLE_CLIENT_SECRET', None)
+        client_id = cfg.get('client_id') or self.get('google_client_id', 'VYASA_GOOGLE_CLIENT_ID', None)
+        client_secret = cfg.get('client_secret') or self.get('google_client_secret', 'VYASA_GOOGLE_CLIENT_SECRET', None)
         allowed_domains = cfg.get('allowed_domains')
         if allowed_domains is None:
-            allowed_domains = self.get('google_allowed_domains', 'BLOGGY_GOOGLE_ALLOWED_DOMAINS', [])
+            allowed_domains = self.get('google_allowed_domains', 'VYASA_GOOGLE_ALLOWED_DOMAINS', [])
         allowed_emails = cfg.get('allowed_emails')
         if allowed_emails is None:
-            allowed_emails = self.get('google_allowed_emails', 'BLOGGY_GOOGLE_ALLOWED_EMAILS', [])
+            allowed_emails = self.get('google_allowed_emails', 'VYASA_GOOGLE_ALLOWED_EMAILS', [])
         default_roles = cfg.get('default_roles')
         if default_roles is None:
-            default_roles = self.get('google_default_roles', 'BLOGGY_GOOGLE_DEFAULT_ROLES', [])
+            default_roles = self.get('google_default_roles', 'VYASA_GOOGLE_DEFAULT_ROLES', [])
 
         return {
             "client_id": client_id,
@@ -165,7 +165,7 @@ class BloggyConfig:
             cfg = {}
 
         enabled = cfg.get('enabled', None)
-        enabled_env = os.getenv('BLOGGY_RBAC_ENABLED')
+        enabled_env = os.getenv('VYASA_RBAC_ENABLED')
         if enabled_env is not None:
             enabled = enabled_env.lower() in ('true', '1', 'yes', 'on')
         if enabled is None:
@@ -173,7 +173,7 @@ class BloggyConfig:
 
         default_roles = cfg.get('default_roles', None)
         if default_roles is None:
-            default_roles = self.get('rbac_default_roles', 'BLOGGY_RBAC_DEFAULT_ROLES', [])
+            default_roles = self.get('rbac_default_roles', 'VYASA_RBAC_DEFAULT_ROLES', [])
 
         user_roles = cfg.get('user_roles', {})
         if not isinstance(user_roles, dict):
@@ -197,7 +197,7 @@ class BloggyConfig:
     
     def get_sidebars_open(self) -> bool:
         """Get whether sidebars should be open by default."""
-        value = self.get('sidebars_open', 'BLOGGY_SIDEBARS_OPEN', True)
+        value = self.get('sidebars_open', 'VYASA_SIDEBARS_OPEN', True)
         # Handle string values from environment variables
         if isinstance(value, str):
             return value.lower() in ('true', '1', 'yes', 'on')
@@ -206,19 +206,19 @@ class BloggyConfig:
 
 
 # Global config instance
-_config: Optional[BloggyConfig] = None
+_config: Optional[VyasaConfig] = None
 
 
-def get_config() -> BloggyConfig:
+def get_config() -> VyasaConfig:
     """Get or create the global configuration instance."""
     global _config
     if _config is None:
-        _config = BloggyConfig()
+        _config = VyasaConfig()
     return _config
 
 
 def reload_config(config_path: Optional[Path] = None):
     """Reload configuration, optionally from a specific path."""
     global _config
-    _config = BloggyConfig(config_path)
+    _config = VyasaConfig(config_path)
     return _config

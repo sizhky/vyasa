@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This is a high-level view of how requests flow through Bloggy. These diagrams are here (not in the main README) to keep the README user-focused.
+This is a high-level view of how requests flow through Vyasa. These diagrams are here (not in the main README) to keep the README user-focused.
 
 ## Request flow
 
@@ -119,7 +119,7 @@ graph TB
     style Footnotes fill:#cce5ff
 ```
 
-## How Bloggy Works
+## How Vyasa Works
 
 ### 1. Request Flow
 
@@ -280,7 +280,7 @@ The `layout()` helper builds the complete page structure with intelligent HTMX o
   - Main content (flex-1): Swappable content area with section-specific CSS classes
   - Right sidebar (72 width): Auto-generated TOC from headings
 - **Mobile panels**: Fullscreen overlays for posts and TOC with smooth slide transitions
-- **Footer**: "Powered by Bloggy" right-aligned in max-width container
+- **Footer**: "Powered by Vyasa" right-aligned in max-width container
 
 ### HTMX Optimization
 When `htmx.request` is detected, `layout()` returns only swappable fragments:
@@ -312,5 +312,5 @@ When `htmx.request` is detected, `layout()` returns only swappable fragments:
 
 ### Performance Logging
 - Debug logs track timing for each phase (section class, TOC build, CSS resolution, container build)
-- Logs written to `/tmp/bloggy_core.log` with rotation (10 MB, 10 days retention)
+- Logs written to `/tmp/vyasa_core.log` with rotation (10 MB, 10 days retention)
 - Request start/complete markers for easy debugging

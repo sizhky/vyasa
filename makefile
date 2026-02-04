@@ -9,14 +9,14 @@ build: clean
 	python -m build
 
 test: build
-	pip install dist/bloggy-*.whl --force-reinstall
-	bloggy demo/
+	pip install dist/vyasa-*.whl --force-reinstall
+	vyasa demo/
 
 install:
 	pip install -e ".[dev]"
 
 dev:
-	bloggy demo/
+	vyasa demo/
 
 # Version bumping
 bump-major:

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Static Build - BLOGGY</title>
+    <title>Static Build - VYASA</title>
     
     <!-- TailwindCSS and MonsterUI -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio,container-queries"></script>
@@ -163,7 +163,7 @@
         <div class="w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4">
             
     <div class="flex items-center justify-between bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
-        <a href="/index.html">BLOGGY</a>
+        <a href="/index.html">VYASA</a>
         
     <button onclick="toggleTheme()" class="p-1 hover:scale-110 shadow-none" type="button">
         <span uk-icon="moon" class="dark:hidden"></span>
@@ -215,21 +215,21 @@
     <main id="main-content" class="flex-1 min-w-0 px-6 py-8 space-y-8">
         <h1 class="text-4xl font-bold mb-8">Static Build</h1><div class="w-full">
   <link rel="stylesheet" href="/static/sidenote.css">
-<div><h1 id="bloggy-static-site-generator" class="text-3xl font-bold mb-6 mt-8">Bloggy Static Site Generator</h1>
-<p class="text-base leading-relaxed mb-6">Bloggy now supports generating completely standalone static websites from your markdown files! It's janky and need some polishing, but it works.</p>
+<div><h1 id="vyasa-static-site-generator" class="text-3xl font-bold mb-6 mt-8">Vyasa Static Site Generator</h1>
+<p class="text-base leading-relaxed mb-6">Vyasa now supports generating completely standalone static websites from your markdown files! It's janky and need some polishing, but it works.</p>
 <h2 id="usage" class="text-2xl font-semibold mb-4 mt-6">Usage</h2>
 <h3 id="command-line" class="text-xl font-semibold mb-3 mt-5">Command Line</h3>
 <pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Build static site from demo directory
-bloggy build demo
+vyasa build demo
 
 # Build to a custom output directory
-bloggy build demo -o my-static-site
+vyasa build demo -o my-static-site
 
 # Build from current directory
-bloggy build
+vyasa build
 </code></pre>
 <h3 id="python-api" class="text-xl font-semibold mb-3 mt-5">Python API</h3>
-<pre class="my-4"><code class="language-python uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">from bloggy.build import build_static_site
+<pre class="my-4"><code class="language-python uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">from vyasa.build import build_static_site
 
 # Build static site
 output_dir = build_static_site(
@@ -248,7 +248,7 @@ output_dir = build_static_site(
 </ul>
 </li>
 <li class="text-base leading-relaxed">
-<p class="text-base leading-relaxed mb-6"><strong>Static Assets</strong>: Copies from <code class="uk-codespan px-1">bloggy/static/</code>:</p>
+<p class="text-base leading-relaxed mb-6"><strong>Static Assets</strong>: Copies from <code class="uk-codespan px-1">vyasa/static/</code>:</p>
 <ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
 <li class="text-base leading-relaxed"><code class="uk-codespan px-1">sidenote.css</code> - Sidenote styling</li>
 <li class="text-base leading-relaxed"><code class="uk-codespan px-1">scripts.js</code> - Interactive features (Mermaid zoom/pan)</li>
@@ -265,7 +265,7 @@ output_dir = build_static_site(
 </li>
 </ol>
 <h2 id="features-preserved" class="text-2xl font-semibold mb-4 mt-6">Features Preserved</h2>
-<p class="text-base leading-relaxed mb-6">All bloggy features work in the static site:</p>
+<p class="text-base leading-relaxed mb-6">All vyasa features work in the static site:</p>
 <ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
 <li class="text-base leading-relaxed">✅ <strong>Sidenotes/Footnotes</strong>: Interactive margin notes</li>
 <li class="text-base leading-relaxed">✅ <strong>Mermaid Diagrams</strong>: With zoom/pan/reset controls</li>
@@ -296,7 +296,7 @@ output_dir = build_static_site(
 <h2 id="deployment" class="text-2xl font-semibold mb-4 mt-6">Deployment</h2>
 <h3 id="github-pages" class="text-xl font-semibold mb-3 mt-5">GitHub Pages</h3>
 <pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Build the site
-bloggy build demo -o docs
+vyasa build demo -o docs
 
 # Push to GitHub and enable GitHub Pages from /docs folder
 git add docs
@@ -304,7 +304,7 @@ git commit -m "Build static site"
 git push
 </code></pre>
 <h3 id="netlify" class="text-xl font-semibold mb-3 mt-5">Netlify</h3>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">bloggy build demo -o dist
+<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">vyasa build demo -o dist
 # Upload dist/ folder to Netlify
 </code></pre>
 <h3 id="local-preview" class="text-xl font-semibold mb-3 mt-5">Local Preview</h3>
@@ -355,15 +355,15 @@ python -m http.server 8000
 </tbody>
 </table>
 <h2 id="configuration" class="text-2xl font-semibold mb-4 mt-6">Configuration</h2>
-<p class="text-base leading-relaxed mb-6">Uses the same <code class="uk-codespan px-1">.bloggy</code> configuration file as server mode:</p>
-<pre class="my-4"><code class="language-toml uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># .bloggy
+<p class="text-base leading-relaxed mb-6">Uses the same <code class="uk-codespan px-1">.vyasa</code> configuration file as server mode:</p>
+<pre class="my-4"><code class="language-toml uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># .vyasa
 title = "My Blog"
 host = "127.0.0.1"  # Not used in static mode
 port = 5001         # Not used in static mode
 </code></pre>
 <h2 id="tips" class="text-2xl font-semibold mb-4 mt-6">Tips</h2>
 <ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed"><strong>Preview Before Building</strong>: Use <code class="uk-codespan px-1">bloggy demo</code> to preview your site with hot reload</li>
+<li class="text-base leading-relaxed"><strong>Preview Before Building</strong>: Use <code class="uk-codespan px-1">vyasa demo</code> to preview your site with hot reload</li>
 <li class="text-base leading-relaxed"><strong>Rebuild After Changes</strong>: Static sites need rebuilding when content changes</li>
 <li class="text-base leading-relaxed"><strong>Check Output</strong>: Review <code class="uk-codespan px-1">dist/index.html</code> to verify the build</li>
 <li class="text-base leading-relaxed"><strong>Assets Path</strong>: Ensure images use relative paths or are in the static folder</li>
@@ -373,10 +373,10 @@ port = 5001         # Not used in static mode
 vim my-blog/new-post.md
 
 # 2. Preview locally with hot reload
-bloggy my-blog
+vyasa my-blog
 
 # 3. Build static site when ready
-bloggy build my-blog -o site
+vyasa build my-blog -o site
 
 # 4. Deploy
 cd site
@@ -397,7 +397,7 @@ python -m http.server 8000  # Test locally
                 <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
                     <ul class="mt-2 list-none">
   <li class="my-1">
-<a href="#bloggy-static-site-generator" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-0">Bloggy Static Site Generator</a>  </li>
+<a href="#vyasa-static-site-generator" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-0">Vyasa Static Site Generator</a>  </li>
   <li class="my-1">
 <a href="#usage" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Usage</a>  </li>
   <li class="my-1">
@@ -436,7 +436,7 @@ python -m http.server 8000  # Test locally
         
     <footer class="w-full max-w-7xl mx-auto px-6 mt-auto mb-6">
         <div class="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right">
-            Powered by Bloggy
+            Powered by Vyasa
         </div>
     </footer>
     
