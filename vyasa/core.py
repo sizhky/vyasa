@@ -67,6 +67,8 @@ def span_token(name, pat, attr, prec=5):
                     self.caption = match.group(2) if match.group(2) else None
                 elif name == 'MermaidEmbed':
                     self.option = match.group(2) if match.group(2) else None
+                elif name == 'IframeEmbed':
+                    self.options = match.group(2) if match.group(2) else None
     T.__name__ = name
     return T
 
@@ -75,6 +77,12 @@ YoutubeEmbed = span_token(
     'YoutubeEmbed',
     r'\[yt:([a-zA-Z0-9_-]+)(?:\|(.+))?\]',
     'video_id',
+    6
+)
+IframeEmbed = span_token(
+    'IframeEmbed',
+    r'\[iframe:([^\|\]]+)(?:\|(.+))?\]',
+    'src',
     6
 )
 
@@ -221,6 +229,7 @@ class ContentRenderer(FrankenRenderer):
         self.current_path = current_path  # Current post path for resolving relative links and images
         self.heading_counts = {}
         self.mermaid_counter = 0
+        self.iframe_counter = 0
     
     def render_list_item(self, token):
         """Render list items with task list checkbox support"""
@@ -266,6 +275,86 @@ class ContentRenderer(FrankenRenderer):
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowfullscreen
                 class="absolute inset-0 w-full h-full">
+            </iframe>
+        </div>
+        '''
+
+        if caption:
+            return iframe + f'<p class="text-sm text-slate-500 dark:text-slate-400 text-center mt-2">{caption}</p>'
+        return iframe
+
+    def render_iframe_embed(self, token):
+        src = token.src.strip()
+        options_raw = getattr(token, 'options', None)
+
+        # Defaults
+        width = '65vw'
+        height = '400px'
+        title = 'Embedded content'
+        allow = 'clipboard-read; clipboard-write; fullscreen'
+        allowfullscreen = True
+        caption = None
+        popup = False
+
+        # Parse options: key=value;key=value
+        if options_raw:
+            for part in options_raw.split(';'):
+                if not part.strip() or '=' not in part:
+                    continue
+                key, value = part.split('=', 1)
+                key = key.strip().lower()
+                value = value.strip()
+                if key == 'width':
+                    width = value
+                elif key == 'height':
+                    height = value
+                elif key == 'title':
+                    title = value
+                elif key == 'allow':
+                    allow = value
+                elif key == 'fullscreen':
+                    allowfullscreen = value.lower() in ('1', 'true', 'yes', 'on')
+                elif key == 'caption':
+                    caption = value
+                elif key == 'popup':
+                    popup = value.lower() in ('1', 'true', 'yes', 'on')
+
+        # Break out of normal content flow for viewport widths
+        break_out = 'vw' in str(width).lower()
+        if break_out:
+            container_style = f"width: {width}; position: relative; left: 50%; transform: translateX(-50%);"
+        else:
+            container_style = f"width: {width};"
+
+        self.iframe_counter += 1
+        iframe_id = f"iframe-{abs(hash(src)) & 0xFFFFFF}-{self.iframe_counter}"
+
+        fullscreen_button = ''
+        if popup:
+            fullscreen_button = (
+                '<div class="iframe-controls absolute top-2 right-2 z-10 flex gap-1 '
+                'bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">'
+                f'<button data-iframe-fullscreen-toggle="true" '
+                f'data-iframe-src="{src}" '
+                f'data-iframe-title="{title}" '
+                f'data-iframe-allow="{allow}" '
+                f'data-iframe-allowfullscreen="{str(allowfullscreen).lower()}" '
+                'class="px-2 py-1 text-xs border rounded hover:bg-slate-100 '
+                'dark:hover:bg-slate-700" title="Fullscreen">⛶</button>'
+                '</div>'
+            )
+
+        iframe = f'''
+        <div class="relative my-6 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800" style="{container_style}">
+            {fullscreen_button}
+            <iframe
+                id="{iframe_id}"
+                src="{src}"
+                title="{title}"
+                frameborder="0"
+                allow="{allow}"
+                {'allowfullscreen' if allowfullscreen else ''}
+                style="width: 100%; height: {height};">
             </iframe>
         </div>
         '''
@@ -613,7 +702,7 @@ def from_md(content, img_dir=None, current_path=None):
             'table': 'uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle my-6'}
     
     # Register custom tokens with renderer context manager
-    with ContentRenderer(YoutubeEmbed, InlineCodeAttr, Strikethrough, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, current_path=current_path) as renderer:
+    with ContentRenderer(YoutubeEmbed, IframeEmbed, InlineCodeAttr, Strikethrough, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, current_path=current_path) as renderer:
         doc = mst.Document(content)
         html = renderer.render(doc)
     
@@ -816,6 +905,41 @@ hdrs = (
         }
         body.pdf-focus .pdf-viewer {
             height: calc(100vh - 6rem) !important;
+        }
+
+        /* Iframe fullscreen overlay */
+        body.iframe-fullscreen-open {
+            overflow: hidden;
+        }
+        .iframe-fullscreen-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: rgba(2, 6, 23, 0.85);
+            display: flex;
+            flex-direction: column;
+        }
+        .iframe-fullscreen-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.75rem 1rem;
+            color: #e2e8f0;
+            font-size: 0.9rem;
+            background: rgba(15, 23, 42, 0.9);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+        }
+        .iframe-fullscreen-body {
+            flex: 1;
+            padding: 0.75rem;
+        }
+        .iframe-fullscreen-frame {
+            width: 100%;
+            height: 100%;
+            border: 0;
+            border-radius: 0.5rem;
+            background: #0f172a;
         }
 
         .layout-fluid {

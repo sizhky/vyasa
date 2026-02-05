@@ -1174,6 +1174,86 @@ function initPdfFocusToggle() {
     });
 }
 
+function openIframeFullscreen(button) {
+    const src = button.getAttribute('data-iframe-src');
+    const title = button.getAttribute('data-iframe-title') || 'Embedded content';
+    const allow = button.getAttribute('data-iframe-allow') || '';
+    const allowfullscreen = button.getAttribute('data-iframe-allowfullscreen') === 'true';
+
+    let overlay = document.querySelector('.iframe-fullscreen-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'iframe-fullscreen-overlay';
+        overlay.innerHTML = `
+            <div class="iframe-fullscreen-header">
+                <div class="iframe-fullscreen-title"></div>
+                <button type="button" class="iframe-fullscreen-close px-2 py-1 text-xs border rounded hover:bg-slate-700">
+                    Close
+                </button>
+            </div>
+            <div class="iframe-fullscreen-body">
+                <iframe class="iframe-fullscreen-frame" frameborder="0"></iframe>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        overlay.addEventListener('click', (event) => {
+            if (event.target.classList.contains('iframe-fullscreen-overlay')) {
+                closeIframeFullscreen();
+            }
+        });
+
+        overlay.querySelector('.iframe-fullscreen-close').addEventListener('click', () => {
+            closeIframeFullscreen();
+        });
+    }
+
+    overlay.querySelector('.iframe-fullscreen-title').textContent = title;
+    const frame = overlay.querySelector('.iframe-fullscreen-frame');
+    frame.setAttribute('src', src);
+    frame.setAttribute('title', title);
+    frame.setAttribute('allow', allow);
+    if (allowfullscreen) {
+        frame.setAttribute('allowfullscreen', '');
+    } else {
+        frame.removeAttribute('allowfullscreen');
+    }
+
+    document.body.classList.add('iframe-fullscreen-open');
+    overlay.style.display = 'flex';
+}
+
+function closeIframeFullscreen() {
+    const overlay = document.querySelector('.iframe-fullscreen-overlay');
+    if (!overlay) {
+        return;
+    }
+    const frame = overlay.querySelector('.iframe-fullscreen-frame');
+    if (frame) {
+        frame.setAttribute('src', 'about:blank');
+    }
+    overlay.style.display = 'none';
+    document.body.classList.remove('iframe-fullscreen-open');
+}
+
+function initIframeFullscreenToggle() {
+    document.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-iframe-fullscreen-toggle]');
+        if (!button) {
+            return;
+        }
+        event.preventDefault();
+        openIframeFullscreen(button);
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') {
+            return;
+        }
+        closeIframeFullscreen();
+    });
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     updateActivePostLink();
@@ -1183,6 +1263,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFolderChevronState();
     initKeyboardShortcuts();
     initPdfFocusToggle();
+    initIframeFullscreenToggle();
     initSearchPlaceholderCycle(document);
     initPostsSearchPersistence(document);
     initCodeBlockCopyButtons(document);
