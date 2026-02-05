@@ -69,6 +69,8 @@ def span_token(name, pat, attr, prec=5):
                     self.option = match.group(2) if match.group(2) else None
                 elif name == 'IframeEmbed':
                     self.options = match.group(2) if match.group(2) else None
+                elif name == 'DownloadEmbed':
+                    self.label = match.group(2) if match.group(2) else None
     T.__name__ = name
     return T
 
@@ -83,6 +85,12 @@ IframeEmbed = span_token(
     'IframeEmbed',
     r'\[iframe:([^\|\]]+)(?:\|(.+))?\]',
     'src',
+    6
+)
+DownloadEmbed = span_token(
+    'DownloadEmbed',
+    r'\[download:([^\|\]]+)(?:\|(.+))?\]',
+    'path',
     6
 )
 
@@ -295,6 +303,7 @@ class ContentRenderer(FrankenRenderer):
         allowfullscreen = True
         caption = None
         popup = False
+        border = 'default'
 
         # Parse options: key=value;key=value
         if options_raw:
@@ -318,6 +327,8 @@ class ContentRenderer(FrankenRenderer):
                     caption = value
                 elif key == 'popup':
                     popup = value.lower() in ('1', 'true', 'yes', 'on')
+                elif key == 'border':
+                    border = value.lower()
 
         # Break out of normal content flow for viewport widths
         break_out = 'vw' in str(width).lower()
@@ -344,8 +355,15 @@ class ContentRenderer(FrankenRenderer):
                 '</div>'
             )
 
+        if border in ('black', 'dark'):
+            border_classes = 'border border-black'
+        elif border in ('none', 'false', '0', 'off'):
+            border_classes = 'border border-transparent'
+        else:
+            border_classes = 'border border-slate-200 dark:border-slate-800'
+
         iframe = f'''
-        <div class="relative my-6 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800" style="{container_style}">
+        <div class="relative my-6 rounded-lg overflow-hidden {border_classes}" style="{container_style}">
             {fullscreen_button}
             <iframe
                 id="{iframe_id}"
@@ -362,6 +380,34 @@ class ContentRenderer(FrankenRenderer):
         if caption:
             return iframe + f'<p class="text-sm text-slate-500 dark:text-slate-400 text-center mt-2">{caption}</p>'
         return iframe
+
+    def render_download_embed(self, token):
+        from pathlib import Path
+        raw_path = token.path.strip()
+        label = getattr(token, 'label', None)
+
+        # Resolve relative paths against current_path like normal links
+        if self.current_path:
+            root = get_root_folder().resolve()
+            current_file_full = root / self.current_path
+            current_dir = current_file_full.parent
+            resolved = (current_dir / raw_path).resolve()
+            try:
+                rel_path = resolved.relative_to(root).as_posix()
+                download_path = f"/download/{rel_path}"
+            except ValueError:
+                download_path = raw_path
+        else:
+            download_path = f"/download/{raw_path}"
+
+        if not label:
+            label = Path(raw_path).name
+
+        link_class = (
+            "text-amber-600 dark:text-amber-400 underline underline-offset-2 "
+            "hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors"
+        )
+        return f'<a href="{download_path}" class="{link_class}" download>{label}</a>'
     
     def render_footnote_ref(self, token):
         self.fn_counter += 1
@@ -562,6 +608,12 @@ class ContentRenderer(FrankenRenderer):
         is_external = href.startswith(('http://', 'https://', 'mailto:', 'tel:', '//'))
         is_absolute_internal = href.startswith('/') and not href.startswith('//')
         is_relative = not is_external and not is_absolute_internal
+        download_flag = False
+        if token.title and 'download=true' in token.title.lower():
+            download_flag = True
+        if '?download=true' in href.lower():
+            href = re.sub(r'\?download=true', '', href, flags=re.IGNORECASE)
+            download_flag = True
         if is_hash:
             link_class = (
                 "text-amber-600 dark:text-amber-400 underline underline-offset-2 "
@@ -593,12 +645,23 @@ class ContentRenderer(FrankenRenderer):
         is_internal = is_absolute_internal and '.' not in href.split('/')[-1]
         hx = f' hx-get="{href}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top"' if is_internal else ''
         ext = '' if (is_internal or is_absolute_internal or is_hash) else ' target="_blank" rel="noopener noreferrer"'
+        download_attr = ''
+        if download_flag:
+            download_attr = ' download'
+            if href.startswith('/posts/'):
+                download_target = href[len('/posts/'):]
+            elif href.startswith('/'):
+                download_target = href.lstrip('/')
+            else:
+                download_target = href
+            href = f'/download/{download_target}'
+            hx = ''
         # Amber/gold link styling, stands out and is accessible
         link_class = (
             "text-amber-600 dark:text-amber-400 underline underline-offset-2 "
             "hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors"
         )
-        return f'<a href="{href}"{hx}{ext} class="{link_class}"{title}>{inner}</a>'
+        return f'<a href="{href}"{hx}{ext}{download_attr} class="{link_class}"{title}>{inner}</a>'
 
 
 def postprocess_tabs(html, tab_data_store, img_dir, current_path, footnotes):
@@ -621,7 +684,7 @@ def postprocess_tabs(html, tab_data_store, img_dir, current_path, footnotes):
         for i, (_, tab_content) in enumerate(tabs):
             active = 'active' if i == 0 else ''
             # Render each tab's content as fresh markdown
-            with ContentRenderer(YoutubeEmbed, InlineCodeAttr, Strikethrough, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, current_path=current_path) as renderer:
+            with ContentRenderer(YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, current_path=current_path) as renderer:
                 doc = mst.Document(tab_content)
                 rendered = renderer.render(doc)
             html_parts.append(f'<div class="tab-panel {active}" data-tab-index="{i}">{rendered}</div>')
@@ -702,7 +765,7 @@ def from_md(content, img_dir=None, current_path=None):
             'table': 'uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle my-6'}
     
     # Register custom tokens with renderer context manager
-    with ContentRenderer(YoutubeEmbed, IframeEmbed, InlineCodeAttr, Strikethrough, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, current_path=current_path) as renderer:
+    with ContentRenderer(YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, current_path=current_path) as renderer:
         doc = mst.Document(content)
         html = renderer.render(doc)
     
@@ -1922,6 +1985,33 @@ def serve_post_static(path: str, ext: str):
     file_path = get_root_folder() / f'{path}.{ext}'
     if file_path.exists():
         return FileResponse(file_path)
+    return Response(status_code=404)
+
+# Serve JSON attachments from blog posts (not included in fasthtml static exts)
+@rt("/posts/{path:path}.json")
+def serve_post_json(path: str):
+    from starlette.responses import FileResponse
+    file_path = get_root_folder() / f'{path}.json'
+    if file_path.exists():
+        return FileResponse(
+            file_path,
+            headers={"Content-Disposition": f'attachment; filename="{file_path.name}"'}
+        )
+    return Response(status_code=404)
+
+# Generic download route for any file under the blog root
+@rt("/download/{path:path}")
+def download_file(path: str):
+    from starlette.responses import FileResponse
+    root = get_root_folder().resolve()
+    file_path = (root / path).resolve()
+    if not str(file_path).startswith(str(root) + os.sep):
+        return Response(status_code=403)
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(
+            file_path,
+            headers={"Content-Disposition": f'attachment; filename="{file_path.name}"'}
+        )
     return Response(status_code=404)
 
 def theme_toggle():
