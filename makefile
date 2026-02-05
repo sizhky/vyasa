@@ -34,15 +34,15 @@ bump-patch:
 # Explicit publish + checkpoint shortcuts
 publish-patch: bump-patch build
 	python -m twine upload --repository sizhky dist/*
-	zsh -i -c "checkpoint"
+	zsh -i -c "checkpoint main"
 
 publish-minor: bump-minor build
 	python -m twine upload --repository sizhky dist/*
-	zsh -i -c "checkpoint"
+	zsh -i -c "checkpoint main"
 
 publish-major: bump-major build
 	python -m twine upload --repository sizhky dist/*
-	zsh -i -c "checkpoint"
+	zsh -i -c "checkpoint main"
 
 pc: publish-patch
 ppat: publish-patch
