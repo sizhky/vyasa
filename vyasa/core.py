@@ -407,7 +407,7 @@ class ContentRenderer(FrankenRenderer):
             "text-amber-600 dark:text-amber-400 underline underline-offset-2 "
             "hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors"
         )
-        return f'<a href="{download_path}" class="{link_class}" download>{label}</a>'
+        return f'<a href="{download_path}" class="{link_class}" download hx-boost="false">{label}</a>'
     
     def render_footnote_ref(self, token):
         self.fn_counter += 1
@@ -646,8 +646,10 @@ class ContentRenderer(FrankenRenderer):
         hx = f' hx-get="{href}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top"' if is_internal else ''
         ext = '' if (is_internal or is_absolute_internal or is_hash) else ' target="_blank" rel="noopener noreferrer"'
         download_attr = ''
+        boost_attr = ''
         if download_flag:
             download_attr = ' download'
+            boost_attr = ' hx-boost="false"'
             if href.startswith('/posts/'):
                 download_target = href[len('/posts/'):]
             elif href.startswith('/'):
@@ -661,7 +663,7 @@ class ContentRenderer(FrankenRenderer):
             "text-amber-600 dark:text-amber-400 underline underline-offset-2 "
             "hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors"
         )
-        return f'<a href="{href}"{hx}{ext}{download_attr} class="{link_class}"{title}>{inner}</a>'
+        return f'<a href="{href}"{hx}{ext}{download_attr}{boost_attr} class="{link_class}"{title}>{inner}</a>'
 
 
 def postprocess_tabs(html, tab_data_store, img_dir, current_path, footnotes):
