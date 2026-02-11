@@ -502,6 +502,7 @@ class ContentRenderer(FrankenRenderer):
             d2_target = None
             d2_animate_interval = None
             d2_animate = None
+            d2_fullscreen_title = None
             if frontmatter_match:
                 frontmatter_content = frontmatter_match.group(1)
                 code_without_frontmatter = code[frontmatter_match.end():]
@@ -536,6 +537,10 @@ class ContentRenderer(FrankenRenderer):
                         d2_animate_interval = config['animate-interval']
                     if 'animate' in config:
                         d2_animate = config['animate']
+                    if 'title' in config:
+                        d2_fullscreen_title = config['title']
+                    elif 'fullscreen_title' in config:
+                        d2_fullscreen_title = config['fullscreen_title']
                 except Exception as e:
                     print(f"Error parsing d2 frontmatter: {e}")
                 code = code_without_frontmatter
@@ -570,14 +575,23 @@ class ContentRenderer(FrankenRenderer):
                 d2_attrs.append(f'data-d2-animate-interval="{_escape_attr(d2_animate_interval)}"')
             if d2_animate is not None:
                 d2_attrs.append(f'data-d2-animate="{_escape_attr(d2_animate)}"')
+            if d2_fullscreen_title is not None:
+                d2_attrs.append(f'data-d2-fullscreen-title="{_escape_attr(d2_fullscreen_title)}"')
             d2_attr_str = (' ' + ' '.join(d2_attrs)) if d2_attrs else ''
+            caption_html = ''
+            if d2_fullscreen_title:
+                import html
+                safe_caption = html.escape(str(d2_fullscreen_title))
+                caption_html = f'<div class="text-xs text-slate-500 dark:text-slate-400 text-center px-3 pb-2">{safe_caption}</div>'
             return f'''<div class="d2-container relative border-4 rounded-md my-4 shadow-2xl" style="{container_style}">
                 <div class="d2-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
+                    <button onclick="openD2Fullscreen('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>
                     <button onclick="resetD2Zoom('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
                     <button onclick="zoomD2In('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
                     <button onclick="zoomD2Out('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
                 </div>
                 <div id="{diagram_id}" class="d2-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: {min_height}; height: {height};" data-d2-code="{escaped_code}"{d2_attr_str}><pre class="d2" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">{code}</pre></div>
+                {caption_html}
             </div>'''
         if lang == 'mermaid':
             # Extract frontmatter from mermaid code block
@@ -589,6 +603,7 @@ class ContentRenderer(FrankenRenderer):
             width = '65vw'  # Default to viewport width for better visibility
             min_height = '400px'
             gantt_width = None  # Custom Gantt width override
+            mermaid_title = None
             
             if frontmatter_match:
                 frontmatter_content = frontmatter_match.group(1)
@@ -608,6 +623,8 @@ class ContentRenderer(FrankenRenderer):
                         min_height = height
                     if 'width' in config:
                         width = config['width']
+                    if 'title' in config:
+                        mermaid_title = config['title']
                     
                     # Handle aspect_ratio for Gantt charts
                     if 'aspect_ratio' in config:
@@ -652,6 +669,13 @@ class ContentRenderer(FrankenRenderer):
             
             # Add custom Gantt width as data attribute if specified
             gantt_data_attr = f' data-gantt-width="{gantt_width}"' if gantt_width else ''
+            mermaid_title_attr = ''
+            caption_html = ''
+            if mermaid_title:
+                import html
+                safe_mermaid_title = html.escape(str(mermaid_title))
+                mermaid_title_attr = f' data-mermaid-title="{safe_mermaid_title}"'
+                caption_html = f'<div class="text-xs text-slate-500 dark:text-slate-400 text-center px-3 pb-2">{safe_mermaid_title}</div>'
             
             return f'''<div class="mermaid-container relative border-4 rounded-md my-4 shadow-2xl" style="{container_style}">
                 <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
@@ -660,7 +684,8 @@ class ContentRenderer(FrankenRenderer):
                     <button onclick="zoomMermaidIn('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
                     <button onclick="zoomMermaidOut('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
                 </div>
-                <div id="{diagram_id}" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: {min_height}; height: {height};" data-mermaid-code="{escaped_code}"{gantt_data_attr}><pre class="mermaid" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">{code}</pre></div>
+                <div id="{diagram_id}" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: {min_height}; height: {height};" data-mermaid-code="{escaped_code}"{gantt_data_attr}{mermaid_title_attr}><pre class="mermaid" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">{code}</pre></div>
+                {caption_html}
             </div>'''
         
         # For other languages: escape HTML/XML for display, but NOT for markdown 

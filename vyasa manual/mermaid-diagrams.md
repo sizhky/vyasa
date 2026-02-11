@@ -6,6 +6,7 @@ Vyasa renders Mermaid code blocks with zoom, pan, reset, and fullscreen controls
 ::tab{title="Rendered"}
 ```mermaid
 ---
+title: "Mermaid Diagram Example"
 width: 45 vw
 ---
 graph TD

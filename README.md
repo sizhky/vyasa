@@ -68,6 +68,10 @@ mindmap
         Sequence Diagrams
         State Diagrams
         Gantt Charts
+      D2 Diagrams
+        Layouts & Themes
+        Composition Animation
+        Scenario/Layers Support
       Interactive Diagrams
         Zoom & Pan
         Fullscreen Mode
@@ -102,14 +106,24 @@ mindmap
 - **YouTube Embeds**: Use `[yt:VIDEO_ID]` or `[yt:VIDEO_ID|Caption]` for responsive iframe cards with aspect-ratio containers
 - **Task Lists**: `- [ ]` / `- [x]` render as custom styled checkboxes (green for checked, gray for unchecked) with SVG checkmarks
 - **Mermaid Diagrams**: Full support for flowcharts, sequence diagrams, state diagrams, Gantt charts, etc.
+- **D2 Diagrams**: Supports architecture/process diagrams with interactive rendering and composition animation support.
 - **Interactive Diagrams**: 
   - Zoom with mouse wheel (zooms towards cursor position)
   - Pan by dragging with mouse
   - Built-in controls: fullscreen, reset, zoom in/out buttons
-  - Auto-scaling based on diagram aspect ratio (wide diagrams like Gantt charts get special handling)
+  - Auto-scaling based on diagram aspect ratio
   - Fullscreen modal viewer with dark mode support
 - **Theme-aware Rendering**: Diagrams automatically re-render when switching light/dark mode via MutationObserver
-- **Mermaid Frontmatter**: Configure diagram size with YAML frontmatter (width, height, min-height)
+- **Mermaid Frontmatter**: Configure diagram size and metadata with YAML frontmatter (`width`, `height`, `aspect_ratio`, `title`)
+- **D2 Frontmatter**: Configure rendering and animation with YAML frontmatter:
+  - `width`, `height`, `title`
+  - `layout` (`elk`, `dagre`, etc.), `theme_id`, `dark_theme_id`, `sketch`
+  - `pad`, `scale`
+  - `target` (board/layer target), `animate_interval`/`animate-interval`, `animate`
+  - Notes:
+    - Composition animation is enabled with `animate_interval`
+    - If animation is enabled and `target` is omitted, Vyasa auto-targets all boards (`*`)
+    - If `title` is provided, it is used for fullscreen modal title and as a small centered caption under the diagram
 - **Tabbed Content**: Create multi-tab sections using `:::tabs` and `::tab{title="..."}` syntax with smooth transitions
 - **Relative Links**: Full support for relative markdown links (`./file.md`, `../other.md`) with automatic path resolution
 - **Plain-Text Headings**: Inline markdown in headings is stripped for clean display and consistent anchor slugs
@@ -144,9 +158,9 @@ See the full list in [Markdown Writing Features](vyasa%20manual/markdown-feature
 | Feature                     | Description                                      |
 |-----------------------------|--------------------------------------------------|
 | FastHTML Integration        | Built on FastHTML for high performance and ease of use |
-| Advanced Markdown Support   | Footnotes as sidenotes, YouTube embeds, task lists, Mermaid diagrams, math notation, tabbed content, and more |
+| Advanced Markdown Support   | Footnotes as sidenotes, YouTube embeds, task lists, Mermaid + D2 diagrams, math notation, tabbed content, and more |
 | Modern UI                   | Responsive design, dark mode, three-panel layout, HTMX navigation |
-| Interactive Diagrams       | Zoomable, pannable Mermaid diagrams with fullscreen support |
+| Interactive Diagrams       | Zoomable, pannable Mermaid and D2 diagrams with fullscreen support |
 
 ## Installation
 
