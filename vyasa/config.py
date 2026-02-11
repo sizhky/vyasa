@@ -197,7 +197,7 @@ class VyasaConfig:
     
     def get_sidebars_open(self) -> bool:
         """Get whether sidebars should be open by default."""
-        value = self.get('sidebars_open', 'VYASA_SIDEBARS_OPEN', True)
+        value = self.get('sidebars_open', 'VYASA_SIDEBARS_OPEN', False)
         # Handle string values from environment variables
         if isinstance(value, str):
             return value.lower() in ('true', '1', 'yes', 'on')

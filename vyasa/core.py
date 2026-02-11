@@ -2572,7 +2572,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                     "hx_swap_oob": "true",
                 }
                 toc_sidebar = Aside(
-                    collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(),
+                    collapsible_sidebar("list", "Table of Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(),
                     **toc_attrs
                 )
                 mobile_toc_panel = Div(
@@ -2586,7 +2586,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                         cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
                     ),
                     Div(
-                        collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
+                        collapsible_sidebar("list", "Table of Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
                         cls="p-4 overflow-y-auto"
                     ),
                     id="mobile-toc-panel",
@@ -2660,7 +2660,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 "id": "toc-sidebar"
             }
             toc_sidebar = Aside(
-                collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(),
+                collapsible_sidebar("list", "Table of Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(),
                 **toc_attrs
             )
         # Container for main content only (for HTMX swapping)
@@ -2713,7 +2713,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                     cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
                 ),
                 Div(
-                    collapsible_sidebar("list", "Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
+                    collapsible_sidebar("list", "Table of Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
                     cls="p-4 overflow-y-auto"
                 ),
                 id="mobile-toc-panel",
