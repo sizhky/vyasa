@@ -499,6 +499,9 @@ class ContentRenderer(FrankenRenderer):
             d2_sketch = None
             d2_pad = None
             d2_scale = None
+            d2_target = None
+            d2_animate_interval = None
+            d2_animate = None
             if frontmatter_match:
                 frontmatter_content = frontmatter_match.group(1)
                 code_without_frontmatter = code[frontmatter_match.end():]
@@ -525,6 +528,14 @@ class ContentRenderer(FrankenRenderer):
                         d2_pad = config['pad']
                     if 'scale' in config:
                         d2_scale = config['scale']
+                    if 'target' in config:
+                        d2_target = config['target']
+                    if 'animate_interval' in config:
+                        d2_animate_interval = config['animate_interval']
+                    if 'animate-interval' in config and d2_animate_interval is None:
+                        d2_animate_interval = config['animate-interval']
+                    if 'animate' in config:
+                        d2_animate = config['animate']
                 except Exception as e:
                     print(f"Error parsing d2 frontmatter: {e}")
                 code = code_without_frontmatter
@@ -553,6 +564,12 @@ class ContentRenderer(FrankenRenderer):
                 d2_attrs.append(f'data-d2-pad="{_escape_attr(d2_pad)}"')
             if d2_scale is not None:
                 d2_attrs.append(f'data-d2-scale="{_escape_attr(d2_scale)}"')
+            if d2_target is not None:
+                d2_attrs.append(f'data-d2-target="{_escape_attr(d2_target)}"')
+            if d2_animate_interval is not None:
+                d2_attrs.append(f'data-d2-animate-interval="{_escape_attr(d2_animate_interval)}"')
+            if d2_animate is not None:
+                d2_attrs.append(f'data-d2-animate="{_escape_attr(d2_animate)}"')
             d2_attr_str = (' ' + ' '.join(d2_attrs)) if d2_attrs else ''
             return f'''<div class="d2-container relative border-4 rounded-md my-4 shadow-2xl" style="{container_style}">
                 <div class="d2-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">

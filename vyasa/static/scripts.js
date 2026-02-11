@@ -7,6 +7,15 @@ const mermaidDebugEnabled = () => (
     window.VYASA_DEBUG_MERMAID === true ||
     localStorage.getItem('vyasaDebugMermaid') === '1'
 );
+const d2DebugEnabled = () => (
+    window.VYASA_DEBUG_D2 === true ||
+    localStorage.getItem('vyasaDebugD2') === '1'
+);
+const d2DebugLog = (...args) => {
+    if (d2DebugEnabled()) {
+        console.log('[vyasa][d2]', ...args);
+    }
+};
 const mermaidDebugLog = (...args) => {
     if (mermaidDebugEnabled()) {
         console.log('[vyasa][mermaid]', ...args);
@@ -54,6 +63,74 @@ function decodeHtmlEntities(value) {
     return textarea.value;
 }
 
+function normalizeD2SvgForBrowser(svg) {
+    // Work around D2 animation script collisions that can emit duplicate
+    // declarations like `const htmlElement` and break execution in-page.
+    return svg.replace(/\b(?:const|let)\s+htmlElement\b/g, 'var htmlElement');
+}
+
+function rehydrateScripts(container) {
+    const scripts = Array.from(container.querySelectorAll('script'));
+    scripts.forEach((oldScript) => {
+        const newScript = document.createElement('script');
+        Array.from(oldScript.attributes).forEach((attr) => {
+            newScript.setAttribute(attr.name, attr.value);
+        });
+        newScript.textContent = oldScript.textContent || '';
+        oldScript.replaceWith(newScript);
+    });
+}
+
+function activateSvgAnimations(container) {
+    const svg = container.querySelector('svg');
+    if (!svg) {
+        return;
+    }
+    try {
+        if (typeof svg.unpauseAnimations === 'function') {
+            svg.unpauseAnimations();
+        }
+        if (typeof svg.setCurrentTime === 'function') {
+            svg.setCurrentTime(0);
+        }
+    } catch (error) {
+        d2DebugLog('activateSvgAnimations error', error);
+    }
+}
+
+function setD2ControlsEnabled(wrapper, enabled) {
+    const container = wrapper.closest('.d2-container');
+    if (!container) {
+        return;
+    }
+    const controls = container.querySelector('.d2-controls');
+    if (!controls) {
+        return;
+    }
+    controls.querySelectorAll('button').forEach((button) => {
+        button.disabled = !enabled;
+        button.style.opacity = enabled ? '1' : '0.5';
+        button.style.cursor = enabled ? 'pointer' : 'not-allowed';
+    });
+}
+
+function ensureD2PanzoomStage(wrapper) {
+    let stage = wrapper.querySelector('.d2-panzoom-stage');
+    if (stage) {
+        return stage;
+    }
+    const svg = wrapper.querySelector('svg');
+    if (!svg) {
+        return null;
+    }
+    stage = document.createElement('div');
+    stage.className = 'd2-panzoom-stage w-full h-full flex items-center justify-center';
+    stage.style.transformOrigin = 'center center';
+    svg.replaceWith(stage);
+    stage.appendChild(svg);
+    return stage;
+}
+
 function isDarkModeActive() {
     return document.documentElement.classList.contains('dark');
 }
@@ -78,6 +155,19 @@ function parseOptionalBoolean(value) {
         return false;
     }
     return undefined;
+}
+
+function normalizeD2Target(value) {
+    if (value === null || value === undefined) {
+        return undefined;
+    }
+    const trimmed = String(value).trim();
+    if (trimmed === '""' || trimmed === "''" || trimmed === '') {
+        // D2 multi-board target uses wildcard patterns (e.g. layers.x.*).
+        // Treat empty target as wildcard-all for composition animation.
+        return '*';
+    }
+    return trimmed;
 }
 
 async function renderD2Diagrams(rootElement = document) {
@@ -109,6 +199,9 @@ async function renderD2Diagrams(rootElement = document) {
             const sketch = parseOptionalBoolean(wrapper.getAttribute('data-d2-sketch'));
             const pad = parseOptionalNumber(wrapper.getAttribute('data-d2-pad'));
             const scale = parseOptionalNumber(wrapper.getAttribute('data-d2-scale'));
+            const target = wrapper.getAttribute('data-d2-target');
+            const animateInterval = parseOptionalNumber(wrapper.getAttribute('data-d2-animate-interval'));
+            const animate = parseOptionalBoolean(wrapper.getAttribute('data-d2-animate'));
 
             const compileOptions = {};
             if (layout) {
@@ -116,6 +209,11 @@ async function renderD2Diagrams(rootElement = document) {
             }
             if (sketch !== undefined) {
                 compileOptions.sketch = sketch;
+            }
+            // For compositions, target selection must happen at compile-time.
+            const normalizedTarget = normalizeD2Target(target);
+            if (normalizedTarget !== undefined) {
+                compileOptions.target = normalizedTarget;
             }
 
             const result = await d2.compile(decodedSource, compileOptions);
@@ -140,9 +238,57 @@ async function renderD2Diagrams(rootElement = document) {
             if (scale !== undefined) {
                 renderOptions.scale = scale;
             }
+            if (normalizedTarget !== undefined) {
+                renderOptions.target = normalizedTarget;
+            }
+            if (animateInterval !== undefined) {
+                renderOptions.animateInterval = animateInterval;
+            } else if (animate === true) {
+                renderOptions.animateInterval = 1200;
+            }
+            // D2 compositions need target="" + animateInterval>0 to emit animated multi-board SVG.
+            // If user requests animation but omits target, default to all boards.
+            if (
+                renderOptions.animateInterval > 0 &&
+                (renderOptions.target === undefined || renderOptions.target === null)
+            ) {
+                renderOptions.target = '*';
+            }
+            if (
+                renderOptions.animateInterval > 0 &&
+                (compileOptions.target === undefined || compileOptions.target === null)
+            ) {
+                compileOptions.target = '*';
+            }
+            const isAnimated = Number(renderOptions.animateInterval || 0) > 0;
+            wrapper.dataset.d2Animated = isAnimated ? 'true' : 'false';
+            setD2ControlsEnabled(wrapper, !isAnimated);
+            d2DebugLog('render options', {
+                id: wrapper.id,
+                layout: compileOptions.layout,
+                sketch: compileOptions.sketch,
+                compileTarget: compileOptions.target,
+                themeID: renderOptions.themeID,
+                darkThemeID: renderOptions.darkThemeID,
+                target: renderOptions.target,
+                animateInterval: renderOptions.animateInterval
+            });
             const svg = await d2.render(result.diagram, renderOptions);
-            wrapper.innerHTML = svg;
+            const normalizedSvg = normalizeD2SvgForBrowser(svg);
+            wrapper.innerHTML = normalizedSvg;
+            rehydrateScripts(wrapper);
+            activateSvgAnimations(wrapper);
+            ensureD2PanzoomStage(wrapper);
             wrapper.dataset.d2Rendered = 'true';
+            const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            d2DebugLog('rendered', {
+                id: wrapper.id,
+                animated: normalizedSvg.includes('animation') || normalizedSvg.includes('@keyframes'),
+                hasHtmlElementScript: normalizedSvg.includes('htmlElement'),
+                hasScriptTag: normalizedSvg.includes('<script'),
+                hasSmilAnimateTag: normalizedSvg.includes('<animate'),
+                prefersReducedMotion
+            });
         } catch (error) {
             console.error('Failed to render D2 diagram', error);
         }
@@ -153,19 +299,25 @@ async function renderD2Diagrams(rootElement = document) {
 function initD2Interaction(rootElement = document) {
     const wrappers = Array.from(rootElement.querySelectorAll('.d2-wrapper'));
     wrappers.forEach((wrapper) => {
+        if (wrapper.dataset.d2Animated === 'true') {
+            wrapper.style.cursor = 'default';
+            wrapper.style.touchAction = 'auto';
+            return;
+        }
         const svg = wrapper.querySelector('svg');
-        if (!svg || wrapper.dataset.d2Interactive === 'true') {
+        const stage = ensureD2PanzoomStage(wrapper);
+        if (!svg || !stage || wrapper.dataset.d2Interactive === 'true') {
             return;
         }
 
         const wrapperRect = wrapper.getBoundingClientRect();
-        const svgRect = svg.getBoundingClientRect();
-        if (!svgRect.width || !svgRect.height) {
+        const stageRect = stage.getBoundingClientRect();
+        if (!stageRect.width || !stageRect.height) {
             return;
         }
-        const scaleX = (wrapperRect.width - 32) / svgRect.width;
-        const scaleY = (wrapperRect.height - 32) / svgRect.height;
-        const aspectRatio = svgRect.width / svgRect.height;
+        const scaleX = (wrapperRect.width - 32) / stageRect.width;
+        const scaleY = (wrapperRect.height - 32) / stageRect.height;
+        const aspectRatio = stageRect.width / stageRect.height;
         const maxUpscale = 1;
         const initialScale = aspectRatio > 3
             ? Math.min(scaleX, maxUpscale)
@@ -183,14 +335,18 @@ function initD2Interaction(rootElement = document) {
         wrapper.dataset.d2Interactive = 'true';
 
         const getSvg = () => wrapper.querySelector('svg');
+        const getStage = () => wrapper.querySelector('.d2-panzoom-stage');
         const applyState = () => {
-            const currentSvg = getSvg();
-            if (!currentSvg) {
+            const currentStage = getStage();
+            if (!currentStage) {
                 return;
             }
-            currentSvg.style.pointerEvents = 'none';
-            currentSvg.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`;
-            currentSvg.style.transformOrigin = 'center center';
+            const currentSvg = getSvg();
+            if (currentSvg) {
+                currentSvg.style.pointerEvents = 'none';
+            }
+            currentStage.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`;
+            currentStage.style.transformOrigin = 'center center';
         };
         applyState();
 
@@ -199,11 +355,11 @@ function initD2Interaction(rootElement = document) {
 
         wrapper.addEventListener('wheel', (e) => {
             e.preventDefault();
-            const currentSvg = getSvg();
-            if (!currentSvg) {
+            const currentStage = getStage();
+            if (!currentStage) {
                 return;
             }
-            const rect = currentSvg.getBoundingClientRect();
+            const rect = currentStage.getBoundingClientRect();
             const mouseX = e.clientX - rect.left - rect.width / 2;
             const mouseY = e.clientY - rect.top - rect.height / 2;
             const zoomIntensity = 0.01;
@@ -261,12 +417,15 @@ window.resetD2Zoom = function(id) {
     if (!state || !wrapper) {
         return;
     }
+    if (wrapper.dataset.d2Animated === 'true') {
+        return;
+    }
     state.scale = 1;
     state.translateX = 0;
     state.translateY = 0;
-    const svg = wrapper.querySelector('svg');
-    if (svg) {
-        svg.style.transform = 'translate(0px, 0px) scale(1)';
+    const stage = wrapper.querySelector('.d2-panzoom-stage');
+    if (stage) {
+        stage.style.transform = 'translate(0px, 0px) scale(1)';
     }
 };
 
@@ -276,10 +435,13 @@ window.zoomD2In = function(id) {
     if (!state || !wrapper) {
         return;
     }
+    if (wrapper.dataset.d2Animated === 'true') {
+        return;
+    }
     state.scale = Math.min(state.scale * 1.1, 10);
-    const svg = wrapper.querySelector('svg');
-    if (svg) {
-        svg.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`;
+    const stage = wrapper.querySelector('.d2-panzoom-stage');
+    if (stage) {
+        stage.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`;
     }
 };
 
@@ -289,10 +451,13 @@ window.zoomD2Out = function(id) {
     if (!state || !wrapper) {
         return;
     }
+    if (wrapper.dataset.d2Animated === 'true') {
+        return;
+    }
     state.scale = Math.max(state.scale * 0.9, 0.1);
-    const svg = wrapper.querySelector('svg');
-    if (svg) {
-        svg.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`;
+    const stage = wrapper.querySelector('.d2-panzoom-stage');
+    if (stage) {
+        stage.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`;
     }
 };
 
