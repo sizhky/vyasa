@@ -194,6 +194,7 @@ Short, focused guides for deeper topics. Start with configuration and writing co
 - [Configuration & CLI](vyasa%20manual/configuration.md)
 - [Markdown Writing Features](vyasa%20manual/markdown-features.md)
 - [Mermaid Diagrams](vyasa%20manual/mermaid-diagrams.md)
+- [D2 Diagrams](vyasa%20manual/d2-diagrams.md)
 - [Architecture Overview](vyasa%20manual/architecture.md)
 - [Theming & CSS](vyasa%20manual/theming.md)
 - [Security & Auth](vyasa%20manual/security.md)

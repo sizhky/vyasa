@@ -4,7 +4,8 @@ Short, focused guides for deeper topics. Start with configuration and writing co
 
 - [Configuration & CLI](configuration.md)
 - [Markdown Writing Features](markdown-features.md)
-- [Mermaid Diagrams](mermaid.md)
+- [Mermaid Diagrams](mermaid-diagrams.md)
+- [D2 Diagrams](d2-diagrams.md)
 - [Architecture Overview](architecture.md)
 - [Theming & CSS](theming.md)
 - [Security & Auth](security.md)
