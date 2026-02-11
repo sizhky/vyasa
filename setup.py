@@ -1,7 +1,7 @@
-from pkg_resources import parse_version
+from packaging.version import Version
 from configparser import ConfigParser
 import setuptools, shlex
-assert parse_version(setuptools.__version__)>=parse_version('36.2')
+assert Version(setuptools.__version__) >= Version('36.2')
 
 # note: all settings are in settings.ini; edit there, not here
 config = ConfigParser(delimiters=['='])
@@ -60,5 +60,4 @@ setuptools.setup(
         'nbdev': [f'{cfg.get("lib_path")}={cfg.get("lib_path")}._modidx:d']
     },
     **setup_cfg)
-
 
