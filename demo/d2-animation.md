@@ -5,6 +5,7 @@
 animate_interval: 1200
 width: 80vw
 layout: elk
+title: Deployment pipeline
 ---
 direction: right
 
@@ -97,6 +98,7 @@ scenarios: {
 animate_interval: 1400
 layout: elk
 width: 80vw
+title: Water cycle in nature
 ---
 direction: right
 

@@ -503,6 +503,91 @@ window.zoomD2Out = function(id) {
     }
 };
 
+window.openD2Fullscreen = async function(id) {
+    const wrapper = document.getElementById(id);
+    if (!wrapper) return;
+
+    const originalCode = wrapper.getAttribute('data-d2-code');
+    if (!originalCode) return;
+    const fullscreenTitle = wrapper.getAttribute('data-d2-fullscreen-title') || 'D2 Diagram';
+
+    const existing = document.getElementById('d2-fullscreen-modal');
+    if (existing) {
+        existing.remove();
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'd2-fullscreen-modal';
+    modal.className = 'fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4';
+    modal.style.animation = 'fadeIn 0.2s ease-in';
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col';
+
+    const header = document.createElement('div');
+    header.className = 'flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700';
+
+    const title = document.createElement('h3');
+    title.className = 'text-lg font-semibold text-slate-800 dark:text-slate-200';
+    title.textContent = fullscreenTitle;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '✕';
+    closeBtn.className = 'px-3 py-1 text-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors';
+    closeBtn.title = 'Close (Esc)';
+    closeBtn.onclick = () => document.body.removeChild(modal);
+
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+
+    const diagramContainer = document.createElement('div');
+    diagramContainer.className = 'flex-1 overflow-auto p-4 flex items-center justify-center';
+
+    const fullscreenWrapper = document.createElement('div');
+    fullscreenWrapper.className = 'd2-wrapper w-full h-full overflow-hidden flex items-center justify-center';
+    fullscreenWrapper.id = `${id}-fullscreen`;
+    fullscreenWrapper.setAttribute('data-d2-code', originalCode);
+    Array.from(wrapper.attributes).forEach((attr) => {
+        if (attr.name.startsWith('data-d2-') && attr.name !== 'data-d2-code') {
+            fullscreenWrapper.setAttribute(attr.name, attr.value);
+        }
+    });
+    fullscreenWrapper.style.minHeight = '80vh';
+    fullscreenWrapper.style.height = '80vh';
+
+    const pre = document.createElement('pre');
+    pre.className = 'd2';
+    pre.style.width = '100%';
+    pre.style.height = '100%';
+    pre.style.display = 'flex';
+    pre.style.alignItems = 'center';
+    pre.style.justifyContent = 'center';
+    pre.textContent = decodeHtmlEntities(originalCode);
+    fullscreenWrapper.appendChild(pre);
+
+    diagramContainer.appendChild(fullscreenWrapper);
+    modalContent.appendChild(header);
+    modalContent.appendChild(diagramContainer);
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            document.body.removeChild(modal);
+        }
+    });
+
+    const escHandler = (e) => {
+        if (e.key === 'Escape' && document.getElementById('d2-fullscreen-modal')) {
+            document.body.removeChild(modal);
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    await renderD2Diagrams(modal);
+};
+
 function handleCodeCopyClick(event) {
     const button = event.target.closest('.code-copy-button, .hljs-copy-button');
     if (!button) {
@@ -820,6 +905,7 @@ window.openMermaidFullscreen = function(id) {
     
     const originalCode = wrapper.getAttribute('data-mermaid-code');
     if (!originalCode) return;
+    const mermaidTitle = wrapper.getAttribute('data-mermaid-title') || 'Diagram';
     
     // Decode HTML entities
     const textarea = document.createElement('textarea');
@@ -842,7 +928,7 @@ window.openMermaidFullscreen = function(id) {
     
     const title = document.createElement('h3');
     title.className = 'text-lg font-semibold text-slate-800 dark:text-slate-200';
-    title.textContent = 'Diagram';
+    title.textContent = mermaidTitle;
     
     const closeBtn = document.createElement('button');
     closeBtn.innerHTML = '✕';
