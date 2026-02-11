@@ -493,7 +493,7 @@ class ContentRenderer(FrankenRenderer):
             height = 'auto'
             width = '65vw'
             min_height = '320px'
-            d2_layout = None
+            d2_layout = 'elk'
             d2_theme_id = None
             d2_dark_theme_id = None
             d2_sketch = None

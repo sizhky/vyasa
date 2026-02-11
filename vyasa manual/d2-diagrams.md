@@ -7,13 +7,22 @@ Vyasa renders D2 code blocks with zoom, pan, reset, and fullscreen controls.
 ```d2
 ---
 title: Basic Request Flow
-width: 80vw
-height: 420px
+width: 70vw
+height: 40vh
 ---
 direction: right
-user: User
-api: API
-db: Database
+user: {
+  label: User
+  icon: "https://api.iconify.design/material-symbols:person.svg"
+}
+api: {
+  label: API
+  icon: "https://api.iconify.design/mdi:api.svg"
+}
+db: {
+  label: Database
+  icon: "https://api.iconify.design/mdi:database.svg"
+}
 
 user -> api: request
 api -> db: query
@@ -36,9 +45,6 @@ layout: elk
 theme_id: 3
 dark_theme_id: 200
 sketch: false
-pad: 80
-scale: 1
-target: "*"
 animate_interval: 1200
 ---
 direction: right
@@ -50,11 +56,9 @@ Supported keys in Vyasa:
 - `width` (default: `65vw`)
 - `height` (default: `auto`)
 - `title` (used for fullscreen title + small bottom caption)
-- `layout` (`elk`, `dagre`, etc.)
+- `layout` (`elk` or `dagre`, default: `elk`)
 - `theme_id`, `dark_theme_id`
 - `sketch`
-- `pad`, `scale`
-- `target`
 - `animate_interval` or `animate-interval`
 - `animate` (boolean shorthand)
 
@@ -78,16 +82,38 @@ Animation notes:
 ---
 title: Signup Flow
 width: 85vw
-height: 460px
+height: 70vh
+layout: elk
 ---
 direction: right
-start: Start
-form: Fill form
-validate: Validate
-exists: Account exists?
-create: Create account
-verify: Verify email
-login: Login
+start: {
+  label: Start
+  icon: "https://api.iconify.design/mdi:play-circle.svg"
+}
+form: {
+  label: Fill form
+  icon: "https://api.iconify.design/mdi:form-select.svg"
+}
+validate: {
+  label: Validate
+  icon: "https://api.iconify.design/mdi:check-decagram.svg"
+}
+exists: {
+  label: Account exists?
+  icon: "https://api.iconify.design/mdi:account-question.svg"
+}
+create: {
+  label: Create account
+  icon: "https://api.iconify.design/mdi:account-plus.svg"
+}
+verify: {
+  label: Verify email
+  icon: "https://api.iconify.design/mdi:email-check.svg"
+}
+login: {
+  label: Login
+  icon: "https://api.iconify.design/mdi:login.svg"
+}
 
 start -> form
 form -> validate
@@ -113,25 +139,55 @@ layout: elk
 ---
 direction: right
 clients: {
-  web: Web App
-  mobile: Mobile App
+  web: {
+    label: Web App
+    icon: "https://api.iconify.design/mdi:web.svg"
+  }
+  mobile: {
+    label: Mobile App
+    icon: "https://api.iconify.design/mdi:cellphone.svg"
+  }
 }
 
 edge: {
-  gateway: API Gateway
-  auth: Auth Service
+  gateway: {
+    label: API Gateway
+    icon: "https://api.iconify.design/mdi:router-network.svg"
+  }
+  auth: {
+    label: Auth Service
+    icon: "https://api.iconify.design/mdi:shield-lock.svg"
+  }
 }
 
 core: {
-  orders: Orders Service
-  payments: Payments Service
-  catalog: Catalog Service
+  orders: {
+    label: Orders Service
+    icon: "https://api.iconify.design/mdi:cart-outline.svg"
+  }
+  payments: {
+    label: Payments Service
+    icon: "https://api.iconify.design/mdi:credit-card-outline.svg"
+  }
+  catalog: {
+    label: Catalog Service
+    icon: "https://api.iconify.design/mdi:view-grid-outline.svg"
+  }
 }
 
 data: {
-  postgres: Postgres
-  redis: Redis
-  queue: Event Queue
+  postgres: {
+    label: Postgres
+    icon: "https://api.iconify.design/logos:postgresql.svg"
+  }
+  redis: {
+    label: Redis
+    icon: "https://api.iconify.design/logos:redis.svg"
+  }
+  queue: {
+    label: Event Queue
+    icon: "https://api.iconify.design/mdi:queue.svg"
+  }
 }
 
 clients.web -> edge.gateway
@@ -163,6 +219,7 @@ layout: elk
 direction: right
 users: {
   shape: sql_table
+  icon: "https://api.iconify.design/mdi:account-group.svg"
   id: int {constraint: primary_key}
   email: string {constraint: unique}
   created_at: timestamp
@@ -170,6 +227,7 @@ users: {
 
 orders: {
   shape: sql_table
+  icon: "https://api.iconify.design/mdi:receipt-text-outline.svg"
   id: int {constraint: primary_key}
   user_id: int {constraint: foreign_key}
   total: decimal
@@ -178,6 +236,7 @@ orders: {
 
 order_items: {
   shape: sql_table
+  icon: "https://api.iconify.design/mdi:package-variant-closed.svg"
   id: int {constraint: primary_key}
   order_id: int {constraint: foreign_key}
   sku: string
@@ -204,9 +263,18 @@ height: 420px
 direction: right
 flow: {
   shape: sequence_diagram
-  client: {shape: person}
-  api: {shape: rectangle}
-  auth: {shape: rectangle}
+  client: {
+    shape: person
+    icon: "https://api.iconify.design/material-symbols:person.svg"
+  }
+  api: {
+    shape: rectangle
+    icon: "https://api.iconify.design/mdi:api.svg"
+  }
+  auth: {
+    shape: rectangle
+    icon: "https://api.iconify.design/mdi:shield-lock.svg"
+  }
 
   client -> api: POST /login
   api -> auth: verify credentials
@@ -224,30 +292,57 @@ flow: {
 ```d2
 ---
 title: CI/CD Pipeline
-width: 90vw
-height: 520px
+width: 60vw
+height: 55vh
 layout: elk
 ---
 direction: right
 dev: {
-  local: Local Code
-  git: Git Repo
+  local: {
+    label: Local Code
+    icon: "https://api.iconify.design/mdi:laptop.svg"
+  }
+  git: {
+    label: Git Repo
+    icon: "https://api.iconify.design/logos:github-icon.svg"
+  }
 }
 
 ci: {
-  build: Build Job
-  test: Test Job
-  scan: Security Scan
+  build: {
+    label: Build Job
+    icon: "https://api.iconify.design/mdi:hammer-wrench.svg"
+  }
+  test: {
+    label: Test Job
+    icon: "https://api.iconify.design/mdi:test-tube.svg"
+  }
+  scan: {
+    label: Security Scan
+    icon: "https://api.iconify.design/mdi:shield-search.svg"
+  }
 }
 
 release: {
-  registry: Image Registry
-  deploy: Deploy Job
+  registry: {
+    label: Image Registry
+    icon: "https://api.iconify.design/mdi:docker.svg"
+  }
+  deploy: {
+    label: Deploy Job
+    icon: "https://api.iconify.design/mdi:rocket-launch-outline.svg"
+  }
 }
 
 runtime: {
-  k8s: Kubernetes
-  monitor: Monitoring
+  k8s: {
+    label: Kubernetes
+    icon: "https://api.iconify.design/logos:kubernetes.svg"
+  }
+  monitor: {
+    label: Monitoring
+    icon: "https://api.iconify.design/mdi:monitor-dashboard.svg"
+  }
 }
 
 dev.local -> dev.git: push
@@ -275,21 +370,45 @@ height: 540px
 layout: elk
 ---
 direction: right
-internet: Internet
+internet: {
+  label: Internet
+  icon: "https://api.iconify.design/mdi:cloud-outline.svg"
+}
 
 vpc: {
   public: {
-    alb: ALB
-    bastion: Bastion
+    alb: {
+      label: ALB
+      icon: "https://api.iconify.design/simple-icons:amazonaws.svg"
+    }
+    bastion: {
+      label: Bastion
+      icon: "https://api.iconify.design/mdi:shield-home.svg"
+    }
   }
   private: {
-    app1: App Node 1
-    app2: App Node 2
-    worker: Worker
+    app1: {
+      label: App Node 1
+      icon: "https://api.iconify.design/mdi:application-braces-outline.svg"
+    }
+    app2: {
+      label: App Node 2
+      icon: "https://api.iconify.design/mdi:application-braces-outline.svg"
+    }
+    worker: {
+      label: Worker
+      icon: "https://api.iconify.design/mdi:cog-outline.svg"
+    }
   }
   data: {
-    db: Postgres
-    cache: Redis
+    db: {
+      label: Postgres
+      icon: "https://api.iconify.design/logos:postgresql.svg"
+    }
+    cache: {
+      label: Redis
+      icon: "https://api.iconify.design/logos:redis.svg"
+    }
   }
 }
 
@@ -318,24 +437,51 @@ layout: elk
 ---
 direction: right
 producers: {
-  checkout: Checkout Service
-  billing: Billing Service
-  support: Support Service
+  checkout: {
+    label: Checkout Service
+    icon: "https://api.iconify.design/mdi:cart-outline.svg"
+  }
+  billing: {
+    label: Billing Service
+    icon: "https://api.iconify.design/mdi:credit-card-outline.svg"
+  }
+  support: {
+    label: Support Service
+    icon: "https://api.iconify.design/mdi:headset.svg"
+  }
 }
 
 broker: {
-  kafka: Event Bus
+  kafka: {
+    label: Event Bus
+    icon: "https://api.iconify.design/logos:kafka-icon.svg"
+  }
 }
 
 consumers: {
-  fraud: Fraud Detector
-  analytics: Analytics
-  notifier: Notification Service
+  fraud: {
+    label: Fraud Detector
+    icon: "https://api.iconify.design/mdi:shield-alert-outline.svg"
+  }
+  analytics: {
+    label: Analytics
+    icon: "https://api.iconify.design/mdi:chart-line.svg"
+  }
+  notifier: {
+    label: Notification Service
+    icon: "https://api.iconify.design/mdi:bell-outline.svg"
+  }
 }
 
 stores: {
-  lake: Data Lake
-  redis: Materialized View Cache
+  lake: {
+    label: Data Lake
+    icon: "https://api.iconify.design/mdi:database-outline.svg"
+  }
+  redis: {
+    label: Materialized View Cache
+    icon: "https://api.iconify.design/logos:redis.svg"
+  }
 }
 
 producers.checkout -> broker.kafka: order.created
@@ -364,20 +510,44 @@ height: 420px
 ---
 direction: right
 platform: {
-  gateway: API Gateway
-  auth: Auth
-  observability: Logging/Tracing
+  gateway: {
+    label: API Gateway
+    icon: "https://api.iconify.design/mdi:router-network.svg"
+  }
+  auth: {
+    label: Auth
+    icon: "https://api.iconify.design/mdi:shield-lock.svg"
+  }
+  observability: {
+    label: Logging/Tracing
+    icon: "https://api.iconify.design/mdi:timeline-text-outline.svg"
+  }
 }
 
 product: {
-  checkout: Checkout
-  catalog: Catalog
-  search: Search
+  checkout: {
+    label: Checkout
+    icon: "https://api.iconify.design/mdi:cart-outline.svg"
+  }
+  catalog: {
+    label: Catalog
+    icon: "https://api.iconify.design/mdi:view-grid-outline.svg"
+  }
+  search: {
+    label: Search
+    icon: "https://api.iconify.design/mdi:magnify.svg"
+  }
 }
 
 data: {
-  warehouse: Warehouse
-  db: OLTP DB
+  warehouse: {
+    label: Warehouse
+    icon: "https://api.iconify.design/mdi:warehouse.svg"
+  }
+  db: {
+    label: OLTP DB
+    icon: "https://api.iconify.design/mdi:database.svg"
+  }
 }
 
 platform.gateway -> product.checkout
@@ -403,24 +573,54 @@ layout: elk
 ---
 direction: right
 cluster: {
-  ingress: Ingress
+  ingress: {
+    label: Ingress
+    icon: "https://api.iconify.design/logos:kubernetes.svg"
+  }
   ns_app: {
-    api: API Deployment
-    web: Web Deployment
-    worker: Worker Deployment
+    api: {
+      label: API Deployment
+      icon: "https://api.iconify.design/mdi:api.svg"
+    }
+    web: {
+      label: Web Deployment
+      icon: "https://api.iconify.design/mdi:web.svg"
+    }
+    worker: {
+      label: Worker Deployment
+      icon: "https://api.iconify.design/mdi:cog-outline.svg"
+    }
   }
   ns_data: {
-    postgres: StatefulSet Postgres
-    redis: Redis
+    postgres: {
+      label: StatefulSet Postgres
+      icon: "https://api.iconify.design/logos:postgresql.svg"
+    }
+    redis: {
+      label: Redis
+      icon: "https://api.iconify.design/logos:redis.svg"
+    }
   }
   ns_ops: {
-    prometheus: Prometheus
-    grafana: Grafana
-    loki: Loki
+    prometheus: {
+      label: Prometheus
+      icon: "https://api.iconify.design/logos:prometheus.svg"
+    }
+    grafana: {
+      label: Grafana
+      icon: "https://api.iconify.design/logos:grafana.svg"
+    }
+    loki: {
+      label: Loki
+      icon: "https://api.iconify.design/mdi:file-document-outline.svg"
+    }
   }
 }
 
-ingress_client: Internet Clients
+ingress_client: {
+  label: Internet Clients
+  icon: "https://api.iconify.design/mdi:account-group-outline.svg"
+}
 ingress_client -> cluster.ingress
 cluster.ingress -> cluster.ns_app.api
 cluster.ingress -> cluster.ns_app.web
@@ -447,11 +647,26 @@ animate_interval: 1300
 ---
 direction: right
 
-oncall: On-call Engineer
-alerts: Alert Stream
-service: Production Service
-runbook: Runbook
-status: Status Page
+oncall: {
+  label: On-call Engineer
+  icon: "https://api.iconify.design/material-symbols:person.svg"
+}
+alerts: {
+  label: Alert Stream
+  icon: "https://api.iconify.design/mdi:bell-alert-outline.svg"
+}
+service: {
+  label: Production Service
+  icon: "https://api.iconify.design/mdi:server-network.svg"
+}
+runbook: {
+  label: Runbook
+  icon: "https://api.iconify.design/mdi:book-open-page-variant-outline.svg"
+}
+status: {
+  label: Status Page
+  icon: "https://api.iconify.design/mdi:web-check.svg"
+}
 
 alerts -> oncall: page
 oncall -> service: investigate
@@ -495,13 +710,26 @@ direction: right
 
 sun: {
   shape: circle
+  icon: "https://api.iconify.design/mdi:white-balance-sunny.svg"
   style.fill: "#fde68a"
   style.stroke: "#f59e0b"
 }
-clouds: {shape: cloud}
-ocean: {style.fill: "#bfdbfe"}
-land: {style.fill: "#bbf7d0"}
-groundwater: {shape: cylinder}
+clouds: {
+  shape: cloud
+  icon: "https://api.iconify.design/mdi:weather-cloudy.svg"
+}
+ocean: {
+  icon: "https://api.iconify.design/mdi:waves.svg"
+  style.fill: "#bfdbfe"
+}
+land: {
+  icon: "https://api.iconify.design/mdi:terrain.svg"
+  style.fill: "#bbf7d0"
+}
+groundwater: {
+  shape: cylinder
+  icon: "https://api.iconify.design/mdi:water-outline.svg"
+}
 
 sun -> ocean: evaporation
 ocean -> clouds: vapor
@@ -532,3 +760,8 @@ scenarios: {
 - Use `width: 85vw` or `90vw` for large architecture diagrams.
 - For animated compositions, prefer short labels and clear scenario deltas.
 - If a diagram is too dense, split it into multiple diagrams and link them with headings.
+- For icons, use D2's `icon: "<svg-url>"` support with SVG URLs.
+- Good sources:
+  - D2 icon tour: `https://github.com/terrastruct/d2-docs/blob/master/docs/tour/icons.md`
+  - Terrastruct icon catalog (official D2 examples): `https://icons.terrastruct.com/`
+  - Iconify API (large icon library used in examples above): `https://api.iconify.design/`

@@ -241,7 +241,7 @@ async function renderD2Diagrams(rootElement = document) {
             delete wrapper.dataset.d2Interactive;
         }
         try {
-            const layout = wrapper.getAttribute('data-d2-layout');
+            const layout = wrapper.getAttribute('data-d2-layout') || 'elk';
             const themeId = parseOptionalNumber(wrapper.getAttribute('data-d2-theme-id'));
             const darkThemeId = parseOptionalNumber(wrapper.getAttribute('data-d2-dark-theme-id'));
             const sketch = parseOptionalBoolean(wrapper.getAttribute('data-d2-sketch'));
@@ -252,9 +252,7 @@ async function renderD2Diagrams(rootElement = document) {
             const animate = parseOptionalBoolean(wrapper.getAttribute('data-d2-animate'));
 
             const compileOptions = {};
-            if (layout) {
-                compileOptions.layout = layout;
-            }
+            compileOptions.layout = layout;
             if (sketch !== undefined) {
                 compileOptions.sketch = sketch;
             }
