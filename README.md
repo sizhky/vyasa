@@ -117,7 +117,7 @@ mindmap
 - **Mermaid Frontmatter**: Configure diagram size and metadata with YAML frontmatter (`width`, `height`, `aspect_ratio`, `title`)
 - **D2 Frontmatter**: Configure rendering and animation with YAML frontmatter:
   - `width`, `height`, `title`
-  - `layout` (`elk`, `dagre`, etc.), `theme_id`, `dark_theme_id`, `sketch`
+  - `layout` (`elk`, `dagre`, etc.; default is `elk`), `theme_id`, `dark_theme_id`, `sketch`
   - `pad`, `scale`
   - `target` (board/layer target), `animate_interval`/`animate-interval`, `animate`
   - Notes:
