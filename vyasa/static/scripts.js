@@ -69,6 +69,54 @@ function normalizeD2SvgForBrowser(svg) {
     return svg.replace(/\b(?:const|let)\s+htmlElement\b/g, 'var htmlElement');
 }
 
+function coerceD2RenderToSvgMarkup(renderResult) {
+    if (typeof renderResult === 'string') {
+        return renderResult;
+    }
+    if (renderResult instanceof Uint8Array) {
+        return new TextDecoder().decode(renderResult);
+    }
+    if (Array.isArray(renderResult)) {
+        for (const item of renderResult) {
+            try {
+                const svg = coerceD2RenderToSvgMarkup(item);
+                if (svg && svg.includes('<svg')) {
+                    return svg;
+                }
+            } catch {
+                // Keep trying other entries.
+            }
+        }
+    }
+    if (renderResult && typeof renderResult === 'object') {
+        if (typeof renderResult.svg === 'string') {
+            return renderResult.svg;
+        }
+        if (renderResult.data && typeof renderResult.data === 'string') {
+            return renderResult.data;
+        }
+        if (typeof renderResult.markup === 'string') {
+            return renderResult.markup;
+        }
+        for (const value of Object.values(renderResult)) {
+            if (typeof value === 'string' && value.includes('<svg')) {
+                return value;
+            }
+            if (value && typeof value === 'object') {
+                try {
+                    const nested = coerceD2RenderToSvgMarkup(value);
+                    if (nested && nested.includes('<svg')) {
+                        return nested;
+                    }
+                } catch {
+                    // Continue checking other keys.
+                }
+            }
+        }
+    }
+    throw new TypeError(`Unsupported D2 render result type: ${typeof renderResult}`);
+}
+
 function rehydrateScripts(container) {
     const scripts = Array.from(container.querySelectorAll('script'));
     scripts.forEach((oldScript) => {
@@ -182,10 +230,10 @@ async function renderD2Diagrams(rootElement = document) {
         console.error('Failed to initialize D2 renderer', error);
         return;
     }
-    await Promise.all(wrappers.map(async (wrapper) => {
+    for (const wrapper of wrappers) {
         const source = wrapper.getAttribute('data-d2-code');
         if (!source) {
-            return;
+            continue;
         }
         const decodedSource = decodeHtmlEntities(source);
         if (wrapper.id) {
@@ -273,8 +321,9 @@ async function renderD2Diagrams(rootElement = document) {
                 target: renderOptions.target,
                 animateInterval: renderOptions.animateInterval
             });
-            const svg = await d2.render(result.diagram, renderOptions);
-            const normalizedSvg = normalizeD2SvgForBrowser(svg);
+            const rawRenderResult = await d2.render(result.diagram, renderOptions);
+            const svgMarkup = coerceD2RenderToSvgMarkup(rawRenderResult);
+            const normalizedSvg = normalizeD2SvgForBrowser(svgMarkup);
             wrapper.innerHTML = normalizedSvg;
             rehydrateScripts(wrapper);
             activateSvgAnimations(wrapper);
@@ -291,8 +340,15 @@ async function renderD2Diagrams(rootElement = document) {
             });
         } catch (error) {
             console.error('Failed to render D2 diagram', error);
+            if (d2DebugEnabled()) {
+                d2DebugLog('render failure details', {
+                    id: wrapper.id,
+                    error: String(error),
+                    sourcePreview: decodedSource.slice(0, 120)
+                });
+            }
         }
-    }));
+    }
     initD2Interaction(rootElement);
 }
 
@@ -306,13 +362,13 @@ function initD2Interaction(rootElement = document) {
         }
 
         const wrapperRect = wrapper.getBoundingClientRect();
-        const stageRect = stage.getBoundingClientRect();
-        if (!stageRect.width || !stageRect.height) {
+        const svgRect = svg.getBoundingClientRect();
+        if (!svgRect.width || !svgRect.height) {
             return;
         }
-        const scaleX = (wrapperRect.width - 32) / stageRect.width;
-        const scaleY = (wrapperRect.height - 32) / stageRect.height;
-        const aspectRatio = stageRect.width / stageRect.height;
+        const scaleX = (wrapperRect.width - 32) / svgRect.width;
+        const scaleY = (wrapperRect.height - 32) / svgRect.height;
+        const aspectRatio = svgRect.width / svgRect.height;
         const maxUpscale = 1;
         const initialScale = aspectRatio > 3
             ? Math.min(scaleX, maxUpscale)
