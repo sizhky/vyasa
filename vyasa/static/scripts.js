@@ -1,6 +1,8 @@
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+import { D2 } from 'https://esm.sh/@terrastruct/d2@0.1.33?bundle';
 
 const mermaidStates = {};
+const d2States = {};
 const mermaidDebugEnabled = () => (
     window.VYASA_DEBUG_MERMAID === true ||
     localStorage.getItem('vyasaDebugMermaid') === '1'
@@ -37,6 +39,262 @@ const mermaidDebugSnapshot = (label) => {
     });
 };
 const GANTT_WIDTH = 1200;
+let d2InstancePromise = null;
+
+function getD2Instance() {
+    if (!d2InstancePromise) {
+        d2InstancePromise = Promise.resolve(new D2());
+    }
+    return d2InstancePromise;
+}
+
+function decodeHtmlEntities(value) {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = value;
+    return textarea.value;
+}
+
+function isDarkModeActive() {
+    return document.documentElement.classList.contains('dark');
+}
+
+function parseOptionalNumber(value) {
+    if (value === null || value === undefined || value === '') {
+        return undefined;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseOptionalBoolean(value) {
+    if (value === null || value === undefined || value === '') {
+        return undefined;
+    }
+    const normalized = String(value).trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1' || normalized === 'yes') {
+        return true;
+    }
+    if (normalized === 'false' || normalized === '0' || normalized === 'no') {
+        return false;
+    }
+    return undefined;
+}
+
+async function renderD2Diagrams(rootElement = document) {
+    const wrappers = Array.from(rootElement.querySelectorAll('.d2-wrapper'));
+    if (!wrappers.length) {
+        return;
+    }
+    let d2;
+    try {
+        d2 = await getD2Instance();
+    } catch (error) {
+        console.error('Failed to initialize D2 renderer', error);
+        return;
+    }
+    await Promise.all(wrappers.map(async (wrapper) => {
+        const source = wrapper.getAttribute('data-d2-code');
+        if (!source) {
+            return;
+        }
+        const decodedSource = decodeHtmlEntities(source);
+        if (wrapper.id) {
+            delete d2States[wrapper.id];
+            delete wrapper.dataset.d2Interactive;
+        }
+        try {
+            const layout = wrapper.getAttribute('data-d2-layout');
+            const themeId = parseOptionalNumber(wrapper.getAttribute('data-d2-theme-id'));
+            const darkThemeId = parseOptionalNumber(wrapper.getAttribute('data-d2-dark-theme-id'));
+            const sketch = parseOptionalBoolean(wrapper.getAttribute('data-d2-sketch'));
+            const pad = parseOptionalNumber(wrapper.getAttribute('data-d2-pad'));
+            const scale = parseOptionalNumber(wrapper.getAttribute('data-d2-scale'));
+
+            const compileOptions = {};
+            if (layout) {
+                compileOptions.layout = layout;
+            }
+            if (sketch !== undefined) {
+                compileOptions.sketch = sketch;
+            }
+
+            const result = await d2.compile(decodedSource, compileOptions);
+            const renderOptions = { ...(result.renderOptions || result.options || {}) };
+            if (themeId !== undefined) {
+                renderOptions.themeID = themeId;
+            }
+            if (darkThemeId !== undefined) {
+                renderOptions.darkThemeID = darkThemeId;
+            }
+            if (themeId !== undefined || darkThemeId !== undefined) {
+                const activeThemeId = isDarkModeActive()
+                    ? (darkThemeId !== undefined ? darkThemeId : themeId)
+                    : (themeId !== undefined ? themeId : darkThemeId);
+                if (activeThemeId !== undefined) {
+                    renderOptions.themeID = activeThemeId;
+                }
+            }
+            if (pad !== undefined) {
+                renderOptions.pad = pad;
+            }
+            if (scale !== undefined) {
+                renderOptions.scale = scale;
+            }
+            const svg = await d2.render(result.diagram, renderOptions);
+            wrapper.innerHTML = svg;
+            wrapper.dataset.d2Rendered = 'true';
+        } catch (error) {
+            console.error('Failed to render D2 diagram', error);
+        }
+    }));
+    initD2Interaction(rootElement);
+}
+
+function initD2Interaction(rootElement = document) {
+    const wrappers = Array.from(rootElement.querySelectorAll('.d2-wrapper'));
+    wrappers.forEach((wrapper) => {
+        const svg = wrapper.querySelector('svg');
+        if (!svg || wrapper.dataset.d2Interactive === 'true') {
+            return;
+        }
+
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const svgRect = svg.getBoundingClientRect();
+        if (!svgRect.width || !svgRect.height) {
+            return;
+        }
+        const scaleX = (wrapperRect.width - 32) / svgRect.width;
+        const scaleY = (wrapperRect.height - 32) / svgRect.height;
+        const aspectRatio = svgRect.width / svgRect.height;
+        const maxUpscale = 1;
+        const initialScale = aspectRatio > 3
+            ? Math.min(scaleX, maxUpscale)
+            : Math.min(scaleX, scaleY, maxUpscale);
+
+        const state = {
+            scale: initialScale,
+            translateX: 0,
+            translateY: 0,
+            isPanning: false,
+            startX: 0,
+            startY: 0
+        };
+        d2States[wrapper.id] = state;
+        wrapper.dataset.d2Interactive = 'true';
+
+        const getSvg = () => wrapper.querySelector('svg');
+        const applyState = () => {
+            const currentSvg = getSvg();
+            if (!currentSvg) {
+                return;
+            }
+            currentSvg.style.pointerEvents = 'none';
+            currentSvg.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`;
+            currentSvg.style.transformOrigin = 'center center';
+        };
+        applyState();
+
+        wrapper.style.cursor = 'grab';
+        wrapper.style.touchAction = 'none';
+
+        wrapper.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const currentSvg = getSvg();
+            if (!currentSvg) {
+                return;
+            }
+            const rect = currentSvg.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left - rect.width / 2;
+            const mouseY = e.clientY - rect.top - rect.height / 2;
+            const zoomIntensity = 0.01;
+            const delta = e.deltaY > 0 ? 1 - zoomIntensity : 1 + zoomIntensity;
+            const newScale = Math.min(Math.max(0.1, state.scale * delta), 55);
+            const scaleFactor = newScale / state.scale - 1;
+            state.translateX -= mouseX * scaleFactor;
+            state.translateY -= mouseY * scaleFactor;
+            state.scale = newScale;
+            applyState();
+        }, { passive: false });
+
+        wrapper.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'mouse' && e.button !== 0) {
+                return;
+            }
+            state.isPanning = true;
+            state.startX = e.clientX - state.translateX;
+            state.startY = e.clientY - state.translateY;
+            wrapper.setPointerCapture(e.pointerId);
+            wrapper.style.cursor = 'grabbing';
+            e.preventDefault();
+        });
+
+        wrapper.addEventListener('pointermove', (e) => {
+            if (!state.isPanning) {
+                return;
+            }
+            state.translateX = e.clientX - state.startX;
+            state.translateY = e.clientY - state.startY;
+            applyState();
+        });
+
+        const stopPanning = (e) => {
+            if (!state.isPanning) {
+                return;
+            }
+            state.isPanning = false;
+            try {
+                wrapper.releasePointerCapture(e.pointerId);
+            } catch {
+                // Ignore if pointer capture is not active.
+            }
+            wrapper.style.cursor = 'grab';
+        };
+
+        wrapper.addEventListener('pointerup', stopPanning);
+        wrapper.addEventListener('pointercancel', stopPanning);
+    });
+}
+
+window.resetD2Zoom = function(id) {
+    const state = d2States[id];
+    const wrapper = document.getElementById(id);
+    if (!state || !wrapper) {
+        return;
+    }
+    state.scale = 1;
+    state.translateX = 0;
+    state.translateY = 0;
+    const svg = wrapper.querySelector('svg');
+    if (svg) {
+        svg.style.transform = 'translate(0px, 0px) scale(1)';
+    }
+};
+
+window.zoomD2In = function(id) {
+    const state = d2States[id];
+    const wrapper = document.getElementById(id);
+    if (!state || !wrapper) {
+        return;
+    }
+    state.scale = Math.min(state.scale * 1.1, 10);
+    const svg = wrapper.querySelector('svg');
+    if (svg) {
+        svg.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`;
+    }
+};
+
+window.zoomD2Out = function(id) {
+    const state = d2States[id];
+    const wrapper = document.getElementById(id);
+    if (!state || !wrapper) {
+        return;
+    }
+    state.scale = Math.max(state.scale * 0.9, 0.1);
+    const svg = wrapper.querySelector('svg');
+    if (svg) {
+        svg.style.transform = `translate(${state.translateX}px, ${state.translateY}px) scale(${state.scale})`;
+    }
+};
 
 function handleCodeCopyClick(event) {
     const button = event.target.closest('.code-copy-button, .hljs-copy-button');
@@ -570,6 +828,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+    renderD2Diagrams();
 });
 
 // Reveal current file in sidebar
@@ -995,6 +1254,7 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
         mermaidDebugSnapshot('after mermaid.run (htmx:afterSwap)');
         scheduleMermaidInteraction();
     });
+    renderD2Diagrams(event.target || document);
     updateActivePostLink();
     updateActiveTocLink();
     initMobileMenus(); // Reinitialize mobile menu handlers
@@ -1009,6 +1269,7 @@ const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
         if (mutation.attributeName === 'class') {
             reinitializeMermaid();
+            renderD2Diagrams();
         }
     });
 });
