@@ -1193,11 +1193,13 @@ class RbacConfigRow:
 _rbac_db = None
 _rbac_tbl = None
 
-def _get_rbac_db():
+def _get_rbac_db(create_if_missing=True):
     global _rbac_db, _rbac_tbl
     if _rbac_db is None:
         root = get_config().get_root_folder()
         db_path = root / ".vyasa-rbac.db"
+        if not create_if_missing and not db_path.exists():
+            return None, None
         db_path.parent.mkdir(parents=True, exist_ok=True)
         _rbac_db = Database(f"sqlite:///{db_path}")
         _rbac_tbl = _rbac_db.create(RbacConfigRow, pk="key", name="rbac_config")
@@ -1235,9 +1237,11 @@ def _normalize_rbac_cfg(cfg):
 
 def _rbac_db_load():
     try:
-        _, tbl = _get_rbac_db()
+        _, tbl = _get_rbac_db(create_if_missing=False)
     except Exception as exc:
         logger.warning(f"RBAC DB unavailable: {exc}")
+        return None
+    if tbl is None:
         return None
     rows = tbl()
     if not rows:
@@ -1275,8 +1279,6 @@ def _load_rbac_cfg_from_store():
     if cfg:
         return cfg
     cfg = _normalize_rbac_cfg(_config.get_rbac())
-    if cfg.get("enabled") or cfg.get("rules") or cfg.get("role_users") or cfg.get("user_roles") or cfg.get("default_roles"):
-        _rbac_db_write(cfg)
     return cfg
 
 def _set_rbac_cfg(cfg):
