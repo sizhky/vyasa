@@ -487,6 +487,81 @@ class ContentRenderer(FrankenRenderer):
     def render_block_code(self, token):
         lang = getattr(token, 'language', '')
         code = self.render_raw_text(token)
+        if lang == 'd2':
+            frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n'
+            frontmatter_match = re.match(frontmatter_pattern, code, re.DOTALL)
+            height = 'auto'
+            width = '65vw'
+            min_height = '320px'
+            d2_layout = None
+            d2_theme_id = None
+            d2_dark_theme_id = None
+            d2_sketch = None
+            d2_pad = None
+            d2_scale = None
+            if frontmatter_match:
+                frontmatter_content = frontmatter_match.group(1)
+                code_without_frontmatter = code[frontmatter_match.end():]
+                try:
+                    config = {}
+                    for line in frontmatter_content.strip().split('\n'):
+                        if ':' in line:
+                            key, value = line.split(':', 1)
+                            config[key.strip()] = value.strip()
+                    if 'height' in config:
+                        height = config['height']
+                        min_height = height
+                    if 'width' in config:
+                        width = config['width']
+                    if 'layout' in config:
+                        d2_layout = config['layout']
+                    if 'theme_id' in config:
+                        d2_theme_id = config['theme_id']
+                    if 'dark_theme_id' in config:
+                        d2_dark_theme_id = config['dark_theme_id']
+                    if 'sketch' in config:
+                        d2_sketch = config['sketch']
+                    if 'pad' in config:
+                        d2_pad = config['pad']
+                    if 'scale' in config:
+                        d2_scale = config['scale']
+                except Exception as e:
+                    print(f"Error parsing d2 frontmatter: {e}")
+                code = code_without_frontmatter
+            self.mermaid_counter += 1
+            diagram_id = f"d2-{abs(hash(code)) & 0xFFFFFF}-{self.mermaid_counter}"
+            break_out = 'vw' in str(width).lower()
+            if break_out:
+                container_style = f"width: {width}; position: relative; left: 50%; transform: translateX(-50%);"
+            else:
+                container_style = f"width: {width};"
+            escaped_code = code.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#39;')
+            def _escape_attr(value):
+                if value is None:
+                    return None
+                return str(value).replace('&', '&amp;').replace('"', '&quot;').replace("'", '&#39;').replace('<', '&lt;').replace('>', '&gt;')
+            d2_attrs = []
+            if d2_layout is not None:
+                d2_attrs.append(f'data-d2-layout="{_escape_attr(d2_layout)}"')
+            if d2_theme_id is not None:
+                d2_attrs.append(f'data-d2-theme-id="{_escape_attr(d2_theme_id)}"')
+            if d2_dark_theme_id is not None:
+                d2_attrs.append(f'data-d2-dark-theme-id="{_escape_attr(d2_dark_theme_id)}"')
+            if d2_sketch is not None:
+                d2_attrs.append(f'data-d2-sketch="{_escape_attr(d2_sketch)}"')
+            if d2_pad is not None:
+                d2_attrs.append(f'data-d2-pad="{_escape_attr(d2_pad)}"')
+            if d2_scale is not None:
+                d2_attrs.append(f'data-d2-scale="{_escape_attr(d2_scale)}"')
+            d2_attr_str = (' ' + ' '.join(d2_attrs)) if d2_attrs else ''
+            return f'''<div class="d2-container relative border-4 rounded-md my-4 shadow-2xl" style="{container_style}">
+                <div class="d2-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
+                    <button onclick="resetD2Zoom('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
+                    <button onclick="zoomD2In('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
+                    <button onclick="zoomD2Out('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
+                </div>
+                <div id="{diagram_id}" class="d2-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: {min_height}; height: {height};" data-d2-code="{escaped_code}"{d2_attr_str}><pre class="d2" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">{code}</pre></div>
+            </div>'''
         if lang == 'mermaid':
             # Extract frontmatter from mermaid code block
             frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n'
