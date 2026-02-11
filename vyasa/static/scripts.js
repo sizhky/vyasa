@@ -262,7 +262,7 @@ async function renderD2Diagrams(rootElement = document) {
             }
             const isAnimated = Number(renderOptions.animateInterval || 0) > 0;
             wrapper.dataset.d2Animated = isAnimated ? 'true' : 'false';
-            setD2ControlsEnabled(wrapper, !isAnimated);
+            setD2ControlsEnabled(wrapper, true);
             d2DebugLog('render options', {
                 id: wrapper.id,
                 layout: compileOptions.layout,
@@ -299,11 +299,6 @@ async function renderD2Diagrams(rootElement = document) {
 function initD2Interaction(rootElement = document) {
     const wrappers = Array.from(rootElement.querySelectorAll('.d2-wrapper'));
     wrappers.forEach((wrapper) => {
-        if (wrapper.dataset.d2Animated === 'true') {
-            wrapper.style.cursor = 'default';
-            wrapper.style.touchAction = 'auto';
-            return;
-        }
         const svg = wrapper.querySelector('svg');
         const stage = ensureD2PanzoomStage(wrapper);
         if (!svg || !stage || wrapper.dataset.d2Interactive === 'true') {
@@ -417,9 +412,6 @@ window.resetD2Zoom = function(id) {
     if (!state || !wrapper) {
         return;
     }
-    if (wrapper.dataset.d2Animated === 'true') {
-        return;
-    }
     state.scale = 1;
     state.translateX = 0;
     state.translateY = 0;
@@ -435,9 +427,6 @@ window.zoomD2In = function(id) {
     if (!state || !wrapper) {
         return;
     }
-    if (wrapper.dataset.d2Animated === 'true') {
-        return;
-    }
     state.scale = Math.min(state.scale * 1.1, 10);
     const stage = wrapper.querySelector('.d2-panzoom-stage');
     if (stage) {
@@ -449,9 +438,6 @@ window.zoomD2Out = function(id) {
     const state = d2States[id];
     const wrapper = document.getElementById(id);
     if (!state || !wrapper) {
-        return;
-    }
-    if (wrapper.dataset.d2Animated === 'true') {
         return;
     }
     state.scale = Math.max(state.scale * 0.9, 0.1);
