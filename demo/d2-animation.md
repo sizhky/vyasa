@@ -1,6 +1,10 @@
+## Deployment Pipeline
+
 ```d2
 ---
 animate_interval: 1200
+width: 80vw
+layout: elk
 ---
 direction: right
 
@@ -80,6 +84,85 @@ scenarios: {
       style.opacity: 1
       style.stroke-dash: 5
       style.stroke: "#167c3c"
+    }
+  }
+}
+```
+
+
+## Water Cycle (Animated)
+
+```d2
+---
+animate_interval: 1400
+layout: elk
+width: 80vw
+---
+direction: right
+
+title: {
+  label: Water cycle in nature
+  near: bottom-center
+  shape: text
+  style.font-size: 36
+  style.underline: true
+}
+
+sun: {
+  shape: circle
+  style.fill: "#fde68a"
+  style.stroke: "#f59e0b"
+}
+
+clouds: {
+  shape: cloud
+  style.fill: "#e2e8f0"
+}
+
+ocean: {
+  shape: rectangle
+  style.fill: "#bfdbfe"
+  style.stroke: "#2563eb"
+}
+
+land: {
+  shape: rectangle
+  style.fill: "#bbf7d0"
+  style.stroke: "#16a34a"
+}
+
+groundwater: {
+  shape: cylinder
+  style.fill: "#93c5fd"
+}
+
+sun -> ocean: evaporation
+ocean -> clouds: water vapor
+clouds -> land: precipitation
+land -> groundwater: infiltration
+groundwater -> ocean: runoff
+land -> clouds: transpiration
+
+scenarios: {
+  storm: {
+    title.label: Storm season
+    (clouds -> land)[0].style: {
+      stroke: "#1d4ed8"
+      stroke-width: 5
+    }
+    (ocean -> clouds)[0].style: {
+      stroke: "#0ea5e9"
+      stroke-width: 5
+    }
+  }
+
+  drought: {
+    title.label: Drought season
+    (clouds -> land)[0].style.opacity: 0.2
+    (land -> groundwater)[0].style.opacity: 0.25
+    (sun -> ocean)[0].style: {
+      stroke: "#dc2626"
+      stroke-width: 5
     }
   }
 }
