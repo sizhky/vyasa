@@ -477,7 +477,7 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
             <details open>
                 <summary class="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
                     <span uk-icon="list" class="w-5 h-5 mr-2"></span>
-                    Contents
+                    Table of Contents
                 </summary>
                 <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
                     {toc_list_html}
