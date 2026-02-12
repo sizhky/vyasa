@@ -218,6 +218,49 @@ function normalizeD2Target(value) {
     return trimmed;
 }
 
+function hasD2SubstitutionBraceError(error) {
+    return String(error).includes('substitutions must begin on {');
+}
+
+function escapeBareD2SubstitutionDollars(source) {
+    // D2 treats `$` as the start of a substitution. Escape bare dollars so
+    // values like "$100" or shell snippets don't fail parsing.
+    let escaped = '';
+    for (let i = 0; i < source.length; i += 1) {
+        const char = source[i];
+        if (char !== '$') {
+            escaped += char;
+            continue;
+        }
+        const previous = source[i - 1];
+        const next = source[i + 1];
+        if (previous === '\\' || next === '{') {
+            escaped += '$';
+            continue;
+        }
+        escaped += '\\$';
+    }
+    return escaped;
+}
+
+function replaceBareD2SubstitutionDollarsWithFullwidth(source) {
+    let replaced = '';
+    for (let i = 0; i < source.length; i += 1) {
+        const char = source[i];
+        if (char !== '$') {
+            replaced += char;
+            continue;
+        }
+        const next = source[i + 1];
+        if (next === '{') {
+            replaced += '$';
+            continue;
+        }
+        replaced += '＄';
+    }
+    return replaced;
+}
+
 async function renderD2Diagrams(rootElement = document) {
     const wrappers = Array.from(rootElement.querySelectorAll('.d2-wrapper'));
     if (!wrappers.length) {
@@ -262,7 +305,32 @@ async function renderD2Diagrams(rootElement = document) {
                 compileOptions.target = normalizedTarget;
             }
 
-            const result = await d2.compile(decodedSource, compileOptions);
+            let result;
+            try {
+                result = await d2.compile(decodedSource, compileOptions);
+            } catch (compileError) {
+                if (!hasD2SubstitutionBraceError(compileError)) {
+                    throw compileError;
+                }
+                const escapedSource = escapeBareD2SubstitutionDollars(decodedSource);
+                const fullwidthSource = replaceBareD2SubstitutionDollarsWithFullwidth(decodedSource);
+                if (escapedSource === decodedSource && fullwidthSource === decodedSource) {
+                    throw compileError;
+                }
+                d2DebugLog('retrying compile after normalizing bare $ substitutions', {
+                    id: wrapper.id,
+                    sourcePreview: decodedSource.slice(0, 120)
+                });
+                try {
+                    result = await d2.compile(escapedSource, compileOptions);
+                } catch (secondCompileError) {
+                    if (!hasD2SubstitutionBraceError(secondCompileError)) {
+                        throw secondCompileError;
+                    }
+                    result = await d2.compile(fullwidthSource, compileOptions);
+                    result.__vyasaFullwidthDollarFallback = true;
+                }
+            }
             const renderOptions = { ...(result.renderOptions || result.options || {}) };
             if (themeId !== undefined) {
                 renderOptions.themeID = themeId;
@@ -321,7 +389,10 @@ async function renderD2Diagrams(rootElement = document) {
             });
             const rawRenderResult = await d2.render(result.diagram, renderOptions);
             const svgMarkup = coerceD2RenderToSvgMarkup(rawRenderResult);
-            const normalizedSvg = normalizeD2SvgForBrowser(svgMarkup);
+            let normalizedSvg = normalizeD2SvgForBrowser(svgMarkup);
+            if (result.__vyasaFullwidthDollarFallback) {
+                normalizedSvg = normalizedSvg.replaceAll('＄', '$');
+            }
             wrapper.innerHTML = normalizedSvg;
             rehydrateScripts(wrapper);
             activateSvgAnimations(wrapper);
