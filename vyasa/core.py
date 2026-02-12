@@ -965,6 +965,9 @@ hdrs = (
                     panel.style.pointerEvents = 'none';
                 }
             });
+            if (window.refreshVyasaTableScrollShadows) {
+                window.requestAnimationFrame(() => window.refreshVyasaTableScrollShadows(container));
+            }
         }
         window.switchTab = switchTab;
         
@@ -1002,6 +1005,51 @@ hdrs = (
                 });
             }, 100);
         });
+    """),
+    Script("""
+        (function () {
+            function updateShadows(el) {
+                if (!el) return;
+                const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
+                if (maxScrollLeft <= 1) {
+                    el.classList.remove('has-left-overflow');
+                    el.classList.remove('has-right-overflow');
+                    return;
+                }
+                const leftVisible = el.scrollLeft > 1;
+                const rightVisible = el.scrollLeft < (maxScrollLeft - 1);
+                el.classList.toggle('has-left-overflow', leftVisible);
+                el.classList.toggle('has-right-overflow', rightVisible);
+            }
+
+            function bindIfNeeded(el) {
+                if (!el || el.dataset.shadowBound === '1') return;
+                el.dataset.shadowBound = '1';
+                el.addEventListener('scroll', function () { updateShadows(el); }, { passive: true });
+            }
+
+            function refresh(root) {
+                const scope = root && root.querySelectorAll ? root : document;
+                scope.querySelectorAll('.vyasa-table-scroll').forEach(function (el) {
+                    bindIfNeeded(el);
+                    updateShadows(el);
+                });
+            }
+
+            window.refreshVyasaTableScrollShadows = refresh;
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function () { refresh(document); });
+            } else {
+                refresh(document);
+            }
+            window.addEventListener('resize', function () { refresh(document); });
+            document.addEventListener('htmx:afterSwap', function (event) {
+                refresh(event.target || document);
+            });
+            document.addEventListener('htmx:afterSettle', function (event) {
+                refresh(event.target || document);
+            });
+        })();
     """),
     Script(src="/static/scripts.js", type='module'),
     Link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"),
@@ -1262,6 +1310,30 @@ hdrs = (
             overflow-y: hidden;
             -webkit-overflow-scrolling: touch;
             scrollbar-gutter: stable both-edges;
+            box-shadow: none;
+            transition: box-shadow 160ms ease;
+        }
+        .vyasa-table-scroll.has-right-overflow {
+            box-shadow: inset -18px 0 16px -14px rgba(15, 23, 42, 0.32);
+        }
+        .vyasa-table-scroll.has-left-overflow {
+            box-shadow: inset 18px 0 16px -14px rgba(15, 23, 42, 0.32);
+        }
+        .vyasa-table-scroll.has-left-overflow.has-right-overflow {
+            box-shadow:
+                inset 18px 0 16px -14px rgba(15, 23, 42, 0.32),
+                inset -18px 0 16px -14px rgba(15, 23, 42, 0.32);
+        }
+        .dark .vyasa-table-scroll.has-right-overflow {
+            box-shadow: inset -18px 0 16px -14px rgba(2, 6, 23, 0.62);
+        }
+        .dark .vyasa-table-scroll.has-left-overflow {
+            box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62);
+        }
+        .dark .vyasa-table-scroll.has-left-overflow.has-right-overflow {
+            box-shadow:
+                inset 18px 0 16px -14px rgba(2, 6, 23, 0.62),
+                inset -18px 0 16px -14px rgba(2, 6, 23, 0.62);
         }
         .vyasa-table-scroll > table,
         .vyasa-table-scroll > .uk-table {
