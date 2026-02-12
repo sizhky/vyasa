@@ -1,6 +1,6 @@
 /* custom.css in the folder */
 span.abcd {
-    background-color: #fff831;
+    /* background-color: #fff831; */
     padding: 0 4px;
     border-radius: 3px;
     font-weight: bold;
@@ -59,10 +59,10 @@ span.abcd {
 }
 
 /* Global background + text color */
-html, body {
+/* html, body {
     background-color: #f6f3ee !important;
     color: #1f2937 !important;
-}
+} */
 
 #page-container,
 #main-content,
