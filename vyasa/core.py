@@ -1036,7 +1036,14 @@ hdrs = (
                     const parentWidth = el.parentElement ? el.parentElement.clientWidth : el.clientWidth;
                     const tableWidth = table ? table.scrollWidth : el.scrollWidth;
                     const needsBreakout = tableWidth > (parentWidth + 1);
+                    const viewportCap = Math.floor(window.innerWidth * 0.8);
                     el.classList.toggle('vyasa-table-breakout', needsBreakout);
+                    if (needsBreakout) {
+                        const breakoutWidth = Math.min(tableWidth, viewportCap);
+                        el.style.setProperty('--vyasa-breakout-width', breakoutWidth + 'px');
+                    } else {
+                        el.style.removeProperty('--vyasa-breakout-width');
+                    }
                     window.requestAnimationFrame(function () { updateShadows(el); });
                 });
             }
@@ -1319,7 +1326,7 @@ hdrs = (
             transition: box-shadow 160ms ease;
         }
         .vyasa-table-scroll.vyasa-table-breakout {
-            width: 80vw;
+            width: min(var(--vyasa-breakout-width, 80vw), 80vw);
             max-width: 80vw;
             position: relative;
             left: 50%;
@@ -1352,7 +1359,7 @@ hdrs = (
             width: max-content !important;
             min-width: 0;
             table-layout: auto;
-            margin: 0;
+            margin: 0 auto;
         }
         .uk-table-striped tbody tr:nth-of-type(odd) {
             background-color: rgba(71, 85, 105, 0.08);
