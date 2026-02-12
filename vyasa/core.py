@@ -1032,7 +1032,12 @@ hdrs = (
                 const scope = root && root.querySelectorAll ? root : document;
                 scope.querySelectorAll('.vyasa-table-scroll').forEach(function (el) {
                     bindIfNeeded(el);
-                    updateShadows(el);
+                    const table = el.querySelector('table');
+                    const parentWidth = el.parentElement ? el.parentElement.clientWidth : el.clientWidth;
+                    const tableWidth = table ? table.scrollWidth : el.scrollWidth;
+                    const needsBreakout = tableWidth > (parentWidth + 1);
+                    el.classList.toggle('vyasa-table-breakout', needsBreakout);
+                    window.requestAnimationFrame(function () { updateShadows(el); });
                 });
             }
 
@@ -1300,11 +1305,11 @@ hdrs = (
     # Custom table stripe styling for punchier colors
     Style("""
         .vyasa-table-scroll {
-            width: 80vw;
-            max-width: 80vw;
-            position: relative;
-            left: 50%;
-            transform: translateX(-50%);
+            width: 100%;
+            max-width: 100%;
+            position: static;
+            left: auto;
+            transform: none;
             margin: 1.5rem 0;
             overflow-x: auto;
             overflow-y: hidden;
@@ -1312,6 +1317,13 @@ hdrs = (
             scrollbar-gutter: stable both-edges;
             box-shadow: none;
             transition: box-shadow 160ms ease;
+        }
+        .vyasa-table-scroll.vyasa-table-breakout {
+            width: 80vw;
+            max-width: 80vw;
+            position: relative;
+            left: 50%;
+            transform: translateX(-50%);
         }
         .vyasa-table-scroll.has-right-overflow {
             box-shadow: inset -18px 0 16px -14px rgba(15, 23, 42, 0.32);
@@ -1338,7 +1350,7 @@ hdrs = (
         .vyasa-table-scroll > table,
         .vyasa-table-scroll > .uk-table {
             width: max-content !important;
-            min-width: 100%;
+            min-width: 0;
             table-layout: auto;
             margin: 0;
         }
