@@ -891,6 +891,15 @@ def from_md(content, img_dir=None, current_path=None):
     # Post-process: replace tab placeholders with rendered tabs
     if tab_data_store:
         html = postprocess_tabs(html, tab_data_store, img_dir, current_path, footnotes)
+
+    # Wrap rendered tables in a centered horizontal scroll container so very wide
+    # tables don't overflow to the right and instead stay browsable within bounds.
+    html = re.sub(
+        r'(<table\b[\s\S]*?</table>)',
+        r'<div class="vyasa-table-scroll">\1</div>',
+        html,
+        flags=re.IGNORECASE,
+    )
     
     return Div(Link(rel="stylesheet", href="/static/sidenote.css"), NotStr(apply_classes(html, class_map_mods=mods)), cls="w-full")
 
@@ -1242,6 +1251,25 @@ hdrs = (
     """),
     # Custom table stripe styling for punchier colors
     Style("""
+        .vyasa-table-scroll {
+            width: 80vw;
+            max-width: 80vw;
+            position: relative;
+            left: 50%;
+            transform: translateX(-50%);
+            margin: 1.5rem 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-gutter: stable both-edges;
+        }
+        .vyasa-table-scroll > table,
+        .vyasa-table-scroll > .uk-table {
+            width: max-content !important;
+            min-width: 100%;
+            table-layout: auto;
+            margin: 0;
+        }
         .uk-table-striped tbody tr:nth-of-type(odd) {
             background-color: rgba(71, 85, 105, 0.08);
         }
