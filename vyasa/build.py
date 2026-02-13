@@ -559,7 +559,7 @@ def build_static_site(input_dir=None, output_dir=None):
     # Build navigation tree with static .html links
     nav_tree = build_post_tree_static(root_folder, root_folder)
     root_icon = root_folder / "static" / "icon.png"
-    favicon_href = "/static/icon.png" if root_icon.exists() else "/static/favicon.png"
+    favicon_href = "/static/icon.png"
     
     # Find all markdown files (only in the specified root folder, not parent directories)
     md_files = []

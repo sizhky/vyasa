@@ -907,10 +907,7 @@ def from_md(content, img_dir=None, current_path=None):
 def get_root_folder(): return get_config().get_root_folder()
 def get_blog_title(): return get_config().get_blog_title()
 def get_favicon_href():
-    root_icon = get_root_folder() / "static" / "icon.png"
-    if root_icon.exists():
-        return "/static/icon.png"
-    return "/static/favicon.png"
+    return "/static/icon.png"
 
 hdrs = (
     *Theme.slate.headers(highlightjs=True),
@@ -1780,9 +1777,9 @@ def _favicon_icon_path():
     root_icon = get_root_folder() / "static" / "icon.png"
     if root_icon.exists():
         return root_icon
-    package_favicon = Path(__file__).parent / "static" / "favicon.png"
-    if package_favicon.exists():
-        return package_favicon
+    package_icon = Path(__file__).parent / "static" / "icon.png"
+    if package_icon.exists():
+        return package_icon
     return None
 
 @app.route("/static/icon.png")
