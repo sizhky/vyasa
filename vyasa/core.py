@@ -970,9 +970,7 @@ hdrs = (
     Script("""
         // Tab switching functionality (global scope)
         function switchTab(tabsId, index) {
-            console.log('switchTab called:', tabsId, index);
             const container = document.querySelector('.tabs-container[data-tabs-id="' + tabsId + '"]');
-            console.log('container:', container);
             if (!container) return;
             
             // Update buttons
@@ -3443,7 +3441,7 @@ def slide_deck(path: str, request: Request):
         textNode.nodeValue = textNode.nodeValue.split(placeholder).join('$');
       }});
     }}
-    function vyasaRenderResidualMath(root, label='fallback') {{
+    function vyasaRenderResidualMath(root) {{
       if (!window.katex) return;
       const scope = root || document.body;
       scope.querySelectorAll('p, li').forEach((el) => {{
@@ -3463,29 +3461,13 @@ def slide_deck(path: str, request: Request):
             return katex.renderToString(expr.trim(), {{ displayMode: false, throwOnError: false }});
           }});
           if (changed && replaced !== raw) el.innerHTML = replaced;
-        }} catch (err) {{
-          console.warn('[vyasa][katex]', label, 'residual fallback failed', err);
-        }}
+        }} catch (err) {{}}
       }});
     }}
-    function vyasaRenderSlideMath(root, label='pass') {{
-      if (typeof renderMathInElement !== 'function') {{
-        console.warn('[vyasa][katex] renderMathInElement missing');
-        return;
-      }}
+    function vyasaRenderSlideMath(root) {{
+      if (typeof renderMathInElement !== 'function') return;
       const target = root || document.body;
       replaceEscapedDollarPlaceholders(target);
-      const textSample = (target.innerText || '').slice(0, 1200);
-      const hasDollarBlock = textSample.includes('$$');
-      const hasParenDelim = textSample.includes('\\(') || textSample.includes('\\)');
-      const hasBracketDelim = textSample.includes('\\[') || textSample.includes('\\]');
-      const beforeCount = target.querySelectorAll('.katex').length;
-      console.log('[vyasa][katex]', label, {{
-        beforeCount,
-        hasDollarBlock,
-        hasParenDelim,
-        hasBracketDelim
-      }});
       renderMathInElement(root || document.body, {{
         delimiters: [
           {{left: '$$', right: '$$', display: true}},
@@ -3495,23 +3477,19 @@ def slide_deck(path: str, request: Request):
         ],
         throwOnError: false
       }});
-      vyasaRenderResidualMath(target, label + ':residual');
-      const afterCount = target.querySelectorAll('.katex').length;
-      console.log('[vyasa][katex]', label, {{ afterCount }});
+      vyasaRenderResidualMath(target);
     }}
     Reveal.initialize(Object.assign({reveal_init_json},{{plugins:[RevealHighlight]}}));
-    const runMathPass = (node, eventLabel='unknown') => {{
-      console.group('[vyasa][katex] runMathPass', eventLabel);
-      vyasaRenderSlideMath(node, eventLabel + ':immediate');
-      requestAnimationFrame(() => vyasaRenderSlideMath(node, eventLabel + ':raf'));
+    const runMathPass = (node) => {{
+      vyasaRenderSlideMath(node);
+      requestAnimationFrame(() => vyasaRenderSlideMath(node));
       setTimeout(() => {{
-        vyasaRenderSlideMath(node, eventLabel + ':timeout50');
-        console.groupEnd();
+        vyasaRenderSlideMath(node);
       }}, 50);
     }};
-    runMathPass(document.body, 'initial');
-    Reveal.on('ready', () => runMathPass(document.body, 'ready'));
-    Reveal.on('slidechanged', (e) => runMathPass(e.currentSlide || document.body, 'slidechanged'));
+    runMathPass(document.body);
+    Reveal.on('ready', () => runMathPass(document.body));
+    Reveal.on('slidechanged', (e) => runMathPass(e.currentSlide || document.body));
   </script>
 </body>
 </html>"""

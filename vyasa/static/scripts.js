@@ -3,30 +3,6 @@ import { D2 } from 'https://esm.sh/@terrastruct/d2@0.1.33?bundle';
 
 const mermaidStates = {};
 const d2States = {};
-function logMermaidLabelDiagnostics(wrapper, phase = 'unknown') {
-    const svg = wrapper?.querySelector('svg');
-    if (!svg) {
-        console.log('[vyasa][mermaid][diag]', phase, wrapper?.id, 'no svg');
-        return;
-    }
-    const textNodes = svg.querySelectorAll('text,tspan');
-    const foNodes = svg.querySelectorAll('foreignObject');
-    const labelDiv = svg.querySelector('foreignObject div,.nodeLabel,.edgeLabel,text,tspan');
-    const sample = (labelDiv?.textContent || '').trim().slice(0, 80);
-    const style = labelDiv ? window.getComputedStyle(labelDiv) : null;
-    const diag = {
-        svgRect: svg.getBoundingClientRect(),
-        textCount: textNodes.length,
-        foreignObjectCount: foNodes.length,
-        sample,
-        fillAttr: labelDiv?.getAttribute?.('fill') || null,
-        color: style?.color || null,
-        fill: style?.fill || null,
-        fontSize: style?.fontSize || null,
-        opacity: style?.opacity || null
-    };
-    console.log('[vyasa][mermaid][diag]', phase, wrapper.id, JSON.stringify(diag));
-}
 const mermaidDebugEnabled = () => (
     window.VYASA_DEBUG_MERMAID === true ||
     localStorage.getItem('vyasaDebugMermaid') === '1'
@@ -786,13 +762,6 @@ function initMermaidInteraction() {
             svg.style.pointerEvents = 'none';
         }
         if (!svg || alreadyInteractive) return;
-        logMermaidLabelDiagnostics(wrapper, 'initMermaidInteraction');
-        
-        // DEBUG: Log initial state
-        console.group(`🔍 initMermaidInteraction: ${wrapper.id}`);
-        console.log('Theme:', getCurrentTheme());
-        console.log('Wrapper computed style height:', window.getComputedStyle(wrapper).height);
-        console.log('Wrapper inline style:', wrapper.getAttribute('style'));
         
         // Scale SVG to fit container (maintain aspect ratio, fit to width or height whichever is smaller)
         const svgRect = svg.getBoundingClientRect();
@@ -809,14 +778,10 @@ function initMermaidInteraction() {
             }
             return;
         }
-        console.log('Wrapper rect:', { width: wrapperRect.width, height: wrapperRect.height });
-        console.log('SVG rect:', { width: svgRect.width, height: svgRect.height });
-        
         const innerWidth = Math.max(wrapperRect.width - 32, 1);   // 32 for p-4 padding
         const innerHeight = Math.max(wrapperRect.height - 32, 1);
         const scaleX = innerWidth / Math.max(svgRect.width, 1);
         const scaleY = innerHeight / Math.max(svgRect.height, 1);
-        console.log('Scale factors:', { scaleX, scaleY });
         
         // For very wide diagrams (like Gantt charts), prefer width scaling even if it exceeds height
         const aspectRatio = svgRect.width / svgRect.height;
@@ -825,11 +790,9 @@ function initMermaidInteraction() {
         if (aspectRatio > 3) {
             // Wide diagram: scale to fit width, but do not upscale by default
             initialScale = Math.min(scaleX, maxUpscale);
-            console.log('Wide diagram detected (aspect ratio > 3):', aspectRatio, 'Using scaleX:', initialScale);
         } else {
             // Normal diagram: fit to smaller dimension, but do not upscale by default
             initialScale = Math.min(scaleX, scaleY, maxUpscale);
-            console.log('Normal diagram (aspect ratio <=3):', aspectRatio, 'Using min scale:', initialScale);
         }
         if (!Number.isFinite(initialScale) || initialScale <= 0) {
             // Hidden/unstable layout (e.g., Reveal transition state) can yield tiny or negative sizes.
@@ -863,9 +826,6 @@ function initMermaidInteraction() {
         };
         mermaidStates[wrapper.id] = state;
         wrapper.dataset.mermaidInteractive = 'true';
-        console.log('Final state:', state);
-        console.groupEnd();
-
         if (mermaidDebugEnabled() && !wrapper.dataset.mermaidDebugBound) {
             wrapper.dataset.mermaidDebugBound = 'true';
             const logEvent = (name, event) => {
@@ -1121,19 +1081,12 @@ function getDynamicGanttWidth() {
 }
 
 function reinitializeMermaid() {
-    console.group('🔄 reinitializeMermaid called');
-    console.log('Switching to theme:', getCurrentTheme());
-    console.log('Is initial load?', isInitialLoad);
-    
     // Skip if this is the initial load (let it render naturally first)
     if (isInitialLoad) {
-        console.log('Skipping reinitialize on initial load');
-        console.groupEnd();
         return;
     }
     
     const dynamicWidth = getDynamicGanttWidth();
-    console.log('Using dynamic Gantt width:', dynamicWidth);
     
     mermaid.initialize({ 
         startOnLoad: false,
@@ -1157,14 +1110,9 @@ function reinitializeMermaid() {
     document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
         const originalCode = wrapper.getAttribute('data-mermaid-code');
         if (originalCode) {
-            console.log(`Processing wrapper: ${wrapper.id}`);
-            console.log('BEFORE clear - wrapper height:', window.getComputedStyle(wrapper).height);
-            console.log('BEFORE clear - wrapper rect:', wrapper.getBoundingClientRect());
-            
             // Preserve the current computed height before clearing (height should already be set explicitly)
             if (shouldLockHeight(wrapper)) {
                 const currentHeight = wrapper.getBoundingClientRect().height;
-                console.log('Preserving height:', currentHeight);
                 wrapper.style.height = currentHeight + 'px';
             }
             
@@ -1179,8 +1127,6 @@ function reinitializeMermaid() {
             
             // Clear the wrapper
             wrapper.innerHTML = '';
-            console.log('AFTER clear - wrapper height:', window.getComputedStyle(wrapper).height);
-            console.log('AFTER clear - wrapper rect:', wrapper.getBoundingClientRect());
             
             // Re-add the pre element with mermaid code
             const newPre = document.createElement('pre');
@@ -1192,19 +1138,13 @@ function reinitializeMermaid() {
     
     // Re-run mermaid
     mermaid.run().then(() => {
-        console.log('Mermaid re-render complete, scheduling initMermaidInteraction');
         scheduleMermaidInteraction({
-            onReady: () => {
-                console.groupEnd();
-            }
+            onReady: () => {}
         });
     });
 }
 
-console.log('🚀 Initial Mermaid setup - Theme:', getCurrentTheme());
-
 const initialGanttWidth = getDynamicGanttWidth();
-console.log('Using initial Gantt width:', initialGanttWidth);
 
 mermaid.initialize({ 
     startOnLoad: false,
@@ -1227,11 +1167,8 @@ document.addEventListener('DOMContentLoaded', () => {
     mermaidDebugSnapshot('before mermaid.run (DOMContentLoaded)');
     mermaid.run().then(() => {
         mermaidDebugSnapshot('after mermaid.run (DOMContentLoaded)');
-        console.log('Initial mermaid render complete');
         scheduleMermaidInteraction({
             onReady: () => {
-                console.log('Calling initial initMermaidInteraction');
-                
                 // After initial render, set explicit heights on all wrappers so theme switching works
                 const shouldLockHeight = (wrapper) => {
                     const height = (wrapper.style.height || '').trim();
@@ -1242,7 +1179,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
                     const currentHeight = wrapper.getBoundingClientRect().height;
-                    console.log(`Setting initial height for ${wrapper.id}:`, currentHeight);
                     wrapper.style.height = currentHeight + 'px';
                 });
                 isInitialLoad = false;
@@ -1276,9 +1212,6 @@ function initRevealDiagramRefresh() {
         const afterMermaid = () => scheduleMermaidInteraction();
         if (mermaidNodes.length > 0) {
             mermaid.run({ nodes: mermaidNodes }).then(() => {
-                current.querySelectorAll('.mermaid-wrapper').forEach((w) => {
-                    logMermaidLabelDiagnostics(w, 'reveal-refresh-after-run');
-                });
                 afterMermaid();
             }).catch(() => {});
         } else {
