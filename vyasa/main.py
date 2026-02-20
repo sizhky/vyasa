@@ -1,10 +1,18 @@
 from pathlib import Path
 import sys
 import os
+from importlib.metadata import PackageNotFoundError, version as pkg_version
 from .config import get_config, reload_config
 
 # Import app at module level, but config will be initialized before it's used
 from .core import app
+from . import __version__ as local_version
+
+def _get_vyasa_version():
+    try:
+        return pkg_version("vyasa")
+    except PackageNotFoundError:
+        return local_version
 
 def build_command():
     """CLI entry point for vyasa build command"""
@@ -45,6 +53,10 @@ def cli():
     """
     import uvicorn
     import argparse
+
+    if "--version" in sys.argv[1:] or "-V" in sys.argv[1:]:
+        print(_get_vyasa_version())
+        return
     
     # Check if first argument is 'build'
     if len(sys.argv) > 1 and sys.argv[1] == 'build':
