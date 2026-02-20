@@ -60,6 +60,12 @@ reveal_controls: true
 reveal_slideNumber: true
 ```
 
+To make the **right arrow** advance through every slide (including vertical/below slides), enable:
+
+```yaml
+reveal_rightAdvancesAll: true
+```
+
 Top-level keys and `reveal:` both work.
 If both define the same key, `reveal_*` overrides the value from `reveal:`.
 

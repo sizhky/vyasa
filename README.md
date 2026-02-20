@@ -137,6 +137,16 @@ mindmap
 
 See the full list in [Markdown Writing Features](vyasa%20manual/markdown-features.md).
 
+### 🎬 Reveal.js Slides
+- **One-click Present Mode**: Add `slides: true` in frontmatter and Vyasa shows a `Present` button that opens `/slides/<path>` in Reveal.js
+- **Markdown-Native Slide Splits**: Use `---` for horizontal slides and `--` for vertical slides (customizable with `separator` and `separatorVertical`)
+- **Frontmatter Config Support**: Set Reveal options via nested `reveal:` or top-level `reveal_*` keys; these are passed into `Reveal.initialize(...)`
+- **Theme + Highlight Control**: Configure `theme` and `highlightTheme` for deck appearance and code styling
+- **Optional Linear Right-Arrow Navigation**: Use `reveal_rightAdvancesAll: true` (or `reveal: { rightAdvancesAll: true }`) so Right Arrow advances through every slide, including vertical/below slides
+- **Slides with Existing Vyasa Features**: Mermaid, D2, code highlighting, and math rendering all work inside slides
+
+See the working example in [Reveal Slides Demo](demo/reveal-slides.md).
+
 ### 🎨 Modern UI
 - **Responsive Design**: Works beautifully on all screen sizes with mobile-first approach
 - **Three-Panel Layout**: Posts sidebar, main content, and table of contents for easy navigation

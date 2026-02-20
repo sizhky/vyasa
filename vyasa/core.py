@@ -3302,6 +3302,11 @@ def slide_deck(path: str, request: Request):
     md_separator_notes = str(reveal_cfg.pop("separatorNotes", "^Note:"))
     slide_padding = str(reveal_cfg.pop("slidePadding", "1.25rem")).strip() or "1.25rem"
     font_size = str(reveal_cfg.pop("fontSize", "42px")).strip() or "42px"
+    right_advances_all = reveal_cfg.pop("rightAdvancesAll", False)
+    if isinstance(right_advances_all, str):
+        right_advances_all = right_advances_all.strip().lower() in {"1", "true", "yes", "on"}
+    if right_advances_all and "navigationMode" not in reveal_cfg:
+        reveal_cfg["navigationMode"] = "linear"
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?(?:px|rem|em|vw|vh|%)", font_size):
         font_size = "42px"
     reveal_init_cfg = {"hash": True, "slideNumber": True, "margin": 0.12, **reveal_cfg}
