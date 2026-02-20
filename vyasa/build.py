@@ -15,7 +15,10 @@ from .core import (
     from_md, extract_toc, build_toc_items, text_to_anchor,
     build_post_tree, ContentRenderer, extract_footnotes,
     preprocess_super_sub, preprocess_tabs,
-    get_vyasa_config, order_vyasa_entries, _effective_abbreviations, find_folder_note_file
+)
+from .helpers import (
+    get_vyasa_config, order_vyasa_entries, _effective_abbreviations, _effective_ignore_list, 
+    _effective_include_list, _should_include_folder, find_folder_note_file
 )
 from .config import get_config, reload_config
 
@@ -366,11 +369,16 @@ def build_post_tree_static(folder, root_folder):
 
         entries = []
         folder_note = find_folder_note_file(folder)
+        ignore_list = _effective_ignore_list(root_folder, folder)
+        include_list = _effective_include_list(root_folder, folder)
         for item in folder.iterdir():
             if item.name == ".vyasa":
                 continue
             if item.is_dir():
                 if item.name.startswith('.'):
+                    continue
+                # Check include/ignore lists
+                if not _should_include_folder(item.name, include_list, ignore_list):
                     continue
                 entries.append(item)
             elif item.suffix == '.md':
@@ -446,9 +454,23 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     
     # Navbar
     navbar = f'''
-    <div class="flex items-center justify-between bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
-        <a href="/index.html">{blog_title}</a>
-        {theme_toggle}
+    <div class="bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
+        <div class="flex items-center justify-between md:hidden">
+            <button id="mobile-posts-toggle" title="Toggle file tree" class="p-2 rounded transition-colors hover:bg-slate-800" type="button">
+                <span uk-icon="menu" class="w-5 h-5"></span>
+            </button>
+            <a href="/index.html" class="flex-1 px-4 text-center truncate">{blog_title}</a>
+            <div class="flex items-center gap-1">
+                <button id="mobile-toc-toggle" title="Toggle table of contents" class="p-2 rounded transition-colors hover:bg-slate-800" type="button">
+                    <span uk-icon="list" class="w-5 h-5"></span>
+                </button>
+                {theme_toggle}
+            </div>
+        </div>
+        <div class="hidden md:flex items-center justify-between">
+            <a href="/index.html">{blog_title}</a>
+            {theme_toggle}
+        </div>
     </div>
     '''
     
@@ -559,14 +581,25 @@ def build_static_site(input_dir=None, output_dir=None):
     # Build navigation tree with static .html links
     nav_tree = build_post_tree_static(root_folder, root_folder)
     root_icon = root_folder / "static" / "icon.png"
-    favicon_href = "/static/icon.png" if root_icon.exists() else "/static/favicon.png"
+    favicon_href = "/static/icon.png"
     
     # Find all markdown files (only in the specified root folder, not parent directories)
+    ignore_list = _effective_ignore_list(root_folder)
+    include_list = _effective_include_list(root_folder)
     md_files = []
     for md_file in root_folder.rglob('*.md'):
         # Only include files that are actually inside root_folder
         try:
             relative_path = md_file.relative_to(root_folder)
+            # Check if any folder in path should be excluded
+            path_parts = relative_path.parts[:-1]  # Exclude filename
+            should_skip = False
+            for part in path_parts:
+                if not _should_include_folder(part, include_list, ignore_list):
+                    should_skip = True
+                    break
+            if should_skip:
+                continue
             md_files.append(md_file)
         except ValueError:
             # Skip files outside root_folder
