@@ -1681,22 +1681,15 @@ function initMobileMenus() {
     const closePostsBtn = document.getElementById('close-mobile-posts');
     const closeTocBtn = document.getElementById('close-mobile-toc');
 
-    // Default mobile state: posts tree open, TOC closed.
-    if (postsPanel && window.matchMedia('(max-width: 1279px)').matches) {
-        postsPanel.classList.remove('-translate-x-full');
-        postsPanel.classList.add('translate-x-0');
-        if (tocPanel) {
-            tocPanel.classList.remove('translate-x-0');
-            tocPanel.classList.add('translate-x-full');
-        }
-    }
-    
     // Open posts panel
     if (postsToggle) {
         postsToggle.addEventListener('click', () => {
             if (postsPanel) {
                 postsPanel.classList.remove('-translate-x-full');
                 postsPanel.classList.add('translate-x-0');
+                postsPanel.querySelectorAll('details[data-sidebar="posts"]').forEach((sidebar) => {
+                    revealInSidebar(sidebar);
+                });
                 // Close TOC panel if open
                 if (tocPanel) {
                     tocPanel.classList.remove('translate-x-0');
