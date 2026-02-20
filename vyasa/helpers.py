@@ -105,6 +105,8 @@ def _normalize_vyasa_config(parsed):
         "folders_always_first": False,
         "layout_max_width": None,
         "abbreviations": None,
+        "ignore": [],
+        "include": [],
     }
     if not isinstance(parsed, dict):
         return config
@@ -151,6 +153,20 @@ def _normalize_vyasa_config(parsed):
         parts = [part.strip() for part in abbreviations.split(",")]
         config["abbreviations"] = [part for part in parts if part]
 
+    ignore = parsed.get("ignore")
+    if isinstance(ignore, (list, tuple, set)):
+        config["ignore"] = [str(item).strip() for item in ignore if str(item).strip()]
+    elif isinstance(ignore, str):
+        parts = [part.strip() for part in ignore.split(",")]
+        config["ignore"] = [part for part in parts if part]
+
+    include = parsed.get("include")
+    if isinstance(include, (list, tuple, set)):
+        config["include"] = [str(item).strip() for item in include if str(item).strip()]
+    elif isinstance(include, str):
+        parts = [part.strip() for part in include.split(",")]
+        config["include"] = [part for part in parts if part]
+
     return config
 
 def _effective_abbreviations(root: Path, folder: Path | None = None):
@@ -161,6 +177,40 @@ def _effective_abbreviations(root: Path, folder: Path | None = None):
     folder_config = get_vyasa_config(folder)
     folder_abbrevs = folder_config.get("abbreviations")
     return folder_abbrevs if folder_abbrevs is not None else root_abbrevs
+
+def _effective_ignore_list(root: Path, folder: Path | None = None):
+    """Get the effective ignore list for a folder (inherits from root)."""
+    root_config = get_vyasa_config(root)
+    root_ignore = root_config.get("ignore") or []
+    if folder is None or folder == root:
+        return root_ignore
+    folder_config = get_vyasa_config(folder)
+    folder_ignore = folder_config.get("ignore")
+    return folder_ignore if folder_ignore is not None else root_ignore
+
+def _effective_include_list(root: Path, folder: Path | None = None):
+    """Get the effective include list for a folder (inherits from root)."""
+    root_config = get_vyasa_config(root)
+    root_include = root_config.get("include") or []
+    if folder is None or folder == root:
+        return root_include
+    folder_config = get_vyasa_config(folder)
+    folder_include = folder_config.get("include")
+    return folder_include if folder_include is not None else root_include
+
+def _should_include_folder(folder_name: str, include_list: list, ignore_list: list) -> bool:
+    """Check if a folder should be included based on include/ignore lists.
+    
+    Logic:
+    - If in ignore list: exclude
+    - If include list is empty: include (no whitelist defined)
+    - If include list is defined: only include if in the list
+    """
+    if folder_name in ignore_list:
+        return False
+    if not include_list:
+        return True
+    return folder_name in include_list
 
 def get_vyasa_config(folder: Path):
     vyasa_path = folder / ".vyasa"

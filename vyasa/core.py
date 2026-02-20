@@ -1,4 +1,4 @@
-import re, mistletoe as mst, pathlib, os
+import re, mistletoe as mst, pathlib, os, html
 import json
 from dataclasses import dataclass
 from itertools import chain
@@ -23,6 +23,9 @@ from .helpers import (
     get_vyasa_config,
     order_vyasa_entries,
     _effective_abbreviations,
+    _effective_ignore_list,
+    _effective_include_list,
+    _should_include_folder,
     find_folder_note_file,
 )
 from .layout_helpers import (
@@ -1080,27 +1083,27 @@ hdrs = (
             });
         }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            renderMathInElement(document.body, {
+        function renderMathSafely(root) {
+            if (typeof renderMathInElement !== 'function') return;
+            renderMathInElement(root, {
                 delimiters: [
                     {left: '$$', right: '$$', display: true},
                     {left: '$', right: '$', display: false}
                 ],
                 throwOnError: false
             });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
             replaceEscapedDollarPlaceholders(document.body);
+            renderMathSafely(document.body);
         });
         
         // Re-render math after HTMX swaps
         document.body.addEventListener('htmx:afterSwap', function(event) {
-            renderMathInElement(document.body, {
-                delimiters: [
-                    {left: '$$', right: '$$', display: true},
-                    {left: '$', right: '$', display: false}
-                ],
-                throwOnError: false
-            });
-            replaceEscapedDollarPlaceholders(event.target || document.body);
+            const root = event.target || document.body;
+            replaceEscapedDollarPlaceholders(root);
+            renderMathSafely(root);
         });
     """),
     Link(rel="preconnect", href="https://fonts.googleapis.com"), 
@@ -2285,31 +2288,36 @@ def navbar(show_mobile_menus=False, htmx_nav=True):
         cls="flex items-center gap-2"
     )
     
-    # Add mobile menu buttons if sidebars are present
     if show_mobile_menus:
-        mobile_buttons = Div(
+        mobile_row = Div(
             Button(
                 UkIcon("menu", cls="w-5 h-5"),
                 title="Toggle file tree",
                 id="mobile-posts-toggle",
-                cls="xl:hidden p-2 hover:bg-slate-800 rounded transition-colors",
+                cls="p-2 hover:bg-slate-800 rounded transition-colors",
                 type="button"
             ),
-            Button(
-                UkIcon("list", cls="w-5 h-5"),
-                title="Toggle table of contents",
-                id="mobile-toc-toggle",
-                cls="xl:hidden p-2 hover:bg-slate-800 rounded transition-colors",
-                type="button"
+            A(get_blog_title(), href="/", cls="flex-1 px-4 text-center truncate", **home_link_attrs),
+            Div(
+                Button(
+                    UkIcon("list", cls="w-5 h-5"),
+                    title="Toggle table of contents",
+                    id="mobile-toc-toggle",
+                    cls="p-2 hover:bg-slate-800 rounded transition-colors",
+                    type="button"
+                ),
+                theme_toggle(),
+                cls="flex items-center gap-1"
             ),
-            cls="flex items-center gap-1"
+            cls="flex items-center justify-between xl:hidden"
         )
-        right_section = Div(
-            mobile_buttons,
-            theme_toggle(),
-            cls="flex items-center gap-2"
+        desktop_row = Div(left_section, right_section, cls="hidden xl:flex items-center justify-between")
+        return Div(
+            mobile_row,
+            desktop_row,
+            cls="bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800"
         )
-    
+
     return Div(left_section, right_section,
                cls="flex items-center justify-between bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800")
 
@@ -2353,11 +2361,22 @@ def _find_search_matches_uncached(query, limit=40):
     query_norm = _normalize_search_text(trimmed) if not regex else ""
     root = get_root_folder()
     index_file = find_index_file()
+    ignore_list = _effective_ignore_list(root)
+    include_list = _effective_include_list(root)
     results = []
     for item in chain(root.rglob("*.md"), root.rglob("*.pdf")):
         if any(part.startswith('.') for part in item.relative_to(root).parts):
             continue
         if ".vyasa" in item.parts:
+            continue
+        # Check if any folder in path should be excluded based on include/ignore lists
+        path_parts = item.relative_to(root).parts[:-1]  # Exclude filename
+        should_skip = False
+        for part in path_parts:
+            if not _should_include_folder(part, include_list, ignore_list):
+                should_skip = True
+                break
+        if should_skip:
             continue
         if index_file and item.resolve() == index_file.resolve():
             continue
@@ -2927,11 +2946,16 @@ def build_post_tree(folder, roles=None):
         index_file = find_index_file() if folder == root else None
         entries = []
         folder_note = find_folder_note_file(folder)
+        ignore_list = _effective_ignore_list(root, folder)
+        include_list = _effective_include_list(root, folder)
         for item in folder.iterdir():
             if item.name == ".vyasa":
                 continue
             if item.is_dir():
                 if item.name.startswith('.'):
+                    continue
+                # Check include/ignore lists
+                if not _should_include_folder(item.name, include_list, ignore_list):
                     continue
                 entries.append(item)
             elif item.suffix in ('.md', '.pdf'):
@@ -3173,9 +3197,19 @@ def post_detail(path: str, htmx, request: Request):
         onclick="(function(){const el=document.getElementById('raw-md-clipboard');const toast=document.getElementById('raw-md-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()",
         cls="inline-flex items-center justify-center p-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors"
     )
+    show_present = bool(metadata.get("slides", False))
+    present_button = A(
+        UkIcon("monitor", cls="w-4 h-4"),
+        "Present",
+        href=f"/slides/{path}",
+        target="_blank",
+        rel="noopener noreferrer",
+        cls="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors text-sm"
+    ) if show_present else None
     post_content = Div(
         Div(
             H1(post_title, cls="text-4xl font-bold"),
+            present_button,
             copy_button,
             cls="flex items-center gap-2 flex-wrap mb-8"
         ),
@@ -3203,6 +3237,69 @@ def post_detail(path: str, htmx, request: Request):
     logger.debug(f"[DEBUG] ########## REQUEST COMPLETE: {total_time:.2f}ms TOTAL ##########\n")
     
     return result
+
+@rt('/slides/{path:path}')
+def slide_deck(path: str, request: Request):
+    root = get_root_folder()
+    file_path = root / f'{path}.md'
+    if not file_path.exists():
+        return not_found(auth=request.scope.get("auth"))
+
+    roles = _get_roles_from_auth(request.scope.get("auth"))
+    if not _is_allowed(f"/posts/{path}", roles or []):
+        return not_found(auth=request.scope.get("auth"))
+
+    metadata, raw_content = parse_frontmatter(file_path)
+    title = metadata.get('title', slug_to_title(Path(path).name, abbreviations=_effective_abbreviations(root)))
+    deck_md = html.escape(raw_content)
+    safe_title = html.escape(f"{title} - Slides")
+    reveal_block = metadata.get("reveal", {}) if isinstance(metadata.get("reveal"), dict) else {}
+    reveal_top_level = {k[7:]: v for k, v in metadata.items() if k.startswith("reveal_")}
+    reveal_cfg = {**reveal_block, **reveal_top_level}
+    theme = str(reveal_cfg.pop("theme", "black")).strip() or "black"
+    highlight_theme = str(reveal_cfg.pop("highlightTheme", "monokai")).strip() or "monokai"
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", theme):
+        theme = "black"
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", highlight_theme):
+        highlight_theme = "monokai"
+    md_separator = str(reveal_cfg.pop("separator", "^---$"))
+    md_separator_vertical = str(reveal_cfg.pop("separatorVertical", "^--$"))
+    md_separator_notes = str(reveal_cfg.pop("separatorNotes", "^Note:"))
+    slide_padding = str(reveal_cfg.pop("slidePadding", "1.25rem")).strip() or "1.25rem"
+    font_size = str(reveal_cfg.pop("fontSize", "42px")).strip() or "42px"
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?(?:px|rem|em|vw|vh|%)", font_size):
+        font_size = "42px"
+    reveal_init_cfg = {"hash": True, "slideNumber": True, "margin": 0.12, **reveal_cfg}
+    reveal_init_json = json.dumps(reveal_init_cfg, ensure_ascii=False)
+    md_separator_attr = html.escape(md_separator, quote=True)
+    md_separator_vertical_attr = html.escape(md_separator_vertical, quote=True)
+    md_separator_notes_attr = html.escape(md_separator_notes, quote=True)
+    page = f"""<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{safe_title}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/{theme}.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/{highlight_theme}.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <style>.reveal{{--r-main-font-size:{font_size};}} .reveal .slides{{text-align:left}} .reveal .slides section{{padding:0 {slide_padding}; box-sizing:border-box}} .reveal section img{{max-height:72vh}}</style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+      <section data-markdown data-separator="{md_separator_attr}" data-separator-vertical="{md_separator_vertical_attr}" data-separator-notes="{md_separator_notes_attr}"><textarea data-template>{deck_md}</textarea></section>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/markdown/markdown.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/math/math.js"></script>
+  <script>Reveal.initialize(Object.assign({reveal_init_json},{{plugins:[RevealMarkdown,RevealHighlight,RevealMath.KaTeX]}}));</script>
+</body>
+</html>"""
+    return Response(page, media_type="text/html; charset=utf-8")
 
 def find_index_file():
     """Find index.md or readme.md (case insensitive) in root folder"""
