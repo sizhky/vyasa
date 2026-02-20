@@ -4,15 +4,27 @@ import os
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 from .config import get_config, reload_config
 
-# Import app at module level, but config will be initialized before it's used
-from .core import app
-from . import __version__ as local_version
+_core_app = None
+
+async def app(scope, receive, send):
+    global _core_app
+    if _core_app is None:
+        from .core import app as core_app
+        _core_app = core_app
+    await _core_app(scope, receive, send)
 
 def _get_vyasa_version():
     try:
         return pkg_version("vyasa")
     except PackageNotFoundError:
-        return local_version
+        init_file = Path(__file__).with_name("__init__.py")
+        try:
+            for line in init_file.read_text(encoding="utf-8").splitlines():
+                if line.startswith("__version__"):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+        except OSError:
+            pass
+        return "unknown"
 
 def build_command():
     """CLI entry point for vyasa build command"""
