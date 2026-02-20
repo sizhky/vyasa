@@ -1980,7 +1980,7 @@ wheels = [
 
 [[package]]
 name = "vyasa"
-version = "0.3.33"
+version = "0.3.34"
 source = { editable = "." }
 dependencies = [
     { name = "mistletoe" },
