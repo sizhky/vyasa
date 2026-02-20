@@ -63,6 +63,11 @@ mindmap
       Title Abbreviations
       Folder Notes
     🎨 Interactive Elements
+      Reveal.js Slides
+        Present Mode
+        Horizontal + Vertical Slides
+        Frontmatter Config Support
+        Theme + Highlight Control
       Mermaid Diagrams
         Flowcharts
         Sequence Diagrams
