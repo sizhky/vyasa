@@ -3271,9 +3271,41 @@ def slide_deck(path: str, request: Request):
         font_size = "42px"
     reveal_init_cfg = {"hash": True, "slideNumber": True, "margin": 0.12, **reveal_cfg}
     reveal_init_json = json.dumps(reveal_init_cfg, ensure_ascii=False)
-    md_separator_attr = html.escape(md_separator, quote=True)
-    md_separator_vertical_attr = html.escape(md_separator_vertical, quote=True)
-    md_separator_notes_attr = html.escape(md_separator_notes, quote=True)
+    sep_re = re.compile(md_separator)
+    sep_v_re = re.compile(md_separator_vertical)
+    def _split_slide_groups(md_text: str):
+        groups, group, buf = [], [], []
+        in_fence = False
+        fence_char, fence_len = "", 0
+        for line in md_text.splitlines():
+            s = line.strip()
+            m = re.match(r'^(```+|~~~+)', s)
+            if m:
+                tok = m.group(1)
+                if not in_fence:
+                    in_fence, fence_char, fence_len = True, tok[0], len(tok)
+                elif tok[0] == fence_char and len(tok) >= fence_len:
+                    in_fence = False
+            if not in_fence and sep_re.fullmatch(s):
+                group.append("\n".join(buf).strip()); groups.append([x for x in group if x.strip()]); group, buf = [], []; continue
+            if not in_fence and sep_v_re.fullmatch(s):
+                group.append("\n".join(buf).strip()); buf = []; continue
+            buf.append(line)
+        group.append("\n".join(buf).strip())
+        groups.append([x for x in group if x.strip()])
+        return [g for g in groups if g]
+    def _render_slide_fragment(md_fragment: str):
+        frag = to_xml(from_md(md_fragment, current_path=path))
+        return re.sub(r'<link[^>]*sidenote\\.css[^>]*>', '', frag, count=1)
+    slide_groups = _split_slide_groups(raw_content)
+    sections = []
+    for group in slide_groups:
+        if len(group) == 1:
+            sections.append(f"<section>{_render_slide_fragment(group[0])}</section>")
+        else:
+            inner = "".join(f"<section>{_render_slide_fragment(item)}</section>" for item in group)
+            sections.append(f"<section>{inner}</section>")
+    slides_html = "".join(sections) if sections else "<section><h2>Empty deck</h2></section>"
     page = f"""<!doctype html>
 <html>
 <head>
@@ -3286,17 +3318,17 @@ def slide_deck(path: str, request: Request):
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
   <style>.reveal{{--r-main-font-size:{font_size};}} .reveal .slides{{text-align:left}} .reveal .slides section{{padding:0 {slide_padding}; box-sizing:border-box}} .reveal section img{{max-height:72vh}}</style>
 </head>
-<body>
+  <body>
   <div class="reveal">
     <div class="slides">
-      <section data-markdown data-separator="{md_separator_attr}" data-separator-vertical="{md_separator_vertical_attr}" data-separator-notes="{md_separator_notes_attr}"><textarea data-template>{deck_md}</textarea></section>
+      {slides_html}
     </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/markdown/markdown.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/math/math.js"></script>
-  <script>Reveal.initialize(Object.assign({reveal_init_json},{{plugins:[RevealMarkdown,RevealHighlight,RevealMath.KaTeX]}}));</script>
+  <script type="module" src="/static/scripts.js"></script>
+  <script>Reveal.initialize(Object.assign({reveal_init_json},{{plugins:[RevealHighlight,RevealMath.KaTeX]}}));</script>
 </body>
 </html>"""
     return Response(page, media_type="text/html; charset=utf-8")

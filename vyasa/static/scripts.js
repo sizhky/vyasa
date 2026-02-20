@@ -734,6 +734,8 @@ function initMermaidInteraction() {
         }
     }
     wrappers.forEach((wrapper, idx) => {
+        const wrapperRect = wrapper.getBoundingClientRect();
+        if (wrapperRect.width < 8 || wrapperRect.height < 8) return;
         const svg = wrapper.querySelector('svg');
         const alreadyInteractive = wrapper.dataset.mermaidInteractive === 'true';
         if (mermaidDebugEnabled()) {
@@ -768,7 +770,6 @@ function initMermaidInteraction() {
         console.log('Wrapper inline style:', wrapper.getAttribute('style'));
         
         // Scale SVG to fit container (maintain aspect ratio, fit to width or height whichever is smaller)
-        const wrapperRect = wrapper.getBoundingClientRect();
         const svgRect = svg.getBoundingClientRect();
         console.log('Wrapper rect:', { width: wrapperRect.width, height: wrapperRect.height });
         console.log('SVG rect:', { width: svgRect.width, height: svgRect.height });
@@ -1192,6 +1193,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     renderD2Diagrams();
 });
+
+function initRevealDiagramRefresh() {
+    if (!window.Reveal || typeof window.Reveal.on !== 'function') return;
+    const refreshCurrentSlideDiagrams = () => {
+        const current = window.Reveal.getCurrentSlide();
+        if (!current) return;
+        current.querySelectorAll('.mermaid-wrapper').forEach((wrapper) => {
+            if (!wrapper.id) return;
+            delete mermaidStates[wrapper.id];
+            delete wrapper.dataset.mermaidInteractive;
+        });
+        const mermaidNodes = Array.from(current.querySelectorAll('pre.mermaid'));
+        const afterMermaid = () => scheduleMermaidInteraction();
+        if (mermaidNodes.length > 0) {
+            mermaid.run({ nodes: mermaidNodes }).then(afterMermaid).catch(() => {});
+        } else {
+            afterMermaid();
+        }
+        renderD2Diagrams(current);
+    };
+    window.Reveal.on('ready', refreshCurrentSlideDiagrams);
+    window.Reveal.on('slidechanged', refreshCurrentSlideDiagrams);
+}
+initRevealDiagramRefresh();
 
 // Reveal current file in sidebar
 function revealInSidebar(rootElement = document) {
