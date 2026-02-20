@@ -734,6 +734,8 @@ function initMermaidInteraction() {
         }
     }
     wrappers.forEach((wrapper, idx) => {
+        const wrapperRect = wrapper.getBoundingClientRect();
+        if (wrapperRect.width < 8 || wrapperRect.height < 8) return;
         const svg = wrapper.querySelector('svg');
         const alreadyInteractive = wrapper.dataset.mermaidInteractive === 'true';
         if (mermaidDebugEnabled()) {
@@ -761,21 +763,25 @@ function initMermaidInteraction() {
         }
         if (!svg || alreadyInteractive) return;
         
-        // DEBUG: Log initial state
-        console.group(`🔍 initMermaidInteraction: ${wrapper.id}`);
-        console.log('Theme:', getCurrentTheme());
-        console.log('Wrapper computed style height:', window.getComputedStyle(wrapper).height);
-        console.log('Wrapper inline style:', wrapper.getAttribute('style'));
-        
         // Scale SVG to fit container (maintain aspect ratio, fit to width or height whichever is smaller)
-        const wrapperRect = wrapper.getBoundingClientRect();
         const svgRect = svg.getBoundingClientRect();
-        console.log('Wrapper rect:', { width: wrapperRect.width, height: wrapperRect.height });
-        console.log('SVG rect:', { width: svgRect.width, height: svgRect.height });
-        
-        const scaleX = (wrapperRect.width - 32) / svgRect.width;  // 32 for p-4 padding (16px each side)
-        const scaleY = (wrapperRect.height - 32) / svgRect.height;
-        console.log('Scale factors:', { scaleX, scaleY });
+        const inReveal = !!wrapper.closest('.reveal');
+        if (inReveal && (wrapperRect.height < 120 || svgRect.width < 120 || svgRect.height < 30)) {
+            if (mermaidDebugEnabled()) {
+                mermaidDebugLog('skip initMermaidInteraction: reveal layout not stable', {
+                    id: wrapper.id,
+                    wrapperWidth: wrapperRect.width,
+                    wrapperHeight: wrapperRect.height,
+                    svgWidth: svgRect.width,
+                    svgHeight: svgRect.height
+                });
+            }
+            return;
+        }
+        const innerWidth = Math.max(wrapperRect.width - 32, 1);   // 32 for p-4 padding
+        const innerHeight = Math.max(wrapperRect.height - 32, 1);
+        const scaleX = innerWidth / Math.max(svgRect.width, 1);
+        const scaleY = innerHeight / Math.max(svgRect.height, 1);
         
         // For very wide diagrams (like Gantt charts), prefer width scaling even if it exceeds height
         const aspectRatio = svgRect.width / svgRect.height;
@@ -784,11 +790,19 @@ function initMermaidInteraction() {
         if (aspectRatio > 3) {
             // Wide diagram: scale to fit width, but do not upscale by default
             initialScale = Math.min(scaleX, maxUpscale);
-            console.log('Wide diagram detected (aspect ratio > 3):', aspectRatio, 'Using scaleX:', initialScale);
         } else {
             // Normal diagram: fit to smaller dimension, but do not upscale by default
             initialScale = Math.min(scaleX, scaleY, maxUpscale);
-            console.log('Normal diagram (aspect ratio <=3):', aspectRatio, 'Using min scale:', initialScale);
+        }
+        if (!Number.isFinite(initialScale) || initialScale <= 0) {
+            // Hidden/unstable layout (e.g., Reveal transition state) can yield tiny or negative sizes.
+            // Skip now and let a later ready/slidechanged pass initialize interaction.
+            if (mermaidDebugEnabled()) {
+                mermaidDebugLog('skip initMermaidInteraction: unstable scale', {
+                    id: wrapper.id, wrapperRect, svgRect, scaleX, scaleY, initialScale
+                });
+            }
+            return;
         }
 
         if (mermaidDebugEnabled()) {
@@ -812,9 +826,6 @@ function initMermaidInteraction() {
         };
         mermaidStates[wrapper.id] = state;
         wrapper.dataset.mermaidInteractive = 'true';
-        console.log('Final state:', state);
-        console.groupEnd();
-
         if (mermaidDebugEnabled() && !wrapper.dataset.mermaidDebugBound) {
             wrapper.dataset.mermaidDebugBound = 'true';
             const logEvent = (name, event) => {
@@ -1070,23 +1081,20 @@ function getDynamicGanttWidth() {
 }
 
 function reinitializeMermaid() {
-    console.group('🔄 reinitializeMermaid called');
-    console.log('Switching to theme:', getCurrentTheme());
-    console.log('Is initial load?', isInitialLoad);
-    
     // Skip if this is the initial load (let it render naturally first)
     if (isInitialLoad) {
-        console.log('Skipping reinitialize on initial load');
-        console.groupEnd();
         return;
     }
     
     const dynamicWidth = getDynamicGanttWidth();
-    console.log('Using dynamic Gantt width:', dynamicWidth);
     
     mermaid.initialize({ 
         startOnLoad: false,
         theme: getCurrentTheme(),
+        fontSize: 16,
+        flowchart: {
+            htmlLabels: false
+        },
         gantt: {
             useWidth: dynamicWidth,
             useMaxWidth: false
@@ -1102,14 +1110,9 @@ function reinitializeMermaid() {
     document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
         const originalCode = wrapper.getAttribute('data-mermaid-code');
         if (originalCode) {
-            console.log(`Processing wrapper: ${wrapper.id}`);
-            console.log('BEFORE clear - wrapper height:', window.getComputedStyle(wrapper).height);
-            console.log('BEFORE clear - wrapper rect:', wrapper.getBoundingClientRect());
-            
             // Preserve the current computed height before clearing (height should already be set explicitly)
             if (shouldLockHeight(wrapper)) {
                 const currentHeight = wrapper.getBoundingClientRect().height;
-                console.log('Preserving height:', currentHeight);
                 wrapper.style.height = currentHeight + 'px';
             }
             
@@ -1124,8 +1127,6 @@ function reinitializeMermaid() {
             
             // Clear the wrapper
             wrapper.innerHTML = '';
-            console.log('AFTER clear - wrapper height:', window.getComputedStyle(wrapper).height);
-            console.log('AFTER clear - wrapper rect:', wrapper.getBoundingClientRect());
             
             // Re-add the pre element with mermaid code
             const newPre = document.createElement('pre');
@@ -1137,23 +1138,21 @@ function reinitializeMermaid() {
     
     // Re-run mermaid
     mermaid.run().then(() => {
-        console.log('Mermaid re-render complete, scheduling initMermaidInteraction');
         scheduleMermaidInteraction({
-            onReady: () => {
-                console.groupEnd();
-            }
+            onReady: () => {}
         });
     });
 }
 
-console.log('🚀 Initial Mermaid setup - Theme:', getCurrentTheme());
-
 const initialGanttWidth = getDynamicGanttWidth();
-console.log('Using initial Gantt width:', initialGanttWidth);
 
 mermaid.initialize({ 
     startOnLoad: false,
     theme: getCurrentTheme(),
+    fontSize: 16,
+    flowchart: {
+        htmlLabels: false
+    },
     gantt: {
         useWidth: initialGanttWidth,
         useMaxWidth: false
@@ -1168,11 +1167,8 @@ document.addEventListener('DOMContentLoaded', () => {
     mermaidDebugSnapshot('before mermaid.run (DOMContentLoaded)');
     mermaid.run().then(() => {
         mermaidDebugSnapshot('after mermaid.run (DOMContentLoaded)');
-        console.log('Initial mermaid render complete');
         scheduleMermaidInteraction({
             onReady: () => {
-                console.log('Calling initial initMermaidInteraction');
-                
                 // After initial render, set explicit heights on all wrappers so theme switching works
                 const shouldLockHeight = (wrapper) => {
                     const height = (wrapper.style.height || '').trim();
@@ -1183,7 +1179,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
                     const currentHeight = wrapper.getBoundingClientRect().height;
-                    console.log(`Setting initial height for ${wrapper.id}:`, currentHeight);
                     wrapper.style.height = currentHeight + 'px';
                 });
                 isInitialLoad = false;
@@ -1192,6 +1187,42 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     renderD2Diagrams();
 });
+
+function initRevealDiagramRefresh() {
+    if (!window.Reveal || typeof window.Reveal.on !== 'function') return;
+    const refreshCurrentSlideDiagrams = () => {
+        const current = window.Reveal.getCurrentSlide();
+        if (!current) return;
+        current.querySelectorAll('.mermaid-wrapper').forEach((wrapper) => {
+            if (!wrapper.id) return;
+            delete mermaidStates[wrapper.id];
+            delete wrapper.dataset.mermaidInteractive;
+            const encoded = wrapper.getAttribute('data-mermaid-code');
+            if (!encoded) return;
+            const textarea = document.createElement('textarea');
+            textarea.innerHTML = encoded;
+            const code = textarea.value;
+            wrapper.innerHTML = '';
+            const pre = document.createElement('pre');
+            pre.className = 'mermaid';
+            pre.textContent = code;
+            wrapper.appendChild(pre);
+        });
+        const mermaidNodes = Array.from(current.querySelectorAll('pre.mermaid'));
+        const afterMermaid = () => scheduleMermaidInteraction();
+        if (mermaidNodes.length > 0) {
+            mermaid.run({ nodes: mermaidNodes }).then(() => {
+                afterMermaid();
+            }).catch(() => {});
+        } else {
+            afterMermaid();
+        }
+        renderD2Diagrams(current);
+    };
+    window.Reveal.on('ready', refreshCurrentSlideDiagrams);
+    window.Reveal.on('slidechanged', refreshCurrentSlideDiagrams);
+}
+initRevealDiagramRefresh();
 
 // Reveal current file in sidebar
 function revealInSidebar(rootElement = document) {
