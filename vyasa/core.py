@@ -42,6 +42,20 @@ logger.add(sys.stdout, level="INFO")
 logfile = Path("/tmp/vyasa_core.log")
 logger.add(logfile, rotation="10 MB", retention="10 days", level="DEBUG")
 
+def _asset_url(path: str) -> str:
+    """Return static URL with mtime cache-busting token."""
+    rel = path.lstrip("/")
+    if not rel.startswith("static/"):
+        return path
+    static_root = Path(__file__).resolve().parent / "static"
+    file_path = static_root / rel.replace("static/", "", 1)
+    try:
+        token = int(file_path.stat().st_mtime_ns)
+    except OSError:
+        return path
+    sep = "&" if "?" in path else "?"
+    return f"{path}{sep}v={token}"
+
 # Markdown rendering setup
 try: FrankenRenderer
 except NameError:
@@ -99,7 +113,7 @@ DownloadEmbed = span_token(
 
 # Superscript and Subscript tokens with higher precedence
 class Superscript(mst.span_token.SpanToken):
-    pattern = re.compile(r'\^([^\^]+?)\^')
+    pattern = re.compile(r'(?<![\\\w$])\^([A-Za-z0-9.+\-]{1,32})\^(?![\w$])')
     parse_inner = False
     parse_group = 1
     precedence = 7
@@ -108,7 +122,7 @@ class Superscript(mst.span_token.SpanToken):
         self.children = []
 
 class Subscript(mst.span_token.SpanToken):
-    pattern = re.compile(r'~([^~]+?)~')
+    pattern = re.compile(r'(?<![~\\\w$])~([A-Za-z0-9.+\-]{1,32})~(?![~\w$])')
     parse_inner = False
     parse_group = 1
     precedence = 7
@@ -138,10 +152,29 @@ class Strikethrough(mst.span_token.SpanToken):
 
 def preprocess_super_sub(content):
     """Convert superscript and subscript syntax to HTML before markdown rendering"""
-    # Handle superscript ^text^
-    content = re.sub(r'\^([^\^\n]+?)\^', r'<sup>\1</sup>', content)
-    # Handle subscript ~text~ (but not strikethrough ~~text~~)
-    content = re.sub(r'(?<!~)~([^~\n]+?)~(?!~)', r'<sub>\1</sub>', content)
+    protected = []
+
+    def protect(pattern, text, flags=0):
+        regex = re.compile(pattern, flags)
+        def _repl(match):
+            protected.append(match.group(0))
+            return f"@@VYASA_PROTECT_{len(protected)-1}@@"
+        return regex.sub(_repl, text)
+
+    # Preserve code/math regions so ^...^ / ~...~ transforms never corrupt LaTeX.
+    content = protect(r'(```+|~~~+)[\s\S]*?\1', content, re.MULTILINE)
+    content = protect(r'(`+)([^`]*?)\1', content)
+    content = protect(r'\$\$[\s\S]*?\$\$', content, re.MULTILINE)
+    content = protect(r'\$(?:\\.|[^$\n])+\$', content)
+    content = protect(r'\\\[[\s\S]*?\\\]', content, re.MULTILINE)
+    content = protect(r'\\\((?:\\.|[^\\)])*\\\)', content)
+
+    # Handle markdown-style superscript/subscript in plain text only.
+    content = re.sub(r'(?<![\\\w$])\^([A-Za-z0-9.+\-]{1,32})\^(?![\w$])', r'<sup>\1</sup>', content)
+    content = re.sub(r'(?<![~\\\w$])~([A-Za-z0-9.+\-]{1,32})~(?![~\w$])', r'<sub>\1</sub>', content)
+
+    for i, chunk in enumerate(protected):
+        content = content.replace(f"@@VYASA_PROTECT_{i}@@", chunk)
     return content
 
 def extract_footnotes(content):
@@ -865,18 +898,22 @@ def from_md(content, img_dir=None, current_path=None):
     # This preserves double newlines (paragraphs) and code blocks
     def _preserve_newlines(md):
         import re
-        # Don't touch code blocks (fenced or indented)
-        code_block = re.compile(r'(```+|~~~+)[\s\S]*?\1', re.MULTILINE)
-        blocks = []
-        def repl(m):
-            blocks.append(m.group(0))
-            return f"__CODEBLOCK_{len(blocks)-1}__"
-        md = code_block.sub(repl, md)
+        # Don't touch fenced code blocks or display-math blocks.
+        protected = []
+        def protect(pattern, text, flags=0):
+            regex = re.compile(pattern, flags)
+            def repl(m):
+                protected.append(m.group(0))
+                return f"__VYASA_BLOCK_{len(protected)-1}__"
+            return regex.sub(repl, text)
+        md = protect(r'(```+|~~~+)[\s\S]*?\1', md, re.MULTILINE)
+        md = protect(r'\$\$[\s\S]*?\$\$', md, re.MULTILINE)
+        md = protect(r'\\\[[\s\S]*?\\\]', md, re.MULTILINE)
         # Replace single newlines not preceded/followed by another newline with '  \n'
         md = re.sub(r'(?<!\n)\n(?!\n)', '  \n', md)
-        # Restore code blocks
-        for i, block in enumerate(blocks):
-            md = md.replace(f"__CODEBLOCK_{i}__", block)
+        # Restore protected blocks
+        for i, block in enumerate(protected):
+            md = md.replace(f"__VYASA_BLOCK_{i}__", block)
         return md
     content = _preserve_newlines(content)
 
@@ -904,7 +941,7 @@ def from_md(content, img_dir=None, current_path=None):
         flags=re.IGNORECASE,
     )
     
-    return Div(Link(rel="stylesheet", href="/static/sidenote.css"), NotStr(apply_classes(html, class_map_mods=mods)), cls="w-full")
+    return Div(Link(rel="stylesheet", href=_asset_url("/static/sidenote.css")), NotStr(apply_classes(html, class_map_mods=mods)), cls="w-full")
 
 # App configuration
 def get_root_folder(): return get_config().get_root_folder()
@@ -1063,7 +1100,7 @@ hdrs = (
             });
         })();
     """),
-    Script(src="/static/scripts.js", type='module'),
+    Script(src=_asset_url("/static/scripts.js"), type='module'),
     Link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"),
     Script(src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"),
     Script(src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"),
@@ -3295,7 +3332,58 @@ def slide_deck(path: str, request: Request):
         groups.append([x for x in group if x.strip()])
         return [g for g in groups if g]
     def _render_slide_fragment(md_fragment: str):
-        frag = to_xml(from_md(md_fragment, current_path=path))
+        def _normalize_math_delimiters(md_text: str) -> str:
+            lines = md_text.splitlines()
+            out = []
+            in_fence = False
+            in_bracket_math = False
+            fence_char, fence_len = "", 0
+            for line in lines:
+                s = line.strip()
+                m = re.match(r'^(```+|~~~+)', s)
+                if m:
+                    tok = m.group(1)
+                    if not in_fence:
+                        in_fence, fence_char, fence_len = True, tok[0], len(tok)
+                    elif tok[0] == fence_char and len(tok) >= fence_len:
+                        in_fence = False
+                    out.append(line)
+                    continue
+                if in_fence:
+                    out.append(line)
+                    continue
+                if s == r'\[':
+                    out.append('$$')
+                    in_bracket_math = True
+                    continue
+                if s == r'\]':
+                    out.append('$$')
+                    in_bracket_math = False
+                    continue
+                if in_bracket_math:
+                    out.append(line)
+                    continue
+                line = re.sub(r'\\\((.+?)\\\)', r'$\1$', line)
+                line = re.sub(r'\\\[(.+?)\\\]', r'$$\1$$', line)
+                out.append(line)
+            # Ensure display math blocks are paragraph-separated from surrounding text.
+            spaced = []
+            in_display = False
+            for i, line in enumerate(out):
+                s = line.strip()
+                if s == '$$':
+                    if not in_display and spaced and spaced[-1].strip():
+                        spaced.append('')
+                    spaced.append(line)
+                    if in_display and i + 1 < len(out) and out[i + 1].strip():
+                        spaced.append('')
+                    in_display = not in_display
+                    continue
+                spaced.append(line)
+            return "\n".join(spaced)
+
+        normalized = _normalize_math_delimiters(md_fragment)
+        frag = to_xml(from_md(normalized, current_path=path))
         return re.sub(r'<link[^>]*sidenote\\.css[^>]*>', '', frag, count=1)
     slide_groups = _split_slide_groups(raw_content)
     sections = []
@@ -3316,7 +3404,20 @@ def slide_deck(path: str, request: Request):
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/{theme}.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/{highlight_theme}.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-  <style>.reveal{{--r-main-font-size:{font_size};}} .reveal .slides{{text-align:left}} .reveal .slides section{{padding:0 {slide_padding}; box-sizing:border-box}} .reveal section img{{max-height:72vh}}</style>
+  <style>
+    .reveal{{--r-main-font-size:{font_size};}}
+    .reveal .slides{{text-align:left}}
+    .reveal .slides section{{padding:0 {slide_padding}; box-sizing:border-box}}
+    .reveal section img{{max-height:72vh}}
+    .reveal .mermaid-container,.reveal .d2-container{{position:relative;border:1px solid rgba(15,23,42,.18)!important;border-radius:10px!important;box-shadow:none!important;background:transparent!important;padding:14px!important}}
+    .reveal .mermaid-controls,.reveal .d2-controls{{display:none!important}}
+    .reveal .mermaid-wrapper,.reveal .d2-wrapper{{overflow:visible;min-height:0!important;height:auto!important}}
+    .reveal .mermaid,.reveal .mermaid svg{{font-size:16px!important;line-height:1.2!important}}
+    .reveal .mermaid svg text,.reveal .mermaid svg tspan{{fill:#1f2937!important}}
+    .reveal .mermaid .nodeLabel,.reveal .mermaid .edgeLabel,.reveal .mermaid foreignObject div,.reveal .mermaid foreignObject span,.reveal .mermaid foreignObject p{{color:#1f2937!important;fill:#1f2937!important}}
+    .reveal .code-copy-button,.reveal .code-block [id$="-toast"]{{display:none!important}}
+    .reveal .code-block textarea{{position:absolute!important;left:-9999px!important;top:0!important;opacity:0!important;pointer-events:none!important}}
+  </style>
 </head>
   <body>
   <div class="reveal">
@@ -3326,12 +3427,99 @@ def slide_deck(path: str, request: Request):
   </div>
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/math/math.js"></script>
-  <script type="module" src="/static/scripts.js"></script>
-  <script>Reveal.initialize(Object.assign({reveal_init_json},{{plugins:[RevealHighlight,RevealMath.KaTeX]}}));</script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script type="module" src="{_asset_url("/static/scripts.js")}"></script>
+  <script>
+    function replaceEscapedDollarPlaceholders(root) {{
+      const placeholder = '@@VYASA_DOLLAR@@';
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      let node;
+      while ((node = walker.nextNode())) {{
+        if (node.nodeValue && node.nodeValue.includes(placeholder)) nodes.push(node);
+      }}
+      nodes.forEach((textNode) => {{
+        textNode.nodeValue = textNode.nodeValue.split(placeholder).join('$');
+      }});
+    }}
+    function vyasaRenderResidualMath(root, label='fallback') {{
+      if (!window.katex) return;
+      const scope = root || document.body;
+      scope.querySelectorAll('p, li').forEach((el) => {{
+        if (el.querySelector('.katex')) return;
+        if (el.querySelector('code, pre')) return;
+        const raw = el.textContent || '';
+        if (!raw.includes('$')) return;
+        let replaced = raw;
+        let changed = false;
+        try {{
+          replaced = replaced.replace(/\\$\\$([\\s\\S]+?)\\$\\$/g, (_m, expr) => {{
+            changed = true;
+            return katex.renderToString(expr.trim(), {{ displayMode: true, throwOnError: false }});
+          }});
+          replaced = replaced.replace(/\\$([^$\\n]+?)\\$/g, (_m, expr) => {{
+            changed = true;
+            return katex.renderToString(expr.trim(), {{ displayMode: false, throwOnError: false }});
+          }});
+          if (changed && replaced !== raw) el.innerHTML = replaced;
+        }} catch (err) {{
+          console.warn('[vyasa][katex]', label, 'residual fallback failed', err);
+        }}
+      }});
+    }}
+    function vyasaRenderSlideMath(root, label='pass') {{
+      if (typeof renderMathInElement !== 'function') {{
+        console.warn('[vyasa][katex] renderMathInElement missing');
+        return;
+      }}
+      const target = root || document.body;
+      replaceEscapedDollarPlaceholders(target);
+      const textSample = (target.innerText || '').slice(0, 1200);
+      const hasDollarBlock = textSample.includes('$$');
+      const hasParenDelim = textSample.includes('\\(') || textSample.includes('\\)');
+      const hasBracketDelim = textSample.includes('\\[') || textSample.includes('\\]');
+      const beforeCount = target.querySelectorAll('.katex').length;
+      console.log('[vyasa][katex]', label, {{
+        beforeCount,
+        hasDollarBlock,
+        hasParenDelim,
+        hasBracketDelim
+      }});
+      renderMathInElement(root || document.body, {{
+        delimiters: [
+          {{left: '$$', right: '$$', display: true}},
+          {{left: '$', right: '$', display: false}},
+          {{left: '\\\\[', right: '\\\\]', display: true}},
+          {{left: '\\\\(', right: '\\\\)', display: false}}
+        ],
+        throwOnError: false
+      }});
+      vyasaRenderResidualMath(target, label + ':residual');
+      const afterCount = target.querySelectorAll('.katex').length;
+      console.log('[vyasa][katex]', label, {{ afterCount }});
+    }}
+    Reveal.initialize(Object.assign({reveal_init_json},{{plugins:[RevealHighlight]}}));
+    const runMathPass = (node, eventLabel='unknown') => {{
+      console.group('[vyasa][katex] runMathPass', eventLabel);
+      vyasaRenderSlideMath(node, eventLabel + ':immediate');
+      requestAnimationFrame(() => vyasaRenderSlideMath(node, eventLabel + ':raf'));
+      setTimeout(() => {{
+        vyasaRenderSlideMath(node, eventLabel + ':timeout50');
+        console.groupEnd();
+      }}, 50);
+    }};
+    runMathPass(document.body, 'initial');
+    Reveal.on('ready', () => runMathPass(document.body, 'ready'));
+    Reveal.on('slidechanged', (e) => runMathPass(e.currentSlide || document.body, 'slidechanged'));
+  </script>
 </body>
 </html>"""
-    return Response(page, media_type="text/html; charset=utf-8")
+    return Response(
+        page,
+        media_type="text/html; charset=utf-8",
+        headers={"Cache-Control": "no-store"},
+    )
 
 def find_index_file():
     """Find index.md or readme.md (case insensitive) in root folder"""

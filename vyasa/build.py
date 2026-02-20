@@ -22,6 +22,18 @@ from .helpers import (
 )
 from .config import get_config, reload_config
 
+def _asset_url(path):
+    rel = path.lstrip("/")
+    if not rel.startswith("static/"):
+        return path
+    static_root = Path(__file__).resolve().parent / "static"
+    file_path = static_root / rel.replace("static/", "", 1)
+    try:
+        token = int(file_path.stat().st_mtime_ns)
+    except OSError:
+        return path
+    sep = "&" if "?" in path else "?"
+    return f"{path}{sep}v={token}"
 
 def generate_static_html(title, body_content, blog_title, favicon_href):
     """Generate complete static HTML page"""
@@ -330,7 +342,7 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
     
     <!-- Static assets -->
     <link rel="icon" href="{favicon_href}">
-    <link rel="stylesheet" href="/static/sidenote.css">
+    <link rel="stylesheet" href="{_asset_url('/static/sidenote.css')}">
     
     {static_css}
 </head>
@@ -342,7 +354,7 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
         mermaid.initialize({{ startOnLoad: true, theme: 'default' }});
     </script>
-    <script src="/static/scripts.js" type="module"></script>
+    <script src="{_asset_url('/static/scripts.js')}" type="module"></script>
     
     {static_js}
 </body>

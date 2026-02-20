@@ -142,58 +142,15 @@ Common functions:
 ## 8) Mermaid Works in Slides
 ```mermaid
 flowchart LR
-  User(["👤 User"])
-  Editor["Editor"]
-
-  subgraph FS["File System 💾"]
-    MD["Markdown Files"]
-    CFG["Config / settings.ini"]
-    LOGS["Build Logs"]
-  end
-
-  subgraph VYASA["Vyasa Engine ⚙️"]
-    PARSER["Markdown Parser"]
-    FM["Frontmatter Reader"]
-    RENDER["HTML Renderer"]
-    ROUTER["URL Router"]
-  end
-
-  subgraph ASSETS["Static Assets 🎨"]
-    CSS["CSS Files"]
-    JS["JS Bundles"]
-    FONTS["Fonts"]
-  end
-
-  subgraph OUT["Browser Output 🌐"]
-    READ["Reading View"]
-    API["REST API"]
-    subgraph SLIDES["Slide View"]
-      REVEAL["Reveal.js"]
-      MERMAID["Mermaid.js"]
-      D2["D2 Renderer"]
-      MATH["KaTeX"]
-    end
-  end
-
-  User -->|writes markdown| Editor
-  Editor -->|saves| MD
-  MD -->|reads| PARSER
-  PARSER -->|extracts| FM
-  PARSER -->|AST| RENDER
-  FM -->|metadata| RENDER
-  RENDER -->|HTML page| READ
-  RENDER -->|slide deck| SLIDES
-  RENDER -->|writes| LOGS
-  ROUTER -->|/posts/...| READ
-  ROUTER -->|/slides/...| SLIDES
-  CSS --> READ
-  JS --> SLIDES
-  REVEAL --> MERMAID
-  REVEAL --> D2
-  REVEAL --> MATH
-  API -->|read/write| CFG
-  User -->|views| READ
-  User -->|presents| SLIDES
+  user["User"] --> editor["Editor"]
+  editor --> md["Markdown Files"]
+  md --> parser["Markdown Parser"]
+  parser --> renderer["HTML Renderer"]
+  renderer --> read["Reading View"]
+  renderer --> slide["Slide View"]
+  slide --> mermaid["Mermaid.js"]
+  slide --> d2["D2 Renderer"]
+  slide --> math["KaTeX"]
 ```
 
 ---

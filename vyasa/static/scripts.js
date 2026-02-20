@@ -3,6 +3,30 @@ import { D2 } from 'https://esm.sh/@terrastruct/d2@0.1.33?bundle';
 
 const mermaidStates = {};
 const d2States = {};
+function logMermaidLabelDiagnostics(wrapper, phase = 'unknown') {
+    const svg = wrapper?.querySelector('svg');
+    if (!svg) {
+        console.log('[vyasa][mermaid][diag]', phase, wrapper?.id, 'no svg');
+        return;
+    }
+    const textNodes = svg.querySelectorAll('text,tspan');
+    const foNodes = svg.querySelectorAll('foreignObject');
+    const labelDiv = svg.querySelector('foreignObject div,.nodeLabel,.edgeLabel,text,tspan');
+    const sample = (labelDiv?.textContent || '').trim().slice(0, 80);
+    const style = labelDiv ? window.getComputedStyle(labelDiv) : null;
+    const diag = {
+        svgRect: svg.getBoundingClientRect(),
+        textCount: textNodes.length,
+        foreignObjectCount: foNodes.length,
+        sample,
+        fillAttr: labelDiv?.getAttribute?.('fill') || null,
+        color: style?.color || null,
+        fill: style?.fill || null,
+        fontSize: style?.fontSize || null,
+        opacity: style?.opacity || null
+    };
+    console.log('[vyasa][mermaid][diag]', phase, wrapper.id, JSON.stringify(diag));
+}
 const mermaidDebugEnabled = () => (
     window.VYASA_DEBUG_MERMAID === true ||
     localStorage.getItem('vyasaDebugMermaid') === '1'
@@ -762,6 +786,7 @@ function initMermaidInteraction() {
             svg.style.pointerEvents = 'none';
         }
         if (!svg || alreadyInteractive) return;
+        logMermaidLabelDiagnostics(wrapper, 'initMermaidInteraction');
         
         // DEBUG: Log initial state
         console.group(`🔍 initMermaidInteraction: ${wrapper.id}`);
@@ -771,11 +796,26 @@ function initMermaidInteraction() {
         
         // Scale SVG to fit container (maintain aspect ratio, fit to width or height whichever is smaller)
         const svgRect = svg.getBoundingClientRect();
+        const inReveal = !!wrapper.closest('.reveal');
+        if (inReveal && (wrapperRect.height < 120 || svgRect.width < 120 || svgRect.height < 30)) {
+            if (mermaidDebugEnabled()) {
+                mermaidDebugLog('skip initMermaidInteraction: reveal layout not stable', {
+                    id: wrapper.id,
+                    wrapperWidth: wrapperRect.width,
+                    wrapperHeight: wrapperRect.height,
+                    svgWidth: svgRect.width,
+                    svgHeight: svgRect.height
+                });
+            }
+            return;
+        }
         console.log('Wrapper rect:', { width: wrapperRect.width, height: wrapperRect.height });
         console.log('SVG rect:', { width: svgRect.width, height: svgRect.height });
         
-        const scaleX = (wrapperRect.width - 32) / svgRect.width;  // 32 for p-4 padding (16px each side)
-        const scaleY = (wrapperRect.height - 32) / svgRect.height;
+        const innerWidth = Math.max(wrapperRect.width - 32, 1);   // 32 for p-4 padding
+        const innerHeight = Math.max(wrapperRect.height - 32, 1);
+        const scaleX = innerWidth / Math.max(svgRect.width, 1);
+        const scaleY = innerHeight / Math.max(svgRect.height, 1);
         console.log('Scale factors:', { scaleX, scaleY });
         
         // For very wide diagrams (like Gantt charts), prefer width scaling even if it exceeds height
@@ -790,6 +830,16 @@ function initMermaidInteraction() {
             // Normal diagram: fit to smaller dimension, but do not upscale by default
             initialScale = Math.min(scaleX, scaleY, maxUpscale);
             console.log('Normal diagram (aspect ratio <=3):', aspectRatio, 'Using min scale:', initialScale);
+        }
+        if (!Number.isFinite(initialScale) || initialScale <= 0) {
+            // Hidden/unstable layout (e.g., Reveal transition state) can yield tiny or negative sizes.
+            // Skip now and let a later ready/slidechanged pass initialize interaction.
+            if (mermaidDebugEnabled()) {
+                mermaidDebugLog('skip initMermaidInteraction: unstable scale', {
+                    id: wrapper.id, wrapperRect, svgRect, scaleX, scaleY, initialScale
+                });
+            }
+            return;
         }
 
         if (mermaidDebugEnabled()) {
@@ -1088,6 +1138,10 @@ function reinitializeMermaid() {
     mermaid.initialize({ 
         startOnLoad: false,
         theme: getCurrentTheme(),
+        fontSize: 16,
+        flowchart: {
+            htmlLabels: false
+        },
         gantt: {
             useWidth: dynamicWidth,
             useMaxWidth: false
@@ -1155,6 +1209,10 @@ console.log('Using initial Gantt width:', initialGanttWidth);
 mermaid.initialize({ 
     startOnLoad: false,
     theme: getCurrentTheme(),
+    fontSize: 16,
+    flowchart: {
+        htmlLabels: false
+    },
     gantt: {
         useWidth: initialGanttWidth,
         useMaxWidth: false
@@ -1203,11 +1261,26 @@ function initRevealDiagramRefresh() {
             if (!wrapper.id) return;
             delete mermaidStates[wrapper.id];
             delete wrapper.dataset.mermaidInteractive;
+            const encoded = wrapper.getAttribute('data-mermaid-code');
+            if (!encoded) return;
+            const textarea = document.createElement('textarea');
+            textarea.innerHTML = encoded;
+            const code = textarea.value;
+            wrapper.innerHTML = '';
+            const pre = document.createElement('pre');
+            pre.className = 'mermaid';
+            pre.textContent = code;
+            wrapper.appendChild(pre);
         });
         const mermaidNodes = Array.from(current.querySelectorAll('pre.mermaid'));
         const afterMermaid = () => scheduleMermaidInteraction();
         if (mermaidNodes.length > 0) {
-            mermaid.run({ nodes: mermaidNodes }).then(afterMermaid).catch(() => {});
+            mermaid.run({ nodes: mermaidNodes }).then(() => {
+                current.querySelectorAll('.mermaid-wrapper').forEach((w) => {
+                    logMermaidLabelDiagnostics(w, 'reveal-refresh-after-run');
+                });
+                afterMermaid();
+            }).catch(() => {});
         } else {
             afterMermaid();
         }
