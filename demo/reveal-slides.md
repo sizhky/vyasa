@@ -139,6 +139,100 @@ Common functions:
 
 ---
 
+## 8) Mermaid Works in Slides
+```mermaid
+flowchart LR
+  user["User"] --> editor["Editor"]
+  editor --> md["Markdown Files"]
+  md --> parser["Markdown Parser"]
+  parser --> renderer["HTML Renderer"]
+  renderer --> read["Reading View"]
+  renderer --> slide["Slide View"]
+  slide --> mermaid["Mermaid.js"]
+  slide --> d2["D2 Renderer"]
+  slide --> math["KaTeX"]
+```
+
+---
+
+## 9) D2 Works in Slides
+```d2
+direction: right
+
+user: User {
+  shape: person
+}
+
+editor: Editor {
+  shape: rectangle
+  style.fill: "#e8f4fd"
+}
+
+vyasa: Vyasa Engine {
+  shape: rectangle
+  style.fill: "#fff3cd"
+
+  parser: Markdown Parser
+  frontmatter: Frontmatter Reader
+  renderer: HTML Renderer
+  router: URL Router
+}
+
+assets: Static Assets {
+  shape: rectangle
+  style.fill: "#d4edda"
+
+  css: CSS Files
+  js: JS Bundles
+  fonts: Fonts
+}
+
+output: Browser Output {
+  shape: rectangle
+  style.fill: "#f8d7da"
+
+  reading: Reading View
+  slides: Slide View {
+    reveal: Reveal.js
+    mermaid: Mermaid.js
+    d2: D2 Renderer
+    math: KaTeX
+  }
+  api: REST API
+}
+
+storage: File System {
+  shape: cylinder
+  style.fill: "#e2d9f3"
+
+  md: Markdown Files
+  config: Config / settings.ini
+  logs: Build Logs
+}
+
+user -> editor: writes markdown
+editor -> storage.md: saves
+storage.md -> vyasa.parser: reads
+vyasa.frontmatter -> vyasa.renderer: metadata
+vyasa.parser -> vyasa.frontmatter: extracts
+vyasa.parser -> vyasa.renderer: AST
+vyasa.renderer -> output.reading: HTML page
+vyasa.renderer -> output.slides: slide deck
+vyasa.router -> output.reading: /posts/...
+vyasa.router -> output.slides: /slides/...
+assets.css -> output.reading: styles
+assets.js -> output.slides: scripts
+output.slides.reveal -> output.slides.mermaid: init
+output.slides.reveal -> output.slides.d2: init
+output.slides.reveal -> output.slides.math: init
+output.api -> storage.config: read/write
+user -> output.reading: views
+user -> output.slides: presents
+vyasa.renderer -> storage.logs: writes
+```
+
+---
+
 # Your Turn
 Try changing one value:
 - `theme`: `white`, `beige`, `simple`
