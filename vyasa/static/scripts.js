@@ -426,7 +426,19 @@ function initD2Interaction(rootElement = document) {
     wrappers.forEach((wrapper) => {
         const svg = wrapper.querySelector('svg');
         const stage = ensureD2PanzoomStage(wrapper);
+        const inReveal = !!wrapper.closest('.reveal');
         if (!svg || !stage || wrapper.dataset.d2Interactive === 'true') {
+            return;
+        }
+        if (inReveal) {
+            stage.style.transform = 'none';
+            stage.style.transformOrigin = 'center center';
+            stage.style.display = 'flex';
+            stage.style.justifyContent = 'center';
+            stage.style.alignItems = 'center';
+            svg.style.pointerEvents = 'auto';
+            svg.style.display = 'block';
+            svg.style.margin = '0 auto';
             return;
         }
 
@@ -723,6 +735,60 @@ function handleCodeCopyClick(event) {
 
 document.addEventListener('click', handleCodeCopyClick, true);
 
+function switchTab(tabsId, index) {
+    const container = document.querySelector(`.tabs-container[data-tabs-id="${tabsId}"]`);
+    if (!container) return;
+    const buttons = container.querySelectorAll('.tab-button');
+    buttons.forEach((btn, i) => btn.classList.toggle('active', i === index));
+    const panels = container.querySelectorAll('.tab-panel');
+    panels.forEach((panel, i) => {
+        const active = i === index;
+        panel.classList.toggle('active', active);
+        panel.style.position = active ? 'relative' : 'absolute';
+        panel.style.visibility = active ? 'visible' : 'hidden';
+        panel.style.opacity = active ? '1' : '0';
+        panel.style.pointerEvents = active ? 'auto' : 'none';
+    });
+    const activePanel = container.querySelector(`.tab-panel[data-tab-index="${index}"]`);
+    if (activePanel) {
+        const mermaidNodes = Array.from(activePanel.querySelectorAll('pre.mermaid'));
+        if (mermaidNodes.length > 0) {
+            mermaid.run({ nodes: mermaidNodes }).then(() => scheduleMermaidInteraction()).catch(() => {});
+        } else {
+            scheduleMermaidInteraction();
+        }
+        renderD2Diagrams(activePanel);
+    }
+    if (window.refreshVyasaTableScrollShadows) {
+        requestAnimationFrame(() => window.refreshVyasaTableScrollShadows(container));
+    }
+}
+window.switchTab = switchTab;
+
+function initTabPanelHeights(rootElement = document) {
+    const containers = rootElement.querySelectorAll('.tabs-container');
+    containers.forEach((container) => {
+        const panels = container.querySelectorAll('.tab-panel');
+        let maxHeight = 0;
+        panels.forEach((panel) => {
+            const wasActive = panel.classList.contains('active');
+            panel.style.position = 'relative';
+            panel.style.visibility = 'visible';
+            panel.style.opacity = '1';
+            panel.style.pointerEvents = 'auto';
+            maxHeight = Math.max(maxHeight, panel.offsetHeight);
+            if (!wasActive) {
+                panel.style.position = 'absolute';
+                panel.style.visibility = 'hidden';
+                panel.style.opacity = '0';
+                panel.style.pointerEvents = 'none';
+            }
+        });
+        const tabsContent = container.querySelector('.tabs-content');
+        if (tabsContent && maxHeight > 0) tabsContent.style.minHeight = `${maxHeight}px`;
+    });
+}
+
 function initMermaidInteraction() {
     const wrappers = Array.from(document.querySelectorAll('.mermaid-wrapper'));
     if (mermaidDebugEnabled()) {
@@ -737,6 +803,7 @@ function initMermaidInteraction() {
         const wrapperRect = wrapper.getBoundingClientRect();
         if (wrapperRect.width < 8 || wrapperRect.height < 8) return;
         const svg = wrapper.querySelector('svg');
+        const inReveal = !!wrapper.closest('.reveal');
         const alreadyInteractive = wrapper.dataset.mermaidInteractive === 'true';
         if (mermaidDebugEnabled()) {
             mermaidDebugLog(
@@ -762,11 +829,18 @@ function initMermaidInteraction() {
             svg.style.pointerEvents = 'none';
         }
         if (!svg || alreadyInteractive) return;
+        if (inReveal) {
+            svg.style.pointerEvents = 'auto';
+            svg.style.transform = 'none';
+            svg.style.transformOrigin = 'center center';
+            svg.style.display = 'block';
+            svg.style.margin = '0 auto';
+            return;
+        }
         
         // Scale SVG to fit container (maintain aspect ratio, fit to width or height whichever is smaller)
         const svgRect = svg.getBoundingClientRect();
-        const inReveal = !!wrapper.closest('.reveal');
-        if (inReveal && (wrapperRect.height < 120 || svgRect.width < 120 || svgRect.height < 30)) {
+        if (wrapperRect.height < 120 || svgRect.width < 120 || svgRect.height < 30) {
             if (mermaidDebugEnabled()) {
                 mermaidDebugLog('skip initMermaidInteraction: reveal layout not stable', {
                     id: wrapper.id,
@@ -1190,6 +1264,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initRevealDiagramRefresh() {
     if (!window.Reveal || typeof window.Reveal.on !== 'function') return;
+    let refreshTimer = null;
+    const normalizeMermaidViewBox = (scope) => {
+        if (!scope) return;
+        const svgs = scope.querySelectorAll('.mermaid-wrapper svg');
+        svgs.forEach((svg) => {
+            try {
+                if (!svg.getBBox) return;
+                const box = svg.getBBox();
+                if (!Number.isFinite(box.width) || !Number.isFinite(box.height)) return;
+                if (box.width < 1 || box.height < 1) return;
+                const pad = 16;
+                svg.setAttribute('viewBox', `${box.x - pad} ${box.y - pad} ${box.width + (pad * 2)} ${box.height + (pad * 2)}`);
+                svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                svg.style.display = 'block';
+                svg.style.margin = '0 auto';
+            } catch (_) {
+                // Ignore unstable SVG state during transitions.
+            }
+        });
+    };
+    const centerRevealSlideDiagrams = (scope) => {
+        if (!scope) return;
+        const svgs = scope.querySelectorAll('.mermaid-wrapper svg, .d2-wrapper svg');
+        svgs.forEach((svg) => {
+            svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+            svg.style.display = 'block';
+            svg.style.margin = '0 auto';
+        });
+    };
     const refreshCurrentSlideDiagrams = () => {
         const current = window.Reveal.getCurrentSlide();
         if (!current) return;
@@ -1209,7 +1312,20 @@ function initRevealDiagramRefresh() {
             wrapper.appendChild(pre);
         });
         const mermaidNodes = Array.from(current.querySelectorAll('pre.mermaid'));
-        const afterMermaid = () => scheduleMermaidInteraction();
+        const afterMermaid = () => {
+            scheduleMermaidInteraction();
+            if (window.Reveal && typeof window.Reveal.layout === 'function') {
+                requestAnimationFrame(() => {
+                    window.Reveal.layout();
+                });
+                setTimeout(() => {
+                    window.Reveal.layout();
+                }, 80);
+                setTimeout(() => {
+                    normalizeMermaidViewBox(current);
+                }, 140);
+            }
+        };
         if (mermaidNodes.length > 0) {
             mermaid.run({ nodes: mermaidNodes }).then(() => {
                 afterMermaid();
@@ -1218,9 +1334,32 @@ function initRevealDiagramRefresh() {
             afterMermaid();
         }
         renderD2Diagrams(current);
+        initTabPanelHeights(current);
+        requestAnimationFrame(() => centerRevealSlideDiagrams(current));
+        setTimeout(() => centerRevealSlideDiagrams(current), 60);
     };
-    window.Reveal.on('ready', refreshCurrentSlideDiagrams);
-    window.Reveal.on('slidechanged', refreshCurrentSlideDiagrams);
+    const queueRefresh = () => {
+        const delays = [0, 80, 180, 320];
+        delays.forEach((delay) => {
+            setTimeout(() => {
+                const current = window.Reveal.getCurrentSlide();
+                if (!current) return;
+                refreshCurrentSlideDiagrams();
+            }, delay);
+        });
+    };
+    const queueRefreshDebounced = () => {
+        if (refreshTimer) {
+            clearTimeout(refreshTimer);
+        }
+        refreshTimer = setTimeout(() => {
+            refreshTimer = null;
+            queueRefresh();
+        }, 20);
+    };
+    window.Reveal.on('ready', queueRefreshDebounced);
+    window.Reveal.on('slidechanged', queueRefreshDebounced);
+    window.Reveal.on('slidetransitionend', queueRefreshDebounced);
 }
 initRevealDiagramRefresh();
 
@@ -1926,6 +2065,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initCodeBlockCopyButtons(document);
     initSearchClearButtons(document);
     ensurePdfFocusState();
+    initTabPanelHeights(document);
 });
 
 document.body.addEventListener('htmx:afterSwap', (event) => {
@@ -1937,4 +2077,5 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initCodeBlockCopyButtons(event.target);
     initSearchClearButtons(event.target);
     ensurePdfFocusState();
+    initTabPanelHeights(event.target || document);
 });

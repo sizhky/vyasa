@@ -146,22 +146,58 @@ Common functions:
 ---
 
 ## 8) Mermaid Works in Slides
+⇊
+--
+
 ```mermaid
-flowchart LR
-  user["User"] --> editor["Editor"]
-  editor --> md["Markdown Files"]
-  md --> parser["Markdown Parser"]
-  parser --> renderer["HTML Renderer"]
-  renderer --> read["Reading View"]
-  renderer --> slide["Slide View"]
-  slide --> mermaid["Mermaid.js"]
-  slide --> d2["D2 Renderer"]
-  slide --> math["KaTeX"]
+flowchart TD
+  user["👤 User"] --> editor["✏️ Editor"]
+  user --> browser["🌐 Browser"]
+
+  editor --> md["📄 Markdown Files"]
+  editor --> config["⚙️ settings.ini"]
+  editor --> css["🎨 Custom CSS"]
+
+  md --> parser["🔍 Markdown Parser"]
+  config --> frontmatter["📋 Frontmatter Reader"]
+  css --> renderer
+
+  parser --> frontmatter
+  frontmatter --> meta["🏷️ Metadata\n(title, theme, slides)"]
+  parser --> ast["🌳 AST"]
+
+  ast --> renderer["⚙️ HTML Renderer"]
+  meta --> renderer
+
+  renderer --> read["📖 Reading View"]
+  renderer --> slide["🎞️ Slide View"]
+  renderer --> api["🔌 REST API"]
+  renderer --> logs["📝 Build Logs"]
+
+  read --> katex_r["📐 KaTeX"]
+  read --> highlight_r["🖍️ Syntax Highlight"]
+
+  slide --> reveal["🎭 Reveal.js"]
+  reveal --> mermaid["📊 Mermaid.js"]
+  reveal --> d2["📐 D2 Renderer"]
+  reveal --> math["∑ KaTeX"]
+  reveal --> highlight["🖍️ Highlight.js"]
+  reveal --> themes["🎨 Themes\n(white/beige/simple)"]
+  reveal --> transitions["✨ Transitions\n(fade/zoom/slide)"]
+
+  api --> storage["🗄️ File System"]
+  storage --> md
+
+  browser --> read
+  browser --> slide
 ```
 
 ---
 
 ## 9) D2 Works in Slides
+⇊
+--
+
 ```d2
 direction: right
 
