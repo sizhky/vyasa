@@ -426,8 +426,18 @@ function initD2Interaction(rootElement = document) {
     wrappers.forEach((wrapper) => {
         const svg = wrapper.querySelector('svg');
         const stage = ensureD2PanzoomStage(wrapper);
+        const inReveal = !!wrapper.closest('.reveal');
         if (!svg || !stage || wrapper.dataset.d2Interactive === 'true') {
             return;
+        }
+        if (inReveal) {
+            stage.style.transform = 'none';
+            stage.style.transformOrigin = 'center center';
+            stage.style.display = 'flex';
+            stage.style.justifyContent = 'center';
+            stage.style.alignItems = 'center';
+            svg.style.display = 'block';
+            svg.style.margin = '0 auto';
         }
 
         const wrapperRect = wrapper.getBoundingClientRect();
@@ -439,9 +449,33 @@ function initD2Interaction(rootElement = document) {
         const scaleY = (wrapperRect.height - 32) / svgRect.height;
         const aspectRatio = svgRect.width / svgRect.height;
         const maxUpscale = 1;
-        const initialScale = aspectRatio > 3
+        let initialScale = aspectRatio > 3
             ? Math.min(scaleX, maxUpscale)
             : Math.min(scaleX, scaleY, maxUpscale);
+        if (inReveal) {
+            try {
+                const vb = (svg.getAttribute('viewBox') || '').trim().split(/\s+/).map(Number);
+                const box = svg.getBBox ? svg.getBBox() : null;
+                if (vb.length === 4 && box && box.width > 1 && box.height > 1) {
+                    const vbW = vb[2];
+                    const vbH = vb[3];
+                    if (Number.isFinite(vbW) && Number.isFinite(vbH) && vbW > 1 && vbH > 1) {
+                        const fitFromBounds = Math.min(vbW / box.width, vbH / box.height);
+                        if (Number.isFinite(fitFromBounds) && fitFromBounds > 1) {
+                            initialScale = Math.min(fitFromBounds * 0.92, 6);
+                        } else {
+                            initialScale = 1;
+                        }
+                    } else {
+                        initialScale = 1;
+                    }
+                } else {
+                    initialScale = 1;
+                }
+            } catch (_) {
+                initialScale = 1;
+            }
+        }
 
         const state = {
             scale: initialScale,
@@ -723,6 +757,60 @@ function handleCodeCopyClick(event) {
 
 document.addEventListener('click', handleCodeCopyClick, true);
 
+function switchTab(tabsId, index) {
+    const container = document.querySelector(`.tabs-container[data-tabs-id="${tabsId}"]`);
+    if (!container) return;
+    const buttons = container.querySelectorAll('.tab-button');
+    buttons.forEach((btn, i) => btn.classList.toggle('active', i === index));
+    const panels = container.querySelectorAll('.tab-panel');
+    panels.forEach((panel, i) => {
+        const active = i === index;
+        panel.classList.toggle('active', active);
+        panel.style.position = active ? 'relative' : 'absolute';
+        panel.style.visibility = active ? 'visible' : 'hidden';
+        panel.style.opacity = active ? '1' : '0';
+        panel.style.pointerEvents = active ? 'auto' : 'none';
+    });
+    const activePanel = container.querySelector(`.tab-panel[data-tab-index="${index}"]`);
+    if (activePanel) {
+        const mermaidNodes = Array.from(activePanel.querySelectorAll('pre.mermaid'));
+        if (mermaidNodes.length > 0) {
+            mermaid.run({ nodes: mermaidNodes }).then(() => scheduleMermaidInteraction()).catch(() => {});
+        } else {
+            scheduleMermaidInteraction();
+        }
+        renderD2Diagrams(activePanel);
+    }
+    if (window.refreshVyasaTableScrollShadows) {
+        requestAnimationFrame(() => window.refreshVyasaTableScrollShadows(container));
+    }
+}
+window.switchTab = switchTab;
+
+function initTabPanelHeights(rootElement = document) {
+    const containers = rootElement.querySelectorAll('.tabs-container');
+    containers.forEach((container) => {
+        const panels = container.querySelectorAll('.tab-panel');
+        let maxHeight = 0;
+        panels.forEach((panel) => {
+            const wasActive = panel.classList.contains('active');
+            panel.style.position = 'relative';
+            panel.style.visibility = 'visible';
+            panel.style.opacity = '1';
+            panel.style.pointerEvents = 'auto';
+            maxHeight = Math.max(maxHeight, panel.offsetHeight);
+            if (!wasActive) {
+                panel.style.position = 'absolute';
+                panel.style.visibility = 'hidden';
+                panel.style.opacity = '0';
+                panel.style.pointerEvents = 'none';
+            }
+        });
+        const tabsContent = container.querySelector('.tabs-content');
+        if (tabsContent && maxHeight > 0) tabsContent.style.minHeight = `${maxHeight}px`;
+    });
+}
+
 function initMermaidInteraction() {
     const wrappers = Array.from(document.querySelectorAll('.mermaid-wrapper'));
     if (mermaidDebugEnabled()) {
@@ -737,6 +825,7 @@ function initMermaidInteraction() {
         const wrapperRect = wrapper.getBoundingClientRect();
         if (wrapperRect.width < 8 || wrapperRect.height < 8) return;
         const svg = wrapper.querySelector('svg');
+        const inReveal = !!wrapper.closest('.reveal');
         const alreadyInteractive = wrapper.dataset.mermaidInteractive === 'true';
         if (mermaidDebugEnabled()) {
             mermaidDebugLog(
@@ -762,11 +851,15 @@ function initMermaidInteraction() {
             svg.style.pointerEvents = 'none';
         }
         if (!svg || alreadyInteractive) return;
+        if (inReveal) {
+            svg.style.display = 'block';
+            svg.style.margin = '0 auto';
+            svg.style.transformOrigin = 'center center';
+        }
         
         // Scale SVG to fit container (maintain aspect ratio, fit to width or height whichever is smaller)
         const svgRect = svg.getBoundingClientRect();
-        const inReveal = !!wrapper.closest('.reveal');
-        if (inReveal && (wrapperRect.height < 120 || svgRect.width < 120 || svgRect.height < 30)) {
+        if (wrapperRect.height < 120 || svgRect.width < 120 || svgRect.height < 30) {
             if (mermaidDebugEnabled()) {
                 mermaidDebugLog('skip initMermaidInteraction: reveal layout not stable', {
                     id: wrapper.id,
@@ -1190,13 +1283,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initRevealDiagramRefresh() {
     if (!window.Reveal || typeof window.Reveal.on !== 'function') return;
-    const refreshCurrentSlideDiagrams = () => {
+    const normalizeMermaidViewBox = (scope) => {
+        if (!scope) return;
+        const svgs = scope.querySelectorAll('.mermaid-wrapper svg');
+        svgs.forEach((svg) => {
+            try {
+                if (!svg.getBBox) return;
+                const box = svg.getBBox();
+                if (!Number.isFinite(box.width) || !Number.isFinite(box.height)) return;
+                if (box.width < 1 || box.height < 1) return;
+                const pad = 16;
+                svg.setAttribute('viewBox', `${box.x - pad} ${box.y - pad} ${box.width + (pad * 2)} ${box.height + (pad * 2)}`);
+                svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                svg.style.display = 'block';
+                svg.style.margin = '0 auto';
+            } catch (_) {
+                // Ignore unstable SVG state during transitions.
+            }
+        });
+    };
+    const centerRevealSlideDiagrams = (scope) => {
+        if (!scope) return;
+        const svgs = scope.querySelectorAll('.mermaid-wrapper svg, .d2-wrapper svg');
+        svgs.forEach((svg) => {
+            svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+            svg.style.display = 'block';
+            svg.style.margin = '0 auto';
+            svg.style.width = '100%';
+            svg.style.height = '100%';
+            svg.style.maxWidth = '100%';
+            svg.style.maxHeight = '100%';
+        });
+    };
+    const hydrateSlideDiagrams = (force = false) => {
         const current = window.Reveal.getCurrentSlide();
         if (!current) return;
+        if (!force && current.dataset.diagramHydrated === 'true') return;
+        current.dataset.diagramHydrated = 'true';
+        const mermaidNodes = [];
         current.querySelectorAll('.mermaid-wrapper').forEach((wrapper) => {
             if (!wrapper.id) return;
             delete mermaidStates[wrapper.id];
             delete wrapper.dataset.mermaidInteractive;
+            if (wrapper.querySelector('svg')) return;
             const encoded = wrapper.getAttribute('data-mermaid-code');
             if (!encoded) return;
             const textarea = document.createElement('textarea');
@@ -1207,9 +1336,19 @@ function initRevealDiagramRefresh() {
             pre.className = 'mermaid';
             pre.textContent = code;
             wrapper.appendChild(pre);
+            mermaidNodes.push(pre);
         });
-        const mermaidNodes = Array.from(current.querySelectorAll('pre.mermaid'));
-        const afterMermaid = () => scheduleMermaidInteraction();
+        const afterMermaid = () => {
+            scheduleMermaidInteraction();
+            if (window.Reveal && typeof window.Reveal.layout === 'function') {
+                requestAnimationFrame(() => {
+                    window.Reveal.layout();
+                });
+                setTimeout(() => {
+                    normalizeMermaidViewBox(current);
+                }, 120);
+            }
+        };
         if (mermaidNodes.length > 0) {
             mermaid.run({ nodes: mermaidNodes }).then(() => {
                 afterMermaid();
@@ -1218,9 +1357,12 @@ function initRevealDiagramRefresh() {
             afterMermaid();
         }
         renderD2Diagrams(current);
+        initTabPanelHeights(current);
+        requestAnimationFrame(() => centerRevealSlideDiagrams(current));
+        setTimeout(() => centerRevealSlideDiagrams(current), 60);
     };
-    window.Reveal.on('ready', refreshCurrentSlideDiagrams);
-    window.Reveal.on('slidechanged', refreshCurrentSlideDiagrams);
+    window.Reveal.on('ready', () => setTimeout(() => hydrateSlideDiagrams(true), 0));
+    window.Reveal.on('slidetransitionend', () => hydrateSlideDiagrams(false));
 }
 initRevealDiagramRefresh();
 
@@ -1926,6 +2068,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initCodeBlockCopyButtons(document);
     initSearchClearButtons(document);
     ensurePdfFocusState();
+    initTabPanelHeights(document);
 });
 
 document.body.addEventListener('htmx:afterSwap', (event) => {
@@ -1937,4 +2080,5 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initCodeBlockCopyButtons(event.target);
     initSearchClearButtons(event.target);
     ensurePdfFocusState();
+    initTabPanelHeights(event.target || document);
 });
