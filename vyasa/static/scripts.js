@@ -436,10 +436,8 @@ function initD2Interaction(rootElement = document) {
             stage.style.display = 'flex';
             stage.style.justifyContent = 'center';
             stage.style.alignItems = 'center';
-            svg.style.pointerEvents = 'auto';
             svg.style.display = 'block';
             svg.style.margin = '0 auto';
-            return;
         }
 
         const wrapperRect = wrapper.getBoundingClientRect();
@@ -830,12 +828,9 @@ function initMermaidInteraction() {
         }
         if (!svg || alreadyInteractive) return;
         if (inReveal) {
-            svg.style.pointerEvents = 'auto';
-            svg.style.transform = 'none';
-            svg.style.transformOrigin = 'center center';
             svg.style.display = 'block';
             svg.style.margin = '0 auto';
-            return;
+            svg.style.transformOrigin = 'center center';
         }
         
         // Scale SVG to fit container (maintain aspect ratio, fit to width or height whichever is smaller)

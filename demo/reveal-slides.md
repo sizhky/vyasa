@@ -151,6 +151,26 @@ Common functions:
 
 ```mermaid
 flowchart TD
+  A --> B
+  B --> C
+```
+⇊
+--
+
+```mermaid
+flowchart TD
+  A --> B
+  B --> C
+  C --> D
+  D --> E
+  E --> F
+```
+
+⇊
+--
+
+```mermaid
+flowchart TD
   user["👤 User"] --> editor["✏️ Editor"]
   user --> browser["🌐 Browser"]
 
@@ -163,7 +183,7 @@ flowchart TD
   css --> renderer
 
   parser --> frontmatter
-  frontmatter --> meta["🏷️ Metadata\n(title, theme, slides)"]
+  frontmatter --> meta["🏷️ Metadata<br/>(title, theme, slides)"]
   parser --> ast["🌳 AST"]
 
   ast --> renderer["⚙️ HTML Renderer"]
@@ -182,8 +202,8 @@ flowchart TD
   reveal --> d2["📐 D2 Renderer"]
   reveal --> math["∑ KaTeX"]
   reveal --> highlight["🖍️ Highlight.js"]
-  reveal --> themes["🎨 Themes\n(white/beige/simple)"]
-  reveal --> transitions["✨ Transitions\n(fade/zoom/slide)"]
+  reveal --> themes["🎨 Themes<br/>(white/beige/simple)"]
+  reveal --> transitions["✨ Transitions<br/>(fade/zoom/slide)"]
 
   api --> storage["🗄️ File System"]
   storage --> md

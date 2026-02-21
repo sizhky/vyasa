@@ -3412,9 +3412,11 @@ def slide_deck(path: str, request: Request):
     .reveal{{--r-main-font-size:{font_size};}}
     .reveal .slides{{text-align:left}}
     .reveal .slides section{{padding:0 {slide_padding}; box-sizing:border-box}}
+    .reveal .slides section.present{{left:0!important}}
     .reveal section img{{max-height:72vh}}
     .reveal .mermaid-container,.reveal .d2-container{{position:relative;border:1px solid rgba(15,23,42,.18)!important;border-radius:10px!important;box-shadow:none!important;background:transparent!important;padding:14px!important;box-sizing:border-box!important;left:auto!important;transform:none!important;margin:0 auto!important;width:min(100%,1400px)!important;max-width:min(100%,1400px)!important;align-self:center!important}}
-    .reveal .mermaid-controls,.reveal .d2-controls{{display:none!important}}
+    .reveal .mermaid-controls{{display:flex!important}}
+    .reveal .d2-controls{{display:flex!important}}
     .reveal .mermaid-wrapper,.reveal .d2-wrapper{{overflow:visible;min-height:0!important;height:auto!important;justify-content:center!important;align-items:center!important}}
     .reveal .slides section:has(.mermaid-container),.reveal .slides section:has(.d2-container){{display:flex;flex-direction:column;align-items:center}}
     .reveal .mermaid,.reveal .mermaid svg{{font-size:16px!important;line-height:1.2!important}}
