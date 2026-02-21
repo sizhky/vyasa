@@ -1,7 +1,7 @@
 import re, mistletoe as mst, pathlib, os, html
 import json
 from dataclasses import dataclass
-from itertools import chain
+from itertools import chain, count
 from urllib.parse import quote_plus
 from functools import partial
 from functools import lru_cache
@@ -41,6 +41,7 @@ logger.remove()
 logger.add(sys.stdout, level="INFO")
 logfile = Path("/tmp/vyasa_core.log")
 logger.add(logfile, rotation="10 MB", retention="10 days", level="DEBUG")
+_diagram_uid_counter = count(1)
 
 def _asset_url(path: str) -> str:
     """Return static URL with mtime cache-busting token."""
@@ -580,8 +581,8 @@ class ContentRenderer(FrankenRenderer):
                 except Exception as e:
                     print(f"Error parsing d2 frontmatter: {e}")
                 code = code_without_frontmatter
-            self.mermaid_counter += 1
-            diagram_id = f"d2-{abs(hash(code)) & 0xFFFFFF}-{self.mermaid_counter}"
+            diagram_uid = next(_diagram_uid_counter)
+            diagram_id = f"d2-{abs(hash(code)) & 0xFFFFFF}-{diagram_uid}"
             break_out = 'vw' in str(width).lower()
             if break_out:
                 container_style = f"width: {width}; position: relative; left: 50%; transform: translateX(-50%);"
@@ -687,8 +688,8 @@ class ContentRenderer(FrankenRenderer):
                 # Use code without frontmatter for rendering
                 code = code_without_frontmatter
             
-            self.mermaid_counter += 1
-            diagram_id = f"mermaid-{abs(hash(code)) & 0xFFFFFF}-{self.mermaid_counter}"
+            diagram_uid = next(_diagram_uid_counter)
+            diagram_id = f"mermaid-{abs(hash(code)) & 0xFFFFFF}-{diagram_uid}"
             
             # Determine if we need to break out of normal content flow
             # This is required for viewport-based widths to properly center
@@ -3301,15 +3302,17 @@ def slide_deck(path: str, request: Request):
     md_separator_vertical = str(reveal_cfg.pop("separatorVertical", "^--$"))
     md_separator_notes = str(reveal_cfg.pop("separatorNotes", "^Note:"))
     slide_padding = str(reveal_cfg.pop("slidePadding", "1.25rem")).strip() or "1.25rem"
-    font_size = str(reveal_cfg.pop("fontSize", "42px")).strip() or "42px"
+    # Keep slide margins deterministic from CSS/layout rules rather than frontmatter.
+    reveal_cfg.pop("margin", None)
+    font_size = str(reveal_cfg.pop("fontSize", "18px")).strip() or "18px"
     right_advances_all = reveal_cfg.pop("rightAdvancesAll", False)
     if isinstance(right_advances_all, str):
         right_advances_all = right_advances_all.strip().lower() in {"1", "true", "yes", "on"}
     if right_advances_all and "navigationMode" not in reveal_cfg:
         reveal_cfg["navigationMode"] = "linear"
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?(?:px|rem|em|vw|vh|%)", font_size):
-        font_size = "42px"
-    reveal_init_cfg = {"hash": True, "slideNumber": True, "margin": 0.12, **reveal_cfg}
+        font_size = "18px"
+    reveal_init_cfg = {"hash": True, "slideNumber": True, "margin": 0, **reveal_cfg}
     reveal_init_json = json.dumps(reveal_init_cfg, ensure_ascii=False)
     sep_re = re.compile(md_separator)
     sep_v_re = re.compile(md_separator_vertical)
@@ -3408,18 +3411,29 @@ def slide_deck(path: str, request: Request):
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/{highlight_theme}.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
   <style>
-    .reveal{{--r-main-font-size:{font_size};}}
+    .reveal{{--r-main-font-size:{font_size};--diagram-inset:7.5%;}}
     .reveal .slides{{text-align:left}}
     .reveal .slides section{{padding:0 {slide_padding}; box-sizing:border-box}}
+    .reveal .slides section.present{{left:0!important}}
     .reveal section img{{max-height:72vh}}
-    .reveal .mermaid-container,.reveal .d2-container{{position:relative;border:1px solid rgba(15,23,42,.18)!important;border-radius:10px!important;box-shadow:none!important;background:transparent!important;padding:14px!important}}
+    .reveal .mermaid-container,.reveal .d2-container{{position:relative;border:1px solid rgba(15,23,42,.18)!important;border-radius:10px!important;box-shadow:none!important;background:transparent!important;padding:14px!important;box-sizing:border-box!important;left:auto!important;transform:none!important;margin:0 auto!important;width:calc(100% - (2 * var(--diagram-inset)))!important;max-width:calc(100% - (2 * var(--diagram-inset)))!important;height:calc(100% - (2 * var(--diagram-inset)))!important;max-height:calc(100% - (2 * var(--diagram-inset)))!important;min-height:0!important;align-self:center!important}}
     .reveal .mermaid-controls,.reveal .d2-controls{{display:none!important}}
-    .reveal .mermaid-wrapper,.reveal .d2-wrapper{{overflow:visible;min-height:0!important;height:auto!important}}
+    .reveal .mermaid-wrapper,.reveal .d2-wrapper{{overflow:visible;min-height:0!important;height:100%!important;width:100%!important;justify-content:center!important;align-items:center!important}}
+    .reveal .mermaid-wrapper svg,.reveal .d2-wrapper svg{{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important}}
+    .reveal .slides section:has(.mermaid-container),.reveal .slides section:has(.d2-container){{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;padding:0!important;width:100%!important;height:100%!important;min-height:100%!important}}
+    .reveal .slides section:has(.mermaid-container) > *,.reveal .slides section:has(.d2-container) > *{{width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important}}
     .reveal .mermaid,.reveal .mermaid svg{{font-size:16px!important;line-height:1.2!important}}
     .reveal .mermaid svg text,.reveal .mermaid svg tspan{{fill:#1f2937!important}}
     .reveal .mermaid .nodeLabel,.reveal .mermaid .edgeLabel,.reveal .mermaid foreignObject div,.reveal .mermaid foreignObject span,.reveal .mermaid foreignObject p{{color:#1f2937!important;fill:#1f2937!important}}
     .reveal .code-copy-button,.reveal .code-block [id$="-toast"]{{display:none!important}}
     .reveal .code-block textarea{{position:absolute!important;left:-9999px!important;top:0!important;opacity:0!important;pointer-events:none!important}}
+    .reveal .tabs-container{{margin:1rem auto;max-width:min(92vw,1300px);border:1px solid rgba(15,23,42,.2);border-radius:10px;overflow:hidden}}
+    .reveal .tabs-header{{display:flex;background:rgba(241,245,249,.95);border-bottom:1px solid rgba(15,23,42,.12)}}
+    .reveal .tab-button{{flex:1;padding:.6rem .8rem;background:transparent;border:0;border-bottom:2px solid transparent;cursor:pointer}}
+    .reveal .tab-button.active{{border-bottom-color:#0f172a;font-weight:600}}
+    .reveal .tabs-content{{position:relative;background:rgba(255,255,255,.9)}}
+    .reveal .tab-panel{{padding:.75rem;position:absolute;left:0;right:0;opacity:0;visibility:hidden;pointer-events:none}}
+    .reveal .tab-panel.active{{position:relative;opacity:1;visibility:visible;pointer-events:auto}}
   </style>
 </head>
   <body>
