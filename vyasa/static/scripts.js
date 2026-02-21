@@ -1291,10 +1291,14 @@ function initRevealDiagramRefresh() {
     const refreshCurrentSlideDiagrams = () => {
         const current = window.Reveal.getCurrentSlide();
         if (!current) return;
+        const mermaidNodes = [];
         current.querySelectorAll('.mermaid-wrapper').forEach((wrapper) => {
             if (!wrapper.id) return;
             delete mermaidStates[wrapper.id];
             delete wrapper.dataset.mermaidInteractive;
+            if (wrapper.querySelector('svg')) {
+                return;
+            }
             const encoded = wrapper.getAttribute('data-mermaid-code');
             if (!encoded) return;
             const textarea = document.createElement('textarea');
@@ -1305,28 +1309,25 @@ function initRevealDiagramRefresh() {
             pre.className = 'mermaid';
             pre.textContent = code;
             wrapper.appendChild(pre);
+            mermaidNodes.push(pre);
         });
-        const mermaidNodes = Array.from(current.querySelectorAll('pre.mermaid'));
-        const afterMermaid = () => {
+        const afterMermaid = (didRenderMermaid) => {
             scheduleMermaidInteraction();
-            if (window.Reveal && typeof window.Reveal.layout === 'function') {
+            if (didRenderMermaid && window.Reveal && typeof window.Reveal.layout === 'function') {
                 requestAnimationFrame(() => {
                     window.Reveal.layout();
                 });
                 setTimeout(() => {
-                    window.Reveal.layout();
-                }, 80);
-                setTimeout(() => {
                     normalizeMermaidViewBox(current);
-                }, 140);
+                }, 90);
             }
         };
         if (mermaidNodes.length > 0) {
             mermaid.run({ nodes: mermaidNodes }).then(() => {
-                afterMermaid();
+                afterMermaid(true);
             }).catch(() => {});
         } else {
-            afterMermaid();
+            afterMermaid(false);
         }
         renderD2Diagrams(current);
         initTabPanelHeights(current);
@@ -1334,7 +1335,7 @@ function initRevealDiagramRefresh() {
         setTimeout(() => centerRevealSlideDiagrams(current), 60);
     };
     const queueRefresh = () => {
-        const delays = [0, 80, 180, 320];
+        const delays = [0, 120];
         delays.forEach((delay) => {
             setTimeout(() => {
                 const current = window.Reveal.getCurrentSlide();
@@ -1353,7 +1354,6 @@ function initRevealDiagramRefresh() {
         }, 20);
     };
     window.Reveal.on('ready', queueRefreshDebounced);
-    window.Reveal.on('slidechanged', queueRefreshDebounced);
     window.Reveal.on('slidetransitionend', queueRefreshDebounced);
 }
 initRevealDiagramRefresh();
