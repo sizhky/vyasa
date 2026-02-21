@@ -3417,8 +3417,7 @@ def slide_deck(path: str, request: Request):
     .reveal .slides section.present{{left:0!important}}
     .reveal section img{{max-height:72vh}}
     .reveal .mermaid-container,.reveal .d2-container{{position:relative;border:1px solid rgba(15,23,42,.18)!important;border-radius:10px!important;box-shadow:none!important;background:transparent!important;padding:14px!important;box-sizing:border-box!important;left:auto!important;transform:none!important;margin:0 auto!important;width:calc(100% - (2 * var(--diagram-inset)))!important;max-width:calc(100% - (2 * var(--diagram-inset)))!important;height:calc(100% - (2 * var(--diagram-inset)))!important;max-height:calc(100% - (2 * var(--diagram-inset)))!important;min-height:0!important;align-self:center!important}}
-    .reveal .mermaid-controls{{display:flex!important}}
-    .reveal .d2-controls{{display:flex!important}}
+    .reveal .mermaid-controls,.reveal .d2-controls{{display:none!important}}
     .reveal .mermaid-wrapper,.reveal .d2-wrapper{{overflow:visible;min-height:0!important;height:100%!important;width:100%!important;justify-content:center!important;align-items:center!important}}
     .reveal .mermaid-wrapper svg,.reveal .d2-wrapper svg{{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important}}
     .reveal .slides section:has(.mermaid-container),.reveal .slides section:has(.d2-container){{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;padding:0!important;width:100%!important;height:100%!important;min-height:100%!important}}
