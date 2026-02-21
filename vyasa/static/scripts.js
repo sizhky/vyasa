@@ -449,9 +449,33 @@ function initD2Interaction(rootElement = document) {
         const scaleY = (wrapperRect.height - 32) / svgRect.height;
         const aspectRatio = svgRect.width / svgRect.height;
         const maxUpscale = 1;
-        const initialScale = aspectRatio > 3
+        let initialScale = aspectRatio > 3
             ? Math.min(scaleX, maxUpscale)
             : Math.min(scaleX, scaleY, maxUpscale);
+        if (inReveal) {
+            try {
+                const vb = (svg.getAttribute('viewBox') || '').trim().split(/\s+/).map(Number);
+                const box = svg.getBBox ? svg.getBBox() : null;
+                if (vb.length === 4 && box && box.width > 1 && box.height > 1) {
+                    const vbW = vb[2];
+                    const vbH = vb[3];
+                    if (Number.isFinite(vbW) && Number.isFinite(vbH) && vbW > 1 && vbH > 1) {
+                        const fitFromBounds = Math.min(vbW / box.width, vbH / box.height);
+                        if (Number.isFinite(fitFromBounds) && fitFromBounds > 1) {
+                            initialScale = Math.min(fitFromBounds * 0.92, 6);
+                        } else {
+                            initialScale = 1;
+                        }
+                    } else {
+                        initialScale = 1;
+                    }
+                } else {
+                    initialScale = 1;
+                }
+            } catch (_) {
+                initialScale = 1;
+            }
+        }
 
         const state = {
             scale: initialScale,
@@ -1259,7 +1283,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initRevealDiagramRefresh() {
     if (!window.Reveal || typeof window.Reveal.on !== 'function') return;
-    let refreshTimer = null;
     const normalizeMermaidViewBox = (scope) => {
         if (!scope) return;
         const svgs = scope.querySelectorAll('.mermaid-wrapper svg');
@@ -1286,15 +1309,23 @@ function initRevealDiagramRefresh() {
             svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
             svg.style.display = 'block';
             svg.style.margin = '0 auto';
+            svg.style.width = '100%';
+            svg.style.height = '100%';
+            svg.style.maxWidth = '100%';
+            svg.style.maxHeight = '100%';
         });
     };
-    const refreshCurrentSlideDiagrams = () => {
+    const hydrateSlideDiagrams = (force = false) => {
         const current = window.Reveal.getCurrentSlide();
         if (!current) return;
+        if (!force && current.dataset.diagramHydrated === 'true') return;
+        current.dataset.diagramHydrated = 'true';
+        const mermaidNodes = [];
         current.querySelectorAll('.mermaid-wrapper').forEach((wrapper) => {
             if (!wrapper.id) return;
             delete mermaidStates[wrapper.id];
             delete wrapper.dataset.mermaidInteractive;
+            if (wrapper.querySelector('svg')) return;
             const encoded = wrapper.getAttribute('data-mermaid-code');
             if (!encoded) return;
             const textarea = document.createElement('textarea');
@@ -1305,8 +1336,8 @@ function initRevealDiagramRefresh() {
             pre.className = 'mermaid';
             pre.textContent = code;
             wrapper.appendChild(pre);
+            mermaidNodes.push(pre);
         });
-        const mermaidNodes = Array.from(current.querySelectorAll('pre.mermaid'));
         const afterMermaid = () => {
             scheduleMermaidInteraction();
             if (window.Reveal && typeof window.Reveal.layout === 'function') {
@@ -1314,11 +1345,8 @@ function initRevealDiagramRefresh() {
                     window.Reveal.layout();
                 });
                 setTimeout(() => {
-                    window.Reveal.layout();
-                }, 80);
-                setTimeout(() => {
                     normalizeMermaidViewBox(current);
-                }, 140);
+                }, 120);
             }
         };
         if (mermaidNodes.length > 0) {
@@ -1333,28 +1361,8 @@ function initRevealDiagramRefresh() {
         requestAnimationFrame(() => centerRevealSlideDiagrams(current));
         setTimeout(() => centerRevealSlideDiagrams(current), 60);
     };
-    const queueRefresh = () => {
-        const delays = [0, 80, 180, 320];
-        delays.forEach((delay) => {
-            setTimeout(() => {
-                const current = window.Reveal.getCurrentSlide();
-                if (!current) return;
-                refreshCurrentSlideDiagrams();
-            }, delay);
-        });
-    };
-    const queueRefreshDebounced = () => {
-        if (refreshTimer) {
-            clearTimeout(refreshTimer);
-        }
-        refreshTimer = setTimeout(() => {
-            refreshTimer = null;
-            queueRefresh();
-        }, 20);
-    };
-    window.Reveal.on('ready', queueRefreshDebounced);
-    window.Reveal.on('slidechanged', queueRefreshDebounced);
-    window.Reveal.on('slidetransitionend', queueRefreshDebounced);
+    window.Reveal.on('ready', () => setTimeout(() => hydrateSlideDiagrams(true), 0));
+    window.Reveal.on('slidetransitionend', () => hydrateSlideDiagrams(false));
 }
 initRevealDiagramRefresh();
 

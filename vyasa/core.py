@@ -3302,15 +3302,17 @@ def slide_deck(path: str, request: Request):
     md_separator_vertical = str(reveal_cfg.pop("separatorVertical", "^--$"))
     md_separator_notes = str(reveal_cfg.pop("separatorNotes", "^Note:"))
     slide_padding = str(reveal_cfg.pop("slidePadding", "1.25rem")).strip() or "1.25rem"
-    font_size = str(reveal_cfg.pop("fontSize", "42px")).strip() or "42px"
+    # Keep slide margins deterministic from CSS/layout rules rather than frontmatter.
+    reveal_cfg.pop("margin", None)
+    font_size = str(reveal_cfg.pop("fontSize", "18px")).strip() or "18px"
     right_advances_all = reveal_cfg.pop("rightAdvancesAll", False)
     if isinstance(right_advances_all, str):
         right_advances_all = right_advances_all.strip().lower() in {"1", "true", "yes", "on"}
     if right_advances_all and "navigationMode" not in reveal_cfg:
         reveal_cfg["navigationMode"] = "linear"
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?(?:px|rem|em|vw|vh|%)", font_size):
-        font_size = "42px"
-    reveal_init_cfg = {"hash": True, "slideNumber": True, "margin": 0.12, **reveal_cfg}
+        font_size = "18px"
+    reveal_init_cfg = {"hash": True, "slideNumber": True, "margin": 0, **reveal_cfg}
     reveal_init_json = json.dumps(reveal_init_cfg, ensure_ascii=False)
     sep_re = re.compile(md_separator)
     sep_v_re = re.compile(md_separator_vertical)
@@ -3409,16 +3411,18 @@ def slide_deck(path: str, request: Request):
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/{highlight_theme}.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
   <style>
-    .reveal{{--r-main-font-size:{font_size};}}
+    .reveal{{--r-main-font-size:{font_size};--diagram-inset:7.5%;}}
     .reveal .slides{{text-align:left}}
     .reveal .slides section{{padding:0 {slide_padding}; box-sizing:border-box}}
     .reveal .slides section.present{{left:0!important}}
     .reveal section img{{max-height:72vh}}
-    .reveal .mermaid-container,.reveal .d2-container{{position:relative;border:1px solid rgba(15,23,42,.18)!important;border-radius:10px!important;box-shadow:none!important;background:transparent!important;padding:14px!important;box-sizing:border-box!important;left:auto!important;transform:none!important;margin:0 auto!important;width:min(100%,1400px)!important;max-width:min(100%,1400px)!important;align-self:center!important}}
+    .reveal .mermaid-container,.reveal .d2-container{{position:relative;border:1px solid rgba(15,23,42,.18)!important;border-radius:10px!important;box-shadow:none!important;background:transparent!important;padding:14px!important;box-sizing:border-box!important;left:auto!important;transform:none!important;margin:0 auto!important;width:calc(100% - (2 * var(--diagram-inset)))!important;max-width:calc(100% - (2 * var(--diagram-inset)))!important;height:calc(100% - (2 * var(--diagram-inset)))!important;max-height:calc(100% - (2 * var(--diagram-inset)))!important;min-height:0!important;align-self:center!important}}
     .reveal .mermaid-controls{{display:flex!important}}
     .reveal .d2-controls{{display:flex!important}}
-    .reveal .mermaid-wrapper,.reveal .d2-wrapper{{overflow:visible;min-height:0!important;height:auto!important;justify-content:center!important;align-items:center!important}}
-    .reveal .slides section:has(.mermaid-container),.reveal .slides section:has(.d2-container){{display:flex;flex-direction:column;align-items:center}}
+    .reveal .mermaid-wrapper,.reveal .d2-wrapper{{overflow:visible;min-height:0!important;height:100%!important;width:100%!important;justify-content:center!important;align-items:center!important}}
+    .reveal .mermaid-wrapper svg,.reveal .d2-wrapper svg{{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important}}
+    .reveal .slides section:has(.mermaid-container),.reveal .slides section:has(.d2-container){{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;padding:0!important;width:100%!important;height:100%!important;min-height:100%!important}}
+    .reveal .slides section:has(.mermaid-container) > *,.reveal .slides section:has(.d2-container) > *{{width:100%!important;height:100%!important;min-width:0!important;min-height:0!important}}
     .reveal .mermaid,.reveal .mermaid svg{{font-size:16px!important;line-height:1.2!important}}
     .reveal .mermaid svg text,.reveal .mermaid svg tspan{{fill:#1f2937!important}}
     .reveal .mermaid .nodeLabel,.reveal .mermaid .edgeLabel,.reveal .mermaid foreignObject div,.reveal .mermaid foreignObject span,.reveal .mermaid foreignObject p{{color:#1f2937!important;fill:#1f2937!important}}
