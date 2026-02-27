@@ -3595,7 +3595,7 @@ def drawing_detail(path: str, htmx, request: Request):
                     cls="px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
                 ),
                 Button(
-                    "Open in Excalidraw",
+                    "Open Excalidraw",
                     type="button",
                     data_excalidraw_open_external="1",
                     data_excalidraw_download_url=download_url,
