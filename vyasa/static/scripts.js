@@ -54,6 +54,37 @@ function applyExcalidrawEditMode(host, button) {
     if (button) button.textContent = editable ? 'Disable editing' : 'Enable editing';
 }
 
+function connectExcalidrawCollab(host) {
+    const room = host?.getAttribute('data-excalidraw-path');
+    if (!room || host.__excalidrawWs) return;
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${window.location.host}/ws/excalidraw/${room}`);
+    const localId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    host.__excalidrawWs = ws;
+    host.__excalidrawWsId = localId;
+    ws.onmessage = (evt) => {
+        try {
+            const msg = JSON.parse(evt.data || '{}');
+            if (msg.type !== 'scene' || !msg.scene || !host.__excalidrawApi) return;
+            if (msg.from && msg.from === localId) return;
+            host.__excalidrawApplyingRemote = true;
+            host.__excalidrawSkipUntil = Date.now() + 180;
+            host.__excalidrawState = {
+                ...host.__excalidrawState,
+                elements: msg.scene.elements || [],
+                files: msg.scene.files || {},
+            };
+            host.__excalidrawApi.updateScene({
+                elements: msg.scene.elements || [],
+                files: msg.scene.files || {},
+            });
+            setTimeout(() => { host.__excalidrawApplyingRemote = false; }, 200);
+        } catch (e) {
+            console.error('[vyasa][collab] bad message', e);
+        }
+    };
+}
+
 async function initExcalidrawHosts(rootElement = document) {
     const hosts = Array.from(rootElement.querySelectorAll('.excalidraw-host'));
     for (const host of hosts) {
@@ -88,6 +119,7 @@ async function initExcalidrawHosts(rootElement = document) {
             host.__excalidrawState = sceneState;
             host.__excalidrawEditable = false;
             host.__excalidrawAutosaveTimer = null;
+            connectExcalidrawCollab(host);
             const root = ReactDOMClient.createRoot(host);
             const element = React.createElement(ExcalidrawComp, {
                 initialData: sceneState,
@@ -99,6 +131,14 @@ async function initExcalidrawHosts(rootElement = document) {
                 onChange: (elements, appState, files) => {
                     host.__excalidrawState = { ...sceneState, elements, appState, files };
                     if (!host.__excalidrawEditable) return;
+                    if (host.__excalidrawApplyingRemote || Date.now() < (host.__excalidrawSkipUntil || 0)) return;
+                    if (host.__excalidrawWs?.readyState === WebSocket.OPEN) {
+                        host.__excalidrawWs.send(JSON.stringify({
+                            type: 'scene',
+                            from: host.__excalidrawWsId,
+                            scene: { elements: host.__excalidrawState.elements || [], files: host.__excalidrawState.files || {} },
+                        }));
+                    }
                     if (host.__excalidrawAutosaveTimer) clearTimeout(host.__excalidrawAutosaveTimer);
                     host.__excalidrawAutosaveTimer = setTimeout(() => {
                         saveExcalidrawScene(host, status);

@@ -3,6 +3,7 @@ import json
 import hashlib
 import mimetypes
 import subprocess
+import asyncio
 from dataclasses import dataclass
 from itertools import chain, count
 from urllib.parse import quote_plus
@@ -1878,6 +1879,37 @@ rt = app.route
 
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, FileResponse, Response
+from starlette.websockets import WebSocket
+
+_collab_rooms = {}
+_collab_scenes = {}
+_collab_lock = asyncio.Lock()
+
+async def _collab_broadcast(room, payload, exclude=None):
+    msg = json.dumps(payload)
+    for sock in list(_collab_rooms.get(room, set())):
+        if exclude is not None and sock is exclude:
+            continue
+        try:
+            await sock.send_text(msg)
+        except Exception:
+            pass
+
+async def _collab_conn(ws: WebSocket):
+    room = ws.path_params.get("path", "")
+    async with _collab_lock:
+        _collab_rooms.setdefault(room, set()).add(ws)
+        scene = _collab_scenes.get(room)
+    if scene is not None:
+        await ws.send_text(json.dumps({"type": "scene", "room": room, "scene": scene}))
+
+async def _collab_disconn(ws: WebSocket):
+    room = ws.path_params.get("path", "")
+    async with _collab_lock:
+        peers = _collab_rooms.get(room, set())
+        peers.discard(ws)
+        if not peers:
+            _collab_rooms.pop(room, None)
 
 _pylogue_register, _PylogueResponder = _load_pylogue_routes()
 if _pylogue_register:
@@ -2346,6 +2378,26 @@ async def save_excalidraw(path: str, request: Request):
         logger.warning(f"Failed to save excalidraw file '{path}': {exc}")
         return Response("Save failed", status_code=500)
     return Response('{"ok":true}', media_type="application/json")
+
+@app.ws("/ws/excalidraw/{path:path}", conn=_collab_conn, disconn=_collab_disconn)
+async def excalidraw_collab(ws: WebSocket, data: dict):
+    room = ws.path_params.get("path", "")
+    kind = data.get("type")
+    if kind == "scene":
+        scene = data.get("scene")
+        async with _collab_lock:
+            _collab_scenes[room] = scene
+        await _collab_broadcast(
+            room,
+            {"type": "scene", "room": room, "scene": scene},
+            exclude=ws,
+        )
+    elif kind == "presence":
+        await _collab_broadcast(
+            room,
+            {"type": "presence", "room": room, "presence": data.get("presence")},
+            exclude=ws,
+        )
 
 # Generic download route for any file under the blog root
 @rt("/download/{path:path}")
