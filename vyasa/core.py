@@ -1,8 +1,5 @@
 import re, mistletoe as mst, pathlib, os, html
 import json
-import hashlib
-import mimetypes
-import subprocess
 import asyncio
 import tomllib
 from dataclasses import dataclass
@@ -47,43 +44,6 @@ logger.add(sys.stdout, level="INFO")
 logfile = Path("/tmp/vyasa_core.log")
 logger.add(logfile, rotation="10 MB", retention="10 days", level="DEBUG")
 _diagram_uid_counter = count(1)
-_SLIDEV_CACHE_ROOT = Path("/tmp/vyasa-slidev-cache")
-_SLIDEV_SOURCE_ROOT = Path("/tmp/vyasa-slidev-src")
-
-
-def _slidev_cache_key(md_file: Path) -> str:
-    st = md_file.stat()
-    raw = f"{md_file.resolve()}:{st.st_mtime_ns}:{st.st_size}"
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
-
-
-def _ensure_slidev_build(md_file: Path, cache_key: str) -> Path:
-    out_dir = _SLIDEV_CACHE_ROOT / cache_key
-    index_file = out_dir / "index.html"
-    if index_file.exists():
-        return out_dir
-    out_dir.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        "npx", "-y", "@slidev/cli", "build", str(md_file),
-        "--out", str(out_dir),
-        "--base", f"/__slidev/{cache_key}/",
-        "--without-notes",
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or "Slidev build failed")
-    return out_dir
-
-
-def _prepare_slidev_entry(path: str, raw_content: str, cache_key: str) -> Path:
-    src_dir = _SLIDEV_SOURCE_ROOT / cache_key
-    src_dir.mkdir(parents=True, exist_ok=True)
-    # Reveal vertical separator is '--'; Slidev uses only '---'.
-    normalized = re.sub(r'(?m)^--\s*$', '---', raw_content)
-    entry = src_dir / "slides.md"
-    if not entry.exists() or entry.read_text(encoding="utf-8") != normalized:
-        entry.write_text(normalized, encoding="utf-8")
-    return entry
 
 
 def _asset_url(path: str) -> str:
@@ -3310,6 +3270,8 @@ def build_post_tree(folder, roles=None):
             slug = str(item.relative_to(root).with_suffix(''))
             if not _is_allowed(f"/posts/{slug}", roles or []):
                 continue
+            metadata, _ = parse_frontmatter(item)
+            has_slides = bool(metadata.get("slides", False))
             title_start = time.time()
             title = get_post_title(item, abbreviations=abbreviations)
             title_time = (time.time() - title_start) * 1000
@@ -3317,7 +3279,7 @@ def build_post_tree(folder, roles=None):
                 logger.debug(f"[DEBUG] Getting title for {item.name} took {title_time:.2f}ms")
             items.append(Li(A(
                 Span(cls="w-4 mr-2 shrink-0"),
-                Span(UkIcon("file-text", cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                Span(UkIcon("monitor" if has_slides else "file-text", cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                 Span(title, cls="truncate min-w-0", title=title),
                 href=f'/posts/{slug}',
                 hx_get=f'/posts/{slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
@@ -3330,7 +3292,7 @@ def build_post_tree(folder, roles=None):
             title = slug_to_title(item.stem, abbreviations=abbreviations)
             items.append(Li(A(
                 Span(cls="w-4 mr-2 shrink-0"),
-                Span(UkIcon("file-text", cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                Span(UkIcon("file", cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                 Span(f"{title} (PDF)", cls="truncate min-w-0", title=title),
                 href=f'/posts/{slug}',
                 hx_get=f'/posts/{slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
@@ -3627,23 +3589,121 @@ def slide_deck(path: str, request: Request):
     file_path = root / f'{path}.md'
     if not file_path.exists():
         return not_found(auth=request.scope.get("auth"))
-
     roles = _get_roles_from_auth(request.scope.get("auth"))
     if not _is_allowed(f"/posts/{path}", roles or []):
         return not_found(auth=request.scope.get("auth"))
-    _, raw_content = parse_frontmatter(file_path)
-    cache_key = _slidev_cache_key(file_path)
-    try:
-        entry = _prepare_slidev_entry(path, raw_content, cache_key)
-        out_dir = _ensure_slidev_build(entry, cache_key)
-    except Exception as exc:
-        return Response(
-            f"<h1>Slidev build failed</h1><pre>{html.escape(str(exc))}</pre>",
-            media_type="text/html; charset=utf-8",
-            status_code=500,
-            headers={"Cache-Control": "no-store"},
-        )
-    return FileResponse(out_dir / "index.html", media_type="text/html; charset=utf-8")
+    metadata, raw_content = parse_frontmatter(file_path)
+    title = metadata.get('title', slug_to_title(Path(path).name, abbreviations=_effective_abbreviations(root)))
+    deck_md = html.escape(raw_content)
+    safe_title = html.escape(f"{title} - Slides")
+    reveal_block = metadata.get("reveal", {}) if isinstance(metadata.get("reveal"), dict) else {}
+    reveal_top_level = {k[7:]: v for k, v in metadata.items() if k.startswith("reveal_")}
+    reveal_cfg = {**reveal_block, **reveal_top_level}
+    theme = str(reveal_cfg.pop("theme", "black")).strip() or "black"
+    highlight_theme = str(reveal_cfg.pop("highlightTheme", "monokai")).strip() or "monokai"
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", theme):
+        theme = "black"
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", highlight_theme):
+        highlight_theme = "monokai"
+    md_separator = str(reveal_cfg.pop("separator", "^---$"))
+    md_separator_vertical = str(reveal_cfg.pop("separatorVertical", "^--$"))
+    md_separator_notes = str(reveal_cfg.pop("separatorNotes", "^Note:"))
+    slide_padding = str(reveal_cfg.pop("slidePadding", "1.25rem")).strip() or "1.25rem"
+    reveal_cfg.pop("margin", None)
+    font_size = str(reveal_cfg.pop("fontSize", "18px")).strip() or "18px"
+    right_advances_all = reveal_cfg.pop("rightAdvancesAll", False)
+    if isinstance(right_advances_all, str):
+        right_advances_all = right_advances_all.strip().lower() in {"1", "true", "yes", "on"}
+    if right_advances_all and "navigationMode" not in reveal_cfg:
+        reveal_cfg["navigationMode"] = "linear"
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?(?:px|rem|em|vw|vh|%)", font_size):
+        font_size = "18px"
+    reveal_init_cfg = {"hash": True, "slideNumber": True, "margin": 0, **reveal_cfg}
+    reveal_init_json = json.dumps(reveal_init_cfg, ensure_ascii=False)
+    sep_re = re.compile(md_separator)
+    sep_v_re = re.compile(md_separator_vertical)
+    def _split_slide_groups(md_text: str):
+        groups, group, buf = [], [], []
+        in_fence = False
+        fence_char, fence_len = "", 0
+        for line in md_text.splitlines():
+            s = line.strip()
+            m = re.match(r'^(```+|~~~+)', s)
+            if m:
+                tok = m.group(1)
+                if not in_fence:
+                    in_fence, fence_char, fence_len = True, tok[0], len(tok)
+                elif tok[0] == fence_char and len(tok) >= fence_len:
+                    in_fence = False
+            if not in_fence and sep_re.fullmatch(s):
+                group.append("\n".join(buf).strip())
+                groups.append([x for x in group if x.strip()])
+                group, buf = [], []
+                continue
+            if not in_fence and sep_v_re.fullmatch(s):
+                group.append("\n".join(buf).strip())
+                buf = []
+                continue
+            buf.append(line)
+        group.append("\n".join(buf).strip())
+        groups.append([x for x in group if x.strip()])
+        return [g for g in groups if g]
+
+    def _render_slide_fragment(md_fragment: str):
+        frag = to_xml(from_md(md_fragment, current_path=path))
+        return re.sub(r'<link[^>]*sidenote\\.css[^>]*>', '', frag, count=1)
+    slide_groups = _split_slide_groups(raw_content)
+    sections = []
+    for group in slide_groups:
+        if len(group) == 1:
+            sections.append(f"<section>{_render_slide_fragment(group[0])}</section>")
+        else:
+            inner = "".join(f"<section>{_render_slide_fragment(item)}</section>" for item in group)
+            sections.append(f"<section>{inner}</section>")
+    slides_markup = "".join(sections) if sections else "<section><h2>Empty deck</h2></section>"
+    page_html = f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{safe_title}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/{theme}.css" id="theme">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/{highlight_theme}.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<style>
+:root{{--vyasa-slide-padding:{slide_padding};--vyasa-slide-font-size:{font_size};}}
+.reveal{{font-size:var(--vyasa-slide-font-size);}}
+.reveal .slides section{{padding:var(--vyasa-slide-padding);}}
+.reveal pre code{{max-height:none;}}
+/* Match dev behavior: hide copy/toast controls and raw textarea helper in slides */
+.reveal .code-copy-button,
+.reveal .code-block [id$="-toast"]{{display:none!important;}}
+.reveal .code-block textarea{{position:absolute!important;left:-9999px!important;top:0!important;opacity:0!important;pointer-events:none!important;}}
+</style>
+</head><body><div class="reveal"><div class="slides">{slides_markup}</div></div>"""
+    page_html += f"""
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script type="module" src="{_asset_url("/static/scripts.js")}"></script>
+<script>
+const cfg = {reveal_init_json};
+cfg.plugins = [RevealHighlight];
+Reveal.initialize(cfg);
+function runMathPass(node) {{
+  if (typeof renderMathInElement !== 'function') return;
+  renderMathInElement(node || document.body, {{
+    delimiters: [
+      {{left: '$$', right: '$$', display: true}},
+      {{left: '$', right: '$', display: false}},
+      {{left: '\\\\[', right: '\\\\]', display: true}},
+      {{left: '\\\\(', right: '\\\\)', display: false}}
+    ],
+    throwOnError: false
+  }});
+}}
+runMathPass(document.body);
+Reveal.on('ready', () => runMathPass(document.body));
+Reveal.on('slidechanged', (e) => runMathPass(e.currentSlide || document.body));
+</script></body></html>"""
+    return Response(page_html, media_type="text/html; charset=utf-8")
 
 def find_index_file():
     """Find index.md or readme.md (case insensitive) in root folder"""
@@ -3709,15 +3769,6 @@ def index(htmx, request: Request):
         logger.debug(f"[DEBUG] ########## REQUEST COMPLETE: {total_time:.2f}ms TOTAL ##########\n")
         
         return result
-
-@rt('/__slidev/{deck_key}/{asset_path:path}')
-def serve_slidev_asset(deck_key: str, asset_path: str, request: Request):
-    file_path = (_SLIDEV_CACHE_ROOT / deck_key / asset_path).resolve()
-    root = (_SLIDEV_CACHE_ROOT / deck_key).resolve()
-    if not file_path.is_file() or not str(file_path).startswith(str(root)):
-        return not_found(auth=request.scope.get("auth"))
-    media_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
-    return FileResponse(file_path, media_type=media_type)
 
 # Catch-all route for 404 pages (must be last)
 @rt('/{path:path}')
