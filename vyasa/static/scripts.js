@@ -62,9 +62,21 @@ function connectExcalidrawCollab(host) {
     const localId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     host.__excalidrawWs = ws;
     host.__excalidrawWsId = localId;
+    host.__excalidrawPeers = new Map();
     ws.onmessage = (evt) => {
         try {
             const msg = JSON.parse(evt.data || '{}');
+            if (msg.type === 'presence' && msg.presence?.id && host.__excalidrawApi) {
+                if (msg.presence.id === localId) return;
+                host.__excalidrawPeers.set(msg.presence.id, {
+                    username: msg.presence.username || 'Guest',
+                    pointer: msg.presence.pointer || null,
+                    button: msg.presence.button || 'up',
+                    selectedElementIds: {},
+                });
+                host.__excalidrawApi.updateScene({ collaborators: new Map(host.__excalidrawPeers) });
+                return;
+            }
             if (msg.type !== 'scene' || !msg.scene || !host.__excalidrawApi) return;
             if (msg.from && msg.from === localId) return;
             host.__excalidrawApplyingRemote = true;
@@ -143,6 +155,21 @@ async function initExcalidrawHosts(rootElement = document) {
                     host.__excalidrawAutosaveTimer = setTimeout(() => {
                         saveExcalidrawScene(host, status);
                     }, 700);
+                },
+                onPointerUpdate: ({ pointer, button }) => {
+                    if (!host.__excalidrawWs || host.__excalidrawWs.readyState !== WebSocket.OPEN) return;
+                    const now = Date.now();
+                    if (now - (host.__excalidrawPresenceTs || 0) < 50) return;
+                    host.__excalidrawPresenceTs = now;
+                    host.__excalidrawWs.send(JSON.stringify({
+                        type: 'presence',
+                        presence: {
+                            id: host.__excalidrawWsId,
+                            username: 'Guest',
+                            pointer: pointer ? { x: pointer.x, y: pointer.y } : null,
+                            button: button || 'up',
+                        },
+                    }));
                 },
             });
             root.render(element);

@@ -2107,13 +2107,11 @@
       "shown": false,
       "data": null
     },
-    "previousSelectedElementIds": {
-      "s8IhjKf-t11qW0iYhVZ_K": true
-    },
+    "previousSelectedElementIds": {},
     "resizingElement": null,
     "scrolledOutside": false,
-    "scrollX": 1525.6907085655268,
-    "scrollY": 1167.854163000209,
+    "scrollX": 779.8490613887878,
+    "scrollY": 372.47215548509837,
     "selectedElementIds": {},
     "selectedGroupIds": {},
     "selectedElementsAreBeingDragged": false,
@@ -2137,7 +2135,7 @@
     "viewBackgroundColor": "transparent",
     "zenModeEnabled": false,
     "zoom": {
-      "value": 0.3771519291028385
+      "value": 0.9842161576167728
     },
     "viewModeEnabled": false,
     "pendingImageElementId": null,
