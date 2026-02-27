@@ -34,12 +34,7 @@ async function initExcalidrawHosts(rootElement = document) {
             if (!ExcalidrawComp || typeof ReactDOMClient.createRoot !== 'function') {
                 throw new Error('Excalidraw module shape is unsupported');
             }
-            let scene = { elements: [], appState: {}, files: {} };
-            if (src) {
-                const url = `${src}${src.includes('?') ? '&' : '?'}t=${Date.now()}`;
-                const response = await fetch(url, { cache: 'no-store' });
-                scene = await response.json();
-            }
+            const scene = src ? await fetch(src).then((r) => r.json()) : { elements: [], appState: {}, files: {} };
             const sceneState = {
                 type: 'excalidraw',
                 version: 2,
