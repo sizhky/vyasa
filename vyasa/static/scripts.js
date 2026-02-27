@@ -20,10 +20,8 @@ async function saveExcalidrawScene(host, status) {
     const saveUrl = host?.getAttribute('data-excalidraw-save-url');
     const scene = host?.__excalidrawState;
     if (!host || !saveUrl || !scene) {
-        if (status) status.textContent = 'Not ready';
         return;
     }
-    if (status) status.textContent = 'Saving...';
     try {
         const appState = { ...(scene.appState || {}) };
         if (typeof appState.collaborators?.forEach !== 'function') appState.collaborators = [];
@@ -41,11 +39,19 @@ async function saveExcalidrawScene(host, status) {
             body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        if (status) status.textContent = 'Saved';
     } catch (error) {
-        if (status) status.textContent = 'Save failed';
         console.error('[vyasa][excalidraw] save failed', error);
     }
+}
+
+function applyExcalidrawEditMode(host, button) {
+    const editable = !!host?.__excalidrawEditable;
+    if (host?.__excalidrawApi?.updateScene && host?.__excalidrawState?.appState) {
+        host.__excalidrawApi.updateScene({
+            appState: { ...host.__excalidrawState.appState, viewModeEnabled: !editable },
+        });
+    }
+    if (button) button.textContent = editable ? 'Disable editing' : 'Enable editing';
 }
 
 async function initExcalidrawHosts(rootElement = document) {
@@ -76,17 +82,23 @@ async function initExcalidrawHosts(rootElement = document) {
                 version: 2,
                 source: 'vyasa',
                 elements: scene.elements || [],
-                appState,
+                appState: { ...appState, viewModeEnabled: true },
                 files: scene.files || {},
             };
             host.__excalidrawState = sceneState;
+            host.__excalidrawEditable = false;
             host.__excalidrawAutosaveTimer = null;
             const root = ReactDOMClient.createRoot(host);
             const element = React.createElement(ExcalidrawComp, {
                 initialData: sceneState,
                 theme: getCurrentTheme() === 'dark' ? 'dark' : 'light',
+                excalidrawAPI: (api) => {
+                    host.__excalidrawApi = api;
+                    applyExcalidrawEditMode(host, document.querySelector(`[data-excalidraw-toggle="${host.id}"]`));
+                },
                 onChange: (elements, appState, files) => {
                     host.__excalidrawState = { ...sceneState, elements, appState, files };
+                    if (!host.__excalidrawEditable) return;
                     if (host.__excalidrawAutosaveTimer) clearTimeout(host.__excalidrawAutosaveTimer);
                     host.__excalidrawAutosaveTimer = setTimeout(() => {
                         saveExcalidrawScene(host, status);
@@ -103,15 +115,16 @@ async function initExcalidrawHosts(rootElement = document) {
 }
 
 function initExcalidrawSave(rootElement = document) {
-    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-save]'));
+    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-toggle]'));
     buttons.forEach((button) => {
         if (button.dataset.excalidrawSaveBound === 'true') return;
         button.dataset.excalidrawSaveBound = 'true';
-        button.addEventListener('click', async () => {
-            const hostId = button.getAttribute('data-excalidraw-save');
+        button.addEventListener('click', () => {
+            const hostId = button.getAttribute('data-excalidraw-toggle');
             const host = hostId ? document.getElementById(hostId) : null;
-            const status = hostId ? document.getElementById(`${hostId}-status`) : null;
-            await saveExcalidrawScene(host, status);
+            if (!host) return;
+            host.__excalidrawEditable = !host.__excalidrawEditable;
+            applyExcalidrawEditMode(host, button);
         });
     });
 }
