@@ -4,6 +4,7 @@ import hashlib
 import mimetypes
 import subprocess
 import asyncio
+import tomllib
 from dataclasses import dataclass
 from itertools import chain, count
 from urllib.parse import quote_plus
@@ -1785,6 +1786,50 @@ def _is_allowed(path, roles):
                 allowed = True
     return allowed if matched_any else True
 
+def _drawing_password_for(path: str):
+    if not path:
+        return None
+    root = get_root_folder().resolve()
+    drawing = (root / f"{path.strip('/')}.excalidraw").resolve()
+    if not str(drawing).startswith(str(root) + os.sep):
+        return None
+    rel_root = drawing.with_suffix("").relative_to(root).as_posix()
+    cur = drawing.parent
+    while True:
+        cfg = cur / ".vyasa"
+        if cfg.exists():
+            try:
+                data = tomllib.loads(cfg.read_text(encoding="utf-8"))
+                passwords = data.get("drawings_passwords", {})
+                if isinstance(passwords, dict):
+                    rel_cur = drawing.with_suffix("").relative_to(cur).as_posix()
+                    if rel_cur in passwords:
+                        return str(passwords[rel_cur])
+                    if rel_root in passwords:
+                        return str(passwords[rel_root])
+            except Exception:
+                pass
+        if cur == root:
+            break
+        parent = cur.parent
+        if parent == cur:
+            break
+        cur = parent
+    return None
+
+def _drawing_unlocked_in_session(session, path: str) -> bool:
+    unlocked = (session or {}).get("drawings_unlocked", {})
+    return bool(unlocked.get(path.strip("/")))
+
+def _drawing_unlocked(request: Request, path: str) -> bool:
+    return _drawing_unlocked_in_session(request.session, path)
+
+def _unlock_drawing(request: Request, path: str):
+    key = path.strip("/")
+    unlocked = dict(request.session.get("drawings_unlocked", {}))
+    unlocked[key] = True
+    request.session["drawings_unlocked"] = unlocked
+
 def user_auth_before(req, sess):
     logger.info(f'Authenticating request for {req.url.path}')
     auth = sess.get('auth', None)
@@ -2359,12 +2404,29 @@ def serve_post_excalidraw(path: str):
         return FileResponse(file_path, media_type="application/json; charset=utf-8")
     return Response(status_code=404)
 
+@rt("/api/excalidraw/unlock/{path:path}", methods=["POST"])
+async def unlock_excalidraw(path: str, request: Request):
+    expected = _drawing_password_for(path)
+    if not expected:
+        return Response('{"ok":true,"unlocked":true}', media_type="application/json")
+    try:
+        body = await request.body()
+        payload = json.loads(body.decode("utf-8")) if body else {}
+    except Exception:
+        return Response("Invalid JSON", status_code=400)
+    if (payload.get("password") or "") != expected:
+        return Response("Forbidden", status_code=403)
+    _unlock_drawing(request, path)
+    return Response('{"ok":true,"unlocked":true}', media_type="application/json")
+
 @rt("/api/excalidraw/{path:path}", methods=["PUT"])
 async def save_excalidraw(path: str, request: Request):
     root = get_root_folder().resolve()
     file_path = (root / f"{path}.excalidraw").resolve()
     if not str(file_path).startswith(str(root) + os.sep):
         return Response(status_code=403)
+    if _drawing_password_for(path) and not _drawing_unlocked(request, path):
+        return Response("Forbidden", status_code=403)
     roles = _get_roles_from_request(request)
     if roles is not None and not _is_allowed(f"/posts/{path}", roles or []):
         return Response("Forbidden", status_code=403)
@@ -2387,6 +2449,8 @@ async def excalidraw_collab(ws: WebSocket, data: dict):
     room = ws.path_params.get("path", "")
     kind = data.get("type")
     if kind == "scene":
+        if _drawing_password_for(room) and not _drawing_unlocked_in_session(ws.scope.get("session"), room):
+            return
         scene = data.get("scene")
         async with _collab_lock:
             _collab_scenes[room] = scene
@@ -3495,6 +3559,9 @@ def drawing_detail(path: str, htmx, request: Request):
         return not_found(htmx, auth=request.scope.get("auth"))
     title = f"{slug_to_title(Path(path).name, abbreviations=_effective_abbreviations(root))} (Excalidraw)"
     host_id = f"excalidraw-{abs(hash(path)) & 0xFFFFFF}"
+    drawing_protected = bool(_drawing_password_for(path))
+    download_url = f"/download/{path}.excalidraw"
+    download_name = f"{Path(path).name}.excalidraw"
     auth = request.scope.get("auth")
     user_locked = bool(auth)
     default_user = ""
@@ -3521,6 +3588,20 @@ def drawing_detail(path: str, htmx, request: Request):
                     data_excalidraw_toggle=host_id,
                     cls="px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
                 ),
+                A(
+                    "Download .excalidraw",
+                    href=download_url,
+                    download=download_name,
+                    cls="px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                ),
+                Button(
+                    "Open in Excalidraw",
+                    type="button",
+                    data_excalidraw_open_external="1",
+                    data_excalidraw_download_url=download_url,
+                    data_excalidraw_download_name=download_name,
+                    cls="px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                ),
                 cls="flex items-center gap-3"
             ),
             cls="flex items-center justify-between gap-3 mb-6 flex-wrap"
@@ -3530,7 +3611,9 @@ def drawing_detail(path: str, htmx, request: Request):
             cls="excalidraw-host w-full flex-1 min-h-0 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden",
             data_excalidraw_path=path,
             data_excalidraw_src=f"/posts/{path}.excalidraw",
-            data_excalidraw_save_url=f"/api/excalidraw/{path}"
+            data_excalidraw_save_url=f"/api/excalidraw/{path}",
+            data_excalidraw_unlock_url=f"/api/excalidraw/unlock/{path}",
+            data_excalidraw_protected="1" if drawing_protected else "0",
         ),
         cls="h-[calc(100vh-8rem)] flex flex-col overflow-hidden"
     )

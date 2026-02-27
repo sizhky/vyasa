@@ -250,12 +250,75 @@ function initExcalidrawSave(rootElement = document) {
     buttons.forEach((button) => {
         if (button.dataset.excalidrawSaveBound === 'true') return;
         button.dataset.excalidrawSaveBound = 'true';
-        button.addEventListener('click', () => {
+        button.addEventListener('click', async () => {
             const hostId = button.getAttribute('data-excalidraw-toggle');
             const host = hostId ? document.getElementById(hostId) : null;
             if (!host) return;
+            if (!host.__excalidrawEditable && host.getAttribute('data-excalidraw-protected') === '1') {
+                const unlockUrl = host.getAttribute('data-excalidraw-unlock-url');
+                if (unlockUrl) {
+                    const password = prompt('Enter drawing password to enable editing:');
+                    if (password === null) return;
+                    try {
+                        const resp = await fetch(unlockUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password }),
+                        });
+                        if (!resp.ok) {
+                            alert('Invalid drawing password.');
+                            return;
+                        }
+                    } catch (err) {
+                        console.error('[vyasa][excalidraw] unlock failed', err);
+                        alert('Could not verify drawing password.');
+                        return;
+                    }
+                }
+            }
             host.__excalidrawEditable = !host.__excalidrawEditable;
             applyExcalidrawEditMode(host, button);
+        });
+    });
+}
+
+function initExcalidrawOpenExternal(rootElement = document) {
+    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-open-external]'));
+    buttons.forEach((button) => {
+        if (button.dataset.excalidrawOpenBound === 'true') return;
+        button.dataset.excalidrawOpenBound = 'true';
+        button.addEventListener('click', () => {
+            const downloadUrl = button.getAttribute('data-excalidraw-download-url');
+            const downloadName = button.getAttribute('data-excalidraw-download-name') || 'drawing.excalidraw';
+            window.open('https://excalidraw.com', '_blank', 'noopener');
+            if (!downloadUrl) return;
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = downloadName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        });
+    });
+}
+
+function initExcalidrawExternalOpen(rootElement = document) {
+    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-open-external]'));
+    buttons.forEach((button) => {
+        if (button.dataset.excalidrawOpenBound === 'true') return;
+        button.dataset.excalidrawOpenBound = 'true';
+        button.addEventListener('click', () => {
+            const downloadUrl = button.getAttribute('data-excalidraw-download-url');
+            const downloadName = button.getAttribute('data-excalidraw-download-name') || 'drawing.excalidraw';
+            if (downloadUrl) {
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = downloadName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            }
+            window.open('https://excalidraw.com', '_blank', 'noopener');
         });
     });
 }
@@ -2328,6 +2391,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initExcalidrawHosts(document);
     initExcalidrawName(document);
     initExcalidrawSave(document);
+    initExcalidrawOpenExternal(document);
+    initExcalidrawExternalOpen(document);
 });
 
 document.body.addEventListener('htmx:afterSwap', (event) => {
@@ -2340,6 +2405,8 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initExcalidrawHosts(event.target || document);
     initExcalidrawName(event.target || document);
     initExcalidrawSave(event.target || document);
+    initExcalidrawOpenExternal(event.target || document);
+    initExcalidrawExternalOpen(event.target || document);
     initSearchClearButtons(event.target);
     ensurePdfFocusState();
     initTabPanelHeights(event.target || document);
