@@ -2372,7 +2372,7 @@ def theme_toggle():
     return Button(UkIcon("moon", cls="dark:hidden"), UkIcon("sun", cls="hidden dark:block"), 
                   _=theme_script, cls="p-1 hover:scale-110 shadow-none", type="button")
 
-def navbar(show_mobile_menus=False, htmx_nav=True):
+def navbar(show_mobile_menus=False, htmx_nav=True, posts_menu_items=None):
     """Navbar with mobile menu buttons for file tree and TOC"""
     home_link_attrs = {}
     if htmx_nav:
@@ -2391,9 +2391,20 @@ def navbar(show_mobile_menus=False, htmx_nav=True):
         cls="flex items-center gap-2"
     )
     
+    nav_posts_menu = None
+    if posts_menu_items:
+        nav_posts_menu = Details(
+            Summary(UkIcon("menu", cls="w-4 h-4"), Span("Library"), cls="flex items-center gap-2 cursor-pointer"),
+            Div(
+                Ul(*posts_menu_items, cls="list-none text-sm max-h-[60vh] overflow-y-auto pr-2"),
+                cls="absolute right-0 mt-2 w-80 p-3 rounded-lg bg-white text-slate-800 shadow-lg border border-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 z-[1100]"
+            ),
+            cls="relative hidden xl:block"
+        )
     right_section = Div(
+        nav_posts_menu,
         theme_toggle(),
-        cls="flex items-center gap-2"
+        cls="flex items-center gap-3"
     )
     
     if show_mobile_menus:
@@ -2763,7 +2774,7 @@ def get_custom_css_links(current_path=None, section_class=None):
     
     return css_elements
 
-def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True, auth=None, htmx_nav=True):
+def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True, auth=None, htmx_nav=True, nav_posts_menu=False):
     import time
     layout_start_time = time.time()
     logger.debug("[LAYOUT] layout() start")
@@ -2965,6 +2976,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 id="mobile-toc-panel",
                 cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] xl:hidden transform translate-x-full transition-transform duration-300"
             )
+        nav_posts_items = get_posts(list(roles_key) if roles_key else []) if nav_posts_menu else None
         # Full layout with all sidebars
         content_with_sidebars = Div(
             cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 flex gap-6 flex-1".strip(),
@@ -2983,7 +2995,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 hx_get="/_sidebar/posts",
                 hx_trigger="load",
                 hx_swap="outerHTML"
-            ),
+            ) if not nav_posts_menu else None,
             # Main content (swappable)
             main_content_container,
             # Right sidebar - TOC (swappable out-of-band)
@@ -2994,7 +3006,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         # Layout with sidebar for blog posts
         body_content = Div(id="page-container", cls="flex flex-col min-h-screen")(
             Div(
-                navbar(show_mobile_menus=True, htmx_nav=htmx_nav),
+                navbar(show_mobile_menus=True, htmx_nav=htmx_nav, posts_menu_items=nav_posts_items),
                 cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-50 mt-4".strip(),
                 id="site-navbar",
                 **_style_attr(layout_max_style)
@@ -3411,7 +3423,8 @@ def drawing_detail(path: str, htmx, request: Request):
         Div(f"Raw file: /posts/{path}.excalidraw", cls="text-sm text-slate-500 dark:text-slate-400 mt-2"),
     )
     return layout(post_content, htmx=htmx, title=f"{title} - {get_blog_title()}",
-                  show_sidebar=True, toc_content=None, current_path=path, show_toc=False, auth=request.scope.get("auth"))
+                  show_sidebar=True, toc_content=None, current_path=path, show_toc=False,
+                  auth=request.scope.get("auth"), nav_posts_menu=True)
 
 @rt('/slides/{path:path}')
 def slide_deck(path: str, request: Request):
