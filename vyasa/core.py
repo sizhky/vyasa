@@ -3400,6 +3400,8 @@ def drawing_detail(path: str, htmx, request: Request):
     file_path = root / f'{path}.excalidraw'
     if not file_path.exists():
         return not_found(htmx, auth=request.scope.get("auth"))
+    if htmx and getattr(htmx, "request", None):
+        return Response(status_code=200, headers={"HX-Redirect": f"/drawings/{path}"})
     roles = _get_roles_from_request(request)
     if roles is not None and not _is_allowed(f"/posts/{path}", roles or []):
         return not_found(htmx, auth=request.scope.get("auth"))
