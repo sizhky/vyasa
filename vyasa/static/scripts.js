@@ -100,9 +100,23 @@ function connectExcalidrawCollab(host) {
     host.__excalidrawWs = ws;
     host.__excalidrawWsId = localId;
     host.__excalidrawPeers = new Map();
+    if (!host.__excalidrawPeerGcTimer) {
+        host.__excalidrawPeerGcTimer = setInterval(() => {
+            const now = Date.now();
+            for (const [id, peer] of host.__excalidrawPeers.entries()) {
+                if (now - (peer.lastSeen || 0) > 4000) host.__excalidrawPeers.delete(id);
+            }
+            host.__excalidrawApi?.updateScene({ collaborators: new Map(host.__excalidrawPeers) });
+        }, 2000);
+    }
     ws.onmessage = (evt) => {
         try {
             const msg = JSON.parse(evt.data || '{}');
+            if (msg.type === 'presence_remove' && msg.id) {
+                host.__excalidrawPeers.delete(msg.id);
+                host.__excalidrawApi?.updateScene({ collaborators: new Map(host.__excalidrawPeers) });
+                return;
+            }
             if (msg.type === 'presence' && msg.presence?.id && host.__excalidrawApi) {
                 if (msg.presence.id === localId) return;
                 host.__excalidrawPeers.set(msg.presence.id, {
@@ -110,6 +124,7 @@ function connectExcalidrawCollab(host) {
                     pointer: msg.presence.pointer || null,
                     button: msg.presence.button || 'up',
                     selectedElementIds: {},
+                    lastSeen: Date.now(),
                 });
                 host.__excalidrawApi.updateScene({ collaborators: new Map(host.__excalidrawPeers) });
                 return;

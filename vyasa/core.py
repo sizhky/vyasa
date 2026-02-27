@@ -1905,11 +1905,14 @@ async def _collab_conn(ws: WebSocket):
 
 async def _collab_disconn(ws: WebSocket):
     room = ws.path_params.get("path", "")
+    peer_id = ws.scope.get("collab_id")
     async with _collab_lock:
         peers = _collab_rooms.get(room, set())
         peers.discard(ws)
         if not peers:
             _collab_rooms.pop(room, None)
+    if peer_id:
+        await _collab_broadcast(room, {"type": "presence_remove", "id": peer_id}, exclude=ws)
 
 _pylogue_register, _PylogueResponder = _load_pylogue_routes()
 if _pylogue_register:
@@ -2393,6 +2396,9 @@ async def excalidraw_collab(ws: WebSocket, data: dict):
             exclude=ws,
         )
     elif kind == "presence":
+        pid = (data.get("presence") or {}).get("id")
+        if pid:
+            ws.scope["collab_id"] = pid
         await _collab_broadcast(
             room,
             {"type": "presence", "room": room, "presence": data.get("presence")},
