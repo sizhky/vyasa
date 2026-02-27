@@ -35,12 +35,16 @@ async function initExcalidrawHosts(rootElement = document) {
                 throw new Error('Excalidraw module shape is unsupported');
             }
             const scene = src ? await fetch(src).then((r) => r.json()) : { elements: [], appState: {}, files: {} };
+            const appState = scene.appState || {};
+            if (typeof appState.collaborators?.forEach !== 'function') {
+                appState.collaborators = [];
+            }
             const sceneState = {
                 type: 'excalidraw',
                 version: 2,
                 source: 'vyasa',
                 elements: scene.elements || [],
-                appState: scene.appState || {},
+                appState,
                 files: scene.files || {},
             };
             host.__excalidrawState = sceneState;
@@ -78,12 +82,16 @@ function initExcalidrawSave(rootElement = document) {
             }
             if (status) status.textContent = 'Saving...';
             try {
+                const appState = { ...(scene.appState || {}) };
+                if (typeof appState.collaborators?.forEach !== 'function') {
+                    appState.collaborators = [];
+                }
                 const payload = {
                     type: 'excalidraw',
                     version: 2,
                     source: 'vyasa',
                     elements: scene.elements || [],
-                    appState: scene.appState || {},
+                    appState,
                     files: scene.files || {},
                 };
                 const res = await fetch(saveUrl, {
@@ -2182,4 +2190,16 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initSearchClearButtons(event.target);
     ensurePdfFocusState();
     initTabPanelHeights(event.target || document);
+});
+
+document.body.addEventListener('htmx:beforeRequest', (event) => {
+    if (document.body.dataset.forceFullNav !== '1') {
+        return;
+    }
+    const path = event?.detail?.requestConfig?.path || '';
+    if (!path || path.startsWith('/api/excalidraw/')) {
+        return;
+    }
+    event.preventDefault();
+    window.location.assign(path);
 });

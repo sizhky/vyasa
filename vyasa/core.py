@@ -2778,7 +2778,7 @@ def get_custom_css_links(current_path=None, section_class=None):
     
     return css_elements
 
-def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True, auth=None, htmx_nav=True, nav_posts_menu=False, full_width=False):
+def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True, auth=None, htmx_nav=True, nav_posts_menu=False, full_width=False, show_footer=True, no_scroll=False):
     import time
     layout_start_time = time.time()
     logger.debug("[LAYOUT] layout() start")
@@ -2793,6 +2793,9 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         layout_max_class = ""
         layout_max_style = ""
         layout_fluid_class = ""
+    main_spacing_cls = "px-0 py-0" if no_scroll else "px-6 py-8"
+    page_container_cls = "flex flex-col h-screen overflow-hidden" if no_scroll else "flex flex-col min-h-screen"
+    navbar_margin_cls = "mt-0" if no_scroll else "mt-4"
 
     def _footer_node(outer_cls, outer_style):
         logout_button = None
@@ -2865,7 +2868,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
 
             main_content_container = Main(
                 *content,
-                cls=f"flex-1 min-w-0 px-6 py-8 space-y-8 {section_class}",
+                cls=f"flex-1 min-w-0 {main_spacing_cls} space-y-8 {section_class}",
                 id="main-content",
                 hx_boost="true",
                 hx_target="#main-content",
@@ -2937,7 +2940,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         logger.debug(f"[LAYOUT] Custom CSS resolved in {(t_css - t_toc)*1000:.2f}ms")
         main_content_container = Main(
             *content,
-            cls=f"flex-1 min-w-0 px-6 py-8 space-y-8 {section_class}",
+            cls=f"flex-1 min-w-0 {main_spacing_cls} space-y-8 {section_class}",
             id="main-content",
             hx_boost="true",
             hx_target="#main-content",
@@ -2987,7 +2990,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         nav_posts_items = get_posts(list(roles_key) if roles_key else []) if nav_posts_menu else None
         # Full layout with all sidebars
         content_with_sidebars = Div(
-            cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 flex gap-6 flex-1".strip(),
+            cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 flex gap-6 flex-1 {'min-h-0' if no_scroll else ''}".strip(),
             id="content-with-sidebars",
             **_style_attr(layout_max_style)
         )(
@@ -3012,10 +3015,10 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         t_sidebars = time.time()
         logger.debug(f"[LAYOUT] Sidebars container built in {(t_sidebars - t_main)*1000:.2f}ms")
         # Layout with sidebar for blog posts
-        body_content = Div(id="page-container", cls="flex flex-col min-h-screen")(
+        body_content = Div(id="page-container", cls=page_container_cls)(
             Div(
                 navbar(show_mobile_menus=True, htmx_nav=htmx_nav, posts_menu_items=nav_posts_items),
-                cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-50 mt-4".strip(),
+                cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-50 {navbar_margin_cls}".strip(),
                 id="site-navbar",
                 **_style_attr(layout_max_style)
             ),
@@ -3025,7 +3028,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
             _footer_node(
                 f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(),
                 _style_attr(layout_max_style)
-            )
+            ) if show_footer else None
         )
     else:
         # Default layout without sidebar
@@ -3049,7 +3052,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
             _footer_node(
                 f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(),
                 _style_attr(layout_max_style)
-            )
+            ) if show_footer else None
         )
         t_body = time.time()
         logger.debug(f"[LAYOUT] Body content (no sidebar) built in {(t_body - layout_start_time)*1000:.2f}ms")
@@ -3403,6 +3406,7 @@ def drawing_detail(path: str, htmx, request: Request):
     title = f"{slug_to_title(Path(path).name, abbreviations=_effective_abbreviations(root))} (Excalidraw)"
     host_id = f"excalidraw-{abs(hash(path)) & 0xFFFFFF}"
     post_content = Div(
+        Script("document.body.dataset.forceFullNav='1';"),
         Div(
             H1(title, cls="text-4xl font-bold"),
             Div(
@@ -3423,15 +3427,16 @@ def drawing_detail(path: str, htmx, request: Request):
         ),
         Div(
             id=host_id,
-            cls="excalidraw-host w-full h-[75vh] rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden",
+            cls="excalidraw-host w-full flex-1 min-h-0 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden",
             data_excalidraw_path=path,
             data_excalidraw_src=f"/posts/{path}.excalidraw",
             data_excalidraw_save_url=f"/api/excalidraw/{path}"
         ),
+        cls="h-[calc(100vh-8rem)] flex flex-col overflow-hidden"
     )
     return layout(post_content, htmx=htmx, title=f"{title} - {get_blog_title()}",
                   show_sidebar=True, toc_content=None, current_path=path, show_toc=False,
-                  auth=request.scope.get("auth"), nav_posts_menu=True, full_width=True)
+                  auth=request.scope.get("auth"), nav_posts_menu=True, full_width=True, show_footer=False, no_scroll=True)
 
 @rt('/slides/{path:path}')
 def slide_deck(path: str, request: Request):
