@@ -119,11 +119,14 @@ function connectExcalidrawCollab(host) {
             }
             if (msg.type === 'presence' && msg.presence?.id && host.__excalidrawApi) {
                 if (msg.presence.id === localId) return;
+                const remotePointer = msg.presence.pointer || null;
+                const isLaser = remotePointer?.tool === 'laser';
                 host.__excalidrawPeers.set(msg.presence.id, {
                     username: msg.presence.username || 'Guest',
-                    pointer: msg.presence.pointer || null,
+                    pointer: remotePointer,
                     button: msg.presence.button || 'up',
                     selectedElementIds: {},
+                    renderCursor: !isLaser,
                     lastSeen: Date.now(),
                 });
                 host.__excalidrawApi.updateScene({ collaborators: new Map(host.__excalidrawPeers) });
@@ -218,7 +221,7 @@ async function initExcalidrawHosts(rootElement = document) {
                         presence: {
                             id: host.__excalidrawWsId,
                             username: host.__excalidrawUserName || 'Guest',
-                            pointer: pointer ? { x: pointer.x, y: pointer.y } : null,
+                            pointer: pointer ? { x: pointer.x, y: pointer.y, tool: pointer.tool || 'pointer' } : null,
                             button: button || 'up',
                         },
                     }));
