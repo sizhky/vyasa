@@ -3,6 +3,108 @@ import { D2 } from 'https://esm.sh/@terrastruct/d2@0.1.33?bundle';
 
 const mermaidStates = {};
 const d2States = {};
+let excalidrawLibPromise = null;
+
+async function getExcalidrawLib() {
+    if (!excalidrawLibPromise) {
+        excalidrawLibPromise = Promise.all([
+            import('https://esm.sh/react@18'),
+            import('https://esm.sh/react-dom@18/client'),
+            import('https://esm.sh/@excalidraw/excalidraw@0.17.6?bundle'),
+        ]);
+    }
+    return excalidrawLibPromise;
+}
+
+async function initExcalidrawHosts(rootElement = document) {
+    const hosts = Array.from(rootElement.querySelectorAll('.excalidraw-host'));
+    for (const host of hosts) {
+        if (host.dataset.excalidrawMounted === 'true') continue;
+        host.dataset.excalidrawMounted = 'true';
+        const src = host.getAttribute('data-excalidraw-src');
+        const status = document.getElementById(`${host.id}-status`);
+        try {
+            const [ReactNS, ReactDOMNS, ExcalidrawNS] = await getExcalidrawLib();
+            const React = ReactNS.default || ReactNS;
+            const ReactDOMClient = ReactDOMNS.default || ReactDOMNS;
+            const ExcalidrawComp =
+                ExcalidrawNS.Excalidraw ||
+                ExcalidrawNS.default?.Excalidraw ||
+                ExcalidrawNS.default;
+            if (!ExcalidrawComp || typeof ReactDOMClient.createRoot !== 'function') {
+                throw new Error('Excalidraw module shape is unsupported');
+            }
+            let scene = { elements: [], appState: {}, files: {} };
+            if (src) {
+                const url = `${src}${src.includes('?') ? '&' : '?'}t=${Date.now()}`;
+                const response = await fetch(url, { cache: 'no-store' });
+                scene = await response.json();
+            }
+            const sceneState = {
+                type: 'excalidraw',
+                version: 2,
+                source: 'vyasa',
+                elements: scene.elements || [],
+                appState: scene.appState || {},
+                files: scene.files || {},
+            };
+            host.__excalidrawState = sceneState;
+            const root = ReactDOMClient.createRoot(host);
+            const element = React.createElement(ExcalidrawComp, {
+                initialData: sceneState,
+                theme: getCurrentTheme() === 'dark' ? 'dark' : 'light',
+                onChange: (elements, appState, files) => {
+                    host.__excalidrawState = { ...sceneState, elements, appState, files };
+                },
+            });
+            root.render(element);
+            if (status) status.textContent = 'Loaded';
+        } catch (error) {
+            if (status) status.textContent = 'Failed to load';
+            console.error('[vyasa][excalidraw] mount failed', error);
+        }
+    }
+}
+
+function initExcalidrawSave(rootElement = document) {
+    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-save]'));
+    buttons.forEach((button) => {
+        if (button.dataset.excalidrawSaveBound === 'true') return;
+        button.dataset.excalidrawSaveBound = 'true';
+        button.addEventListener('click', async () => {
+            const hostId = button.getAttribute('data-excalidraw-save');
+            const host = hostId ? document.getElementById(hostId) : null;
+            const status = hostId ? document.getElementById(`${hostId}-status`) : null;
+            const saveUrl = host?.getAttribute('data-excalidraw-save-url');
+            const scene = host?.__excalidrawState;
+            if (!host || !saveUrl || !scene) {
+                if (status) status.textContent = 'Not ready';
+                return;
+            }
+            if (status) status.textContent = 'Saving...';
+            try {
+                const payload = {
+                    type: 'excalidraw',
+                    version: 2,
+                    source: 'vyasa',
+                    elements: scene.elements || [],
+                    appState: scene.appState || {},
+                    files: scene.files || {},
+                };
+                const res = await fetch(saveUrl, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                if (status) status.textContent = 'Saved';
+            } catch (error) {
+                if (status) status.textContent = 'Save failed';
+                console.error('[vyasa][excalidraw] save failed', error);
+            }
+        });
+    });
+}
 const mermaidDebugEnabled = () => (
     window.VYASA_DEBUG_MERMAID === true ||
     localStorage.getItem('vyasaDebugMermaid') === '1'
@@ -2069,6 +2171,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initSearchClearButtons(document);
     ensurePdfFocusState();
     initTabPanelHeights(document);
+    initExcalidrawHosts(document);
+    initExcalidrawSave(document);
 });
 
 document.body.addEventListener('htmx:afterSwap', (event) => {
@@ -2078,6 +2182,8 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initSearchPlaceholderCycle(event.target);
     initPostsSearchPersistence(event.target);
     initCodeBlockCopyButtons(event.target);
+    initExcalidrawHosts(event.target || document);
+    initExcalidrawSave(event.target || document);
     initSearchClearButtons(event.target);
     ensurePdfFocusState();
     initTabPanelHeights(event.target || document);

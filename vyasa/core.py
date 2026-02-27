@@ -1,5 +1,8 @@
 import re, mistletoe as mst, pathlib, os, html
 import json
+import hashlib
+import mimetypes
+import subprocess
 from dataclasses import dataclass
 from itertools import chain, count
 from urllib.parse import quote_plus
@@ -42,6 +45,44 @@ logger.add(sys.stdout, level="INFO")
 logfile = Path("/tmp/vyasa_core.log")
 logger.add(logfile, rotation="10 MB", retention="10 days", level="DEBUG")
 _diagram_uid_counter = count(1)
+_SLIDEV_CACHE_ROOT = Path("/tmp/vyasa-slidev-cache")
+_SLIDEV_SOURCE_ROOT = Path("/tmp/vyasa-slidev-src")
+
+
+def _slidev_cache_key(md_file: Path) -> str:
+    st = md_file.stat()
+    raw = f"{md_file.resolve()}:{st.st_mtime_ns}:{st.st_size}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _ensure_slidev_build(md_file: Path, cache_key: str) -> Path:
+    out_dir = _SLIDEV_CACHE_ROOT / cache_key
+    index_file = out_dir / "index.html"
+    if index_file.exists():
+        return out_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "npx", "-y", "@slidev/cli", "build", str(md_file),
+        "--out", str(out_dir),
+        "--base", f"/__slidev/{cache_key}/",
+        "--without-notes",
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or "Slidev build failed")
+    return out_dir
+
+
+def _prepare_slidev_entry(path: str, raw_content: str, cache_key: str) -> Path:
+    src_dir = _SLIDEV_SOURCE_ROOT / cache_key
+    src_dir.mkdir(parents=True, exist_ok=True)
+    # Reveal vertical separator is '--'; Slidev uses only '---'.
+    normalized = re.sub(r'(?m)^--\s*$', '---', raw_content)
+    entry = src_dir / "slides.md"
+    if not entry.exists() or entry.read_text(encoding="utf-8") != normalized:
+        entry.write_text(normalized, encoding="utf-8")
+    return entry
+
 
 def _asset_url(path: str) -> str:
     """Return static URL with mtime cache-busting token."""
@@ -2275,6 +2316,37 @@ def serve_post_json(path: str):
         )
     return Response(status_code=404)
 
+@rt("/posts/{path:path}.excalidraw")
+def serve_post_excalidraw(path: str):
+    from starlette.responses import FileResponse
+    file_path = get_root_folder() / f'{path}.excalidraw'
+    if file_path.exists():
+        return FileResponse(file_path, media_type="application/json; charset=utf-8")
+    return Response(status_code=404)
+
+@rt("/api/excalidraw/{path:path}", methods=["PUT"])
+async def save_excalidraw(path: str, request: Request):
+    root = get_root_folder().resolve()
+    file_path = (root / f"{path}.excalidraw").resolve()
+    if not str(file_path).startswith(str(root) + os.sep):
+        return Response(status_code=403)
+    roles = _get_roles_from_request(request)
+    if roles is not None and not _is_allowed(f"/posts/{path}", roles or []):
+        return Response("Forbidden", status_code=403)
+    try:
+        payload = await request.body()
+        parsed = json.loads(payload.decode("utf-8"))
+        if not isinstance(parsed, dict):
+            return Response("Expected a JSON object", status_code=400)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
+    except json.JSONDecodeError:
+        return Response("Invalid JSON", status_code=400)
+    except Exception as exc:
+        logger.warning(f"Failed to save excalidraw file '{path}': {exc}")
+        return Response("Save failed", status_code=500)
+    return Response('{"ok":true}', media_type="application/json")
+
 # Generic download route for any file under the blog root
 @rt("/download/{path:path}")
 def download_file(path: str):
@@ -2360,7 +2432,10 @@ def navbar(show_mobile_menus=False, htmx_nav=True):
 def _posts_sidebar_fingerprint():
     root = get_root_folder()
     try:
-        return max((p.stat().st_mtime for p in root.rglob("*.md")), default=0)
+        md_mtime = max((p.stat().st_mtime for p in root.rglob("*.md")), default=0)
+        pdf_mtime = max((p.stat().st_mtime for p in root.rglob("*.pdf")), default=0)
+        excalidraw_mtime = max((p.stat().st_mtime for p in root.rglob("*.excalidraw")), default=0)
+        return max(md_mtime, pdf_mtime, excalidraw_mtime)
     except Exception:
         return 0
 
@@ -2994,7 +3069,7 @@ def build_post_tree(folder, roles=None):
                 if not _should_include_folder(item.name, include_list, ignore_list):
                     continue
                 entries.append(item)
-            elif item.suffix in ('.md', '.pdf'):
+            elif item.suffix in ('.md', '.pdf', '.excalidraw'):
                 if folder_note and item.resolve() == folder_note.resolve():
                     continue
                 # Skip the file being used for home page (index.md takes precedence over readme.md)
@@ -3086,6 +3161,19 @@ def build_post_tree(folder, roles=None):
                 hx_get=f'/posts/{slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
                 cls="post-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0",
                 data_path=slug)))
+        elif item.suffix == '.excalidraw':
+            slug = str(item.relative_to(root).with_suffix(''))
+            if not _is_allowed(f"/posts/{slug}", roles or []):
+                continue
+            title = slug_to_title(item.stem, abbreviations=abbreviations)
+            items.append(Li(A(
+                Span(cls="w-4 mr-2 shrink-0"),
+                Span(UkIcon("pencil", cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                Span(f"{title} (Excalidraw)", cls="truncate min-w-0", title=title),
+                href=f'/drawings/{slug}',
+                hx_get=f'/drawings/{slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
+                cls="post-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0",
+                data_path=slug)))
     
     elapsed = (time.time() - start_time) * 1000
     logger.debug(f"[DEBUG] build_post_tree for {folder.relative_to(root) if folder != root else '.'} completed in {elapsed:.2f}ms")
@@ -3096,8 +3184,9 @@ def _posts_tree_fingerprint():
     try:
         md_mtime = max((p.stat().st_mtime for p in root.rglob("*.md")), default=0)
         pdf_mtime = max((p.stat().st_mtime for p in root.rglob("*.pdf")), default=0)
+        excalidraw_mtime = max((p.stat().st_mtime for p in root.rglob("*.excalidraw")), default=0)
         vyasa_mtime = max((p.stat().st_mtime for p in root.rglob(".vyasa")), default=0)
-        return max(md_mtime, pdf_mtime, vyasa_mtime)
+        return max(md_mtime, pdf_mtime, excalidraw_mtime, vyasa_mtime)
     except Exception:
         return 0
 
@@ -3181,9 +3270,17 @@ def post_detail(path: str, htmx, request: Request):
     abbreviations = _effective_abbreviations(root)
     file_path = root / f'{path}.md'
     pdf_path = root / f'{path}.pdf'
+    excalidraw_path = root / f'{path}.excalidraw'
+    folder_path = root / path
     
     # Check if file exists
     if not file_path.exists():
+        if folder_path.exists() and folder_path.is_dir():
+            note_file = find_folder_note_file(folder_path)
+            if note_file:
+                note_slug = str(note_file.relative_to(root).with_suffix(''))
+                from starlette.responses import RedirectResponse
+                return RedirectResponse(f"/posts/{note_slug}", status_code=307)
         if pdf_path.exists():
             post_title = f"{slug_to_title(Path(path).name, abbreviations=abbreviations)} (PDF)"
             pdf_src = f"/posts/{path}.pdf"
@@ -3274,6 +3371,48 @@ def post_detail(path: str, htmx, request: Request):
     
     return result
 
+@rt('/drawings/{path:path}')
+def drawing_detail(path: str, htmx, request: Request):
+    root = get_root_folder()
+    file_path = root / f'{path}.excalidraw'
+    if not file_path.exists():
+        return not_found(htmx, auth=request.scope.get("auth"))
+    roles = _get_roles_from_request(request)
+    if roles is not None and not _is_allowed(f"/posts/{path}", roles or []):
+        return not_found(htmx, auth=request.scope.get("auth"))
+    title = f"{slug_to_title(Path(path).name, abbreviations=_effective_abbreviations(root))} (Excalidraw)"
+    host_id = f"excalidraw-{abs(hash(path)) & 0xFFFFFF}"
+    post_content = Div(
+        Div(
+            H1(title, cls="text-4xl font-bold"),
+            Div(
+                Button(
+                    "Save drawing",
+                    type="button",
+                    data_excalidraw_save=host_id,
+                    cls="px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                ),
+                Span(
+                    "Ready",
+                    id=f"{host_id}-status",
+                    cls="text-xs text-slate-500 dark:text-slate-400"
+                ),
+                cls="flex items-center gap-3"
+            ),
+            cls="flex items-center justify-between gap-3 mb-6 flex-wrap"
+        ),
+        Div(
+            id=host_id,
+            cls="excalidraw-host w-full h-[75vh] rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden",
+            data_excalidraw_path=path,
+            data_excalidraw_src=f"/posts/{path}.excalidraw",
+            data_excalidraw_save_url=f"/api/excalidraw/{path}"
+        ),
+        Div(f"Raw file: /posts/{path}.excalidraw", cls="text-sm text-slate-500 dark:text-slate-400 mt-2"),
+    )
+    return layout(post_content, htmx=htmx, title=f"{title} - {get_blog_title()}",
+                  show_sidebar=True, toc_content=None, current_path=path, show_toc=False, auth=request.scope.get("auth"))
+
 @rt('/slides/{path:path}')
 def slide_deck(path: str, request: Request):
     root = get_root_folder()
@@ -3284,239 +3423,19 @@ def slide_deck(path: str, request: Request):
     roles = _get_roles_from_auth(request.scope.get("auth"))
     if not _is_allowed(f"/posts/{path}", roles or []):
         return not_found(auth=request.scope.get("auth"))
-
-    metadata, raw_content = parse_frontmatter(file_path)
-    title = metadata.get('title', slug_to_title(Path(path).name, abbreviations=_effective_abbreviations(root)))
-    deck_md = html.escape(raw_content)
-    safe_title = html.escape(f"{title} - Slides")
-    reveal_block = metadata.get("reveal", {}) if isinstance(metadata.get("reveal"), dict) else {}
-    reveal_top_level = {k[7:]: v for k, v in metadata.items() if k.startswith("reveal_")}
-    reveal_cfg = {**reveal_block, **reveal_top_level}
-    theme = str(reveal_cfg.pop("theme", "black")).strip() or "black"
-    highlight_theme = str(reveal_cfg.pop("highlightTheme", "monokai")).strip() or "monokai"
-    if not re.fullmatch(r"[a-zA-Z0-9_-]+", theme):
-        theme = "black"
-    if not re.fullmatch(r"[a-zA-Z0-9_-]+", highlight_theme):
-        highlight_theme = "monokai"
-    md_separator = str(reveal_cfg.pop("separator", "^---$"))
-    md_separator_vertical = str(reveal_cfg.pop("separatorVertical", "^--$"))
-    md_separator_notes = str(reveal_cfg.pop("separatorNotes", "^Note:"))
-    slide_padding = str(reveal_cfg.pop("slidePadding", "1.25rem")).strip() or "1.25rem"
-    # Keep slide margins deterministic from CSS/layout rules rather than frontmatter.
-    reveal_cfg.pop("margin", None)
-    font_size = str(reveal_cfg.pop("fontSize", "18px")).strip() or "18px"
-    right_advances_all = reveal_cfg.pop("rightAdvancesAll", False)
-    if isinstance(right_advances_all, str):
-        right_advances_all = right_advances_all.strip().lower() in {"1", "true", "yes", "on"}
-    if right_advances_all and "navigationMode" not in reveal_cfg:
-        reveal_cfg["navigationMode"] = "linear"
-    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?(?:px|rem|em|vw|vh|%)", font_size):
-        font_size = "18px"
-    reveal_init_cfg = {"hash": True, "slideNumber": True, "margin": 0, **reveal_cfg}
-    reveal_init_json = json.dumps(reveal_init_cfg, ensure_ascii=False)
-    sep_re = re.compile(md_separator)
-    sep_v_re = re.compile(md_separator_vertical)
-    def _split_slide_groups(md_text: str):
-        groups, group, buf = [], [], []
-        in_fence = False
-        fence_char, fence_len = "", 0
-        for line in md_text.splitlines():
-            s = line.strip()
-            m = re.match(r'^(```+|~~~+)', s)
-            if m:
-                tok = m.group(1)
-                if not in_fence:
-                    in_fence, fence_char, fence_len = True, tok[0], len(tok)
-                elif tok[0] == fence_char and len(tok) >= fence_len:
-                    in_fence = False
-            if not in_fence and sep_re.fullmatch(s):
-                group.append("\n".join(buf).strip()); groups.append([x for x in group if x.strip()]); group, buf = [], []; continue
-            if not in_fence and sep_v_re.fullmatch(s):
-                group.append("\n".join(buf).strip()); buf = []; continue
-            buf.append(line)
-        group.append("\n".join(buf).strip())
-        groups.append([x for x in group if x.strip()])
-        return [g for g in groups if g]
-    def _render_slide_fragment(md_fragment: str):
-        def _normalize_math_delimiters(md_text: str) -> str:
-            lines = md_text.splitlines()
-            out = []
-            in_fence = False
-            in_bracket_math = False
-            fence_char, fence_len = "", 0
-            for line in lines:
-                s = line.strip()
-                m = re.match(r'^(```+|~~~+)', s)
-                if m:
-                    tok = m.group(1)
-                    if not in_fence:
-                        in_fence, fence_char, fence_len = True, tok[0], len(tok)
-                    elif tok[0] == fence_char and len(tok) >= fence_len:
-                        in_fence = False
-                    out.append(line)
-                    continue
-                if in_fence:
-                    out.append(line)
-                    continue
-                if s == r'\[':
-                    out.append('$$')
-                    in_bracket_math = True
-                    continue
-                if s == r'\]':
-                    out.append('$$')
-                    in_bracket_math = False
-                    continue
-                if in_bracket_math:
-                    out.append(line)
-                    continue
-                line = re.sub(r'\\\((.+?)\\\)', r'$\1$', line)
-                line = re.sub(r'\\\[(.+?)\\\]', r'$$\1$$', line)
-                out.append(line)
-            # Ensure display math blocks are paragraph-separated from surrounding text.
-            spaced = []
-            in_display = False
-            for i, line in enumerate(out):
-                s = line.strip()
-                if s == '$$':
-                    if not in_display and spaced and spaced[-1].strip():
-                        spaced.append('')
-                    spaced.append(line)
-                    if in_display and i + 1 < len(out) and out[i + 1].strip():
-                        spaced.append('')
-                    in_display = not in_display
-                    continue
-                spaced.append(line)
-            return "\n".join(spaced)
-
-        normalized = _normalize_math_delimiters(md_fragment)
-        frag = to_xml(from_md(normalized, current_path=path))
-        return re.sub(r'<link[^>]*sidenote\\.css[^>]*>', '', frag, count=1)
-    slide_groups = _split_slide_groups(raw_content)
-    sections = []
-    for group in slide_groups:
-        if len(group) == 1:
-            sections.append(f"<section>{_render_slide_fragment(group[0])}</section>")
-        else:
-            inner = "".join(f"<section>{_render_slide_fragment(item)}</section>" for item in group)
-            sections.append(f"<section>{inner}</section>")
-    slides_html = "".join(sections) if sections else "<section><h2>Empty deck</h2></section>"
-    page = f"""<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{safe_title}</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/{theme}.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/{highlight_theme}.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-  <style>
-    .reveal{{--r-main-font-size:{font_size};--diagram-inset:7.5%;}}
-    .reveal .slides{{text-align:left}}
-    .reveal .slides section{{padding:0 {slide_padding}; box-sizing:border-box}}
-    .reveal .slides section.present{{left:0!important}}
-    .reveal section img{{max-height:72vh}}
-    .reveal .mermaid-container,.reveal .d2-container{{position:relative;border:1px solid rgba(15,23,42,.18)!important;border-radius:10px!important;box-shadow:none!important;background:transparent!important;padding:14px!important;box-sizing:border-box!important;left:auto!important;transform:none!important;margin:0 auto!important;width:calc(100% - (2 * var(--diagram-inset)))!important;max-width:calc(100% - (2 * var(--diagram-inset)))!important;height:calc(100% - (2 * var(--diagram-inset)))!important;max-height:calc(100% - (2 * var(--diagram-inset)))!important;min-height:0!important;align-self:center!important}}
-    .reveal .mermaid-controls,.reveal .d2-controls{{display:none!important}}
-    .reveal .mermaid-wrapper,.reveal .d2-wrapper{{overflow:visible;min-height:0!important;height:100%!important;width:100%!important;justify-content:center!important;align-items:center!important}}
-    .reveal .mermaid-wrapper svg,.reveal .d2-wrapper svg{{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important}}
-    .reveal .slides section:has(.mermaid-container),.reveal .slides section:has(.d2-container){{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;padding:0!important;width:100%!important;height:100%!important;min-height:100%!important}}
-    .reveal .slides section:has(.mermaid-container) > *,.reveal .slides section:has(.d2-container) > *{{width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important}}
-    .reveal .mermaid,.reveal .mermaid svg{{font-size:16px!important;line-height:1.2!important}}
-    .reveal .mermaid svg text,.reveal .mermaid svg tspan{{fill:#1f2937!important}}
-    .reveal .mermaid .nodeLabel,.reveal .mermaid .edgeLabel,.reveal .mermaid foreignObject div,.reveal .mermaid foreignObject span,.reveal .mermaid foreignObject p{{color:#1f2937!important;fill:#1f2937!important}}
-    .reveal .code-copy-button,.reveal .code-block [id$="-toast"]{{display:none!important}}
-    .reveal .code-block textarea{{position:absolute!important;left:-9999px!important;top:0!important;opacity:0!important;pointer-events:none!important}}
-    .reveal .tabs-container{{margin:1rem auto;max-width:min(92vw,1300px);border:1px solid rgba(15,23,42,.2);border-radius:10px;overflow:hidden}}
-    .reveal .tabs-header{{display:flex;background:rgba(241,245,249,.95);border-bottom:1px solid rgba(15,23,42,.12)}}
-    .reveal .tab-button{{flex:1;padding:.6rem .8rem;background:transparent;border:0;border-bottom:2px solid transparent;cursor:pointer}}
-    .reveal .tab-button.active{{border-bottom-color:#0f172a;font-weight:600}}
-    .reveal .tabs-content{{position:relative;background:rgba(255,255,255,.9)}}
-    .reveal .tab-panel{{padding:.75rem;position:absolute;left:0;right:0;opacity:0;visibility:hidden;pointer-events:none}}
-    .reveal .tab-panel.active{{position:relative;opacity:1;visibility:visible;pointer-events:auto}}
-  </style>
-</head>
-  <body>
-  <div class="reveal">
-    <div class="slides">
-      {slides_html}
-    </div>
-  </div>
-  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-  <script type="module" src="{_asset_url("/static/scripts.js")}"></script>
-  <script>
-    function replaceEscapedDollarPlaceholders(root) {{
-      const placeholder = '@@VYASA_DOLLAR@@';
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-      const nodes = [];
-      let node;
-      while ((node = walker.nextNode())) {{
-        if (node.nodeValue && node.nodeValue.includes(placeholder)) nodes.push(node);
-      }}
-      nodes.forEach((textNode) => {{
-        textNode.nodeValue = textNode.nodeValue.split(placeholder).join('$');
-      }});
-    }}
-    function vyasaRenderResidualMath(root) {{
-      if (!window.katex) return;
-      const scope = root || document.body;
-      scope.querySelectorAll('p, li').forEach((el) => {{
-        if (el.querySelector('.katex')) return;
-        if (el.querySelector('code, pre')) return;
-        const raw = el.textContent || '';
-        if (!raw.includes('$')) return;
-        let replaced = raw;
-        let changed = false;
-        try {{
-          replaced = replaced.replace(/\\$\\$([\\s\\S]+?)\\$\\$/g, (_m, expr) => {{
-            changed = true;
-            return katex.renderToString(expr.trim(), {{ displayMode: true, throwOnError: false }});
-          }});
-          replaced = replaced.replace(/\\$([^$\\n]+?)\\$/g, (_m, expr) => {{
-            changed = true;
-            return katex.renderToString(expr.trim(), {{ displayMode: false, throwOnError: false }});
-          }});
-          if (changed && replaced !== raw) el.innerHTML = replaced;
-        }} catch (err) {{}}
-      }});
-    }}
-    function vyasaRenderSlideMath(root) {{
-      if (typeof renderMathInElement !== 'function') return;
-      const target = root || document.body;
-      replaceEscapedDollarPlaceholders(target);
-      renderMathInElement(root || document.body, {{
-        delimiters: [
-          {{left: '$$', right: '$$', display: true}},
-          {{left: '$', right: '$', display: false}},
-          {{left: '\\\\[', right: '\\\\]', display: true}},
-          {{left: '\\\\(', right: '\\\\)', display: false}}
-        ],
-        throwOnError: false
-      }});
-      vyasaRenderResidualMath(target);
-    }}
-    Reveal.initialize(Object.assign({reveal_init_json},{{plugins:[RevealHighlight]}}));
-    const runMathPass = (node) => {{
-      vyasaRenderSlideMath(node);
-      requestAnimationFrame(() => vyasaRenderSlideMath(node));
-      setTimeout(() => {{
-        vyasaRenderSlideMath(node);
-      }}, 50);
-    }};
-    runMathPass(document.body);
-    Reveal.on('ready', () => runMathPass(document.body));
-    Reveal.on('slidechanged', (e) => runMathPass(e.currentSlide || document.body));
-  </script>
-</body>
-</html>"""
-    return Response(
-        page,
-        media_type="text/html; charset=utf-8",
-        headers={"Cache-Control": "no-store"},
-    )
+    _, raw_content = parse_frontmatter(file_path)
+    cache_key = _slidev_cache_key(file_path)
+    try:
+        entry = _prepare_slidev_entry(path, raw_content, cache_key)
+        out_dir = _ensure_slidev_build(entry, cache_key)
+    except Exception as exc:
+        return Response(
+            f"<h1>Slidev build failed</h1><pre>{html.escape(str(exc))}</pre>",
+            media_type="text/html; charset=utf-8",
+            status_code=500,
+            headers={"Cache-Control": "no-store"},
+        )
+    return FileResponse(out_dir / "index.html", media_type="text/html; charset=utf-8")
 
 def find_index_file():
     """Find index.md or readme.md (case insensitive) in root folder"""
@@ -3582,6 +3501,15 @@ def index(htmx, request: Request):
         logger.debug(f"[DEBUG] ########## REQUEST COMPLETE: {total_time:.2f}ms TOTAL ##########\n")
         
         return result
+
+@rt('/__slidev/{deck_key}/{asset_path:path}')
+def serve_slidev_asset(deck_key: str, asset_path: str, request: Request):
+    file_path = (_SLIDEV_CACHE_ROOT / deck_key / asset_path).resolve()
+    root = (_SLIDEV_CACHE_ROOT / deck_key).resolve()
+    if not file_path.is_file() or not str(file_path).startswith(str(root)):
+        return not_found(auth=request.scope.get("auth"))
+    media_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+    return FileResponse(file_path, media_type=media_type)
 
 # Catch-all route for 404 pages (must be last)
 @rt('/{path:path}')
