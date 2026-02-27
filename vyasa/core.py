@@ -2394,7 +2394,11 @@ def navbar(show_mobile_menus=False, htmx_nav=True, posts_menu_items=None):
     nav_posts_menu = None
     if posts_menu_items:
         nav_posts_menu = Details(
-            Summary(UkIcon("menu", cls="w-4 h-4"), Span("Library"), cls="flex items-center gap-2 cursor-pointer"),
+            Summary(
+                UkIcon("menu", cls="w-4 h-4"),
+                Span("Library"),
+                cls="list-none flex items-center gap-2 cursor-pointer select-none rounded-md px-3 py-2 text-slate-100 hover:bg-slate-800/80 transition-colors [&::-webkit-details-marker]:hidden"
+            ),
             Div(
                 Ul(*posts_menu_items, cls="list-none text-sm max-h-[60vh] overflow-y-auto pr-2"),
                 cls="absolute right-0 mt-2 w-80 p-3 rounded-lg bg-white text-slate-800 shadow-lg border border-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 z-[1100]"
@@ -3420,7 +3424,6 @@ def drawing_detail(path: str, htmx, request: Request):
             data_excalidraw_src=f"/posts/{path}.excalidraw",
             data_excalidraw_save_url=f"/api/excalidraw/{path}"
         ),
-        Div(f"Raw file: /posts/{path}.excalidraw", cls="text-sm text-slate-500 dark:text-slate-400 mt-2"),
     )
     return layout(post_content, htmx=htmx, title=f"{title} - {get_blog_title()}",
                   show_sidebar=True, toc_content=None, current_path=path, show_toc=False,
