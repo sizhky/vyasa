@@ -6,7 +6,7 @@
     {
       "type": "text",
       "version": 3,
-      "versionNonce": 432515534,
+      "versionNonce": 272065775,
       "isDeleted": false,
       "id": "xTDWbupB",
       "fillStyle": "solid",
@@ -26,7 +26,7 @@
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1772210637771,
+      "updated": 1772215408415,
       "link": null,
       "locked": false,
       "fontSize": 36,
@@ -197,8 +197,8 @@
     },
     {
       "type": "rectangle",
-      "version": 4,
-      "versionNonce": 62822482,
+      "version": 3,
+      "versionNonce": 1234389340,
       "isDeleted": false,
       "id": "learner-profile-store",
       "fillStyle": "solid",
@@ -235,13 +235,9 @@
         {
           "id": "arrow-learner-profile-store-to-recommendation-policy-engine",
           "type": "arrow"
-        },
-        {
-          "id": "sghnNPZFdTh1Szphg9toN",
-          "type": "arrow"
         }
       ],
-      "updated": 1772210646261,
+      "updated": 1772094673676,
       "link": null,
       "locked": false
     },
@@ -361,8 +357,8 @@
     },
     {
       "type": "rectangle",
-      "version": 71,
-      "versionNonce": 812526546,
+      "version": 70,
+      "versionNonce": 1029986404,
       "isDeleted": false,
       "id": "content-knowledge-graph",
       "fillStyle": "solid",
@@ -391,13 +387,9 @@
         {
           "id": "arrow-content-knowledge-graph-to-recommendation-policy-engine",
           "type": "arrow"
-        },
-        {
-          "id": "sghnNPZFdTh1Szphg9toN",
-          "type": "arrow"
         }
       ],
-      "updated": 1772210646261,
+      "updated": 1772094753690,
       "link": null,
       "locked": false
     },
@@ -1348,64 +1340,12 @@
           -247.97297297297294
         ]
       ]
-    },
-    {
-      "id": "sghnNPZFdTh1Szphg9toN",
-      "type": "arrow",
-      "x": -580,
-      "y": 160,
-      "width": 180,
-      "height": 20,
-      "angle": 0,
-      "strokeColor": "#1e1e1e",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 2,
-      "strokeStyle": "solid",
-      "roughness": 1,
-      "opacity": 100,
-      "groupIds": [],
-      "frameId": null,
-      "roundness": {
-        "type": 2
-      },
-      "seed": 1002835534,
-      "version": 15,
-      "versionNonce": 1017888274,
-      "isDeleted": false,
-      "boundElements": null,
-      "updated": 1772210646261,
-      "link": null,
-      "locked": false,
-      "points": [
-        [
-          0,
-          0
-        ],
-        [
-          180,
-          20
-        ]
-      ],
-      "lastCommittedPoint": null,
-      "startBinding": {
-        "elementId": "learner-profile-store",
-        "focus": -0.009174311926605505,
-        "gap": 1
-      },
-      "endBinding": {
-        "elementId": "content-knowledge-graph",
-        "focus": -0.26844256190516436,
-        "gap": 13.755722672444904
-      },
-      "startArrowhead": null,
-      "endArrowhead": "arrow"
     }
   ],
   "appState": {
     "showWelcomeScreen": false,
     "theme": "light",
-    "collaborators": {},
+    "collaborators": [],
     "currentChartType": "bar",
     "currentItemBackgroundColor": "transparent",
     "currentItemEndArrowhead": "arrow",
@@ -1448,7 +1388,7 @@
     "isRotating": false,
     "lastPointerDownWith": "mouse",
     "multiElement": null,
-    "name": "Untitled-2026-02-27-0843",
+    "name": "Untitled-2026-02-27-1003",
     "contextMenu": null,
     "openMenu": null,
     "openPopup": null,
@@ -1458,13 +1398,11 @@
       "shown": false,
       "data": null
     },
-    "previousSelectedElementIds": {
-      "sghnNPZFdTh1Szphg9toN": true
-    },
+    "previousSelectedElementIds": {},
     "resizingElement": null,
     "scrolledOutside": false,
-    "scrollX": 1006.9310427135819,
-    "scrollY": 821.9597772958274,
+    "scrollX": 1086.1821082589306,
+    "scrollY": 498.22963591074847,
     "selectedElementIds": {},
     "selectedGroupIds": {},
     "selectedElementsAreBeingDragged": false,
@@ -1488,19 +1426,22 @@
     "viewBackgroundColor": "transparent",
     "zenModeEnabled": false,
     "zoom": {
-      "value": 0.645441
+      "value": 0.8970434852828288
     },
     "viewModeEnabled": false,
     "pendingImageElementId": null,
     "showHyperlinkPopup": false,
     "selectedLinearElement": null,
     "snapLines": [],
-    "originSnapOffset": null,
+    "originSnapOffset": {
+      "x": 0,
+      "y": 0
+    },
     "objectsSnapModeEnabled": false,
-    "offsetLeft": 607,
-    "offsetTop": 217,
-    "width": 1130,
-    "height": 947.5
+    "offsetLeft": 17,
+    "offsetTop": 169,
+    "width": 2002,
+    "height": 1072
   },
   "files": {}
 }

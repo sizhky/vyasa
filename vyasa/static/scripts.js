@@ -16,6 +16,38 @@ async function getExcalidrawLib() {
     return excalidrawLibPromise;
 }
 
+async function saveExcalidrawScene(host, status) {
+    const saveUrl = host?.getAttribute('data-excalidraw-save-url');
+    const scene = host?.__excalidrawState;
+    if (!host || !saveUrl || !scene) {
+        if (status) status.textContent = 'Not ready';
+        return;
+    }
+    if (status) status.textContent = 'Saving...';
+    try {
+        const appState = { ...(scene.appState || {}) };
+        if (typeof appState.collaborators?.forEach !== 'function') appState.collaborators = [];
+        const payload = {
+            type: 'excalidraw',
+            version: 2,
+            source: 'vyasa',
+            elements: scene.elements || [],
+            appState,
+            files: scene.files || {},
+        };
+        const res = await fetch(saveUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (status) status.textContent = 'Saved';
+    } catch (error) {
+        if (status) status.textContent = 'Save failed';
+        console.error('[vyasa][excalidraw] save failed', error);
+    }
+}
+
 async function initExcalidrawHosts(rootElement = document) {
     const hosts = Array.from(rootElement.querySelectorAll('.excalidraw-host'));
     for (const host of hosts) {
@@ -48,12 +80,17 @@ async function initExcalidrawHosts(rootElement = document) {
                 files: scene.files || {},
             };
             host.__excalidrawState = sceneState;
+            host.__excalidrawAutosaveTimer = null;
             const root = ReactDOMClient.createRoot(host);
             const element = React.createElement(ExcalidrawComp, {
                 initialData: sceneState,
                 theme: getCurrentTheme() === 'dark' ? 'dark' : 'light',
                 onChange: (elements, appState, files) => {
                     host.__excalidrawState = { ...sceneState, elements, appState, files };
+                    if (host.__excalidrawAutosaveTimer) clearTimeout(host.__excalidrawAutosaveTimer);
+                    host.__excalidrawAutosaveTimer = setTimeout(() => {
+                        saveExcalidrawScene(host, status);
+                    }, 700);
                 },
             });
             root.render(element);
@@ -74,37 +111,7 @@ function initExcalidrawSave(rootElement = document) {
             const hostId = button.getAttribute('data-excalidraw-save');
             const host = hostId ? document.getElementById(hostId) : null;
             const status = hostId ? document.getElementById(`${hostId}-status`) : null;
-            const saveUrl = host?.getAttribute('data-excalidraw-save-url');
-            const scene = host?.__excalidrawState;
-            if (!host || !saveUrl || !scene) {
-                if (status) status.textContent = 'Not ready';
-                return;
-            }
-            if (status) status.textContent = 'Saving...';
-            try {
-                const appState = { ...(scene.appState || {}) };
-                if (typeof appState.collaborators?.forEach !== 'function') {
-                    appState.collaborators = [];
-                }
-                const payload = {
-                    type: 'excalidraw',
-                    version: 2,
-                    source: 'vyasa',
-                    elements: scene.elements || [],
-                    appState,
-                    files: scene.files || {},
-                };
-                const res = await fetch(saveUrl, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                if (status) status.textContent = 'Saved';
-            } catch (error) {
-                if (status) status.textContent = 'Save failed';
-                console.error('[vyasa][excalidraw] save failed', error);
-            }
+            await saveExcalidrawScene(host, status);
         });
     });
 }

@@ -3412,14 +3412,8 @@ def drawing_detail(path: str, htmx, request: Request):
         Div(
             H1(title, cls="text-4xl font-bold"),
             Div(
-                Button(
-                    "Save drawing",
-                    type="button",
-                    data_excalidraw_save=host_id,
-                    cls="px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
-                ),
                 Span(
-                    "Ready",
+                    "Autosave on",
                     id=f"{host_id}-status",
                     cls="text-xs text-slate-500 dark:text-slate-400"
                 ),
