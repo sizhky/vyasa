@@ -2430,7 +2430,7 @@ def theme_toggle():
     return Button(UkIcon("moon", cls="dark:hidden"), UkIcon("sun", cls="hidden dark:block"), 
                   _=theme_script, cls="p-1 hover:scale-110 shadow-none", type="button")
 
-def navbar(show_mobile_menus=False, htmx_nav=True, posts_menu_items=None):
+def navbar(show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False):
     """Navbar with mobile menu buttons for file tree and TOC"""
     home_link_attrs = {}
     if htmx_nav:
@@ -2469,6 +2469,31 @@ def navbar(show_mobile_menus=False, htmx_nav=True, posts_menu_items=None):
         cls="flex items-center gap-3"
     )
     
+    if compact_mode:
+        compact_posts_menu = None
+        if posts_menu_items:
+            compact_posts_menu = Details(
+                Summary(
+                    UkIcon("menu", cls="w-5 h-5"),
+                    cls="list-none p-2 cursor-pointer rounded hover:bg-slate-800 transition-colors [&::-webkit-details-marker]:hidden"
+                ),
+                Div(
+                    Ul(*posts_menu_items, cls="list-none text-sm max-h-[60vh] overflow-y-auto pr-2"),
+                    cls="absolute left-0 mt-2 w-80 p-3 rounded-lg bg-white text-slate-800 shadow-lg border border-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 z-[1100]"
+                ),
+                cls="relative"
+            )
+        compact_row = Div(
+            Div(compact_posts_menu or Div(cls="w-9"), cls="w-16"),
+            A(get_blog_title(), href="/", cls="flex-1 px-4 text-center truncate", **home_link_attrs),
+            Div(theme_toggle(), cls="w-16 flex justify-end"),
+            cls="flex items-center justify-between"
+        )
+        return Div(
+            compact_row,
+            cls="bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800"
+        )
+
     if show_mobile_menus:
         mobile_row = Div(
             Button(
@@ -3075,7 +3100,12 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
         # Layout with sidebar for blog posts
         body_content = Div(id="page-container", cls=page_container_cls)(
             Div(
-                navbar(show_mobile_menus=True, htmx_nav=htmx_nav, posts_menu_items=nav_posts_items),
+                navbar(
+                    show_mobile_menus=True,
+                    htmx_nav=htmx_nav,
+                    posts_menu_items=nav_posts_items,
+                    compact_mode=nav_posts_menu,
+                ),
                 cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-50 {navbar_margin_cls}".strip(),
                 id="site-navbar",
                 **_style_attr(layout_max_style)

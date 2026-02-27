@@ -52,12 +52,21 @@ function applyExcalidrawEditMode(host, button) {
         });
     }
     if (button) button.textContent = editable ? 'Disable editing' : 'Enable editing';
+    updateExcalidrawIdentityLabel(host);
 }
 
 function randomExcalidrawName() {
     const a = ['Swift', 'Quiet', 'Bold', 'Curious', 'Bright', 'Calm'];
     const b = ['Otter', 'Falcon', 'Fox', 'Panda', 'Lynx', 'Hawk'];
     return `${a[Math.floor(Math.random() * a.length)]} ${b[Math.floor(Math.random() * b.length)]}`;
+}
+
+function updateExcalidrawIdentityLabel(host) {
+    if (!host) return;
+    const button = document.querySelector(`[data-excalidraw-name="${host.id}"]`);
+    if (!button) return;
+    const name = host.__excalidrawUserName || 'Guest';
+    button.textContent = `${host.__excalidrawEditable ? 'Editing' : 'Viewing'} as ${name}`;
 }
 
 function initExcalidrawName(rootElement = document) {
@@ -75,8 +84,8 @@ function initExcalidrawName(rootElement = document) {
         let name = defaultName || localStorage.getItem(key) || '';
         if (!name && !locked) name = randomExcalidrawName();
         if (!locked && name) localStorage.setItem(key, name);
-        if (name) button.textContent = name;
         host.__excalidrawUserName = name || 'Guest';
+        updateExcalidrawIdentityLabel(host);
         if (locked) return;
         button.addEventListener('click', () => {
             const current = host.__excalidrawUserName || '';
@@ -85,8 +94,8 @@ function initExcalidrawName(rootElement = document) {
             const cleaned = next.trim();
             if (!cleaned) return;
             host.__excalidrawUserName = cleaned;
-            button.textContent = cleaned;
             localStorage.setItem(key, cleaned);
+            updateExcalidrawIdentityLabel(host);
         });
     });
 }

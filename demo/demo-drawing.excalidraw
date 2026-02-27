@@ -2156,12 +2156,7 @@
       "roundness": {
         "type": 2
       },
-      "boundElements": [
-        {
-          "type": "text",
-          "id": "ITKUz89-Iutd0Pl_-CfbT"
-        }
-      ],
+      "boundElements": [],
       "updated": 1772225202786,
       "link": null,
       "locked": false,
@@ -2265,12 +2260,7 @@
       "roundness": {
         "type": 2
       },
-      "boundElements": [
-        {
-          "type": "text",
-          "id": "iY_uh_NNLD6NQLhoervko"
-        }
-      ],
+      "boundElements": [],
       "updated": 1772225202786,
       "link": null,
       "locked": false,
@@ -2326,12 +2316,7 @@
       "roundness": {
         "type": 2
       },
-      "boundElements": [
-        {
-          "type": "text",
-          "id": "YjS4_UOX0BCC1VitOrFr_"
-        }
-      ],
+      "boundElements": [],
       "updated": 1772225202787,
       "link": null,
       "locked": false,
@@ -2387,12 +2372,7 @@
       "roundness": {
         "type": 2
       },
-      "boundElements": [
-        {
-          "type": "text",
-          "id": "4aBZ0VJsFWWLG7cwIxnB6"
-        }
-      ],
+      "boundElements": [],
       "updated": 1772225202787,
       "link": null,
       "locked": false,
@@ -2458,7 +2438,7 @@
       "containerId": "PsoxxHv6i4wj-nQofl0bl",
       "originalText": "Christmas",
       "lineHeight": 1.25,
-      "baseline": 18
+      "baseline": 19
     },
     {
       "type": "text",
@@ -2494,7 +2474,7 @@
       "containerId": "gkjk6uyEseF0lIA95dbqx",
       "originalText": "Go shopping",
       "lineHeight": 1.25,
-      "baseline": 18
+      "baseline": 19
     },
     {
       "type": "text",
@@ -2530,7 +2510,7 @@
       "containerId": "-wZ6trxSDmMvia2votFGQ",
       "originalText": "Let me think",
       "lineHeight": 1.25,
-      "baseline": 43
+      "baseline": 44
     },
     {
       "type": "text",
@@ -2566,7 +2546,7 @@
       "containerId": "R3UaMrhV_DzLbYx2IIuzX",
       "originalText": "Laptop",
       "lineHeight": 1.25,
-      "baseline": 18
+      "baseline": 19
     },
     {
       "type": "text",
@@ -2602,7 +2582,7 @@
       "containerId": "oYm28FFZRLtZSHbouLY8a",
       "originalText": "iPhone",
       "lineHeight": 1.25,
-      "baseline": 18
+      "baseline": 19
     },
     {
       "type": "text",
@@ -2638,7 +2618,7 @@
       "containerId": "yBGwu8d-WVMJIUiV34B5k",
       "originalText": "Car",
       "lineHeight": 1.25,
-      "baseline": 18
+      "baseline": 19
     },
     {
       "type": "text",
@@ -2674,7 +2654,7 @@
       "containerId": "2WNu5T1K8BVNwVEaiBCR4",
       "originalText": "Get money",
       "lineHeight": 1.25,
-      "baseline": 18
+      "baseline": 19
     },
     {
       "type": "text",
@@ -2710,7 +2690,7 @@
       "containerId": "DdGSSwH-RwskOj0VhpDji",
       "originalText": "One",
       "lineHeight": 1.25,
-      "baseline": 18
+      "baseline": 19
     },
     {
       "type": "text",
@@ -2746,7 +2726,7 @@
       "containerId": "K0Xfw8V502sGtC8UkTqNs",
       "originalText": "Two",
       "lineHeight": 1.25,
-      "baseline": 18
+      "baseline": 19
     },
     {
       "type": "text",
@@ -2782,7 +2762,7 @@
       "containerId": "cHUhNly57NxOa-_qtV4WU",
       "originalText": "Three",
       "lineHeight": 1.25,
-      "baseline": 18
+      "baseline": 19
     }
   ],
   "appState": {
@@ -2810,7 +2790,7 @@
     "editingGroupId": null,
     "editingLinearElement": null,
     "activeTool": {
-      "type": "laser",
+      "type": "selection",
       "customType": null,
       "locked": false,
       "lastActiveTool": null
@@ -2841,13 +2821,11 @@
       "shown": false,
       "data": null
     },
-    "previousSelectedElementIds": {
-      "a_sXwroFWQeNniDAfX_cH": true
-    },
+    "previousSelectedElementIds": {},
     "resizingElement": null,
     "scrolledOutside": false,
-    "scrollX": 346.6156058002698,
-    "scrollY": 620.993072779961,
+    "scrollX": 1140.156917840553,
+    "scrollY": 531.9253192136847,
     "selectedElementIds": {},
     "selectedGroupIds": {},
     "selectedElementsAreBeingDragged": false,
@@ -2873,7 +2851,7 @@
     "zoom": {
       "value": 0.6705306225732949
     },
-    "viewModeEnabled": false,
+    "viewModeEnabled": true,
     "pendingImageElementId": null,
     "showHyperlinkPopup": false,
     "selectedLinearElement": null,
@@ -2882,7 +2860,7 @@
     "objectsSnapModeEnabled": false,
     "offsetLeft": 17,
     "offsetTop": 169,
-    "width": 971,
+    "width": 1998,
     "height": 1072
   },
   "files": {}
