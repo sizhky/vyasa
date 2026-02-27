@@ -2054,7 +2054,7 @@
   "appState": {
     "showWelcomeScreen": false,
     "theme": "light",
-    "collaborators": [],
+    "collaborators": {},
     "currentChartType": "bar",
     "currentItemBackgroundColor": "#ffc9c9",
     "currentItemEndArrowhead": "arrow",
@@ -2110,8 +2110,8 @@
     "previousSelectedElementIds": {},
     "resizingElement": null,
     "scrolledOutside": false,
-    "scrollX": 779.8490613887878,
-    "scrollY": 372.47215548509837,
+    "scrollX": 718.0798113336591,
+    "scrollY": 502.6108489445055,
     "selectedElementIds": {},
     "selectedGroupIds": {},
     "selectedElementsAreBeingDragged": false,
@@ -2135,7 +2135,7 @@
     "viewBackgroundColor": "transparent",
     "zenModeEnabled": false,
     "zoom": {
-      "value": 0.9842161576167728
+      "value": 0.6705306225732949
     },
     "viewModeEnabled": false,
     "pendingImageElementId": null,

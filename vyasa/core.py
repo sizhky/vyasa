@@ -3459,11 +3459,26 @@ def drawing_detail(path: str, htmx, request: Request):
         return not_found(htmx, auth=request.scope.get("auth"))
     title = f"{slug_to_title(Path(path).name, abbreviations=_effective_abbreviations(root))} (Excalidraw)"
     host_id = f"excalidraw-{abs(hash(path)) & 0xFFFFFF}"
+    auth = request.scope.get("auth")
+    user_locked = bool(auth)
+    default_user = ""
+    if auth:
+        default_user = auth.get("name") or auth.get("email") or auth.get("username") or ""
     post_content = Div(
         Script("document.body.dataset.forceFullNav='1';"),
         Div(
             H1(title, cls="text-4xl font-bold"),
             Div(
+                Button(
+                    default_user or "Set your name",
+                    type="button",
+                    data_excalidraw_name=host_id,
+                    data_excalidraw_name_locked="1" if user_locked else "0",
+                    data_excalidraw_name_default=default_user,
+                    disabled=user_locked,
+                    cls="px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-sm "
+                        + ("opacity-70 cursor-default" if user_locked else "hover:bg-slate-100 dark:hover:bg-slate-800")
+                ),
                 Button(
                     "Enable editing",
                     type="button",

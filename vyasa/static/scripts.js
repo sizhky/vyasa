@@ -54,6 +54,43 @@ function applyExcalidrawEditMode(host, button) {
     if (button) button.textContent = editable ? 'Disable editing' : 'Enable editing';
 }
 
+function randomExcalidrawName() {
+    const a = ['Swift', 'Quiet', 'Bold', 'Curious', 'Bright', 'Calm'];
+    const b = ['Otter', 'Falcon', 'Fox', 'Panda', 'Lynx', 'Hawk'];
+    return `${a[Math.floor(Math.random() * a.length)]} ${b[Math.floor(Math.random() * b.length)]}`;
+}
+
+function initExcalidrawName(rootElement = document) {
+    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-name]'));
+    buttons.forEach((button) => {
+        if (button.dataset.excalidrawNameBound === 'true') return;
+        button.dataset.excalidrawNameBound = 'true';
+        const hostId = button.getAttribute('data-excalidraw-name');
+        const host = hostId ? document.getElementById(hostId) : null;
+        if (!host) return;
+        const locked = button.getAttribute('data-excalidraw-name-locked') === '1';
+        const room = host.getAttribute('data-excalidraw-path') || hostId;
+        const defaultName = button.getAttribute('data-excalidraw-name-default') || '';
+        const key = `vyasa.excalidraw.name.${room}`;
+        let name = defaultName || localStorage.getItem(key) || '';
+        if (!name && !locked) name = randomExcalidrawName();
+        if (!locked && name) localStorage.setItem(key, name);
+        if (name) button.textContent = name;
+        host.__excalidrawUserName = name || 'Guest';
+        if (locked) return;
+        button.addEventListener('click', () => {
+            const current = host.__excalidrawUserName || '';
+            const next = window.prompt('Your display name', current);
+            if (!next) return;
+            const cleaned = next.trim();
+            if (!cleaned) return;
+            host.__excalidrawUserName = cleaned;
+            button.textContent = cleaned;
+            localStorage.setItem(key, cleaned);
+        });
+    });
+}
+
 function connectExcalidrawCollab(host) {
     const room = host?.getAttribute('data-excalidraw-path');
     if (!room || host.__excalidrawWs) return;
@@ -165,7 +202,7 @@ async function initExcalidrawHosts(rootElement = document) {
                         type: 'presence',
                         presence: {
                             id: host.__excalidrawWsId,
-                            username: 'Guest',
+                            username: host.__excalidrawUserName || 'Guest',
                             pointer: pointer ? { x: pointer.x, y: pointer.y } : null,
                             button: button || 'up',
                         },
@@ -2262,6 +2299,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ensurePdfFocusState();
     initTabPanelHeights(document);
     initExcalidrawHosts(document);
+    initExcalidrawName(document);
     initExcalidrawSave(document);
 });
 
@@ -2273,6 +2311,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initPostsSearchPersistence(event.target);
     initCodeBlockCopyButtons(event.target);
     initExcalidrawHosts(event.target || document);
+    initExcalidrawName(event.target || document);
     initExcalidrawSave(event.target || document);
     initSearchClearButtons(event.target);
     ensurePdfFocusState();
