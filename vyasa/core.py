@@ -2778,7 +2778,7 @@ def get_custom_css_links(current_path=None, section_class=None):
     
     return css_elements
 
-def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True, auth=None, htmx_nav=True, nav_posts_menu=False):
+def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True, auth=None, htmx_nav=True, nav_posts_menu=False, full_width=False):
     import time
     layout_start_time = time.time()
     logger.debug("[LAYOUT] layout() start")
@@ -2789,6 +2789,10 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
     layout_config = _resolve_layout_config(current_path)
     layout_max_class, layout_max_style = _width_class_and_style(layout_config.get("layout_max_width"), "max")
     layout_fluid_class = "layout-fluid" if layout_max_style else ""
+    if full_width:
+        layout_max_class = ""
+        layout_max_style = ""
+        layout_fluid_class = ""
 
     def _footer_node(outer_cls, outer_style):
         logout_button = None
@@ -3427,7 +3431,7 @@ def drawing_detail(path: str, htmx, request: Request):
     )
     return layout(post_content, htmx=htmx, title=f"{title} - {get_blog_title()}",
                   show_sidebar=True, toc_content=None, current_path=path, show_toc=False,
-                  auth=request.scope.get("auth"), nav_posts_menu=True)
+                  auth=request.scope.get("auth"), nav_posts_menu=True, full_width=True)
 
 @rt('/slides/{path:path}')
 def slide_deck(path: str, request: Request):
