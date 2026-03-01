@@ -3270,10 +3270,10 @@ def build_post_tree(folder, roles=None):
             slug = str(item.relative_to(root).with_suffix(''))
             if not _is_allowed(f"/posts/{slug}", roles or []):
                 continue
+            title_start = time.time()
             metadata, _ = parse_frontmatter(item)
             has_slides = bool(metadata.get("slides", False))
-            title_start = time.time()
-            title = get_post_title(item, abbreviations=abbreviations)
+            title = metadata.get("title", slug_to_title(item.stem, abbreviations=abbreviations))
             title_time = (time.time() - title_start) * 1000
             if title_time > 1:  # Only log if it takes more than 1ms
                 logger.debug(f"[DEBUG] Getting title for {item.name} took {title_time:.2f}ms")
@@ -3594,7 +3594,6 @@ def slide_deck(path: str, request: Request):
         return not_found(auth=request.scope.get("auth"))
     metadata, raw_content = parse_frontmatter(file_path)
     title = metadata.get('title', slug_to_title(Path(path).name, abbreviations=_effective_abbreviations(root)))
-    deck_md = html.escape(raw_content)
     safe_title = html.escape(f"{title} - Slides")
     reveal_block = metadata.get("reveal", {}) if isinstance(metadata.get("reveal"), dict) else {}
     reveal_top_level = {k[7:]: v for k, v in metadata.items() if k.startswith("reveal_")}
@@ -3607,7 +3606,7 @@ def slide_deck(path: str, request: Request):
         highlight_theme = "monokai"
     md_separator = str(reveal_cfg.pop("separator", "^---$"))
     md_separator_vertical = str(reveal_cfg.pop("separatorVertical", "^--$"))
-    md_separator_notes = str(reveal_cfg.pop("separatorNotes", "^Note:"))
+    reveal_cfg.pop("separatorNotes", None)
     slide_padding = str(reveal_cfg.pop("slidePadding", "1.25rem")).strip() or "1.25rem"
     reveal_cfg.pop("margin", None)
     font_size = str(reveal_cfg.pop("fontSize", "18px")).strip() or "18px"
