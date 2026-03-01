@@ -33,6 +33,8 @@ dependencies = [
     "uvicorn>=0.30.0",
     "monsterui>=0.0.37",
     "pylogue>=0.3",
+    "loguru>=0.7.3",
+    "fastsql>=2.1.2",
 ]
 
 [project.optional-dependencies]
