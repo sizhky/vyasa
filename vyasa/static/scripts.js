@@ -3,6 +3,325 @@ import { D2 } from 'https://esm.sh/@terrastruct/d2@0.1.33?bundle';
 
 const mermaidStates = {};
 const d2States = {};
+let excalidrawLibPromise = null;
+
+async function getExcalidrawLib() {
+    if (!excalidrawLibPromise) {
+        excalidrawLibPromise = Promise.all([
+            import('https://esm.sh/react@18'),
+            import('https://esm.sh/react-dom@18/client'),
+            import('https://esm.sh/@excalidraw/excalidraw@0.17.6?bundle'),
+        ]);
+    }
+    return excalidrawLibPromise;
+}
+
+async function saveExcalidrawScene(host, status) {
+    const saveUrl = host?.getAttribute('data-excalidraw-save-url');
+    const scene = host?.__excalidrawState;
+    if (!host || !saveUrl || !scene) {
+        return;
+    }
+    try {
+        const appState = { ...(scene.appState || {}) };
+        if (typeof appState.collaborators?.forEach !== 'function') appState.collaborators = [];
+        const payload = {
+            type: 'excalidraw',
+            version: 2,
+            source: 'vyasa',
+            elements: scene.elements || [],
+            appState,
+            files: scene.files || {},
+        };
+        const res = await fetch(saveUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (error) {
+        console.error('[vyasa][excalidraw] save failed', error);
+    }
+}
+
+function applyExcalidrawEditMode(host, button) {
+    const editable = !!host?.__excalidrawEditable;
+    if (host?.__excalidrawApi?.updateScene && host?.__excalidrawState?.appState) {
+        host.__excalidrawApi.updateScene({
+            appState: { ...host.__excalidrawState.appState, viewModeEnabled: !editable },
+        });
+    }
+    if (button) button.textContent = editable ? 'Disable editing' : 'Enable editing';
+    updateExcalidrawIdentityLabel(host);
+}
+
+function randomExcalidrawName() {
+    const a = ['Swift', 'Quiet', 'Bold', 'Curious', 'Bright', 'Calm', 'Brave', 'Clever', 'Witty', 'Sly', 'Nimble', 'Mighty', 'Gentle', 'Fierce', 'Loyal', 'Wise', 'Happy', 'Grumpy', 'Sleepy', 'Dopey', 'Zany', 'Jolly', 'Lucky', 'Silly', 'Charming', 'Daring', 'Elegant', 'Fancy', 'Gleaming', 'Heroic', 'Inventive', 'Jovial', 'Kindly', 'Lively', 'Merry', 'Noble', 'Playful', 'Quick', 'Radiant', 'Shy', 'Tough', 'Upbeat', 'Vibrant', 'Wandering', 'Xenial', 'Youthful', 'Zealous', 'Adventurous', 'Bright-eyed', 'Cheerful', 'Dazzling', 'Energetic', 'Fearless', 'Gallant', 'Humble', 'Imaginative', 'Joyful', 'Keen', 'Luminous', 'Majestic', 'Nimble-fingered', 'Optimistic', 'Passionate', 'Quick-witted', 'Resilient', 'Spirited', 'Tenacious', 'Unstoppable', 'Valiant', 'Whimsical', 'Xtraordinary', 'Youthful-at-heart', 'Zesty'];
+    const b = ['Otter', 'Falcon', 'Fox', 'Panda', 'Lynx', 'Hawk', 'Wolf', 'Tiger', 'Eagle', 'Bear', 'Shark', 'Dolphin', 'Raven', 'Leopard', 'Panther', 'Cheetah', 'Gorilla', 'Koala', 'Squirrel', 'Rabbit', 'Deer', 'Moose', 'Buffalo', 'Alligator', 'Crocodile', 'Turtle', 'Frog', 'Snake', 'Horse', 'Donkey', 'Zebra', 'Giraffe', 'Elephant', 'Rhino', 'Hippo', 'Armadillo', 'Badger', 'Beaver', 'Camel', 'Chameleon', 'Chipmunk', 'Cougar', 'Crab', 'Crow', 'Ferret', 'Gazelle', 'Gerbil', 'Goat', 'Gopher', 'Guinea Pig', 'Hamster', 'Hedgehog', 'Ibex', 'Jackal', 'Jerboa', 'Kangaroo', 'Koala', 'Lemur', 'Meerkat', 'Mongoose', 'Mule', 'Ocelot', 'Octopus', 'Orangutan', 'Owl', 'Porcupine', 'Prairie Dog', 'Quokka', 'Raccoon', 'Rat', 'Reindeer', 'Salamander', 'Sea Lion', 'Skunk', 'Sloth', 'Swan', 'Tapir', 'Vole', 'Wombat'];
+    return `${a[Math.floor(Math.random() * a.length)]} ${b[Math.floor(Math.random() * b.length)]}`;
+}
+
+function updateExcalidrawIdentityLabel(host) {
+    if (!host) return;
+    const button = document.querySelector(`[data-excalidraw-name="${host.id}"]`);
+    if (!button) return;
+    const name = host.__excalidrawUserName || 'Guest';
+    button.textContent = `${host.__excalidrawEditable ? 'Editing' : 'Viewing'} as ${name}`;
+}
+
+function initExcalidrawName(rootElement = document) {
+    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-name]'));
+    buttons.forEach((button) => {
+        if (button.dataset.excalidrawNameBound === 'true') return;
+        button.dataset.excalidrawNameBound = 'true';
+        const hostId = button.getAttribute('data-excalidraw-name');
+        const host = hostId ? document.getElementById(hostId) : null;
+        if (!host) return;
+        const locked = button.getAttribute('data-excalidraw-name-locked') === '1';
+        const room = host.getAttribute('data-excalidraw-path') || hostId;
+        const defaultName = button.getAttribute('data-excalidraw-name-default') || '';
+        const key = `vyasa.excalidraw.name.${room}`;
+        let name = defaultName || localStorage.getItem(key) || '';
+        if (!name && !locked) name = randomExcalidrawName();
+        if (!locked && name) localStorage.setItem(key, name);
+        host.__excalidrawUserName = name || 'Guest';
+        updateExcalidrawIdentityLabel(host);
+        if (locked) return;
+        button.addEventListener('click', () => {
+            const current = host.__excalidrawUserName || '';
+            const next = window.prompt('Your display name', current);
+            if (!next) return;
+            const cleaned = next.trim();
+            if (!cleaned) return;
+            host.__excalidrawUserName = cleaned;
+            localStorage.setItem(key, cleaned);
+            updateExcalidrawIdentityLabel(host);
+        });
+    });
+}
+
+function connectExcalidrawCollab(host) {
+    const room = host?.getAttribute('data-excalidraw-path');
+    if (!room || host.__excalidrawWs) return;
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${window.location.host}/ws/excalidraw/${room}`);
+    const localId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    host.__excalidrawWs = ws;
+    host.__excalidrawWsId = localId;
+    host.__excalidrawPeers = new Map();
+    if (!host.__excalidrawPeerGcTimer) {
+        host.__excalidrawPeerGcTimer = setInterval(() => {
+            const now = Date.now();
+            for (const [id, peer] of host.__excalidrawPeers.entries()) {
+                if (now - (peer.lastSeen || 0) > 4000) host.__excalidrawPeers.delete(id);
+            }
+            host.__excalidrawApi?.updateScene({ collaborators: new Map(host.__excalidrawPeers) });
+        }, 2000);
+    }
+    ws.onmessage = (evt) => {
+        try {
+            const msg = JSON.parse(evt.data || '{}');
+            if (msg.type === 'presence_remove' && msg.id) {
+                host.__excalidrawPeers.delete(msg.id);
+                host.__excalidrawApi?.updateScene({ collaborators: new Map(host.__excalidrawPeers) });
+                return;
+            }
+            if (msg.type === 'presence' && msg.presence?.id && host.__excalidrawApi) {
+                if (msg.presence.id === localId) return;
+                const remotePointer = msg.presence.pointer || null;
+                const isLaser = remotePointer?.tool === 'laser';
+                host.__excalidrawPeers.set(msg.presence.id, {
+                    username: msg.presence.username || 'Guest',
+                    pointer: remotePointer,
+                    button: msg.presence.button || 'up',
+                    selectedElementIds: {},
+                    renderCursor: !isLaser,
+                    lastSeen: Date.now(),
+                });
+                host.__excalidrawApi.updateScene({ collaborators: new Map(host.__excalidrawPeers) });
+                return;
+            }
+            if (msg.type !== 'scene' || !msg.scene || !host.__excalidrawApi) return;
+            if (msg.from && msg.from === localId) return;
+            host.__excalidrawApplyingRemote = true;
+            host.__excalidrawSkipUntil = Date.now() + 180;
+            host.__excalidrawState = {
+                ...host.__excalidrawState,
+                elements: msg.scene.elements || [],
+                files: msg.scene.files || {},
+            };
+            host.__excalidrawApi.updateScene({
+                elements: msg.scene.elements || [],
+                files: msg.scene.files || {},
+            });
+            setTimeout(() => { host.__excalidrawApplyingRemote = false; }, 200);
+        } catch (e) {
+            console.error('[vyasa][collab] bad message', e);
+        }
+    };
+}
+
+async function initExcalidrawHosts(rootElement = document) {
+    const hosts = Array.from(rootElement.querySelectorAll('.excalidraw-host'));
+    for (const host of hosts) {
+        if (host.dataset.excalidrawMounted === 'true') continue;
+        host.dataset.excalidrawMounted = 'true';
+        const src = host.getAttribute('data-excalidraw-src');
+        const status = document.getElementById(`${host.id}-status`);
+        try {
+            const [ReactNS, ReactDOMNS, ExcalidrawNS] = await getExcalidrawLib();
+            const React = ReactNS.default || ReactNS;
+            const ReactDOMClient = ReactDOMNS.default || ReactDOMNS;
+            const ExcalidrawComp =
+                ExcalidrawNS.Excalidraw ||
+                ExcalidrawNS.default?.Excalidraw ||
+                ExcalidrawNS.default;
+            if (!ExcalidrawComp || typeof ReactDOMClient.createRoot !== 'function') {
+                throw new Error('Excalidraw module shape is unsupported');
+            }
+            const scene = src ? await fetch(src).then((r) => r.json()) : { elements: [], appState: {}, files: {} };
+            const appState = scene.appState || {};
+            if (typeof appState.collaborators?.forEach !== 'function') {
+                appState.collaborators = [];
+            }
+            const sceneState = {
+                type: 'excalidraw',
+                version: 2,
+                source: 'vyasa',
+                elements: scene.elements || [],
+                appState: { ...appState, viewModeEnabled: true },
+                files: scene.files || {},
+            };
+            host.__excalidrawState = sceneState;
+            host.__excalidrawEditable = false;
+            host.__excalidrawAutosaveTimer = null;
+            connectExcalidrawCollab(host);
+            const root = ReactDOMClient.createRoot(host);
+            const element = React.createElement(ExcalidrawComp, {
+                initialData: sceneState,
+                theme: getCurrentTheme() === 'dark' ? 'dark' : 'light',
+                excalidrawAPI: (api) => {
+                    host.__excalidrawApi = api;
+                    applyExcalidrawEditMode(host, document.querySelector(`[data-excalidraw-toggle="${host.id}"]`));
+                },
+                onChange: (elements, appState, files) => {
+                    host.__excalidrawState = { ...sceneState, elements, appState, files };
+                    if (!host.__excalidrawEditable) return;
+                    if (host.__excalidrawApplyingRemote || Date.now() < (host.__excalidrawSkipUntil || 0)) return;
+                    if (host.__excalidrawWs?.readyState === WebSocket.OPEN) {
+                        host.__excalidrawWs.send(JSON.stringify({
+                            type: 'scene',
+                            from: host.__excalidrawWsId,
+                            scene: { elements: host.__excalidrawState.elements || [], files: host.__excalidrawState.files || {} },
+                        }));
+                    }
+                    if (host.__excalidrawAutosaveTimer) clearTimeout(host.__excalidrawAutosaveTimer);
+                    host.__excalidrawAutosaveTimer = setTimeout(() => {
+                        saveExcalidrawScene(host, status);
+                    }, 700);
+                },
+                onPointerUpdate: ({ pointer, button }) => {
+                    if (!host.__excalidrawWs || host.__excalidrawWs.readyState !== WebSocket.OPEN) return;
+                    const now = Date.now();
+                    if (now - (host.__excalidrawPresenceTs || 0) < 50) return;
+                    host.__excalidrawPresenceTs = now;
+                    host.__excalidrawWs.send(JSON.stringify({
+                        type: 'presence',
+                        presence: {
+                            id: host.__excalidrawWsId,
+                            username: host.__excalidrawUserName || 'Guest',
+                            pointer: pointer ? { x: pointer.x, y: pointer.y, tool: pointer.tool || 'pointer' } : null,
+                            button: button || 'up',
+                        },
+                    }));
+                },
+            });
+            root.render(element);
+            if (status) status.textContent = 'Loaded';
+        } catch (error) {
+            if (status) status.textContent = 'Failed to load';
+            console.error('[vyasa][excalidraw] mount failed', error);
+        }
+    }
+}
+
+function initExcalidrawSave(rootElement = document) {
+    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-toggle]'));
+    buttons.forEach((button) => {
+        if (button.dataset.excalidrawSaveBound === 'true') return;
+        button.dataset.excalidrawSaveBound = 'true';
+        button.addEventListener('click', async () => {
+            const hostId = button.getAttribute('data-excalidraw-toggle');
+            const host = hostId ? document.getElementById(hostId) : null;
+            if (!host) return;
+            if (!host.__excalidrawEditable && host.getAttribute('data-excalidraw-protected') === '1') {
+                const unlockUrl = host.getAttribute('data-excalidraw-unlock-url');
+                if (unlockUrl) {
+                    const password = prompt('Enter drawing password to enable editing:');
+                    if (password === null) return;
+                    try {
+                        const resp = await fetch(unlockUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password }),
+                        });
+                        if (!resp.ok) {
+                            alert('Invalid drawing password.');
+                            return;
+                        }
+                    } catch (err) {
+                        console.error('[vyasa][excalidraw] unlock failed', err);
+                        alert('Could not verify drawing password.');
+                        return;
+                    }
+                }
+            }
+            host.__excalidrawEditable = !host.__excalidrawEditable;
+            applyExcalidrawEditMode(host, button);
+        });
+    });
+}
+
+function initExcalidrawOpenExternal(rootElement = document) {
+    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-open-external]'));
+    buttons.forEach((button) => {
+        if (button.dataset.excalidrawOpenBound === 'true') return;
+        button.dataset.excalidrawOpenBound = 'true';
+        button.addEventListener('click', () => {
+            const downloadUrl = button.getAttribute('data-excalidraw-download-url');
+            const downloadName = button.getAttribute('data-excalidraw-download-name') || 'drawing.excalidraw';
+            window.open('https://excalidraw.com', '_blank', 'noopener');
+            if (!downloadUrl) return;
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = downloadName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        });
+    });
+}
+
+function initExcalidrawExternalOpen(rootElement = document) {
+    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-open-external]'));
+    buttons.forEach((button) => {
+        if (button.dataset.excalidrawOpenBound === 'true') return;
+        button.dataset.excalidrawOpenBound = 'true';
+        button.addEventListener('click', () => {
+            const downloadUrl = button.getAttribute('data-excalidraw-download-url');
+            const downloadName = button.getAttribute('data-excalidraw-download-name') || 'drawing.excalidraw';
+            if (downloadUrl) {
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = downloadName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            }
+            window.open('https://excalidraw.com', '_blank', 'noopener');
+        });
+    });
+}
 const mermaidDebugEnabled = () => (
     window.VYASA_DEBUG_MERMAID === true ||
     localStorage.getItem('vyasaDebugMermaid') === '1'
@@ -1338,9 +1657,10 @@ function initRevealDiagramRefresh() {
             wrapper.appendChild(pre);
             mermaidNodes.push(pre);
         });
+        const didRenderMermaid = mermaidNodes.length > 0;
         const afterMermaid = () => {
             scheduleMermaidInteraction();
-            if (window.Reveal && typeof window.Reveal.layout === 'function') {
+            if (didRenderMermaid && window.Reveal && typeof window.Reveal.layout === 'function') {
                 requestAnimationFrame(() => {
                     window.Reveal.layout();
                 });
@@ -1351,10 +1671,10 @@ function initRevealDiagramRefresh() {
         };
         if (mermaidNodes.length > 0) {
             mermaid.run({ nodes: mermaidNodes }).then(() => {
-                afterMermaid();
+                afterMermaid(true);
             }).catch(() => {});
         } else {
-            afterMermaid();
+            afterMermaid(false);
         }
         renderD2Diagrams(current);
         initTabPanelHeights(current);
@@ -2069,6 +2389,11 @@ document.addEventListener('DOMContentLoaded', () => {
     initSearchClearButtons(document);
     ensurePdfFocusState();
     initTabPanelHeights(document);
+    initExcalidrawHosts(document);
+    initExcalidrawName(document);
+    initExcalidrawSave(document);
+    initExcalidrawOpenExternal(document);
+    initExcalidrawExternalOpen(document);
 });
 
 document.body.addEventListener('htmx:afterSwap', (event) => {
@@ -2078,7 +2403,24 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initSearchPlaceholderCycle(event.target);
     initPostsSearchPersistence(event.target);
     initCodeBlockCopyButtons(event.target);
+    initExcalidrawHosts(event.target || document);
+    initExcalidrawName(event.target || document);
+    initExcalidrawSave(event.target || document);
+    initExcalidrawOpenExternal(event.target || document);
+    initExcalidrawExternalOpen(event.target || document);
     initSearchClearButtons(event.target);
     ensurePdfFocusState();
     initTabPanelHeights(event.target || document);
+});
+
+document.body.addEventListener('htmx:beforeRequest', (event) => {
+    if (document.body.dataset.forceFullNav !== '1') {
+        return;
+    }
+    const path = event?.detail?.requestConfig?.path || '';
+    if (!path || path.startsWith('/api/excalidraw/')) {
+        return;
+    }
+    event.preventDefault();
+    window.location.assign(path);
 });
