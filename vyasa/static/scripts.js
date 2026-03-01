@@ -1659,7 +1659,7 @@ function initRevealDiagramRefresh() {
         });
         const afterMermaid = () => {
             scheduleMermaidInteraction();
-            if (window.Reveal && typeof window.Reveal.layout === 'function') {
+            if (didRenderMermaid && window.Reveal && typeof window.Reveal.layout === 'function') {
                 requestAnimationFrame(() => {
                     window.Reveal.layout();
                 });
@@ -1670,10 +1670,10 @@ function initRevealDiagramRefresh() {
         };
         if (mermaidNodes.length > 0) {
             mermaid.run({ nodes: mermaidNodes }).then(() => {
-                afterMermaid();
+                afterMermaid(true);
             }).catch(() => {});
         } else {
-            afterMermaid();
+            afterMermaid(false);
         }
         renderD2Diagrams(current);
         initTabPanelHeights(current);
