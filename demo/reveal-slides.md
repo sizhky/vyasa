@@ -295,9 +295,6 @@ vyasa.renderer -> storage.logs: writes
 
 ---
 
-# Your Turn
-Try changing one value:
-- `theme`: `white`, `beige`, `simple`
-- `transition`: `none`, `fade`, `slide`, `convex`, `concave`, `zoom`
 
-Refresh `/slides/...` and compare.
+# Remember
+It's advisable to store not put any text in slides that have mermaid or d2 diagrams, as they may not render properly in the slide view. Instead, use the reading view for detailed explanations and reserve the slide view for visual content.
