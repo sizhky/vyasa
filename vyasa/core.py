@@ -1118,12 +1118,43 @@ hdrs = (
                 }
             }
             nodes.forEach((textNode) => {
-                textNode.nodeValue = textNode.nodeValue.split(placeholder).join('$');
+                // Restore as escaped dollars so KaTeX treats them as literal '$', not delimiters.
+                textNode.nodeValue = textNode.nodeValue.split(placeholder).join('\\$');
             });
+        }
+
+        function protectCurrencyDollars(root) {
+            const marker = '@@VYASA_CURRENCY_DOLLAR@@';
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            const nodes = [];
+            let node;
+            while ((node = walker.nextNode())) {
+                const parent = node.parentElement;
+                if (!parent) continue;
+                const tag = parent.tagName;
+                if (tag === 'CODE' || tag === 'PRE' || tag === 'SCRIPT' || tag === 'STYLE' || tag === 'TEXTAREA') continue;
+                if (parent.closest('.katex')) continue;
+                if (node.nodeValue && node.nodeValue.includes('$')) nodes.push(node);
+            }
+            nodes.forEach((textNode) => {
+                textNode.nodeValue = textNode.nodeValue.replace(/\\$(?=\\d)/g, marker);
+            });
+            return marker;
+        }
+
+        function restoreCurrencyDollars(root, marker) {
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            let node;
+            while ((node = walker.nextNode())) {
+                if (node.nodeValue && node.nodeValue.includes(marker)) {
+                    node.nodeValue = node.nodeValue.split(marker).join('$');
+                }
+            }
         }
 
         function renderMathSafely(root) {
             if (typeof renderMathInElement !== 'function') return;
+            const currencyMarker = protectCurrencyDollars(root);
             renderMathInElement(root, {
                 delimiters: [
                     {left: '$$', right: '$$', display: true},
@@ -1131,6 +1162,7 @@ hdrs = (
                 ],
                 throwOnError: false
             });
+            restoreCurrencyDollars(root, currencyMarker);
         }
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -1139,7 +1171,7 @@ hdrs = (
         });
         
         // Re-render math after HTMX swaps
-        document.body.addEventListener('htmx:afterSwap', function(event) {
+        document.addEventListener('htmx:afterSwap', function(event) {
             const root = event.target || document.body;
             replaceEscapedDollarPlaceholders(root);
             renderMathSafely(root);
