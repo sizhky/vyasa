@@ -1,0 +1,6 @@
+order = ["vision.md", "mermaids.md"]
+folders_first = true
+folders_always_first = true
+
+[drawings_passwords]
+"demo-drawing" = "secret123"
