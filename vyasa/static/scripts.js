@@ -56,8 +56,8 @@ function applyExcalidrawEditMode(host, button) {
 }
 
 function randomExcalidrawName() {
-    const a = ['Swift', 'Quiet', 'Bold', 'Curious', 'Bright', 'Calm'];
-    const b = ['Otter', 'Falcon', 'Fox', 'Panda', 'Lynx', 'Hawk'];
+    const a = ['Swift', 'Quiet', 'Bold', 'Curious', 'Bright', 'Calm', 'Brave', 'Clever', 'Witty', 'Sly', 'Nimble', 'Mighty', 'Gentle', 'Fierce', 'Loyal', 'Wise', 'Happy', 'Grumpy', 'Sleepy', 'Dopey', 'Zany', 'Jolly', 'Lucky', 'Silly', 'Charming', 'Daring', 'Elegant', 'Fancy', 'Gleaming', 'Heroic', 'Inventive', 'Jovial', 'Kindly', 'Lively', 'Merry', 'Noble', 'Playful', 'Quick', 'Radiant', 'Shy', 'Tough', 'Upbeat', 'Vibrant', 'Wandering', 'Xenial', 'Youthful', 'Zealous', 'Adventurous', 'Bright-eyed', 'Cheerful', 'Dazzling', 'Energetic', 'Fearless', 'Gallant', 'Humble', 'Imaginative', 'Joyful', 'Keen', 'Luminous', 'Majestic', 'Nimble-fingered', 'Optimistic', 'Passionate', 'Quick-witted', 'Resilient', 'Spirited', 'Tenacious', 'Unstoppable', 'Valiant', 'Whimsical', 'Xtraordinary', 'Youthful-at-heart', 'Zesty'];
+    const b = ['Otter', 'Falcon', 'Fox', 'Panda', 'Lynx', 'Hawk', 'Wolf', 'Tiger', 'Eagle', 'Bear', 'Shark', 'Dolphin', 'Raven', 'Leopard', 'Panther', 'Cheetah', 'Gorilla', 'Koala', 'Squirrel', 'Rabbit', 'Deer', 'Moose', 'Buffalo', 'Alligator', 'Crocodile', 'Turtle', 'Frog', 'Snake', 'Horse', 'Donkey', 'Zebra', 'Giraffe', 'Elephant', 'Rhino', 'Hippo', 'Armadillo', 'Badger', 'Beaver', 'Camel', 'Chameleon', 'Chipmunk', 'Cougar', 'Crab', 'Crow', 'Ferret', 'Gazelle', 'Gerbil', 'Goat', 'Gopher', 'Guinea Pig', 'Hamster', 'Hedgehog', 'Ibex', 'Jackal', 'Jerboa', 'Kangaroo', 'Koala', 'Lemur', 'Meerkat', 'Mongoose', 'Mule', 'Ocelot', 'Octopus', 'Orangutan', 'Owl', 'Porcupine', 'Prairie Dog', 'Quokka', 'Raccoon', 'Rat', 'Reindeer', 'Salamander', 'Sea Lion', 'Skunk', 'Sloth', 'Swan', 'Tapir', 'Vole', 'Wombat'];
     return `${a[Math.floor(Math.random() * a.length)]} ${b[Math.floor(Math.random() * b.length)]}`;
 }
 
@@ -1657,6 +1657,7 @@ function initRevealDiagramRefresh() {
             wrapper.appendChild(pre);
             mermaidNodes.push(pre);
         });
+        const didRenderMermaid = mermaidNodes.length > 0;
         const afterMermaid = () => {
             scheduleMermaidInteraction();
             if (didRenderMermaid && window.Reveal && typeof window.Reveal.layout === 'function') {
