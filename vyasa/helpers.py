@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import tomllib
 from functools import lru_cache
@@ -72,7 +73,14 @@ def parse_frontmatter(file_path: str | Path):
 
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            post = frontmatter.load(f)
+            text = f.read()
+            if not text.startswith(('---\n', '---\r\n', '+++\n', '+++\r\n')):
+                result = ({}, text)
+                _frontmatter_cache[cache_key] = (mtime, result)
+                elapsed = (time.time() - start_time) * 1000
+                logger.debug(f"[DEBUG] parse_frontmatter SKIP NO FRONTMATTER {file_path.name} ({elapsed:.2f}ms)")
+                return result
+            post = frontmatter.loads(text)
             result = (post.metadata, post.content)
             _frontmatter_cache[cache_key] = (mtime, result)
             elapsed = (time.time() - start_time) * 1000
@@ -102,6 +110,24 @@ def get_post_title(file_path: str | Path, abbreviations=None) -> str:
     """Get post title from frontmatter or filename"""
     title, _ = resolve_markdown_title(file_path, abbreviations=abbreviations)
     return title
+
+def iter_visible_files(root: Path, suffixes: tuple[str, ...], include_hidden: bool = False):
+    """Yield files while pruning hidden and excluded directories before descent."""
+    from .config import get_config
+
+    root = root.resolve()
+    excluded = set(get_config().get_reload_excludes())
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [
+            name for name in dirnames
+            if (include_hidden or not name.startswith(".")) and name not in excluded
+        ]
+        for filename in filenames:
+            if not include_hidden and filename.startswith("."):
+                continue
+            if not filename.endswith(suffixes):
+                continue
+            yield Path(dirpath) / filename
 
 @lru_cache(maxsize=128)
 def _cached_vyasa_config(path_str: str, mtime: float):

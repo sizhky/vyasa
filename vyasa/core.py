@@ -30,6 +30,7 @@ from .helpers import (
     _effective_include_list,
     _should_include_folder,
     find_folder_note_file,
+    iter_visible_files,
 )
 from .layout_helpers import (
     _resolve_layout_config,
@@ -2587,8 +2588,8 @@ def navbar(show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compac
 def _posts_sidebar_fingerprint():
     root = get_root_folder()
     try:
-        md_mtime = max((p.stat().st_mtime for p in root.rglob("*.md")), default=0)
-        pdf_mtime = max((p.stat().st_mtime for p in root.rglob("*.pdf")), default=0)
+        md_mtime = max((p.stat().st_mtime for p in iter_visible_files(root, (".md",), get_config().get_show_hidden())), default=0)
+        pdf_mtime = max((p.stat().st_mtime for p in iter_visible_files(root, (".pdf",), get_config().get_show_hidden())), default=0)
         excalidraw_mtime = max((p.stat().st_mtime for p in root.rglob("*.excalidraw")), default=0)
         return max(md_mtime, pdf_mtime, excalidraw_mtime)
     except Exception:
@@ -2632,7 +2633,7 @@ def _find_search_matches_uncached(query, limit=40):
     ignore_list = _effective_ignore_list(root)
     include_list = _effective_include_list(root)
     results = []
-    for item in chain(root.rglob("*.md"), root.rglob("*.pdf")):
+    for item in iter_visible_files(root, (".md", ".pdf"), show_hidden):
         if not show_hidden and any(part.startswith('.') for part in item.relative_to(root).parts):
             continue
         if ".vyasa" in item.parts:
@@ -3357,8 +3358,8 @@ def build_post_tree(folder, roles=None):
 def _posts_tree_fingerprint():
     root = get_root_folder()
     try:
-        md_mtime = max((p.stat().st_mtime for p in root.rglob("*.md")), default=0)
-        pdf_mtime = max((p.stat().st_mtime for p in root.rglob("*.pdf")), default=0)
+        md_mtime = max((p.stat().st_mtime for p in iter_visible_files(root, (".md",), get_config().get_show_hidden())), default=0)
+        pdf_mtime = max((p.stat().st_mtime for p in iter_visible_files(root, (".pdf",), get_config().get_show_hidden())), default=0)
         excalidraw_mtime = max((p.stat().st_mtime for p in root.rglob("*.excalidraw")), default=0)
         vyasa_mtime = max((p.stat().st_mtime for p in root.rglob(".vyasa")), default=0)
         return max(md_mtime, pdf_mtime, excalidraw_mtime, vyasa_mtime)
