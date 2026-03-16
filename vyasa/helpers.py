@@ -55,6 +55,13 @@ def _unique_anchor(base: str, counts: dict[str, int]) -> str:
 
 _frontmatter_cache: dict[str, tuple[float, tuple[dict, str]]] = {}
 
+def should_exclude_dir(name: str, excluded: set[str]) -> bool:
+    """Exclude exact matches plus common derived names like .venv.bak."""
+    if name in excluded:
+        return True
+    prefixes = (".venv", "venv", "node_modules", ".git", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "dist", "build", ".cache")
+    return any(name == prefix or name.startswith(prefix + ".") for prefix in prefixes)
+
 def parse_frontmatter(file_path: str | Path):
     """Parse frontmatter from a markdown file with caching"""
     import time
@@ -62,7 +69,10 @@ def parse_frontmatter(file_path: str | Path):
 
     file_path = Path(file_path)
     cache_key = str(file_path)
-    mtime = file_path.stat().st_mtime
+    try:
+        mtime = file_path.stat().st_mtime
+    except OSError:
+        return {}, ""
 
     if cache_key in _frontmatter_cache:
         cached_mtime, cached_data = _frontmatter_cache[cache_key]
@@ -86,9 +96,20 @@ def parse_frontmatter(file_path: str | Path):
             elapsed = (time.time() - start_time) * 1000
             logger.debug(f"[DEBUG] parse_frontmatter READ FILE {file_path.name} ({elapsed:.2f}ms)")
             return result
+    except UnicodeDecodeError as e:
+        logger.warning("Skipping non-UTF8 markdown file {}: {}", file_path, e)
+        result = ({}, "")
+        _frontmatter_cache[cache_key] = (mtime, result)
+        return result
     except Exception as e:
-        print(f"Error parsing frontmatter from {file_path}: {e}")
-        return {}, open(file_path).read()
+        logger.warning("Error parsing frontmatter from {}: {}", file_path, e)
+        try:
+            text = file_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return {}, ""
+        result = ({}, text)
+        _frontmatter_cache[cache_key] = (mtime, result)
+        return result
 
 def resolve_markdown_title(file_path: str | Path, abbreviations=None) -> tuple[str, str]:
     """Get effective title and body, preferring frontmatter title, then first H1, then slug."""
@@ -120,7 +141,7 @@ def iter_visible_files(root: Path, suffixes: tuple[str, ...], include_hidden: bo
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [
             name for name in dirnames
-            if (include_hidden or not name.startswith(".")) and name not in excluded
+            if (include_hidden or not name.startswith(".")) and not should_exclude_dir(name, excluded)
         ]
         for filename in filenames:
             if not include_hidden and filename.startswith("."):
@@ -263,13 +284,7 @@ def get_vyasa_config(folder: Path):
         return _normalize_vyasa_config({})
     parsed = _cached_vyasa_config(str(vyasa_path), mtime)
     config = _normalize_vyasa_config(parsed)
-    logger.debug(
-        "[DEBUG] .vyasa config for %s: order=%s sort=%s folders_first=%s",
-        folder,
-        config.get("order"),
-        config.get("sort"),
-        config.get("folders_first"),
-    )
+    logger.debug("[DEBUG] .vyasa config for {}: order={} sort={} folders_first={}", folder, config.get("order"), config.get("sort"), config.get("folders_first"))
     return config
 
 def order_vyasa_entries(entries, config):
@@ -281,10 +296,7 @@ def order_vyasa_entries(entries, config):
         sorted_entries = _sort_vyasa_entries(entries, config.get("sort"), config.get("folders_first", True))
         if config.get("folders_always_first"):
             sorted_entries = _group_folders_first(sorted_entries)
-        logger.debug(
-            "[DEBUG] .vyasa order empty; sorted entries: %s",
-            [item.name for item in sorted_entries],
-        )
+        logger.debug("[DEBUG] .vyasa order empty; sorted entries: {}", [item.name for item in sorted_entries])
         return sorted_entries
 
     exact_map = {}
@@ -316,11 +328,7 @@ def order_vyasa_entries(entries, config):
     combined = ordered + remaining_sorted
     if config.get("folders_always_first"):
         combined = _group_folders_first(combined)
-    logger.debug(
-        "[DEBUG] .vyasa ordered=%s remaining=%s",
-        [item.name for item in ordered],
-        [item.name for item in remaining_sorted],
-    )
+    logger.debug("[DEBUG] .vyasa ordered={} remaining={}", [item.name for item in ordered], [item.name for item in remaining_sorted])
     return combined
 
 def _group_folders_first(entries):

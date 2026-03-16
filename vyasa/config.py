@@ -221,7 +221,7 @@ class VyasaConfig:
         """Get extra reload excludes, merged with sane defaults."""
         defaults = [
             ".git", ".venv", "venv", "node_modules", "dist", "build",
-            ".pytest_cache", ".mypy_cache", ".ruff_cache", "__pycache__",
+            ".pytest_cache", ".mypy_cache", ".ruff_cache", "__pycache__", ".cache",
         ]
         value = self.get('reload_exclude', 'VYASA_RELOAD_EXCLUDE', [])
         extras = [str(v).strip() for v in self._coerce_list(value) if str(v).strip()]

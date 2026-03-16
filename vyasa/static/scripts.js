@@ -585,9 +585,12 @@ async function renderD2Diagrams(rootElement = document) {
     if (!wrappers.length) {
         return;
     }
+    const totalStart = performance.now();
     let d2;
     try {
+        const loadStart = performance.now();
         d2 = await getD2Instance();
+        d2DebugLog('library ready', { wrappers: wrappers.length, ms: performance.now() - loadStart });
     } catch (error) {
         console.error('Failed to initialize D2 renderer', error);
         return;
@@ -626,7 +629,9 @@ async function renderD2Diagrams(rootElement = document) {
 
             let result;
             try {
+                const compileStart = performance.now();
                 result = await d2.compile(decodedSource, compileOptions);
+                d2DebugLog('compile complete', { id: wrapper.id, ms: performance.now() - compileStart });
             } catch (compileError) {
                 if (!hasD2SubstitutionBraceError(compileError)) {
                     throw compileError;
@@ -706,17 +711,21 @@ async function renderD2Diagrams(rootElement = document) {
                 target: renderOptions.target,
                 animateInterval: renderOptions.animateInterval
             });
+            const renderStart = performance.now();
             const rawRenderResult = await d2.render(result.diagram, renderOptions);
+            d2DebugLog('render complete', { id: wrapper.id, ms: performance.now() - renderStart });
             const svgMarkup = coerceD2RenderToSvgMarkup(rawRenderResult);
             let normalizedSvg = normalizeD2SvgForBrowser(svgMarkup);
             if (result.__vyasaFullwidthDollarFallback) {
                 normalizedSvg = normalizedSvg.replaceAll('＄', '$');
             }
+            const hydrateStart = performance.now();
             wrapper.innerHTML = normalizedSvg;
             rehydrateScripts(wrapper);
             activateSvgAnimations(wrapper);
             ensureD2PanzoomStage(wrapper);
             wrapper.dataset.d2Rendered = 'true';
+            d2DebugLog('svg hydrated', { id: wrapper.id, ms: performance.now() - hydrateStart });
             const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
             d2DebugLog('rendered', {
                 id: wrapper.id,
@@ -737,6 +746,7 @@ async function renderD2Diagrams(rootElement = document) {
             }
         }
     }
+    d2DebugLog('renderD2Diagrams complete', { wrappers: wrappers.length, ms: performance.now() - totalStart });
     initD2Interaction(rootElement);
 }
 

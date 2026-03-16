@@ -5,15 +5,30 @@ import threading
 import webbrowser
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 from .config import get_config, reload_config
+from .logging import configure_logging
 
 _core_app = None
+_browser_url = None
+_browser_opened = False
 
 async def app(scope, receive, send):
-    global _core_app
+    global _core_app, _browser_opened
     if _core_app is None:
         from .core import app as core_app
         _core_app = core_app
-    await _core_app(scope, receive, send)
+    async def wrapped_send(message):
+        global _browser_opened
+        if (
+            scope["type"] == "lifespan"
+            and message.get("type") == "lifespan.startup.complete"
+            and _browser_url
+            and not _browser_opened
+        ):
+            _browser_opened = True
+            threading.Timer(0.1, lambda: webbrowser.open(_browser_url)).start()
+            print(f"Opening browser at: {_browser_url}")
+        await send(message)
+    await _core_app(scope, receive, wrapped_send)
 
 def _get_vyasa_version():
     try:
@@ -124,11 +139,10 @@ def cli():
     if host == '0.0.0.0':
         print(f"Server accessible from network at: http://<your-ip>:{port}")
 
+    global _browser_url, _browser_opened
     browser_host = '127.0.0.1' if host == '0.0.0.0' else host
-    browser_url = f"http://{browser_host}:{port}"
-    if not args.no_browser:
-        threading.Timer(1.0, lambda: webbrowser.open(browser_url)).start()
-        print(f"Opening browser at: {browser_url}")
+    _browser_url = None if args.no_browser else f"http://{browser_host}:{port}"
+    _browser_opened = False
     
     # Configure reload to watch markdown and PDF files in the blog directory
     reload_kwargs = {}
@@ -143,7 +157,8 @@ def cli():
     else:
         reload_kwargs = {"reload": False}
 
-    uvicorn.run("vyasa.main:app", host=host, port=port, **reload_kwargs)
+    configure_logging()
+    uvicorn.run("vyasa.main:app", host=host, port=port, log_config=None, **reload_kwargs)
 
 if __name__ == "__main__":
     cli()
