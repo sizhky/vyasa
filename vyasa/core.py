@@ -2280,8 +2280,8 @@ def posts_sidebar_lazy(request: Request = None, current_path: str = ""):
         id="posts-sidebar"
     )
 
-@rt("/_sidebar/posts/branch/{path:path}")
-def posts_sidebar_branch(path: str, request: Request = None):
+@rt("/_sidebar/posts/branch")
+def posts_sidebar_branch(path: str = "", request: Request = None):
     roles = _get_roles_from_request(request)
     folder = (get_root_folder() / path).resolve()
     root = get_root_folder().resolve()
@@ -3335,7 +3335,7 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
                 if not _folder_has_visible_descendant(item, roles):
                     logger.debug("Pruned empty lazy folder {}", item)
                     continue
-                branch_href = f"/_sidebar/posts/branch/{quote(rel_folder, safe='')}"
+                branch_href = f"/_sidebar/posts/branch?path={quote(rel_folder, safe='')}"
                 items.append(Li(Details(
                     Summary(
                         Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
