@@ -1,6 +1,8 @@
 from pathlib import Path
 import sys
 import os
+import threading
+import webbrowser
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 from .config import get_config, reload_config
 
@@ -79,6 +81,7 @@ def cli():
     parser.add_argument('--host', help='Server host (default: 127.0.0.1, use 0.0.0.0 for all interfaces)')
     parser.add_argument('--port', type=int, help='Server port (default: 5001)')
     parser.add_argument('--no-reload', action='store_true', help='Disable auto-reload')
+    parser.add_argument('--no-browser', action='store_true', help='Do not open the site in a browser')
     parser.add_argument('--user', help='Login username (overrides config/env)')
     parser.add_argument('--password', help='Login password (overrides config/env)')
     
@@ -113,6 +116,12 @@ def cli():
     print(f"Serving at: http://{host}:{port}")
     if host == '0.0.0.0':
         print(f"Server accessible from network at: http://<your-ip>:{port}")
+
+    browser_host = '127.0.0.1' if host == '0.0.0.0' else host
+    browser_url = f"http://{browser_host}:{port}"
+    if not args.no_browser:
+        threading.Timer(1.0, lambda: webbrowser.open(browser_url)).start()
+        print(f"Opening browser at: {browser_url}")
     
     # Configure reload to watch markdown and PDF files in the blog directory
     reload_kwargs = {}
