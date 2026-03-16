@@ -82,11 +82,26 @@ def parse_frontmatter(file_path: str | Path):
         print(f"Error parsing frontmatter from {file_path}: {e}")
         return {}, open(file_path).read()
 
+def resolve_markdown_title(file_path: str | Path, abbreviations=None) -> tuple[str, str]:
+    """Get effective title and body, preferring frontmatter title, then first H1, then slug."""
+    metadata, raw_content = parse_frontmatter(file_path)
+    file_path = Path(file_path)
+    explicit_title = metadata.get("title")
+    if explicit_title:
+        return explicit_title, raw_content
+
+    match = re.match(r"^\s*#\s+(.+?)\s*$\n?", raw_content or "", re.MULTILINE)
+    if match:
+        title = _plain_text_from_html(_strip_inline_markdown(match.group(1).strip()))
+        body = (raw_content[:match.start()] + raw_content[match.end():]).lstrip("\n")
+        return title, body
+
+    return slug_to_title(file_path.stem, abbreviations=abbreviations), raw_content
+
 def get_post_title(file_path: str | Path, abbreviations=None) -> str:
     """Get post title from frontmatter or filename"""
-    metadata, _ = parse_frontmatter(file_path)
-    file_path = Path(file_path)
-    return metadata.get('title', slug_to_title(file_path.stem, abbreviations=abbreviations))
+    title, _ = resolve_markdown_title(file_path, abbreviations=abbreviations)
+    return title
 
 @lru_cache(maxsize=128)
 def _cached_vyasa_config(path_str: str, mtime: float):

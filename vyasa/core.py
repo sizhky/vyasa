@@ -22,6 +22,7 @@ from .helpers import (
     _unique_anchor,
     parse_frontmatter,
     get_post_title,
+    resolve_markdown_title,
     get_vyasa_config,
     order_vyasa_entries,
     _effective_abbreviations,
@@ -2881,7 +2882,7 @@ def build_toc_items(headings):
     return items
 
 def get_custom_css_links(current_path=None, section_class=None):
-    """Check for custom.css or style.css in blog root and current post's directory
+    """Check for custom.css or style.css from root through ancestor folders
     
     Returns list of Link/Style elements for all found CSS files, ordered from root to specific
     (so more specific styles can override general ones). Folder-specific CSS is automatically
@@ -2897,19 +2898,20 @@ def get_custom_css_links(current_path=None, section_class=None):
             css_elements.append(Link(rel="stylesheet", href=f"/posts/{filename}"))
             break  # Only one from root
     
-    # Then check current post's directory (if provided)
-    # These are automatically scoped to only apply within the section
+    # Then check each ancestor directory from root -> current post folder.
+    # These are automatically scoped to only apply within the current section.
     if current_path and section_class:
         from pathlib import Path
         post_dir = Path(current_path).parent if '/' in current_path else Path('.')
         
         if str(post_dir) != '.':  # Not in root
-            for filename in ['custom.css', 'style.css']:
-                css_file = root / post_dir / filename
-                if css_file.exists():
-                    # Read CSS content and wrap all rules with section scope
+            ancestors = [Path(*post_dir.parts[:idx]) for idx in range(1, len(post_dir.parts) + 1)]
+            for ancestor in ancestors:
+                for filename in ['custom.css', 'style.css']:
+                    css_file = root / ancestor / filename
+                    if not css_file.exists():
+                        continue
                     css_content = css_file.read_text()
-                    # Wrap the entire CSS in a section-specific scope
                     scoped_css = Style(f"""
                         #main-content.{section_class} {{
                             {css_content}
@@ -3487,13 +3489,11 @@ def post_detail(path: str, htmx, request: Request):
         return not_found(htmx, auth=request.scope.get("auth"))
     
     metadata, raw_content = parse_frontmatter(file_path)
-    
-    # Get title from frontmatter or filename
-    post_title = metadata.get('title', slug_to_title(path.split('/')[-1], abbreviations=abbreviations))
+    post_title, render_content = resolve_markdown_title(file_path, abbreviations=abbreviations)
     
     # Render the markdown content with current path for relative link resolution
     md_start = time.time()
-    content = from_md(raw_content, current_path=path)
+    content = from_md(render_content, current_path=path)
     md_time = (time.time() - md_start) * 1000
     logger.debug(f"[DEBUG] Markdown rendering took {md_time:.2f}ms")
     
@@ -3781,11 +3781,11 @@ def index(htmx, request: Request):
     
     if index_file:
         # Render the index/readme file
-        metadata, raw_content = parse_frontmatter(index_file)
-        page_title = metadata.get('title', blog_title)
+        _, raw_content = parse_frontmatter(index_file)
+        page_title, render_content = resolve_markdown_title(index_file)
         # Use index file's relative path from root for link resolution
         index_path = str(index_file.relative_to(get_root_folder()).with_suffix(''))
-        content = from_md(raw_content, current_path=index_path)
+        content = from_md(render_content, current_path=index_path)
         page_content = Div(H1(page_title, cls="text-4xl font-bold mb-8"), content)
         
         layout_start = time.time()
