@@ -11,7 +11,7 @@ import mistletoe as mst
 from fasthtml.common import *
 from monsterui.all import *
 from .core import (
-    parse_frontmatter, get_post_title, slug_to_title, 
+    parse_frontmatter, get_post_title, slug_to_title, resolve_markdown_title,
     from_md, extract_toc, build_toc_items, text_to_anchor,
     build_post_tree, ContentRenderer, extract_footnotes,
     preprocess_super_sub, preprocess_tabs,
@@ -629,10 +629,10 @@ def build_static_site(input_dir=None, output_dir=None):
         
         # Parse frontmatter and content
         metadata, raw_content = parse_frontmatter(md_file)
-        post_title = metadata.get('title', get_post_title(md_file, abbreviations=abbreviations))
+        post_title, render_content = resolve_markdown_title(md_file, abbreviations=abbreviations)
         
         # Render markdown to HTML
-        content_div = from_md(raw_content)
+        content_div = from_md(render_content)
         title_html = f'<h1 class="text-4xl font-bold mb-8">{post_title}</h1>'
         content_html = title_html + to_xml(content_div)
         
