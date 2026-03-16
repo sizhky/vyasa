@@ -36,8 +36,11 @@ def build_command():
     parser = argparse.ArgumentParser(description='Build static site from markdown files')
     parser.add_argument('directory', nargs='?', help='Path to markdown files directory')
     parser.add_argument('-o', '--output', help='Output directory (default: ./dist)', default='dist')
+    parser.add_argument('--show-hidden', action='store_true', help='Include hidden files and folders in listings')
     
     args = parser.parse_args(sys.argv[2:])  # Skip 'vyasa' and 'build'
+    if args.show_hidden:
+        os.environ['VYASA_SHOW_HIDDEN'] = 'true'
     
     try:
         output_dir = build_static_site(input_dir=args.directory, output_dir=args.output)
@@ -84,6 +87,7 @@ def cli():
     parser.add_argument('--no-browser', action='store_true', help='Do not open the site in a browser')
     parser.add_argument('--user', help='Login username (overrides config/env)')
     parser.add_argument('--password', help='Login password (overrides config/env)')
+    parser.add_argument('--show-hidden', action='store_true', help='Include hidden files and folders in listings')
     
     args = parser.parse_args()
     
@@ -109,6 +113,9 @@ def cli():
         os.environ['VYASA_USER'] = args.user
     if args.password:
         os.environ['VYASA_PASSWORD'] = args.password
+    if args.show_hidden:
+        os.environ['VYASA_SHOW_HIDDEN'] = 'true'
+        config = reload_config()
 
     print(f"Starting Vyasa server...")
     print(f"Blog root: {config.get_root_folder()}")

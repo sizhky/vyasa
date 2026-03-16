@@ -2273,7 +2273,7 @@ async def admin_rbac(htmx, request: Request):
 @rt("/_sidebar/posts")
 def posts_sidebar_lazy(request: Request = None):
     roles = _get_roles_from_request(request)
-    html = _cached_posts_sidebar_html(_posts_sidebar_fingerprint(), tuple(roles or []))
+    html = _cached_posts_sidebar_html(_posts_sidebar_fingerprint(), tuple(roles or []), get_config().get_show_hidden())
     return Aside(
         NotStr(html),
         cls="hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
@@ -2611,12 +2611,13 @@ def _parse_search_query(query):
     return None, ""
 
 @lru_cache(maxsize=256)
-def _cached_search_matches(fingerprint, query, limit):
+def _cached_search_matches(fingerprint, show_hidden, query, limit):
     return _find_search_matches_uncached(query, limit)
 
 def _find_search_matches(query, limit=40):
     fingerprint = _posts_sidebar_fingerprint()
-    return _cached_search_matches(fingerprint, query, limit)
+    show_hidden = get_config().get_show_hidden()
+    return _cached_search_matches(fingerprint, show_hidden, query, limit)
 
 def _find_search_matches_uncached(query, limit=40):
     trimmed = (query or "").strip()
@@ -2625,12 +2626,13 @@ def _find_search_matches_uncached(query, limit=40):
     regex, regex_error = _parse_search_query(trimmed)
     query_norm = _normalize_search_text(trimmed) if not regex else ""
     root = get_root_folder()
+    show_hidden = get_config().get_show_hidden()
     index_file = find_index_file()
     ignore_list = _effective_ignore_list(root)
     include_list = _effective_include_list(root)
     results = []
     for item in chain(root.rglob("*.md"), root.rglob("*.pdf")):
-        if any(part.startswith('.') for part in item.relative_to(root).parts):
+        if not show_hidden and any(part.startswith('.') for part in item.relative_to(root).parts):
             continue
         if ".vyasa" in item.parts:
             continue
@@ -2752,8 +2754,8 @@ def _posts_search_block():
         cls="posts-search-block sticky top-0 z-10 bg-white/20 dark:bg-slate-950/70 mb-3"
     )
 
-@lru_cache(maxsize=4)
-def _cached_posts_sidebar_html(fingerprint, roles_key):
+@lru_cache(maxsize=8)
+def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden):
     sidebars_open = get_config().get_sidebars_open()
     sidebar = collapsible_sidebar(
         "menu",
@@ -2773,8 +2775,9 @@ def _cached_posts_sidebar_html(fingerprint, roles_key):
 
 def _preload_posts_cache():
     try:
-        _cached_build_post_tree(_posts_tree_fingerprint(), ())
-        _cached_posts_sidebar_html(_posts_sidebar_fingerprint(), ())
+        show_hidden = get_config().get_show_hidden()
+        _cached_build_post_tree(_posts_tree_fingerprint(), (), show_hidden)
+        _cached_posts_sidebar_html(_posts_sidebar_fingerprint(), (), show_hidden)
         logger.info("Preloaded posts sidebar cache.")
     except Exception as exc:
         logger.warning(f"Failed to preload posts sidebar cache: {exc}")
@@ -3101,7 +3104,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
             ),
             Div(
-                NotStr(_cached_posts_sidebar_html(_posts_sidebar_fingerprint(), roles_key)),
+                NotStr(_cached_posts_sidebar_html(_posts_sidebar_fingerprint(), roles_key, get_config().get_show_hidden())),
                 cls="p-4 overflow-y-auto"
             ),
             id="mobile-posts-panel",
@@ -3219,6 +3222,7 @@ def build_post_tree(folder, roles=None):
     import time
     start_time = time.time()
     root = get_root_folder()
+    show_hidden = get_config().get_show_hidden()
     items = []
     try:
         index_file = find_index_file() if folder == root else None
@@ -3230,7 +3234,7 @@ def build_post_tree(folder, roles=None):
             if item.name == ".vyasa":
                 continue
             if item.is_dir():
-                if item.name.startswith('.'):
+                if not show_hidden and item.name.startswith('.'):
                     continue
                 # Check include/ignore lists
                 if not _should_include_folder(item.name, include_list, ignore_list):
@@ -3257,7 +3261,7 @@ def build_post_tree(folder, roles=None):
     
     for item in entries:
         if item.is_dir():
-            if item.name.startswith('.'): continue
+            if not show_hidden and item.name.startswith('.'): continue
             sub_items = build_post_tree(item, roles=roles)
             folder_title = slug_to_title(item.name, abbreviations=abbreviations)
             note_file = find_folder_note_file(item)
@@ -3359,15 +3363,16 @@ def _posts_tree_fingerprint():
     except Exception:
         return 0
 
-@lru_cache(maxsize=4)
-def _cached_build_post_tree(fingerprint, roles_key):
+@lru_cache(maxsize=8)
+def _cached_build_post_tree(fingerprint, roles_key, show_hidden):
     roles = list(roles_key) if roles_key else []
     return build_post_tree(get_root_folder(), roles=roles)
 
 def get_posts(roles=None):
     fingerprint = _posts_tree_fingerprint()
     roles_key = tuple(roles or [])
-    return _cached_build_post_tree(fingerprint, roles_key)
+    show_hidden = get_config().get_show_hidden()
+    return _cached_build_post_tree(fingerprint, roles_key, show_hidden)
 
 def not_found(htmx=None, auth=None):
     """Custom 404 error page"""

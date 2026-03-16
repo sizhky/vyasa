@@ -210,6 +210,13 @@ class VyasaConfig:
             return value.lower() in ('true', '1', 'yes', 'on')
         return bool(value)
 
+    def get_show_hidden(self) -> bool:
+        """Get whether hidden files and folders should appear in listings."""
+        value = self.get('show_hidden', 'VYASA_SHOW_HIDDEN', False)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
+
 
 
 # Global config instance

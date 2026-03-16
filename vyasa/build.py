@@ -363,7 +363,7 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
     return html
 
 
-def build_post_tree_static(folder, root_folder):
+def build_post_tree_static(folder, root_folder, show_hidden=False):
     """Build post tree with static .html links instead of HTMX"""
     items = []
     try:
@@ -387,7 +387,7 @@ def build_post_tree_static(folder, root_folder):
             if item.name == ".vyasa":
                 continue
             if item.is_dir():
-                if item.name.startswith('.'):
+                if not show_hidden and item.name.startswith('.'):
                     continue
                 # Check include/ignore lists
                 if not _should_include_folder(item.name, include_list, ignore_list):
@@ -406,9 +406,9 @@ def build_post_tree_static(folder, root_folder):
     
     for item in entries:
         if item.is_dir():
-            if item.name.startswith('.'): 
+            if not show_hidden and item.name.startswith('.'): 
                 continue
-            sub_items = build_post_tree_static(item, root_folder)
+            sub_items = build_post_tree_static(item, root_folder, show_hidden=show_hidden)
             folder_title = slug_to_title(item.name, abbreviations=abbreviations)
             note_file = find_folder_note_file(item)
             note_link = None
@@ -572,6 +572,7 @@ def build_static_site(input_dir=None, output_dir=None):
     config = get_config()
     root_folder = config.get_root_folder()
     blog_title = config.get_blog_title()
+    show_hidden = config.get_show_hidden()
     abbreviations = _effective_abbreviations(root_folder)
     
     # Set default output directory
@@ -591,7 +592,7 @@ def build_static_site(input_dir=None, output_dir=None):
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Build navigation tree with static .html links
-    nav_tree = build_post_tree_static(root_folder, root_folder)
+    nav_tree = build_post_tree_static(root_folder, root_folder, show_hidden=show_hidden)
     root_icon = root_folder / "static" / "icon.png"
     favicon_href = "/static/icon.png"
     
@@ -603,6 +604,8 @@ def build_static_site(input_dir=None, output_dir=None):
         # Only include files that are actually inside root_folder
         try:
             relative_path = md_file.relative_to(root_folder)
+            if not show_hidden and any(part.startswith('.') for part in relative_path.parts):
+                continue
             # Check if any folder in path should be excluded
             path_parts = relative_path.parts[:-1]  # Exclude filename
             should_skip = False
