@@ -2276,7 +2276,7 @@ def posts_sidebar_lazy(request: Request = None, current_path: str = ""):
     html = _cached_posts_sidebar_html(_posts_sidebar_fingerprint(), tuple(roles or []), get_config().get_show_hidden(), current_path or "")
     return Aside(
         NotStr(html),
-        cls="hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
+        cls="hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]",
         id="posts-sidebar"
     )
 
@@ -2848,7 +2848,7 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
     summary_classes = f"flex items-center gap-2 font-semibold cursor-pointer py-2.5 px-3 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-lg select-none list-none {common_frost_style} min-h-[56px]"
     if scroll_target == "list":
         content_classes = f"p-3 {common_frost_style} rounded-lg max-h-[calc(100vh-18rem)] flex flex-col overflow-hidden min-h-0"
-        list_classes = "list-none pt-2 flex-1 min-h-0 overflow-x-auto overflow-y-auto sidebar-scroll-container"
+        list_classes = "list-none pt-2 sidebar-scroll-container"
     else:
         content_classes = f"p-3 {common_frost_style} rounded-lg overflow-x-auto overflow-y-auto max-h-[calc(100vh-18rem)] sidebar-scroll-container"
         list_classes = "list-none pt-4"
@@ -2859,7 +2859,10 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
         Summary(*summary_content, cls=summary_classes, style="margin: 0 0 0.5rem 0;"),
         Div(
             *extra_content,
-            Ul(*items_list, cls=list_classes, id="sidebar-scroll-container" if scroll_target == "list" else None),
+            Div(
+                Ul(*items_list, cls=list_classes, id="sidebar-scroll-container" if scroll_target == "list" else None),
+                cls="min-w-0 flex-1 min-h-0 overflow-x-auto overflow-y-auto"
+            ) if scroll_target == "list" else Ul(*items_list, cls=list_classes, id=content_id),
             cls=content_classes,
             id=content_id,
             style="will-change: auto;"
@@ -3179,7 +3182,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                     Span("Loading posts…", cls="ml-2 text-sm"),
                     cls="flex items-center justify-center h-32 text-slate-400"
                 ),
-                cls="hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
+                cls="hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]",
                 id="posts-sidebar",
                 hx_get=f"/_sidebar/posts?current_path={quote(current_path or '', safe='')}",
                 hx_trigger="load",
@@ -3326,7 +3329,7 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
                 if should_expand:
                     sub_items = build_post_tree(item, roles=roles, max_depth=0 if not child_active else None, active_parts=child_active)
                     items.append(Li(Details(
-                        Summary(Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(folder_title, cls="truncate min-w-0", title=folder_title), cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"),
+                        Summary(Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(folder_title, cls="whitespace-nowrap", title=folder_title), cls="inline-flex w-max items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap"),
                         Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"),
                         data_folder="true",
                         open=True,
@@ -3340,8 +3343,8 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
                     Summary(
                         Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                         Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
-                        Span(folder_title, cls="truncate min-w-0", title=folder_title),
-                        cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0",
+                        Span(folder_title, cls="whitespace-nowrap", title=folder_title),
+                        cls="inline-flex w-max items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap",
                         hx_get=branch_href,
                         hx_trigger="click once",
                         hx_target="next ul",
@@ -3366,32 +3369,32 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
                     note_link = A(
                         href=f'/posts/{note_slug}',
                         hx_get=f'/posts/{note_slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
-                        cls="folder-note-link truncate min-w-0 hover:underline",
+                        cls="folder-note-link whitespace-nowrap hover:underline",
                         title=f"Open {folder_title}",
                         onclick="event.stopPropagation();",
                     )(folder_title)
             if not sub_items and not note_allowed:
                 continue
-            title_node = note_link if note_link else Span(folder_title, cls="truncate min-w-0", title=folder_title)
+            title_node = note_link if note_link else Span(folder_title, cls="whitespace-nowrap", title=folder_title)
             if sub_items:
                 items.append(Li(Details(
                     Summary(
                         Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                         Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                         title_node,
-                        cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"),
+                        cls="inline-flex w-max items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap"),
                     Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"),
                     data_folder="true",
                     open=should_expand), cls="my-1"))
             elif note_allowed and note_slug:
-                title_text = Span(folder_title, cls="truncate min-w-0", title=folder_title)
+                title_text = Span(folder_title, cls="whitespace-nowrap", title=folder_title)
                 items.append(Li(A(
                     Span(cls="w-4 mr-2 shrink-0"),
                     Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                     title_text,
                     href=f'/posts/{note_slug}',
                     hx_get=f'/posts/{note_slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
-                    cls="post-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 hover:underline transition-colors min-w-0",
+                    cls="post-link inline-flex w-max items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 hover:underline transition-colors whitespace-nowrap",
                     data_path=note_slug)))
         elif item.suffix == '.md':
             slug = str(item.relative_to(root).with_suffix(''))
@@ -3407,10 +3410,10 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
             items.append(Li(A(
                 Span(cls="w-4 mr-2 shrink-0"),
                 Span(UkIcon("monitor" if has_slides else "file-text", cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
-                Span(title, cls="truncate min-w-0", title=title),
+                Span(title, cls="whitespace-nowrap", title=title),
                 href=f'/posts/{slug}',
                 hx_get=f'/posts/{slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
-                cls="post-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0",
+                cls="post-link inline-flex w-max items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors whitespace-nowrap",
                 data_path=slug)))
         elif item.suffix == '.pdf':
             slug = str(item.relative_to(root).with_suffix(''))
@@ -3420,10 +3423,10 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
             items.append(Li(A(
                 Span(cls="w-4 mr-2 shrink-0"),
                 Span(UkIcon("file", cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
-                Span(f"{title} (PDF)", cls="truncate min-w-0", title=title),
+                Span(f"{title} (PDF)", cls="whitespace-nowrap", title=title),
                 href=f'/posts/{slug}',
                 hx_get=f'/posts/{slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
-                cls="post-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0",
+                cls="post-link inline-flex w-max items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors whitespace-nowrap",
                 data_path=slug)))
         elif item.suffix == '.excalidraw':
             slug = str(item.relative_to(root).with_suffix(''))
@@ -3433,10 +3436,10 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
             items.append(Li(A(
                 Span(cls="w-4 mr-2 shrink-0"),
                 Span(UkIcon("pencil", cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
-                Span(f"{title} (Excalidraw)", cls="truncate min-w-0", title=title),
+                Span(f"{title} (Excalidraw)", cls="whitespace-nowrap", title=title),
                 href=f'/drawings/{slug}',
                 hx_get=f'/drawings/{slug}', hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s",
-                cls="post-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0",
+                cls="post-link inline-flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors whitespace-nowrap",
                 data_path=slug)))
     
     elapsed = (time.time() - start_time) * 1000
