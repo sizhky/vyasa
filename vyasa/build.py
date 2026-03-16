@@ -680,10 +680,15 @@ def build_static_site(input_dir=None, output_dir=None):
         print("\nGenerating default index.html...")
         welcome_content = f'''
         <h1 class="text-4xl font-bold tracking-tight mb-8">Welcome to {blog_title}!</h1>
-        <p class="text-lg text-slate-600 dark:text-slate-400 mb-4">Your personal blogging platform.</p>
+        <p class="text-lg font-medium text-slate-700 dark:text-slate-300 mb-4">Quick start tutorial</p>
+        <ol class="list-decimal pl-6 space-y-2 text-base text-slate-600 dark:text-slate-400 mb-4">
+            <li>Use the sidebar to browse the files and folders in your blog.</li>
+            <li>Open a markdown file to preview it instantly.</li>
+            <li>Create an <strong>index.md</strong> or <strong>README.md</strong> in your blog directory to replace this page with your own landing page.</li>
+        </ol>
         <p class="text-base text-slate-600 dark:text-slate-400">
-            Browse your posts using the sidebar, or create an <strong>index.md</strong> or 
-            <strong>README.md</strong> file in your blog directory to customize this page.
+            More guides, examples, and documentation are available at
+            <a href="https://vyasa.yeshwanth.com" class="text-slate-900 dark:text-slate-100 underline underline-offset-4">vyasa.yeshwanth.com</a>.
         </p>
         '''
         

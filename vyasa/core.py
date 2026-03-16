@@ -4,7 +4,7 @@ import asyncio
 import tomllib
 from dataclasses import dataclass
 from itertools import chain, count
-from urllib.parse import quote_plus
+from urllib.parse import quote, quote_plus
 from functools import partial
 from functools import lru_cache
 from pathlib import Path
@@ -31,6 +31,7 @@ from .helpers import (
     _should_include_folder,
     find_folder_note_file,
     iter_visible_files,
+    should_exclude_dir,
 )
 from .layout_helpers import (
     _resolve_layout_config,
@@ -39,12 +40,9 @@ from .layout_helpers import (
 )
 from loguru import logger
 from fastsql import Database
+from .logging import configure_logging
 
-# disable debug level logs to stdout
-logger.remove()
-logger.add(sys.stdout, level="INFO")
-logfile = Path("/tmp/vyasa_core.log")
-logger.add(logfile, rotation="10 MB", retention="10 days", level="DEBUG")
+configure_logging()
 _diagram_uid_counter = count(1)
 
 
@@ -2273,14 +2271,26 @@ async def admin_rbac(htmx, request: Request):
 
 # Progressive sidebar loading: lazy posts sidebar endpoint
 @rt("/_sidebar/posts")
-def posts_sidebar_lazy(request: Request = None):
+def posts_sidebar_lazy(request: Request = None, current_path: str = ""):
     roles = _get_roles_from_request(request)
-    html = _cached_posts_sidebar_html(_posts_sidebar_fingerprint(), tuple(roles or []), get_config().get_show_hidden())
+    html = _cached_posts_sidebar_html(_posts_sidebar_fingerprint(), tuple(roles or []), get_config().get_show_hidden(), current_path or "")
     return Aside(
         NotStr(html),
         cls="hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
         id="posts-sidebar"
     )
+
+@rt("/_sidebar/posts/branch/{path:path}")
+def posts_sidebar_branch(path: str, request: Request = None):
+    roles = _get_roles_from_request(request)
+    folder = (get_root_folder() / path).resolve()
+    root = get_root_folder().resolve()
+    if not folder.is_dir() or not str(folder).startswith(str(root)):
+        logger.debug("Sidebar branch invalid path={}", path)
+        return Response(status_code=404)
+    items = build_post_tree(folder, roles=roles, max_depth=0)
+    logger.debug("Sidebar branch path={} resolved={} items={}", path, folder, len(items))
+    return "".join(to_xml(item) for item in items)
 
 # Route to serve raw markdown for LLM-friendly access
 @rt("/posts/{path:path}.md")
@@ -2756,13 +2766,13 @@ def _posts_search_block():
         cls="posts-search-block sticky top-0 z-10 bg-white/20 dark:bg-slate-950/70 mb-3"
     )
 
-@lru_cache(maxsize=8)
-def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden):
+@lru_cache(maxsize=16)
+def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden, current_path=""):
     sidebars_open = get_config().get_sidebars_open()
     sidebar = collapsible_sidebar(
         "menu",
         "Library",
-        get_posts(list(roles_key) if roles_key else []),
+        get_posts(list(roles_key) if roles_key else [], current_path=current_path),
         is_open=sidebars_open,
         data_sidebar="posts",
         shortcut_key="Z",
@@ -2775,11 +2785,34 @@ def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden):
     )
     return to_xml(sidebar)
 
+def _log_startup_content_stats():
+    root = get_root_folder()
+    show_hidden = get_config().get_show_hidden()
+    excludes = get_config().get_reload_excludes()
+    md_count = sum(1 for _ in iter_visible_files(root, (".md",), show_hidden))
+    pdf_count = sum(1 for _ in iter_visible_files(root, (".pdf",), show_hidden))
+    excalidraw_count = sum(1 for _ in iter_visible_files(root, (".excalidraw",), show_hidden))
+    vyasa_count = sum(1 for _ in iter_visible_files(root, (".vyasa",), True))
+    logger.info(
+        "Startup scan root={} show_hidden={} md={} pdf={} excalidraw={} vyasa={} excludes={}",
+        root, show_hidden, md_count, pdf_count, excalidraw_count, vyasa_count, excludes,
+    )
+
 def _preload_posts_cache():
     try:
         show_hidden = get_config().get_show_hidden()
+        import time
+        t0 = time.perf_counter()
+        _log_startup_content_stats()
+        t1 = time.perf_counter()
         _cached_build_post_tree(_posts_tree_fingerprint(), (), show_hidden)
+        t2 = time.perf_counter()
         _cached_posts_sidebar_html(_posts_sidebar_fingerprint(), (), show_hidden)
+        t3 = time.perf_counter()
+        logger.info(
+            "Startup preload timings stats={:.3f}s tree={:.3f}s sidebar={:.3f}s total={:.3f}s",
+            t1 - t0, t2 - t1, t3 - t2, t3 - t0,
+        )
         logger.info("Preloaded posts sidebar cache.")
     except Exception as exc:
         logger.warning(f"Failed to preload posts sidebar cache: {exc}")
@@ -2815,9 +2848,9 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
     summary_classes = f"flex items-center gap-2 font-semibold cursor-pointer py-2.5 px-3 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-lg select-none list-none {common_frost_style} min-h-[56px]"
     if scroll_target == "list":
         content_classes = f"p-3 {common_frost_style} rounded-lg max-h-[calc(100vh-18rem)] flex flex-col overflow-hidden min-h-0"
-        list_classes = "list-none pt-2 flex-1 min-h-0 overflow-y-auto sidebar-scroll-container"
+        list_classes = "list-none pt-2 flex-1 min-h-0 overflow-x-auto overflow-y-auto sidebar-scroll-container"
     else:
-        content_classes = f"p-3 {common_frost_style} rounded-lg overflow-y-auto max-h-[calc(100vh-18rem)] sidebar-scroll-container"
+        content_classes = f"p-3 {common_frost_style} rounded-lg overflow-x-auto overflow-y-auto max-h-[calc(100vh-18rem)] sidebar-scroll-container"
         list_classes = "list-none pt-4"
     
     extra_content = extra_content or []
@@ -3107,7 +3140,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 cls="flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"
             ),
             Div(
-                NotStr(_cached_posts_sidebar_html(_posts_sidebar_fingerprint(), roles_key, get_config().get_show_hidden())),
+                NotStr(_cached_posts_sidebar_html(_posts_sidebar_fingerprint(), roles_key, get_config().get_show_hidden(), current_path or "")),
                 cls="p-4 overflow-y-auto"
             ),
             id="mobile-posts-panel",
@@ -3132,7 +3165,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 id="mobile-toc-panel",
                 cls="fixed inset-0 bg-white dark:bg-slate-950 z-[9999] xl:hidden transform translate-x-full transition-transform duration-300"
             )
-        nav_posts_items = get_posts(list(roles_key) if roles_key else []) if nav_posts_menu else None
+        nav_posts_items = get_posts(list(roles_key) if roles_key else [], current_path=current_path or "") if nav_posts_menu else None
         # Full layout with all sidebars
         content_with_sidebars = Div(
             cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 flex gap-6 flex-1 {'min-h-0' if no_scroll else ''}".strip(),
@@ -3148,7 +3181,7 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
                 ),
                 cls="hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]",
                 id="posts-sidebar",
-                hx_get="/_sidebar/posts",
+                hx_get=f"/_sidebar/posts?current_path={quote(current_path or '', safe='')}",
                 hx_trigger="load",
                 hx_swap="outerHTML"
             ) if not nav_posts_menu else None,
@@ -3221,52 +3254,106 @@ def layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, cur
     logger.debug(f"[LAYOUT] FULL PAGE assembled in {(t_end - layout_start_time)*1000:.2f}ms")
     return tuple(result)
 
-def build_post_tree(folder, roles=None):
+_nav_entries_cache: dict[tuple[str, bool], tuple[float, list[Path]]] = {}
+
+def _get_nav_entries(folder: Path, root: Path, show_hidden: bool, excluded_dirs: set[str]):
+    key = (str(folder.resolve()), show_hidden)
+    try:
+        mtime = folder.stat().st_mtime
+    except OSError:
+        return []
+    cached = _nav_entries_cache.get(key)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    index_file = find_index_file() if folder == root else None
+    folder_note = find_folder_note_file(folder)
+    ignore_list = _effective_ignore_list(root, folder)
+    include_list = _effective_include_list(root, folder)
+    entries = []
+    for item in folder.iterdir():
+        if item.name == ".vyasa": continue
+        if item.is_dir():
+            if should_exclude_dir(item.name, excluded_dirs) or (not show_hidden and item.name.startswith('.')): continue
+            if _should_include_folder(item.name, include_list, ignore_list): entries.append(item)
+        elif item.suffix in ('.md', '.pdf', '.excalidraw'):
+            if folder_note and item.resolve() == folder_note.resolve(): continue
+            if index_file and item.resolve() == index_file.resolve(): continue
+            entries.append(item)
+    ordered = order_vyasa_entries(entries, get_vyasa_config(folder))
+    _nav_entries_cache[key] = (mtime, ordered)
+    return ordered
+
+def _folder_has_visible_descendant(folder: Path, roles, depth: int = 3):
+    root = get_root_folder()
+    show_hidden = get_config().get_show_hidden()
+    excluded_dirs = set(get_config().get_reload_excludes())
+    for item in _get_nav_entries(folder, root, show_hidden, excluded_dirs):
+        if item.is_dir():
+            if depth > 0 and _folder_has_visible_descendant(item, roles, depth - 1):
+                return True
+            continue
+        slug = str(item.relative_to(root).with_suffix(''))
+        route = f"/drawings/{slug}" if item.suffix == ".excalidraw" else f"/posts/{slug}"
+        if _is_allowed(route, roles or []):
+            return True
+    return False
+
+def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
     import time
     start_time = time.time()
     root = get_root_folder()
     show_hidden = get_config().get_show_hidden()
+    excluded_dirs = set(get_config().get_reload_excludes())
     items = []
     try:
-        index_file = find_index_file() if folder == root else None
-        entries = []
-        folder_note = find_folder_note_file(folder)
-        ignore_list = _effective_ignore_list(root, folder)
-        include_list = _effective_include_list(root, folder)
-        for item in folder.iterdir():
-            if item.name == ".vyasa":
-                continue
-            if item.is_dir():
-                if not show_hidden and item.name.startswith('.'):
-                    continue
-                # Check include/ignore lists
-                if not _should_include_folder(item.name, include_list, ignore_list):
-                    continue
-                entries.append(item)
-            elif item.suffix in ('.md', '.pdf', '.excalidraw'):
-                if folder_note and item.resolve() == folder_note.resolve():
-                    continue
-                # Skip the file being used for home page (index.md takes precedence over readme.md)
-                if index_file and item.resolve() == index_file.resolve():
-                    continue
-                entries.append(item)
-        config = get_vyasa_config(folder)
-        entries = order_vyasa_entries(entries, config)
+        entries = _get_nav_entries(folder, root, show_hidden, excluded_dirs)
         abbreviations = _effective_abbreviations(root, folder)
-        logger.debug(
-            "[DEBUG] build_post_tree entries for %s: %s",
-            folder,
-            [item.name for item in entries],
-        )
+        logger.debug("[DEBUG] build_post_tree entries for {}: {}", folder, [item.name for item in entries])
         logger.debug(f"[DEBUG] Scanning directory: {folder.relative_to(root) if folder != root else '.'} - found {len(entries)} entries")
     except (OSError, PermissionError): 
         return items
     
     for item in entries:
         if item.is_dir():
+            if should_exclude_dir(item.name, excluded_dirs):
+                continue
             if not show_hidden and item.name.startswith('.'): continue
-            sub_items = build_post_tree(item, roles=roles)
             folder_title = slug_to_title(item.name, abbreviations=abbreviations)
+            rel_folder = str(item.relative_to(root))
+            child_active = tuple(active_parts[1:]) if active_parts and active_parts[0] == item.name else ()
+            should_expand = bool(active_parts and active_parts[0] == item.name)
+            if max_depth == 0:
+                if should_expand:
+                    sub_items = build_post_tree(item, roles=roles, max_depth=0 if not child_active else None, active_parts=child_active)
+                    items.append(Li(Details(
+                        Summary(Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(folder_title, cls="truncate min-w-0", title=folder_title), cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"),
+                        Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"),
+                        data_folder="true",
+                        open=True,
+                    ), cls="my-1"))
+                    continue
+                if not _folder_has_visible_descendant(item, roles):
+                    logger.debug("Pruned empty lazy folder {}", item)
+                    continue
+                branch_href = f"/_sidebar/posts/branch/{quote(rel_folder, safe='')}"
+                items.append(Li(Details(
+                    Summary(
+                        Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                        Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                        Span(folder_title, cls="truncate min-w-0", title=folder_title),
+                        cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0",
+                        hx_get=branch_href,
+                        hx_trigger="click once",
+                        hx_target="next ul",
+                        hx_swap="innerHTML",
+                    ),
+                    Ul(
+                        cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800",
+                    ),
+                    data_folder="true",
+                ), cls="my-1"))
+                continue
+            sub_items = build_post_tree(item, roles=roles, max_depth=None if should_expand else (None if max_depth is None else max_depth - 1), active_parts=child_active)
             note_file = find_folder_note_file(item)
             note_link = None
             note_slug = None
@@ -3294,7 +3381,8 @@ def build_post_tree(folder, roles=None):
                         title_node,
                         cls="flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"),
                     Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"),
-                    data_folder="true"), cls="my-1"))
+                    data_folder="true",
+                    open=should_expand), cls="my-1"))
             elif note_allowed and note_slug:
                 title_text = Span(folder_title, cls="truncate min-w-0", title=folder_title)
                 items.append(Li(A(
@@ -3367,15 +3455,16 @@ def _posts_tree_fingerprint():
         return 0
 
 @lru_cache(maxsize=8)
-def _cached_build_post_tree(fingerprint, roles_key, show_hidden):
+def _cached_build_post_tree(fingerprint, roles_key, show_hidden, current_path):
     roles = list(roles_key) if roles_key else []
-    return build_post_tree(get_root_folder(), roles=roles)
+    active_parts = tuple(Path(current_path).parts[:-1]) if current_path else ()
+    return build_post_tree(get_root_folder(), roles=roles, max_depth=1, active_parts=active_parts)
 
-def get_posts(roles=None):
+def get_posts(roles=None, current_path=""):
     fingerprint = _posts_tree_fingerprint()
     roles_key = tuple(roles or [])
     show_hidden = get_config().get_show_hidden()
-    return _cached_build_post_tree(fingerprint, roles_key, show_hidden)
+    return _cached_build_post_tree(fingerprint, roles_key, show_hidden, current_path or "")
 
 def not_found(htmx=None, auth=None):
     """Custom 404 error page"""
@@ -3773,7 +3862,7 @@ def find_index_file():
 def index(htmx, request: Request):
     import time
     request_start = time.time()
-    logger.info(f"\n[DEBUG] ########## REQUEST START: / (index) ##########")
+    logger.debug("Request start path=/ route=index")
     
     blog_title = get_blog_title()
     
@@ -3793,10 +3882,10 @@ def index(htmx, request: Request):
         result = layout(page_content, htmx=htmx, title=f"{page_title} - {blog_title}", 
                       show_sidebar=True, toc_content=raw_content, current_path=index_path, auth=request.scope.get("auth"))
         layout_time = (time.time() - layout_start) * 1000
-        logger.debug(f"[DEBUG] Layout generation took {layout_time:.2f}ms")
+        logger.debug("Index layout generation took {:.2f}ms", layout_time)
         
         total_time = (time.time() - request_start) * 1000
-        logger.debug(f"[DEBUG] ########## REQUEST COMPLETE: {total_time:.2f}ms TOTAL ##########\n")
+        logger.debug("Request complete path=/ route=index total={:.2f}ms", total_time)
         
         return result
     else:
@@ -3804,17 +3893,24 @@ def index(htmx, request: Request):
         layout_start = time.time()
         result = layout(Div(
             H1(f"Welcome to {blog_title}!", cls="text-4xl font-bold tracking-tight mb-8"),
-            P("Your personal blogging platform.", cls="text-lg text-slate-600 dark:text-slate-400 mb-4"),
-            P("Browse your posts using the sidebar, or create an ", 
-              Strong("index.md"), " or ", Strong("README.md"), 
-              " file in your blog directory to customize this page.", 
+            P("Quick start tutorial", cls="text-lg font-medium text-slate-700 dark:text-slate-300 mb-4"),
+            Ol(
+                Li("Use the sidebar to browse the files and folders in your blog."),
+                Li("Open a markdown file to preview it instantly."),
+                Li("Create an ", Strong("index.md"), " or ", Strong("README.md"),
+                   " in your blog directory to replace this page with your own landing page."),
+                cls="list-decimal pl-6 space-y-2 text-base text-slate-600 dark:text-slate-400 mb-4"),
+            P("More guides, examples, and documentation are available at ",
+              A("vyasa.yeshwanth.com", href="https://vyasa.yeshwanth.com",
+                cls="text-slate-900 dark:text-slate-100 underline underline-offset-4"),
+              ".",
               cls="text-base text-slate-600 dark:text-slate-400"),
             cls="w-full"), htmx=htmx, title=f"Home - {blog_title}", show_sidebar=True, auth=request.scope.get("auth"))
         layout_time = (time.time() - layout_start) * 1000
-        logger.debug(f"[DEBUG] Layout generation took {layout_time:.2f}ms")
+        logger.debug("Index layout generation took {:.2f}ms", layout_time)
         
         total_time = (time.time() - request_start) * 1000
-        logger.debug(f"[DEBUG] ########## REQUEST COMPLETE: {total_time:.2f}ms TOTAL ##########\n")
+        logger.debug("Request complete path=/ route=index total={:.2f}ms", total_time)
         
         return result
 
