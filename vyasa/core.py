@@ -106,6 +106,19 @@ hdrs = (
     Script(src="https://unpkg.com/hyperscript.org@0.9.12"),
     Script(src=_asset_url("/static/scripts.js"), type="module"),
     Link(rel="stylesheet", href=_asset_url("/static/header.css")),
+    Style(
+        """
+        .vyasa-table-scroll { width: 100%; max-width: 100%; position: static; left: auto; transform: none; margin: 1.5rem 0; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-gutter: stable both-edges; box-shadow: none; transition: box-shadow 160ms ease; }
+        .vyasa-table-scroll.vyasa-table-breakout { width: min(var(--vyasa-breakout-width, 80vw), 80vw); max-width: 80vw; position: relative; left: 50%; transform: translateX(-50%); }
+        .vyasa-table-scroll.has-right-overflow { box-shadow: inset -18px 0 16px -14px rgba(15, 23, 42, 0.32); }
+        .vyasa-table-scroll.has-left-overflow { box-shadow: inset 18px 0 16px -14px rgba(15, 23, 42, 0.32); }
+        .vyasa-table-scroll.has-left-overflow.has-right-overflow { box-shadow: inset 18px 0 16px -14px rgba(15, 23, 42, 0.32), inset -18px 0 16px -14px rgba(15, 23, 42, 0.32); }
+        .dark .vyasa-table-scroll.has-right-overflow { box-shadow: inset -18px 0 16px -14px rgba(2, 6, 23, 0.62); }
+        .dark .vyasa-table-scroll.has-left-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62); }
+        .dark .vyasa-table-scroll.has-left-overflow.has-right-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62), inset -18px 0 16px -14px rgba(2, 6, 23, 0.62); }
+        .vyasa-table-scroll > table, .vyasa-table-scroll > .uk-table { width: max-content !important; min-width: 0; table-layout: auto; margin: 0 auto; }
+        """
+    ),
     Link(
         rel="stylesheet",
         href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css",
