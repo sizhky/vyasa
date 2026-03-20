@@ -10,11 +10,21 @@ from .logging import configure_logging
 _core_app = None
 _browser_url = None
 _browser_opened = False
+_logging_configured = False
+
+
+def _ensure_logging_configured():
+    global _logging_configured
+    if not _logging_configured:
+        configure_logging()
+        _logging_configured = True
 
 async def app(scope, receive, send):
     global _core_app, _browser_opened
+    _ensure_logging_configured()
     if _core_app is None:
-        from .core import app as core_app
+        from .core import app as core_app, ensure_app_initialized
+        ensure_app_initialized()
         _core_app = core_app
     async def wrapped_send(message):
         global _browser_opened
@@ -157,7 +167,7 @@ def cli():
     else:
         reload_kwargs = {"reload": False}
 
-    configure_logging()
+    _ensure_logging_configured()
     uvicorn.run("vyasa.main:app", host=host, port=port, log_config=None, **reload_kwargs)
 
 if __name__ == "__main__":

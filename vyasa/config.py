@@ -12,6 +12,7 @@ import os
 import tomllib
 from pathlib import Path
 from typing import Optional
+from .helpers import slug_to_title
 
 
 class VyasaConfig:
@@ -26,6 +27,7 @@ class VyasaConfig:
                         in current directory and VYASA_ROOT.
         """
         self._config = {}
+        self._loaded_config_path: Optional[Path] = None
         self._load_config(config_path)
     
     def _load_config(self, config_path: Optional[Path] = None):
@@ -54,10 +56,10 @@ class VyasaConfig:
             try:
                 with open(config_file, 'rb') as f:
                     self._config = tomllib.load(f)
-                print(f"✓ Loaded configuration from: {config_file}")
+                self._loaded_config_path = config_file
             except Exception as e:
-                print(f"Warning: Failed to load {config_file}: {e}")
                 self._config = {}
+                self._loaded_config_path = None
     
     def get(self, key: str, env_var: str, default: any = None) -> any:
         """Get configuration value with priority: config file > env var > default.
@@ -89,8 +91,6 @@ class VyasaConfig:
     
     def get_blog_title(self) -> str:
         """Get the blog title."""
-        from .core import slug_to_title  # Import here to avoid circular dependency
-        
         title = self.get('title', 'VYASA_TITLE', None)
         if title:
             return title.upper()

@@ -1140,6 +1140,28 @@ function initTabPanelHeights(rootElement = document) {
     });
 }
 
+function refreshVyasaTableScrollShadows(root = document) {
+    const scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll('.vyasa-table-scroll').forEach((el) => {
+        const table = el.querySelector('table');
+        const parentWidth = el.parentElement ? el.parentElement.clientWidth : el.clientWidth;
+        const tableWidth = table ? table.scrollWidth : el.scrollWidth;
+        const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
+        const needsBreakout = tableWidth > (parentWidth + 1);
+        const viewportCap = Math.floor(window.innerWidth * 0.8);
+        el.classList.toggle('vyasa-table-breakout', needsBreakout);
+        if (needsBreakout) el.style.setProperty('--vyasa-breakout-width', `${Math.min(tableWidth, viewportCap)}px`);
+        else el.style.removeProperty('--vyasa-breakout-width');
+        el.classList.toggle('has-left-overflow', maxScrollLeft > 1 && el.scrollLeft > 1);
+        el.classList.toggle('has-right-overflow', maxScrollLeft > 1 && el.scrollLeft < (maxScrollLeft - 1));
+        if (el.dataset.shadowBound === '1') return;
+        el.dataset.shadowBound = '1';
+        el.addEventListener('scroll', () => refreshVyasaTableScrollShadows(el.parentElement || document), { passive: true });
+    });
+}
+
+window.refreshVyasaTableScrollShadows = refreshVyasaTableScrollShadows;
+
 function initMermaidInteraction() {
     const wrappers = Array.from(document.querySelectorAll('.mermaid-wrapper'));
     if (mermaidDebugEnabled()) {
@@ -1188,14 +1210,31 @@ function initMermaidInteraction() {
         
         // Scale SVG to fit container (maintain aspect ratio, fit to width or height whichever is smaller)
         const svgRect = svg.getBoundingClientRect();
-        if (wrapperRect.height < 120 || svgRect.width < 120 || svgRect.height < 30) {
+        const viewBox = (svg.getAttribute('viewBox') || '').trim().split(/\s+/).map(Number);
+        let bbox = null;
+        try {
+            bbox = svg.getBBox ? svg.getBBox() : null;
+        } catch {
+            bbox = null;
+        }
+        const hasStableViewBox = viewBox.length === 4 && viewBox[2] > 1 && viewBox[3] > 1;
+        const hasStableBBox = !!bbox && bbox.width > 1 && bbox.height > 1;
+        const isLayoutUnstable = (
+            wrapperRect.height < 120 ||
+            svgRect.height < 30 ||
+            (!hasStableViewBox && !hasStableBBox) ||
+            (svgRect.width < 30 && !hasStableViewBox && !hasStableBBox)
+        );
+        if (isLayoutUnstable) {
             if (mermaidDebugEnabled()) {
                 mermaidDebugLog('skip initMermaidInteraction: reveal layout not stable', {
                     id: wrapper.id,
                     wrapperWidth: wrapperRect.width,
                     wrapperHeight: wrapperRect.height,
                     svgWidth: svgRect.width,
-                    svgHeight: svgRect.height
+                    svgHeight: svgRect.height,
+                    viewBox,
+                    bbox
                 });
             }
             return;
@@ -2383,8 +2422,37 @@ function initIframeFullscreenToggle() {
     });
 }
 
+function replaceEscapedDollarPlaceholders(root) {
+    const placeholder = '@@VYASA_DOLLAR@@';
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    let node;
+    while ((node = walker.nextNode())) if (node.nodeValue && node.nodeValue.includes(placeholder)) nodes.push(node);
+    nodes.forEach((textNode) => {
+        textNode.nodeValue = textNode.nodeValue.split(placeholder).join('\\$');
+    });
+}
+
+function renderMathSafely(root) {
+    if (typeof renderMathInElement !== 'function') return;
+    const marker = '@@VYASA_CURRENCY_DOLLAR@@';
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+        const parent = node.parentElement;
+        if (!parent || ['CODE', 'PRE', 'SCRIPT', 'STYLE', 'TEXTAREA'].includes(parent.tagName) || parent.closest('.katex')) continue;
+        if (node.nodeValue && node.nodeValue.includes('$')) node.nodeValue = node.nodeValue.replace(/\$(?=\d)/g, marker);
+    }
+    renderMathInElement(root, { delimiters: [{ left: '$$', right: '$$', display: true }, { left: '$', right: '$', display: false }], throwOnError: false });
+    walker.currentNode = root;
+    while ((node = walker.nextNode())) if (node.nodeValue && node.nodeValue.includes(marker)) node.nodeValue = node.nodeValue.split(marker).join('$');
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    replaceEscapedDollarPlaceholders(document.body);
+    renderMathSafely(document.body);
+    refreshVyasaTableScrollShadows(document);
     updateActivePostLink();
     updateActiveTocLink();
     initMobileMenus();
@@ -2410,6 +2478,9 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     if (!event.target) {
         return;
     }
+    replaceEscapedDollarPlaceholders(event.target);
+    renderMathSafely(event.target);
+    refreshVyasaTableScrollShadows(event.target);
     initSearchPlaceholderCycle(event.target);
     initPostsSearchPersistence(event.target);
     initCodeBlockCopyButtons(event.target);
@@ -2422,6 +2493,8 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     ensurePdfFocusState();
     initTabPanelHeights(event.target || document);
 });
+
+window.addEventListener('resize', () => refreshVyasaTableScrollShadows(document));
 
 document.body.addEventListener('htmx:beforeRequest', (event) => {
     if (document.body.dataset.forceFullNav !== '1') {

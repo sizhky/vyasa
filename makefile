@@ -15,5 +15,10 @@ test: build
 install:
 	pip install -e ".[dev]"
 
-dev:
-	vyasa demo/
+preview:
+	# kill any existing process on port 21212
+	@lsof -ti:21212 | xargs -r kill -9
+	vyasa --port 21212 > /dev/null 2>&1 &
+
+line-count:
+	find vyasa -type f \( -name "*.py" -o -name "*.js" \) -print0 | xargs -0 wc -l

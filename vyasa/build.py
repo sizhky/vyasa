@@ -17,23 +17,14 @@ from .core import (
     preprocess_super_sub, preprocess_tabs,
 )
 from .helpers import (
-    get_vyasa_config, order_vyasa_entries, _effective_abbreviations, _effective_ignore_list, 
+    _effective_abbreviations, _effective_ignore_list, 
     _effective_include_list, _should_include_folder, find_folder_note_file
 )
 from .config import get_config, reload_config
+from .assets import asset_url
+from .tree_service import get_tree_entries
 
-def _asset_url(path):
-    rel = path.lstrip("/")
-    if not rel.startswith("static/"):
-        return path
-    static_root = Path(__file__).resolve().parent / "static"
-    file_path = static_root / rel.replace("static/", "", 1)
-    try:
-        token = int(file_path.stat().st_mtime_ns)
-    except OSError:
-        return path
-    sep = "&" if "?" in path else "?"
-    return f"{path}{sep}v={token}"
+_asset_url = asset_url
 
 def generate_static_html(title, body_content, blog_title, favicon_href):
     """Generate complete static HTML page"""
@@ -367,39 +358,7 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
     """Build post tree with static .html links instead of HTMX"""
     items = []
     try:
-        index_file = None
-        if folder == root_folder:
-            for candidate in root_folder.iterdir():
-                if candidate.is_file() and candidate.suffix == '.md' and candidate.stem.lower() == 'index':
-                    index_file = candidate
-                    break
-            if index_file is None:
-                for candidate in root_folder.iterdir():
-                    if candidate.is_file() and candidate.suffix == '.md' and candidate.stem.lower() == 'readme':
-                        index_file = candidate
-                        break
-
-        entries = []
-        folder_note = find_folder_note_file(folder)
-        ignore_list = _effective_ignore_list(root_folder, folder)
-        include_list = _effective_include_list(root_folder, folder)
-        for item in folder.iterdir():
-            if item.name == ".vyasa":
-                continue
-            if item.is_dir():
-                if not show_hidden and item.name.startswith('.'):
-                    continue
-                # Check include/ignore lists
-                if not _should_include_folder(item.name, include_list, ignore_list):
-                    continue
-                entries.append(item)
-            elif item.suffix == '.md':
-                if folder_note and item.resolve() == folder_note.resolve():
-                    continue
-                if index_file and item.resolve() == index_file.resolve():
-                    continue
-                entries.append(item)
-        entries = order_vyasa_entries(entries, get_vyasa_config(folder))
+        entries = get_tree_entries(folder, root_folder, show_hidden, set(), ('.md',))
         abbreviations = _effective_abbreviations(root_folder, folder)
     except (OSError, PermissionError): 
         return items
