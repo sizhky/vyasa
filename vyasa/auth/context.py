@@ -1,4 +1,4 @@
-from .auth_policy import normalize_auth, resolve_roles
+from .policy import normalize_auth, resolve_roles
 
 
 def get_auth_from_request(request, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list):

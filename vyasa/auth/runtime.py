@@ -1,6 +1,6 @@
 from starlette.responses import RedirectResponse, Response
 
-from .auth_policy import is_allowed, normalize_auth, path_requires_roles, resolve_roles
+from .policy import is_allowed, normalize_auth, path_requires_roles, resolve_roles
 
 
 def make_user_auth_before(auth_required, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list):
