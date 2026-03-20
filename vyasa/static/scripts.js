@@ -1188,14 +1188,31 @@ function initMermaidInteraction() {
         
         // Scale SVG to fit container (maintain aspect ratio, fit to width or height whichever is smaller)
         const svgRect = svg.getBoundingClientRect();
-        if (wrapperRect.height < 120 || svgRect.width < 120 || svgRect.height < 30) {
+        const viewBox = (svg.getAttribute('viewBox') || '').trim().split(/\s+/).map(Number);
+        let bbox = null;
+        try {
+            bbox = svg.getBBox ? svg.getBBox() : null;
+        } catch {
+            bbox = null;
+        }
+        const hasStableViewBox = viewBox.length === 4 && viewBox[2] > 1 && viewBox[3] > 1;
+        const hasStableBBox = !!bbox && bbox.width > 1 && bbox.height > 1;
+        const isLayoutUnstable = (
+            wrapperRect.height < 120 ||
+            svgRect.height < 30 ||
+            (!hasStableViewBox && !hasStableBBox) ||
+            (svgRect.width < 30 && !hasStableViewBox && !hasStableBBox)
+        );
+        if (isLayoutUnstable) {
             if (mermaidDebugEnabled()) {
                 mermaidDebugLog('skip initMermaidInteraction: reveal layout not stable', {
                     id: wrapper.id,
                     wrapperWidth: wrapperRect.width,
                     wrapperHeight: wrapperRect.height,
                     svgWidth: svgRect.width,
-                    svgHeight: svgRect.height
+                    svgHeight: svgRect.height,
+                    viewBox,
+                    bbox
                 });
             }
             return;
