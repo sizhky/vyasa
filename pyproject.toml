@@ -56,8 +56,10 @@ Repository = "https://github.com/yeshwanth/vyasa"
 Issues = "https://github.com/yeshwanth/vyasa/issues"
 
 [tool.setuptools]
-packages = ["vyasa"]
 include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["vyasa", "vyasa.*"]
 
 [tool.setuptools.package-data]
 vyasa = ["static/*", "static/**/*"]
