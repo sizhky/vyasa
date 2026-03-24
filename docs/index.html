@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Readme - VYASA</title>
+    <title>Vyāsa - VYASA</title>
     
     <!-- TailwindCSS and MonsterUI -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio,container-queries"></script>
@@ -29,14 +29,23 @@
     <script src="https://unpkg.com/hyperscript.org@0.9.12"></script>
     
     <!-- Static assets -->
-    <link rel="stylesheet" href="/static/sidenote.css">
+    <link rel="icon" href="/static/icon.png">
+    <link rel="stylesheet" href="/static/sidenote.css?v=1770232138197500663">
     
     
     <style>
         body { font-family: 'IBM Plex Sans', sans-serif; margin: 0; padding: 0; }
         code, pre { font-family: 'IBM Plex Mono', monospace; }
-        .folder-chevron { transition: transform 0.2s; display: inline-block; }
-        details[open] > summary > .folder-chevron { transform: rotate(90deg); }
+        .folder-chevron {
+            display: inline-block;
+            width: 0.45rem;
+            height: 0.45rem;
+            border-right: 2px solid rgb(148 163 184);
+            border-bottom: 2px solid rgb(148 163 184);
+            transform: rotate(-45deg);
+            transition: transform 0.2s;
+        }
+        details.is-open > summary .folder-chevron { transform: rotate(45deg); }
         details { border: none !important; box-shadow: none !important; }
         h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
         
@@ -55,7 +64,7 @@
             margin: 2rem 0; 
             border: 1px solid rgb(226 232 240); 
             border-radius: 0.5rem; 
-            overflow: hidden; 
+            overflow: visible; 
             box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
         }
         .dark .tabs-container { 
@@ -114,6 +123,7 @@
         .tabs-content { 
             background: white;
             position: relative;
+            overflow: visible;
         }
         .dark .tabs-content { 
             background: rgb(2 6 23);
@@ -129,6 +139,7 @@
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
+            overflow: visible;
         }
         .tab-panel.active { 
             position: relative;
@@ -154,6 +165,34 @@
         .tab-panel code { 
             font-family: 'IBM Plex Mono', monospace;
         }
+        .vyasa-callout { background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.95)); border-color: rgba(148, 163, 184, 0.35); box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); }
+        .dark .vyasa-callout { background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.96)); border-color: rgba(148, 163, 184, 0.2); box-shadow: 0 14px 34px rgba(2, 6, 23, 0.35); }
+        .vyasa-callout-label { color: rgb(15 23 42); }
+        .dark .vyasa-callout-label { color: rgb(226 232 240); }
+        .vyasa-callout-body > *:first-child { margin-top: 0 !important; }
+        .vyasa-callout-body > *:last-child { margin-bottom: 0 !important; }
+        .vyasa-callout-info { border-left: 4px solid rgb(14 116 144); }
+        .vyasa-callout-note { border-left: 4px solid rgb(37 99 235); }
+        .vyasa-callout-tip { border-left: 4px solid rgb(22 163 74); }
+        .vyasa-callout-warning { border-left: 4px solid rgb(217 119 6); }
+        .vyasa-callout-important { border-left: 4px solid rgb(190 24 93); }
+        .vyasa-callout-caution { border-left: 4px solid rgb(220 38 38); }
+        .code-block .vyasa-code-line-highlight { background: rgba(204, 36, 29, 0.22); box-shadow: inset 6px 0 0 rgba(204, 36, 29, 1); }
+        .dark .code-block .vyasa-code-line-highlight { background: rgba(251, 73, 52, 0.24); box-shadow: inset 6px 0 0 rgba(251, 73, 52, 1); }
+        .code-block pre, .code-block pre code, pre code.hljs { background: #fbf1c7; color: #3c3836; }
+        .dark .code-block pre, .dark .code-block pre code, .dark pre code.hljs { background: #282828; color: #ebdbb2; }
+        .code-block pre { border: 1px solid rgba(60, 56, 54, 0.12); border-radius: 12px; }
+        .dark .code-block pre { border-color: rgba(235, 219, 178, 0.12); }
+        .hljs-comment, .hljs-quote { color: #928374; }
+        .dark .hljs-comment, .dark .hljs-quote { color: #a89984; }
+        .hljs-keyword, .hljs-selector-tag, .hljs-literal { color: #9d0006; }
+        .dark .hljs-keyword, .dark .hljs-selector-tag, .dark .hljs-literal { color: #fb4934; }
+        .hljs-string, .hljs-doctag, .hljs-regexp { color: #79740e; }
+        .dark .hljs-string, .dark .hljs-doctag, .dark .hljs-regexp { color: #b8bb26; }
+        .hljs-title, .hljs-title.function_, .hljs-section, .hljs-attribute { color: #076678; }
+        .dark .hljs-title, .dark .hljs-title.function_, .dark .hljs-section, .dark .hljs-attribute { color: #83a598; }
+        .hljs-number, .hljs-symbol, .hljs-variable, .hljs-template-variable, .hljs-type, .hljs-built_in { color: #8f3f71; }
+        .dark .hljs-number, .dark .hljs-symbol, .dark .hljs-variable, .dark .hljs-template-variable, .dark .hljs-type, .dark .hljs-built_in { color: #d3869b; }
     </style>
     
 </head>
@@ -162,14 +201,33 @@
     <div id="page-container" class="flex flex-col min-h-screen">
         <div class="w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4">
             
-    <div class="flex items-center justify-between bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
-        <a href="/index.html">VYASA</a>
-        
+    <div class="bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
+        <div class="flex items-center justify-between md:hidden">
+            <button id="mobile-posts-toggle" title="Toggle file tree" class="p-2 rounded transition-colors hover:bg-slate-800" type="button">
+                <span uk-icon="menu" class="w-5 h-5"></span>
+            </button>
+            <a href="/index.html" class="flex-1 px-4 text-center truncate">VYASA</a>
+            <div class="flex items-center gap-1">
+                <button id="mobile-toc-toggle" title="Toggle table of contents" class="p-2 rounded transition-colors hover:bg-slate-800" type="button">
+                    <span uk-icon="list" class="w-5 h-5"></span>
+                </button>
+                
     <button onclick="toggleTheme()" class="p-1 hover:scale-110 shadow-none" type="button">
         <span uk-icon="moon" class="dark:hidden"></span>
         <span uk-icon="sun" class="hidden dark:block"></span>
     </button>
     
+            </div>
+        </div>
+        <div class="hidden md:flex items-center justify-between">
+            <a href="/index.html">VYASA</a>
+            
+    <button onclick="toggleTheme()" class="p-1 hover:scale-110 shadow-none" type="button">
+        <span uk-icon="moon" class="dark:hidden"></span>
+        <span uk-icon="sun" class="hidden dark:block"></span>
+    </button>
+    
+        </div>
     </div>
     
         </div>
@@ -183,28 +241,118 @@
             </summary>
             <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
                 <ul class="mt-2 list-none">
+  <li>
+<a href="/posts/todo.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Todo">Todo</span></a>  </li>
+  <li>
+<a href="/posts/PUBLISHING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Publishing to PyPI">Publishing to PyPI</span></a>  </li>
   <li class="my-1">
-<details class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="chevron-right" class="folder-chevron w-4 h-4 text-slate-400"></uk-icon></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span>Demo</span></summary>      <ul class="ml-6 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><a href="/posts/demo/demo.html" onclick="event.stopPropagation();" class="folder-note-link truncate min-w-0 hover:underline" title="Open: Demo">Demo</a></summary>      <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
         <li class="my-1">
-<details class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="chevron-right" class="folder-chevron w-4 h-4 text-slate-400"></uk-icon></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span>Guides</span></summary>            <ul class="ml-6 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
-              <li>
-<a href="/posts/demo/guides/api-authentication-2.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>API Authentication and Security</span></a>              </li>
-              <li>
-<a href="/posts/demo/guides/api-authentication.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>API Authentication and Security</span></a>              </li>
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Books">Books</span></summary>            <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+              <li class="my-1">
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Flat Land">Flat Land</span></summary>                  <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-01.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of the Nature of Flatland">Of the Nature of Flatland</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-02.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of the Climate and Houses in Flatland">Of the Climate and Houses in Flatland</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-03.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Concerning the Inhabitants of Flatland">Concerning the Inhabitants of Flatland</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-04.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Concerning the Women">Concerning the Women</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-05.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of Our Methods of Recognizing One Another">Of Our Methods of Recognizing One Another</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-06.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of Recognition by Sight">Of Recognition by Sight</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-07.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Concerning Irregular Figures">Concerning Irregular Figures</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-08.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of the Ancient Practice of Painting">Of the Ancient Practice of Painting</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-09.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of the Universal Colour Bill">Of the Universal Colour Bill</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-10.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of the Suppression of the Chromatic Sedition">Of the Suppression of the Chromatic Sedition</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-11.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Concerning Our Priests">Concerning Our Priests</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-12.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of the Doctrine of Our Priests">Of the Doctrine of Our Priests</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-13.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="How I Had a Vision of Lineland">How I Had a Vision of Lineland</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-14.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="How I Vainly Tried to Explain the Nature of Flatland">How I Vainly Tried to Explain the Nature of Flatland</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-15.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Concerning a Stranger from Spaceland">Concerning a Stranger from Spaceland</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-16.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Chapter 16">Chapter 16</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-17.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="How the Sphere, Having in Vain Tried Words, Resorted to Deeds">How the Sphere, Having in Vain Tried Words, Resorted to Deeds</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-18.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="How I Came to Spaceland, and What I Saw There">How I Came to Spaceland, and What I Saw There</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-19.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Chapter 19">Chapter 19</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-20.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="How the Sphere Encouraged Me in a Vision">How the Sphere Encouraged Me in a Vision</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-21.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Chapter 21">Chapter 21</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-22.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Chapter 22">Chapter 22</span></a>                    </li>
+                  </ul>
+</details>              </li>
+            </ul>
+</details>        </li>
+        <li class="my-1">
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Css">Css</span></summary>            <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+              <li class="my-1">
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Maximum Whack Css">Maximum Whack Css</span></summary>                  <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+                    <li>
+<a href="/posts/demo/css/maximum-whack-css/seizure-warning.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="MAXIMUM WHACK CSS - SEIZURE WARNING">MAXIMUM WHACK CSS - SEIZURE WARNING</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/css/maximum-whack-css/whack-css.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Whack Css">Whack Css</span></a>                    </li>
+                  </ul>
+</details>              </li>
             </ul>
 </details>        </li>
         <li>
-<a href="/posts/demo/getting-started.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Getting Started with Our Platform</span></a>        </li>
+<a href="/posts/demo/d2-animation.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="D2 Animation">D2 Animation</span></a>        </li>
         <li>
-<a href="/posts/demo/markdown-features.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>A Small Demonstration of All The Markdown Features That Are Under The Sun, Without Worrying About If They Are Supported Or Not</span></a>        </li>
+<a href="/posts/demo/dollar-escape.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Dollar Escape">Dollar Escape</span></a>        </li>
+        <li>
+<a href="/posts/demo/quick-styling-inline-css.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Quick Styling with Markdown + Inline CSS">Quick Styling with Markdown + Inline CSS</span></a>        </li>
+        <li>
+<a href="/posts/demo/reveal-slides.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Presentations with Vyasa">Presentations with Vyasa</span></a>        </li>
       </ul>
 </details>  </li>
   <li>
-<a href="/posts/CONTRIBUTING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Contributing</span></a>  </li>
+<a href="/posts/static-build.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Vyasa Static Site Generator">Vyasa Static Site Generator</span></a>  </li>
+  <li class="my-1">
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Plans">Plans</span></summary>      <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+        <li>
+<a href="/posts/_plans/brainstorm-diverge-converge.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Brainstorm: Vyasa Slop Refactor">Brainstorm: Vyasa Slop Refactor</span></a>        </li>
+        <li>
+<a href="/posts/_plans/presentation-engine.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Custom Presentation Engine Design">Custom Presentation Engine Design</span></a>        </li>
+      </ul>
+</details>  </li>
   <li>
-<a href="/posts/PUBLISHING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Publishing</span></a>  </li>
-  <li>
-<a href="/posts/STATIC_BUILD.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Static Build</span></a>  </li>
+<a href="/posts/CONTRIBUTING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Contributing to Vyasa">Contributing to Vyasa</span></a>  </li>
+  <li class="my-1">
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><a href="/posts/vyasa manual/README.html" onclick="event.stopPropagation();" class="folder-note-link truncate min-w-0 hover:underline" title="Open: Vyasa Manual">Vyasa Manual</a></summary>      <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+        <li>
+<a href="/posts/vyasa manual/configuration.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Configuration &amp; CLI">Configuration &amp; CLI</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/markdown-features.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Markdown Features">Markdown Features</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/mermaid-diagrams.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Mermaid Diagrams">Mermaid Diagrams</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/theming.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Theming &amp; Customization Guide">Theming &amp; Customization Guide</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/advanced.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Advanced Behavior">Advanced Behavior</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/architecture.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Architecture Overview">Architecture Overview</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/security.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Security &amp; Auth">Security &amp; Auth</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/d2-diagrams.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="D2 Diagrams">D2 Diagrams</span></a>        </li>
+      </ul>
+</details>  </li>
 </ul>
 
             </div>
@@ -213,594 +361,366 @@
     
             
     <main id="main-content" class="flex-1 min-w-0 px-6 py-8 space-y-8">
-        <h1 class="text-4xl font-bold mb-8">Readme</h1><div class="w-full">
-  <link rel="stylesheet" href="/static/sidenote.css">
-<div><h1 id="vyasa" class="text-3xl font-bold mb-6 mt-8">Vyasa</h1>
-<p class="text-base leading-relaxed mb-6">A lightweight, elegant blogging platform built with FastHTML that renders Markdown files into beautiful web pages with advanced features.</p>
-<h2 id="architecture-overview" class="text-2xl font-semibold mb-4 mt-6">Architecture Overview</h2>
-<div class="mermaid-container relative border-2 rounded-md my-4" style="width: 80vw; position: relative; left: 50%; transform: translateX(-50%);">
-                <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
-                    <button onclick="resetMermaidZoom('mermaid-5426466')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
-                    <button onclick="zoomMermaidIn('mermaid-5426466')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
-                    <button onclick="zoomMermaidOut('mermaid-5426466')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
-                </div>
-                <div id="mermaid-5426466" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: 400px; height: auto;" data-mermaid-code='graph TB
-    subgraph "User Interface"
-        Browser[Web Browser]
-        Theme[Light/Dark Theme Toggle]
-    end
-    
-    subgraph "FastHTML Application"
-        App[FastHTML App&amp;lt;br/&amp;gt;core.py]
-        Router[URL Router]
-        Layout[Layout Engine]
-        
-        subgraph "Route Handlers"
-            Index[Index Route&amp;lt;br/&amp;gt;/]
-            PostDetail[Post Detail Route&amp;lt;br/&amp;gt;/posts/path]
-        end
-    end
-    
-    subgraph "Markdown Processing"
-        MDParser[Mistletoe Parser]
-        Renderer[ContentRenderer]
-        
-        subgraph "Custom Renderers"
-            Footnotes[Footnote Renderer&amp;lt;br/&amp;gt;Sidenotes]
-            Mermaid[Mermaid Diagram Renderer&amp;lt;br/&amp;gt;Zoom/Pan Controls]
-            Links[Link Renderer&amp;lt;br/&amp;gt;HTMX Integration]
-        end
-    end
-    
-    subgraph "File System"
-        MDFiles[Markdown Files&amp;lt;br/&amp;gt;.md]
-        Tree[Folder Tree Builder&amp;lt;br/&amp;gt;build_post_tree]
-    end
-    
-    subgraph "Frontend Assets"
-        Static[Static Files]
-        JS[scripts.js&amp;lt;br/&amp;gt;Mermaid + Interactions]
-        CSS[Styles&amp;lt;br/&amp;gt;TailwindCSS + MonsterUI]
-    end
-    
-    Browser --&amp;gt;|HTTP Request| Router
-    Theme --&amp;gt;|Toggle Dark Mode| JS
-    
-    Router --&amp;gt; Index
-    Router --&amp;gt; PostDetail
-    
-    Index --&amp;gt; Tree
-    Tree --&amp;gt; MDFiles
-    Index --&amp;gt; Layout
-    
-    PostDetail --&amp;gt; MDFiles
-    PostDetail --&amp;gt; MDParser
-    
-    MDParser --&amp;gt; Renderer
-    Renderer --&amp;gt; Footnotes
-    Renderer --&amp;gt; Mermaid
-    Renderer --&amp;gt; Links
-    
-    Footnotes --&amp;gt;|Marginal Notes| Layout
-    Mermaid --&amp;gt;|Interactive Diagrams| Layout
-    Links --&amp;gt;|HTMX Navigation| Layout
-    
-    Layout --&amp;gt; Browser
-    
-    JS --&amp;gt;|Theme Change| Mermaid
-    JS --&amp;gt;|Zoom/Pan/Reset| Mermaid
-    
-    Static --&amp;gt; CSS
-    Static --&amp;gt; JS
-    
-    App -.-&amp;gt;|Serves| Static
-    
-    style Browser fill:#e1f5ff
-    style App fill:#fff3cd
-    style MDParser fill:#d4edda
-    style Static fill:#f8d7da
-    style Mermaid fill:#cce5ff
-    style Footnotes fill:#cce5ff
-'><pre class="mermaid my-4" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">graph TB
-    subgraph "User Interface"
-        Browser[Web Browser]
-        Theme[Light/Dark Theme Toggle]
-    end
-    
-    subgraph "FastHTML Application"
-        App[FastHTML App&lt;br/&gt;core.py]
-        Router[URL Router]
-        Layout[Layout Engine]
-        
-        subgraph "Route Handlers"
-            Index[Index Route&lt;br/&gt;/]
-            PostDetail[Post Detail Route&lt;br/&gt;/posts/path]
-        end
-    end
-    
-    subgraph "Markdown Processing"
-        MDParser[Mistletoe Parser]
-        Renderer[ContentRenderer]
-        
-        subgraph "Custom Renderers"
-            Footnotes[Footnote Renderer&lt;br/&gt;Sidenotes]
-            Mermaid[Mermaid Diagram Renderer&lt;br/&gt;Zoom/Pan Controls]
-            Links[Link Renderer&lt;br/&gt;HTMX Integration]
-        end
-    end
-    
-    subgraph "File System"
-        MDFiles[Markdown Files&lt;br/&gt;.md]
-        Tree[Folder Tree Builder&lt;br/&gt;build_post_tree]
-    end
-    
-    subgraph "Frontend Assets"
-        Static[Static Files]
-        JS[scripts.js&lt;br/&gt;Mermaid + Interactions]
-        CSS[Styles&lt;br/&gt;TailwindCSS + MonsterUI]
-    end
-    
-    Browser --&gt;|HTTP Request| Router
-    Theme --&gt;|Toggle Dark Mode| JS
-    
-    Router --&gt; Index
-    Router --&gt; PostDetail
-    
-    Index --&gt; Tree
-    Tree --&gt; MDFiles
-    Index --&gt; Layout
-    
-    PostDetail --&gt; MDFiles
-    PostDetail --&gt; MDParser
-    
-    MDParser --&gt; Renderer
-    Renderer --&gt; Footnotes
-    Renderer --&gt; Mermaid
-    Renderer --&gt; Links
-    
-    Footnotes --&gt;|Marginal Notes| Layout
-    Mermaid --&gt;|Interactive Diagrams| Layout
-    Links --&gt;|HTMX Navigation| Layout
-    
-    Layout --&gt; Browser
-    
-    JS --&gt;|Theme Change| Mermaid
-    JS --&gt;|Zoom/Pan/Reset| Mermaid
-    
-    Static --&gt; CSS
-    Static --&gt; JS
-    
-    App -.-&gt;|Serves| Static
-    
-    style Browser fill:#e1f5ff
-    style App fill:#fff3cd
-    style MDParser fill:#d4edda
-    style Static fill:#f8d7da
-    style Mermaid fill:#cce5ff
-    style Footnotes fill:#cce5ff
-</pre></div>
-            </div>
-<h2 id="how-vyasa-works" class="text-2xl font-semibold mb-4 mt-6">How Vyasa Works</h2>
-<h3 id="1-request-flow" class="text-xl font-semibold mb-3 mt-5">1. Request Flow</h3>
-<div class="mermaid-container relative border-2 rounded-md my-4" style="width: 80vw; position: relative; left: 50%; transform: translateX(-50%);">
-                <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
-                    <button onclick="resetMermaidZoom('mermaid-10500923')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
-                    <button onclick="zoomMermaidIn('mermaid-10500923')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
-                    <button onclick="zoomMermaidOut('mermaid-10500923')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
-                </div>
-                <div id="mermaid-10500923" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: 400px; height: auto;" data-mermaid-code='sequenceDiagram
-    participant User
-    participant Browser
-    participant FastHTML
-    participant Router
-    participant FileSystem
-    participant Renderer
-    participant HTMX
-    
-    User-&amp;gt;&amp;gt;Browser: Visit /
-    Browser-&amp;gt;&amp;gt;FastHTML: GET /
-    FastHTML-&amp;gt;&amp;gt;Router: Route to index()
-    Router-&amp;gt;&amp;gt;FileSystem: Scan for .md files
-    FileSystem--&amp;gt;&amp;gt;Router: Return file tree
-    Router-&amp;gt;&amp;gt;Browser: Render post list + layout
-    
-    User-&amp;gt;&amp;gt;Browser: Click post link
-    Browser-&amp;gt;&amp;gt;HTMX: hx-get="/posts/demo"
-    HTMX-&amp;gt;&amp;gt;FastHTML: GET /posts/demo
-    FastHTML-&amp;gt;&amp;gt;Router: Route to post_detail()
-    Router-&amp;gt;&amp;gt;FileSystem: Read demo.md
-    FileSystem--&amp;gt;&amp;gt;Router: Markdown content
-    Router-&amp;gt;&amp;gt;Renderer: Parse &amp;amp; render markdown
-    
-    rect rgb(200, 220, 250)
-        Note over Renderer: Process custom syntax:&amp;lt;br/&amp;gt;- Footnotes [^1]&amp;lt;br/&amp;gt;- Mermaid diagrams&amp;lt;br/&amp;gt;- Internal links
-    end
-    
-    Renderer--&amp;gt;&amp;gt;Router: Rendered HTML
-    Router-&amp;gt;&amp;gt;HTMX: Return HTML fragment
-    HTMX-&amp;gt;&amp;gt;Browser: Swap content (#main-content)
-    Browser-&amp;gt;&amp;gt;User: Display post
-'><pre class="mermaid my-4" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">sequenceDiagram
-    participant User
-    participant Browser
-    participant FastHTML
-    participant Router
-    participant FileSystem
-    participant Renderer
-    participant HTMX
-    
-    User-&gt;&gt;Browser: Visit /
-    Browser-&gt;&gt;FastHTML: GET /
-    FastHTML-&gt;&gt;Router: Route to index()
-    Router-&gt;&gt;FileSystem: Scan for .md files
-    FileSystem--&gt;&gt;Router: Return file tree
-    Router-&gt;&gt;Browser: Render post list + layout
-    
-    User-&gt;&gt;Browser: Click post link
-    Browser-&gt;&gt;HTMX: hx-get="/posts/demo"
-    HTMX-&gt;&gt;FastHTML: GET /posts/demo
-    FastHTML-&gt;&gt;Router: Route to post_detail()
-    Router-&gt;&gt;FileSystem: Read demo.md
-    FileSystem--&gt;&gt;Router: Markdown content
-    Router-&gt;&gt;Renderer: Parse &amp; render markdown
-    
-    rect rgb(200, 220, 250)
-        Note over Renderer: Process custom syntax:&lt;br/&gt;- Footnotes [^1]&lt;br/&gt;- Mermaid diagrams&lt;br/&gt;- Internal links
-    end
-    
-    Renderer--&gt;&gt;Router: Rendered HTML
-    Router-&gt;&gt;HTMX: Return HTML fragment
-    HTMX-&gt;&gt;Browser: Swap content (#main-content)
-    Browser-&gt;&gt;User: Display post
-</pre></div>
-            </div>
-<h3 id="2-markdown-processing-pipeline" class="text-xl font-semibold mb-3 mt-5">2. Markdown Processing Pipeline</h3>
-<div class="mermaid-container relative border-2 rounded-md my-4" style="width: 80vw; position: relative; left: 50%; transform: translateX(-50%);">
-                <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
-                    <button onclick="resetMermaidZoom('mermaid-14149258')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
-                    <button onclick="zoomMermaidIn('mermaid-14149258')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
-                    <button onclick="zoomMermaidOut('mermaid-14149258')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
-                </div>
-                <div id="mermaid-14149258" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: 400px; height: auto;" data-mermaid-code="flowchart LR
-    A[Raw Markdown] --&amp;gt; B{Extract Footnotes}
-    B --&amp;gt;|Content| C[Mistletoe Parser]
-    B --&amp;gt;|Footnote Defs| D[Store in Dict]
-    
-    C --&amp;gt; E[Token Stream]
-    
-    E --&amp;gt; F{ContentRenderer}
-    
-    F --&amp;gt;|BlockCode + 'mermaid'| G[Mermaid Renderer]
-    F --&amp;gt;|Link| H[Link Renderer]
-    F --&amp;gt;|FootnoteRef| I[Footnote Renderer]
-    F --&amp;gt;|Other| J[Standard HTML]
-    
-    G --&amp;gt; K[Diagram with Controls]
-    H --&amp;gt; L{Internal Link?}
-    L --&amp;gt;|Yes| M[Add HTMX attrs]
-    L --&amp;gt;|No| N[Add target=_blank]
-    
-    I --&amp;gt; O[Sidenote Component]
-    D --&amp;gt; O
-    
-    K --&amp;gt; P[Apply CSS Classes]
-    M --&amp;gt; P
-    N --&amp;gt; P
-    O --&amp;gt; P
-    J --&amp;gt; P
-    
-    P --&amp;gt; Q[Final HTML]
-    
-    style G fill:#ffe6cc
-    style I fill:#d1ecf1
-    style L fill:#fff3cd
-"><pre class="mermaid my-4" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">flowchart LR
-    A[Raw Markdown] --&gt; B{Extract Footnotes}
-    B --&gt;|Content| C[Mistletoe Parser]
-    B --&gt;|Footnote Defs| D[Store in Dict]
-    
-    C --&gt; E[Token Stream]
-    
-    E --&gt; F{ContentRenderer}
-    
-    F --&gt;|BlockCode + 'mermaid'| G[Mermaid Renderer]
-    F --&gt;|Link| H[Link Renderer]
-    F --&gt;|FootnoteRef| I[Footnote Renderer]
-    F --&gt;|Other| J[Standard HTML]
-    
-    G --&gt; K[Diagram with Controls]
-    H --&gt; L{Internal Link?}
-    L --&gt;|Yes| M[Add HTMX attrs]
-    L --&gt;|No| N[Add target=_blank]
-    
-    I --&gt; O[Sidenote Component]
-    D --&gt; O
-    
-    K --&gt; P[Apply CSS Classes]
-    M --&gt; P
-    N --&gt; P
-    O --&gt; P
-    J --&gt; P
-    
-    P --&gt; Q[Final HTML]
-    
-    style G fill:#ffe6cc
-    style I fill:#d1ecf1
-    style L fill:#fff3cd
-</pre></div>
-            </div>
-<h3 id="3-mermaid-diagram-lifecycle" class="text-xl font-semibold mb-3 mt-5">3. Mermaid Diagram Lifecycle</h3>
-<div class="mermaid-container relative border-2 rounded-md my-4" style="width: 60vw; position: relative; left: 50%; transform: translateX(-50%);">
-                <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
-                    <button onclick="resetMermaidZoom('mermaid-8499696')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
-                    <button onclick="zoomMermaidIn('mermaid-8499696')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
-                    <button onclick="zoomMermaidOut('mermaid-8499696')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
-                </div>
-                <div id="mermaid-8499696" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: 400px; height: auto;" data-mermaid-code='stateDiagram-v2
-    [*] --&amp;gt; Rendered: Page Load
-    
-    state Rendered {
-        [*] --&amp;gt; Initialize
-        Initialize --&amp;gt; AddControls: Create buttons
-        AddControls --&amp;gt; StoreCode: Save original code
-        StoreCode --&amp;gt; EnableInteraction: Mouse events
-    }
-    
-    state EnableInteraction {
-        [*] --&amp;gt; Idle
-        Idle --&amp;gt; Panning: Mouse drag
-        Idle --&amp;gt; Zooming: Mouse wheel
-        Idle --&amp;gt; ButtonZoom: +/- buttons
-        ButtonZoom --&amp;gt; Idle
-        Zooming --&amp;gt; Idle
-        Panning --&amp;gt; Idle
-        
-        state "Reset Button" as Reset
-        Idle --&amp;gt; Reset: Click reset
-        Reset --&amp;gt; Idle: Restore defaults
-    }
-    
-    Rendered --&amp;gt; ThemeChange: Dark/Light toggle
-    
-    state ThemeChange {
-        [*] --&amp;gt; DetectTheme
-        DetectTheme --&amp;gt; GetOriginalCode: Read data attribute
-        GetOriginalCode --&amp;gt; ClearWrapper
-        ClearWrapper --&amp;gt; ReinitMermaid: New theme
-        ReinitMermaid --&amp;gt; ReRender: mermaid.run()
-    }
-    
-    ThemeChange --&amp;gt; Rendered: Re-rendered
-    
-    note right of ThemeChange
-        MutationObserver watches
-        HTML class changes
-    end note
-    
-    note right of EnableInteraction
-        Transform state stored
-        per diagram ID
-    end note
-'><pre class="mermaid my-4" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">stateDiagram-v2
-    [*] --&gt; Rendered: Page Load
-    
-    state Rendered {
-        [*] --&gt; Initialize
-        Initialize --&gt; AddControls: Create buttons
-        AddControls --&gt; StoreCode: Save original code
-        StoreCode --&gt; EnableInteraction: Mouse events
-    }
-    
-    state EnableInteraction {
-        [*] --&gt; Idle
-        Idle --&gt; Panning: Mouse drag
-        Idle --&gt; Zooming: Mouse wheel
-        Idle --&gt; ButtonZoom: +/- buttons
-        ButtonZoom --&gt; Idle
-        Zooming --&gt; Idle
-        Panning --&gt; Idle
-        
-        state "Reset Button" as Reset
-        Idle --&gt; Reset: Click reset
-        Reset --&gt; Idle: Restore defaults
-    }
-    
-    Rendered --&gt; ThemeChange: Dark/Light toggle
-    
-    state ThemeChange {
-        [*] --&gt; DetectTheme
-        DetectTheme --&gt; GetOriginalCode: Read data attribute
-        GetOriginalCode --&gt; ClearWrapper
-        ClearWrapper --&gt; ReinitMermaid: New theme
-        ReinitMermaid --&gt; ReRender: mermaid.run()
-    }
-    
-    ThemeChange --&gt; Rendered: Re-rendered
-    
-    note right of ThemeChange
-        MutationObserver watches
-        HTML class changes
-    end note
-    
-    note right of EnableInteraction
-        Transform state stored
-        per diagram ID
-    end note
-</pre></div>
-            </div>
-<h2 id="key-features" class="text-2xl font-semibold mb-4 mt-6">Key Features</h2>
-<h3 id="-advanced-markdown-features" class="text-xl font-semibold mb-3 mt-5">✨ Advanced Markdown Features</h3>
-<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed"><strong>Footnotes as Sidenotes</strong>: <code class="uk-codespan px-1">[^1]</code> references become elegant margin notes on desktop, expandable on mobile</li>
-<li class="text-base leading-relaxed"><strong>Mermaid Diagrams</strong>: Full support for flowcharts, sequence diagrams, state diagrams, etc.</li>
-<li class="text-base leading-relaxed"><strong>Interactive Diagrams</strong>: Built-in zoom, pan, and reset controls for all mermaid diagrams</li>
-<li class="text-base leading-relaxed"><strong>Theme-aware Rendering</strong>: Diagrams automatically re-render when switching light/dark mode</li>
-</ul>
-<h3 id="-modern-ui" class="text-xl font-semibold mb-3 mt-5">🎨 Modern UI</h3>
-<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed"><strong>Responsive Design</strong>: Works beautifully on all screen sizes</li>
-<li class="text-base leading-relaxed"><strong>Dark Mode</strong>: Automatic theme switching with localStorage persistence</li>
-<li class="text-base leading-relaxed"><strong>HTMX Navigation</strong>: Fast, SPA-like navigation without full page reloads</li>
-<li class="text-base leading-relaxed"><strong>Collapsible Folders</strong>: Organize posts in nested directories</li>
-</ul>
-<h3 id="-technical-highlights" class="text-xl font-semibold mb-3 mt-5">🚀 Technical Highlights</h3>
-<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed">Built on <strong>FastHTML</strong> for modern Python web development</li>
-<li class="text-base leading-relaxed">Uses <strong>Mistletoe</strong> for extensible Markdown parsing</li>
-<li class="text-base leading-relaxed"><strong>TailwindCSS</strong> + <strong>MonsterUI</strong> for styling</li>
-<li class="text-base leading-relaxed"><strong>Hyperscript</strong> for interactive behaviors</li>
-<li class="text-base leading-relaxed"><strong>Mermaid.js v11</strong> for diagram rendering</li>
-</ul>
-<h2 id="project-structure" class="text-2xl font-semibold mb-4 mt-6">Project Structure</h2>
-<div class="mermaid-container relative border-2 rounded-md my-4" style="width: 100%;">
-                <div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">
-                    <button onclick="resetMermaidZoom('mermaid-795916')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button>
-                    <button onclick="zoomMermaidIn('mermaid-795916')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>
-                    <button onclick="zoomMermaidOut('mermaid-795916')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>
-                </div>
-                <div id="mermaid-795916" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: 400px; height: auto;" data-mermaid-code="graph LR
-    subgraph vyasa/
-        A[__init__.py]
-        B[core.py&amp;lt;br/&amp;gt;Main App Logic]
-        C[main.py&amp;lt;br/&amp;gt;Entry Point]
-        
-        subgraph static/
-            D[scripts.js&amp;lt;br/&amp;gt;Mermaid + Interactions]
-            E[sidenote.css&amp;lt;br/&amp;gt;Footnote Styles]
-            F[favicon.png]
-        end
-    end
-    
-    subgraph demo/
-        G[*.md Files&amp;lt;br/&amp;gt;Your Blog Posts]
-        
-        subgraph guides/
-            H[*.md Files&amp;lt;br/&amp;gt;Nested Content]
-        end
-    end
-    
-    B --&amp;gt; D
-    B --&amp;gt; E
-    B --&amp;gt; F
-    B -.reads.-&amp;gt; G
-    B -.reads.-&amp;gt; H
-    
-    style B fill:#ffe6cc
-    style D fill:#d1ecf1
-    style G fill:#d4edda
-"><pre class="mermaid my-4" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">graph LR
-    subgraph vyasa/
-        A[__init__.py]
-        B[core.py&lt;br/&gt;Main App Logic]
-        C[main.py&lt;br/&gt;Entry Point]
-        
-        subgraph static/
-            D[scripts.js&lt;br/&gt;Mermaid + Interactions]
-            E[sidenote.css&lt;br/&gt;Footnote Styles]
-            F[favicon.png]
-        end
-    end
-    
-    subgraph demo/
-        G[*.md Files&lt;br/&gt;Your Blog Posts]
-        
-        subgraph guides/
-            H[*.md Files&lt;br/&gt;Nested Content]
-        end
-    end
-    
-    B --&gt; D
-    B --&gt; E
-    B --&gt; F
-    B -.reads.-&gt; G
-    B -.reads.-&gt; H
-    
-    style B fill:#ffe6cc
-    style D fill:#d1ecf1
-    style G fill:#d4edda
-</pre></div>
-            </div>
-<h2 id="installation" class="text-2xl font-semibold mb-4 mt-6">Installation</h2>
-<h3 id="from-pypi-recommended" class="text-xl font-semibold mb-3 mt-5">From PyPI (recommended)</h3>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install vyasa
-</code></pre>
-<h3 id="from-source" class="text-xl font-semibold mb-3 mt-5">From source</h3>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">git clone https://github.com/yeshwanth/vyasa.git
-cd vyasa
-pip install -e .
-</code></pre>
-<h2 id="quick-start" class="text-2xl font-semibold mb-4 mt-6">Quick Start</h2>
+        <h1 class="text-4xl font-bold mb-8">Vyāsa</h1><div class="w-full">
+  <link rel="stylesheet" href="/static/sidenote.css?v=1770232138197500663">
+<p align="center" class="text-base leading-relaxed mb-6">  
+  <img src="static/icon.png" alt="Vyāsa icon" class="vyasa-icon max-w-full h-auto rounded-lg mb-6" style="width: 256px;">  
+</p>
+<p class="vyasa-caption text-base leading-relaxed mb-6" style="text-align: center;">  
+  Markdown feeds Python<br>  
+  Instant sites, no code juggling<br>  
+  CSS reigns supreme  
+</p>
+<hr class="border-t border-border my-8">
+<p class="text-base leading-relaxed mb-6">Vyāsa is a Python-first blogging platform designed to turn your Markdown files into a fully-featured website in seconds. Write your content in clean, simple Markdown—no boilerplate, no configuration hassles—and watch your site come alive instantly. Whether you're a minimalist who wants it just to work or a CSS enthusiast ready to craft pixel-perfect designs, Vyāsa adapts to your needs. Start with zero configuration and customize every pixel when you're ready.<span aria-hidden="true" class="hidden"> (</span><span role="doc-noteref" aria-label="Sidenote 1" _="on click if window.innerWidth &gt;= 1280 then add .hl to #sn-1 then wait 1s then remove .hl from #sn-1 else toggle .open on me then toggle .show on #sn-1" id="snref-1" class="sidenote-ref cursor-pointer"></span><span role="doc-footnote" aria-labelledby="snref-1" id="sn-1" class="sidenote text-sm leading-relaxed border-l-2 border-amber-400 dark:border-blue-400 pl-3 text-neutral-500 dark:text-neutral-400 transition-all duration-500 w-full my-2 xl:my-0">If you're curious about how the intro was styled, <a href="https://github.com/sizhky/vyasa/blob/fa9a671931ad69b24139ba9d105bbadd8753b85b/custom.css#L36C1-L36C13" target="_blank" rel="noopener noreferrer" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">visit this page</a>.<br><br>
+Check out the <a href="/posts/vyasa%20manual/theming" hx-get="/posts/vyasa%20manual/theming" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">Theming &amp; CSS</a> guide for details on customizing your blog's appearance.</span><span aria-hidden="true" class="hidden">)</span></p>
+<div class="vyasa-callout vyasa-callout-info my-6 rounded-xl border px-5 py-4"><div class="vyasa-callout-label mb-2 text-sm font-semibold uppercase tracking-[0.18em]">Info</div><div class="vyasa-callout-body"><p class="text-base leading-relaxed mb-6"><strong>Vyāsa</strong> is named after the legendary sage <strong>Krishna Dvaipayana Vyāsa</strong>, who is credited with compiling the ancient Indian epic - the Mahabharata, 18 puranas and many more spiritually significant works.</p>
+<p class="text-base leading-relaxed mb-6">Just as Vyāsa organized vast knowledge into a coherent narrative, Vyāsa the blogging platform helps you organize your thoughts and content into a beautiful, functional website with ease.</p></div></div>  
+---
+<h2 id="quick-start" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Quick Start</span><a href="#quick-start" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Quick Start">¶</a></h2>
 <ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed">
-<p class="text-base leading-relaxed mb-6">Create a directory with your markdown files:</p>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">mkdir my-blog
+<li class="text-base leading-relaxed"><p class="text-base leading-relaxed mb-6">Install Vyāsa:</p><div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-13330174-clipboard');const toast=document.getElementById('codeblock-13330174-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-13330174-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-13330174-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">pip install vyasa
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install vyasa
+</code></pre></div></li>
+
+<li class="text-base leading-relaxed"><p class="text-base leading-relaxed mb-6">Create a directory with your markdown files:</p><div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-15789305-clipboard');const toast=document.getElementById('codeblock-15789305-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-15789305-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-15789305-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">mkdir my-blog
+cd my-blog
+echo "# Hello World" &amp;gt; hello.md
+mkdir -p posts
+echo "# My First Post\nThis is a sample blog post." &amp;gt; posts/first-post.md
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">mkdir my-blog
 cd my-blog
 echo "# Hello World" &gt; hello.md
-</code></pre>
-</li>
-<li class="text-base leading-relaxed">
-<p class="text-base leading-relaxed mb-6">Run Vyasa:</p>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">vyasa .
-</code></pre>
-</li>
-<li class="text-base leading-relaxed">
-<p class="text-base leading-relaxed mb-6">Open your browser at <code class="uk-codespan px-1">http://127.0.0.1:5001</code></p>
-</li>
+mkdir -p posts
+echo "# My First Post\nThis is a sample blog post." &gt; posts/first-post.md
+</code></pre></div></li>
+
+<li class="text-base leading-relaxed"><p class="text-base leading-relaxed mb-6">Run Vyāsa:</p><div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-12917326-clipboard');const toast=document.getElementById('codeblock-12917326-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-12917326-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-12917326-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">vyasa .
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">vyasa .
+</code></pre></div></li>
+
+<li class="text-base leading-relaxed"><p class="text-base leading-relaxed mb-6">Open your browser at <code class="uk-codespan px-1">http://127.0.0.1:5001</code></p></li>
+
 </ol>
-<h2 id="configuration" class="text-2xl font-semibold mb-4 mt-6">Configuration</h2>
-<p class="text-base leading-relaxed mb-6">Vyasa supports three ways to configure your blog (in priority order):</p>
-<ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed"><strong><code class="uk-codespan px-1">.vyasa</code> configuration file</strong> (TOML format)</li>
-<li class="text-base leading-relaxed"><strong>Environment variables</strong></li>
-<li class="text-base leading-relaxed"><strong>Default values</strong></li>
-</ol>
-<h3 id="using-a-codevyasacode-configuration-file" class="text-xl font-semibold mb-3 mt-5">Using a <code class="uk-codespan px-1">.vyasa</code> Configuration File</h3>
-<p class="text-base leading-relaxed mb-6">Create a <code class="uk-codespan px-1">.vyasa</code> file in your blog directory or current directory:</p>
-<pre class="my-4"><code class="language-toml uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Blog title (default: derives from root folder name)
-title = "My Awesome Blog"
-
-# Root folder containing markdown files (default: current directory)
-root = "."
-
-# Server host (default: 127.0.0.1)
-# Use "0.0.0.0" to make the server accessible from network
-host = "127.0.0.1"
-
-# Server port (default: 5001)
-port = 5001
-</code></pre>
-<p class="text-base leading-relaxed mb-6">All settings in the <code class="uk-codespan px-1">.vyasa</code> file are optional. See <code class="uk-codespan px-1">.vyasa.example</code> for a full example.</p>
-<h3 id="environment-variables" class="text-xl font-semibold mb-3 mt-5">Environment Variables</h3>
-<p class="text-base leading-relaxed mb-6">You can also use environment variables as a fallback:</p>
+<h2 id="key-features" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Key Features</span><a href="#key-features" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Key Features">¶</a></h2>
+<div class="mermaid-container relative border-4 rounded-md my-4 shadow-2xl" style="width: 65vw; position: relative; left: 50%; transform: translateX(-50%);"><div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded"><button onclick="openMermaidFullscreen('mermaid-8327553-1')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button><button onclick="resetMermaidZoom('mermaid-8327553-1')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button><button onclick="zoomMermaidIn('mermaid-8327553-1')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button><button onclick="zoomMermaidOut('mermaid-8327553-1')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button></div><div id="mermaid-8327553-1" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: 400px; height: auto;" data-mermaid-code="mindmap
+  root((🚀 Vyāsa Features))
+    📝 Markdown
+      Footnotes as Sidenotes
+      YouTube Embeds
+      Task Lists
+      Math Notation
+      Superscript &amp;amp; Subscript
+      Strikethrough
+      Relative Links
+      Plain-Text Headings
+      Pandoc-style Attributes
+      Title Abbreviations
+      Folder Notes
+    🎨 Interactive Elements
+      Reveal.js Slides
+        Present Mode
+        Horizontal + Vertical Slides
+        Frontmatter Config Support
+        Theme + Highlight Control
+      Mermaid Diagrams
+        Flowcharts
+        Sequence Diagrams
+        State Diagrams
+        Gantt Charts
+      D2 Diagrams
+        Layouts &amp;amp; Themes
+        Composition Animation
+        Scenario/Layers Support
+      Interactive Diagrams
+        Zoom &amp;amp; Pan
+        Fullscreen Mode
+        Dark Mode Support
+        Auto-scaling
+      Tabbed Content
+      Custom CSS Cascade
+     UI/UX
+      Responsive Design
+      Dark Mode
+      Three-Panel Layout
+      HTMX Navigation
+      Collapsible Folders
+      Sidebar Search
+      Auto-Generated TOC
+      Mobile Menus
+      Sticky Navigation
+      Active Link Highlighting
+      PDF Support
+      Copy Button
+    ⚙️ Technical
+      FastHTML Foundation
+      Configuration File Support
+      CLI Arguments
+      Environment Variables
+      Security &amp;amp; Auth
+      Advanced Customization
+"><pre class="mermaid my-4" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">mindmap
+  root((🚀 Vyāsa Features))
+    📝 Markdown
+      Footnotes as Sidenotes
+      YouTube Embeds
+      Task Lists
+      Math Notation
+      Superscript &amp; Subscript
+      Strikethrough
+      Relative Links
+      Plain-Text Headings
+      Pandoc-style Attributes
+      Title Abbreviations
+      Folder Notes
+    🎨 Interactive Elements
+      Reveal.js Slides
+        Present Mode
+        Horizontal + Vertical Slides
+        Frontmatter Config Support
+        Theme + Highlight Control
+      Mermaid Diagrams
+        Flowcharts
+        Sequence Diagrams
+        State Diagrams
+        Gantt Charts
+      D2 Diagrams
+        Layouts &amp; Themes
+        Composition Animation
+        Scenario/Layers Support
+      Interactive Diagrams
+        Zoom &amp; Pan
+        Fullscreen Mode
+        Dark Mode Support
+        Auto-scaling
+      Tabbed Content
+      Custom CSS Cascade
+     UI/UX
+      Responsive Design
+      Dark Mode
+      Three-Panel Layout
+      HTMX Navigation
+      Collapsible Folders
+      Sidebar Search
+      Auto-Generated TOC
+      Mobile Menus
+      Sticky Navigation
+      Active Link Highlighting
+      PDF Support
+      Copy Button
+    ⚙️ Technical
+      FastHTML Foundation
+      Configuration File Support
+      CLI Arguments
+      Environment Variables
+      Security &amp; Auth
+      Advanced Customization
+</pre></div></div>
+<h3 id="-advanced-markdown-features" class="text-xl font-semibold mb-3 mt-5"><span class="vyasa-heading-text">✨ Advanced Markdown Features</span><a href="#-advanced-markdown-features" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to ✨ Advanced Markdown Features">¶</a></h3>
 <ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed"><code class="uk-codespan px-1">VYASA_ROOT</code>: Path to your markdown files (default: current directory)</li>
-<li class="text-base leading-relaxed"><code class="uk-codespan px-1">VYASA_TITLE</code>: Your blog's title (default: folder name)</li>
-<li class="text-base leading-relaxed"><code class="uk-codespan px-1">VYASA_HOST</code>: Server host (default: 127.0.0.1)</li>
-<li class="text-base leading-relaxed"><code class="uk-codespan px-1">VYASA_PORT</code>: Server port (default: 5001)</li>
-</ul>
-<h3 id="examples" class="text-xl font-semibold mb-3 mt-5">Examples</h3>
-<p class="text-base leading-relaxed mb-6"><strong>Using a <code class="uk-codespan px-1">.vyasa</code> file:</strong></p>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Create a .vyasa file in your blog directory
-cd /path/to/your/blog
-cat &gt; .vyasa &lt;&lt; EOF
-title = "My Tech Blog"
-port = 8000
-EOF
+<li class="text-base leading-relaxed"><strong>Footnotes as Sidenotes</strong>: <code class="uk-codespan px-1">[^1]</code> references become elegant margin notes on desktop, expandable on mobile with smooth animations</li>
 
-vyasa
-</code></pre>
-<p class="text-base leading-relaxed mb-6"><strong>Using environment variables:</strong></p>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">export VYASA_ROOT=/path/to/your/markdown/files
-export VYASA_TITLE="My Awesome Blog"
-export VYASA_PORT=8000
-vyasa
-</code></pre>
-<p class="text-base leading-relaxed mb-6"><strong>Passing directory as argument:</strong></p>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">vyasa /path/to/your/markdown/files
-</code></pre>
-<p class="text-base leading-relaxed mb-6"><strong>Configuration priority example:</strong></p>
-<p class="text-base leading-relaxed mb-6">If you have both a <code class="uk-codespan px-1">.vyasa</code> file with <code class="uk-codespan px-1">port = 8000</code> and an environment variable <code class="uk-codespan px-1">VYASA_PORT=9000</code>, the <code class="uk-codespan px-1">.vyasa</code> file takes precedence and port 8000 will be used.</p>
-</div></div>
+<li class="text-base leading-relaxed"><strong>YouTube Embeds</strong>: Use <code class="uk-codespan px-1">[yt:VIDEO_ID]</code> or <code class="uk-codespan px-1">[yt:VIDEO_ID|Caption]</code> for responsive iframe cards with aspect-ratio containers</li>
+
+<li class="text-base leading-relaxed"><strong>Task Lists</strong>: <code class="uk-codespan px-1">- [ ]</code> / <code class="uk-codespan px-1">- [x]</code> render as custom styled checkboxes (green for checked, gray for unchecked) with SVG checkmarks</li>
+
+<li class="text-base leading-relaxed"><strong>Mermaid Diagrams</strong>: Full support for flowcharts, sequence diagrams, state diagrams, Gantt charts, etc.</li>
+
+<li class="text-base leading-relaxed"><strong>D2 Diagrams</strong>: Supports architecture/process diagrams with interactive rendering and composition animation support.</li>
+
+<li class="text-base leading-relaxed"><strong>Interactive Diagrams</strong>:<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">Zoom with mouse wheel (zooms towards cursor position)</li>
+
+<li class="text-base leading-relaxed">Pan by dragging with mouse</li>
+
+<li class="text-base leading-relaxed">Built-in controls: fullscreen, reset, zoom in/out buttons</li>
+
+<li class="text-base leading-relaxed">Auto-scaling based on diagram aspect ratio</li>
+
+<li class="text-base leading-relaxed">Fullscreen modal viewer with dark mode support</li>
+
+</ul></li>
+
+<li class="text-base leading-relaxed"><strong>Theme-aware Rendering</strong>: Diagrams automatically re-render when switching light/dark mode via MutationObserver</li>
+
+<li class="text-base leading-relaxed"><strong>Mermaid Frontmatter</strong>: Configure diagram size and metadata with YAML frontmatter (<code class="uk-codespan px-1">width</code>, <code class="uk-codespan px-1">height</code>, <code class="uk-codespan px-1">aspect_ratio</code>, <code class="uk-codespan px-1">title</code>)</li>
+
+<li class="text-base leading-relaxed"><strong>D2 Frontmatter</strong>: Configure rendering and animation with YAML frontmatter:<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">width</code>, <code class="uk-codespan px-1">height</code>, <code class="uk-codespan px-1">title</code></li>
+
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">layout</code> (<code class="uk-codespan px-1">elk</code>, <code class="uk-codespan px-1">dagre</code>, etc.; default is <code class="uk-codespan px-1">elk</code>), <code class="uk-codespan px-1">theme_id</code>, <code class="uk-codespan px-1">dark_theme_id</code>, <code class="uk-codespan px-1">sketch</code></li>
+
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">pad</code>, <code class="uk-codespan px-1">scale</code></li>
+
+<li class="text-base leading-relaxed"><code class="uk-codespan px-1">target</code> (board/layer target), <code class="uk-codespan px-1">animate_interval</code>/<code class="uk-codespan px-1">animate-interval</code>, <code class="uk-codespan px-1">animate</code></li>
+
+<li class="text-base leading-relaxed">Notes:<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">Composition animation is enabled with <code class="uk-codespan px-1">animate_interval</code></li>
+
+<li class="text-base leading-relaxed">If animation is enabled and <code class="uk-codespan px-1">target</code> is omitted, Vyāsa auto-targets all boards (<code class="uk-codespan px-1">*</code>)</li>
+
+<li class="text-base leading-relaxed">If <code class="uk-codespan px-1">title</code> is provided, it is used for fullscreen modal title and as a small centered caption under the diagram</li>
+
+</ul></li>
+
+</ul></li>
+
+<li class="text-base leading-relaxed"><strong>Tabbed Content</strong>: Create multi-tab sections using <code class="uk-codespan px-1">:::tabs</code> and <code class="uk-codespan px-1">::tab{title="..."}</code> syntax with smooth transitions</li>
+
+<li class="text-base leading-relaxed"><strong>Code Snippet Includes</strong>: Embed external source files with <code class="uk-codespan px-1">{* path ln[1:24] hl[9:11,22] *}</code> and highlight selected source lines</li>
+
+<li class="text-base leading-relaxed"><strong>Slash Callouts</strong>: Add FastAPI-style callouts with <code class="uk-codespan px-1">/// info</code> ... <code class="uk-codespan px-1">///</code> blocks for notes, warnings, and similar inline docs</li>
+
+<li class="text-base leading-relaxed"><strong>Relative Links</strong>: Full support for relative markdown links (<code class="uk-codespan px-1">./file.md</code>, <code class="uk-codespan px-1">../other.md</code>) with automatic path resolution</li>
+
+<li class="text-base leading-relaxed"><strong>Plain-Text Headings</strong>: Inline markdown in headings is stripped for clean display and consistent anchor slugs</li>
+
+<li class="text-base leading-relaxed"><strong>Math Notation</strong>: KaTeX support for inline <code class="uk-codespan px-1">$E=mc^2$</code> and block <code class="uk-codespan px-1">$$</code> math equations, auto-renders after HTMX swaps</li>
+
+<li class="text-base leading-relaxed"><strong>Superscript &amp; Subscript</strong>: Use <code class="uk-codespan px-1">^text^</code> for superscript and <code class="uk-codespan px-1">~text~</code> for subscript (preprocessed before rendering)</li>
+
+<li class="text-base leading-relaxed"><strong>Strikethrough</strong>: Use <code class="uk-codespan px-1">~~text~~</code> for strikethrough formatting</li>
+
+<li class="text-base leading-relaxed"><strong>Pandoc-style Attributes</strong>: Add classes to inline text with <code class="uk-codespan px-1">`text`{.class #id}</code> syntax for semantic markup (renders as <code class="uk-codespan px-1">&lt;span&gt;</code> tags, not <code class="uk-codespan px-1">&lt;code&gt;</code>)</li>
+
+<li class="text-base leading-relaxed"><strong>Cascading Custom CSS</strong>: Add <code class="uk-codespan px-1">custom.css</code> or <code class="uk-codespan px-1">style.css</code> files at multiple levels (root, folders) with automatic scoping</li>
+
+<li class="text-base leading-relaxed"><strong>Title Abbreviations</strong>: Configure <code class="uk-codespan px-1">.vyasa</code> <code class="uk-codespan px-1">abbreviations</code> to force uppercase acronyms in sidebar and slug-based titles (e.g., <code class="uk-codespan px-1">ai-features</code> $\to$ <code class="uk-codespan px-1">AI Features</code>)</li>
+
+<li class="text-base leading-relaxed"><strong>Folder Notes</strong>: <code class="uk-codespan px-1">index.md</code>, <code class="uk-codespan px-1">README.md</code>, or <code class="uk-codespan px-1">&lt;folder&gt;.md</code> can act as a folder summary; clicking the folder name opens it</li>
+
+</ul>
+<p class="text-base leading-relaxed mb-6">See the full list in <a href="/posts/vyasa%20manual/markdown-features" hx-get="/posts/vyasa%20manual/markdown-features" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">Markdown Writing Features</a>.</p>
+<h3 id="-revealjs-slides" class="text-xl font-semibold mb-3 mt-5"><span class="vyasa-heading-text">🎬 Reveal.js Slides</span><a href="#-revealjs-slides" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to 🎬 Reveal.js Slides">¶</a></h3>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><strong>One-click Present Mode</strong>: Add <code class="uk-codespan px-1">slides: true</code> in frontmatter and Vyāsa shows a <code class="uk-codespan px-1">Present</code> button that opens <code class="uk-codespan px-1">/slides/&lt;path&gt;</code> in Reveal.js</li>
+
+<li class="text-base leading-relaxed"><strong>Markdown-Native Slide Splits</strong>: Use <code class="uk-codespan px-1">---</code> for horizontal slides and <code class="uk-codespan px-1">--</code> for vertical slides (customizable with <code class="uk-codespan px-1">separator</code> and <code class="uk-codespan px-1">separatorVertical</code>)</li>
+
+<li class="text-base leading-relaxed"><strong>Frontmatter Config Support</strong>: Set Reveal options via nested <code class="uk-codespan px-1">reveal:</code> or top-level <code class="uk-codespan px-1">reveal_*</code> keys; these are passed into <code class="uk-codespan px-1">Reveal.initialize(...)</code></li>
+
+<li class="text-base leading-relaxed"><strong>Theme + Highlight Control</strong>: Configure <code class="uk-codespan px-1">theme</code> and <code class="uk-codespan px-1">highlightTheme</code> for deck appearance and code styling</li>
+
+<li class="text-base leading-relaxed"><strong>Optional Linear Right-Arrow Navigation</strong>: Use <code class="uk-codespan px-1">reveal_rightAdvancesAll: true</code> (or <code class="uk-codespan px-1">reveal: { rightAdvancesAll: true }</code>) so Right Arrow advances through every slide, including vertical/below slides</li>
+
+<li class="text-base leading-relaxed"><strong>Slides with Existing Vyāsa Features</strong>: Mermaid, D2, code highlighting, and math rendering all work inside slides</li>
+
+</ul>
+<p class="text-base leading-relaxed mb-6">See the working example in <a href="/posts/demo/reveal-slides" hx-get="/posts/demo/reveal-slides" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">Reveal Slides Demo</a>.</p>
+<h3 id="-modern-ui" class="text-xl font-semibold mb-3 mt-5"><span class="vyasa-heading-text">🎨 Modern UI</span><a href="#-modern-ui" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to 🎨 Modern UI">¶</a></h3>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><strong>Responsive Design</strong>: Works beautifully on all screen sizes with mobile-first approach</li>
+
+<li class="text-base leading-relaxed"><strong>Three-Panel Layout</strong>: Posts sidebar, main content, and table of contents for easy navigation</li>
+
+<li class="text-base leading-relaxed"><strong>Dark Mode</strong>: Automatic theme switching with localStorage persistence and instant visual feedback</li>
+
+<li class="text-base leading-relaxed"><strong>HTMX Navigation</strong>: Fast, SPA-like navigation without full page reloads using <code class="uk-codespan px-1">hx-get</code>, <code class="uk-codespan px-1">hx-target</code>, and <code class="uk-codespan px-1">hx-push-url</code></li>
+
+<li class="text-base leading-relaxed"><strong>Collapsible Folders</strong>: Organize posts in nested directories with chevron indicators and smooth expand/collapse</li>
+
+<li class="text-base leading-relaxed"><strong>Sidebar Search</strong>: HTMX-powered filename search with results shown below the search bar (tree stays intact)</li>
+
+<li class="text-base leading-relaxed"><strong>PDF Posts</strong>: PDFs show up in the sidebar and open inline in the main content area</li>
+
+<li class="text-base leading-relaxed"><strong>Auto-Generated TOC</strong>: Table of contents automatically extracted from headings with scroll-based active highlighting</li>
+
+<li class="text-base leading-relaxed"><strong>TOC Autoscroll + Accurate Highlights</strong>: Active TOC item stays in view and highlight logic handles duplicate headings</li>
+
+<li class="text-base leading-relaxed"><strong>Inline Copy Button</strong>: Copy raw markdown from a button placed right next to the post title</li>
+
+<li class="text-base leading-relaxed"><strong>Mobile Menus</strong>: Slide-in panels for posts and TOC on mobile devices with smooth transitions</li>
+
+<li class="text-base leading-relaxed"><strong>Sticky Navigation</strong>: Navbar stays at top while scrolling, with mobile menu toggles</li>
+
+<li class="text-base leading-relaxed"><strong>Active Link Highlighting</strong>: Current post and TOC section highlighted with blue accents</li>
+
+<li class="text-base leading-relaxed"><strong>Auto-Reveal in Sidebar</strong>: Active post automatically expanded and scrolled into view when opening sidebar</li>
+
+<li class="text-base leading-relaxed"><strong>Ultra-Thin Scrollbars</strong>: Custom styled 3px scrollbars that adapt to light/dark theme</li>
+
+<li class="text-base leading-relaxed"><strong>Frosted Glass Sidebars</strong>: Backdrop blur and transparency effects on sidebar components</li>
+
+</ul>
+<div class="vyasa-table-scroll"><table class="uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle my-6">
+<thead>
+<tr>
+<th align="left" class="!text-left p-2 font-semibold">Feature</th>
+<th align="left" class="!text-left p-2 font-semibold">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left" class="p-2">FastHTML Integration</td>
+<td align="left" class="p-2">Built on FastHTML for high performance and ease of use</td>
+</tr>
+<tr>
+<td align="left" class="p-2">Advanced Markdown Support</td>
+<td align="left" class="p-2">Footnotes as sidenotes, YouTube embeds, task lists, Mermaid + D2 diagrams, math notation, tabbed content, and more</td>
+</tr>
+<tr>
+<td align="left" class="p-2">Modern UI</td>
+<td align="left" class="p-2">Responsive design, dark mode, three-panel layout, HTMX navigation</td>
+</tr>
+<tr>
+<td align="left" class="p-2">Interactive Diagrams</td>
+<td align="left" class="p-2">Zoomable, pannable Mermaid and D2 diagrams with fullscreen support</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="installation" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Installation</span><a href="#installation" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Installation">¶</a></h2>
+<h3 id="from-pypi-recommended" class="text-xl font-semibold mb-3 mt-5"><span class="vyasa-heading-text">From PyPI (recommended)</span><a href="#from-pypi-recommended" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to From PyPI (recommended)">¶</a></h3>
+<div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-13330174-clipboard');const toast=document.getElementById('codeblock-13330174-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-13330174-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-13330174-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">pip install vyasa
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install vyasa
+</code></pre></div>
+<h3 id="from-source" class="text-xl font-semibold mb-3 mt-5"><span class="vyasa-heading-text">From source</span><a href="#from-source" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to From source">¶</a></h3>
+<div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-3036800-clipboard');const toast=document.getElementById('codeblock-3036800-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-3036800-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-3036800-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">git clone https://github.com/yeshwanth/vyasa.git
+cd vyasa
+pip install -e .
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">git clone https://github.com/yeshwanth/vyasa.git
+cd vyasa
+pip install -e .
+</code></pre></div>
+<h2 id="configuration" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Configuration</span><a href="#configuration" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Configuration">¶</a></h2>
+<p class="text-base leading-relaxed mb-6">Vyāsa supports four ways to configure your blog (in priority order):</p>
+<ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed">cli arguments (e.g. <code class="uk-codespan px-1">vyasa /path/to/markdown</code>) - Highest priority</li>
+
+<li class="text-base leading-relaxed"><strong><a href="/posts/vyasa%20manual/configuration" hx-get="/posts/vyasa%20manual/configuration" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline"><code class="uk-codespan px-1">.vyasa</code> configuration file</a></strong> (TOML format)</li>
+
+<li class="text-base leading-relaxed"><strong>Environment variables</strong> - Fallback</li>
+
+<li class="text-base leading-relaxed"><strong>Default values</strong> - Final fallback</li>
+
+</ol>
+<h2 id="vyāsa-manual" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Vyāsa Manual</span><a href="#vy%C4%81sa-manual" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Vyāsa Manual">¶</a></h2>
+<p class="text-base leading-relaxed mb-6">Short, focused guides for deeper topics. Start with configuration and writing content, then dive into architecture and advanced details.</p>
+<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><a href="/posts/vyasa%20manual/configuration" hx-get="/posts/vyasa%20manual/configuration" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">Configuration &amp; CLI</a></li>
+
+<li class="text-base leading-relaxed"><a href="/posts/vyasa%20manual/markdown-features" hx-get="/posts/vyasa%20manual/markdown-features" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">Markdown Writing Features</a></li>
+
+<li class="text-base leading-relaxed"><a href="/posts/vyasa%20manual/mermaid-diagrams" hx-get="/posts/vyasa%20manual/mermaid-diagrams" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">Mermaid Diagrams</a></li>
+
+<li class="text-base leading-relaxed"><a href="/posts/vyasa%20manual/d2-diagrams" hx-get="/posts/vyasa%20manual/d2-diagrams" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">D2 Diagrams</a></li>
+
+<li class="text-base leading-relaxed"><a href="/posts/vyasa%20manual/architecture" hx-get="/posts/vyasa%20manual/architecture" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">Architecture Overview</a></li>
+
+<li class="text-base leading-relaxed"><a href="/posts/vyasa%20manual/theming" hx-get="/posts/vyasa%20manual/theming" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">Theming &amp; CSS</a></li>
+
+<li class="text-base leading-relaxed"><a href="/posts/vyasa%20manual/security" hx-get="/posts/vyasa%20manual/security" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">Security &amp; Auth</a></li>
+
+<li class="text-base leading-relaxed"><a href="/posts/vyasa%20manual/advanced" hx-get="/posts/vyasa%20manual/advanced" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">Advanced Behavior</a></li>
+
+</ul>
+<h2 id="testing-code-block" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Testing code block</span><a href="#testing-code-block" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Testing code block">¶</a></h2>
+<div class="code-block relative my-4"><pre class="my-4"><code class="language-python vyasa-code-lines uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"><span class="vyasa-code-line" data-source-line="1">__version__ = "0.3.7"</span>
+<span class="vyasa-code-line" data-source-line="2">__all__ = ['app', 'rt', 'get_root_folder', 'get_blog_title', '__version__']</span>
+<span class="vyasa-code-line vyasa-code-line-highlight" data-source-line="3"> </span>
+<span class="vyasa-code-line vyasa-code-line-highlight" data-source-line="4">def __getattr__(name):</span>
+<span class="vyasa-code-line" data-source-line="5">    if name in {'app', 'rt', 'get_root_folder', 'get_blog_title'}:</span>
+<span class="vyasa-code-line vyasa-code-line-highlight" data-source-line="6">        from .core import app, rt, get_root_folder, get_blog_title</span></code></pre></div>
+</div>
 
     </main>
     
@@ -809,48 +729,32 @@ vyasa
             <details open>
                 <summary class="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
                     <span uk-icon="list" class="w-5 h-5 mr-2"></span>
-                    Contents
+                    Table of Contents
                 </summary>
                 <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
                     <ul class="mt-2 list-none">
   <li class="my-1">
-<a href="#vyasa" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-0">Vyasa</a>  </li>
+<a href="#quick-start" data-anchor="quick-start" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Quick Start</a>  </li>
   <li class="my-1">
-<a href="#architecture-overview" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Architecture Overview</a>  </li>
+<a href="#key-features" data-anchor="key-features" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Key Features</a>  </li>
   <li class="my-1">
-<a href="#how-vyasa-works" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">How Vyasa Works</a>  </li>
+<a href="#-advanced-markdown-features" data-anchor="-advanced-markdown-features" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">✨ Advanced Markdown Features</a>  </li>
   <li class="my-1">
-<a href="#1-request-flow" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">1. Request Flow</a>  </li>
+<a href="#-revealjs-slides" data-anchor="-revealjs-slides" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">🎬 Reveal.js Slides</a>  </li>
   <li class="my-1">
-<a href="#2-markdown-processing-pipeline" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">2. Markdown Processing Pipeline</a>  </li>
+<a href="#-modern-ui" data-anchor="-modern-ui" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">🎨 Modern UI</a>  </li>
   <li class="my-1">
-<a href="#3-mermaid-diagram-lifecycle" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">3. Mermaid Diagram Lifecycle</a>  </li>
+<a href="#installation" data-anchor="installation" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Installation</a>  </li>
   <li class="my-1">
-<a href="#key-features" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Key Features</a>  </li>
+<a href="#from-pypi-recommended" data-anchor="from-pypi-recommended" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">From PyPI (recommended)</a>  </li>
   <li class="my-1">
-<a href="#-advanced-markdown-features" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">✨ Advanced Markdown Features</a>  </li>
+<a href="#from-source" data-anchor="from-source" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">From source</a>  </li>
   <li class="my-1">
-<a href="#-modern-ui" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">🎨 Modern UI</a>  </li>
+<a href="#configuration" data-anchor="configuration" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Configuration</a>  </li>
   <li class="my-1">
-<a href="#-technical-highlights" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">🚀 Technical Highlights</a>  </li>
+<a href="#vyāsa-manual" data-anchor="vyāsa-manual" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Vyāsa Manual</a>  </li>
   <li class="my-1">
-<a href="#project-structure" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Project Structure</a>  </li>
-  <li class="my-1">
-<a href="#installation" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Installation</a>  </li>
-  <li class="my-1">
-<a href="#from-pypi-recommended" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">From PyPI (recommended)</a>  </li>
-  <li class="my-1">
-<a href="#from-source" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">From source</a>  </li>
-  <li class="my-1">
-<a href="#quick-start" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Quick Start</a>  </li>
-  <li class="my-1">
-<a href="#configuration" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Configuration</a>  </li>
-  <li class="my-1">
-<a href="#using-a-vyasa-configuration-file" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Using a `.vyasa` Configuration File</a>  </li>
-  <li class="my-1">
-<a href="#environment-variables" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Environment Variables</a>  </li>
-  <li class="my-1">
-<a href="#examples" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-6">Examples</a>  </li>
+<a href="#testing-code-block" data-anchor="testing-code-block" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Testing code block</a>  </li>
 </ul>
 
                 </div>
@@ -873,7 +777,7 @@ vyasa
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
         mermaid.initialize({ startOnLoad: true, theme: 'default' });
     </script>
-    <script src="/static/scripts.js" type="module"></script>
+    <script src="/static/scripts.js?v=1774334567985031757" type="module"></script>
     
     
     <script>
@@ -962,6 +866,21 @@ vyasa
                 });
             }, 100);
             
+            function replaceEscapedDollarPlaceholders(root) {
+                const placeholder = '@@VYASA_DOLLAR@@';
+                const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+                const nodes = [];
+                let node;
+                while ((node = walker.nextNode())) {
+                    if (node.nodeValue && node.nodeValue.includes(placeholder)) {
+                        nodes.push(node);
+                    }
+                }
+                nodes.forEach((textNode) => {
+                    textNode.nodeValue = textNode.nodeValue.split(placeholder).join('$');
+                });
+            }
+
             // Initialize KaTeX rendering
             if (window.renderMathInElement) {
                 renderMathInElement(document.body, {
@@ -972,6 +891,7 @@ vyasa
                     throwOnError: false
                 });
             }
+            replaceEscapedDollarPlaceholders(document.body);
         });
         
         // Sidenote interactions

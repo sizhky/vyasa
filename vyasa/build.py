@@ -10,16 +10,17 @@ from functools import partial
 import mistletoe as mst
 from fasthtml.common import *
 from monsterui.all import *
-from .core import (
-    parse_frontmatter, get_post_title, slug_to_title, resolve_markdown_title,
-    from_md, extract_toc, build_toc_items, text_to_anchor,
-    build_post_tree, ContentRenderer, extract_footnotes,
-    preprocess_super_sub, preprocess_tabs,
-)
 from .helpers import (
-    _effective_abbreviations, _effective_ignore_list, 
-    _effective_include_list, _should_include_folder, find_folder_note_file
+    _effective_abbreviations, _effective_ignore_list,
+    _effective_include_list, _should_include_folder, _strip_inline_markdown,
+    _unique_anchor, find_folder_note_file,
+    get_post_title, parse_frontmatter, resolve_markdown_title, slug_to_title,
+    text_to_anchor,
 )
+from .markdown_pipeline import extract_footnotes, preprocess_super_sub
+from .markdown_rendering import ContentRenderer, from_md
+from .markdown_tabs import preprocess_tabs
+from .sidebar_helpers import build_toc_items, extract_toc
 from .config import get_config, reload_config
 from .assets import asset_url
 from .tree_service import get_tree_entries
@@ -163,6 +164,30 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
         .tab-panel code { 
             font-family: 'IBM Plex Mono', monospace;
         }
+        :root { --vyasa-code-bg: #e1e2e7; --vyasa-code-fg: #3760bf; --vyasa-code-border: rgba(55, 96, 191, 0.16); --vyasa-code-highlight-bg: rgba(245, 42, 101, 0.16); --vyasa-code-highlight-accent: #f52a65; --vyasa-code-comment: #848cb5; --vyasa-code-keyword: #9854f1; --vyasa-code-string: #587539; --vyasa-code-title: #2e7de9; --vyasa-code-number: #b15c00; }
+        .dark { --vyasa-code-bg: #1a1b26; --vyasa-code-fg: #d5d6db; --vyasa-code-border: rgba(122, 162, 247, 0.16); --vyasa-code-highlight-bg: rgba(247, 118, 142, 0.18); --vyasa-code-highlight-accent: #f7768e; --vyasa-code-comment: #848cb5; --vyasa-code-keyword: #bb9af7; --vyasa-code-string: #9ece6a; --vyasa-code-title: #7dcfff; --vyasa-code-number: #ff9e64; }
+        .vyasa-callout { background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.95)); border-color: rgba(148, 163, 184, 0.35); box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); }
+        .dark .vyasa-callout { background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.96)); border-color: rgba(148, 163, 184, 0.2); box-shadow: 0 14px 34px rgba(2, 6, 23, 0.35); }
+        .vyasa-callout-label { color: rgb(15 23 42); }
+        .dark .vyasa-callout-label { color: rgb(226 232 240); }
+        .vyasa-callout-body > *:first-child { margin-top: 0 !important; }
+        .vyasa-callout-body > *:last-child { margin-bottom: 0 !important; }
+        .vyasa-callout-info { border-left: 4px solid rgb(14 116 144); }
+        .vyasa-callout-note { border-left: 4px solid rgb(37 99 235); }
+        .vyasa-callout-tip { border-left: 4px solid rgb(22 163 74); }
+        .vyasa-callout-warning { border-left: 4px solid rgb(217 119 6); }
+        .vyasa-callout-important { border-left: 4px solid rgb(190 24 93); }
+        .vyasa-callout-caution { border-left: 4px solid rgb(220 38 38); }
+        .vyasa-code-lines { display: block; white-space: normal !important; }
+        .vyasa-code-line { display: block; white-space: pre; margin: 0 -1rem; padding: 0 1rem; }
+        .code-block .vyasa-code-line-highlight { background: var(--vyasa-code-highlight-bg); box-shadow: inset 6px 0 0 var(--vyasa-code-highlight-accent); }
+        .code-block pre, .code-block pre code, pre code.hljs { background: var(--vyasa-code-bg); color: var(--vyasa-code-fg); }
+        .code-block pre { border: 1px solid var(--vyasa-code-border); border-radius: 12px; }
+        .hljs-comment, .hljs-quote { color: var(--vyasa-code-comment); }
+        .hljs-keyword, .hljs-selector-tag, .hljs-literal { color: var(--vyasa-code-keyword); }
+        .hljs-string, .hljs-doctag, .hljs-regexp { color: var(--vyasa-code-string); }
+        .hljs-title, .hljs-title.function_, .hljs-section, .hljs-attribute { color: var(--vyasa-code-title); }
+        .hljs-number, .hljs-symbol, .hljs-variable, .hljs-template-variable, .hljs-type, .hljs-built_in { color: var(--vyasa-code-number); }
     </style>
     """
     
@@ -591,12 +616,12 @@ def build_static_site(input_dir=None, output_dir=None):
         post_title, render_content = resolve_markdown_title(md_file, abbreviations=abbreviations)
         
         # Render markdown to HTML
-        content_div = from_md(render_content)
+        content_div = from_md(render_content, current_path=str(relative_path))
         title_html = f'<h1 class="text-4xl font-bold mb-8">{post_title}</h1>'
         content_html = title_html + to_xml(content_div)
         
         # Extract TOC
-        toc_headings = extract_toc(raw_content)
+        toc_headings = extract_toc(raw_content, _strip_inline_markdown, text_to_anchor, _unique_anchor)
         toc_items = build_toc_items(toc_headings)
         
         # Generate full page

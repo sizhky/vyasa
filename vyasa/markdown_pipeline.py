@@ -1,4 +1,10 @@
+import hashlib
 import re
+from pathlib import Path
+
+
+def _placeholder_id(text):
+    return hashlib.md5(text.encode()).hexdigest()[:8]
 
 
 def preprocess_super_sub(content):
@@ -39,3 +45,47 @@ def preserve_newlines(md):
     for i, block in enumerate(protected):
         md = md.replace(f"__VYASA_BLOCK_{i}__", block)
     return md
+
+
+def preprocess_callouts(content):
+    callout_store = {}
+    pattern = re.compile(
+        r"^///\s*([a-zA-Z][a-zA-Z0-9_-]*)\s*\n(.*?)^///\s*$",
+        re.MULTILINE | re.DOTALL,
+    )
+
+    def replace(match):
+        kind = match.group(1).strip().lower()
+        body = match.group(2).strip()
+        if not body:
+            return match.group(0)
+        callout_id = _placeholder_id(match.group(0))
+        callout_store[callout_id] = {"kind": kind, "body": body}
+        return f'<div class="vyasa-callout-placeholder" data-callout-id="{callout_id}"></div>'
+
+    return pattern.sub(replace, content), callout_store
+
+
+def preprocess_code_includes(content, current_path=None, root_folder=None):
+    protected = []
+    def protect(match):
+        protected.append(match.group(0))
+        return f"@@VYASA_CODE_BLOCK_{len(protected)-1}@@"
+
+    include_store = {}
+    pattern = re.compile(r"^\{\*\s+(.+?)\s+\*\}\s*$", re.MULTILINE)
+    base_dir = (Path(root_folder) / Path(current_path).parent) if current_path and root_folder else None
+    content = re.sub(r"(```+|~~~+)[\s\S]*?\1", protect, content, flags=re.MULTILINE)
+
+    def replace(match):
+        spec = match.group(1).strip()
+        path_text = spec.split(" ln[", 1)[0].split(" hl[", 1)[0].strip()
+        file_path = (base_dir / path_text).resolve() if base_dir else Path(path_text).resolve()
+        include_id = _placeholder_id(match.group(0))
+        include_store[include_id] = {"spec": spec, "path_text": path_text, "file_path": file_path}
+        return f'<div class="vyasa-code-include-placeholder" data-include-id="{include_id}"></div>'
+
+    content = pattern.sub(replace, content)
+    for i, block in enumerate(protected):
+        content = content.replace(f"@@VYASA_CODE_BLOCK_{i}@@", block)
+    return content, include_store

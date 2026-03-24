@@ -1146,12 +1146,12 @@ function refreshVyasaTableScrollShadows(root = document) {
         const table = el.querySelector('table');
         const parentWidth = el.parentElement ? el.parentElement.clientWidth : el.clientWidth;
         const tableWidth = table ? table.scrollWidth : el.scrollWidth;
-        const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
         const needsBreakout = tableWidth > (parentWidth + 1);
         const viewportCap = Math.floor(window.innerWidth * 0.8);
         el.classList.toggle('vyasa-table-breakout', needsBreakout);
         if (needsBreakout) el.style.setProperty('--vyasa-breakout-width', `${Math.min(tableWidth, viewportCap)}px`);
         else el.style.removeProperty('--vyasa-breakout-width');
+        const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
         el.classList.toggle('has-left-overflow', maxScrollLeft > 1 && el.scrollLeft > 1);
         el.classList.toggle('has-right-overflow', maxScrollLeft > 1 && el.scrollLeft < (maxScrollLeft - 1));
         if (el.dataset.shadowBound === '1') return;
@@ -2448,6 +2448,33 @@ function renderMathSafely(root) {
     while ((node = walker.nextNode())) if (node.nodeValue && node.nodeValue.includes(marker)) node.nodeValue = node.nodeValue.split(marker).join('$');
 }
 
+function initHighlightedCodeIncludes(root) {
+    (root || document).querySelectorAll('code[data-code-highlight-lines]').forEach((code) => {
+        if (code.querySelector('.vyasa-code-line')) return;
+        const start = Number(code.dataset.codeSourceStart || '1');
+        const ranges = String(code.dataset.codeHighlightLines || '').split(',').map((part) => part.trim()).filter(Boolean);
+        const highlighted = new Set();
+        ranges.forEach((part) => {
+            const [a, b] = part.split('-').map((value) => Number(value));
+            for (let n = a; n <= (b || a); n += 1) highlighted.add(n);
+        });
+        const lines = code.innerHTML.split('\n');
+        code.innerHTML = lines.map((line, index) => {
+            const lineNo = start + index;
+            const cls = highlighted.has(lineNo) ? 'vyasa-code-line vyasa-code-line-highlight' : 'vyasa-code-line';
+            return `<span class="${cls}" data-source-line="${lineNo}">${line || '&nbsp;'}</span>`;
+        }).join('\n');
+        code.classList.add('vyasa-code-lines');
+    });
+}
+
+function scheduleHighlightedCodeIncludes(root) {
+    const target = root || document;
+    initHighlightedCodeIncludes(target);
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => initHighlightedCodeIncludes(target));
+    [40, 140, 320].forEach((delay) => setTimeout(() => initHighlightedCodeIncludes(target), delay));
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     replaceEscapedDollarPlaceholders(document.body);
@@ -2464,6 +2491,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSearchPlaceholderCycle(document);
     initPostsSearchPersistence(document);
     initCodeBlockCopyButtons(document);
+    scheduleHighlightedCodeIncludes(document);
     initSearchClearButtons(document);
     ensurePdfFocusState();
     initTabPanelHeights(document);
@@ -2484,6 +2512,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initSearchPlaceholderCycle(event.target);
     initPostsSearchPersistence(event.target);
     initCodeBlockCopyButtons(event.target);
+    scheduleHighlightedCodeIncludes(event.target);
     initExcalidrawHosts(event.target || document);
     initExcalidrawName(event.target || document);
     initExcalidrawSave(event.target || document);
@@ -2492,6 +2521,10 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initSearchClearButtons(event.target);
     ensurePdfFocusState();
     initTabPanelHeights(event.target || document);
+});
+
+window.addEventListener('load', () => {
+    scheduleHighlightedCodeIncludes(document);
 });
 
 window.addEventListener('resize', () => refreshVyasaTableScrollShadows(document));
