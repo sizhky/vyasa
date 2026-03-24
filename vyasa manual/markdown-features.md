@@ -11,6 +11,17 @@
 
 :::tabs
 ::tab{title="Rendered"}
+### My Title { #server-sent-events-sse }
+
+Hover any heading to reveal its `¶` permalink. Explicit heading IDs are used by both the permalink and the TOC.
+::tab{title="Markdown Source"}
+```markdown
+### My Title { #server-sent-events-sse }
+```
+:::
+
+:::tabs
+::tab{title="Rendered"}
 ### Setext Style
 Heading Level 1
 ===============
@@ -185,6 +196,12 @@ Use `inline code` for short snippets.
 def hello_world():
     print("Hello, world!")
 ```
+
+### File Snippet Include
+
+{* ../demo/dollar-escape.md ln[1:24] hl[9:11,22] *}
+
+`ln[start:end]` slices the source file by 1-based line numbers. `hl[...]` highlights original source lines, so `hl[9:11,22]` highlights lines 9 through 11 and line 22 in the rendered snippet.
 ::tab{title="Markdown Source"}
 ````markdown
 ### Inline Code
@@ -201,6 +218,12 @@ Use `inline code` for short snippets.
 ```python
 def hello_world():
     print("Hello, world!")
+```
+
+### File Snippet Include
+
+```markdown
+{* ../demo/dollar-escape.md ln[1:24] hl[9:11,22] *}
 ```
 ````
 :::
@@ -609,22 +632,34 @@ gantt
 ```
 :::
 
-## Custom Containers
+## Callouts
 
 :::tabs
 ::tab{title="Rendered"}
-> [!NOTE]
-> This is a note.
+/// info
 
-> [!WARNING]
-> This is a warning.
+Added in FastAPI 0.134.0.
+
+///
+
+/// warning
+
+Rotate your keys every 90 days.
+
+///
 ::tab{title="Markdown Source"}
 ```markdown
-> [!NOTE]
-> This is a note.
+/// info
 
-> [!WARNING]
-> This is a warning.
+Added in FastAPI 0.134.0.
+
+///
+
+/// warning
+
+Rotate your keys every 90 days.
+
+///
 ```
 :::
 

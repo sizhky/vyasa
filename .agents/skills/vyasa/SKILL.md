@@ -1,0 +1,34 @@
+---
+name: vyasa
+description: Use when working on the Vyasa project or when the user wants help using Vyasa itself. Invoke for `.vyasa` TOML config, content organization, markdown features, theming, Mermaid or D2 rendering, auth and RBAC, static build behavior, or repo-aware Vyasa implementation work.
+---
+
+# Vyasa
+
+Use this skill for real Vyasa behavior. All reference files are self-contained — no external docs or repo clone needed.
+
+| If you want to... | Read |
+|---|---|
+| Configure `.vyasa`, CLI flags, env vars, RBAC, OAuth | `references/config.md` |
+| Write or explain markdown features | `references/markdown.md` |
+| Style with CSS or theming | `references/theming.md` |
+| Create Mermaid or D2 diagrams | `references/diagrams.md` |
+| Build or deploy a static site | `references/static-build.md` |
+
+Start here:
+
+1. Identify the request type from the table above and read only that file.
+2. Prefer existing Vyasa conventions over inventing new ones.
+3. When generating `.vyasa`, output valid TOML with only supported keys.
+4. When changing repo code, cite the concrete file that implements the behavior.
+5. For recent markdown work, check `references/markdown.md` for slash callouts, code snippet includes, and explicit heading IDs/permalinks before inventing new syntax.
+6. For code-block color changes, check `references/theming.md` for the `--vyasa-code-*` CSS variables so users can override palettes from `custom.css`.
+
+Core rules:
+
+- Treat `.vyasa` as a TOML file, usually at repo root or a content folder.
+- Respect precedence: CLI args > `.vyasa` > environment variables > defaults.
+- Distinguish root app config from folder-local ordering and navigation config.
+- For Mermaid labels, use literal `<br/>` for line breaks inside nodes and edge text; do not emit `\n`.
+- Do not invent unsupported frontmatter keys, sort modes, or config keys.
+- Never emit real secret values — use explicit placeholders.

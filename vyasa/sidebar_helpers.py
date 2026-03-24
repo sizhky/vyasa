@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fasthtml.common import *
 from monsterui.all import *
+from .helpers import resolve_heading_anchor
 
 
 def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=None, shortcut_key=None, extra_content=None, scroll_target="container"):
@@ -23,8 +24,9 @@ def extract_toc(content, strip_inline_markdown, text_to_anchor, unique_anchor):
     content_no_code = re.sub(r"^~~~.*?^~~~", "", content_no_code, flags=re.MULTILINE | re.DOTALL)
     headings, counts = [], {}
     for match in re.finditer(r"^(#{1,6})\s+(.+)$", content_no_code, flags=re.MULTILINE):
-        text = strip_inline_markdown(match.group(2).strip())
-        headings.append((len(match.group(1)), text, unique_anchor(text_to_anchor(text), counts)))
+        raw_text = strip_inline_markdown(match.group(2).strip())
+        text, anchor = resolve_heading_anchor(raw_text, counts)
+        headings.append((len(match.group(1)), text, anchor))
     return headings
 
 

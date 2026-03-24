@@ -46,6 +46,19 @@ def text_to_anchor(text: str) -> str:
     cleaned = _plain_text_from_html(cleaned)
     return re.sub(r'[^\w\s-]', '', cleaned.lower()).replace(' ', '-')
 
+def split_heading_text_and_id(text: str) -> tuple[str, str | None]:
+    cleaned = (text or "").strip()
+    match = re.match(r"^(.*?)\s*\{\s*#([A-Za-z][\w\-:.]*)\s*\}\s*$", cleaned)
+    if not match:
+        return cleaned, None
+    return match.group(1).strip(), match.group(2).strip()
+
+def resolve_heading_anchor(text: str, counts: dict[str, int]) -> tuple[str, str]:
+    heading_text, explicit_id = split_heading_text_and_id(text)
+    if explicit_id:
+        return heading_text, explicit_id
+    return heading_text, _unique_anchor(text_to_anchor(heading_text), counts)
+
 def _unique_anchor(base: str, counts: dict[str, int]) -> str:
     if not base:
         base = "section"

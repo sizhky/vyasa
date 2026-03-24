@@ -1,9 +1,9 @@
 ---
-title: Vyasa
+title: Vyāsa
 ---
 
 <p align="center">
-  <img src="static/icon.png" alt="Vyasa icon" class="vyasa-icon" style="width: 256px;">
+  <img src="static/icon.png" alt="Vyāsa icon" class="vyasa-icon" style="width: 256px;">
 </p>
 
 <p class="vyasa-caption" style="text-align: center;">
@@ -15,15 +15,21 @@ title: Vyasa
 
 ---
 
-Vyasa is a Python-first blogging platform designed to turn your Markdown files into a fully-featured website in seconds. Write your content in clean, simple Markdown—no boilerplate, no configuration hassles—and watch your site come alive instantly. Whether you're a minimalist who wants it just to work or a CSS enthusiast ready to craft pixel-perfect designs, Vyasa adapts to your needs. Start with zero configuration and customize every pixel when you're ready.[^1]
+Vyāsa is a Python-first blogging platform designed to turn your Markdown files into a fully-featured website in seconds. Write your content in clean, simple Markdown—no boilerplate, no configuration hassles—and watch your site come alive instantly. Whether you're a minimalist who wants it just to work or a CSS enthusiast ready to craft pixel-perfect designs, Vyāsa adapts to your needs. Start with zero configuration and customize every pixel when you're ready.[^1]
 
 [^1]: If you're curious about how the intro was styled, [visit this page](https://github.com/sizhky/vyasa/blob/fa9a671931ad69b24139ba9d105bbadd8753b85b/custom.css#L36C1-L36C13).<br>
     Check out the [Theming & CSS](vyasa%20manual/theming.md) guide for details on customizing your blog's appearance.
 
+/// info
+**Vyāsa** is named after the legendary sage **Krishna Dvaipayana Vyāsa**, who is credited with compiling the ancient Indian epic - the Mahabharata, 18 puranas and many more spiritually significant works. 
+
+Just as Vyāsa organized vast knowledge into a coherent narrative, Vyāsa the blogging platform helps you organize your thoughts and content into a beautiful, functional website with ease.
+///
+
 ---
 
 ## Quick Start
-1. Install Vyasa:
+1. Install Vyāsa:
    ```bash
    pip install vyasa
    ```
@@ -37,7 +43,7 @@ Vyasa is a Python-first blogging platform designed to turn your Markdown files i
    echo "# My First Post\nThis is a sample blog post." > posts/first-post.md
    ```
 
-3. Run Vyasa:
+3. Run Vyāsa:
    ```bash
    vyasa .
    ```
@@ -49,7 +55,7 @@ Vyasa is a Python-first blogging platform designed to turn your Markdown files i
 
 ```mermaid
 mindmap
-  root((🚀 Vyasa Features))
+  root((🚀 Vyāsa Features))
     📝 Markdown
       Footnotes as Sidenotes
       YouTube Embeds
@@ -127,9 +133,11 @@ mindmap
   - `target` (board/layer target), `animate_interval`/`animate-interval`, `animate`
   - Notes:
     - Composition animation is enabled with `animate_interval`
-    - If animation is enabled and `target` is omitted, Vyasa auto-targets all boards (`*`)
+    - If animation is enabled and `target` is omitted, Vyāsa auto-targets all boards (`*`)
     - If `title` is provided, it is used for fullscreen modal title and as a small centered caption under the diagram
 - **Tabbed Content**: Create multi-tab sections using `:::tabs` and `::tab{title="..."}` syntax with smooth transitions
+- **Code Snippet Includes**: Embed external source files with `{* path ln[1:24] hl[9:11,22] *}` and highlight selected source lines
+- **Slash Callouts**: Add FastAPI-style callouts with `/// info` ... `///` blocks for notes, warnings, and similar inline docs
 - **Relative Links**: Full support for relative markdown links (`./file.md`, `../other.md`) with automatic path resolution
 - **Plain-Text Headings**: Inline markdown in headings is stripped for clean display and consistent anchor slugs
 - **Math Notation**: KaTeX support for inline `$E=mc^2$` and block `$$` math equations, auto-renders after HTMX swaps
@@ -143,12 +151,12 @@ mindmap
 See the full list in [Markdown Writing Features](vyasa%20manual/markdown-features.md).
 
 ### 🎬 Reveal.js Slides
-- **One-click Present Mode**: Add `slides: true` in frontmatter and Vyasa shows a `Present` button that opens `/slides/<path>` in Reveal.js
+- **One-click Present Mode**: Add `slides: true` in frontmatter and Vyāsa shows a `Present` button that opens `/slides/<path>` in Reveal.js
 - **Markdown-Native Slide Splits**: Use `---` for horizontal slides and `--` for vertical slides (customizable with `separator` and `separatorVertical`)
 - **Frontmatter Config Support**: Set Reveal options via nested `reveal:` or top-level `reveal_*` keys; these are passed into `Reveal.initialize(...)`
 - **Theme + Highlight Control**: Configure `theme` and `highlightTheme` for deck appearance and code styling
 - **Optional Linear Right-Arrow Navigation**: Use `reveal_rightAdvancesAll: true` (or `reveal: { rightAdvancesAll: true }`) so Right Arrow advances through every slide, including vertical/below slides
-- **Slides with Existing Vyasa Features**: Mermaid, D2, code highlighting, and math rendering all work inside slides
+- **Slides with Existing Vyāsa Features**: Mermaid, D2, code highlighting, and math rendering all work inside slides
 
 See the working example in [Reveal Slides Demo](demo/reveal-slides.md).
 
@@ -195,14 +203,14 @@ pip install -e .
 
 ## Configuration
 
-Vyasa supports four ways to configure your blog (in priority order):
+Vyāsa supports four ways to configure your blog (in priority order):
 
 1. cli arguments (e.g. `vyasa /path/to/markdown`) - Highest priority
 1. **[`.vyasa` configuration file](vyasa%20manual/configuration.md)** (TOML format)
 2. **Environment variables** - Fallback
 3. **Default values** - Final fallback
 
-## Vyasa Manual
+## Vyāsa Manual
 
 Short, focused guides for deeper topics. Start with configuration and writing content, then dive into architecture and advanced details.
 

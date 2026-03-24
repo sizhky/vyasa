@@ -44,17 +44,19 @@ Vyasa logs render timings to `/tmp/vyasa_core.log` for profiling.
 1. **Frontmatter extraction**: `parse_frontmatter()` with file mtime-based caching
 2. **Footnote extraction**: `extract_footnotes()` using regex to find `[^label]:` definitions
 3. **Superscript/subscript preprocessing**: `preprocess_super_sub()` converts `^text^` and `~text~` to HTML
-4. **Tab preprocessing**: `preprocess_tabs()` replaces `:::tabs` blocks with placeholders, stores tab data
-5. **Mistletoe parsing**: Custom `ContentRenderer` with registered tokens:
+4. **Callout preprocessing**: `preprocess_callouts()` replaces `/// info` ... `///` blocks with placeholders, stores callout data
+5. **Tab preprocessing**: `preprocess_tabs()` replaces `:::tabs` blocks with placeholders, stores tab data
+6. **Mistletoe parsing**: Custom `ContentRenderer` with registered tokens:
    - `YoutubeEmbed` (precedence 6): `[yt:VIDEO_ID|caption]` syntax
    - `FootnoteRef`: `[^label]` references
    - `InlineCodeAttr` (precedence 8): `` `code`{.class} `` syntax
    - `Superscript` (precedence 7): `^text^` (if not preprocessed)
    - `Subscript` (precedence 7): `~text~` (if not preprocessed)
    - `Strikethrough` (precedence 7): `~~text~~`
-6. **Token rendering**: Each token has custom `render_*` method in `ContentRenderer`
-7. **Tab postprocessing**: `postprocess_tabs()` replaces placeholders with rendered tab HTML
-8. **CSS class application**: `apply_classes()` adds Tailwind classes to HTML elements
+7. **Token rendering**: Each token has custom `render_*` method in `ContentRenderer`
+8. **Tab postprocessing**: `postprocess_tabs()` replaces placeholders with rendered tab HTML
+9. **Callout postprocessing**: placeholder callouts are rendered back into themed HTML blocks
+10. **CSS class application**: `apply_classes()` adds Tailwind classes to HTML elements
 
 ### Custom Renderers
 - **`render_list_item`**: Detects `[ ]` / `[x]` patterns, renders custom checkboxes

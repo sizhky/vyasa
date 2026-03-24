@@ -15,10 +15,13 @@ from .helpers import (
     _plain_text_from_html,
     _unique_anchor,
     parse_frontmatter,
+    resolve_heading_anchor,
     text_to_anchor,
 )
 from .markdown_pipeline import (
     extract_footnotes,
+    preprocess_callouts,
+    preprocess_code_includes,
     preserve_newlines as preserve_md_newlines,
     preprocess_super_sub,
 )
@@ -36,6 +39,59 @@ from .markdown_tokens import (
 )
 
 _diagram_uid_counter = count(1)
+
+
+def _callout_label(kind):
+    labels = {
+        "info": "Info",
+        "note": "Note",
+        "tip": "Tip",
+        "warning": "Warning",
+        "important": "Important",
+        "caution": "Caution",
+    }
+    return labels.get(kind, kind.replace("-", " ").replace("_", " ").title())
+
+
+def _render_callout(kind, body, render_body):
+    rendered = render_body(body).strip()
+    return (
+        f'<div class="vyasa-callout vyasa-callout-{kind} my-6 rounded-xl border px-5 py-4">'
+        f'<div class="vyasa-callout-label mb-2 text-sm font-semibold uppercase tracking-[0.18em]">{html.escape(_callout_label(kind))}</div>'
+        f'<div class="vyasa-callout-body">{rendered}</div>'
+        '</div>'
+    )
+
+
+def _infer_code_language(path):
+    mapping = {
+        ".py": "python", ".js": "javascript", ".ts": "typescript", ".tsx": "tsx",
+        ".jsx": "jsx", ".json": "json", ".toml": "toml", ".md": "markdown",
+        ".sh": "bash", ".html": "html", ".css": "css", ".yml": "yaml", ".yaml": "yaml",
+    }
+    return mapping.get(Path(path).suffix.lower(), "")
+
+
+def _parse_line_spec(spec):
+    match = re.search(r"ln\[(\d+):(\d+)\]", spec)
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def _parse_highlight_spec(spec):
+    match = re.search(r"hl\[([^\]]+)\]", spec)
+    return match.group(1).replace(":", "-").replace(" ", "") if match else ""
+
+
+def _render_code_include(snippet, lang="", start=1, highlight_spec=""):
+    attrs = [f'data-code-source-start="{start}"']
+    if highlight_spec:
+        attrs.append(f'data-code-highlight-lines="{html.escape(highlight_spec)}"')
+    lang_class = f' class="language-{lang}"' if lang else ""
+    return (
+        '<div class="code-block relative my-4">'
+        f'<pre><code{lang_class} {" ".join(attrs)}>{html.escape(snippet)}</code></pre>'
+        '</div>'
+    )
 
 
 class FrankenRenderer(mst.HTMLRenderer):
@@ -305,8 +361,13 @@ class ContentRenderer(FrankenRenderer):
         level = token.level
         inner = self.render_inner(token)
         plain = _plain_text_from_html(inner)
-        anchor = _unique_anchor(text_to_anchor(plain), self.heading_counts)
-        return f'<h{level} id="{anchor}">{html.escape(plain)}</h{level}>'
+        heading_text, anchor = resolve_heading_anchor(plain, self.heading_counts)
+        permalink = (
+            f'<a href="#{anchor}" class="vyasa-heading-permalink ml-2 no-underline '
+            f'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" '
+            f'aria-label="Link to {html.escape(heading_text)}">¶</a>'
+        )
+        return f'<h{level} id="{anchor}"><span class="vyasa-heading-text">{html.escape(heading_text)}</span>{permalink}</h{level}>'
 
     def render_superscript(self, token):
         return f"<sup>{token.content}</sup>"
@@ -435,6 +496,10 @@ def from_md(content, img_dir=None, current_path=None):
     content = _protect_escaped_dollar(content)
     content, footnotes = extract_footnotes(content)
     content = preprocess_super_sub(content)
+    content, code_include_store = preprocess_code_includes(
+        content, current_path=current_path, root_folder=get_root_folder()
+    )
+    content, callout_data_store = preprocess_callouts(content)
     content, tab_data_store = preprocess_md_tabs(content)
     content = preserve_md_newlines(content)
     mods = {
@@ -459,5 +524,36 @@ def from_md(content, img_dir=None, current_path=None):
             ) as renderer:
                 return renderer.render(mst.Document(tab_content))
         html_out = postprocess_md_tabs(html_out, tab_data_store, _render_tab_content)
+    if callout_data_store:
+        def _render_callout_body(callout_body):
+            with ContentRenderer(
+                YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough,
+                FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes,
+                current_path=current_path,
+            ) as renderer:
+                return renderer.render(mst.Document(callout_body))
+        for callout_id, callout in callout_data_store.items():
+            rendered = _render_callout(callout["kind"], callout["body"], _render_callout_body)
+            placeholder = f'<div class="vyasa-callout-placeholder" data-callout-id="{callout_id}"></div>'
+            html_out = html_out.replace(placeholder, rendered)
+    if code_include_store:
+        for include_id, include in code_include_store.items():
+            if include["file_path"].exists():
+                text = include["file_path"].read_text(encoding="utf-8")
+                line_spec = _parse_line_spec(include["spec"])
+                start, end = line_spec if line_spec else (1, len(text.splitlines()))
+                lines = text.splitlines()
+                snippet = "\n".join(lines[start - 1:end])
+                lang = _infer_code_language(include["path_text"])
+                hl = _parse_highlight_spec(include["spec"])
+                rendered = _render_code_include(snippet, lang=lang, start=start, highlight_spec=hl)
+            else:
+                rendered = _render_callout(
+                    "warning",
+                    f'Code include not found: `{include["path_text"]}`',
+                    lambda body: mst.markdown(body, partial(ContentRenderer, img_dir=img_dir, current_path=current_path)).strip(),
+                )
+            placeholder = f'<div class="vyasa-code-include-placeholder" data-include-id="{include_id}"></div>'
+            html_out = html_out.replace(placeholder, rendered)
     html_out = re.sub(r"(<table\b[\s\S]*?</table>)", r'<div class="vyasa-table-scroll">\1</div>', html_out, flags=re.IGNORECASE)
     return Div(Link(rel="stylesheet", href=_asset_url("/static/sidenote.css")), NotStr(apply_classes(html_out, class_map_mods=mods)), cls="w-full")

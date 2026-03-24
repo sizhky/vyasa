@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Publishing - VYASA</title>
+    <title>Publishing to PyPI - VYASA</title>
     
     <!-- TailwindCSS and MonsterUI -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio,container-queries"></script>
@@ -29,14 +29,23 @@
     <script src="https://unpkg.com/hyperscript.org@0.9.12"></script>
     
     <!-- Static assets -->
-    <link rel="stylesheet" href="/static/sidenote.css">
+    <link rel="icon" href="/static/icon.png">
+    <link rel="stylesheet" href="/static/sidenote.css?v=1770232138197500663">
     
     
     <style>
         body { font-family: 'IBM Plex Sans', sans-serif; margin: 0; padding: 0; }
         code, pre { font-family: 'IBM Plex Mono', monospace; }
-        .folder-chevron { transition: transform 0.2s; display: inline-block; }
-        details[open] > summary > .folder-chevron { transform: rotate(90deg); }
+        .folder-chevron {
+            display: inline-block;
+            width: 0.45rem;
+            height: 0.45rem;
+            border-right: 2px solid rgb(148 163 184);
+            border-bottom: 2px solid rgb(148 163 184);
+            transform: rotate(-45deg);
+            transition: transform 0.2s;
+        }
+        details.is-open > summary .folder-chevron { transform: rotate(45deg); }
         details { border: none !important; box-shadow: none !important; }
         h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
         
@@ -55,7 +64,7 @@
             margin: 2rem 0; 
             border: 1px solid rgb(226 232 240); 
             border-radius: 0.5rem; 
-            overflow: hidden; 
+            overflow: visible; 
             box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
         }
         .dark .tabs-container { 
@@ -114,6 +123,7 @@
         .tabs-content { 
             background: white;
             position: relative;
+            overflow: visible;
         }
         .dark .tabs-content { 
             background: rgb(2 6 23);
@@ -129,6 +139,7 @@
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
+            overflow: visible;
         }
         .tab-panel.active { 
             position: relative;
@@ -154,6 +165,34 @@
         .tab-panel code { 
             font-family: 'IBM Plex Mono', monospace;
         }
+        .vyasa-callout { background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.95)); border-color: rgba(148, 163, 184, 0.35); box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); }
+        .dark .vyasa-callout { background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.96)); border-color: rgba(148, 163, 184, 0.2); box-shadow: 0 14px 34px rgba(2, 6, 23, 0.35); }
+        .vyasa-callout-label { color: rgb(15 23 42); }
+        .dark .vyasa-callout-label { color: rgb(226 232 240); }
+        .vyasa-callout-body > *:first-child { margin-top: 0 !important; }
+        .vyasa-callout-body > *:last-child { margin-bottom: 0 !important; }
+        .vyasa-callout-info { border-left: 4px solid rgb(14 116 144); }
+        .vyasa-callout-note { border-left: 4px solid rgb(37 99 235); }
+        .vyasa-callout-tip { border-left: 4px solid rgb(22 163 74); }
+        .vyasa-callout-warning { border-left: 4px solid rgb(217 119 6); }
+        .vyasa-callout-important { border-left: 4px solid rgb(190 24 93); }
+        .vyasa-callout-caution { border-left: 4px solid rgb(220 38 38); }
+        .code-block .vyasa-code-line-highlight { background: rgba(204, 36, 29, 0.22); box-shadow: inset 6px 0 0 rgba(204, 36, 29, 1); }
+        .dark .code-block .vyasa-code-line-highlight { background: rgba(251, 73, 52, 0.24); box-shadow: inset 6px 0 0 rgba(251, 73, 52, 1); }
+        .code-block pre, .code-block pre code, pre code.hljs { background: #fbf1c7; color: #3c3836; }
+        .dark .code-block pre, .dark .code-block pre code, .dark pre code.hljs { background: #282828; color: #ebdbb2; }
+        .code-block pre { border: 1px solid rgba(60, 56, 54, 0.12); border-radius: 12px; }
+        .dark .code-block pre { border-color: rgba(235, 219, 178, 0.12); }
+        .hljs-comment, .hljs-quote { color: #928374; }
+        .dark .hljs-comment, .dark .hljs-quote { color: #a89984; }
+        .hljs-keyword, .hljs-selector-tag, .hljs-literal { color: #9d0006; }
+        .dark .hljs-keyword, .dark .hljs-selector-tag, .dark .hljs-literal { color: #fb4934; }
+        .hljs-string, .hljs-doctag, .hljs-regexp { color: #79740e; }
+        .dark .hljs-string, .dark .hljs-doctag, .dark .hljs-regexp { color: #b8bb26; }
+        .hljs-title, .hljs-title.function_, .hljs-section, .hljs-attribute { color: #076678; }
+        .dark .hljs-title, .dark .hljs-title.function_, .dark .hljs-section, .dark .hljs-attribute { color: #83a598; }
+        .hljs-number, .hljs-symbol, .hljs-variable, .hljs-template-variable, .hljs-type, .hljs-built_in { color: #8f3f71; }
+        .dark .hljs-number, .dark .hljs-symbol, .dark .hljs-variable, .dark .hljs-template-variable, .dark .hljs-type, .dark .hljs-built_in { color: #d3869b; }
     </style>
     
 </head>
@@ -162,14 +201,33 @@
     <div id="page-container" class="flex flex-col min-h-screen">
         <div class="w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4">
             
-    <div class="flex items-center justify-between bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
-        <a href="/index.html">VYASA</a>
-        
+    <div class="bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
+        <div class="flex items-center justify-between md:hidden">
+            <button id="mobile-posts-toggle" title="Toggle file tree" class="p-2 rounded transition-colors hover:bg-slate-800" type="button">
+                <span uk-icon="menu" class="w-5 h-5"></span>
+            </button>
+            <a href="/index.html" class="flex-1 px-4 text-center truncate">VYASA</a>
+            <div class="flex items-center gap-1">
+                <button id="mobile-toc-toggle" title="Toggle table of contents" class="p-2 rounded transition-colors hover:bg-slate-800" type="button">
+                    <span uk-icon="list" class="w-5 h-5"></span>
+                </button>
+                
     <button onclick="toggleTheme()" class="p-1 hover:scale-110 shadow-none" type="button">
         <span uk-icon="moon" class="dark:hidden"></span>
         <span uk-icon="sun" class="hidden dark:block"></span>
     </button>
     
+            </div>
+        </div>
+        <div class="hidden md:flex items-center justify-between">
+            <a href="/index.html">VYASA</a>
+            
+    <button onclick="toggleTheme()" class="p-1 hover:scale-110 shadow-none" type="button">
+        <span uk-icon="moon" class="dark:hidden"></span>
+        <span uk-icon="sun" class="hidden dark:block"></span>
+    </button>
+    
+        </div>
     </div>
     
         </div>
@@ -183,28 +241,118 @@
             </summary>
             <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
                 <ul class="mt-2 list-none">
+  <li>
+<a href="/posts/todo.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Todo">Todo</span></a>  </li>
+  <li>
+<a href="/posts/PUBLISHING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Publishing to PyPI">Publishing to PyPI</span></a>  </li>
   <li class="my-1">
-<details class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="chevron-right" class="folder-chevron w-4 h-4 text-slate-400"></uk-icon></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span>Demo</span></summary>      <ul class="ml-6 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><a href="/posts/demo/demo.html" onclick="event.stopPropagation();" class="folder-note-link truncate min-w-0 hover:underline" title="Open: Demo">Demo</a></summary>      <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
         <li class="my-1">
-<details class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="chevron-right" class="folder-chevron w-4 h-4 text-slate-400"></uk-icon></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span>Guides</span></summary>            <ul class="ml-6 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
-              <li>
-<a href="/posts/demo/guides/api-authentication-2.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>API Authentication and Security</span></a>              </li>
-              <li>
-<a href="/posts/demo/guides/api-authentication.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>API Authentication and Security</span></a>              </li>
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Books">Books</span></summary>            <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+              <li class="my-1">
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Flat Land">Flat Land</span></summary>                  <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-01.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of the Nature of Flatland">Of the Nature of Flatland</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-02.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of the Climate and Houses in Flatland">Of the Climate and Houses in Flatland</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-03.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Concerning the Inhabitants of Flatland">Concerning the Inhabitants of Flatland</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-04.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Concerning the Women">Concerning the Women</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-05.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of Our Methods of Recognizing One Another">Of Our Methods of Recognizing One Another</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-06.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of Recognition by Sight">Of Recognition by Sight</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-07.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Concerning Irregular Figures">Concerning Irregular Figures</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-08.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of the Ancient Practice of Painting">Of the Ancient Practice of Painting</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-09.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of the Universal Colour Bill">Of the Universal Colour Bill</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-10.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of the Suppression of the Chromatic Sedition">Of the Suppression of the Chromatic Sedition</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-11.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Concerning Our Priests">Concerning Our Priests</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-12.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Of the Doctrine of Our Priests">Of the Doctrine of Our Priests</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-13.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="How I Had a Vision of Lineland">How I Had a Vision of Lineland</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-14.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="How I Vainly Tried to Explain the Nature of Flatland">How I Vainly Tried to Explain the Nature of Flatland</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-15.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Concerning a Stranger from Spaceland">Concerning a Stranger from Spaceland</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-16.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Chapter 16">Chapter 16</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-17.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="How the Sphere, Having in Vain Tried Words, Resorted to Deeds">How the Sphere, Having in Vain Tried Words, Resorted to Deeds</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-18.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="How I Came to Spaceland, and What I Saw There">How I Came to Spaceland, and What I Saw There</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-19.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Chapter 19">Chapter 19</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-20.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="How the Sphere Encouraged Me in a Vision">How the Sphere Encouraged Me in a Vision</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-21.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Chapter 21">Chapter 21</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/books/flat-land/chapter-22.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Chapter 22">Chapter 22</span></a>                    </li>
+                  </ul>
+</details>              </li>
+            </ul>
+</details>        </li>
+        <li class="my-1">
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Css">Css</span></summary>            <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+              <li class="my-1">
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Maximum Whack Css">Maximum Whack Css</span></summary>                  <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+                    <li>
+<a href="/posts/demo/css/maximum-whack-css/seizure-warning.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="MAXIMUM WHACK CSS - SEIZURE WARNING">MAXIMUM WHACK CSS - SEIZURE WARNING</span></a>                    </li>
+                    <li>
+<a href="/posts/demo/css/maximum-whack-css/whack-css.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Whack Css">Whack Css</span></a>                    </li>
+                  </ul>
+</details>              </li>
             </ul>
 </details>        </li>
         <li>
-<a href="/posts/demo/getting-started.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Getting Started with Our Platform</span></a>        </li>
+<a href="/posts/demo/d2-animation.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="D2 Animation">D2 Animation</span></a>        </li>
         <li>
-<a href="/posts/demo/markdown-features.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>A Small Demonstration of All The Markdown Features That Are Under The Sun, Without Worrying About If They Are Supported Or Not</span></a>        </li>
+<a href="/posts/demo/dollar-escape.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Dollar Escape">Dollar Escape</span></a>        </li>
+        <li>
+<a href="/posts/demo/quick-styling-inline-css.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Quick Styling with Markdown + Inline CSS">Quick Styling with Markdown + Inline CSS</span></a>        </li>
+        <li>
+<a href="/posts/demo/reveal-slides.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Presentations with Vyasa">Presentations with Vyasa</span></a>        </li>
       </ul>
 </details>  </li>
   <li>
-<a href="/posts/CONTRIBUTING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Contributing</span></a>  </li>
+<a href="/posts/static-build.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Vyasa Static Site Generator">Vyasa Static Site Generator</span></a>  </li>
+  <li class="my-1">
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Plans">Plans</span></summary>      <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+        <li>
+<a href="/posts/_plans/brainstorm-diverge-converge.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Brainstorm: Vyasa Slop Refactor">Brainstorm: Vyasa Slop Refactor</span></a>        </li>
+        <li>
+<a href="/posts/_plans/presentation-engine.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Custom Presentation Engine Design">Custom Presentation Engine Design</span></a>        </li>
+      </ul>
+</details>  </li>
   <li>
-<a href="/posts/PUBLISHING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Publishing</span></a>  </li>
-  <li>
-<a href="/posts/STATIC_BUILD.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span>Static Build</span></a>  </li>
+<a href="/posts/CONTRIBUTING.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Contributing to Vyasa">Contributing to Vyasa</span></a>  </li>
+  <li class="my-1">
+<details data-folder="true" class="border border-secondary rounded-lg "><summary class="font-medium  p-3 hover:bg-secondary cursor-pointer flex items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-0"><span class="w-4 mr-2 flex items-center justify-center shrink-0"><span class="folder-chevron"></span></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="folder" class="text-blue-500 w-4 h-4"></uk-icon></span><a href="/posts/vyasa manual/README.html" onclick="event.stopPropagation();" class="folder-note-link truncate min-w-0 hover:underline" title="Open: Vyasa Manual">Vyasa Manual</a></summary>      <ul class="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800">
+        <li>
+<a href="/posts/vyasa manual/configuration.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Configuration &amp; CLI">Configuration &amp; CLI</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/markdown-features.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Markdown Features">Markdown Features</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/mermaid-diagrams.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Mermaid Diagrams">Mermaid Diagrams</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/theming.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Theming &amp; Customization Guide">Theming &amp; Customization Guide</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/advanced.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Advanced Behavior">Advanced Behavior</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/architecture.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Architecture Overview">Architecture Overview</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/security.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="Security &amp; Auth">Security &amp; Auth</span></a>        </li>
+        <li>
+<a href="/posts/vyasa manual/d2-diagrams.html" class="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"><span class="w-4 mr-2 shrink-0"></span><span class="w-4 mr-2 flex items-center justify-center shrink-0"><uk-icon icon="file-text" class="text-slate-400 w-4 h-4"></uk-icon></span><span class="truncate min-w-0" title="D2 Diagrams">D2 Diagrams</span></a>        </li>
+      </ul>
+</details>  </li>
 </ul>
 
             </div>
@@ -213,100 +361,120 @@
     
             
     <main id="main-content" class="flex-1 min-w-0 px-6 py-8 space-y-8">
-        <h1 class="text-4xl font-bold mb-8">Publishing</h1><div class="w-full">
-  <link rel="stylesheet" href="/static/sidenote.css">
-<div><h1 id="publishing-to-pypi" class="text-3xl font-bold mb-6 mt-8">Publishing to PyPI</h1>
-<h2 id="prerequisites" class="text-2xl font-semibold mb-4 mt-6">Prerequisites</h2>
+        <h1 class="text-4xl font-bold mb-8">Publishing to PyPI</h1><div class="w-full">
+  <link rel="stylesheet" href="/static/sidenote.css?v=1770232138197500663">
+<h2 id="prerequisites" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Prerequisites</span><a href="#prerequisites" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Prerequisites">¶</a></h2>
 <ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
 <li class="text-base leading-relaxed">Install build tools:</li>
+
 </ol>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install build twine
-</code></pre>
+<div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-9865718-clipboard');const toast=document.getElementById('codeblock-9865718-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-9865718-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-9865718-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">pip install build twine
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install build twine
+</code></pre></div>
 <ol start="2" class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed">
-<p class="text-base leading-relaxed mb-6">Create accounts on:</p>
-<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed"><a href="https://pypi.org/account/register/" target="_blank" rel="noopener noreferrer" class="text-primary underline uk-link text-primary hover:text-primary-focus underline">PyPI</a> (production)</li>
-<li class="text-base leading-relaxed"><a href="https://test.pypi.org/account/register/" target="_blank" rel="noopener noreferrer" class="text-primary underline uk-link text-primary hover:text-primary-focus underline">TestPyPI</a> (testing)</li>
-</ul>
-</li>
-<li class="text-base leading-relaxed">
-<p class="text-base leading-relaxed mb-6">Create API tokens:</p>
-<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><p class="text-base leading-relaxed mb-6">Create accounts on:</p><ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><a href="https://pypi.org/account/register/" target="_blank" rel="noopener noreferrer" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">PyPI</a> (production)</li>
+
+<li class="text-base leading-relaxed"><a href="https://test.pypi.org/account/register/" target="_blank" rel="noopener noreferrer" class="text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors uk-link text-primary hover:text-primary-focus underline">TestPyPI</a> (testing)</li>
+
+</ul></li>
+
+<li class="text-base leading-relaxed"><p class="text-base leading-relaxed mb-6">Create API tokens:</p><ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
 <li class="text-base leading-relaxed">PyPI: https://pypi.org/manage/account/token/</li>
+
 <li class="text-base leading-relaxed">TestPyPI: https://test.pypi.org/manage/account/token/</li>
-</ul>
-</li>
+
+</ul></li>
+
 </ol>
-<h2 id="build-the-package" class="text-2xl font-semibold mb-4 mt-6">Build the Package</h2>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Clean previous builds
+<h2 id="build-the-package" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Build the Package</span><a href="#build-the-package" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Build the Package">¶</a></h2>
+<div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-14948255-clipboard');const toast=document.getElementById('codeblock-14948255-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-14948255-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-14948255-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"># Clean previous builds
 rm -rf dist/ build/ *.egg-info
 
 # Build the package
 python -m build
-</code></pre>
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Clean previous builds
+rm -rf dist/ build/ *.egg-info
+
+# Build the package
+python -m build
+</code></pre></div>
 <p class="text-base leading-relaxed mb-6">This creates:</p>
 <ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
 <li class="text-base leading-relaxed"><code class="uk-codespan px-1">dist/vyasa-0.1.0-py3-none-any.whl</code> (wheel)</li>
+
 <li class="text-base leading-relaxed"><code class="uk-codespan px-1">dist/vyasa-0.1.0.tar.gz</code> (source distribution)</li>
+
 </ul>
-<h2 id="test-locally" class="text-2xl font-semibold mb-4 mt-6">Test Locally</h2>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Install from the wheel
+<h2 id="test-locally" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Test Locally</span><a href="#test-locally" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Test Locally">¶</a></h2>
+<div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-6353478-clipboard');const toast=document.getElementById('codeblock-6353478-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-6353478-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-6353478-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"># Install from the wheel
 pip install dist/vyasa-0.1.0-py3-none-any.whl
 
 # Test the CLI
 vyasa demo/
-</code></pre>
-<h2 id="publish-to-testpypi-recommended-first" class="text-2xl font-semibold mb-4 mt-6">Publish to TestPyPI (recommended first)</h2>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">python -m twine upload --repository testpypi dist/*
-</code></pre>
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto"># Install from the wheel
+pip install dist/vyasa-0.1.0-py3-none-any.whl
+
+# Test the CLI
+vyasa demo/
+</code></pre></div>
+<h2 id="publish-to-testpypi-recommended-first" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Publish to TestPyPI (recommended first)</span><a href="#publish-to-testpypi-recommended-first" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Publish to TestPyPI (recommended first)">¶</a></h2>
+<div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-16315188-clipboard');const toast=document.getElementById('codeblock-16315188-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-16315188-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-16315188-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">python -m twine upload --repository testpypi dist/*
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">python -m twine upload --repository testpypi dist/*
+</code></pre></div>
 <p class="text-base leading-relaxed mb-6">Test installation from TestPyPI:</p>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ vyasa
-</code></pre>
-<h2 id="publish-to-pypi" class="text-2xl font-semibold mb-4 mt-6">Publish to PyPI</h2>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">python -m twine upload dist/*
-</code></pre>
-<h2 id="post-publication" class="text-2xl font-semibold mb-4 mt-6">Post-Publication</h2>
+<div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-5158393-clipboard');const toast=document.getElementById('codeblock-5158393-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-5158393-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-5158393-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ vyasa
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ vyasa
+</code></pre></div>
+<h2 id="publish-to-pypi" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Publish to PyPI</span><a href="#publish-to-pypi" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Publish to PyPI">¶</a></h2>
+<div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-12570917-clipboard');const toast=document.getElementById('codeblock-12570917-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-12570917-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-12570917-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">python -m twine upload dist/*
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">python -m twine upload dist/*
+</code></pre></div>
+<h2 id="post-publication" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Post-Publication</span><a href="#post-publication" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Post-Publication">¶</a></h2>
 <ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
 <li class="text-base leading-relaxed">Create a git tag:</li>
+
 </ol>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">git tag v0.1.0
+<div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-9299948-clipboard');const toast=document.getElementById('codeblock-9299948-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-9299948-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-9299948-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">git tag v0.1.0
 git push origin v0.1.0
-</code></pre>
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">git tag v0.1.0
+git push origin v0.1.0
+</code></pre></div>
 <ol start="2" class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed">
-<p class="text-base leading-relaxed mb-6">Create a GitHub release with the changelog</p>
-</li>
-<li class="text-base leading-relaxed">
-<p class="text-base leading-relaxed mb-6">Test installation:</p>
-</li>
+<li class="text-base leading-relaxed"><p class="text-base leading-relaxed mb-6">Create a GitHub release with the changelog</p></li>
+
+<li class="text-base leading-relaxed"><p class="text-base leading-relaxed mb-6">Test installation:</p></li>
+
 </ol>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install vyasa
-</code></pre>
-<h2 id="updating-the-package" class="text-2xl font-semibold mb-4 mt-6">Updating the Package</h2>
+<div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-13330174-clipboard');const toast=document.getElementById('codeblock-13330174-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-13330174-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-13330174-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">pip install vyasa
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">pip install vyasa
+</code></pre></div>
+<h2 id="updating-the-package" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Updating the Package</span><a href="#updating-the-package" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Updating the Package">¶</a></h2>
 <ol class="uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base">
-<li class="text-base leading-relaxed">
-<p class="text-base leading-relaxed mb-6">Update version in:</p>
-<ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
+<li class="text-base leading-relaxed"><p class="text-base leading-relaxed mb-6">Update version in:</p><ul class="uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base">
 <li class="text-base leading-relaxed"><code class="uk-codespan px-1">pyproject.toml</code></li>
+
 <li class="text-base leading-relaxed"><code class="uk-codespan px-1">settings.ini</code></li>
+
 <li class="text-base leading-relaxed"><code class="uk-codespan px-1">vyasa/__init__.py</code></li>
-</ul>
-</li>
-<li class="text-base leading-relaxed">
-<p class="text-base leading-relaxed mb-6">Update CHANGELOG.md</p>
-</li>
-<li class="text-base leading-relaxed">
-<p class="text-base leading-relaxed mb-6">Rebuild and republish:</p>
-</li>
+
+</ul></li>
+
+<li class="text-base leading-relaxed"><p class="text-base leading-relaxed mb-6">Update CHANGELOG.md</p></li>
+
+<li class="text-base leading-relaxed"><p class="text-base leading-relaxed mb-6">Rebuild and republish:</p></li>
+
 </ol>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">rm -rf dist/ build/ *.egg-info
+<div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-11342991-clipboard');const toast=document.getElementById('codeblock-11342991-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-11342991-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-11342991-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">rm -rf dist/ build/ *.egg-info
 python -m build
 python -m twine upload dist/*
-</code></pre>
-<h2 id="using-pypi-api-tokens" class="text-2xl font-semibold mb-4 mt-6">Using PyPI API Tokens</h2>
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">rm -rf dist/ build/ *.egg-info
+python -m build
+python -m twine upload dist/*
+</code></pre></div>
+<h2 id="using-pypi-api-tokens" class="text-2xl font-semibold mb-4 mt-6"><span class="vyasa-heading-text">Using PyPI API Tokens</span><a href="#using-pypi-api-tokens" class="vyasa-heading-permalink ml-2 no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 uk-link text-primary hover:text-primary-focus underline" aria-label="Link to Using PyPI API Tokens">¶</a></h2>
 <p class="text-base leading-relaxed mb-6">Store your tokens in <code class="uk-codespan px-1">~/.pypirc</code>:</p>
-<pre class="my-4"><code class="language-ini uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">[distutils]
+<div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-4038327-clipboard');const toast=document.getElementById('codeblock-4038327-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-4038327-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-4038327-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">[distutils]
 index-servers =
     pypi
     testpypi
@@ -318,11 +486,24 @@ password = pypi-YOUR-API-TOKEN-HERE
 [testpypi]
 username = __token__
 password = pypi-YOUR-TESTPYPI-TOKEN-HERE
-</code></pre>
+</textarea><pre class="my-4"><code class="language-ini uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">[distutils]
+index-servers =
+    pypi
+    testpypi
+
+[pypi]
+username = __token__
+password = pypi-YOUR-API-TOKEN-HERE
+
+[testpypi]
+username = __token__
+password = pypi-YOUR-TESTPYPI-TOKEN-HERE
+</code></pre></div>
 <p class="text-base leading-relaxed mb-6">Then you can upload without entering credentials:</p>
-<pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">python -m twine upload dist/*
-</code></pre>
-</div></div>
+<div class="code-block relative my-4"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code" onclick="(function(){const el=document.getElementById('codeblock-12570917-clipboard');const toast=document.getElementById('codeblock-12570917-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=&gt;{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=&gt;{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&amp;&amp;window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=&gt;{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()"><uk-icon icon="copy" class="w-4 h-4"></uk-icon><span class="sr-only">Copy code</span></button><div id="codeblock-12570917-toast" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div><textarea id="codeblock-12570917-clipboard" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">python -m twine upload dist/*
+</textarea><pre class="my-4"><code class="language-bash uk-codespan px-1 uk-codespan px-1 block overflow-x-auto">python -m twine upload dist/*
+</code></pre></div>
+</div>
 
     </main>
     
@@ -331,28 +512,28 @@ password = pypi-YOUR-TESTPYPI-TOKEN-HERE
             <details open>
                 <summary class="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
                     <span uk-icon="list" class="w-5 h-5 mr-2"></span>
-                    Contents
+                    Table of Contents
                 </summary>
                 <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
                     <ul class="mt-2 list-none">
   <li class="my-1">
-<a href="#publishing-to-pypi" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-0">Publishing to PyPI</a>  </li>
+<a href="#publishing-to-pypi" data-anchor="publishing-to-pypi" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-0">Publishing to PyPI</a>  </li>
   <li class="my-1">
-<a href="#prerequisites" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Prerequisites</a>  </li>
+<a href="#prerequisites" data-anchor="prerequisites" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Prerequisites</a>  </li>
   <li class="my-1">
-<a href="#build-the-package" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Build the Package</a>  </li>
+<a href="#build-the-package" data-anchor="build-the-package" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Build the Package</a>  </li>
   <li class="my-1">
-<a href="#test-locally" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Test Locally</a>  </li>
+<a href="#test-locally" data-anchor="test-locally" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Test Locally</a>  </li>
   <li class="my-1">
-<a href="#publish-to-testpypi-recommended-first" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Publish to TestPyPI (recommended first)</a>  </li>
+<a href="#publish-to-testpypi-recommended-first" data-anchor="publish-to-testpypi-recommended-first" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Publish to TestPyPI (recommended first)</a>  </li>
   <li class="my-1">
-<a href="#publish-to-pypi" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Publish to PyPI</a>  </li>
+<a href="#publish-to-pypi" data-anchor="publish-to-pypi" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Publish to PyPI</a>  </li>
   <li class="my-1">
-<a href="#post-publication" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Post-Publication</a>  </li>
+<a href="#post-publication" data-anchor="post-publication" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Post-Publication</a>  </li>
   <li class="my-1">
-<a href="#updating-the-package" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Updating the Package</a>  </li>
+<a href="#updating-the-package" data-anchor="updating-the-package" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Updating the Package</a>  </li>
   <li class="my-1">
-<a href="#using-pypi-api-tokens" class="block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Using PyPI API Tokens</a>  </li>
+<a href="#using-pypi-api-tokens" data-anchor="using-pypi-api-tokens" class="toc-link block py-1 px-2 text-sm rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors ml-3">Using PyPI API Tokens</a>  </li>
 </ul>
 
                 </div>
@@ -375,7 +556,7 @@ password = pypi-YOUR-TESTPYPI-TOKEN-HERE
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
         mermaid.initialize({ startOnLoad: true, theme: 'default' });
     </script>
-    <script src="/static/scripts.js" type="module"></script>
+    <script src="/static/scripts.js?v=1774334567985031757" type="module"></script>
     
     
     <script>
@@ -464,6 +645,21 @@ password = pypi-YOUR-TESTPYPI-TOKEN-HERE
                 });
             }, 100);
             
+            function replaceEscapedDollarPlaceholders(root) {
+                const placeholder = '@@VYASA_DOLLAR@@';
+                const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+                const nodes = [];
+                let node;
+                while ((node = walker.nextNode())) {
+                    if (node.nodeValue && node.nodeValue.includes(placeholder)) {
+                        nodes.push(node);
+                    }
+                }
+                nodes.forEach((textNode) => {
+                    textNode.nodeValue = textNode.nodeValue.split(placeholder).join('$');
+                });
+            }
+
             // Initialize KaTeX rendering
             if (window.renderMathInElement) {
                 renderMathInElement(document.body, {
@@ -474,6 +670,7 @@ password = pypi-YOUR-TESTPYPI-TOKEN-HERE
                     throwOnError: false
                 });
             }
+            replaceEscapedDollarPlaceholders(document.body);
         });
         
         // Sidenote interactions
