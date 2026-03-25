@@ -1,14 +1,22 @@
 import time
+import re
 from urllib.parse import quote
 
 from fasthtml.common import A, Aside, Button, Div, Footer, Main, NotStr, P, Span, Title
 from monsterui.all import UkIcon
 
 
+def _section_class(current_path):
+    if not current_path:
+        return ""
+    slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", current_path).strip("-").lower()
+    return f"section-{slug}" if slug else ""
+
+
 def render_layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True, auth=None, htmx_nav=True, nav_posts_menu=False, full_width=False, show_footer=True, no_scroll=False, logger, resolve_layout_config, width_class_and_style, style_attr, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar):
     layout_start_time = time.time()
     logger.debug("[LAYOUT] layout() start")
-    section_class = f"section-{current_path.replace('/', '-')}" if current_path else ""
+    section_class = _section_class(current_path)
     t_section = time.time()
     logger.debug(f"[LAYOUT] section_class computed in {(t_section - layout_start_time)*1000:.2f}ms")
     layout_config = resolve_layout_config(current_path)

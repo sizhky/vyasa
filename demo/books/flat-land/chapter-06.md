@@ -50,28 +50,28 @@ triangle.](figures/illustration-3.svg)
 
 It will be obvious, to every child in Spaceland who has touched the
 threshold of Geometrical Studies, that, if I can bring my eye so that
-its glance may bisect an angle (`A`{.variable}) of the approaching
+its glance may bisect an angle (`A`{.vector}) of the approaching
 stranger, my view will lie as it were evenly between his two sides that
-are next to me (viz. `CA`{.variable} and
-`AB`{.variable}), so that I shall contemplate the two impartially, and
+are next to me (viz. `CA`{.vector} and
+`AB`{.vector}), so that I shall contemplate the two impartially, and
 both will appear of the same size.
 
-Now in the case of (`1`{.variable}) the Merchant, what shall I see? I
-shall see a straight line `DAE`{.variable}, in which the middle point
-(`A`{.variable}) will be very bright because it is nearest to me; but on
+Now in the case of (`1`{.vector}) the Merchant, what shall I see? I
+shall see a straight line `DAE`{.vector}, in which the middle point
+(`A`{.vector}) will be very bright because it is nearest to me; but on
 either side the line will shade away *rapidly into dimness*, because the
-sides `AC`{.variable} and `AB`{.variable} *recede rapidly into the fog*
+sides `AC`{.vector} and `AB`{.vector} *recede rapidly into the fog*
 and what appear to me as the Merchant's extremities,
-viz. `D`{.variable} and `E`{.variable},
+viz. `D`{.vector} and `E`{.vector},
 will be *very dim indeed*.
 
-On the other hand in the case of (`2`{.variable}) the Physician, though
-I shall here also see a line (`D′A′E′`{.variable}) with a bright centre
-(`A′`{.variable}), yet it will shade away *less rapidly* into dimness,
-because the sides (`A′C′`{.variable}, `A′B′`{.variable}) *recede less
+On the other hand in the case of (`2`{.vector}) the Physician, though
+I shall here also see a line (`D′A′E′`{.vector}) with a bright centre
+(`A′`{.vector}), yet it will shade away *less rapidly* into dimness,
+because the sides (`A′C′`{.vector}, `A′B′`{.vector}) *recede less
 rapidly into the fog*; and what appear to me the Physician's
-extremities, viz. `D′`{.variable} and
-`E′`{.variable}, will be *not so dim* as the extremities of the
+extremities, viz. `D′`{.vector} and
+`E′`{.vector}, will be *not so dim* as the extremities of the
 Merchant.
 
 The reader will probably understand from these two instances how⁠---after
@@ -99,13 +99,13 @@ to present his side to me instead of his angle, then, until I have asked
 him to rotate, or until I have edged my eye round him, I am for the
 moment doubtful whether he may not be a Straight Line, or, in other
 words, a woman. Again, when I am in the company of one of my two
-hexagonal grandsons, contemplating one of his sides (`AB`{.variable})
+hexagonal grandsons, contemplating one of his sides (`AB`{.vector})
 full front, it will be evident from the accompanying diagram that I
-shall see one whole line (`AB`{.variable}) in comparative brightness
+shall see one whole line (`AB`{.vector}) in comparative brightness
 (shading off hardly at all at the ends) and two smaller lines
-(`CA`{.variable} and `BD`{.variable}) dim throughout and shading away
-into greater dimness towards the extremities `C`{.variable} and
-`D`{.variable}.
+(`CA`{.vector} and `BD`{.vector}) dim throughout and shading away
+into greater dimness towards the extremities `C`{.vector} and
+`D`{.vector}.
 
 But I must not give way to the temptation of enlarging on these topics.
 The meanest mathematician in Spaceland will readily believe me when I

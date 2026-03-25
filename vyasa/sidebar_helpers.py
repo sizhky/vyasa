@@ -38,13 +38,19 @@ def build_toc_items(headings):
 
 def get_custom_css_links(root, current_path=None, section_class=None):
     css_elements = []
-    for filename in ["custom.css", "style.css"]:
+    for filename in ["global.css", "custom.css", "style.css"]:
         if (root / filename).exists():
             css_elements.append(Link(rel="stylesheet", href=f"/posts/{filename}"))
-            break
+            if filename != "global.css":
+                break
     if current_path and section_class:
         post_dir = Path(current_path).parent if "/" in current_path else Path(".")
-        for ancestor in ([] if str(post_dir) == "." else [Path(*post_dir.parts[:idx]) for idx in range(1, len(post_dir.parts) + 1)]):
+        ancestors = [] if str(post_dir) == "." else [Path(*post_dir.parts[:idx]) for idx in range(1, len(post_dir.parts) + 1)]
+        for ancestor in ancestors:
+            global_css = root / ancestor / "global.css"
+            if global_css.exists():
+                css_elements.append(Link(rel="stylesheet", href=f"/posts/{ancestor.as_posix()}/global.css"))
+        for ancestor in ancestors:
             for filename in ["custom.css", "style.css"]:
                 css_file = root / ancestor / filename
                 if css_file.exists():

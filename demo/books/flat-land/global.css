@@ -1,0 +1,34 @@
+@font-face {
+    font-family: "IM Fell English";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("https://fonts.gstatic.com/s/imfellenglish/v14/Ktk1ALSLW8zDe0rthJysWrnLsAz3Fw.ttf") format("truetype");
+}
+
+@font-face {
+    font-family: "IM Fell English SC";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("https://fonts.gstatic.com/s/imfellenglishsc/v16/a8IENpD3CDX-4zrWfr1VY879qFF05pZLOw.ttf") format("truetype");
+}
+
+html, body {
+    background-color: #e6d2a4 !important;
+    background-image: url("https://www.transparenttextures.com/patterns/fabric-1-dark.png") !important;
+    background-position: left top !important;
+    background-size: 120px 120px !important;
+    background-repeat: repeat !important;
+    background-attachment: fixed !important;
+    color: #352718 !important;
+    font-family: "IM Fell English", "Goudy Old Style", "Baskerville", "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif !important;
+}
+
+#page-container, aside, main, nav, header, footer, [class*="bg-white"], [class*="bg-slate"] { background: transparent !important; }
+#site-navbar > *, #posts-sidebar details > summary, #posts-sidebar details > div, #toc-sidebar details > summary, #toc-sidebar details > div, #site-footer > * {
+    background: rgba(183, 170, 141, 0.84) !important;
+    border-color: rgba(101, 71, 34, 0.26) !important;
+    box-shadow: 0 6px 14px -18px rgba(84, 58, 26, 0.3) !important;
+    color: #4a3218 !important;
+}

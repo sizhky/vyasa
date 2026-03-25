@@ -1,0 +1,1035 @@
+
+background-color: rgba(255, 255, 255, 0.72) !important;
+background-image: none !important;
+border: 6px double rgba(255, 0, 255, 0.72);
+box-shadow: 0 0 30px rgba(255, 0, 255, 0.35), 0 0 60px rgba(0, 255, 255, 0.2), 0 18px 48px rgba(0, 0, 0, 0.18), inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+padding: 2rem !important;
+border-radius: 18px;
+
+.under-construction-row,
+.gif-chaos-strip,
+.cat-banner-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9rem;
+    justify-content: center;
+    align-items: center;
+    margin: 1rem 0 1.6rem;
+}
+
+.under-construction-row span {
+    font-family: "Press Start 2P", monospace;
+    font-size: 0.68rem;
+    color: #111;
+    background: linear-gradient(180deg, #ff0, #ffa600);
+    padding: 0.7rem 0.9rem;
+    border: 4px ridge #fff;
+    box-shadow: 0 0 14px rgba(255,255,0,0.7);
+}
+
+.whack-marquee {
+    display: block;
+    margin: 1rem 0 1.5rem;
+    padding: 0.75rem 1rem;
+    font-family: "Bungee", sans-serif;
+    font-size: 1.1rem;
+    color: #ff00aa;
+    background: rgba(255,255,255,0.88);
+    border: 5px double #00e5ff;
+    text-shadow: 0 0 8px #fff, 0 0 16px #0ff;
+    box-shadow: 0 0 22px rgba(255,0,255,0.35);
+}
+
+.gif-chaos-strip img {
+    max-width: min(220px, 30%);
+    min-width: 140px;
+    image-rendering: pixelated;
+    border: 5px ridge #fff;
+    background: rgba(255,255,255,0.85);
+    padding: 0.45rem;
+    box-shadow: 0 0 18px rgba(255,0,255,0.45), 0 0 30px rgba(0,255,255,0.28);
+    transform: rotate(-3deg);
+}
+
+.gif-chaos-strip img:nth-child(2) { transform: rotate(2deg) scale(1.04); }
+.gif-chaos-strip img:nth-child(3) { transform: rotate(-6deg); }
+
+.cat-banner-grid {
+    margin: 1.4rem 0 2rem;
+}
+
+.cat-banner-grid img {
+    max-width: min(220px, 30%);
+    min-width: 140px;
+    border: 6px ridge #ff0;
+    background: rgba(255,255,255,0.82);
+    padding: 0.4rem;
+    box-shadow: 0 0 14px rgba(255,255,0,0.65), 0 0 24px rgba(255,0,255,0.28);
+    transform: rotate(4deg);
+}
+
+.cat-banner-grid img:nth-child(2) { transform: rotate(-5deg) scale(1.03); }
+.cat-banner-grid img:nth-child(3) { transform: rotate(2deg); }
+
+.meme-banner {
+    margin: 1.5rem auto 2rem;
+    padding: 0.85rem 1.2rem;
+    max-width: max-content;
+    font-family: "Bungee", sans-serif;
+    font-size: 1.2rem;
+    text-transform: uppercase;
+    color: #fff;
+    background: linear-gradient(90deg, #ff00aa, #7c3aed, #00e5ff);
+    border: 5px ridge #fff;
+    box-shadow: 0 0 18px rgba(255,0,255,0.45);
+    text-shadow: 2px 2px 0 #111, 0 0 12px rgba(255,255,255,0.8);
+    transform: rotate(-2deg);
+}
+
+.retro-ui-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1rem; margin:1.4rem 0 2rem; }
+.retro-window { background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,240,247,.88)); border:4px ridge #fff; box-shadow:0 0 18px rgba(255,0,255,.25); padding:.8rem; }
+.retro-title { font-family:"Press Start 2P",monospace; font-size:.72rem; color:#111827; background:linear-gradient(90deg,#67e8f9,#f0abfc,#fde047); padding:.55rem .65rem; border:3px ridge #fff; margin:-.1rem -.1rem .8rem; text-transform:uppercase; }
+.retro-window p { margin:.55rem 0; font-family:"Audiowide",sans-serif; color:#6b21a8; }
+.retro-meter { height:18px; background:#1f2937; border:3px inset #fff; overflow:hidden; margin:.7rem 0; }
+.retro-meter-fill { height:100%; background:linear-gradient(90deg,#00e5ff,#ff00aa,#ff0); background-size:200% 100%; animation:gold-shimmer 3s linear infinite; }
+.retro-chip { display:inline-block; margin:.25rem .35rem .15rem 0; padding:.22rem .45rem; font:900 .72rem/1 "Press Start 2P",monospace; color:#fff; background:linear-gradient(90deg,#111827,#7c3aed); border:2px solid #67e8f9; }
+.button-wall { display:flex; flex-wrap:wrap; gap:.55rem; justify-content:center; margin:1.2rem 0 1.8rem; }
+.retro-button { display:inline-flex; align-items:center; justify-content:center; min-width:88px; min-height:31px; padding:.2rem .45rem; font:900 .55rem/1 "Press Start 2P",monospace; text-align:center; color:#fff; background:linear-gradient(135deg,#7c3aed,#ec4899,#06b6d4); border:3px ridge #fff; box-shadow:0 0 12px rgba(255,0,255,.28); text-transform:uppercase; }
+.retro-button:nth-child(odd) { transform:rotate(-2deg); }
+.retro-button:nth-child(even) { transform:rotate(2deg); }
+.guestbook-box { margin:1.4rem 0 2rem; padding:1rem; background:linear-gradient(180deg,rgba(255,255,255,.93),rgba(239,246,255,.9)); border:5px groove #fff; box-shadow:0 0 16px rgba(0,229,255,.22); }
+.guestbook-heading { font-family:"Bungee",sans-serif; color:#ff00aa; text-shadow:1px 1px 0 #111; margin-bottom:.8rem; }
+.guestbook-entry { margin:.7rem 0; padding:.7rem .8rem; border-left:5px solid #00e5ff; background:rgba(255,255,255,.72); font-family:"Audiowide",sans-serif; color:#4c1d95; }
+.guestbook-entry strong { color:#111827; }
+.hit-parade { margin:1.4rem 0 2rem; padding:1rem; background:linear-gradient(180deg,#111827,#312e81); border:4px ridge #67e8f9; color:#fff; box-shadow:0 0 18px rgba(34,211,238,.2); }
+.hit-parade h3 { margin:0 0 .8rem; font-family:"Bungee",sans-serif; color:#fde047; }
+.hit-parade ol { margin:0; padding-left:1.5rem; }
+.hit-parade li { margin:.38rem 0; font-family:"Audiowide",sans-serif; }
+.webring-nav { display:flex; flex-wrap:wrap; gap:.7rem; justify-content:center; margin:1.3rem 0 0; }
+.webring-nav a { font:900 .72rem/1 "Press Start 2P",monospace; padding:.5rem .75rem; background:linear-gradient(90deg,#fef08a,#67e8f9,#f0abfc); color:#111827; border:3px ridge #fff; box-shadow:0 0 10px rgba(255,255,255,.3); }
+
+.story-hero {
+    position: relative;
+    margin: 1.2rem auto 1.9rem;
+    max-width: 560px;
+    border: 8px ridge #fff;
+    background: rgba(255,255,255,0.88);
+    padding: 0.5rem;
+    box-shadow: 0 0 18px rgba(255,0,255,0.35), 0 0 32px rgba(0,255,255,0.22);
+}
+
+.story-hero img {
+    width: 100%;
+    display: block;
+    min-height: 280px;
+    object-fit: cover;
+    transform: rotate(-3.5deg) scale(1.03);
+}
+
+.story-hero-caption {
+    position: absolute;
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    font-family: "Bungee", sans-serif;
+    font-size: 1.25rem;
+    line-height: 1.15;
+    color: #fff;
+    text-transform: uppercase;
+    padding: 0.8rem 1rem;
+    background: rgba(0, 0, 0, 0.58);
+    border: 5px solid #fff;
+    box-shadow: 0 0 0 4px #ff00aa, 0 0 18px rgba(0,0,0,0.45);
+    text-shadow: 3px 3px 0 #111, -1px -1px 0 #111;
+}
+
+.story-aside {
+    margin: -0.2rem auto 1.5rem;
+    max-width: 620px;
+    font-family: "Audiowide", sans-serif;
+    color: #7c3aed;
+    text-align: center;
+    text-shadow: 0 0 10px rgba(255,255,255,0.75);
+}
+
+.story-hero--right img { transform: rotate(4deg) scale(1.03); }
+.story-hero--left img { transform: rotate(-5deg) scale(1.04); }
+.story-hero--small { max-width: 470px; }
+
+.cat-decree {
+    margin: 1rem auto 1.5rem;
+    max-width: 700px;
+    padding: 0.9rem 1.1rem;
+    font-family: "Bungee", sans-serif;
+    color: #fff;
+    background: linear-gradient(90deg, #111, #7c3aed, #ff00aa);
+    border: 6px ridge #ff0;
+    text-align: center;
+    text-transform: uppercase;
+    text-shadow: 2px 2px 0 #000, 0 0 12px rgba(255,255,255,0.75);
+    box-shadow: 0 0 18px rgba(255,0,255,0.35);
+}
+
+.overlordcat { display:inline-block; font-family:"Bungee",sans-serif; color:#ff00aa; text-shadow:0 0 8px #fff,0 0 14px #ff0; transform:rotate(-4deg); }
+.yoink { display:inline-block; color:#00c2ff; font-family:"Audiowide",sans-serif; animation: yoink-pop .35s infinite alternate; }
+.bonkword { display:inline-block; color:#ff6b00; font-family:"Bungee",sans-serif; animation: bonk-shake .18s infinite alternate; }
+.scheme { display:inline-block; color:#7c3aed; font-family:"Rubik Glitch",sans-serif; animation: scheme-tilt .28s infinite alternate; }
+.ascend { display:inline-block; color:#00b894; font-family:"Monoton",sans-serif; animation: ascend-float 1.2s infinite ease-in-out; }
+.ledger { display:inline-block; font-family:"Press Start 2P",monospace; font-size:.78em; color:#5a2d0c; background:linear-gradient(180deg,#e5c78f,#bd8a54); padding:.28em .52em; border:3px solid #8a5a2b; box-shadow:inset 0 0 0 2px rgba(255,255,255,.32),0 3px 0 #704521; transform:rotate(-1.5deg); }
+.taxman { display:inline-block; font-family:"Bungee",sans-serif; color:#fff7d1; background:repeating-linear-gradient(135deg,#7a0018 0 8px,#c1121f 8px 16px); padding:.16em .44em; border:3px double #ffcf56; text-shadow:2px 2px 0 #3d0010; box-shadow:0 0 12px rgba(193,18,31,.35); }
+.pharaohshine { display:inline-block; font-family:"Monoton",sans-serif; color:#f7d66b; background:linear-gradient(90deg,#0b7285,#1b9aaa,#0b7285); background-size:200% 100%; padding:.14em .42em; border-radius:999px; border:3px solid #f7d66b; box-shadow:0 0 12px rgba(247,214,107,.5); animation: gold-shimmer 6s linear infinite; }
+.toga { display:inline-block; font-family:Georgia,"Times New Roman",serif; font-style:italic; color:#5c3a6f; background:linear-gradient(180deg,#fffaf0,#efe2c3); padding:.1em .38em; border-left:4px solid #7c3aed; box-shadow:inset 0 -2px 0 rgba(124,58,237,.18); }
+.manuscript { display:inline-block; font-family:Georgia,serif; color:#4a2c1a; background:linear-gradient(180deg,#f9edc7,#ecd29b); padding:.14em .38em; border:2px solid #a36a2d; box-shadow:inset 0 0 0 2px rgba(255,255,255,.28); transform:rotate(-1deg); }
+.rosewindow { display:inline-block; font-family:"Bungee",sans-serif; color:#fff; background:conic-gradient(from 90deg,#ef4444,#f59e0b,#fde047,#22c55e,#38bdf8,#8b5cf6,#ef4444); padding:.12em .46em; border-radius:999px; box-shadow:0 0 14px rgba(139,92,246,.32); text-shadow:1px 1px 0 #111; }
+.bardic { display:inline-block; font-family:"Bungee",sans-serif; color:#fff5f7; background:linear-gradient(90deg,#831843,#be185d,#fb7185); padding:.12em .46em; border-radius:999px; box-shadow:0 0 14px rgba(244,114,182,.28); transform:rotate(-2deg); }
+.renaissance { display:inline-block; font-family:"Bungee",sans-serif; color:#5b3410; background:linear-gradient(90deg,#f8e7b5,#d9a441,#fff4d6); padding:.12em .45em; border:2px solid #8b5e34; box-shadow:0 0 12px rgba(217,164,65,.28); }
+.marbleflex { display:inline-block; font-family:"Bungee",sans-serif; color:#2f2f2f; background:linear-gradient(135deg,#f9f9f9,#cfcfcf,#f7f7f7); padding:.12em .45em; border:3px solid #8f8f8f; box-shadow:inset 0 0 0 2px rgba(255,255,255,.3),0 0 10px rgba(0,0,0,.1); text-shadow:1px 1px 0 #fff; }
+.broadside { display:inline-block; font-family:"Bungee",sans-serif; color:#fff; background:linear-gradient(90deg,#2b2d42,#7f1d1d,#f97316); padding:.14em .48em; border:3px solid #ffd166; box-shadow:0 0 14px rgba(249,115,22,.34); transform:rotate(-2deg); }
+.steamhiss { display:inline-block; font-family:"Audiowide",sans-serif; color:#eef2f4; background:linear-gradient(180deg,#70757a,#27272a); padding:.12em .42em; border-radius:999px; box-shadow:0 0 18px rgba(255,255,255,.18); animation: smoke-curl 3.8s ease-in-out infinite; }
+.industrial { display:inline-block; font-family:"Press Start 2P",monospace; font-size:.78em; color:#d6f5ff; background:repeating-linear-gradient(90deg,#222 0 6px,#3b3b3b 6px 12px); padding:.24em .42em; border:3px solid #8ecae6; text-shadow:1px 1px 0 #000; }
+.sparkcoil { display:inline-block; font-family:"Audiowide",sans-serif; color:#111827; background:linear-gradient(90deg,#fef08a,#60a5fa,#fef08a); background-size:200% 100%; padding:.14em .48em; border:3px solid #fde047; box-shadow:0 0 16px rgba(96,165,250,.5); animation: gold-shimmer 4s linear infinite; }
+.filmreel { display:inline-block; font-family:"Bungee",sans-serif; color:#fff7cf; background:#1f2937; padding:.16em .5em; border-top:4px dotted #d1d5db; border-bottom:4px dotted #d1d5db; box-shadow:inset 0 0 0 3px rgba(255,255,255,.15); animation: reel-flicker 2.4s steps(2,end) infinite; }
+.moondust { display:inline-block; color:#f8fbff; background:radial-gradient(circle,#cbd5e1,#7dd3fc 60%,#312e81); padding:.18em .48em; border-radius:999px; box-shadow:0 0 16px rgba(125,211,252,.55); }
+.terminalcat { display:inline-block; font-family:"Press Start 2P",monospace; font-size:.78em; color:#86efac; background:#052e16; padding:.28em .48em; border:2px solid #22c55e; box-shadow:0 0 12px rgba(34,197,94,.3), inset 0 0 0 2px rgba(134,239,172,.15); }
+.webring90s { display:inline-block; font-family:"Bungee",sans-serif; color:#002b36; background:linear-gradient(90deg,#f0abfc,#67e8f9,#fde047); padding:.12em .45em; border:3px ridge #fff; box-shadow:0 0 14px rgba(244,114,182,.35); transform:rotate(-2deg); }
+.executivecat { display:inline-block; font-family:"Audiowide",sans-serif; color:#fff; background:linear-gradient(90deg,#111827,#7c3aed,#ec4899); padding:.16em .5em; border-radius:12px; border:2px solid #22d3ee; box-shadow:0 0 16px rgba(34,211,238,.25); }
+.jetpacker { display:inline-block; font-family:"Bungee",sans-serif; color:#fff; background:linear-gradient(135deg,#0f172a,#2563eb,#f97316); padding:.12em .48em; border:3px solid #93c5fd; box-shadow:0 0 16px rgba(59,130,246,.35); animation: orbit-drift 2.8s ease-in-out infinite; }
+.adminpurr { display:inline-block; font-family:"Monoton",sans-serif; color:#f5e8ff; background:radial-gradient(circle,#7c3aed 0,#312e81 58%,#020617 100%); padding:.16em .54em; border-radius:999px; border:2px solid #c084fc; box-shadow:0 0 20px rgba(192,132,252,.4); animation: orbit-drift 4s ease-in-out infinite; }
+
+@keyframes yoink-pop { from { transform:translateX(0) scale(1); } to { transform:translateX(6px) scale(1.08); } }
+@keyframes bonk-shake { from { transform:rotate(-6deg); } to { transform:rotate(6deg) scale(1.08); } }
+@keyframes scheme-tilt { from { transform:skewX(0deg); } to { transform:skewX(-10deg) translateX(3px); } }
+@keyframes ascend-float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-10px) scale(1.06); } }
+@keyframes gold-shimmer { from { background-position:0 0; } to { background-position:200% 0; } }
+@keyframes smoke-curl { 0%,100% { transform:translateY(0); filter:blur(0); } 50% { transform:translateY(-3px); filter:blur(.6px); } }
+@keyframes reel-flicker { 0%,100% { opacity:1; } 50% { opacity:.78; } }
+@keyframes orbit-drift { 0%,100% { transform:translateY(0) rotate(0deg); } 50% { transform:translateY(-4px) rotate(2deg); } }
+.cosmic-pizza { font-family:"Bungee",sans-serif; background:radial-gradient(circle,#ffed4a,#ff7a00 58%,#8b0000); color:#fff; padding:0.15em 0.45em; border-radius:999px; box-shadow:0 0 16px rgba(255,122,0,0.8); display:inline-block; transform:rotate(-8deg); }
+.boil { display:inline-block; color:#ff3b30; text-shadow:0 0 8px #ff0,0 -6px 0 rgba(255,255,255,0.65); animation:boil-bob .45s infinite alternate; }
+.scream { display:inline-block; font-family:"Rubik Glitch",sans-serif; color:#7c3aed; animation:mountain-growl .25s infinite alternate; }
+.jazzhands { display:inline-block; color:#ff00aa; text-shadow:-8px 0 0 #0ff,8px 0 0 #ff0; animation:jazzhands-flail .38s infinite alternate; }
+@keyframes boil-bob { from { transform:translateY(0) scale(1); } to { transform:translateY(-6px) scale(1.08); } }
+@keyframes mountain-growl { from { transform:scale(1) skewX(0deg); } to { transform:scale(1.12) skewX(-8deg); } }
+@keyframes jazzhands-flail { from { transform:rotate(-10deg) scale(1); } to { transform:rotate(10deg) scale(1.16); } }
+
+span.variable {
+    font-family: "Bungee", "Marker Felt", "Chalkboard SE", cursive;
+    color: #ff00ff;
+    font-weight: 900;
+    padding: 5px 10px;
+    background: linear-gradient(45deg, #ff0080, #8000ff, #00ff80, #ffff00);
+    background-size: 400% 400%;
+    animation: rainbow-spin 2s infinite, bounce-crazy 3s infinite;
+    display: inline-block;
+    border: 3px solid;
+    border-image: linear-gradient(45deg, red, blue, green, yellow) 1;
+    box-shadow: 0 0 20px rgba(255, 0, 255, 0.8), inset 0 0 10px rgba(0, 255, 255, 0.5);
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 10px rgba(255, 255, 0, 0.8);
+    transform-origin: center;
+    letter-spacing: 3px;
+}
+
+span.emphasis {
+    font-family: "Rubik Glitch", "Papyrus", fantasy;
+    background: repeating-linear-gradient(
+        45deg,
+        #ff0000,
+        #ff7700 10%,
+        #ffff00 20%,
+        #00ff00 30%,
+        #0000ff 40%,
+        #8b00ff 50%,
+        #ff0000 60%
+    );
+    background-size: 200% 200%;
+    animation: seizure-warning 1s infinite, glitch 0.5s infinite;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 900;
+    font-size: 2em;
+    display: inline-block;
+    transform-origin: center;
+    filter: drop-shadow(0 0 10px rgba(255, 0, 255, 1)) brightness(1.5);
+    position: relative;
+    padding: 0.15em 0.35em;
+}
+
+span.keyword {
+    font-family: "Audiowide", "Chalkboard SE", "Comic Sans MS", cursive;
+    color: #00ffff;
+    text-transform: uppercase;
+    font-size: 1.5em;
+    letter-spacing: 8px;
+    font-weight: 900;
+    background: linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff, #ff0000);
+    background-size: 200% 100%;
+    animation: rainbow-spin 3s linear infinite, vibrate 0.1s infinite;
+    padding: 10px 20px;
+    display: inline-block;
+    border-radius: 50% 10% 50% 10%;
+    box-shadow: 0 0 30px rgba(255, 255, 0, 1), inset 0 0 20px rgba(0, 255, 255, 0.5);
+    transform: rotate(-15deg);
+    position: relative;
+}
+
+span.highlight {
+    font-family: "Monoton", "Impact", "Arial Black", sans-serif;
+    background: repeating-conic-gradient(
+        from 0deg at 50% 50%,
+        #ff0000 0deg,
+        #ffff00 60deg,
+        #00ff00 120deg,
+        #00ffff 180deg,
+        #0000ff 240deg,
+        #ff00ff 300deg,
+        #ff0000 360deg
+    );
+    animation: rainbow-spin 10s linear infinite, pulse-explosion 3.5s ease-in-out infinite;
+    padding: 10px 20px;
+    border-radius: 50%;
+    font-weight: 900;
+    font-size: 2.8rem;
+    display: inline-block;
+    box-shadow: 0 0 20px rgba(255, 0, 255, 0.55),
+                0 0 40px rgba(0, 255, 255, 0.35),
+                inset 0 0 50px rgba(255, 255, 0, 0.6);
+    text-shadow: 3px 3px 0 #000,
+                 -3px -3px 0 #fff,
+                 3px -3px 0 #f00,
+                 -3px 3px 0 #0f0,
+                 0 0 20px rgba(255, 255, 255, 0.9);
+    border: 6px dashed;
+    border-color: #ff0000 #00ff00 #0000ff #ffff00;
+    transform-origin: center;
+    letter-spacing: 4px;
+    filter: saturate(150%) contrast(120%) brightness(110%);
+    position: relative;
+    transform: rotate(-3deg);
+}
+
+span.emphasis::before,
+span.keyword::before,
+span.highlight::before {
+    content: "";
+    position: absolute;
+    inset: 0.18em;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: inherit;
+    transform: translate(0.18em, 0.14em) rotate(4deg);
+}
+
+span.emphasis::before {
+    background: linear-gradient(135deg, rgba(0, 255, 255, 0.45), rgba(255, 255, 0, 0.25));
+}
+
+span.keyword::before {
+    background: linear-gradient(135deg, rgba(255, 0, 255, 0.4), rgba(0, 255, 255, 0.3));
+}
+
+span.highlight::before {
+    background: linear-gradient(135deg, rgba(0, 255, 255, 0.35), rgba(255, 0, 255, 0.35));
+}
+
+/* BONUS WHACK: Make everything shake on hover */
+/* 🦖 DINO MODE - Make things prehistoric! */
+span.dino,
+span.dinosaur,
+span.trex {
+    font-size: 3em;
+    display: inline-block;
+    animation: wobble 2s infinite;
+    filter: hue-rotate(120deg);
+}
+
+span.dino::before,
+span.dinosaur::before,
+span.trex::before {
+    content: "🦖 ";
+    animation: bounce-crazy 1s infinite;
+}
+
+span.dino::after,
+span.dinosaur::after,
+span.trex::after {
+    content: " 🦕";
+    animation: bounce-crazy 1s infinite reverse;
+}
+
+/* 🤖 ROBOT MODE - Gundam transformation! */
+span.robot,
+span.gundam,
+span.mecha {
+    font-family: "Audiowide", "Eurostile", "Bank Gothic", monospace;
+    background: linear-gradient(45deg, #c0c0c0, #808080, #404040, #000);
+    background-size: 300% 300%;
+    animation: rainbow-spin 2s infinite, rotate-3d 5s infinite;
+    padding: 10px 20px;
+    display: inline-block;
+    border: 3px solid #00ff00;
+    box-shadow: 0 0 20px #00ff00, inset 0 0 20px rgba(0, 255, 0, 0.3);
+    text-shadow: 0 0 10px #00ff00;
+    font-weight: 900;
+    letter-spacing: 3px;
+}
+
+span.robot::before {
+    content: "🤖 ";
+}
+
+span.gundam::before {
+    content: "⚙️ ";
+}
+
+span.mecha::before {
+    content: "🦾 ";
+}
+
+/* 🔥 FIRE MODE */
+span.fire,
+span.flame,
+span.burning {
+    font-family: "Creepster", "Brush Script MT", cursive;
+    color: #ff0000;
+    font-weight: 900;
+    font-size: 2em;
+    animation: fire 1s infinite;
+    display: inline-block;
+    text-transform: uppercase;
+}
+
+span.fire::before,
+span.flame::before,
+span.burning::before {
+    content: "🔥 ";
+    animation: wobble 0.5s infinite;
+}
+
+/* ⚡ ELECTRIC MODE */
+span.electric,
+span.lightning,
+span.zap {
+    font-family: "Rubik Glitch", "Avenir Next Condensed", sans-serif;
+    color: #ffff00;
+    animation: neon-glow 0.5s infinite, vibrate 0.1s infinite;
+    font-weight: 900;
+    font-size: 1.8em;
+    display: inline-block;
+}
+
+span.electric::before {
+    content: "⚡ ";
+}
+
+/* 💫 STAR MODE */
+span.star,
+span.sparkle,
+span.shine {
+    animation: starfield 2s infinite, rotate-3d 4s infinite;
+    display: inline-block;
+    background: radial-gradient(circle, #ffffff, #ffff00, #ff00ff);
+    padding: 8px 15px;
+    border-radius: 50%;
+}
+
+span.star::before {
+    content: "⭐ ";
+}
+
+span.sparkle::before {
+    content: "✨ ";
+}
+
+/* 🌈 RAINBOW MODE */
+span.rainbow,
+span.unicorn,
+span.magical {
+    font-family: "Papyrus", "Marker Felt", fantasy;
+    background: linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff);
+    background-size: 200% 100%;
+    animation: rainbow-spin 2s linear infinite;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 900;
+    font-size: 2em;
+    display: inline-block;
+    text-shadow: 0 0 10px rgba(255,255,255,0.9), 0 0 24px rgba(255,0,255,0.8);
+    transform: rotate(-4deg);
+}
+
+span.unicorn::after {
+    content: " 🦄";
+    -webkit-text-fill-color: initial;
+    animation: bounce-crazy 1s infinite;
+}
+
+/* 👾 RETRO GAME MODE */
+span.retro,
+span.pixel,
+span.arcade,
+span.game {
+    font-family: "Press Start 2P", "Andale Mono", monospace;
+    background: #000;
+    color: #0f0;
+    padding: 5px 15px;
+    border: 3px solid #0f0;
+    box-shadow: 0 0 10px #0f0, inset 0 0 10px rgba(0, 255, 0, 0.2);
+    animation: blink 0.8s infinite;
+    font-weight: 900;
+    display: inline-block;
+    text-shadow: 3px 3px 0 #ff00ff, 6px 6px 0 #00ffff;
+}
+
+span.arcade::before,
+span.game::before {
+    content: "👾 ";
+}
+
+/* 🎸 ROCK MODE */
+span.rock,
+span.metal,
+span.headbang {
+    font-family: 'Impact', sans-serif;
+    color: #000;
+    background: linear-gradient(45deg, #ff0000, #000, #ff0000);
+    background-size: 200% 200%;
+    animation: rainbow-spin 1s infinite, wobble 0.5s infinite;
+    padding: 10px 20px;
+    transform: rotate(-5deg);
+    display: inline-block;
+    border: 3px solid #000;
+    box-shadow: 5px 5px 0 #ff0000;
+    font-size: 2em;
+    font-weight: 900;
+    letter-spacing: 3px;
+}
+
+span.rock::before {
+    content: "🎸 ";
+}
+
+span.metal::before {
+    content: "🤘 ";
+}
+
+/* 🌊 WATER MODE */
+span.water,
+span.ocean,
+span.wave {
+    color: #0066ff;
+    animation: wobble 2s infinite;
+    text-shadow: 2px 2px 4px rgba(0, 102, 255, 0.5);
+    font-weight: 700;
+    display: inline-block;
+}
+
+span.wave::before {
+    content: "🌊 ";
+}
+
+/* 🎪 CIRCUS MODE */
+span.circus,
+span.carnival,
+span.party {
+    font-family: 'Comic Sans MS', cursive;
+    background: repeating-linear-gradient(45deg, #ff0000 0px, #ffff00 10px, #00ff00 20px, #00ffff 30px, #0000ff 40px, #ff00ff 50px);
+    animation: rainbow-spin 1s infinite, bounce-crazy 2s infinite;
+    text-shadow: 3px 3px 0 #fff, 6px 6px 0 #ff00ff;
+    transform: rotate(-5deg);
+    padding: 10px 20px;
+    border: 5px dotted #000;
+    border-radius: 20px;
+    font-size: 2em;
+    font-weight: 900;
+    display: inline-block;
+}
+
+span.circus::before,
+span.carnival::before,
+span.party::before {
+    content: "🎪 ";
+}
+
+/* 👽 ALIEN MODE */
+span.alien,
+span.ufo,
+span.space {
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    background: #000;
+    animation: warp-speed 3s infinite, neon-glow 1s infinite;
+    padding: 10px 20px;
+    border: 2px solid #00ff00;
+    border-radius: 10px;
+    display: inline-block;
+    font-weight: 900;
+}
+
+span.alien::before {
+    content: "👽 ";
+}
+
+span.ufo::before {
+    content: "🛸 ";
+}
+
+/* 🎮 GAMER MODE */
+span.gamer,
+span.xbox,
+span.playstation {
+    font-family: 'Impact', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 5px;
+    animation: pulse-explosion 2s infinite;
+    font-weight: 900;
+    display: inline-block;
+    text-transform: uppercase;
+}
+
+span.gamer::before {
+    content: "🎮 ";
+}
+
+/* 🍕 PIZZA MODE */
+span.pizza,
+span.food,
+span.yummy {
+    animation: rotate-3d 3s infinite;
+    display: inline-block;
+    font-size: 2em;
+}
+
+span.pizza::before {
+    content: "🍕 ";
+}
+
+/* 💎 DIAMOND MODE */
+span.diamond,
+span.gem,
+span.bling {
+    background: linear-gradient(45deg, #4FC3F7, #29B6F6, #03A9F4, #039BE5, #0288D1);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: starfield 1s infinite, rotate-3d 3s infinite;
+    font-weight: 900;
+    font-size: 2em;
+    display: inline-block;
+    filter: drop-shadow(0 0 10px rgba(3, 169, 244, 0.8));
+}
+
+span.diamond::before,
+span.gem::before,
+span.bling::before {
+    content: "💎 ";
+    -webkit-text-fill-color: initial;
+}
+
+/* 🎨 PAINT MODE */
+span.paint,
+span.art,
+span.creative {
+    background: linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet);
+    background-size: 400% 100%;
+    animation: rainbow-spin 3s infinite;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 1.8em;
+    font-weight: 900;
+    display: inline-block;
+}
+
+span.paint::before,
+span.art::before {
+    content: "🎨 ";
+    -webkit-text-fill-color: initial;
+}
+
+/* 🌟 MATRIX MODE */
+span.matrix,
+span.hacker,
+span.code {
+    font-family: "Audiowide", "American Typewriter", monospace;
+    font-family: 'Courier New', monospace;
+    color: #00ff00;
+    background: #000;
+    animation: matrix-rain 2s infinite linear, glitch 1s infinite;
+    padding: 5px 15px;
+    border: 2px solid #00ff00;
+    text-shadow: 0 0 5px #00ff00;
+    display: inline-block;
+    font-weight: 900;
+}
+
+span.matrix::before,
+span.hacker::before {
+    content: "⚡ ";
+}
+
+/* 🦋 BUTTERFLY MODE */
+span.butterfly,
+span.flutter,
+span.fly {
+    animation: slide-diagonal 4s infinite, dissolve 2s infinite;
+    display: inline-block;
+    color: #ff69b4;
+    font-weight: 700;
+}
+
+span.butterfly::before {
+    content: "🦋 ";
+}
+
+/* 🎯 TARGET MODE */
+span.target,
+span.bullseye,
+span.aim {
+    background: radial-gradient(circle, #ff0000 20%, #ffff00 40%, #00ff00 60%, #0000ff 80%);
+    animation: pulse-explosion 1s infinite, rotate-3d 2s infinite;
+    padding: 10px 20px;
+    border-radius: 50%;
+    display: inline-block;
+    font-weight: 900;
+}
+
+span.target::before {
+    content: "🎯 ";
+}
+
+/* 🌙 MOON MODE */
+span.moon,
+span.night,
+span.dark {
+    color: #f0f0f0;
+    text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 30px #fff;
+    animation: neon-glow 3s infinite;
+    display: inline-block;
+    font-weight: 700;
+}
+
+span.moon::before {
+    content: "🌙 ";
+}
+
+/* ☀️ SUN MODE */
+span.sun,
+span.day,
+span.bright {
+    color: #ffff00;
+    animation: fire 1s infinite, pulse-explosion 2s infinite;
+    display: inline-block;
+    font-weight: 900;
+    font-size: 2em;
+}
+
+span.sun::before {
+    content: "☀️ ";
+}
+
+/* 🎵 MUSIC MODE */
+span.music,
+span.song,
+span.melody {
+    font-family: "Bungee", "Jazz LET", "Marker Felt", cursive;
+    animation: bounce-crazy 1s infinite, rainbow-spin 2s infinite;
+    display: inline-block;
+    background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 1.5em;
+    font-weight: 900;
+    text-shadow: 0 0 12px rgba(255,255,255,0.9), 0 0 24px rgba(0,255,255,0.8);
+}
+
+span.music::before,
+span.song::before {
+    content: "🎵 ";
+    -webkit-text-fill-color: initial;
+}
+
+/* 🚀 ROCKET MODE */
+span.rocket,
+span.launch,
+span.blast {
+    animation: warp-speed 2s infinite, fire 1s infinite;
+    display: inline-block;
+    font-size: 2em;
+    transform-origin: bottom left;
+}
+
+span.rocket::before,
+span.launch::before,
+span.blast::before {
+    content: "🚀 ";
+}
+
+/* 🎬 MOVIE MODE */
+span.movie,
+span.film,
+span.cinema {
+    font-family: 'Times New Roman', serif;
+    background: linear-gradient(45deg, #000, #ff0000, #000);
+    color: #ffd700;
+    padding: 10px 20px;
+    border: 3px solid #ffd700;
+    animation: blink 1.5s infinite, glitch 2s infinite;
+    display: inline-block;
+    font-weight: 900;
+}
+
+span.movie::before,
+span.film::before {
+    content: "🎬 ";
+}
+
+/* 🌋 VOLCANO MODE */
+span.volcano,
+span.lava,
+span.eruption {
+    color: #ff4500;
+    animation: fire 0.8s infinite, bounce-crazy 2s infinite;
+    font-size: 2em;
+    font-weight: 900;
+    display: inline-block;
+    text-shadow: 0 0 10px #ff4500, 0 0 20px #ff6347;
+}
+
+span.volcano::before {
+    content: "🌋 ";
+}
+
+/* 🎃 SPOOKY MODE */
+span.spooky,
+span.ghost,
+span.halloween {
+    color: #ff6600;
+    animation: wobble 1s infinite, neon-glow 2s infinite;
+    font-family: 'Courier New', monospace;
+    font-size: 1.8em;
+    font-weight: 900;
+    display: inline-block;
+}
+
+span.spooky::before,
+span.ghost::before,
+span.halloween::before {
+    content: "👻 ";
+}
+
+/* 🏆 WINNER MODE */
+span.winner,
+span.champion,
+span.trophy {
+    background: linear-gradient(45deg, #ffd700, #ffed4e, #ffd700);
+    color: #000;
+    padding: 10px 20px;
+    border-radius: 10px;
+    animation: pulse-explosion 1s infinite, bounce-crazy 2s infinite;
+    font-weight: 900;
+    font-size: 1.8em;
+    display: inline-block;
+    box-shadow: 0 0 20px #ffd700;
+}
+
+span.winner::before,
+span.champion::before,
+span.trophy::before {
+    content: "🏆 ";
+}
+
+/* 🌺 FLOWER MODE */
+span.flower,
+span.bloom,
+span.petal {
+    color: #ff69b4;
+    animation: rotate-3d 4s infinite;
+    display: inline-block;
+    filter: drop-shadow(0 0 10px rgba(255, 105, 180, 0.8));
+}
+
+span.flower::before,
+span.bloom::before {
+    content: "🌺 ";
+}
+
+/* 💣 BOMB MODE */
+span.bomb,
+span.explosive,
+span.boom {
+    animation: vibrate 0.1s infinite, pulse-explosion 0.5s infinite;
+    display: inline-block;
+    font-size: 2em;
+    font-weight: 900;
+}
+
+span.bomb::before,
+span.boom::before {
+    content: "💣 ";
+}
+
+/* 🎈 BALLOON MODE */
+span.balloon,
+span.float,
+span.drift {
+    animation: bounce-crazy 3s infinite;
+    display: inline-block;
+    color: #ff1493;
+}
+
+span.balloon::before {
+    content: "🎈 ";
+}
+
+/* 🔮 CRYSTAL MODE */
+span.crystal,
+span.mystic,
+span.magic {
+    background: linear-gradient(45deg, #9b59b6, #8e44ad, #9b59b6);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: neon-glow 2s infinite, rotate-3d 4s infinite;
+    font-weight: 900;
+    font-size: 1.8em;
+    display: inline-block;
+}
+
+span.crystal::before,
+span.mystic::before {
+    content: "🔮 ";
+    -webkit-text-fill-color: initial;
+}
+
+/* 🌀 SPIRAL MODE */
+span.spiral,
+span.vortex,
+span.swirl {
+    animation: rotate-3d 2s infinite, warp-speed 3s infinite;
+    display: inline-block;
+    font-weight: 900;
+    color: #00bfff;
+}
+
+span.spiral::before,
+span.vortex::before {
+    content: "🌀 ";
+}
+
+/* 🎆 FIREWORK MODE */
+span.firework,
+span.explosion,
+span.blast {
+    animation: pulse-explosion 0.8s infinite, rainbow-spin 1s infinite;
+    display: inline-block;
+    font-size: 2em;
+    font-weight: 900;
+}
+
+span.firework::before {
+    content: "🎆 ";
+}
+
+/* ULTRA MEGA GIGA TERA WHACK SUPREME: The body itself */
+body {
+    animation: vibrate 5s infinite;
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(255, 0, 0, 0.02) 0px,
+        rgba(0, 255, 0, 0.02) 50px,
+        rgba(0, 0, 255, 0.02) 100px,
+        rgba(255, 255, 0, 0.02) 150px
+    );
+}
+
+/* 🎭 PHRASES GET EXTRA WHACK - Works with multi-word spans! */
+span[class*="mega"],
+span[class*="ultra"],
+span[class*="super"],
+span[class*="hyper"] {
+    font-size: 2.5em !important;
+    animation-duration: 0.5s !important;
+    filter: saturate(300%) !important;
+}
+
+} /* Close the #main-content scope we opened */
+
+/* The system will add another closing brace for its wrapper */* ULTRA WHACK: Paragraphs get the treatment too */
+p:has(span.highlight) {
+    background: repeating-linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.1) 0px,
+        rgba(0, 255, 0, 0.1) 10px,
+        rgba(0, 0, 255, 0.1) 20px,
+        rgba(255, 255, 0, 0.1) 30px
+    );
+    padding: 20px;
+    border: 5px double rainbow;
+    border-image: linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet) 1;
+    animation: vibrate 0.2s infinite;
+}
+
+/* MEGA WHACK: Code blocks go wild */
+code {
+    background: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00);
+    background-size: 600% 600%;
+    animation: rainbow-spin 5s ease infinite;
+    padding: 5px 10px;
+    border-radius: 10px;
+    font-weight: 900;
+    box-shadow: 0 0 15px rgba(255, 0, 255, 0.8);
+    display: inline-block;
+    transform: skew(-5deg);
+}
+
+/* GIGA WHACK: Links become portals */
+a {
+    color: #ff00ff;
+    font-weight: 900;
+    text-decoration: none;
+    background: linear-gradient(90deg, transparent, rgba(255, 0, 255, 0.3), transparent);
+    background-size: 200% 100%;
+    animation: rainbow-spin 2s infinite;
+    padding: 5px 10px;
+    border-radius: 20px;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+    transition: all 0.3s ease;
+}
+
+a:hover {
+    transform: scale(1.5) rotate(15deg);
+    box-shadow: 0 0 30px rgba(255, 255, 0, 1);
+    animation: glitch 0.2s infinite, bounce-crazy 0.5s infinite;
+}
+
+/* TERA WHACK: Headings explode */
+h1, h2, h3, h4, h5, h6 {
+    background: linear-gradient(45deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 400% 400%;
+    animation: rainbow-spin 8s linear infinite;
+    font-weight: 900;
+    text-shadow: 3px 3px 10px rgba(0, 0, 0, 0.8);
+    filter: drop-shadow(0 0 10px rgba(255, 0, 255, 0.45));
+    letter-spacing: 2px;
+}
+
+/* ULTRA MEGA GIGA TERA WHACK SUPREME: 90s GIF TILING MADNESS! */
+/* Target the main content AND the body */
+& {
+    animation: vibrate 5s infinite !important;
+    background: rgba(255, 255, 255, 0.92) !important;
+    border: 6px double rgba(255, 0, 255, 0.72);
+    box-shadow: 0 0 30px rgba(255, 0, 255, 0.35), 0 0 60px rgba(0, 255, 255, 0.2), 0 18px 48px rgba(0, 0, 0, 0.18), inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+    padding: 2rem !important;
+    border-radius: 18px;
+}
+
+/* Scrolling background animation - 90s chaos */
