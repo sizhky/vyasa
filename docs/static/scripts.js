@@ -2450,7 +2450,7 @@ function renderMathSafely(root) {
 
 function initHighlightedCodeIncludes(root) {
     (root || document).querySelectorAll('code[data-code-highlight-lines]').forEach((code) => {
-        if (code.dataset.vyasaLinesReady === '1') return;
+        if (code.querySelector('.vyasa-code-line')) return;
         const start = Number(code.dataset.codeSourceStart || '1');
         const ranges = String(code.dataset.codeHighlightLines || '').split(',').map((part) => part.trim()).filter(Boolean);
         const highlighted = new Set();
@@ -2463,10 +2463,16 @@ function initHighlightedCodeIncludes(root) {
             const lineNo = start + index;
             const cls = highlighted.has(lineNo) ? 'vyasa-code-line vyasa-code-line-highlight' : 'vyasa-code-line';
             return `<span class="${cls}" data-source-line="${lineNo}">${line || '&nbsp;'}</span>`;
-        }).join('');
+        }).join('\n');
         code.classList.add('vyasa-code-lines');
-        code.dataset.vyasaLinesReady = '1';
     });
+}
+
+function scheduleHighlightedCodeIncludes(root) {
+    const target = root || document;
+    initHighlightedCodeIncludes(target);
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => initHighlightedCodeIncludes(target));
+    [40, 140, 320].forEach((delay) => setTimeout(() => initHighlightedCodeIncludes(target), delay));
 }
 
 // Initialize on page load
@@ -2485,7 +2491,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSearchPlaceholderCycle(document);
     initPostsSearchPersistence(document);
     initCodeBlockCopyButtons(document);
-    initHighlightedCodeIncludes(document);
+    scheduleHighlightedCodeIncludes(document);
     initSearchClearButtons(document);
     ensurePdfFocusState();
     initTabPanelHeights(document);
@@ -2506,7 +2512,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initSearchPlaceholderCycle(event.target);
     initPostsSearchPersistence(event.target);
     initCodeBlockCopyButtons(event.target);
-    initHighlightedCodeIncludes(event.target);
+    scheduleHighlightedCodeIncludes(event.target);
     initExcalidrawHosts(event.target || document);
     initExcalidrawName(event.target || document);
     initExcalidrawSave(event.target || document);
@@ -2515,6 +2521,10 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initSearchClearButtons(event.target);
     ensurePdfFocusState();
     initTabPanelHeights(event.target || document);
+});
+
+window.addEventListener('load', () => {
+    scheduleHighlightedCodeIncludes(document);
 });
 
 window.addEventListener('resize', () => refreshVyasaTableScrollShadows(document));

@@ -165,34 +165,32 @@
         .tab-panel code { 
             font-family: 'IBM Plex Mono', monospace;
         }
-        .vyasa-callout { background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.95)); border-color: rgba(148, 163, 184, 0.35); box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); }
+        :root { --vyasa-code-bg: #e1e2e7; --vyasa-code-fg: #3760bf; --vyasa-code-border: rgba(55, 96, 191, 0.16); --vyasa-code-highlight-bg: rgba(245, 42, 101, 0.16); --vyasa-code-highlight-accent: #f52a65; --vyasa-code-comment: #848cb5; --vyasa-code-keyword: #9854f1; --vyasa-code-string: #587539; --vyasa-code-title: #2e7de9; --vyasa-code-number: #b15c00; }
+        .dark { --vyasa-code-bg: #1a1b26; --vyasa-code-fg: #d5d6db; --vyasa-code-border: rgba(122, 162, 247, 0.16); --vyasa-code-highlight-bg: rgba(247, 118, 142, 0.18); --vyasa-code-highlight-accent: #f7768e; --vyasa-code-comment: #848cb5; --vyasa-code-keyword: #bb9af7; --vyasa-code-string: #9ece6a; --vyasa-code-title: #7dcfff; --vyasa-code-number: #ff9e64; }
+        .vyasa-callout { --vyasa-callout-accent: rgb(37 99 235); background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.95)); border-color: rgba(148, 163, 184, 0.35); border-left: 4px solid var(--vyasa-callout-accent); box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); }
         .dark .vyasa-callout { background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.96)); border-color: rgba(148, 163, 184, 0.2); box-shadow: 0 14px 34px rgba(2, 6, 23, 0.35); }
+        .vyasa-callout-summary { list-style: none; }
+        .vyasa-callout-summary::-webkit-details-marker { display: none; }
+        .vyasa-callout-icon { color: var(--vyasa-callout-accent); display: inline-flex; }
         .vyasa-callout-label { color: rgb(15 23 42); }
         .dark .vyasa-callout-label { color: rgb(226 232 240); }
         .vyasa-callout-body > *:first-child { margin-top: 0 !important; }
         .vyasa-callout-body > *:last-child { margin-bottom: 0 !important; }
-        .vyasa-callout-info { border-left: 4px solid rgb(14 116 144); }
-        .vyasa-callout-note { border-left: 4px solid rgb(37 99 235); }
-        .vyasa-callout-tip { border-left: 4px solid rgb(22 163 74); }
-        .vyasa-callout-warning { border-left: 4px solid rgb(217 119 6); }
-        .vyasa-callout-important { border-left: 4px solid rgb(190 24 93); }
-        .vyasa-callout-caution { border-left: 4px solid rgb(220 38 38); }
-        .code-block .vyasa-code-line-highlight { background: rgba(204, 36, 29, 0.22); box-shadow: inset 6px 0 0 rgba(204, 36, 29, 1); }
-        .dark .code-block .vyasa-code-line-highlight { background: rgba(251, 73, 52, 0.24); box-shadow: inset 6px 0 0 rgba(251, 73, 52, 1); }
-        .code-block pre, .code-block pre code, pre code.hljs { background: #fbf1c7; color: #3c3836; }
-        .dark .code-block pre, .dark .code-block pre code, .dark pre code.hljs { background: #282828; color: #ebdbb2; }
-        .code-block pre { border: 1px solid rgba(60, 56, 54, 0.12); border-radius: 12px; }
-        .dark .code-block pre { border-color: rgba(235, 219, 178, 0.12); }
-        .hljs-comment, .hljs-quote { color: #928374; }
-        .dark .hljs-comment, .dark .hljs-quote { color: #a89984; }
-        .hljs-keyword, .hljs-selector-tag, .hljs-literal { color: #9d0006; }
-        .dark .hljs-keyword, .dark .hljs-selector-tag, .dark .hljs-literal { color: #fb4934; }
-        .hljs-string, .hljs-doctag, .hljs-regexp { color: #79740e; }
-        .dark .hljs-string, .dark .hljs-doctag, .dark .hljs-regexp { color: #b8bb26; }
-        .hljs-title, .hljs-title.function_, .hljs-section, .hljs-attribute { color: #076678; }
-        .dark .hljs-title, .dark .hljs-title.function_, .dark .hljs-section, .dark .hljs-attribute { color: #83a598; }
-        .hljs-number, .hljs-symbol, .hljs-variable, .hljs-template-variable, .hljs-type, .hljs-built_in { color: #8f3f71; }
-        .dark .hljs-number, .dark .hljs-symbol, .dark .hljs-variable, .dark .hljs-template-variable, .dark .hljs-type, .dark .hljs-built_in { color: #d3869b; }
+        .vyasa-callout-note, .vyasa-callout-info, .vyasa-callout-abstract { --vyasa-callout-accent: rgb(37 99 235); }
+        .vyasa-callout-tip, .vyasa-callout-success, .vyasa-callout-todo { --vyasa-callout-accent: rgb(22 163 74); }
+        .vyasa-callout-warning, .vyasa-callout-important, .vyasa-callout-question { --vyasa-callout-accent: rgb(217 119 6); }
+        .vyasa-callout-failure, .vyasa-callout-danger, .vyasa-callout-bug { --vyasa-callout-accent: rgb(220 38 38); }
+        .vyasa-callout-example, .vyasa-callout-quote { --vyasa-callout-accent: rgb(124 58 237); }
+        .vyasa-code-lines { display: block; white-space: normal !important; }
+        .vyasa-code-line { display: block; white-space: pre; margin: 0 -1rem; padding: 0 1rem; }
+        .code-block .vyasa-code-line-highlight { background: var(--vyasa-code-highlight-bg); box-shadow: inset 6px 0 0 var(--vyasa-code-highlight-accent); }
+        .code-block pre, .code-block pre code, pre code.hljs { background: var(--vyasa-code-bg); color: var(--vyasa-code-fg); }
+        .code-block pre { border: 1px solid var(--vyasa-code-border); border-radius: 12px; }
+        .hljs-comment, .hljs-quote { color: var(--vyasa-code-comment); }
+        .hljs-keyword, .hljs-selector-tag, .hljs-literal { color: var(--vyasa-code-keyword); }
+        .hljs-string, .hljs-doctag, .hljs-regexp { color: var(--vyasa-code-string); }
+        .hljs-title, .hljs-title.function_, .hljs-section, .hljs-attribute { color: var(--vyasa-code-title); }
+        .hljs-number, .hljs-symbol, .hljs-variable, .hljs-template-variable, .hljs-type, .hljs-built_in { color: var(--vyasa-code-number); }
     </style>
     
 </head>
@@ -493,7 +491,7 @@
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
         mermaid.initialize({ startOnLoad: true, theme: 'default' });
     </script>
-    <script src="/static/scripts.js?v=1774334567985031757" type="module"></script>
+    <script src="/static/scripts.js?v=1774337327068267560" type="module"></script>
     
     
     <script>

@@ -21,7 +21,7 @@ Start here:
 2. Prefer existing Vyasa conventions over inventing new ones.
 3. When generating `.vyasa`, output valid TOML with only supported keys.
 4. When changing repo code, cite the concrete file that implements the behavior.
-5. For recent markdown work, check `references/markdown.md` for slash callouts, code snippet includes, and explicit heading IDs/permalinks before inventing new syntax.
+5. For recent markdown work, check `references/markdown.md` for Obsidian-style callouts, aliases, nesting/folding, code snippet includes, and explicit heading IDs/permalinks before inventing new syntax.
 6. For code-block color changes, check `references/theming.md` for the `--vyasa-code-*` CSS variables so users can override palettes from `custom.css`.
 
 Core rules:
@@ -29,6 +29,9 @@ Core rules:
 - Treat `.vyasa` as a TOML file, usually at repo root or a content folder.
 - Respect precedence: CLI args > `.vyasa` > environment variables > defaults.
 - Distinguish root app config from folder-local ordering and navigation config.
+- For callouts, emit Obsidian-style callouts like `> [!note] Title` or `> [!warning]- Title`; prefer aliases already supported by Obsidian (`warn`, `error`, `faq`, `check`, `done`, `summary`, `tldr`, `cite`, etc.) rather than inventing new keywords.
+- Use `+` and `-` fold markers when the callout should clearly default open or closed, and prefer nested `> > [!todo]` callouts over ad hoc indentation patterns.
+- For custom callout types, rely on `data-callout="your-type"` plus `custom.css` rather than inventing special renderer logic unless the user explicitly wants core support.
 - For Mermaid labels, use literal `<br/>` for line breaks inside nodes and edge text; do not emit `\n`.
 - Do not invent unsupported frontmatter keys, sort modes, or config keys.
 - Never emit real secret values — use explicit placeholders.
