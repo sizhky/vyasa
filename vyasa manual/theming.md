@@ -2,26 +2,32 @@
 
 Use this guide to change **any part** of Vyasa's look and behavior. It covers where to place CSS, how scoping works, which elements to target, and how to change behavior safely.
 
+Vyasa has two different theming jobs to do. Sometimes you want to restyle the rendered article itself, for example changing paragraph spacing, code colors, or callout treatment for one folder. Other times you want to restyle the page around the article, for example loading a book-specific font, changing the viewport background, or recoloring the navbar and sidebars for one section. Those two jobs look similar from the outside, but they need different CSS loading behavior.
+
+That is why Vyasa now separates **scoped folder CSS** from **global folder CSS**. Scoped CSS is for content-area styling and is attached to the current post section only. Global CSS is for page-level styling and is loaded as a normal stylesheet, so it can legally use `html`, `body`, `@font-face`, `@keyframes`, and other top-level CSS features.
+
 ## 1) Where to put your CSS
 
 Vyasa loads custom CSS in this order (later wins):
 
 1. **Framework CSS** (bundled in the app)
-2. **Root CSS**: `custom.css` or `style.css` at your **blog root**
-3. **Folder CSS**: `custom.css` or `style.css` inside a folder (scoped to that folder)
+2. **Root global CSS**: `global.css`, `custom.css`, or `style.css` at your **blog root**
+3. **Folder global CSS**: `global.css` inside a folder and its ancestor folders
+4. **Folder scoped CSS**: `custom.css` or `style.css` inside a folder and its ancestor folders
 
 Your **blog root** is determined by `VYASA_ROOT` or a `.vyasa` config file. If neither is set, Vyasa uses the current working directory.
 
 ### Root-level CSS (site-wide)
 Create or edit:
 
+- `/your-blog-root/global.css`
 - `/your-blog-root/custom.css` (preferred)
 - `/your-blog-root/style.css`
 
-This applies everywhere.
+Use `global.css` when you need true page-level CSS. Use root `custom.css` or `style.css` for the traditional site-wide stylesheet behavior.
 
 ### Folder-level CSS (scoped)
-Place a `custom.css` or `style.css` in any content folder to style just that folder (and its subfolders).
+Place a `custom.css` or `style.css` in any content folder to style the rendered post area for that folder and its subfolders.
 
 Vyasa wraps that CSS inside a scoped selector:
 
@@ -29,7 +35,29 @@ Vyasa wraps that CSS inside a scoped selector:
 #main-content.section-your-folder { ... }
 ```
 
-This uses **CSS nesting**. Modern browsers support this. You can write normal selectors inside your folder CSS and Vyasa will nest them under the correct section automatically.
+This is for selectors that conceptually belong to the post content: headings, paragraphs, tables, images, code blocks, callouts, and other markdown output.
+
+### Folder-level global CSS
+Place a `global.css` in a content folder when the folder needs to style the whole page shell.
+
+Vyasa links that file as a normal stylesheet for every page in that folder subtree. That means it can safely define rules for:
+
+- `html`, `body`
+- `#page-container`, `#site-navbar`, `#posts-sidebar`, `#toc-sidebar`
+- `@font-face`
+- `@keyframes`
+- `:root` custom properties
+
+This is the correct tool for book themes, app-like section chrome, or folder-specific fonts.
+
+### Example mental model
+
+For `demo/books/flat-land/`:
+
+- `global.css` sets the parchment viewport background, navbar/sidebar chrome, and custom fonts
+- `custom.css` styles the chapter page itself: the paper card, headings, paragraph rhythm, and images
+
+If you remember only one rule, remember this: **`global.css` is for the page, `custom.css` is for the post.**
 
 ## 2) How to find the section scope class
 

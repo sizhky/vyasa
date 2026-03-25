@@ -78,15 +78,15 @@ right nearest the point of view, and C and D which describe the visible
 portion of the front of the
 circle.](figures/illustration-5.svg)
 
-Now imagine a Priest, whose mouth is at `M`{.variable}, and whose front
-semicircle (`AMB`{.variable}) is consequently coloured red, while his
-hinder semicircle is green; so that the diameter `AB`{.variable} divides
+Now imagine a Priest, whose mouth is at `M`{.vector}, and whose front
+semicircle (`AMB`{.vector}) is consequently coloured red, while his
+hinder semicircle is green; so that the diameter `AB`{.vector} divides
 the green from the red. If you contemplate the great man so as to have
 your eye in the same straight line as his dividing diameter
-(`AB`{.variable}), what you will see will be a straight line
-(`CBD`{.variable}), of which *one half* (`CB`{.variable}) *will be red,
-and the other* (`BD`{.variable}) *green*. The whole line
-(`CD`{.variable}) will be rather shorter perhaps than that of a
+(`AB`{.vector}), what you will see will be a straight line
+(`CBD`{.vector}), of which *one half* (`CB`{.vector}) *will be red,
+and the other* (`BD`{.vector}) *green*. The whole line
+(`CD`{.vector}) will be rather shorter perhaps than that of a
 full-sized woman, and will shade off more rapidly towards its
 extremities; but the identity of the colours would give you an immediate
 impression of identity of class, making you neglectful of other details.

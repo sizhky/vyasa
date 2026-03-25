@@ -49,7 +49,7 @@ houses.
 
 The most common form for the construction of a house is five-sided or
 pentagonal, as in the annexed Figure. The two Northern sides
-`RO`{.variable}, `OF`{.variable}, constitute the roof, and for the most
+`RO`{.vector}, `OF`{.vector}, constitute the roof, and for the most
 part have no doors; on the East is a small door for the women; on the
 West a much larger one for the men; the South side or floor is usually
 doorless.
