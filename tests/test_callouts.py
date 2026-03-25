@@ -57,3 +57,53 @@ def test_code_include_stays_literal_inside_fenced_code():
 
     assert '{* ../demo/dollar-escape.md ln[1:24] hl[9:11,22] *}' in html
     assert 'vyasa-code-include-placeholder' not in html
+
+
+def test_markdown_after_callout_still_renders():
+    md = '/// note\nBody\n///\n\n**Key columns:** Example'
+    html = to_xml(from_md(md))
+
+    assert '<strong>Key columns:</strong>' in html
+
+
+def test_obsidian_callout_alias_and_fold_render():
+    md = '> [!warn]- Custom title\n> body'
+    html = to_xml(from_md(md))
+
+    assert 'vyasa-callout-warning' in html
+    assert '<details' in html
+    assert 'Custom title' in html
+    assert '>body<' in html
+
+
+def test_nested_obsidian_callouts_render():
+    md = '> [!question] Outer\n> > [!todo] Inner\n> > **done**'
+    html = to_xml(from_md(md))
+
+    assert 'vyasa-callout-question' in html
+    assert 'vyasa-callout-todo' in html
+    assert '<strong>done</strong>' in html
+
+
+def test_custom_callout_type_keeps_data_attribute():
+    html = to_xml(from_md('> [!business-case] Title\n> body'))
+
+    assert 'data-callout="business-case"' in html
+    assert 'vyasa-callout-note' in html
+
+
+def test_sibling_obsidian_callouts_do_not_merge():
+    md = '> [!info] Added in FastAPI 0.134.0.\n\n> [!warning] Rotate your keys every 90 days.'
+    html = to_xml(from_md(md))
+
+    assert html.count('vyasa-callout ') >= 2
+    assert '[!warning]' not in html
+
+
+def test_fenced_code_inside_obsidian_callout_renders():
+    md = '> [!info] Header\n> Body\n> ```python\n> print("hi")\n> ```'
+    html = to_xml(from_md(md))
+
+    assert '@@VYASA_CALLOUT_BLOCK_' not in html
+    assert 'print("hi")' in html
+    assert '&gt; ```' not in html

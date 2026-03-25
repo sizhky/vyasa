@@ -193,17 +193,14 @@ Renders as a responsive embedded video player.
 
 Renders as `<span class="highlight">highlighted</span>`. Useful with folder-level `custom.css`.
 
-## Slash callouts
+## Obsidian-style callouts
 
 ```markdown
-/// info
-
-Added in FastAPI 0.134.0.
-
-///
+> [!faq]- Can callouts be nested?
+> > [!todo] Yes.
 ```
 
-Renders as a themed callout box. Supported kinds include `info`, `note`, `tip`, `warning`, `important`, and `caution`.
+Supports aliases like `warn`, `error`, `faq`, `help`, `check`, `done`, `summary`, `tldr`, and `cite`, plus fold markers `+` and `-`, nesting, custom titles, and custom types. This is the preferred emitted form.
 
 ## Code snippet includes
 
@@ -221,15 +218,6 @@ Embeds a file as a code block. `ln[start:end]` slices by 1-based source lines, a
 
 Uses the explicit id for both the heading anchor and the `¶` permalink/TOC target.
 
-## Legacy callout blocks
-
-```markdown
-> [!NOTE]
-> Important information.
-
-> [!WARNING]
-> Be careful here.
-```
 
 Renders as styled callout boxes.
 

@@ -636,32 +636,100 @@ gantt
 
 :::tabs
 ::tab{title="Rendered"}
-/// info
+> [!info] Header
+> This is an informational callout inside the header. It can contain multiple paragraphs, lists, and other markdown elements.
+> 
+> It can even contain markdown elements such as **bold**, *italics*
+> `inline code` and blocks of code.
+> ```python
+> def hello():
+>     return "Hello, world!"
+> ```
 
-Added in FastAPI 0.134.0.
 
-///
+> [!warning] Rotate your keys every 90 days.
 
-/// warning
+> [!success] Build completed successfully.
 
-Rotate your keys every 90 days.
+> [!error] Production credentials should never be committed.
+> If you accidentally commit secrets, use `git filter-repo` to scrub them from your git history and rotate the compromised credentials immediately.
 
-///
+> [!bug] This parser edge case was fixed with a regression test.
+
+> [!example] Use `hl[9:11,22]` to highlight selected source lines.
+
+> [!faq]- Can callouts be nested? Click to find out!
+> > [!todo]- Yes. You can nest infinitely
+> > > [!example]- This is a nested callout with code!
+> > > ```python
+> > > def nested_callout():
+> > >     return "This is a nested callout with code!"
+> > > ```
+
+
+> [!cite]- "Documentation is a gift to the future."
+> > [!note] Good Documentation elevates everyone.
+> > [!note] Bad Documentation is worse than no documentation.
+
+
 ::tab{title="Markdown Source"}
-```markdown
-/// info
+````markdown
+> [!info] Header
+> This is an informational callout inside the header. It can contain multiple paragraphs, lists, and other markdown elements.
+> 
+> It can even contain markdown elements such as **bold**, *italics*
+> `inline code` and blocks of code.
+> ```python
+> def hello():
+>     return "Hello, world!"
+> ```
 
-Added in FastAPI 0.134.0.
 
-///
+> [!warning] Rotate your keys every 90 days.
 
-/// warning
+> [!success] Build completed successfully.
 
-Rotate your keys every 90 days.
+> [!error] Production credentials should never be committed.
+> If you accidentally commit secrets, use `git filter-repo` to scrub them from your git history and rotate the compromised credentials immediately.
 
-///
-```
+> [!bug] This parser edge case was fixed with a regression test.
+
+> [!example] Use `hl[9:11,22]` to highlight selected source lines.
+
+> [!faq]- Can callouts be nested? Click to find out!
+> > [!todo]- Yes. You can nest infinitely
+> > > [!example]- This is a nested callout with code!
+> > > ```python
+> > > def nested_callout():
+> > >     return "This is a nested callout with code!"
+> > > ```
+
+
+> [!cite]- "Documentation is a gift to the future."
+> > [!note] Good Documentation elevates everyone.
+> > [!note] Bad Documentation is worse than no documentation.
+````
 :::
+
+Vyasa uses Obsidian-style blockquote callouts. Aliases such as `warn`, `error`, `faq`, `help`, `check`, `done`, `summary`, `tldr`, `cite`, and more are normalized automatically; `+` opens a foldable callout by default, and `-` starts it collapsed.
+
+Supported callout families and aliases:
+
+- `note`
+- `abstract`: `summary`, `tldr`
+- `info`
+- `todo`
+- `tip`: `hint`, `important`
+- `success`: `check`, `done`
+- `question`: `help`, `faq`
+- `warning`: `warn`, `caution`, `attention`
+- `failure`: `fail`, `missing`
+- `danger`: `error`
+- `bug`
+- `example`
+- `quote`: `cite`
+
+Custom types like `> [!business-case]` also render and expose `data-callout="business-case"` for CSS targeting.
 
 ## Collapsible Sections
 

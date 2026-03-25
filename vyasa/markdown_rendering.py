@@ -39,28 +39,52 @@ from .markdown_tokens import (
 )
 
 _diagram_uid_counter = count(1)
+_CALLOUT_META = {
+    "note": ("Note", "info"), "abstract": ("Abstract", "file-text"), "info": ("Info", "info"),
+    "todo": ("Todo", "check"), "tip": ("Tip", "bolt"), "success": ("Success", "check"),
+    "question": ("Question", "question"), "warning": ("Warning", "warning"), "failure": ("Failure", "close"),
+    "danger": ("Danger", "warning"), "bug": ("Bug", "bug"), "example": ("Example", "code"), "quote": ("Quote", "quote-right"),
+}
+_CALLOUT_SVGS = {
+    "info": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/></svg>',
+    "file-text": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h6"/><path d="M9 9h1"/></svg>',
+    "check": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg>',
+    "bolt": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>',
+    "question": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4.2 1.8c-.9.8-1.7 1.3-1.7 2.7"/><path d="M12 17h.01"/></svg>',
+    "warning": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 2.8 19a1 1 0 0 0 .9 1.5h16.6a1 1 0 0 0 .9-1.5z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+    "close": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
+    "bug": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8a4 4 0 1 1 8 0"/><path d="M9 9h6v8a3 3 0 0 1-6 0z"/><path d="M3 13h4"/><path d="M17 13h4"/><path d="m5 7 3 2"/><path d="m19 7-3 2"/><path d="m5 19 3-2"/><path d="m19 19-3-2"/></svg>',
+    "code": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 16-4-4 4-4"/><path d="m16 8 4 4-4 4"/><path d="m14 4-4 16"/></svg>',
+    "quote-right": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 11H6a2 2 0 0 0-2 2v1a4 4 0 0 0 4 4h1"/><path d="M20 11h-4a2 2 0 0 0-2 2v1a4 4 0 0 0 4 4h1"/></svg>',
+}
 
 
 def _callout_label(kind):
-    labels = {
-        "info": "Info",
-        "note": "Note",
-        "tip": "Tip",
-        "warning": "Warning",
-        "important": "Important",
-        "caution": "Caution",
-    }
-    return labels.get(kind, kind.replace("-", " ").replace("_", " ").title())
+    return _CALLOUT_META.get(kind, (kind.replace("-", " ").replace("_", " ").title(), "info"))[0]
 
 
-def _render_callout(kind, body, render_body):
+def _callout_icon(kind):
+    return _CALLOUT_SVGS.get(_CALLOUT_META.get(kind, ("", "info"))[1], _CALLOUT_SVGS["info"])
+
+
+def _render_callout(kind, body, render_body, title=None, fold=None):
+    theme_kind = kind if kind in _CALLOUT_META else "note"
     rendered = render_body(body).strip()
-    return (
-        f'<div class="vyasa-callout vyasa-callout-{kind} my-6 rounded-xl border px-5 py-4">'
-        f'<div class="vyasa-callout-label mb-2 text-sm font-semibold uppercase tracking-[0.18em]">{html.escape(_callout_label(kind))}</div>'
-        f'<div class="vyasa-callout-body">{rendered}</div>'
-        '</div>'
-    )
+    heading = html.escape(title or _callout_label(kind))
+    head_cls = "vyasa-callout-head vyasa-callout-head-with-body flex items-center gap-2" if rendered else "vyasa-callout-head flex items-center gap-2"
+    chevron = '<span class="vyasa-callout-chevron" aria-hidden="true"></span>' if fold else ""
+    head = f'<div class="{head_cls}"><span class="vyasa-callout-icon">{_callout_icon(theme_kind)}</span><span class="vyasa-callout-label text-sm font-semibold tracking-[0.02em]">{heading}</span>{chevron}</div>'
+    body_html = f'<div class="vyasa-callout-body">{rendered}</div>' if rendered else ""
+    if fold:
+        open_attr = " open" if fold == "+" else ""
+        return f'<details class="vyasa-callout vyasa-callout-{theme_kind} my-6 rounded-xl border px-5 py-4" data-callout="{html.escape(kind)}"{open_attr}><summary class="vyasa-callout-summary list-none cursor-pointer">{head}</summary>{body_html}</details>'
+    return f'<div class="vyasa-callout vyasa-callout-{theme_kind} my-6 rounded-xl border px-5 py-4" data-callout="{html.escape(kind)}">{head}{body_html}</div>'
+
+
+def _render_markdown_fragment(body, img_dir=None, current_path=None):
+    rendered = to_xml(from_md(body, img_dir=img_dir, current_path=current_path))
+    rendered = re.sub(r'^<div class="w-full">\s*<link[^>]+>\s*', "", rendered)
+    return re.sub(r"\s*</div>\s*$", "", rendered)
 
 
 def _infer_code_language(path):
@@ -526,14 +550,9 @@ def from_md(content, img_dir=None, current_path=None):
         html_out = postprocess_md_tabs(html_out, tab_data_store, _render_tab_content)
     if callout_data_store:
         def _render_callout_body(callout_body):
-            with ContentRenderer(
-                YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough,
-                FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes,
-                current_path=current_path,
-            ) as renderer:
-                return renderer.render(mst.Document(callout_body))
+            return _render_markdown_fragment(callout_body, img_dir=img_dir, current_path=current_path)
         for callout_id, callout in callout_data_store.items():
-            rendered = _render_callout(callout["kind"], callout["body"], _render_callout_body)
+            rendered = _render_callout(callout["kind"], callout["body"], _render_callout_body, title=callout.get("title"), fold=callout.get("fold"))
             placeholder = f'<div class="vyasa-callout-placeholder" data-callout-id="{callout_id}"></div>'
             html_out = html_out.replace(placeholder, rendered)
     if code_include_store:

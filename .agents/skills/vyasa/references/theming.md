@@ -148,6 +148,8 @@ a:hover { color: #115e59; }
 
 Vyasa exposes code block palette variables through CSS, so users can override the built-in theme from root or folder `custom.css` without editing Vyasa itself.
 
+For custom callout styling, target `.vyasa-callout[data-callout="your-type"]`. You can swap the built-in icon by hiding `.vyasa-callout-icon svg` and applying your own SVG/background in `custom.css`.
+
 ## Example: Mermaid diagrams
 
 ```css

@@ -20,11 +20,10 @@ Vyāsa is a Python-first blogging platform designed to turn your Markdown files 
 [^1]: If you're curious about how the intro was styled, [visit this page](https://github.com/sizhky/vyasa/blob/fa9a671931ad69b24139ba9d105bbadd8753b85b/custom.css#L36C1-L36C13).<br>
     Check out the [Theming & CSS](vyasa%20manual/theming.md) guide for details on customizing your blog's appearance.
 
-/// info
-**Vyāsa** is named after the legendary sage **Krishna Dvaipayana Vyāsa**, who is credited with compiling the ancient Indian epic - the Mahabharata, 18 puranas and many more spiritually significant works. 
-
-Just as Vyāsa organized vast knowledge into a coherent narrative, Vyāsa the blogging platform helps you organize your thoughts and content into a beautiful, functional website with ease.
-///
+> [!info]
+> **Vyāsa** is named after the legendary sage **Krishna Dvaipayana Vyāsa**, who is credited with compiling the ancient Indian epic - the Mahabharata, 18 puranas and many more spiritually significant works.
+>
+> Just as Vyāsa organized vast knowledge into a coherent narrative, Vyāsa the blogging platform helps you organize your thoughts and content into a beautiful, functional website with ease.
 
 ---
 
@@ -137,7 +136,7 @@ mindmap
     - If `title` is provided, it is used for fullscreen modal title and as a small centered caption under the diagram
 - **Tabbed Content**: Create multi-tab sections using `:::tabs` and `::tab{title="..."}` syntax with smooth transitions
 - **Code Snippet Includes**: Embed external source files with `{* path ln[1:24] hl[9:11,22] *}` and highlight selected source lines
-- **Slash Callouts**: Add FastAPI-style callouts with `/// info` ... `///` blocks for notes, warnings, and similar inline docs
+- **Rich Callouts**: Supports Obsidian-style `> [!warning]- Title` callouts with aliases, folding, nesting, and CSS-targetable custom types
 - **Relative Links**: Full support for relative markdown links (`./file.md`, `../other.md`) with automatic path resolution
 - **Plain-Text Headings**: Inline markdown in headings is stripped for clean display and consistent anchor slugs
 - **Math Notation**: KaTeX support for inline `$E=mc^2$` and block `$$` math equations, auto-renders after HTMX swaps
@@ -222,3 +221,12 @@ Short, focused guides for deeper topics. Start with configuration and writing co
 - [Theming & CSS](vyasa%20manual/theming.md)
 - [Security & Auth](vyasa%20manual/security.md)
 - [Advanced Behavior](vyasa%20manual/advanced.md)
+
+> [!note]
+> "FID" — Final Investment Decision — is the governance gate at which capital funding is formally authorised. Before FID, spend is in feasibility/engineering. After FID, the project is live and contractors are engaged.
+
+**Key columns:**
+CBS Code, Description, FID Budget Value, Work Package (Casters / Meltshop / etc.)
+
+**Key columns:**
+CBS Code, Description, FID Budget Value, Work Package (Casters / Meltshop / etc.)
