@@ -9,10 +9,22 @@ Priority: .vyasa file > environment variables > defaults
 """
 
 import os
+import hashlib
 import tomllib
 from pathlib import Path
 from typing import Optional
 from .helpers import slug_to_title
+
+MIN_DYNAMIC_PORT = 1024
+MAX_DYNAMIC_PORT = 65535
+
+
+def port_for_working_directory(path: Path) -> int:
+    """Map an absolute directory path to a deterministic non-privileged port."""
+    normalized = str(path.resolve()).encode("utf-8")
+    digest = hashlib.sha256(normalized).digest()
+    span = MAX_DYNAMIC_PORT - MIN_DYNAMIC_PORT + 1
+    return MIN_DYNAMIC_PORT + (int.from_bytes(digest[:8], "big") % span)
 
 
 class VyasaConfig:
@@ -104,7 +116,9 @@ class VyasaConfig:
     
     def get_port(self) -> int:
         """Get the server port."""
-        port = self.get('port', 'VYASA_PORT', 5001)
+        port = self.get('port', 'VYASA_PORT', None)
+        if port is None:
+            return port_for_working_directory(Path.cwd())
         return int(port)
     
     def get_auth(self):
