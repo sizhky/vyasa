@@ -23,6 +23,7 @@ Start here:
 4. When changing repo code, cite the concrete file that implements the behavior.
 5. For recent markdown work, check `references/markdown.md` for Obsidian-style callouts, aliases, nesting/folding, code snippet includes, and explicit heading IDs/permalinks before inventing new syntax.
 6. For code-block color changes, check `references/theming.md` for the `--vyasa-code-*` CSS variables so users can override palettes from `custom.css`.
+7. For books/tutorials/docs sequences, prefer Vyasa's built-in sibling previous/next pager before inventing manual chapter-footer HTML; it follows the folder's `.vyasa` ordering, not raw filename sort.
 
 Core rules:
 

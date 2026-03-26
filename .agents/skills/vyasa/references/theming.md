@@ -22,6 +22,27 @@ The section class is derived from the folder path with slashes replaced by hyphe
 
 Write your rules normally inside the file — Vyasa nests them under the correct scope automatically.
 
+## Folder-level `global.css`
+
+If a folder needs page-level styling, use `global.css` in that folder. Vyasa links it as a normal stylesheet, so it can safely style `html`, `body`, navbar/sidebar chrome, and top-level rules like `@font-face` and `@keyframes`.
+
+Rule of thumb:
+- `global.css` is for the page
+- `custom.css` is for the post
+
+## Narrative/book navigation
+
+Vyasa has built-in previous/next navigation for markdown files with visible sibling markdown files in the same folder.
+It follows the folder's effective Vyasa order, not raw filename sort.
+
+Theme it with:
+
+```css
+.vyasa-prev-next
+.vyasa-prev-link
+.vyasa-next-link
+```
+
 ## DOM selectors
 
 ### Page structure

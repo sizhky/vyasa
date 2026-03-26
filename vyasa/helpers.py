@@ -145,6 +145,60 @@ def get_post_title(file_path: str | Path, abbreviations=None) -> str:
     title, _ = resolve_markdown_title(file_path, abbreviations=abbreviations)
     return title
 
+def get_adjacent_posts(root: Path, current_path: str | Path, abbreviations=None):
+    current_rel = Path(current_path)
+    if current_rel.suffix != ".md":
+        current_rel = current_rel.with_suffix(".md")
+    current_file = root / current_rel
+    if not current_file.exists():
+        return None, None
+    folder = current_file.parent
+    index_file = None
+    if folder == root:
+        for stem in ("index", "readme"):
+            for candidate in root.iterdir():
+                if candidate.is_file() and candidate.suffix == ".md" and candidate.stem.lower() == stem:
+                    index_file = candidate
+                    break
+            if index_file:
+                break
+    folder_note = find_folder_note_file(folder)
+    ignore_list = _effective_ignore_list(root, folder)
+    include_list = _effective_include_list(root, folder)
+    entries = []
+    excluded = set()
+    for item in folder.iterdir():
+        if item.name == ".vyasa":
+            continue
+        if item.is_dir():
+            if should_exclude_dir(item.name, excluded) or item.name.startswith("."):
+                continue
+            if _should_include_folder(item.name, include_list, ignore_list):
+                entries.append(item)
+        elif item.suffix == ".md":
+            if item.name.startswith("."):
+                continue
+            if (folder_note and item.resolve() == folder_note.resolve()) or (index_file and item.resolve() == index_file.resolve()):
+                continue
+            entries.append(item)
+    siblings = [item for item in order_vyasa_entries(entries, get_vyasa_config(folder)) if item.is_file() and item.suffix == ".md"]
+    try:
+        idx = siblings.index(current_file)
+    except ValueError:
+        return None, None
+
+    def _item(path: Path):
+        rel = path.relative_to(root).with_suffix("")
+        return {
+            "title": get_post_title(path, abbreviations=abbreviations),
+            "href": f"/posts/{rel.as_posix()}",
+            "static_href": f"/posts/{rel.as_posix()}.html",
+        }
+
+    prev_item = _item(siblings[idx - 1]) if idx > 0 else None
+    next_item = _item(siblings[idx + 1]) if idx < len(siblings) - 1 else None
+    return prev_item, next_item
+
 def iter_visible_files(root: Path, suffixes: tuple[str, ...], include_hidden: bool = False):
     """Yield files while pruning hidden and excluded directories before descent."""
     from .config import get_config

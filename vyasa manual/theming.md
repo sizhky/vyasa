@@ -59,6 +59,21 @@ For `demo/books/flat-land/`:
 
 If you remember only one rule, remember this: **`global.css` is for the page, `custom.css` is for the post.**
 
+## 2a) Built-in previous/next navigation
+
+Vyasa now renders previous/next links automatically for markdown files that have visible sibling markdown files in the same folder.
+The pager follows the same folder order Vyasa uses elsewhere, including `.vyasa` `order`, sort rules, and visibility filtering.
+
+The pager is added under the rendered article and uses these selectors:
+
+```css
+.vyasa-prev-next
+.vyasa-prev-link
+.vyasa-next-link
+```
+
+This is especially useful for books, tutorials, and long-form docs where each folder is a linear reading sequence.
+
 ## 2) How to find the section scope class
 
 Folder CSS is scoped to the `#main-content` element with a **section class** derived from the path.

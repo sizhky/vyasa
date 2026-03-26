@@ -14,7 +14,7 @@ from .helpers import (
     _effective_abbreviations, _effective_ignore_list,
     _effective_include_list, _should_include_folder, _strip_inline_markdown,
     _unique_anchor, find_folder_note_file,
-    get_post_title, parse_frontmatter, resolve_markdown_title, slug_to_title,
+    get_adjacent_posts, get_post_title, parse_frontmatter, resolve_markdown_title, slug_to_title,
     text_to_anchor,
 )
 from .markdown_pipeline import extract_footnotes, preprocess_super_sub
@@ -198,6 +198,10 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
         .hljs-string, .hljs-doctag, .hljs-regexp { color: var(--vyasa-code-string); }
         .hljs-title, .hljs-title.function_, .hljs-section, .hljs-attribute { color: var(--vyasa-code-title); }
         .hljs-number, .hljs-symbol, .hljs-variable, .hljs-template-variable, .hljs-type, .hljs-built_in { color: var(--vyasa-code-number); }
+        .vyasa-prev-next { display:flex; justify-content:space-between; gap:1rem; margin-top:3rem; padding-top:1.5rem; border-top:1px solid rgba(148, 163, 184, 0.28); }
+        .vyasa-prev-link, .vyasa-next-link { max-width:48%; text-decoration:none; color:rgb(59 130 246); font-weight:600; }
+        .vyasa-next-link { text-align:right; margin-left:auto; }
+        .vyasa-prev-link:hover, .vyasa-next-link:hover { text-decoration:underline; }
     </style>
     """
     
@@ -633,7 +637,12 @@ def build_static_site(input_dir=None, output_dir=None):
         # Extract TOC
         toc_headings = extract_toc(raw_content, _strip_inline_markdown, text_to_anchor, _unique_anchor)
         toc_items = build_toc_items(toc_headings)
-        
+        prev_item, next_item = get_adjacent_posts(root_folder, relative_path, abbreviations=abbreviations)
+        if prev_item or next_item:
+            prev_html = f'<a class="vyasa-prev-link" href="{prev_item["static_href"]}">← {prev_item["title"]}</a>' if prev_item else '<div></div>'
+            next_html = f'<a class="vyasa-next-link" href="{next_item["static_href"]}">{next_item["title"]} →</a>' if next_item else '<div></div>'
+            content_html += f'<div class="vyasa-prev-next">{prev_html}{next_html}</div>'
+
         # Generate full page
         full_html = static_layout(
             content_html=content_html,
