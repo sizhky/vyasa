@@ -7,6 +7,16 @@ from urllib.parse import quote
 
 from fasthtml.common import A, Button, Div, H1, Li, NotStr, Ol, P, Response, Script, Strong, Textarea
 from monsterui.all import UkIcon
+from .helpers import get_adjacent_posts
+
+
+def _prev_next_nav(root, current_path, abbreviations):
+    prev_item, next_item = get_adjacent_posts(root, current_path, abbreviations=abbreviations)
+    if not prev_item and not next_item:
+        return None
+    prev_link = A(f"← {prev_item['title']}", href=prev_item["href"], cls="vyasa-prev-link") if prev_item else Div()
+    next_link = A(f"{next_item['title']} →", href=next_item["href"], cls="vyasa-next-link") if next_item else Div()
+    return Div(prev_link, next_link, cls="vyasa-prev-next")
 
 
 def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbreviations, find_folder_note_file, slug_to_title, layout, get_blog_title, not_found, parse_frontmatter, resolve_markdown_title, from_md, logger, PathCls=Path):
@@ -34,7 +44,8 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     logger.debug(f"[DEBUG] Markdown rendering took {(time.time() - md_start) * 1000:.2f}ms")
     copy_button = Button(UkIcon("clipboard", cls="w-4 h-4"), type="button", title="Copy raw markdown", onclick="(function(){const el=document.getElementById('raw-md-clipboard');const toast=document.getElementById('raw-md-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()", cls="inline-flex items-center justify-center p-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors")
     present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{path}", target="_blank", rel="noopener noreferrer", cls="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors text-sm") if bool(metadata.get("slides", False)) else None
-    post_content = Div(Div(H1(post_title, cls="text-4xl font-bold"), present_button, copy_button, cls="flex items-center gap-2 flex-wrap mb-8"), Div("Copied Raw Markdown!", id="raw-md-toast", cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"), Textarea(raw_content, id="raw-md-clipboard", cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"), content)
+    pager = _prev_next_nav(root, path, abbreviations)
+    post_content = Div(Div(H1(post_title, cls="text-4xl font-bold"), present_button, copy_button, cls="flex items-center gap-2 flex-wrap mb-8"), Div("Copied Raw Markdown!", id="raw-md-toast", cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"), Textarea(raw_content, id="raw-md-clipboard", cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"), content, pager if pager else Div())
     layout_start = time.time()
     result = layout(post_content, htmx=htmx, title=f"{post_title} - {get_blog_title()}", show_sidebar=True, toc_content=raw_content, current_path=path, auth=request.scope.get("auth"))
     logger.debug(f"[DEBUG] Layout generation took {(time.time() - layout_start) * 1000:.2f}ms")
