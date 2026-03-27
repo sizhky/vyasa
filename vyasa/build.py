@@ -464,7 +464,7 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     
     # Navbar
     navbar = f'''
-    <div class="bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
+    <div class="vyasa-navbar-card bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
         <div class="flex items-center justify-between md:hidden">
             <button id="mobile-posts-toggle" title="Toggle file tree" class="p-2 rounded transition-colors hover:bg-slate-800" type="button">
                 <span uk-icon="menu" class="w-5 h-5"></span>
@@ -487,13 +487,13 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     # Build navigation sidebar
     nav_html = to_xml(Ul(*nav_tree, cls="mt-2 list-none"))
     posts_sidebar = f'''
-    <aside id="posts-sidebar" class="hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
-        <details open>
-            <summary class="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
+    <aside id="posts-sidebar" class="vyasa-sidebar vyasa-posts-sidebar hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
+        <details open class="vyasa-sidebar-card vyasa-sidebar-card-posts">
+            <summary class="vyasa-sidebar-toggle vyasa-sidebar-toggle-posts flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
                 <span uk-icon="menu" class="w-5 h-5 mr-2"></span>
                 Posts
             </summary>
-            <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
+            <div class="vyasa-sidebar-body vyasa-sidebar-body-posts mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
                 {nav_html}
             </div>
         </details>
@@ -505,13 +505,13 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     if toc_items:
         toc_list_html = to_xml(Ul(*toc_items, cls="mt-2 list-none"))
         toc_html = f'''
-        <aside id="toc-sidebar" class="hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
-            <details open>
-                <summary class="flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
+        <aside id="toc-sidebar" class="vyasa-sidebar vyasa-toc-sidebar hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
+            <details open class="vyasa-sidebar-card vyasa-sidebar-card-table-of-contents">
+                <summary class="vyasa-sidebar-toggle vyasa-sidebar-toggle-table-of-contents flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
                     <span uk-icon="list" class="w-5 h-5 mr-2"></span>
                     Table of Contents
                 </summary>
-                <div class="mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
+                <div class="vyasa-sidebar-body vyasa-sidebar-body-table-of-contents mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
                     {toc_list_html}
                 </div>
             </details>
@@ -520,15 +520,15 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     
     # Main content area
     main_content = f'''
-    <main id="main-content" class="flex-1 min-w-0 px-6 py-8 space-y-8">
+    <main id="main-content" class="vyasa-main-shell flex-1 min-w-0 px-6 py-8 space-y-8">
         {content_html}
     </main>
     '''
     
     # Footer
     footer = '''
-    <footer class="w-full max-w-7xl mx-auto px-6 mt-auto mb-6">
-        <div class="bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right">
+    <footer class="vyasa-footer-shell w-full max-w-7xl mx-auto px-6 mt-auto mb-6">
+        <div class="vyasa-footer-card bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right">
             Powered by Vyasa
         </div>
     </footer>
@@ -537,10 +537,10 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     # Complete body
     body = f'''
     <div id="page-container" class="flex flex-col min-h-screen">
-        <div class="w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4">
+        <div class="vyasa-navbar-shell w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4">
             {navbar}
         </div>
-        <div class="w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1">
+        <div id="content-with-sidebars" class="vyasa-content-grid w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1">
             {posts_sidebar}
             {main_content}
             {toc_html}

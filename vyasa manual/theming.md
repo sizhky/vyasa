@@ -127,21 +127,27 @@ If your rule doesn’t apply:
 ### Page structure
 
 - `#page-container` - outer wrapper for the whole page
-- `#site-navbar` - sticky header wrapper
+- `#site-navbar` / `.vyasa-navbar-shell` - sticky header wrapper
+- `.vyasa-navbar-card` - actual visible navbar card
 - `#content-with-sidebars` - row containing sidebars + main content
-- `#main-content` - the rendered post content
-- `#site-footer` - footer wrapper
+- `#main-content` / `.vyasa-main-shell` - the rendered post content
+- `#site-footer` / `.vyasa-footer-shell` - footer wrapper
+- `.vyasa-footer-card` - actual visible footer card
 
 ### Sidebars
 
-- `#posts-sidebar` - left navigation tree
-- `#toc-sidebar` - right table of contents
+- `#posts-sidebar` / `.vyasa-posts-sidebar` - left navigation tree shell
+- `#toc-sidebar` / `.vyasa-toc-sidebar` - right table of contents shell
+- `.vyasa-sidebar-card` - collapsible sidebar card
+- `.vyasa-sidebar-toggle` - sidebar summary/header row
+- `.vyasa-sidebar-body` - sidebar content panel
 - `#sidebar-scroll-container` - scrollable list container
 - `.toc-link` - each TOC link
 
 ### Mobile panels
 
-- `#mobile-posts-panel`, `#mobile-toc-panel` - off-canvas panels
+- `#mobile-posts-panel`, `#mobile-toc-panel`, `.vyasa-mobile-panel` - off-canvas panels
+- `.vyasa-mobile-panel-header`, `.vyasa-mobile-panel-body` - mobile panel sections
 - `#mobile-posts-toggle`, `#mobile-toc-toggle` - toggle buttons
 
 ### Markdown content
@@ -190,15 +196,15 @@ a:hover { color: #115e59; }
 
 ## 5) Navbar and footer
 
-The navbar is the **first child** inside `#site-navbar` and the footer content is inside `#site-footer > div`.
+Use the explicit hooks instead of positional selectors. Style the visible navbar through `.vyasa-navbar-card`, not `#site-navbar > *`.
 
 ```css
-#site-navbar > div {
+.vyasa-navbar-card {
   background-color: #0f766e !important;
   color: #f8fafc !important;
 }
 
-#site-footer > div {
+.vyasa-footer-card {
   background-color: #1f2937 !important;
   color: #f8fafc !important;
 }
@@ -213,22 +219,22 @@ The navbar is the **first child** inside `#site-navbar` and the footer content i
   color: #e2e8f0;
 }
 
-.dark #site-navbar > div { background-color: #0b3b3a !important; }
-.dark #site-footer > div { background-color: #111827 !important; }
+.dark .vyasa-navbar-card { background-color: #0b3b3a !important; }
+.dark .vyasa-footer-card { background-color: #111827 !important; }
 ```
 
 ## 6) Sidebars and TOC
 
 ```css
 /* Left posts sidebar */
-#posts-sidebar {
+.vyasa-posts-sidebar .vyasa-sidebar-body {
   background: #f3f4f6;
   border-radius: 12px;
   padding: 0.5rem;
 }
 
 /* TOC sidebar */
-#toc-sidebar {
+.vyasa-toc-sidebar .vyasa-sidebar-body {
   background: #f8fafc;
   border-radius: 12px;
   padding: 0.5rem;
