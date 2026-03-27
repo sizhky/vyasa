@@ -19,6 +19,8 @@ def _folder_summary(title_node, branch_href=None):
 
 
 def folder_has_visible_descendant(folder, roles, depth, *, root, show_hidden, excluded_dirs, get_nav_entries, is_allowed_fn, rbac_rules):
+    if (folder / ".vyasa").exists():
+        return True
     for item in get_nav_entries(folder, root, show_hidden, excluded_dirs):
         if item.is_dir():
             if depth > 0 and folder_has_visible_descendant(item, roles, depth - 1, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, is_allowed_fn=is_allowed_fn, rbac_rules=rbac_rules):
