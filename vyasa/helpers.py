@@ -68,6 +68,24 @@ def _unique_anchor(base: str, counts: dict[str, int]) -> str:
 
 _frontmatter_cache: dict[str, tuple[float, tuple[dict, str]]] = {}
 
+def _recover_simple_frontmatter(text: str) -> dict:
+    match = re.match(r"^(---|\+\+\+)\s*\n(.*?)\n\1\s*\n?", text, re.DOTALL)
+    if not match:
+        return {}
+    recovered = {}
+    for line in match.group(2).splitlines():
+        if not line or line[:1].isspace() or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key, value = key.strip(), value.strip()
+        if not key or not value or value[0] in "[{":
+            continue
+        recovered[key] = value.strip("'\"")
+    return recovered
+
+def _strip_leading_frontmatter_block(text: str) -> str:
+    return re.sub(r"^(---|\+\+\+)\s*\n.*?\n\1\s*\n?", "", text, count=1, flags=re.DOTALL)
+
 def should_exclude_dir(name: str, excluded: set[str]) -> bool:
     """Exclude exact matches plus common derived names like .venv.bak."""
     if name in excluded:
@@ -120,7 +138,12 @@ def parse_frontmatter(file_path: str | Path):
             text = file_path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             return {}, ""
-        result = ({}, text)
+        recovered = _recover_simple_frontmatter(text)
+        recovered["__frontmatter_error__"] = {
+            "message": str(e),
+            "file": str(file_path),
+        }
+        result = (recovered, _strip_leading_frontmatter_block(text))
         _frontmatter_cache[cache_key] = (mtime, result)
         return result
 

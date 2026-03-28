@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
-from fasthtml.common import A, Button, Div, H1, Li, NotStr, Ol, P, Response, Script, Strong, Textarea
+from fasthtml.common import A, Button, Div, H1, Li, NotStr, Ol, P, Response, Script, Span, Strong, Textarea
 from monsterui.all import UkIcon
 from .helpers import get_adjacent_posts
 
@@ -38,6 +38,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
             return layout(pdf_content, htmx=htmx, title=f"{post_title} - {get_blog_title()}", show_sidebar=True, toc_content=None, current_path=path, show_toc=False, auth=request.scope.get("auth"))
         return not_found(htmx, auth=request.scope.get("auth"))
     metadata, raw_content = parse_frontmatter(file_path)
+    frontmatter_error = metadata.get("__frontmatter_error__")
     post_title, render_content = resolve_markdown_title(file_path, abbreviations=abbreviations)
     md_start = time.time()
     content = from_md(render_content, current_path=path)
@@ -45,7 +46,26 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     copy_button = Button(UkIcon("clipboard", cls="w-4 h-4"), type="button", title="Copy raw markdown", onclick="(function(){const el=document.getElementById('raw-md-clipboard');const toast=document.getElementById('raw-md-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()", cls="inline-flex items-center justify-center p-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors")
     present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{path}", target="_blank", rel="noopener noreferrer", cls="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors text-sm") if bool(metadata.get("slides", False)) else None
     pager = _prev_next_nav(root, path, abbreviations)
-    post_content = Div(Div(H1(post_title, cls="text-4xl font-bold"), present_button, copy_button, cls="flex items-center gap-2 flex-wrap mb-8"), Div("Copied Raw Markdown!", id="raw-md-toast", cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"), Textarea(raw_content, id="raw-md-clipboard", cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"), content, pager if pager else Div())
+    error_chip = Span("Bad Front Matter", cls="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50/70 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200") if frontmatter_error else None
+    metadata_items = [(k, v) for k, v in metadata.items() if k not in {"__frontmatter_error__", "title", "slides", "reveal"} and isinstance(v, str) and v.strip()]
+    metadata_block = NotStr(
+        '<details class="mb-8 overflow-hidden rounded-2xl border border-[rgba(126,154,144,0.28)] bg-[linear-gradient(180deg,rgba(248,250,249,0.96),rgba(241,246,244,0.92))] px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.05)] dark:border-[rgba(126,154,144,0.22)] dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.52),rgba(15,23,42,0.3))]">'
+        '<summary class="cursor-pointer text-xs font-medium uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Front Matter</summary>'
+        + ''.join(
+            f'<div class="space-y-1 pt-6 first:pt-4"><div class="border-t border-[rgba(126,154,144,0.16)] pb-6 first:border-t-0 first:pb-0"></div><div class="text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{html.escape(k.replace("_", " "))}</div><p class="m-0 text-sm leading-relaxed text-slate-700 dark:text-slate-200">{html.escape(v)}</p></div>'
+            for k, v in metadata_items[:4]
+        )
+        + '</details>'
+    ) if metadata_items else None
+    error_toast = Div(
+        Strong("Invalid front matter", cls="block mb-1"),
+        P(f"{file_path}", cls="m-0 text-xs opacity-80 break-all"),
+        P(frontmatter_error["message"], cls="m-0 mt-1 font-mono text-xs break-all"),
+        id="frontmatter-error-toast",
+        cls="fixed top-6 right-6 z-[9999] max-w-md rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 shadow-xl transition-all duration-500 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100",
+    ) if frontmatter_error else None
+    error_script = Script("setTimeout(()=>{const el=document.getElementById('frontmatter-error-toast');if(!el)return;el.classList.add('opacity-0','translate-x-8');setTimeout(()=>el.remove(),500);},3200)") if frontmatter_error else None
+    post_content = Div(Div(H1(post_title, cls="text-4xl font-bold"), error_chip if error_chip else Div(), present_button, copy_button, cls="flex items-center gap-2 flex-wrap mb-8"), metadata_block if metadata_block else Div(), error_toast if error_toast else Div(), error_script if error_script else Div(), Div("Copied Raw Markdown!", id="raw-md-toast", cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"), Textarea(raw_content, id="raw-md-clipboard", cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"), content, pager if pager else Div())
     layout_start = time.time()
     result = layout(post_content, htmx=htmx, title=f"{post_title} - {get_blog_title()}", show_sidebar=True, toc_content=raw_content, current_path=path, auth=request.scope.get("auth"))
     logger.debug(f"[DEBUG] Layout generation took {(time.time() - layout_start) * 1000:.2f}ms")

@@ -71,6 +71,26 @@ kbd {
 #main-content h6 {
     font-family: 'Manrope', 'Inter', sans-serif;
 }
+hr {
+    border: 0;
+    height: 1px;
+    width: min(100%, 34rem);
+    margin: 2.75rem auto;
+    background: linear-gradient(90deg, transparent, rgba(69, 101, 91, 0.26) 14%, rgba(69, 101, 91, 0.52) 50%, rgba(69, 101, 91, 0.26) 86%, transparent);
+    position: relative;
+}
+hr::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: #f9f9f9;
+    border: 1px solid rgba(69, 101, 91, 0.42);
+    transform: translate(-50%, -50%);
+}
 html, body, #page-container { background: #f9f9f9; }
 .vyasa-navbar-shell,
 .vyasa-footer-shell,
@@ -112,6 +132,19 @@ h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
 
 .sidebar-highlight { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35); transition: box-shadow 10s ease, background-color 10s ease; }
 .sidebar-highlight.fade-out { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0); }
+.vyasa-sidebar-body details[data-folder="true"] > summary:hover {
+    background: #41514d !important;
+    color: #f9f9f9 !important;
+    border-radius: 0.45rem !important;
+}
+.vyasa-sidebar-body details[data-folder="true"] > summary:hover span,
+.vyasa-sidebar-body details[data-folder="true"] > summary:hover [uk-icon],
+.vyasa-sidebar-body details[data-folder="true"] > summary:hover a,
+.vyasa-sidebar-body details[data-folder="true"] > summary:hover .post-link,
+.vyasa-sidebar-body details[data-folder="true"] > summary:hover .folder-note-link {
+    color: #f9f9f9 !important;
+    background: transparent !important;
+}
 
 body.pdf-focus { overflow: hidden; }
 body.pdf-focus #site-navbar,
@@ -183,7 +216,36 @@ body.iframe-fullscreen-open { overflow: hidden; }
 .posts-search-input::placeholder { color: #5a6060; }
 .posts-search-clear-button { background: transparent !important; color: #5a6060 !important; }
 .posts-search-clear-button:hover { background: rgba(199, 234, 222, 0.35) !important; color: #45655b !important; }
-.vyasa-spacer-rule { background: transparent !important; }
+.vyasa-spacer-rule {
+    border: 0 !important;
+    height: 1.5rem !important;
+    width: min(100%, 34rem) !important;
+    margin: 2.75rem auto !important;
+    background: none !important;
+    position: relative !important;
+    overflow: visible !important;
+}
+.vyasa-spacer-rule::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(69, 101, 91, 0.28) 14%, rgba(69, 101, 91, 0.56) 50%, rgba(69, 101, 91, 0.28) 86%, transparent);
+}
+.vyasa-spacer-rule::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: #f9f9f9;
+    border: 1px solid rgba(69, 101, 91, 0.48);
+    transform: translate(-50%, -50%);
+}
 .hljs-comment, .hljs-quote { color: var(--vyasa-code-comment); }
 .hljs-keyword, .hljs-selector-tag, .hljs-literal { color: var(--vyasa-code-keyword); }
 .hljs-string, .hljs-doctag, .hljs-regexp { color: var(--vyasa-code-string); }
