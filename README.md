@@ -176,13 +176,18 @@ See the working example in [Reveal Slides Demo](demo/reveal-slides.md).
 - **Auto-Reveal in Sidebar**: Active post automatically expanded and scrolled into view when opening sidebar
 - **Ultra-Thin Scrollbars**: Custom styled 3px scrollbars that adapt to light/dark theme
 - **Frosted Glass Sidebars**: Backdrop blur and transparency effects on sidebar components
+- **Theme Primary Override**: Set `theme_primary` in `.vyasa` to swap the app accent color without editing CSS
 
-| Feature                     | Description                                      |
-|-----------------------------|--------------------------------------------------|
-| FastHTML Integration        | Built on FastHTML for high performance and ease of use |
-| Advanced Markdown Support   | Footnotes as sidenotes, YouTube embeds, task lists, Mermaid + D2 diagrams, math notation, tabbed content, and more |
-| Modern UI                   | Responsive design, dark mode, three-panel layout, HTMX navigation |
-| Interactive Diagrams       | Zoomable, pannable Mermaid and D2 diagrams with fullscreen support |
+| Feature                     | Category | Config Key                                        | Description                                                                                                    | Default        | Env Override                  |
+|-----------------------------|----------|---------------------------------------------------|----------------------------------------------------------------------------------------------------------------|----------------|-------------------------------|
+| FastHTML Integration        | Core     | —                                                 | Built on FastHTML and Starlette for high-performance async rendering without a build step                      | enabled        | —                             |
+| Advanced Markdown Support   | Content  | —                                                 | Footnotes as sidenotes, YouTube embeds, task lists, Mermaid + D2 diagrams, math notation, tabbed content, and more | enabled    | —                             |
+| Modern UI                   | UI       | `sidebars_open`, `layout_max_width`, `theme_primary` | Responsive three-panel layout with dark mode, HTMX navigation, frosted glass sidebars, configurable width, and a configurable primary accent color | `false`, unset, forest green | `VYASA_SIDEBARS_OPEN`, `VYASA_THEME_PRIMARY` |
+| Interactive Diagrams        | Content  | `[drawings_passwords]`                            | Zoomable, pannable Mermaid and D2 diagrams with fullscreen support and optional per-drawing password protection | unprotected   | —                             |
+| Auth & RBAC                 | Security | `[google_oauth]`, `[rbac]`                        | Google OAuth login with allowed domains/emails, role-based access control rules scoped per path               | disabled       | `VYASA_GOOGLE_CLIENT_ID`, `VYASA_RBAC_ENABLED` |
+| Sidebar Navigation          | UI       | `folder_tabs`, `folders_first`, `order`, `sort`   | Collapsible file tree with tab grouping, custom entry ordering, sort direction, and smart abbreviation expansion | `false`, name_asc | —                          |
+| Content Filtering           | Config   | `ignore`, `include`, `show_hidden`                | Fine-grained control over which files and folders appear in listings, with hidden-file visibility toggle       | all visible    | `VYASA_SHOW_HIDDEN`           |
+| Server Configuration        | Config   | `host`, `port`, `title`, `root`                   | Bind address, deterministic port derived from working directory, site title, and content root path             | `127.0.0.1`    | `VYASA_HOST`, `VYASA_PORT`    |
 
 ## Installation
 

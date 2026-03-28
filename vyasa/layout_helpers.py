@@ -37,4 +37,5 @@ def _resolve_layout_config(current_path):
     config = get_config()
     return {
         "layout_max_width": _coerce_config_str(config.get("layout_max_width", "VYASA_LAYOUT_MAX_WIDTH", "75vw")),
+        "theme_primary": _coerce_config_str(config.get_theme_primary()),
     }

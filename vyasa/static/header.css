@@ -2,6 +2,7 @@
 
 body {
     font-family: 'Newsreader', Georgia, serif;
+    font-size: 18px;
     background: #f9f9f9;
     color: #2d3434;
     line-height: 1.6;
@@ -113,6 +114,13 @@ kbd {
 #main-content .sidenote {
     font-family: 'Newsreader', Georgia, serif;
 }
+#main-content a,
+#main-content a:visited {
+    color: var(--vyasa-primary) !important;
+}
+#main-content a:hover {
+    color: var(--vyasa-primary-dim) !important;
+}
 
 #main-content h1,
 #main-content h2,
@@ -213,8 +221,8 @@ kbd {
     display: inline-block;
     width: 0.45rem;
     height: 0.45rem;
-    border-right: 2px solid rgb(148 163 184);
-    border-bottom: 2px solid rgb(148 163 184);
+    border-right: 2px solid var(--vyasa-primary);
+    border-bottom: 2px solid var(--vyasa-primary);
     transform: rotate(-45deg);
     transition: transform 0.2s;
 }
@@ -327,13 +335,13 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 
 .vyasa-table-scroll { width: 100%; max-width: 100%; position: static; left: auto; transform: none; margin: 1.5rem 0; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-gutter: stable both-edges; box-shadow: none; transition: box-shadow 160ms ease; }
 .vyasa-table-scroll.vyasa-table-breakout { width: min(var(--vyasa-breakout-width, 80vw), 80vw); max-width: 80vw; position: relative; left: 50%; transform: translateX(-50%); }
-.vyasa-table-scroll.has-right-overflow { box-shadow: inset -18px 0 16px -14px rgba(15, 23, 42, 0.32); }
-.vyasa-table-scroll.has-left-overflow { box-shadow: inset 18px 0 16px -14px rgba(15, 23, 42, 0.32); }
-.vyasa-table-scroll.has-left-overflow.has-right-overflow { box-shadow: inset 18px 0 16px -14px rgba(15, 23, 42, 0.32), inset -18px 0 16px -14px rgba(15, 23, 42, 0.32); }
-.dark .vyasa-table-scroll.has-right-overflow { box-shadow: inset -18px 0 16px -14px rgba(2, 6, 23, 0.62); }
-.dark .vyasa-table-scroll.has-left-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62); }
-.dark .vyasa-table-scroll.has-left-overflow.has-right-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62), inset -18px 0 16px -14px rgba(2, 6, 23, 0.62); }
-.vyasa-table-scroll > table, .vyasa-table-scroll > .uk-table { width: max-content !important; min-width: 0; table-layout: auto; margin: 0 auto; background: var(--vyasa-paper-low); border-radius: 1rem; overflow: hidden; }
+.vyasa-table-scroll.has-right-overflow { box-shadow: inset -18px 0 16px -14px rgba(45, 52, 52, 0.18); }
+.vyasa-table-scroll.has-left-overflow { box-shadow: inset 18px 0 16px -14px rgba(45, 52, 52, 0.18); }
+.vyasa-table-scroll.has-left-overflow.has-right-overflow { box-shadow: inset 18px 0 16px -14px rgba(45, 52, 52, 0.18), inset -18px 0 16px -14px rgba(45, 52, 52, 0.18); }
+.dark .vyasa-table-scroll.has-right-overflow { box-shadow: inset -18px 0 16px -14px rgba(2, 6, 23, 0.42); }
+.dark .vyasa-table-scroll.has-left-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.42); }
+.dark .vyasa-table-scroll.has-left-overflow.has-right-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.42), inset -18px 0 16px -14px rgba(2, 6, 23, 0.42); }
+.vyasa-table-scroll > table, .vyasa-table-scroll > .uk-table { width: max-content !important; min-width: 0; table-layout: auto; margin: 0 auto; }
 .uk-table-striped tbody tr:nth-of-type(odd) { background-color: rgba(69, 101, 91, 0.04); }
 .uk-table-striped tbody tr:hover { background-color: rgba(69, 101, 91, 0.08); }
 .uk-table thead { border-bottom: none; }
@@ -343,6 +351,17 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .toc-link { color: var(--vyasa-ink-soft) !important; border-radius: 999px; padding-left: 0.95rem !important; transition: all 300ms ease-out; }
 .toc-link:hover { color: #f9f9f9 !important; background: #2d3434 !important; }
 .vyasa-sidebar-body .text-blue-600, .vyasa-sidebar-body .hover\:text-blue-600:hover, .vyasa-sidebar-body .text-blue-700 { color: var(--vyasa-primary) !important; }
+.vyasa-sidebar-body .post-link,
+.vyasa-sidebar-body .post-link span,
+.vyasa-sidebar-body .post-link svg,
+.vyasa-sidebar-body details[data-folder="true"] > summary,
+.vyasa-sidebar-body details[data-folder="true"] > summary > span,
+.vyasa-sidebar-body details[data-folder="true"] > summary a,
+.vyasa-sidebar-body details[data-folder="true"] > summary a span,
+.vyasa-sidebar-body details[data-folder="true"] > summary svg {
+    color: var(--vyasa-primary) !important;
+    stroke: currentColor !important;
+}
 .vyasa-sidebar-body [class*="bg-blue-"], .vyasa-sidebar-body .sidebar-highlight {
     background: #41514d !important;
     box-shadow: none !important;

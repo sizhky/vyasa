@@ -38,4 +38,5 @@ Core rules:
 - For navbar, footer, sidebar, and mobile-panel styling, do not teach or rely on positional selectors like `#site-navbar > *`, `#site-footer > *`, or `#posts-sidebar details > summary`; target the explicit Vyasa hook classes instead so runtime and static-build themes stay stable.
 - For Mermaid labels, use literal `<br/>` for line breaks inside nodes and edge text; do not emit `\n`.
 - Do not invent unsupported frontmatter keys, sort modes, or config keys.
+- Supported root `.vyasa` app-level keys now include `theme_primary` for overriding the primary accent color without editing CSS.
 - Never emit real secret values — use explicit placeholders.

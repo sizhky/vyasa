@@ -110,6 +110,10 @@ class VyasaConfig:
         # Default to root folder name
         return slug_to_title(self.get_root_folder().name).upper()
     
+    def get_theme_primary(self) -> str | None:
+        value = self.get('theme_primary', 'VYASA_THEME_PRIMARY', None)
+        return str(value).strip() if value else None
+    
     def get_host(self) -> str:
         """Get the server host."""
         return self.get('host', 'VYASA_HOST', '127.0.0.1')
