@@ -2049,6 +2049,101 @@ function updateActivePostLink() {
 
 // Update active TOC link based on scroll position
 let lastActiveTocAnchor = null;
+function alignToCurrentHash() {
+    const hash = window.location.hash;
+    if (!hash || hash === '#') {
+        return;
+    }
+    const id = decodeURIComponent(hash.slice(1));
+    const target = document.getElementById(id);
+    if (!target) {
+        return;
+    }
+    target.scrollIntoView({ block: 'start' });
+    requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
+}
+
+function scheduleHashAlignment() {
+    alignToCurrentHash();
+    [80, 220, 500, 1200].forEach((delay) => setTimeout(alignToCurrentHash, delay));
+}
+
+function normalizeCriticalTextColors(root = document) {
+    const ink = getComputedStyle(document.documentElement).getPropertyValue('--vyasa-ink').trim() || '#2d3434';
+    root.querySelectorAll('#main-content h1, #main-content h2, #main-content h3, #main-content h4, #main-content h5, #main-content h6').forEach((el) => {
+        el.style.color = ink;
+        el.style.opacity = '1';
+    });
+    root.querySelectorAll('.vyasa-sidebar-toggle, .vyasa-sidebar-toggle *, .vyasa-sidebar-body, .vyasa-sidebar-body a, .vyasa-sidebar-body span, .vyasa-sidebar-body div, .vyasa-sidebar-body li, .toc-link').forEach((el) => {
+        el.style.color = ink;
+        el.style.opacity = '1';
+    });
+}
+
+function recordStyleProbe(label) {
+    const html = document.documentElement;
+    const page = document.getElementById('page-container');
+    const heading = document.querySelector('#main-content h1, #main-content h2, #main-content h3');
+    const toc = document.querySelector('.toc-link');
+    const rootStyles = getComputedStyle(html);
+    const pageStyles = page ? getComputedStyle(page) : null;
+    function matchedVariableRules(el) {
+        if (!el) return [];
+        const hits = [];
+        for (const sheet of Array.from(document.styleSheets || [])) {
+            let rules;
+            try { rules = sheet.cssRules; } catch (e) { continue; }
+            for (const rule of Array.from(rules || [])) {
+                if (!rule.selectorText) continue;
+                try {
+                    if (el.matches(rule.selectorText) && (
+                        rule.style.getPropertyValue('--vyasa-ink') ||
+                        rule.style.getPropertyValue('--vyasa-paper') ||
+                        rule.style.getPropertyValue('--vyasa-paper-low')
+                    )) {
+                        hits.push({
+                            selector: rule.selectorText,
+                            ink: rule.style.getPropertyValue('--vyasa-ink') || '',
+                            paper: rule.style.getPropertyValue('--vyasa-paper') || '',
+                            paperLow: rule.style.getPropertyValue('--vyasa-paper-low') || '',
+                            href: sheet.href || 'inline',
+                        });
+                    }
+                } catch (e) {}
+            }
+        }
+        return hits.slice(-20);
+    }
+    const pick = (el) => el ? {
+        text: (el.textContent || '').trim().slice(0, 80),
+        color: getComputedStyle(el).color,
+        opacity: getComputedStyle(el).opacity,
+        classes: el.className,
+    } : null;
+    const samples = JSON.parse(localStorage.getItem('vyasa:lastStyleProbe') || '[]');
+    samples.push({
+        label,
+        t: Date.now(),
+        htmlClass: html.className,
+        vars: {
+            rootInk: rootStyles.getPropertyValue('--vyasa-ink').trim(),
+            rootPaper: rootStyles.getPropertyValue('--vyasa-paper').trim(),
+            rootPaperLow: rootStyles.getPropertyValue('--vyasa-paper-low').trim(),
+            pageInk: pageStyles ? pageStyles.getPropertyValue('--vyasa-ink').trim() : '',
+            pagePaper: pageStyles ? pageStyles.getPropertyValue('--vyasa-paper').trim() : '',
+            pagePaperLow: pageStyles ? pageStyles.getPropertyValue('--vyasa-paper-low').trim() : '',
+            pageColor: pageStyles ? pageStyles.color : '',
+        },
+        matches: {
+            html: matchedVariableRules(html),
+            page: matchedVariableRules(page),
+        },
+        heading: pick(heading),
+        toc: pick(toc),
+    });
+    localStorage.setItem('vyasa:lastStyleProbe', JSON.stringify(samples.slice(-12)));
+}
+
 function updateActiveTocLink() {
     const headings = document.querySelectorAll('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]');
     const tocLinks = document.querySelectorAll('.toc-link');
@@ -2102,6 +2197,7 @@ window.addEventListener('scroll', () => {
 
 // Sync TOC highlight on hash changes and TOC clicks
 window.addEventListener('hashchange', () => {
+    alignToCurrentHash();
     requestAnimationFrame(updateActiveTocLink);
 });
 
@@ -2142,6 +2238,8 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
         scheduleMermaidInteraction();
     });
     renderD2Diagrams(event.target || document);
+    normalizeCriticalTextColors(event.target || document);
+    scheduleHashAlignment();
     updateActivePostLink();
     updateActiveTocLink();
     initMobileMenus(); // Reinitialize mobile menu handlers
@@ -2483,6 +2581,10 @@ document.addEventListener('DOMContentLoaded', () => {
     initExcalidrawSave(document);
     initExcalidrawOpenExternal(document);
     initExcalidrawExternalOpen(document);
+    normalizeCriticalTextColors(document);
+    recordStyleProbe('domcontentloaded');
+    [100, 500, 1500].forEach((ms) => setTimeout(() => recordStyleProbe(`t+${ms}`), ms));
+    scheduleHashAlignment();
 });
 
 document.body.addEventListener('htmx:afterSwap', (event) => {
@@ -2507,7 +2609,14 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
 });
 
 window.addEventListener('load', () => {
+    normalizeCriticalTextColors(document);
+    recordStyleProbe('load');
+    scheduleHashAlignment();
     scheduleHighlightedCodeIncludes(document);
+});
+
+window.addEventListener('pageshow', () => {
+    scheduleHashAlignment();
 });
 
 window.addEventListener('resize', () => refreshVyasaTableScrollShadows(document));

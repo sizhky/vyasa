@@ -1,9 +1,46 @@
 import time
 import re
 from urllib.parse import quote
+from fasthtml.common import Link
 
 from fasthtml.common import A, Aside, Button, Div, Footer, Main, NotStr, P, Span, Title
 from monsterui.all import UkIcon
+
+_GOOGLE_FONT_QUERIES = {
+    "Inter": "family=Inter:wght@400;500;600;700;800",
+    "Manrope": "family=Manrope:wght@400;500;700;800",
+    "Newsreader": "family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600",
+    "Fraunces": "family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1",
+    "Outfit": "family=Outfit:wght@400;500;600;700",
+    "Plus Jakarta Sans": "family=Plus+Jakarta+Sans:wght@400;500;600;700;800",
+    "Playfair Display": "family=Playfair+Display:wght@400;500;600;700",
+    "Bricolage Grotesque": "family=Bricolage+Grotesque:wght@400;500;600;700",
+    "Cormorant Garamond": "family=Cormorant+Garamond:wght@400;500;600;700",
+    "Space Grotesk": "family=Space+Grotesk:wght@400;500;700",
+    "Lora": "family=Lora:wght@400;500;600;700",
+}
+
+
+def _theme_font_links(*font_stacks):
+    families = []
+    seen = set()
+    for stack in font_stacks:
+        if not stack:
+            continue
+        for family in re.findall(r'"([^"]+)"|\'([^\']+)\'|([^,\s][^,]*)', stack):
+            name = next(part for part in family if part).strip()
+            if name.lower() in {"serif", "sans-serif", "monospace", "system-ui", "ui-serif", "ui-sans-serif"}:
+                continue
+            if name in _GOOGLE_FONT_QUERIES and name not in seen:
+                seen.add(name)
+                families.append(_GOOGLE_FONT_QUERIES[name])
+    if not families:
+        return []
+    return [
+        Link(rel="preconnect", href="https://fonts.googleapis.com"),
+        Link(rel="preconnect", href="https://fonts.gstatic.com", crossorigin=""),
+        Link(rel="stylesheet", href=f"https://fonts.googleapis.com/css2?{'&'.join(families)}&display=swap"),
+    ]
 
 
 def _section_class(current_path):
@@ -32,6 +69,7 @@ def render_layout(*content, htmx, title=None, show_sidebar=False, toc_content=No
         f"--vyasa-font-heading: {heading_font}" if heading_font else "",
         f"--vyasa-font-ui: {ui_font}" if ui_font else "",
     ) if part)
+    theme_font_links = _theme_font_links(body_font, heading_font, ui_font)
     token_style = "; ".join(
         f"--vyasa-{name}: {value}" for name, value in theme_tokens.items() if value
     )
@@ -56,16 +94,16 @@ def render_layout(*content, htmx, title=None, show_sidebar=False, toc_content=No
         return Footer(Div(footer_inner, cls="vyasa-footer-card bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800"), cls=f"{outer_cls} vyasa-footer-shell".strip(), id="site-footer", **outer_style)
 
     if htmx and getattr(htmx, "request", None):
-        return _render_htmx_layout(content, title, show_sidebar, toc_content, current_path, show_toc, logger, t_section, layout_start_time, main_spacing_cls, section_class, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar)
+        return _render_htmx_layout(content, title, show_sidebar, toc_content, current_path, show_toc, logger, t_section, layout_start_time, main_spacing_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar)
 
-    return _render_full_layout(content, title, show_sidebar, toc_content, current_path, show_toc, auth, htmx_nav, nav_posts_menu, show_footer, no_scroll, logger, t_section, layout_start_time, layout_fluid_class, layout_max_class, layout_max_style, page_style, main_spacing_cls, page_container_cls, navbar_margin_cls, section_class, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar, style_attr, _footer_node)
+    return _render_full_layout(content, title, show_sidebar, toc_content, current_path, show_toc, auth, htmx_nav, nav_posts_menu, show_footer, no_scroll, logger, t_section, layout_start_time, layout_fluid_class, layout_max_class, layout_max_style, page_style, main_spacing_cls, page_container_cls, navbar_margin_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar, style_attr, _footer_node)
 
 
 def _toc_items(toc_content, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor):
     return build_sidebar_toc_items(extract_sidebar_toc(toc_content, strip_inline_markdown, text_to_anchor, unique_anchor)) if toc_content else []
 
 
-def _render_htmx_layout(content, title, show_sidebar, toc_content, current_path, show_toc, logger, t_section, layout_start_time, main_spacing_cls, section_class, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar):
+def _render_htmx_layout(content, title, show_sidebar, toc_content, current_path, show_toc, logger, t_section, layout_start_time, main_spacing_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar):
     if show_sidebar:
         toc_sidebar = None
         t_toc = t_section
@@ -79,7 +117,7 @@ def _render_htmx_layout(content, title, show_sidebar, toc_content, current_path,
         custom_css_links = get_sidebar_custom_css_links(get_root_folder(), current_path, section_class)
         logger.debug(f"[LAYOUT] Custom CSS resolved in {(time.time() - t_toc)*1000:.2f}ms")
         main_content_container = Main(*content, cls=f"vyasa-main-shell flex-1 min-w-0 {main_spacing_cls} space-y-8 {section_class}", id="main-content", hx_boost="true", hx_target="#main-content", hx_swap="outerHTML show:window:top settle:0.1s")
-        result = [Title(title), Div(*custom_css_links, id="scoped-css-container", hx_swap_oob="true") if custom_css_links else Div(id="scoped-css-container", hx_swap_oob="true")]
+        result = [Title(title), *theme_font_links, Div(*custom_css_links, id="scoped-css-container", hx_swap_oob="true") if custom_css_links else Div(id="scoped-css-container", hx_swap_oob="true")]
         if show_toc:
             result.append(mobile_toc_panel)
         if toc_sidebar:
@@ -89,12 +127,12 @@ def _render_htmx_layout(content, title, show_sidebar, toc_content, current_path,
         logger.debug(f"[LAYOUT] TOTAL layout() time {(time.time() - layout_start_time)*1000:.2f}ms")
         return tuple(result)
     custom_css_links = get_sidebar_custom_css_links(get_root_folder(), current_path, section_class) if current_path else []
-    result = [Title(title), Div(*custom_css_links, id="scoped-css-container", hx_swap_oob="true") if custom_css_links else Div(id="scoped-css-container", hx_swap_oob="true"), *content]
+    result = [Title(title), *theme_font_links, Div(*custom_css_links, id="scoped-css-container", hx_swap_oob="true") if custom_css_links else Div(id="scoped-css-container", hx_swap_oob="true"), *content]
     logger.debug(f"[LAYOUT] TOTAL layout() time {(time.time() - layout_start_time)*1000:.2f}ms")
     return tuple(result)
 
 
-def _render_full_layout(content, title, show_sidebar, toc_content, current_path, show_toc, auth, htmx_nav, nav_posts_menu, show_footer, no_scroll, logger, t_section, layout_start_time, layout_fluid_class, layout_max_class, layout_max_style, page_style, main_spacing_cls, page_container_cls, navbar_margin_cls, section_class, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar, style_attr, footer_node):
+def _render_full_layout(content, title, show_sidebar, toc_content, current_path, show_toc, auth, htmx_nav, nav_posts_menu, show_footer, no_scroll, logger, t_section, layout_start_time, layout_fluid_class, layout_max_class, layout_max_style, page_style, main_spacing_cls, page_container_cls, navbar_margin_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar, style_attr, footer_node):
     if show_sidebar:
         toc_sidebar = None
         if show_toc:
@@ -113,6 +151,6 @@ def _render_full_layout(content, title, show_sidebar, toc_content, current_path,
     else:
         custom_css_links = get_sidebar_custom_css_links(get_root_folder(), current_path, section_class) if current_path else []
         body_content = Div(id="page-container", cls="flex flex-col min-h-screen", **style_attr(page_style))(Div(navbar(htmx_nav=htmx_nav), cls=f"vyasa-navbar-shell layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-50 mt-4".strip(), id="site-navbar", **style_attr(layout_max_style)), Main(*content, cls=f"vyasa-main-shell layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 py-8 space-y-8".strip(), id="main-content", hx_boost="true", hx_target="#main-content", hx_swap="outerHTML show:window:top settle:0.1s", **style_attr(layout_max_style)), footer_node(f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(), style_attr(layout_max_style)) if show_footer else None)
-    result = [Title(title), Div(*custom_css_links, id="scoped-css-container") if custom_css_links else Div(id="scoped-css-container"), body_content]
+    result = [Title(title), *theme_font_links, Div(*custom_css_links, id="scoped-css-container") if custom_css_links else Div(id="scoped-css-container"), body_content]
     logger.debug(f"[LAYOUT] FULL PAGE assembled in {(time.time() - layout_start_time)*1000:.2f}ms")
     return tuple(result)

@@ -45,7 +45,6 @@ from .auth.views import impersonate_content, login_content
 from .auth.http import handle_admin_impersonate, handle_admin_rbac, handle_login
 from .auth.policy import is_allowed, resolve_roles
 from .bootstrap import build_app, build_beforeware, mount_package_static
-from .chat_bootstrap import register_chat_routes
 from .collab_runtime import CollabRuntime
 from .content_routes import (
     find_index_file as find_index_file_helper,
@@ -100,9 +99,24 @@ def get_favicon_href():
 
 
 hdrs = (
+    Script(src=_asset_url("/static/head-init.js")),
+    Style(
+        """
+        :root { --vyasa-paper: #f9f9f9; --vyasa-ink: #2d3434; --vyasa-paper-low: #f2f4f3; }
+        html, body { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
+        body.bg-background, body.text-foreground { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
+        #page-container, #main-content, #posts-sidebar, #toc-sidebar, .vyasa-sidebar-toggle, .vyasa-sidebar-body {
+            color: var(--vyasa-ink) !important;
+        }
+        .dark, .dark #page-container {
+            --vyasa-paper: color-mix(in srgb, #0b0e0d 82%, #45655b 18%) !important;
+            --vyasa-ink: #edf2f1 !important;
+            --vyasa-paper-low: color-mix(in srgb, #121716 76%, #45655b 24%) !important;
+        }
+        """
+    ),
     *Theme.slate.headers(highlightjs=True),
     Link(rel="icon", href=get_favicon_href()),
-    Script(src=_asset_url("/static/head-init.js")),
     Script(src="https://unpkg.com/hyperscript.org@0.9.12"),
     Script(src=_asset_url("/static/scripts.js"), type="module"),
     Link(rel="stylesheet", href=_asset_url("/static/header.css")),
@@ -289,7 +303,6 @@ async def _collab_disconn(ws: WebSocket):
 
 def _initialize_app(app_instance):
     _mount_package_static(app_instance)
-    register_chat_routes(app_instance, rt, logger, f"AI Chat for {get_config().get_blog_title().capitalize()} Docs")
 
 
 _app_initialized = False
