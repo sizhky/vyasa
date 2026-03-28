@@ -2030,11 +2030,18 @@ document.addEventListener('toggle', (event) => {
 // Update active post link in sidebar
 function updateActivePostLink() {
     const currentPath = normalizeSidebarPath(window.location.pathname);
+    document.querySelectorAll('details[data-folder="true"] > summary').forEach(summary => {
+        summary.classList.remove('sidebar-highlight');
+    });
     document.querySelectorAll('.post-link').forEach(link => {
         const linkPath = normalizeSidebarPath(link.getAttribute('data-path') || '');
         if (linkPath === currentPath) {
             link.classList.add('bg-blue-50', 'dark:bg-blue-900/20', 'text-blue-600', 'dark:text-blue-400', 'font-medium');
             link.classList.remove('text-slate-700', 'dark:text-slate-300', 'hover:text-blue-600');
+            if (link.classList.contains('folder-note-link')) {
+                link.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
+                link.closest('summary')?.classList.add('sidebar-highlight');
+            }
         } else {
             link.classList.remove('bg-blue-50', 'dark:bg-blue-900/20', 'text-blue-600', 'dark:text-blue-400', 'font-medium');
             link.classList.add('text-slate-700', 'dark:text-slate-300', 'hover:text-blue-600');

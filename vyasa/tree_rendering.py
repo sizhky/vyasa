@@ -11,7 +11,7 @@ def _folder_summary(title_node, branch_href=None):
         kwargs = {"hx_get": branch_href, "hx_trigger": "click once", "hx_target": "next ul", "hx_swap": "innerHTML"}
     return Summary(
         Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
-        Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+        Span(UkIcon("folder", cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
         title_node,
         cls="inline-flex w-max items-center font-medium cursor-pointer py-1 px-2 hover:text-blue-600 select-none list-none rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap",
         **kwargs,
@@ -68,7 +68,7 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             if sub_items:
                 items.append(Li(Details(_folder_summary(note_link or Span(folder_title, cls="whitespace-nowrap", title=folder_title)), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true", open=should_expand), cls="my-1"))
             elif note_slug:
-                items.append(Li(A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(folder_title, cls="whitespace-nowrap", title=folder_title), href=f"/posts/{note_slug}", hx_get=f"/posts/{note_slug}", hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link inline-flex w-max items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 hover:underline transition-colors whitespace-nowrap", data_path=note_slug)))
+                items.append(Li(A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon("folder", cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(folder_title, cls="whitespace-nowrap", title=folder_title), href=f"/posts/{note_slug}", hx_get=f"/posts/{note_slug}", hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link inline-flex w-max items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors whitespace-nowrap", data_path=note_slug)))
             continue
         if item.suffix not in {".md", ".pdf", ".excalidraw"}:
             continue

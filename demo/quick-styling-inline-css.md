@@ -63,19 +63,24 @@ Use <span style="color:#2563eb; font-weight:700;">inline HTML styling</span> tog
 <img id="page-stamp-demo" src="./yeshwanth-stamp.png" alt="Stamped seal overlay" style="position:absolute; width:132px; height:auto; pointer-events:none; opacity:.82; filter:drop-shadow(0 10px 20px rgba(127,29,29,.22)); transform-origin:center; z-index:4440;">
 
 <script>
-(() => {
+const placeFooterStamp = () => {
   const stamp = document.getElementById('page-stamp-demo');
   if (!stamp) return;
-  const footer = document.querySelector('#site-footer .vyasa-footer-card, #site-footer > div, #site-footer, footer');
+  const footer = document.querySelector('#site-footer .vyasa-footer-card');
   if (!footer) return;
   footer.style.position = 'relative';
   footer.appendChild(stamp);
-  const left = 18 + Math.random() * 64;
-  const top = 18 + Math.random() * 44;
+  const left = 16 + Math.random() * 68;
+  const top = 20 + Math.random() * 56;
   const angle = -22 + Math.random() * 44;
   const scale = 0.9 + Math.random() * 0.24;
   stamp.style.left = `${left}%`;
   stamp.style.top = `${top}%`;
   stamp.style.transform = `translate(-50%, -50%) rotate(${angle}deg) scale(${scale})`;
-})();
+};
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', placeFooterStamp, { once: true });
+} else {
+  placeFooterStamp();
+}
 </script>
