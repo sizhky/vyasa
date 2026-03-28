@@ -63,11 +63,3 @@ span.abcd {
     background-color: #f6f3ee !important;
     color: #1f2937 !important;
 } */
-
-#page-container,
-#main-content,
-main.layout-container,
-body > .layout-container {
-    background-color: transparent !important;
-    color: inherit;
-}

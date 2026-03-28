@@ -2031,20 +2031,18 @@ document.addEventListener('toggle', (event) => {
 function updateActivePostLink() {
     const currentPath = normalizeSidebarPath(window.location.pathname);
     document.querySelectorAll('details[data-folder="true"] > summary').forEach(summary => {
-        summary.classList.remove('sidebar-highlight');
+        summary.classList.remove('is-active');
     });
     document.querySelectorAll('.post-link').forEach(link => {
         const linkPath = normalizeSidebarPath(link.getAttribute('data-path') || '');
         if (linkPath === currentPath) {
-            link.classList.add('bg-blue-50', 'dark:bg-blue-900/20', 'text-blue-600', 'dark:text-blue-400', 'font-medium');
-            link.classList.remove('text-slate-700', 'dark:text-slate-300', 'hover:text-blue-600');
+            link.classList.add('is-active');
             if (link.classList.contains('folder-note-link')) {
-                link.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
-                link.closest('summary')?.classList.add('sidebar-highlight');
+                link.classList.remove('is-active');
+                link.closest('summary')?.classList.add('is-active');
             }
         } else {
-            link.classList.remove('bg-blue-50', 'dark:bg-blue-900/20', 'text-blue-600', 'dark:text-blue-400', 'font-medium');
-            link.classList.add('text-slate-700', 'dark:text-slate-300', 'hover:text-blue-600');
+            link.classList.remove('is-active');
         }
     });
 }
@@ -2075,9 +2073,9 @@ function updateActiveTocLink() {
     tocLinks.forEach(link => {
         const anchor = link.getAttribute('data-anchor');
         if (activeHeading && anchor === activeHeading.id) {
-            link.classList.add('bg-blue-50', 'dark:bg-blue-900/20', 'text-blue-600', 'dark:text-blue-400', 'font-semibold');
+            link.classList.add('is-active', 'font-semibold');
         } else {
-            link.classList.remove('bg-blue-50', 'dark:bg-blue-900/20', 'text-blue-600', 'dark:text-blue-400', 'font-semibold');
+            link.classList.remove('is-active', 'font-semibold');
         }
     });
 
@@ -2118,26 +2116,9 @@ document.addEventListener('click', (event) => {
     }
     requestAnimationFrame(() => {
         document.querySelectorAll('.toc-link').forEach(item => {
-            item.classList.toggle(
-                'bg-blue-50',
-                item.getAttribute('data-anchor') === anchor
-            );
-            item.classList.toggle(
-                'dark:bg-blue-900/20',
-                item.getAttribute('data-anchor') === anchor
-            );
-            item.classList.toggle(
-                'text-blue-600',
-                item.getAttribute('data-anchor') === anchor
-            );
-            item.classList.toggle(
-                'dark:text-blue-400',
-                item.getAttribute('data-anchor') === anchor
-            );
-            item.classList.toggle(
-                'font-semibold',
-                item.getAttribute('data-anchor') === anchor
-            );
+            const active = item.getAttribute('data-anchor') === anchor;
+            item.classList.toggle('is-active', active);
+            item.classList.toggle('font-semibold', active);
         });
         lastActiveTocAnchor = anchor;
         updateActiveTocLink();
