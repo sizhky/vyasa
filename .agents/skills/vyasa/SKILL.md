@@ -38,5 +38,6 @@ Core rules:
 - For navbar, footer, sidebar, and mobile-panel styling, do not teach or rely on positional selectors like `#site-navbar > *`, `#site-footer > *`, or `#posts-sidebar details > summary`; target the explicit Vyasa hook classes instead so runtime and static-build themes stay stable.
 - For Mermaid labels, use literal `<br/>` for line breaks inside nodes and edge text; do not emit `\n`.
 - Do not invent unsupported frontmatter keys, sort modes, or config keys.
-- Supported root `.vyasa` app-level keys now include `theme_primary` for overriding the primary accent color without editing CSS.
+- Supported root `.vyasa` app-level keys now include `theme_preset` for selecting a bundled preset and `theme_primary` for overriding the primary accent color without editing CSS.
+- Bundled presets now live inside the package, so `theme_preset = "serene-manuscript"`, `theme_preset = "kinetic-scholar"`, or `theme_preset = "ultra-soft"` should work in normal `pip install vyasa` deployments even without a local `.vyasa-themes` folder.
 - Never emit real secret values — use explicit placeholders.

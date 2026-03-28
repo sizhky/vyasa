@@ -176,13 +176,14 @@ See the working example in [Reveal Slides Demo](demo/reveal-slides.md).
 - **Auto-Reveal in Sidebar**: Active post automatically expanded and scrolled into view when opening sidebar
 - **Ultra-Thin Scrollbars**: Custom styled 3px scrollbars that adapt to light/dark theme
 - **Frosted Glass Sidebars**: Backdrop blur and transparency effects on sidebar components
+- **Theme Presets**: Set `theme_preset` in `.vyasa` to use a bundled theme like `serene-manuscript`, `kinetic-scholar`, or `ultra-soft`
 - **Theme Primary Override**: Set `theme_primary` in `.vyasa` to swap the app accent color without editing CSS
 
 | Feature                     | Category | Config Key                                        | Description                                                                                                    | Default        | Env Override                  |
 |-----------------------------|----------|---------------------------------------------------|----------------------------------------------------------------------------------------------------------------|----------------|-------------------------------|
 | FastHTML Integration        | Core     | —                                                 | Built on FastHTML and Starlette for high-performance async rendering without a build step                      | enabled        | —                             |
 | Advanced Markdown Support   | Content  | —                                                 | Footnotes as sidenotes, YouTube embeds, task lists, Mermaid + D2 diagrams, math notation, tabbed content, and more | enabled    | —                             |
-| Modern UI                   | UI       | `sidebars_open`, `layout_max_width`, `theme_primary` | Responsive three-panel layout with dark mode, HTMX navigation, frosted glass sidebars, configurable width, and a configurable primary accent color | `false`, unset, forest green | `VYASA_SIDEBARS_OPEN`, `VYASA_THEME_PRIMARY` |
+| Modern UI                   | UI       | `sidebars_open`, `layout_max_width`, `theme_preset`, `theme_primary` | Responsive three-panel layout with dark mode, HTMX navigation, frosted glass sidebars, configurable width, bundled theme presets, and optional primary override | `false`, unset, `serene-manuscript`, forest green | `VYASA_SIDEBARS_OPEN`, `VYASA_THEME_PRESET`, `VYASA_THEME_PRIMARY` |
 | Interactive Diagrams        | Content  | `[drawings_passwords]`                            | Zoomable, pannable Mermaid and D2 diagrams with fullscreen support and optional per-drawing password protection | unprotected   | —                             |
 | Auth & RBAC                 | Security | `[google_oauth]`, `[rbac]`                        | Google OAuth login with allowed domains/emails, role-based access control rules scoped per path               | disabled       | `VYASA_GOOGLE_CLIENT_ID`, `VYASA_RBAC_ENABLED` |
 | Sidebar Navigation          | UI       | `folder_tabs`, `folders_first`, `order`, `sort`   | Collapsible file tree with tab grouping, custom entry ordering, sort direction, and smart abbreviation expansion | `false`, name_asc | —                          |
@@ -213,6 +214,8 @@ Vyāsa supports four ways to configure your blog (in priority order):
 1. **[`.vyasa` configuration file](vyasa%20manual/configuration.md)** (TOML format)
 2. **Environment variables** - Fallback
 3. **Default values** - Final fallback
+
+Theme presets are bundled with the package, so `theme_preset = "ultra-soft"` works in normal `pip install vyasa` deployments without copying a local `.vyasa-themes` folder. Local `.vyasa-themes/<name>.toml` files still override bundled presets when present.
 
 ## Vyāsa Manual
 

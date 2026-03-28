@@ -62,7 +62,7 @@ include-package-data = true
 include = ["vyasa", "vyasa.*"]
 
 [tool.setuptools.package-data]
-vyasa = ["static/*", "static/**/*"]
+vyasa = ["static/*", "static/**/*", "themes/*.toml"]
 
 [tool.uv]
 cache-keys = [{file = "pyproject.toml"}]

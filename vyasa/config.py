@@ -12,6 +12,7 @@ import os
 import hashlib
 import tomllib
 from pathlib import Path
+from importlib import resources
 from typing import Optional
 from .helpers import slug_to_title
 
@@ -70,11 +71,20 @@ class VyasaConfig:
                     self._config = tomllib.load(f)
                 preset_name = str(self._config.get("theme_preset", "")).strip()
                 if preset_name:
-                    preset_dir = config_file.parent / ".vyasa-themes"
-                    preset_file = preset_dir / f"{preset_name}.toml"
+                    preset_cfg = None
+                    preset_file = config_file.parent / ".vyasa-themes" / f"{preset_name}.toml"
                     if preset_file.exists():
                         with open(preset_file, "rb") as f:
                             preset_cfg = tomllib.load(f)
+                    else:
+                        try:
+                            package_file = resources.files("vyasa.themes").joinpath(f"{preset_name}.toml")
+                            if package_file.is_file():
+                                with package_file.open("rb") as f:
+                                    preset_cfg = tomllib.load(f)
+                        except Exception:
+                            preset_cfg = None
+                    if preset_cfg:
                         self._config = {**preset_cfg, **self._config}
                 self._loaded_config_path = config_file
             except Exception as e:
