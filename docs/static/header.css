@@ -1,4 +1,4 @@
-body { font-family: 'IBM Plex Sans', sans-serif; }
+body { font-family: 'IBM Plex Sans', sans-serif; font-size: 18px; }
 code, pre { font-family: 'IBM Plex Mono', monospace; }
 :root { --vyasa-code-bg: #f6f8fa; --vyasa-code-fg: #24292f; --vyasa-code-border: rgba(45, 52, 52, 0.12); --vyasa-code-highlight-bg: rgba(9, 105, 218, 0.12); --vyasa-code-highlight-accent: #0969da; --vyasa-code-comment: #6e7781; --vyasa-code-keyword: #cf222e; --vyasa-code-string: #0a3069; --vyasa-code-title: #8250df; --vyasa-code-number: #0550ae; }
 .dark { --vyasa-code-bg: #1a1b26; --vyasa-code-fg: #d5d6db; --vyasa-code-border: rgba(122, 162, 247, 0.16); --vyasa-code-highlight-bg: rgba(247, 118, 142, 0.18); --vyasa-code-highlight-accent: #f7768e; --vyasa-code-comment: #848cb5; --vyasa-code-keyword: #bb9af7; --vyasa-code-string: #9ece6a; --vyasa-code-title: #7dcfff; --vyasa-code-number: #ff9e64; }
@@ -15,8 +15,8 @@ code, pre { font-family: 'IBM Plex Mono', monospace; }
     display: inline-block;
     width: 0.45rem;
     height: 0.45rem;
-    border-right: 2px solid rgb(148 163 184);
-    border-bottom: 2px solid rgb(148 163 184);
+    border-right: 2px solid #45655b;
+    border-bottom: 2px solid #45655b;
     transform: rotate(-45deg);
     transition: transform 0.2s;
 }
@@ -61,6 +61,13 @@ kbd {
 #main-content blockquote,
 #main-content .sidenote {
     font-family: 'Newsreader', Georgia, serif;
+}
+#main-content a,
+#main-content a:visited {
+    color: #45655b !important;
+}
+#main-content a:hover {
+    color: #39584f !important;
 }
 
 #main-content h1,
@@ -260,7 +267,7 @@ body.iframe-fullscreen-open { overflow: hidden; }
 .dark .vyasa-table-scroll.has-right-overflow { box-shadow: inset -18px 0 16px -14px rgba(2, 6, 23, 0.62); }
 .dark .vyasa-table-scroll.has-left-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62); }
 .dark .vyasa-table-scroll.has-left-overflow.has-right-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62), inset -18px 0 16px -14px rgba(2, 6, 23, 0.62); }
-.vyasa-table-scroll > table, .vyasa-table-scroll > .uk-table { width: max-content !important; min-width: 0; table-layout: auto; margin: 0 auto; background: #f2f4f3; border-radius: 1rem; overflow: hidden; }
+.vyasa-table-scroll > table, .vyasa-table-scroll > .uk-table { width: max-content !important; min-width: 0; table-layout: auto; margin: 0 auto; }
 .uk-table-striped tbody tr:nth-of-type(odd) { background-color: rgba(69, 101, 91, 0.04); }
 .uk-table-striped tbody tr:hover { background-color: rgba(69, 101, 91, 0.08); }
 .uk-table thead { border-bottom: none; }
@@ -270,6 +277,17 @@ body.iframe-fullscreen-open { overflow: hidden; }
 .toc-link { color: #5a6060 !important; border-radius: 999px; padding-left: 0.95rem !important; transition: all 300ms ease-out; }
 .toc-link:hover { color: #f9f9f9 !important; background: #2d3434 !important; }
 .vyasa-sidebar-body .text-blue-600, .vyasa-sidebar-body .hover\:text-blue-600:hover, .vyasa-sidebar-body .text-blue-700 { color: #45655b !important; }
+.vyasa-sidebar-body .post-link,
+.vyasa-sidebar-body .post-link span,
+.vyasa-sidebar-body .post-link svg,
+.vyasa-sidebar-body details[data-folder="true"] > summary,
+.vyasa-sidebar-body details[data-folder="true"] > summary > span,
+.vyasa-sidebar-body details[data-folder="true"] > summary a,
+.vyasa-sidebar-body details[data-folder="true"] > summary a span,
+.vyasa-sidebar-body details[data-folder="true"] > summary svg {
+    color: #45655b !important;
+    stroke: currentColor !important;
+}
 .vyasa-sidebar-body [class*="bg-blue-"], .vyasa-sidebar-body .sidebar-highlight {
     background: #41514d !important;
     box-shadow: none !important;

@@ -358,7 +358,7 @@ class ContentRenderer(FrankenRenderer):
             download_path = f"/download/{raw_path}"
         if not label:
             label = Path(raw_path).name
-        link_class = "text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors"
+        link_class = "underline underline-offset-2 font-medium transition-colors"
         return f'<a href="{download_path}" class="{link_class}" download hx-boost="false">{label}</a>'
 
     def render_footnote_ref(self, token):
@@ -466,7 +466,7 @@ class ContentRenderer(FrankenRenderer):
             href = re.sub(r"\?download=true", "", href, flags=re.IGNORECASE)
             download_flag = True
         if is_hash:
-            link_class = "text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors"
+            link_class = "underline underline-offset-2 font-medium transition-colors"
             return f'<a href="{href}" class="{link_class}"{title}>{inner}</a>'
         if is_relative:
             original_href = href
@@ -496,7 +496,7 @@ class ContentRenderer(FrankenRenderer):
             download_target = href[len("/posts/"):] if href.startswith("/posts/") else href.lstrip("/") if href.startswith("/") else href
             href = f"/download/{download_target}"
             hx = ""
-        link_class = "text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:text-amber-800 dark:hover:text-amber-200 font-medium transition-colors"
+        link_class = "underline underline-offset-2 font-medium transition-colors"
         return f'<a href="{href}"{hx}{ext}{download_attr}{boost_attr} class="{link_class}"{title}>{inner}</a>'
 
 
