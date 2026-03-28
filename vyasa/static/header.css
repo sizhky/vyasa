@@ -3,7 +3,7 @@
 body {
     font-family: var(--vyasa-font-body);
     font-size: 18px;
-    background: transparent !important;
+    background: var(--vyasa-paper) !important;
     color: inherit !important;
     line-height: 1.6;
 }
@@ -52,8 +52,8 @@ code, pre { font-family: 'IBM Plex Mono', monospace; }
 body { color: var(--vyasa-ink); }
 a { color: var(--vyasa-primary); transition: color 300ms ease-out, background-color 300ms ease-out, opacity 300ms ease-out; }
 a:hover { color: var(--vyasa-primary-dim); }
-html, body { background: transparent !important; }
-body.bg-background, body.text-foreground { background: transparent !important; color: inherit !important; }
+html, body { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
+body.bg-background, body.text-foreground { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
 #page-container { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
 .dark #page-container { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
 h1, h2, h3, h4, h5, h6 {
@@ -138,6 +138,61 @@ kbd {
 #main-content h5,
 #main-content h6 {
     font-family: var(--vyasa-font-heading);
+    color: var(--vyasa-ink) !important;
+    opacity: 1 !important;
+    text-shadow: none !important;
+}
+
+#main-content > div > h1,
+#main-content > div > h2,
+#main-content > div > h3,
+#main-content > div > h4,
+#main-content > div > h5,
+#main-content > div > h6,
+#main-content .text-4xl.font-bold,
+#main-content .text-3xl.font-bold,
+#main-content .text-2xl.font-semibold,
+#main-content .text-xl.font-semibold,
+#main-content .text-lg.font-semibold {
+    color: var(--vyasa-ink) !important;
+    opacity: 1 !important;
+    text-shadow: none !important;
+}
+
+.vyasa-sidebar-toggle,
+.vyasa-sidebar-toggle span,
+.vyasa-sidebar-toggle summary,
+.vyasa-sidebar-toggle [uk-icon],
+.vyasa-sidebar-body,
+.vyasa-sidebar-body a,
+.vyasa-sidebar-body span,
+.vyasa-sidebar-body div,
+.vyasa-sidebar-body li,
+.vyasa-sidebar-body summary,
+.vyasa-mobile-panel-body,
+.vyasa-mobile-panel-body a,
+.vyasa-mobile-panel-body span,
+.vyasa-mobile-panel-body div,
+.vyasa-mobile-panel-body li {
+    color: var(--vyasa-ink) !important;
+}
+
+.dark .vyasa-sidebar-toggle,
+.dark .vyasa-sidebar-toggle span,
+.dark .vyasa-sidebar-toggle summary,
+.dark .vyasa-sidebar-toggle [uk-icon],
+.dark .vyasa-sidebar-body,
+.dark .vyasa-sidebar-body a,
+.dark .vyasa-sidebar-body span,
+.dark .vyasa-sidebar-body div,
+.dark .vyasa-sidebar-body li,
+.dark .vyasa-sidebar-body summary,
+.dark .vyasa-mobile-panel-body,
+.dark .vyasa-mobile-panel-body a,
+.dark .vyasa-mobile-panel-body span,
+.dark .vyasa-mobile-panel-body div,
+.dark .vyasa-mobile-panel-body li {
+    color: var(--vyasa-ink) !important;
 }
 
 .vyasa-navbar-shell,
