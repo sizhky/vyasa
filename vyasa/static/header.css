@@ -253,6 +253,12 @@ h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
 .vyasa-tree-row * { color: inherit !important; }
 .vyasa-tree-row svg, .vyasa-tree-row [uk-icon] { stroke: currentColor !important; fill: none !important; }
 .vyasa-tree-row:hover, .vyasa-tree-row.is-active { background: var(--vyasa-selection-bg) !important; color: var(--vyasa-selection-fg) !important; border-radius: 0.45rem !important; }
+.folder-note-link,
+.folder-note-link span {
+    text-decoration-line: underline !important;
+    text-decoration-thickness: 1px !important;
+    text-underline-offset: 0.14em !important;
+}
 
 body.pdf-focus { overflow: hidden; }
 body.pdf-focus #site-navbar,
