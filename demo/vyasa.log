@@ -1,0 +1,377 @@
+2026-03-25 18:44:49.700 | INFO     | uvicorn.config:__init__:324 - Will watch for changes in these directories: ['/Users/yeshwanth/Code/Personal/vyasa/demo']
+2026-03-25 18:44:49.700 | INFO     | uvicorn.config:bind_socket:545 - Uvicorn running on http://127.0.0.1:5001 (Press CTRL+C to quit)
+2026-03-25 18:44:49.700 | INFO     | uvicorn.supervisors.basereload:startup:79 - Started reloader process [3031] using WatchFiles
+2026-03-25 18:44:50.661 | INFO     | watchfiles.main:_log_changes:308 - 1 change detected
+2026-03-25 18:44:51.151 | INFO     | vyasa.chat_bootstrap:register_chat_routes:33 - Using PydanticAIStreamingResponder for /chat
+2026-03-25 18:44:51.154 | INFO     | vyasa.core:_log_startup_content_stats:745 - Startup scan root=/Users/yeshwanth/Code/Personal/vyasa/demo show_hidden=False md=28 pdf=0 excalidraw=1 vyasa=3 excludes=['.git', '.venv', 'venv', 'node_modules', 'dist', 'build', '.pytest_cache', '.mypy_cache', '.ruff_cache', '__pycache__', '.cache']
+2026-03-25 18:44:51.155 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.156 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.156 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.156 | DEBUG    | vyasa.helpers:order_vyasa_entries:420 - [DEBUG] .vyasa ordered=[] remaining=['books', 'seizure-warning-trippy-css', 'd2-animation.md', 'demo-drawing.excalidraw', 'dollar-escape.md', 'quick-styling-inline-css.md', 'reveal-slides.md']
+2026-03-25 18:44:51.156 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.156 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.156 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-25 18:44:51.156 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.156 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-25 18:44:51.157 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-25 18:44:51.157 | DEBUG    | vyasa.helpers:order_vyasa_entries:388 - [DEBUG] .vyasa order empty; sorted entries: ['flat-land']
+2026-03-25 18:44:51.157 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.157 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-25 18:44:51.157 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.157 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-25 18:44:51.157 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.157 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-25 18:44:51.157 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-25 18:44:51.157 | DEBUG    | vyasa.helpers:order_vyasa_entries:388 - [DEBUG] .vyasa order empty; sorted entries: ['figures', 'chapter-01.md', 'chapter-02.md', 'chapter-03.md', 'chapter-04.md', 'chapter-05.md', 'chapter-06.md', 'chapter-07.md', 'chapter-08.md', 'chapter-09.md', 'chapter-10.md', 'chapter-11.md', 'chapter-12.md', 'chapter-13.md', 'chapter-14.md', 'chapter-15.md', 'chapter-16.md', 'chapter-17.md', 'chapter-18.md', 'chapter-19.md', 'chapter-20.md', 'chapter-21.md', 'chapter-22.md']
+2026-03-25 18:44:51.157 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.157 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.158 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for books completed in 1.70ms
+2026-03-25 18:44:51.158 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.158 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.158 | DEBUG    | vyasa.helpers:order_vyasa_entries:388 - [DEBUG] .vyasa order empty; sorted entries: ['the-entire-history-of-humanity-in-max-whack-mode.md']
+2026-03-25 18:44:51.158 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:44:51.159 | DEBUG    | vyasa.helpers:parse_frontmatter:110 - [DEBUG] parse_frontmatter READ FILE the-entire-history-of-humanity-in-max-whack-mode.md (0.52ms)
+2026-03-25 18:44:51.159 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for seizure-warning-trippy-css completed in 0.91ms
+2026-03-25 18:44:51.159 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER d2-animation.md (0.21ms)
+2026-03-25 18:44:51.160 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER dollar-escape.md (0.20ms)
+2026-03-25 18:44:51.160 | DEBUG    | vyasa.helpers:parse_frontmatter:110 - [DEBUG] parse_frontmatter READ FILE quick-styling-inline-css.md (0.20ms)
+2026-03-25 18:44:51.160 | DEBUG    | vyasa.helpers:parse_frontmatter:110 - [DEBUG] parse_frontmatter READ FILE reveal-slides.md (0.29ms)
+2026-03-25 18:44:51.161 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for . completed in 5.61ms
+2026-03-25 18:44:51.163 | INFO     | vyasa.core:_preload_posts_cache:769 - Startup preload timings stats=0.001s tree=0.007s sidebar=0.002s total=0.010s
+2026-03-25 18:44:51.163 | INFO     | vyasa.core:_preload_posts_cache:776 - Preloaded posts sidebar cache.
+2026-03-25 18:44:51.163 | INFO     | uvicorn.lifespan.on:startup:62 - Application startup complete.
+2026-03-25 18:44:56.210 | DEBUG    | vyasa.content_routes:render_index:148 - Request start path=/ route=index
+2026-03-25 18:44:56.211 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:44:56.211 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.22ms
+2026-03-25 18:44:56.212 | DEBUG    | vyasa.layout_page:_render_full_layout:87 - [LAYOUT] TOC built in 0.95ms
+2026-03-25 18:44:56.222 | DEBUG    | vyasa.layout_page:_render_full_layout:102 - [LAYOUT] FULL PAGE assembled in 10.86ms
+2026-03-25 18:44:56.222 | DEBUG    | vyasa.content_routes:render_index:162 - Request complete path=/ route=index total=12.22ms
+2026-03-25 18:44:56.224 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50646 - "GET / HTTP/1.1" 200
+2026-03-25 18:44:56.254 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50647 - "GET /static/pylogue-core.css HTTP/1.1" 404
+2026-03-25 18:44:56.255 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50648 - "GET /static/pylogue-core.js HTTP/1.1" 404
+2026-03-25 18:44:56.256 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50646 - "GET /static/pylogue-markdown.js HTTP/1.1" 404
+2026-03-25 18:44:56.502 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50646 - "GET /_sidebar/posts?current_path= HTTP/1.1" 200
+2026-03-25 18:45:01.677 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:01.677 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-25 18:45:01.679 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-01.md (1.01ms)
+2026-03-25 18:45:01.680 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-02.md (0.45ms)
+2026-03-25 18:45:01.682 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-03.md (0.41ms)
+2026-03-25 18:45:01.683 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-04.md (0.49ms)
+2026-03-25 18:45:01.684 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-05.md (0.38ms)
+2026-03-25 18:45:01.685 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-06.md (0.41ms)
+2026-03-25 18:45:01.687 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-07.md (0.30ms)
+2026-03-25 18:45:01.688 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-08.md (0.53ms)
+2026-03-25 18:45:01.689 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-09.md (0.35ms)
+2026-03-25 18:45:01.690 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-10.md (0.22ms)
+2026-03-25 18:45:01.691 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-11.md (0.37ms)
+2026-03-25 18:45:01.692 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-12.md (0.23ms)
+2026-03-25 18:45:01.693 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-13.md (0.28ms)
+2026-03-25 18:45:01.694 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-14.md (0.24ms)
+2026-03-25 18:45:01.695 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-15.md (0.28ms)
+2026-03-25 18:45:01.696 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-16.md (0.25ms)
+2026-03-25 18:45:01.696 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-17.md (0.25ms)
+2026-03-25 18:45:01.697 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-18.md (0.18ms)
+2026-03-25 18:45:01.698 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-19.md (0.29ms)
+2026-03-25 18:45:01.698 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-20.md (0.29ms)
+2026-03-25 18:45:01.699 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-21.md (0.39ms)
+2026-03-25 18:45:01.700 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER chapter-22.md (0.20ms)
+2026-03-25 18:45:01.700 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for books/flat-land completed in 23.82ms
+2026-03-25 18:45:01.700 | DEBUG    | vyasa.core:posts_sidebar_branch:427 - Sidebar branch path=books/flat-land resolved=/Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land items=22
+2026-03-25 18:45:01.701 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50655 - "GET /_sidebar/posts/branch?path=books%2Fflat-land HTTP/1.1" 200
+2026-03-25 18:45:08.490 | INFO     | vyasa.content_routes:render_post_detail:24 - 
+[DEBUG] ########## REQUEST START: /posts/books/flat-land/chapter-02 ##########
+2026-03-25 18:45:08.492 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:08.492 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for chapter-02.md (0.05ms)
+2026-03-25 18:45:08.492 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for chapter-02.md (0.05ms)
+2026-03-25 18:45:08.507 | DEBUG    | vyasa.content_routes:render_post_detail:44 - [DEBUG] Markdown rendering took 14.07ms
+2026-03-25 18:45:08.508 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:08.508 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-25 18:45:08.508 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:08.508 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-25 18:45:08.510 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-25 18:45:08.510 | DEBUG    | vyasa.helpers:order_vyasa_entries:388 - [DEBUG] .vyasa order empty; sorted entries: ['figures', 'chapter-01.md', 'chapter-02.md', 'chapter-03.md', 'chapter-04.md', 'chapter-05.md', 'chapter-06.md', 'chapter-07.md', 'chapter-08.md', 'chapter-09.md', 'chapter-10.md', 'chapter-11.md', 'chapter-12.md', 'chapter-13.md', 'chapter-14.md', 'chapter-15.md', 'chapter-16.md', 'chapter-17.md', 'chapter-18.md', 'chapter-19.md', 'chapter-20.md', 'chapter-21.md', 'chapter-22.md']
+2026-03-25 18:45:08.511 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for chapter-01.md (0.02ms)
+2026-03-25 18:45:08.511 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for chapter-03.md (0.04ms)
+2026-03-25 18:45:08.512 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:08.512 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.25ms
+2026-03-25 18:45:08.513 | DEBUG    | vyasa.layout_page:_render_htmx_layout:60 - [LAYOUT] TOC built in 0.64ms
+2026-03-25 18:45:08.515 | DEBUG    | vyasa.layout_page:_render_htmx_layout:65 - [LAYOUT] Custom CSS resolved in 2.01ms
+2026-03-25 18:45:08.515 | DEBUG    | vyasa.layout_page:_render_htmx_layout:74 - [LAYOUT] TOTAL layout() time 3.06ms
+2026-03-25 18:45:08.515 | DEBUG    | vyasa.content_routes:render_post_detail:51 - [DEBUG] Layout generation took 3.30ms
+2026-03-25 18:45:08.515 | DEBUG    | vyasa.content_routes:render_post_detail:52 - [DEBUG] ########## REQUEST COMPLETE: 24.84ms TOTAL ##########
+
+2026-03-25 18:45:08.516 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50656 - "GET /posts/books/flat-land/chapter-02 HTTP/1.1" 200
+2026-03-25 18:45:08.547 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50656 - "GET /posts/books/flat-land/global.css HTTP/1.1" 200
+2026-03-25 18:45:08.548 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50657 - "GET /posts/books/flat-land/figures/illustration-2.svg HTTP/1.1" 200
+2026-03-25 18:45:08.561 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50657 - "GET /posts/books/flat-land/favicon.svg HTTP/1.1" 404
+2026-03-25 18:45:09.556 | INFO     | vyasa.content_routes:render_post_detail:24 - 
+[DEBUG] ########## REQUEST START: /posts/books/flat-land/chapter-01 ##########
+2026-03-25 18:45:09.557 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:09.557 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for chapter-01.md (0.19ms)
+2026-03-25 18:45:09.557 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for chapter-01.md (0.03ms)
+2026-03-25 18:45:09.564 | DEBUG    | vyasa.content_routes:render_post_detail:44 - [DEBUG] Markdown rendering took 6.06ms
+2026-03-25 18:45:09.565 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:09.565 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-25 18:45:09.565 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:09.565 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-25 18:45:09.566 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-25 18:45:09.567 | DEBUG    | vyasa.helpers:order_vyasa_entries:388 - [DEBUG] .vyasa order empty; sorted entries: ['figures', 'chapter-01.md', 'chapter-02.md', 'chapter-03.md', 'chapter-04.md', 'chapter-05.md', 'chapter-06.md', 'chapter-07.md', 'chapter-08.md', 'chapter-09.md', 'chapter-10.md', 'chapter-11.md', 'chapter-12.md', 'chapter-13.md', 'chapter-14.md', 'chapter-15.md', 'chapter-16.md', 'chapter-17.md', 'chapter-18.md', 'chapter-19.md', 'chapter-20.md', 'chapter-21.md', 'chapter-22.md']
+2026-03-25 18:45:09.568 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for chapter-02.md (0.03ms)
+2026-03-25 18:45:09.568 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:09.568 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.10ms
+2026-03-25 18:45:09.569 | DEBUG    | vyasa.layout_page:_render_htmx_layout:60 - [LAYOUT] TOC built in 0.27ms
+2026-03-25 18:45:09.570 | DEBUG    | vyasa.layout_page:_render_htmx_layout:65 - [LAYOUT] Custom CSS resolved in 1.71ms
+2026-03-25 18:45:09.571 | DEBUG    | vyasa.layout_page:_render_htmx_layout:74 - [LAYOUT] TOTAL layout() time 2.29ms
+2026-03-25 18:45:09.571 | DEBUG    | vyasa.content_routes:render_post_detail:51 - [DEBUG] Layout generation took 2.51ms
+2026-03-25 18:45:09.571 | DEBUG    | vyasa.content_routes:render_post_detail:52 - [DEBUG] ########## REQUEST COMPLETE: 14.30ms TOTAL ##########
+
+2026-03-25 18:45:09.571 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50657 - "GET /posts/books/flat-land/chapter-01 HTTP/1.1" 200
+2026-03-25 18:45:09.602 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50657 - "GET /posts/books/flat-land/figures/illustration-1.svg HTTP/1.1" 200
+2026-03-25 18:45:13.548 | INFO     | vyasa.content_routes:render_post_detail:24 - 
+[DEBUG] ########## REQUEST START: /posts/d2-animation ##########
+2026-03-25 18:45:13.550 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:13.550 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for d2-animation.md (0.01ms)
+2026-03-25 18:45:13.550 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for d2-animation.md (0.02ms)
+2026-03-25 18:45:13.553 | DEBUG    | vyasa.content_routes:render_post_detail:44 - [DEBUG] Markdown rendering took 3.21ms
+2026-03-25 18:45:13.554 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:13.555 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:13.556 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:13.556 | DEBUG    | vyasa.helpers:order_vyasa_entries:420 - [DEBUG] .vyasa ordered=[] remaining=['books', 'seizure-warning-trippy-css', 'd2-animation.md', 'dollar-escape.md', 'quick-styling-inline-css.md', 'reveal-slides.md']
+2026-03-25 18:45:13.556 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for dollar-escape.md (0.03ms)
+2026-03-25 18:45:13.558 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:13.558 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.18ms
+2026-03-25 18:45:13.558 | DEBUG    | vyasa.layout_page:_render_htmx_layout:60 - [LAYOUT] TOC built in 0.40ms
+2026-03-25 18:45:13.560 | DEBUG    | vyasa.layout_page:_render_htmx_layout:65 - [LAYOUT] Custom CSS resolved in 1.50ms
+2026-03-25 18:45:13.560 | DEBUG    | vyasa.layout_page:_render_htmx_layout:74 - [LAYOUT] TOTAL layout() time 2.56ms
+2026-03-25 18:45:13.560 | DEBUG    | vyasa.content_routes:render_post_detail:51 - [DEBUG] Layout generation took 2.89ms
+2026-03-25 18:45:13.560 | DEBUG    | vyasa.content_routes:render_post_detail:52 - [DEBUG] ########## REQUEST COMPLETE: 11.98ms TOTAL ##########
+
+2026-03-25 18:45:13.562 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50657 - "GET /posts/d2-animation HTTP/1.1" 200
+2026-03-25 18:45:13.944 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50657 - "GET /posts/favicon.svg HTTP/1.1" 404
+2026-03-25 18:45:14.649 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50657 - "GET /drawings/demo-drawing HTTP/1.1" 200
+2026-03-25 18:45:14.668 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:14.670 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:14.670 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.21ms
+2026-03-25 18:45:14.674 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:14.674 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:14.674 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-25 18:45:14.674 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for books completed in 0.32ms
+2026-03-25 18:45:14.674 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:14.674 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for the-entire-history-of-humanity-in-max-whack-mode.md (0.01ms)
+2026-03-25 18:45:14.674 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for seizure-warning-trippy-css completed in 0.18ms
+2026-03-25 18:45:14.674 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for d2-animation.md (0.01ms)
+2026-03-25 18:45:14.675 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for dollar-escape.md (0.00ms)
+2026-03-25 18:45:14.675 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for quick-styling-inline-css.md (0.00ms)
+2026-03-25 18:45:14.675 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for reveal-slides.md (0.00ms)
+2026-03-25 18:45:14.675 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for . completed in 1.33ms
+2026-03-25 18:45:14.678 | DEBUG    | vyasa.layout_page:_render_full_layout:102 - [LAYOUT] FULL PAGE assembled in 8.10ms
+2026-03-25 18:45:14.679 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50657 - "GET /drawings/demo-drawing HTTP/1.1" 200
+2026-03-25 18:45:14.715 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:14.716 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.19ms
+2026-03-25 18:45:14.716 | DEBUG    | vyasa.layout_page:_render_full_layout:87 - [LAYOUT] TOC built in 0.08ms
+2026-03-25 18:45:14.716 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:14.717 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:14.717 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.36ms
+2026-03-25 18:45:14.717 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.15ms
+2026-03-25 18:45:14.717 | DEBUG    | vyasa.layout_page:_render_full_layout:87 - [LAYOUT] TOC built in 0.17ms
+2026-03-25 18:45:14.717 | DEBUG    | vyasa.layout_page:_render_full_layout:87 - [LAYOUT] TOC built in 0.20ms
+2026-03-25 18:45:14.721 | DEBUG    | vyasa.layout_page:_render_full_layout:102 - [LAYOUT] FULL PAGE assembled in 5.54ms
+2026-03-25 18:45:14.722 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50657 - "GET /drawings/static/pylogue-markdown.js HTTP/1.1" 200
+2026-03-25 18:45:14.722 | DEBUG    | vyasa.layout_page:_render_full_layout:102 - [LAYOUT] FULL PAGE assembled in 5.89ms
+2026-03-25 18:45:14.723 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50658 - "GET /drawings/static/pylogue-core.css HTTP/1.1" 200
+2026-03-25 18:45:14.724 | DEBUG    | vyasa.layout_page:_render_full_layout:102 - [LAYOUT] FULL PAGE assembled in 7.66ms
+2026-03-25 18:45:14.725 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50659 - "GET /drawings/static/pylogue-core.js HTTP/1.1" 200
+2026-03-25 18:45:14.881 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:14.881 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.08ms
+2026-03-25 18:45:14.881 | DEBUG    | vyasa.layout_page:_render_full_layout:87 - [LAYOUT] TOC built in 0.03ms
+2026-03-25 18:45:14.882 | DEBUG    | vyasa.layout_page:_render_full_layout:102 - [LAYOUT] FULL PAGE assembled in 1.20ms
+2026-03-25 18:45:14.883 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50659 - "GET /drawings/favicon.svg HTTP/1.1" 200
+2026-03-25 18:45:17.817 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50659 - "GET /drawings/demo-drawing HTTP/1.1" 200
+2026-03-25 18:45:17.835 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:17.837 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:17.837 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.20ms
+2026-03-25 18:45:17.842 | DEBUG    | vyasa.layout_page:_render_full_layout:102 - [LAYOUT] FULL PAGE assembled in 5.15ms
+2026-03-25 18:45:17.843 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50659 - "GET /drawings/demo-drawing HTTP/1.1" 200
+2026-03-25 18:45:17.875 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:17.875 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:17.875 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:17.875 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.47ms
+2026-03-25 18:45:17.875 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.26ms
+2026-03-25 18:45:17.875 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.09ms
+2026-03-25 18:45:17.875 | DEBUG    | vyasa.layout_page:_render_full_layout:87 - [LAYOUT] TOC built in 0.10ms
+2026-03-25 18:45:17.875 | DEBUG    | vyasa.layout_page:_render_full_layout:87 - [LAYOUT] TOC built in 0.12ms
+2026-03-25 18:45:17.875 | DEBUG    | vyasa.layout_page:_render_full_layout:87 - [LAYOUT] TOC built in 0.14ms
+2026-03-25 18:45:17.879 | DEBUG    | vyasa.layout_page:_render_full_layout:102 - [LAYOUT] FULL PAGE assembled in 4.35ms
+2026-03-25 18:45:17.880 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50658 - "GET /drawings/static/pylogue-core.css HTTP/1.1" 200
+2026-03-25 18:45:17.881 | DEBUG    | vyasa.layout_page:_render_full_layout:102 - [LAYOUT] FULL PAGE assembled in 5.80ms
+2026-03-25 18:45:17.881 | DEBUG    | vyasa.layout_page:_render_full_layout:102 - [LAYOUT] FULL PAGE assembled in 6.29ms
+2026-03-25 18:45:17.882 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50659 - "GET /drawings/static/pylogue-markdown.js HTTP/1.1" 200
+2026-03-25 18:45:17.883 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50657 - "GET /drawings/static/pylogue-core.js HTTP/1.1" 200
+2026-03-25 18:45:18.038 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:18.038 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.09ms
+2026-03-25 18:45:18.038 | DEBUG    | vyasa.layout_page:_render_full_layout:87 - [LAYOUT] TOC built in 0.04ms
+2026-03-25 18:45:18.039 | DEBUG    | vyasa.layout_page:_render_full_layout:102 - [LAYOUT] FULL PAGE assembled in 1.31ms
+2026-03-25 18:45:18.040 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50657 - "GET /drawings/favicon.svg HTTP/1.1" 200
+2026-03-25 18:45:18.102 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50657 - "GET /posts/demo-drawing.excalidraw HTTP/1.1" 200
+2026-03-25 18:45:18.106 | INFO     | logging:log:1962 - 127.0.0.1:50662 - "WebSocket /ws/excalidraw/demo-drawing" [accepted]
+2026-03-25 18:45:18.106 | INFO     | logging:log:1962 - connection open
+2026-03-25 18:45:19.522 | INFO     | logging:log:1962 - connection closed
+2026-03-25 18:45:20.657 | INFO     | vyasa.content_routes:render_post_detail:24 - 
+[DEBUG] ########## REQUEST START: /posts/dollar-escape ##########
+2026-03-25 18:45:20.658 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:20.658 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for dollar-escape.md (0.03ms)
+2026-03-25 18:45:20.658 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for dollar-escape.md (0.02ms)
+2026-03-25 18:45:20.667 | DEBUG    | vyasa.content_routes:render_post_detail:44 - [DEBUG] Markdown rendering took 8.34ms
+2026-03-25 18:45:20.668 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:20.668 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:20.669 | DEBUG    | vyasa.helpers:get_vyasa_config:361 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-25 18:45:20.669 | DEBUG    | vyasa.helpers:order_vyasa_entries:420 - [DEBUG] .vyasa ordered=[] remaining=['books', 'seizure-warning-trippy-css', 'd2-animation.md', 'dollar-escape.md', 'quick-styling-inline-css.md', 'reveal-slides.md']
+2026-03-25 18:45:20.669 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for d2-animation.md (0.03ms)
+2026-03-25 18:45:20.670 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for quick-styling-inline-css.md (0.04ms)
+2026-03-25 18:45:20.670 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-25 18:45:20.671 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.08ms
+2026-03-25 18:45:20.671 | DEBUG    | vyasa.layout_page:_render_htmx_layout:60 - [LAYOUT] TOC built in 0.27ms
+2026-03-25 18:45:20.672 | DEBUG    | vyasa.layout_page:_render_htmx_layout:65 - [LAYOUT] Custom CSS resolved in 1.18ms
+2026-03-25 18:45:20.673 | DEBUG    | vyasa.layout_page:_render_htmx_layout:74 - [LAYOUT] TOTAL layout() time 2.09ms
+2026-03-25 18:45:20.673 | DEBUG    | vyasa.content_routes:render_post_detail:51 - [DEBUG] Layout generation took 2.40ms
+2026-03-25 18:45:20.673 | DEBUG    | vyasa.content_routes:render_post_detail:52 - [DEBUG] ########## REQUEST COMPLETE: 15.39ms TOTAL ##########
+
+2026-03-25 18:45:20.674 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:50657 - "GET /posts/dollar-escape HTTP/1.1" 200
+2026-03-25 18:45:44.884 | INFO     | uvicorn.server:shutdown:272 - Shutting down
+2026-03-25 18:45:44.986 | INFO     | uvicorn.lifespan.on:shutdown:67 - Waiting for application shutdown.
+2026-03-25 18:45:44.986 | INFO     | uvicorn.lifespan.on:shutdown:76 - Application shutdown complete.
+2026-03-25 18:45:44.986 | INFO     | uvicorn.server:_serve:102 - Finished server process [3035]
+2026-03-25 18:45:44.992 | INFO     | uvicorn.supervisors.basereload:shutdown:115 - Stopping reloader process [3031]
+2026-03-26 17:45:28.252 | INFO     | uvicorn.config:__init__:324 - Will watch for changes in these directories: ['/Users/yeshwanth/Code/Personal/vyasa/demo']
+2026-03-26 17:45:28.253 | ERROR    | uvicorn.config:bind_socket:538 - [Errno 1] Operation not permitted
+2026-03-26 17:45:58.992 | INFO     | uvicorn.config:__init__:324 - Will watch for changes in these directories: ['/Users/yeshwanth/Code/Personal/vyasa/demo']
+2026-03-26 17:45:58.992 | INFO     | uvicorn.config:bind_socket:545 - Uvicorn running on http://127.0.0.1:14742 (Press CTRL+C to quit)
+2026-03-26 17:45:58.992 | INFO     | uvicorn.supervisors.basereload:startup:79 - Started reloader process [27949] using WatchFiles
+2026-03-26 17:46:00.521 | INFO     | vyasa.chat_bootstrap:register_chat_routes:33 - Using PydanticAIStreamingResponder for /chat
+2026-03-26 17:46:00.527 | INFO     | vyasa.core:_log_startup_content_stats:744 - Startup scan root=/Users/yeshwanth/Code/Personal/vyasa/demo show_hidden=False md=28 pdf=0 excalidraw=1 vyasa=3 excludes=['.git', '.venv', 'venv', 'node_modules', 'dist', 'build', '.pytest_cache', '.mypy_cache', '.ruff_cache', '__pycache__', '.cache']
+2026-03-26 17:46:00.529 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.529 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.529 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.529 | DEBUG    | vyasa.helpers:order_vyasa_entries:406 - [DEBUG] .vyasa ordered=[] remaining=['books', 'seizure-warning-trippy-css', 'd2-animation.md', 'demo-drawing.excalidraw', 'dollar-escape.md', 'quick-styling-inline-css.md', 'reveal-slides.md']
+2026-03-26 17:46:00.529 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.529 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.529 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-26 17:46:00.530 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.530 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-26 17:46:00.530 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-26 17:46:00.530 | DEBUG    | vyasa.helpers:order_vyasa_entries:374 - [DEBUG] .vyasa order empty; sorted entries: ['flat-land']
+2026-03-26 17:46:00.530 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.530 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-26 17:46:00.530 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.530 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.530 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-26 17:46:00.530 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.530 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-26 17:46:00.531 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-26 17:46:00.531 | DEBUG    | vyasa.helpers:order_vyasa_entries:374 - [DEBUG] .vyasa order empty; sorted entries: ['figures', 'chapter-01.md', 'chapter-02.md', 'chapter-03.md', 'chapter-04.md', 'chapter-05.md', 'chapter-06.md', 'chapter-07.md', 'chapter-08.md', 'chapter-09.md', 'chapter-10.md', 'chapter-11.md', 'chapter-12.md', 'chapter-13.md', 'chapter-14.md', 'chapter-15.md', 'chapter-16.md', 'chapter-17.md', 'chapter-18.md', 'chapter-19.md', 'chapter-20.md', 'chapter-21.md', 'chapter-22.md']
+2026-03-26 17:46:00.531 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.531 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.532 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for books completed in 2.76ms
+2026-03-26 17:46:00.532 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.532 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.532 | DEBUG    | vyasa.helpers:order_vyasa_entries:374 - [DEBUG] .vyasa order empty; sorted entries: ['the-entire-history-of-humanity-in-max-whack-mode.md']
+2026-03-26 17:46:00.532 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.532 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:46:00.533 | DEBUG    | vyasa.helpers:parse_frontmatter:110 - [DEBUG] parse_frontmatter READ FILE the-entire-history-of-humanity-in-max-whack-mode.md (0.61ms)
+2026-03-26 17:46:00.533 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for seizure-warning-trippy-css completed in 1.12ms
+2026-03-26 17:46:00.534 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER d2-animation.md (0.22ms)
+2026-03-26 17:46:00.534 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER dollar-escape.md (0.21ms)
+2026-03-26 17:46:00.535 | DEBUG    | vyasa.helpers:parse_frontmatter:110 - [DEBUG] parse_frontmatter READ FILE quick-styling-inline-css.md (0.23ms)
+2026-03-26 17:46:00.535 | DEBUG    | vyasa.helpers:parse_frontmatter:110 - [DEBUG] parse_frontmatter READ FILE reveal-slides.md (0.35ms)
+2026-03-26 17:46:00.535 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for . completed in 6.84ms
+2026-03-26 17:46:00.538 | INFO     | vyasa.core:_preload_posts_cache:768 - Startup preload timings stats=0.001s tree=0.008s sidebar=0.002s total=0.011s
+2026-03-26 17:46:00.538 | INFO     | vyasa.core:_preload_posts_cache:775 - Preloaded posts sidebar cache.
+2026-03-26 17:46:00.538 | INFO     | uvicorn.lifespan.on:startup:62 - Application startup complete.
+2026-03-26 17:46:07.557 | INFO     | watchfiles.main:_log_changes:308 - 1 change detected
+2026-03-26 17:47:01.595 | INFO     | uvicorn.server:shutdown:272 - Shutting down
+2026-03-26 17:47:01.697 | INFO     | uvicorn.lifespan.on:shutdown:67 - Waiting for application shutdown.
+2026-03-26 17:47:01.697 | INFO     | uvicorn.lifespan.on:shutdown:76 - Application shutdown complete.
+2026-03-26 17:47:01.698 | INFO     | uvicorn.server:_serve:102 - Finished server process [27951]
+2026-03-26 17:47:01.703 | INFO     | uvicorn.supervisors.basereload:shutdown:115 - Stopping reloader process [27949]
+2026-03-26 17:47:05.243 | INFO     | uvicorn.config:__init__:324 - Will watch for changes in these directories: ['/Users/yeshwanth/Code/Personal/vyasa/demo']
+2026-03-26 17:47:05.243 | INFO     | uvicorn.config:bind_socket:545 - Uvicorn running on http://127.0.0.1:14742 (Press CTRL+C to quit)
+2026-03-26 17:47:05.243 | INFO     | uvicorn.supervisors.basereload:startup:79 - Started reloader process [28244] using WatchFiles
+2026-03-26 17:47:06.792 | INFO     | vyasa.chat_bootstrap:register_chat_routes:33 - Using PydanticAIStreamingResponder for /chat
+2026-03-26 17:47:06.797 | INFO     | vyasa.core:_log_startup_content_stats:744 - Startup scan root=/Users/yeshwanth/Code/Personal/vyasa/demo show_hidden=False md=28 pdf=0 excalidraw=1 vyasa=3 excludes=['.git', '.venv', 'venv', 'node_modules', 'dist', 'build', '.pytest_cache', '.mypy_cache', '.ruff_cache', '__pycache__', '.cache']
+2026-03-26 17:47:06.798 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.798 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.798 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.799 | DEBUG    | vyasa.helpers:order_vyasa_entries:406 - [DEBUG] .vyasa ordered=[] remaining=['books', 'seizure-warning-trippy-css', 'd2-animation.md', 'demo-drawing.excalidraw', 'dollar-escape.md', 'quick-styling-inline-css.md', 'reveal-slides.md']
+2026-03-26 17:47:06.799 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.799 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.799 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-26 17:47:06.799 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.799 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-26 17:47:06.799 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-26 17:47:06.799 | DEBUG    | vyasa.helpers:order_vyasa_entries:374 - [DEBUG] .vyasa order empty; sorted entries: ['flat-land']
+2026-03-26 17:47:06.799 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.799 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-26 17:47:06.799 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.800 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.800 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-26 17:47:06.800 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.800 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-26 17:47:06.800 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books/flat-land: order=[] sort=name_asc folders_first=True
+2026-03-26 17:47:06.800 | DEBUG    | vyasa.helpers:order_vyasa_entries:374 - [DEBUG] .vyasa order empty; sorted entries: ['figures', 'chapter-01.md', 'chapter-02.md', 'chapter-03.md', 'chapter-04.md', 'chapter-05.md', 'chapter-06.md', 'chapter-07.md', 'chapter-08.md', 'chapter-09.md', 'chapter-10.md', 'chapter-11.md', 'chapter-12.md', 'chapter-13.md', 'chapter-14.md', 'chapter-15.md', 'chapter-16.md', 'chapter-17.md', 'chapter-18.md', 'chapter-19.md', 'chapter-20.md', 'chapter-21.md', 'chapter-22.md']
+2026-03-26 17:47:06.802 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.802 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.803 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for books completed in 3.94ms
+2026-03-26 17:47:06.804 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.804 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.804 | DEBUG    | vyasa.helpers:order_vyasa_entries:374 - [DEBUG] .vyasa order empty; sorted entries: ['the-entire-history-of-humanity-in-max-whack-mode.md']
+2026-03-26 17:47:06.804 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.804 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-26 17:47:06.805 | DEBUG    | vyasa.helpers:parse_frontmatter:110 - [DEBUG] parse_frontmatter READ FILE the-entire-history-of-humanity-in-max-whack-mode.md (0.68ms)
+2026-03-26 17:47:06.805 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for seizure-warning-trippy-css completed in 1.54ms
+2026-03-26 17:47:06.806 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER d2-animation.md (0.24ms)
+2026-03-26 17:47:06.808 | DEBUG    | vyasa.helpers:parse_frontmatter:104 - [DEBUG] parse_frontmatter SKIP NO FRONTMATTER dollar-escape.md (0.25ms)
+2026-03-26 17:47:06.808 | DEBUG    | vyasa.helpers:parse_frontmatter:110 - [DEBUG] parse_frontmatter READ FILE quick-styling-inline-css.md (0.27ms)
+2026-03-26 17:47:06.809 | DEBUG    | vyasa.helpers:parse_frontmatter:110 - [DEBUG] parse_frontmatter READ FILE reveal-slides.md (0.40ms)
+2026-03-26 17:47:06.809 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for . completed in 11.14ms
+2026-03-26 17:47:06.812 | INFO     | vyasa.core:_preload_posts_cache:768 - Startup preload timings stats=0.001s tree=0.012s sidebar=0.003s total=0.016s
+2026-03-26 17:47:06.812 | INFO     | vyasa.core:_preload_posts_cache:775 - Preloaded posts sidebar cache.
+2026-03-26 17:47:06.812 | INFO     | uvicorn.lifespan.on:startup:62 - Application startup complete.
+2026-03-26 17:47:08.189 | INFO     | watchfiles.main:_log_changes:308 - 1 change detected
+2026-03-27 08:44:43.730 | INFO     | watchfiles.main:_log_changes:308 - 2 changes detected
+2026-03-27 12:43:17.946 | INFO     | watchfiles.main:_log_changes:308 - 2 changes detected
+2026-03-27 13:01:32.154 | INFO     | watchfiles.main:_log_changes:308 - 1 change detected
+2026-03-27 13:05:29.703 | DEBUG    | vyasa.content_routes:render_index:148 - Request start path=/ route=index
+2026-03-27 13:05:29.704 | DEBUG    | vyasa.layout_page:render_layout:18 - [LAYOUT] layout() start
+2026-03-27 13:05:29.704 | DEBUG    | vyasa.layout_page:render_layout:21 - [LAYOUT] section_class computed in 0.08ms
+2026-03-27 13:05:29.704 | DEBUG    | vyasa.layout_page:_render_full_layout:87 - [LAYOUT] TOC built in 0.24ms
+2026-03-27 13:05:29.707 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-27 13:05:29.707 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-27 13:05:29.707 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-27 13:05:29.707 | DEBUG    | vyasa.helpers:order_vyasa_entries:406 - [DEBUG] .vyasa ordered=[] remaining=['books', 'seizure-warning-trippy-css', 'd2-animation.md', 'demo-drawing.excalidraw', 'dollar-escape.md', 'quick-styling-inline-css.md', 'reveal-slides.md']
+2026-03-27 13:05:29.707 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-27 13:05:29.707 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-27 13:05:29.707 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo/books: order=[] sort=name_asc folders_first=True
+2026-03-27 13:05:29.707 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-27 13:05:29.708 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for books completed in 0.36ms
+2026-03-27 13:05:29.708 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-27 13:05:29.708 | DEBUG    | vyasa.helpers:get_vyasa_config:362 - [DEBUG] .vyasa config for /Users/yeshwanth/Code/Personal/vyasa/demo: order=['vision.md', 'mermaids.md'] sort=name_asc folders_first=True
+2026-03-27 13:05:29.708 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for the-entire-history-of-humanity-in-max-whack-mode.md (0.00ms)
+2026-03-27 13:05:29.708 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for seizure-warning-trippy-css completed in 0.20ms
+2026-03-27 13:05:29.708 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for d2-animation.md (0.01ms)
+2026-03-27 13:05:29.708 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for dollar-escape.md (0.00ms)
+2026-03-27 13:05:29.708 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for quick-styling-inline-css.md (0.00ms)
+2026-03-27 13:05:29.709 | DEBUG    | vyasa.helpers:parse_frontmatter:94 - [DEBUG] parse_frontmatter CACHE HIT for reveal-slides.md (0.01ms)
+2026-03-27 13:05:29.709 | DEBUG    | vyasa.tree_rendering:build_post_tree_render:87 - [DEBUG] build_post_tree for . completed in 2.63ms
+2026-03-27 13:05:29.711 | DEBUG    | vyasa.layout_page:_render_full_layout:102 - [LAYOUT] FULL PAGE assembled in 7.37ms
+2026-03-27 13:05:29.711 | DEBUG    | vyasa.content_routes:render_index:162 - Request complete path=/ route=index total=8.59ms
+2026-03-27 13:05:29.712 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:61508 - "GET / HTTP/1.1" 200
+2026-03-27 13:05:29.775 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:61512 - "GET /static/scripts.js?v=1774551848487503767 HTTP/1.1" 200
+2026-03-27 13:05:29.776 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:61508 - "GET /static/head-init.js?v=1773975657963817624 HTTP/1.1" 200
+2026-03-27 13:05:29.776 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:61511 - "GET /static/header.css?v=1774551848487237057 HTTP/1.1" 200
+2026-03-27 13:05:29.779 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:61517 - "GET /posts/custom.css HTTP/1.1" 200
+2026-03-27 13:05:29.780 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:61518 - "GET /static/pylogue-markdown.js HTTP/1.1" 404
+2026-03-27 13:05:29.780 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:61515 - "GET /static/pylogue-core.css HTTP/1.1" 404
+2026-03-27 13:05:29.788 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:61508 - "GET /static/pylogue-core.js HTTP/1.1" 404
+2026-03-27 13:05:30.292 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:61508 - "GET /_sidebar/posts?current_path= HTTP/1.1" 200
+2026-03-27 13:05:30.374 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:61508 - "GET /favicon.svg HTTP/1.1" 200
+2026-03-27 13:05:30.381 | INFO     | uvicorn.protocols.http.httptools_impl:send:483 - 127.0.0.1:61508 - "GET /static/icon.png HTTP/1.1" 200
