@@ -529,7 +529,7 @@ def from_md(content, img_dir=None, current_path=None):
     mods = {
         "pre": "my-4", "p": "text-base leading-relaxed mb-6", "li": "text-base leading-relaxed",
         "ul": "uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base", "ol": "uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base",
-        "hr": "border-t border-border my-8", "h1": "text-3xl font-bold mb-6 mt-8", "h2": "text-2xl font-semibold mb-4 mt-6",
+        "hr": "vyasa-spacer-rule my-10 border-0 h-0", "h1": "text-3xl font-bold mb-6 mt-8", "h2": "text-2xl font-semibold mb-4 mt-6",
         "h3": "text-xl font-semibold mb-3 mt-5", "h4": "text-lg font-semibold mb-2 mt-4",
         "table": "uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle my-6",
     }

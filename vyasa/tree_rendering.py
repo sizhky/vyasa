@@ -62,7 +62,7 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             note_file = find_folder_note_file_fn(item)
             note_slug = str(note_file.relative_to(root).with_suffix("")) if note_file else None
             note_allowed = bool(note_slug and is_allowed_fn(f"/posts/{note_slug}", roles or [], rbac_rules))
-            note_link = A(href=f"/posts/{note_slug}", hx_get=f"/posts/{note_slug}", hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="folder-note-link whitespace-nowrap hover:underline", title=f"Open {folder_title}", onclick="event.stopPropagation();")(folder_title) if note_allowed else None
+            note_link = A(href=f"/posts/{note_slug}", hx_get=f"/posts/{note_slug}", hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link folder-note-link whitespace-nowrap hover:underline", title=f"Open {folder_title}", onclick="event.stopPropagation();", data_path=note_slug)(folder_title) if note_allowed else None
             if not sub_items and not note_allowed:
                 continue
             if sub_items:
