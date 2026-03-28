@@ -102,6 +102,8 @@ folders_always_first = false    # move ALL folders to top after full ordering
 
 `order` pins listed items first (in that order). Items not in `order` are sorted by `sort`. `folders_always_first` runs last, grouping all folders above all files while preserving their relative order.
 
+`abbreviations` percolates from parent to child folders — define it once in the nearest common ancestor and omit it from children. Child folders inherit the parent's abbreviations automatically.
+
 ### Example: minimal root config
 
 ```toml

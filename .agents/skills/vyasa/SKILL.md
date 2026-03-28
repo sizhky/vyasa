@@ -24,15 +24,18 @@ Start here:
 5. For recent markdown work, check `references/markdown.md` for Obsidian-style callouts, aliases, nesting/folding, code snippet includes, and explicit heading IDs/permalinks before inventing new syntax.
 6. For code-block color changes, check `references/theming.md` for the `--vyasa-code-*` CSS variables so users can override palettes from `custom.css`.
 7. For books/tutorials/docs sequences, prefer Vyasa's built-in sibling previous/next pager before inventing manual chapter-footer HTML; it follows the folder's `.vyasa` ordering, not raw filename sort.
+8. For shell theming, prefer Vyasa's explicit stable hooks over positional selectors: `.vyasa-navbar-shell`, `.vyasa-navbar-card`, `.vyasa-content-grid`, `.vyasa-main-shell`, `.vyasa-sidebar`, `.vyasa-sidebar-card`, `.vyasa-sidebar-toggle`, `.vyasa-sidebar-body`, `.vyasa-posts-sidebar`, `.vyasa-toc-sidebar`, `.vyasa-mobile-panel`, `.vyasa-mobile-panel-header`, `.vyasa-mobile-panel-body`, `.vyasa-footer-shell`, `.vyasa-footer-card`.
 
 Core rules:
 
 - Treat `.vyasa` as a TOML file, usually at repo root or a content folder.
 - Respect precedence: CLI args > `.vyasa` > environment variables > defaults.
 - Distinguish root app config from folder-local ordering and navigation config.
+- In the lazy posts tree sidebar, a folder-local `.vyasa` is also a branch-visibility marker: even if the folder has no direct markdown files and only nested subfolders, the folder should still appear so the branch can lazy-load.
 - For callouts, emit Obsidian-style callouts like `> [!note] Title` or `> [!warning]- Title`; prefer aliases already supported by Obsidian (`warn`, `error`, `faq`, `check`, `done`, `summary`, `tldr`, `cite`, etc.) rather than inventing new keywords.
 - Use `+` and `-` fold markers when the callout should clearly default open or closed, and prefer nested `> > [!todo]` callouts over ad hoc indentation patterns.
 - For custom callout types, rely on `data-callout="your-type"` plus `custom.css` rather than inventing special renderer logic unless the user explicitly wants core support.
+- For navbar, footer, sidebar, and mobile-panel styling, do not teach or rely on positional selectors like `#site-navbar > *`, `#site-footer > *`, or `#posts-sidebar details > summary`; target the explicit Vyasa hook classes instead so runtime and static-build themes stay stable.
 - For Mermaid labels, use literal `<br/>` for line breaks inside nodes and edge text; do not emit `\n`.
 - Do not invent unsupported frontmatter keys, sort modes, or config keys.
 - Never emit real secret values — use explicit placeholders.

@@ -303,9 +303,17 @@ def _effective_abbreviations(root: Path, folder: Path | None = None):
     root_abbrevs = root_config.get("abbreviations") or []
     if folder is None or folder == root:
         return root_abbrevs
-    folder_config = get_vyasa_config(folder)
-    folder_abbrevs = folder_config.get("abbreviations")
-    return folder_abbrevs if folder_abbrevs is not None else root_abbrevs
+    current = folder
+    while True:
+        folder_config = get_vyasa_config(current)
+        folder_abbrevs = folder_config.get("abbreviations")
+        if folder_abbrevs is not None:
+            return folder_abbrevs
+        if current == root:
+            return root_abbrevs
+        if root not in current.parents:
+            return root_abbrevs
+        current = current.parent
 
 def _effective_ignore_list(root: Path, folder: Path | None = None):
     """Get the effective ignore list for a folder (inherits from root)."""

@@ -26,7 +26,7 @@ html, body {
 }
 
 #page-container, aside, main, nav, header, footer, [class*="bg-white"], [class*="bg-slate"] { background: transparent !important; }
-#site-navbar > *, #posts-sidebar details > summary, #posts-sidebar details > div, #toc-sidebar details > summary, #toc-sidebar details > div, #site-footer > * {
+.vyasa-navbar-card, .vyasa-sidebar-toggle, .vyasa-sidebar-body, .vyasa-footer-card {
     background: rgba(183, 170, 141, 0.84) !important;
     border-color: rgba(101, 71, 34, 0.26) !important;
     box-shadow: 0 6px 14px -18px rgba(84, 58, 26, 0.3) !important;

@@ -1735,14 +1735,21 @@ function initRevealDiagramRefresh() {
 }
 initRevealDiagramRefresh();
 
+function normalizeSidebarPath(pathname) {
+    const decoded = decodeURIComponent(pathname || '');
+    const trimmed = decoded
+        .replace(/^\/(?:posts|drawings)\//, '')
+        .replace(/(?:\.pdf|\.excalidraw)$/, '');
+    return trimmed.replace(/\/+$/, '');
+}
+
 // Reveal current file in sidebar
 function revealInSidebar(rootElement = document) {
-    if (!window.location.pathname.startsWith('/posts/')) {
+    if (!window.location.pathname.startsWith('/posts/') && !window.location.pathname.startsWith('/drawings/')) {
         return;
     }
 
-    // Decode the URL path to handle special characters and spaces
-    const currentPath = decodeURIComponent(window.location.pathname.replace(/^\/posts\//, ''));
+    const currentPath = normalizeSidebarPath(window.location.pathname);
     const activeLink = rootElement.querySelector(`.post-link[data-path="${currentPath}"]`);
     
     if (activeLink) {
@@ -1769,18 +1776,6 @@ function revealInSidebar(rootElement = document) {
                 behavior: 'smooth'
             });
         }
-        
-        // Highlight the active link temporarily
-        activeLink.classList.remove('fade-out');
-        activeLink.classList.add('sidebar-highlight');
-        requestAnimationFrame(() => {
-            setTimeout(() => {
-                activeLink.classList.add('fade-out');
-                setTimeout(() => {
-                    activeLink.classList.remove('sidebar-highlight', 'fade-out');
-                }, 10000);
-            }, 1000);
-        });
     }
 }
 
@@ -2034,9 +2029,9 @@ document.addEventListener('toggle', (event) => {
 
 // Update active post link in sidebar
 function updateActivePostLink() {
-    const currentPath = window.location.pathname.replace(/^\/posts\//, '');
+    const currentPath = normalizeSidebarPath(window.location.pathname);
     document.querySelectorAll('.post-link').forEach(link => {
-        const linkPath = link.getAttribute('data-path');
+        const linkPath = normalizeSidebarPath(link.getAttribute('data-path') || '');
         if (linkPath === currentPath) {
             link.classList.add('bg-blue-50', 'dark:bg-blue-900/20', 'text-blue-600', 'dark:text-blue-400', 'font-medium');
             link.classList.remove('text-slate-700', 'dark:text-slate-300', 'hover:text-blue-600');

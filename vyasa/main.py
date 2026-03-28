@@ -158,11 +158,15 @@ def cli():
     reload_kwargs = {}
     if reload:
         blog_root = config.get_root_folder()
+        reload_excludes = [f"*/{name}/*" for name in config.get_reload_excludes()]
+        reload_excludes.append(".py[cod]")
+        reload_excludes.append(".sw.*")
+        reload_excludes.append("~*")
         reload_kwargs = {
             "reload": True,
             "reload_dirs": [str(blog_root)],
-            "reload_includes": ["*.md", "*.pdf", "*.vyasa"],
-            "reload_excludes": [f"*/{name}/*" for name in config.get_reload_excludes()],
+            "reload_includes": ["*.md", "*.pdf", "*.vyasa", ".vyasa", ".*"],
+            "reload_excludes": reload_excludes,
         }
     else:
         reload_kwargs = {"reload": False}
