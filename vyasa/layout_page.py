@@ -23,7 +23,19 @@ def render_layout(*content, htmx, title=None, show_sidebar=False, toc_content=No
     layout_max_class, layout_max_style = width_class_and_style(layout_config.get("layout_max_width"), "max")
     theme_primary = layout_config.get("theme_primary")
     theme_style = f"--vyasa-primary: {theme_primary}; --vyasa-primary-dim: color-mix(in srgb, {theme_primary} 82%, black);" if theme_primary else ""
-    page_style = "; ".join(part for part in (layout_max_style, theme_style) if part)
+    body_font = layout_config.get("theme_body_font")
+    heading_font = layout_config.get("theme_heading_font")
+    ui_font = layout_config.get("theme_ui_font")
+    theme_tokens = layout_config.get("theme_tokens") or {}
+    font_style = "; ".join(part for part in (
+        f"--vyasa-font-body: {body_font}" if body_font else "",
+        f"--vyasa-font-heading: {heading_font}" if heading_font else "",
+        f"--vyasa-font-ui: {ui_font}" if ui_font else "",
+    ) if part)
+    token_style = "; ".join(
+        f"--vyasa-{name}: {value}" for name, value in theme_tokens.items() if value
+    )
+    page_style = "; ".join(part for part in (layout_max_style, theme_style, font_style, token_style) if part)
     layout_fluid_class = "layout-fluid" if layout_max_style else ""
     if full_width:
         layout_max_class = layout_max_style = layout_fluid_class = ""

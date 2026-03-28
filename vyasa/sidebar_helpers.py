@@ -6,6 +6,51 @@ from monsterui.all import *
 from .helpers import resolve_heading_anchor
 
 
+def _scope_css(css_text, scope):
+    css_text = re.sub(r"/\*.*?\*/", "", css_text, flags=re.DOTALL)
+    out, decls, i, n = [], [], 0, len(css_text)
+    while i < n:
+        while i < n and css_text[i].isspace():
+            i += 1
+        start, depth = i, 0
+        while i < n:
+            ch = css_text[i]
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+            elif ch == ";" and depth == 0:
+                i += 1
+                break
+            elif ch == "}" and depth < 0:
+                break
+            i += 1
+            if depth == 0 and i < n and css_text[i - 1] == "}":
+                break
+        chunk = css_text[start:i].strip()
+        if not chunk:
+            continue
+        if "{" not in chunk:
+            decls.append(chunk)
+            continue
+        head, body = chunk.split("{", 1)
+        body = body.rsplit("}", 1)[0]
+        head = head.strip()
+        if head.startswith("@media") or head.startswith("@supports") or head.startswith("@container"):
+            out.append(f"{head} {{ {_scope_css(body, scope)} }}")
+        elif head.startswith("@"):
+            out.append(chunk)
+        else:
+            selectors = ", ".join(
+                scope if sel.strip() == ":root" else f"{scope} {sel.strip()}"
+                for sel in head.split(",") if sel.strip()
+            )
+            out.append(f"{selectors} {{{body}}}")
+    if decls:
+        out.insert(0, f"{scope} {{ {' '.join(decls)} }}")
+    return "\n".join(out)
+
+
 def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=None, shortcut_key=None, extra_content=None, scroll_target="container"):
     sidebar_kind = (data_sidebar or title or "sidebar").strip().lower().replace(" ", "-")
     summary_content = [Span(UkIcon(icon, cls="w-5 h-5 block"), cls="flex items-center justify-center w-5 h-5 shrink-0 leading-none"), Span(title, cls="flex-1 leading-none")]
@@ -55,6 +100,7 @@ def get_custom_css_links(root, current_path=None, section_class=None):
             for filename in ["custom.css", "style.css"]:
                 css_file = root / ancestor / filename
                 if css_file.exists():
-                    css_elements.append(Style(f"\n                        #main-content.{section_class} {{\n                            {css_file.read_text()}\n                        }}\n                    "))
+                    scope = f"#main-content.{section_class}"
+                    css_elements.append(Style(_scope_css(css_file.read_text(), scope)))
                     break
     return css_elements

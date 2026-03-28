@@ -68,6 +68,14 @@ class VyasaConfig:
             try:
                 with open(config_file, 'rb') as f:
                     self._config = tomllib.load(f)
+                preset_name = str(self._config.get("theme_preset", "")).strip()
+                if preset_name:
+                    preset_dir = config_file.parent / ".vyasa-themes"
+                    preset_file = preset_dir / f"{preset_name}.toml"
+                    if preset_file.exists():
+                        with open(preset_file, "rb") as f:
+                            preset_cfg = tomllib.load(f)
+                        self._config = {**preset_cfg, **self._config}
                 self._loaded_config_path = config_file
             except Exception as e:
                 self._config = {}
@@ -113,6 +121,33 @@ class VyasaConfig:
     def get_theme_primary(self) -> str | None:
         value = self.get('theme_primary', 'VYASA_THEME_PRIMARY', None)
         return str(value).strip() if value else None
+    
+    def get_theme_preset(self) -> str | None:
+        value = self.get('theme_preset', 'VYASA_THEME_PRESET', None)
+        return str(value).strip() if value else None
+    
+    def get_theme_body_font(self) -> str | None:
+        value = self.get('theme_body_font', 'VYASA_THEME_BODY_FONT', None)
+        return str(value).strip() if value else None
+    
+    def get_theme_heading_font(self) -> str | None:
+        value = self.get('theme_heading_font', 'VYASA_THEME_HEADING_FONT', None)
+        return str(value).strip() if value else None
+    
+    def get_theme_ui_font(self) -> str | None:
+        value = self.get('theme_ui_font', 'VYASA_THEME_UI_FONT', None)
+        return str(value).strip() if value else None
+
+    def get_theme_tokens(self) -> dict[str, str]:
+        tokens = {}
+        for key, value in self._config.items():
+            if not key.startswith("theme_") or key in {"theme_preset", "theme_primary", "theme_body_font", "theme_heading_font", "theme_ui_font"}:
+                continue
+            if value is None:
+                continue
+            token_name = key.removeprefix("theme_").replace("_", "-")
+            tokens[token_name] = str(value).strip()
+        return tokens
     
     def get_host(self) -> str:
         """Get the server host."""
