@@ -7,16 +7,21 @@ from fasthtml.common import A, Aside, Button, Div, Footer, Main, NotStr, P, Span
 from monsterui.all import UkIcon
 
 _GOOGLE_FONT_QUERIES = {
+    "Be Vietnam Pro": "family=Be+Vietnam+Pro:wght@400;500;600;700",
+    "IBM Plex Mono": "family=IBM+Plex+Mono:wght@400;500;600;700",
     "Inter": "family=Inter:wght@400;500;600;700;800",
     "Manrope": "family=Manrope:wght@400;500;700;800",
     "Newsreader": "family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600",
+    "Noto Serif": "family=Noto+Serif:wght@400;500;600;700",
     "Fraunces": "family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1",
     "Outfit": "family=Outfit:wght@400;500;600;700",
     "Plus Jakarta Sans": "family=Plus+Jakarta+Sans:wght@400;500;600;700;800",
     "Playfair Display": "family=Playfair+Display:wght@400;500;600;700",
     "Bricolage Grotesque": "family=Bricolage+Grotesque:wght@400;500;600;700",
     "Cormorant Garamond": "family=Cormorant+Garamond:wght@400;500;600;700",
+    "Public Sans": "family=Public+Sans:wght@400;500;600;700;800",
     "Space Grotesk": "family=Space+Grotesk:wght@400;500;700",
+    "Work Sans": "family=Work+Sans:wght@400;500;600;700;800",
     "Lora": "family=Lora:wght@400;500;600;700",
 }
 
@@ -147,10 +152,10 @@ def _render_full_layout(content, title, show_sidebar, toc_content, current_path,
         mobile_toc_panel = Div(Div(Button(UkIcon("x", cls="w-5 h-5"), id="close-mobile-toc", cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto", type="button"), cls="vyasa-mobile-panel-header flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"), Div(build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if (show_toc and toc_items) else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")), cls="vyasa-mobile-panel-body p-4 overflow-y-auto"), id="mobile-toc-panel", cls="vyasa-mobile-panel fixed inset-0 bg-white dark:bg-slate-950 z-[9999] xl:hidden transform translate-x-full transition-transform duration-300") if show_toc else None
         nav_posts_items = get_posts(list(roles_key) if roles_key else [], current_path=current_path or "") if nav_posts_menu else None
         content_with_sidebars = Div(cls=f"vyasa-content-grid layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 flex gap-6 flex-1 {'min-h-0' if no_scroll else ''}".strip(), id="content-with-sidebars", **style_attr(layout_max_style))((Aside(Div(UkIcon("loader", cls="w-5 h-5 animate-spin"), Span("Loading posts…", cls="ml-2 text-sm"), cls="flex items-center justify-center h-32 text-slate-400"), cls="vyasa-sidebar vyasa-posts-sidebar hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]", id="posts-sidebar", hx_get=f"/_sidebar/posts?current_path={quote(current_path or '', safe='')}", hx_trigger="load", hx_swap="outerHTML") if not nav_posts_menu else None), main_content_container, toc_sidebar if toc_sidebar else None)
-        body_content = Div(id="page-container", cls=page_container_cls, **style_attr(page_style))(Div(navbar(show_mobile_menus=True, htmx_nav=htmx_nav, posts_menu_items=nav_posts_items, compact_mode=nav_posts_menu), cls=f"vyasa-navbar-shell layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-50 {navbar_margin_cls}".strip(), id="site-navbar", **style_attr(layout_max_style)), mobile_posts_panel, mobile_toc_panel if mobile_toc_panel else None, content_with_sidebars, footer_node(f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(), style_attr(layout_max_style)) if show_footer else None)
+        body_content = Div(id="page-container", cls=page_container_cls, **style_attr(page_style))(Div(navbar(show_mobile_menus=True, htmx_nav=htmx_nav, posts_menu_items=nav_posts_items, compact_mode=nav_posts_menu), cls=f"vyasa-navbar-shell layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-[1300] {navbar_margin_cls}".strip(), id="site-navbar", **style_attr(layout_max_style)), mobile_posts_panel, mobile_toc_panel if mobile_toc_panel else None, content_with_sidebars, footer_node(f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(), style_attr(layout_max_style)) if show_footer else None)
     else:
         custom_css_links = get_sidebar_custom_css_links(get_root_folder(), current_path, section_class) if current_path else []
-        body_content = Div(id="page-container", cls="flex flex-col min-h-screen", **style_attr(page_style))(Div(navbar(htmx_nav=htmx_nav), cls=f"vyasa-navbar-shell layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-50 mt-4".strip(), id="site-navbar", **style_attr(layout_max_style)), Main(*content, cls=f"vyasa-main-shell layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 py-8 space-y-8".strip(), id="main-content", hx_boost="true", hx_target="#main-content", hx_swap="outerHTML show:window:top settle:0.1s", **style_attr(layout_max_style)), footer_node(f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(), style_attr(layout_max_style)) if show_footer else None)
+        body_content = Div(id="page-container", cls="flex flex-col min-h-screen", **style_attr(page_style))(Div(navbar(htmx_nav=htmx_nav), cls=f"vyasa-navbar-shell layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-[1300] mt-4".strip(), id="site-navbar", **style_attr(layout_max_style)), Main(*content, cls=f"vyasa-main-shell layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 py-8 space-y-8".strip(), id="main-content", hx_boost="true", hx_target="#main-content", hx_swap="outerHTML show:window:top settle:0.1s", **style_attr(layout_max_style)), footer_node(f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(), style_attr(layout_max_style)) if show_footer else None)
     result = [Title(title), *theme_font_links, Div(*custom_css_links, id="scoped-css-container") if custom_css_links else Div(id="scoped-css-container"), body_content]
     logger.debug(f"[LAYOUT] FULL PAGE assembled in {(time.time() - layout_start_time)*1000:.2f}ms")
     return tuple(result)
