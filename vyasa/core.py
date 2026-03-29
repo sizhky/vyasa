@@ -603,12 +603,33 @@ def theme_toggle():
                 set franken to (localStorage's __FRANKEN__ or '{}') as Object
                 if the first <html/> matches .dark set franken's mode to 'dark' else set franken's mode to 'light' end
                 set localStorage's __FRANKEN__ to franken as JSON"""
-    return Button(
+    button = Button(
         UkIcon("moon", cls="dark:hidden"),
         UkIcon("sun", cls="hidden dark:block"),
         _=theme_script,
+        id="theme-mode-toggle",
         cls="p-1 hover:scale-110 shadow-none",
         type="button",
+    )
+    cfg = get_config()
+    if not cfg.get_theme_debug():
+        return button
+    active = cfg.get_theme_preset() or ""
+    presets = {name: cfg.load_theme_preset(name) for name in cfg.list_theme_presets()}
+    return Div(
+        Script(f"window.__VYASA_THEME_PRESETS__ = {json.dumps(presets)};"),
+        NotStr(
+            f"""
+            <select id="theme-preset-select" data-theme-active="{active}"
+                onchange="window.vyasaApplyThemePreset && window.vyasaApplyThemePreset(this.value)"
+                class="min-w-44 rounded-md bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none ring-1 ring-white/10">
+                <option value="">Theme</option>
+                {"".join(f'<option value="{name}"{" selected" if name == active else ""}>{name}</option>' for name in presets)}
+            </select>
+            """
+        ),
+        button,
+        cls="relative z-[1200] flex items-center gap-2",
     )
 
 

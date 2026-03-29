@@ -1530,6 +1530,80 @@ function getCurrentTheme() {
     return document.documentElement.classList.contains('dark') ? 'dark' : 'default';
 }
 
+const GOOGLE_FONT_QUERIES = {
+    'Be Vietnam Pro': 'family=Be+Vietnam+Pro:wght@400;500;600;700',
+    Inter: 'family=Inter:wght@400;500;600;700;800',
+    Manrope: 'family=Manrope:wght@400;500;700;800',
+    Newsreader: 'family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600',
+    'Noto Serif': 'family=Noto+Serif:wght@400;500;600;700',
+    'Plus Jakarta Sans': 'family=Plus+Jakarta+Sans:wght@400;500;600;700;800',
+    'Public Sans': 'family=Public+Sans:wght@400;500;600;700;800',
+    'Space Grotesk': 'family=Space+Grotesk:wght@400;500;700',
+    'Work Sans': 'family=Work+Sans:wght@400;500;600;700;800',
+};
+
+function ensureThemeFonts(theme) {
+    const stacks = [theme.theme_body_font, theme.theme_heading_font, theme.theme_ui_font].filter(Boolean);
+    const queries = new Set();
+    stacks.forEach((stack) => {
+        stack.split(',').map((part) => part.trim().replace(/^['"]|['"]$/g, '')).forEach((name) => {
+            if (GOOGLE_FONT_QUERIES[name]) queries.add(GOOGLE_FONT_QUERIES[name]);
+        });
+    });
+    if (!queries.size) return;
+    let link = document.getElementById('vyasa-runtime-fonts');
+    if (!link) {
+        link = document.createElement('link');
+        link.id = 'vyasa-runtime-fonts';
+        link.rel = 'stylesheet';
+        document.head.appendChild(link);
+    }
+    link.href = `https://fonts.googleapis.com/css2?${Array.from(queries).join('&')}&display=swap`;
+}
+
+function applyThemePreset(theme) {
+    if (!theme) return;
+    const root = document.documentElement;
+    const page = document.getElementById('page-container');
+    const targets = [root, page].filter(Boolean);
+    Object.entries(theme).forEach(([key, value]) => {
+        if (!key.startsWith('theme_') || !value || key === 'theme_preset') return;
+        const cssName = key === 'theme_body_font' ? '--vyasa-font-body'
+            : key === 'theme_heading_font' ? '--vyasa-font-heading'
+            : key === 'theme_ui_font' ? '--vyasa-font-ui'
+            : `--vyasa-${key.slice(6).replace(/_/g, '-')}`;
+        targets.forEach((el) => el.style.setProperty(cssName, String(value)));
+    });
+    if (theme.theme_primary) targets.forEach((el) => el.style.setProperty('--vyasa-primary-dim', `color-mix(in srgb, ${theme.theme_primary} 82%, black)`));
+    ensureThemeFonts(theme);
+}
+
+function syncThemePresetDebug(root = document) {
+    const select = root.querySelector ? root.querySelector('#theme-preset-select') : document.getElementById('theme-preset-select');
+    if (!select) return;
+    const presets = window.__VYASA_THEME_PRESETS__ || {};
+    const stored = JSON.parse(localStorage.getItem('__FRANKEN__') || '{"mode":"light"}');
+    const active = stored.preset || select.dataset.themeActive || '';
+    if (active && presets[active]) {
+        select.value = active;
+        applyThemePreset(presets[active]);
+    }
+}
+
+window.vyasaApplyThemePreset = function vyasaApplyThemePreset(next) {
+    const presets = window.__VYASA_THEME_PRESETS__ || {};
+    const franken = JSON.parse(localStorage.getItem('__FRANKEN__') || '{"mode":"light"}');
+    if (next && presets[next]) {
+        applyThemePreset(presets[next]);
+        franken.preset = next;
+    } else {
+        delete franken.preset;
+        window.location.reload();
+        return;
+    }
+    localStorage.setItem('__FRANKEN__', JSON.stringify(franken));
+};
+
 function getDynamicGanttWidth() {
     // Check if any mermaid wrapper has custom gantt width
     const wrappers = document.querySelectorAll('.mermaid-wrapper[data-gantt-width]');
@@ -2558,6 +2632,7 @@ function scheduleHighlightedCodeIncludes(root) {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    syncThemePresetDebug(document);
     replaceEscapedDollarPlaceholders(document.body);
     renderMathSafely(document.body);
     refreshVyasaTableScrollShadows(document);
@@ -2591,6 +2666,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     if (!event.target) {
         return;
     }
+    syncThemePresetDebug(document);
     replaceEscapedDollarPlaceholders(event.target);
     renderMathSafely(event.target);
     refreshVyasaTableScrollShadows(event.target);
@@ -2609,6 +2685,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
 });
 
 window.addEventListener('load', () => {
+    syncThemePresetDebug(document);
     normalizeCriticalTextColors(document);
     recordStyleProbe('load');
     scheduleHashAlignment();

@@ -25,6 +25,8 @@ Start here:
 6. For code-block color changes, check `references/theming.md` for the `--vyasa-code-*` CSS variables so users can override palettes from `custom.css`.
 7. For books/tutorials/docs sequences, prefer Vyasa's built-in sibling previous/next pager before inventing manual chapter-footer HTML; it follows the folder's `.vyasa` ordering, not raw filename sort.
 8. For shell theming, prefer Vyasa's explicit stable hooks over positional selectors: `.vyasa-navbar-shell`, `.vyasa-navbar-card`, `.vyasa-content-grid`, `.vyasa-main-shell`, `.vyasa-sidebar`, `.vyasa-sidebar-card`, `.vyasa-sidebar-toggle`, `.vyasa-sidebar-body`, `.vyasa-posts-sidebar`, `.vyasa-toc-sidebar`, `.vyasa-mobile-panel`, `.vyasa-mobile-panel-header`, `.vyasa-mobile-panel-body`, `.vyasa-footer-shell`, `.vyasa-footer-card`.
+9. For FastHTML or MonsterUI form controls, inspect the rendered HTML before wiring DOM events; helper components may wrap or hide the native input. If you need a direct `change` handler or debug-only control, prefer a plain native element over a styled helper.
+10. For Vyasa boot-time scripts, only depend on data available in the head. Do not read globals from `head-init.js` that are emitted later from body/navbar markup; if the data is body-scoped, apply it from the main runtime script after DOM creation.
 
 Core rules:
 
@@ -40,4 +42,5 @@ Core rules:
 - Do not invent unsupported frontmatter keys, sort modes, or config keys.
 - Supported root `.vyasa` app-level keys now include `theme_preset` for selecting a bundled preset and `theme_primary` for overriding the primary accent color without editing CSS.
 - Bundled presets now live inside the package, so `theme_preset = "serene-manuscript"`, `theme_preset = "kinetic-scholar"`, or `theme_preset = "ultra-soft"` should work in normal `pip install vyasa` deployments even without a local `.vyasa-themes` folder.
+- When debugging runtime theme switching, verify the actual rendered control and stacking context before retrying CSS fixes; z-index changes are not meaningful until you confirm which element receives the event and which ancestor clips or layers it.
 - Never emit real secret values — use explicit placeholders.

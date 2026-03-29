@@ -20,6 +20,35 @@ MIN_DYNAMIC_PORT = 1024
 MAX_DYNAMIC_PORT = 65535
 
 
+def load_theme_preset(preset_name: str, base_dir: Optional[Path] = None) -> dict:
+    name = str(preset_name or "").strip()
+    if not name:
+        return {}
+    if base_dir:
+        preset_file = base_dir / ".vyasa-themes" / f"{name}.toml"
+        if preset_file.exists():
+            with open(preset_file, "rb") as f:
+                return tomllib.load(f)
+    package_file = resources.files("vyasa.themes").joinpath(f"{name}.toml")
+    if package_file.is_file():
+        with package_file.open("rb") as f:
+            return tomllib.load(f)
+    return {}
+
+
+def list_theme_presets(base_dir: Optional[Path] = None) -> list[str]:
+    names = set()
+    if base_dir:
+        theme_dir = base_dir / ".vyasa-themes"
+        if theme_dir.exists():
+            names.update(path.stem for path in theme_dir.glob("*.toml"))
+    try:
+        names.update(path.name[:-5] for path in resources.files("vyasa.themes").iterdir() if path.name.endswith(".toml"))
+    except Exception:
+        pass
+    return sorted(names)
+
+
 def port_for_working_directory(path: Path) -> int:
     """Map an absolute directory path to a deterministic non-privileged port."""
     normalized = str(path.resolve()).encode("utf-8")
@@ -71,19 +100,7 @@ class VyasaConfig:
                     self._config = tomllib.load(f)
                 preset_name = str(self._config.get("theme_preset", "")).strip()
                 if preset_name:
-                    preset_cfg = None
-                    preset_file = config_file.parent / ".vyasa-themes" / f"{preset_name}.toml"
-                    if preset_file.exists():
-                        with open(preset_file, "rb") as f:
-                            preset_cfg = tomllib.load(f)
-                    else:
-                        try:
-                            package_file = resources.files("vyasa.themes").joinpath(f"{preset_name}.toml")
-                            if package_file.is_file():
-                                with package_file.open("rb") as f:
-                                    preset_cfg = tomllib.load(f)
-                        except Exception:
-                            preset_cfg = None
+                    preset_cfg = load_theme_preset(preset_name, config_file.parent)
                     if preset_cfg:
                         self._config = {**preset_cfg, **self._config}
                 self._loaded_config_path = config_file
@@ -147,6 +164,20 @@ class VyasaConfig:
     def get_theme_ui_font(self) -> str | None:
         value = self.get('theme_ui_font', 'VYASA_THEME_UI_FONT', None)
         return str(value).strip() if value else None
+
+    def get_theme_debug(self) -> bool:
+        value = self.get('theme_debug', 'VYASA_THEME_DEBUG', False)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
+
+    def list_theme_presets(self) -> list[str]:
+        base_dir = self._loaded_config_path.parent if self._loaded_config_path else None
+        return list_theme_presets(base_dir)
+
+    def load_theme_preset(self, preset_name: str) -> dict[str, str]:
+        base_dir = self._loaded_config_path.parent if self._loaded_config_path else None
+        return load_theme_preset(preset_name, base_dir)
 
     def get_theme_tokens(self) -> dict[str, str]:
         tokens = {}
