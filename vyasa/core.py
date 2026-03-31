@@ -82,6 +82,7 @@ from .tree_rendering import (
     build_post_tree_render,
     folder_has_visible_descendant as tree_folder_has_visible_descendant,
 )
+from .favicon import favicon_href, favicon_svg
 _asset_url = asset_url
 
 
@@ -95,7 +96,7 @@ def get_blog_title():
 
 
 def get_favicon_href():
-    return "/static/icon.png"
+    return favicon_href(get_root_folder())
 
 
 hdrs = (
@@ -259,13 +260,8 @@ app = _build_app()
 
 
 def _favicon_icon_path():
-    root_icon = get_root_folder() / "static" / "icon.png"
-    if root_icon.exists():
-        return root_icon
-    package_icon = Path(__file__).parent / "static" / "icon.png"
-    if package_icon.exists():
-        return package_icon
-    return None
+    path = get_root_folder() / "static" / "icon.png"
+    return path if path.exists() else None
 
 
 @app.route("/static/icon.png")
@@ -274,6 +270,11 @@ async def favicon_icon():
     if path and path.exists():
         return FileResponse(path)
     return Response(status_code=404)
+
+
+@app.route("/static/icon.svg")
+async def favicon_svg_icon():
+    return Response(favicon_svg(get_root_folder()), media_type="image/svg+xml")
 
 
 def _mount_package_static(app_instance):
