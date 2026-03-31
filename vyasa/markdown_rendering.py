@@ -57,6 +57,40 @@ _CALLOUT_SVGS = {
     "code": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 16-4-4 4-4"/><path d="m16 8 4 4-4 4"/><path d="m14 4-4 16"/></svg>',
     "quote-right": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 11H6a2 2 0 0 0-2 2v1a4 4 0 0 0 4 4h1"/><path d="M20 11h-4a2 2 0 0 0-2 2v1a4 4 0 0 0 4 4h1"/></svg>',
 }
+_TODO_META_SVGS = {
+    "owner": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/></svg>',
+    "deadline": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M3 11h18"/></svg>',
+    "priority": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="m5 10 7-7 7 7"/></svg>',
+    "status": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m9 12 2 2 4-4"/></svg>',
+    "project": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18"/><path d="M6 3h12l1 4H5z"/><path d="M5 7h14v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/></svg>',
+}
+_TODO_META_ALIASES = {
+    "author": "owner",
+    "assignee": "owner",
+    "person": "owner",
+    "user": "owner",
+    "who": "owner",
+    "due": "deadline",
+    "date": "deadline",
+    "when": "deadline",
+    "eta": "deadline",
+    "urgency": "priority",
+    "severity": "priority",
+    "importance": "priority",
+    "state": "status",
+    "phase": "status",
+    "bucket": "project",
+    "area": "project",
+    "team": "project",
+    "stream": "project",
+}
+
+
+def _todo_accent(text):
+    seed = 0
+    for ch in text:
+        seed = (seed * 33 + ord(ch)) % 360
+    return f"hsl({seed} 40% 52%)"
 
 
 def _callout_label(kind):
@@ -116,6 +150,31 @@ def _render_code_include(snippet, lang="", start=1, highlight_spec=""):
         f'<pre><code{lang_class} {" ".join(attrs)}>{html.escape(snippet)}</code></pre>'
         '</div>'
     )
+
+
+def _render_todo_html(html_out):
+    def _todo_accent(text):
+        seed = 0
+        for ch in text:
+            seed = (seed * 33 + ord(ch)) % 360
+        hue = seed
+        return f"hsl({hue} 38% 46%)"
+
+    def _rewrite_todo(match):
+        todo_html = match.group(0)
+        plain = re.sub(r"<[^>]+>", " ", todo_html)
+        accent = _todo_accent(" ".join(plain.split()))
+        todo_html = todo_html.replace(
+            "<todo>",
+            f'<todo style="--vyasa-callout-accent: {accent};">',
+            1,
+        )
+        def _rewrite_meta(meta_match):
+            kind = meta_match.group(1)
+            label = re.sub(r"^[^A-Za-z0-9<]+", "", meta_match.group(2)).strip()
+            return f'<span class="{kind}"><span class="vyasa-todo-meta-icon" aria-hidden="true">{_TODO_META_SVGS[kind]}</span><span>{label}</span></span>'
+        return re.sub(r'<span class="(owner|deadline)">([\s\S]*?)</span>', _rewrite_meta, todo_html)
+    return re.sub(r"<todo>[\s\S]*?</todo>", _rewrite_todo, html_out)
 
 
 class FrankenRenderer(mst.HTMLRenderer):
@@ -237,16 +296,29 @@ class ContentRenderer(FrankenRenderer):
         if task_pattern:
             checked = task_pattern.group(1).lower() == "x"
             content = task_pattern.group(2).strip()
-            if checked:
-                checkbox_style = "background-color: #10b981; border-color: #10b981;"
-                checkmark = '<svg class="w-full h-full text-white" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3,8 6,11 13,4"></polyline></svg>'
-            else:
-                checkbox_style = "background-color: #6b7280; border-color: #6b7280;"
-                checkmark = ""
-            checkbox = f"""<span class="inline-flex items-center justify-center mr-3 mt-0.5" style="width: 20px; height: 20px; border-radius: 6px; border: 2px solid; {checkbox_style} flex-shrink: 0;">
-                {checkmark}
-            </span>"""
-            return f'<li class="task-list-item flex items-start" style="list-style: none; margin: 0.5rem 0;">{checkbox}<span class="flex-1">{content}</span></li>\n'
+            parts = [part.strip() for part in content.split(" | ") if part.strip()]
+            title = parts[0] if parts else content
+            meta = []
+            for part in parts[1:]:
+                if ":" not in part:
+                    continue
+                key, value = [item.strip() for item in part.split(":", 1)]
+                key_slug = re.sub(r"[^a-z0-9]+", "-", key.lower()).strip("-")
+                key_slug = _TODO_META_ALIASES.get(key_slug, key_slug)
+                icon = _TODO_META_SVGS.get(key_slug, _CALLOUT_SVGS["info"])
+                value_slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+                extra_cls = ""
+                if key_slug == "priority" and value_slug not in {
+                    "", "normal", "medium", "default", "none", "low", "minor",
+                    "routine", "standard", "usual", "backlog", "someday",
+                    "later", "eventually", "whenever", "optional",
+                }:
+                    extra_cls = " is-elevated"
+                meta.append(f'<span class="vyasa-task-meta vyasa-task-meta-{key_slug}{extra_cls}"><span class="vyasa-todo-meta-icon" aria-hidden="true">{icon}</span><span>{html.escape(value)}</span></span>')
+            accent = _todo_accent(title)
+            done_cls = " is-done" if checked else ""
+            meta_row = f'<div class="vyasa-task-meta-row">{"".join(meta)}</div>' if meta else ""
+            return f'<li class="vyasa-task-card{done_cls}" style="--vyasa-callout-accent: {accent};"><div class="vyasa-task-pill">Task</div><div class="vyasa-task-copy">{title}</div>{meta_row}</li>\n'
         return f"<li>{inner}</li>\n"
 
     def render_youtube_embed(self, token):
@@ -574,5 +646,6 @@ def from_md(content, img_dir=None, current_path=None):
                 )
             placeholder = f'<div class="vyasa-code-include-placeholder" data-include-id="{include_id}"></div>'
             html_out = html_out.replace(placeholder, rendered)
+    html_out = _render_todo_html(html_out)
     html_out = re.sub(r"(<table\b[\s\S]*?</table>)", r'<div class="vyasa-table-scroll">\1</div>', html_out, flags=re.IGNORECASE)
     return Div(Link(rel="stylesheet", href=_asset_url("/static/sidenote.css")), NotStr(apply_classes(html_out, class_map_mods=mods)), cls="w-full")
