@@ -202,6 +202,20 @@ Renders as `<span class="highlight">highlighted</span>`. Useful with folder-leve
 
 Supports aliases like `warn`, `error`, `faq`, `help`, `check`, `done`, `summary`, `tldr`, and `cite`, plus fold markers `+` and `-`, nesting, custom titles, and custom types. This is the preferred emitted form.
 
+For richer task cards, prefer markdown task-list syntax instead of custom HTML:
+
+```markdown
+- [ ] Write a blog post | author: John Doe | deadline: 2024-12-31 | priority: high | status: in progress | project: Vyasa Blog
+```
+
+Recognized task metadata families:
+
+- person: `owner`, `author`, `assignee`, `person`, `user`, `who`
+- deadline: `deadline`, `due`, `date`, `when`, `eta`
+- priority: `priority`, `urgency`, `severity`, `importance`
+- status: `status`, `state`, `phase`
+- project: `project`, `bucket`, `area`, `team`, `stream`
+
 ## Code snippet includes
 
 ```markdown

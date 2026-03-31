@@ -731,6 +731,20 @@ Supported callout families and aliases:
 
 Custom types like `> [!business-case]` also render and expose `data-callout="business-case"` for CSS targeting.
 
+Task lists can also render as richer task cards when you use task-list syntax with pipe-delimited metadata:
+
+```markdown
+- [ ] Write a blog post | author: John Doe | deadline: 2024-12-31 | priority: high | status: in progress | project: Vyasa Blog
+```
+
+Supported task metadata families are:
+
+- person: `owner`, `author`, `assignee`, `person`, `user`, `who`
+- deadline: `deadline`, `due`, `date`, `when`, `eta`
+- priority: `priority`, `urgency`, `severity`, `importance`
+- status: `status`, `state`, `phase`
+- project: `project`, `bucket`, `area`, `team`, `stream`
+
 ## Collapsible Sections
 
 :::tabs
