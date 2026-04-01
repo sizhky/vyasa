@@ -121,6 +121,7 @@ hdrs = (
     Script(src="https://unpkg.com/hyperscript.org@0.9.12"),
     Script(src=_asset_url("/static/scripts.js"), type="module"),
     Link(rel="stylesheet", href=_asset_url("/static/header.css")),
+    Link(rel="stylesheet", href=_asset_url("/static/kbd.css")),
     Style(
         """
         .vyasa-table-scroll { width: 100%; max-width: 100%; position: static; left: auto; transform: none; margin: 1.5rem 0; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-gutter: stable both-edges; box-shadow: none; transition: box-shadow 160ms ease; }

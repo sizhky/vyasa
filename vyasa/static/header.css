@@ -116,7 +116,7 @@ hr::after {
     filter: blur(0.22rem);
     border-radius: 999px;
 }
-.uk-text-meta, kbd, .toc-link, summary, button, .vyasa-caption {
+.uk-text-meta, .toc-link, summary, button, .vyasa-caption {
     font-family: var(--vyasa-font-ui);
 }
 
@@ -136,8 +136,7 @@ input,
 select,
 textarea,
 label,
-summary,
-kbd {
+summary {
     font-family: var(--vyasa-font-ui);
 }
 
@@ -321,6 +320,20 @@ kbd {
     background: var(--vyasa-paper-low) !important;
     color: var(--vyasa-ink) !important;
     border-radius: 1rem;
+}
+
+.vyasa-footer-card a,
+.vyasa-footer-card a:visited,
+.vyasa-footer-card button,
+.vyasa-footer-card summary,
+.vyasa-footer-card [uk-icon] {
+    color: var(--vyasa-ink) !important;
+}
+
+.vyasa-footer-card a:hover,
+.vyasa-footer-card button:hover,
+.vyasa-footer-card summary:hover {
+    color: color-mix(in srgb, var(--vyasa-ink) 72%, var(--vyasa-primary) 28%) !important;
 }
 
 .chat-row-block { padding: 14px 0; }

@@ -38,8 +38,7 @@ input,
 select,
 textarea,
 label,
-summary,
-kbd {
+summary {
     font-family: 'Inter', sans-serif;
 }
 
