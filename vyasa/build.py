@@ -13,7 +13,7 @@ from monsterui.all import *
 from .helpers import (
     _effective_abbreviations, _effective_ignore_list,
     _effective_include_list, _should_include_folder, _strip_inline_markdown,
-    _unique_anchor, find_folder_note_file,
+    _unique_anchor, estimate_read_time_minutes, find_folder_note_file,
     get_adjacent_posts, get_post_title, parse_frontmatter, resolve_markdown_title, slug_to_title,
     text_to_anchor,
 )
@@ -633,7 +633,8 @@ def build_static_site(input_dir=None, output_dir=None):
         
         # Render markdown to HTML
         content_div = from_md(render_content, current_path=str(relative_path))
-        title_html = f'<h1 class="text-4xl font-bold mb-8">{post_title}</h1>'
+        read_time = estimate_read_time_minutes(render_content)
+        title_html = f'<div class="mb-8"><h1 class="text-4xl font-bold">{post_title}</h1><p class="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2">{read_time}-min read</p></div>'
         content_html = title_html + to_xml(content_div)
         
         # Extract TOC

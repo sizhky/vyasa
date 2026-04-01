@@ -617,19 +617,30 @@ def theme_toggle():
         return button
     active = cfg.get_theme_preset() or ""
     presets = {name: cfg.load_theme_preset(name) for name in cfg.list_theme_presets()}
+    menu_items = "".join(
+        f'<button type="button" data-theme-name="{name}" '
+        f'onclick="window.vyasaApplyThemePreset && window.vyasaApplyThemePreset(this.dataset.themeName, this)" '
+        f'class="theme-preset-option block w-full rounded px-3 py-2 text-left hover:bg-white/10">{name}</button>'
+        for name in presets
+    )
     return Div(
         Script(f"window.__VYASA_THEME_PRESETS__ = {json.dumps(presets)};"),
         NotStr(
             f"""
-            <div class="flex items-center gap-2">
-                <select id="theme-preset-select" data-theme-active="{active}"
-                    onchange="window.vyasaApplyThemePreset && window.vyasaApplyThemePreset(this.value)"
-                    class="min-w-44 rounded-md bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none ring-1 ring-white/10">
-                    <option value="">Theme</option>
-                    {"".join(f'<option value="{name}"{" selected" if name == active else ""}>{name}</option>' for name in presets)}
-                </select>
+            <div class="flex items-center gap-2" data-theme-switcher>
+                <div id="theme-preset-dropdown" class="relative min-w-44" style="position:relative;min-width:11rem;">
+                    <button type="button" id="theme-preset-toggle"
+                        onclick="window.vyasaToggleThemePresetMenu && window.vyasaToggleThemePresetMenu(this)"
+                        class="flex w-full items-center justify-between rounded-md bg-slate-950/70 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10">
+                        <span id="theme-preset-active-label" class="truncate">{active or "Theme"}</span>
+                        <span class="ml-3 text-slate-300">⌄</span>
+                    </button>
+                    <div id="theme-preset-menu" style="display:none;position:absolute;left:0;top:calc(100% + 0.5rem);z-index:1400;max-height:18rem;width:16rem;overflow-y:auto;border-radius:0.375rem;background:rgba(2,6,23,0.95);padding:0.25rem;box-shadow:0 10px 30px rgba(15,23,42,0.35);border:1px solid rgba(255,255,255,0.1);">
+                        {menu_items}
+                    </div>
+                </div>
                 <button type="button" title="Random theme font"
-                    onclick="window.vyasaApplyRandomThemePreset && window.vyasaApplyRandomThemePreset()"
+                    onclick="window.vyasaApplyRandomThemePreset && window.vyasaApplyRandomThemePreset(this)"
                     class="rounded-md bg-slate-950/70 px-3 py-2 text-slate-100 ring-1 ring-white/10 hover:bg-slate-900/80">
                     <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M4 7h10"/>

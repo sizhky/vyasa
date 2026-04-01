@@ -128,14 +128,32 @@ def render_layout(*content, htmx, title=None, show_sidebar=False, toc_content=No
 
     def _footer_node(outer_cls, outer_style):
         logout_button = None
+        admin_links = None
         if auth:
             display_name = auth.get("name") or auth.get("email") or auth.get("username") or "User"
             impersonator = auth.get("impersonator")
+            roles = auth.get("roles") or []
+            impersonator_roles = impersonator.get("roles") if impersonator else []
+            is_admin = "full" in roles or "full" in (impersonator_roles or [])
             if impersonator:
                 original = impersonator.get("name") or impersonator.get("email") or impersonator.get("username") or "User"
                 display_name = f"Impersonating {display_name} (as {original})"
             logout_button = A(f"Logout {display_name}", href="/logout", cls="text-sm text-white/80 hover:text-white underline")
-        footer_inner = Div(Div(logout_button, cls="flex items-center") if logout_button else Div(), Div(NotStr('Powered by <a href="https://github.com/sizhky/vyasa" class="underline hover:text-white/80" target="_blank" rel="noopener noreferrer">Vyasa</a> and ❤️')), cls="flex items-center justify-between w-full")
+            if is_admin:
+                admin_links = Div(
+                    A("RBAC", href="/admin/rbac", cls="text-sm text-white/80 hover:text-white underline"),
+                    A("Impersonate", href="/admin/impersonate", cls="text-sm text-white/80 hover:text-white underline"),
+                    cls="flex items-center gap-3",
+                )
+        footer_inner = Div(
+            Div(logout_button, cls="flex items-center") if logout_button else Div(),
+            Div(
+                admin_links if admin_links else Div(),
+                Div(NotStr('Powered by <a href="https://github.com/sizhky/vyasa" class="underline hover:text-white/80" target="_blank" rel="noopener noreferrer">Vyasa</a> and ❤️')),
+                cls="flex items-center gap-4",
+            ),
+            cls="flex items-center justify-between w-full",
+        )
         return Footer(Div(footer_inner, cls="vyasa-footer-card bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800"), cls=f"{outer_cls} vyasa-footer-shell".strip(), id="site-footer", **outer_style)
 
     if htmx and getattr(htmx, "request", None):

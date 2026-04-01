@@ -1607,6 +1607,20 @@ function applyThemePreset(theme) {
     const root = document.documentElement;
     const page = document.getElementById('page-container');
     const targets = [root, page].filter(Boolean);
+    const runtimeThemeVars = new Set();
+    Object.values(window.__VYASA_THEME_PRESETS__ || {}).forEach((preset) => {
+        Object.keys(preset || {}).forEach((key) => {
+            if (!key.startsWith('theme_') || key === 'theme_preset') return;
+            const cssName = key === 'theme_body_font' ? '--vyasa-font-body'
+                : key === 'theme_heading_font' ? '--vyasa-font-heading'
+                : key === 'theme_ui_font' ? '--vyasa-font-ui'
+                : `--vyasa-${key.slice(6).replace(/_/g, '-')}`;
+            runtimeThemeVars.add(cssName);
+        });
+    });
+    targets.forEach((el) => {
+        runtimeThemeVars.forEach((cssName) => el.style.removeProperty(cssName));
+    });
     Object.entries(theme).forEach(([key, value]) => {
         if (!key.startsWith('theme_') || !value || key === 'theme_preset') return;
         const cssName = key === 'theme_body_font' ? '--vyasa-font-body'
@@ -1619,22 +1633,52 @@ function applyThemePreset(theme) {
     ensureThemeFonts(theme);
 }
 
+function getVisibleThemeControl(id) {
+    const nodes = Array.from(document.querySelectorAll(`#${id}`));
+    return nodes.find((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+    }) || nodes[nodes.length - 1] || null;
+}
+
+function getThemeSwitcher(source) {
+    return source?.closest?.('[data-theme-switcher]') || document.querySelector('[data-theme-switcher]');
+}
+
+function syncThemePresetSelect(next, source) {
+    const scope = getThemeSwitcher(source);
+    const label = scope?.querySelector('#theme-preset-active-label') || getVisibleThemeControl('theme-preset-active-label');
+    if (label) label.textContent = next || 'Theme';
+    const menu = scope?.querySelector('#theme-preset-menu') || getVisibleThemeControl('theme-preset-menu');
+    (menu ? Array.from(menu.querySelectorAll('.theme-preset-option')) : []).forEach((option) => {
+        const active = option.dataset.themeName === next;
+        option.classList.toggle('bg-white/15', active);
+        option.classList.toggle('text-white', active);
+    });
+}
+
 function syncThemePresetDebug(root = document) {
-    const select = root.querySelector ? root.querySelector('#theme-preset-select') : document.getElementById('theme-preset-select');
-    if (!select) return;
     const presets = window.__VYASA_THEME_PRESETS__ || {};
     const stored = JSON.parse(localStorage.getItem('__FRANKEN__') || '{"mode":"light"}');
-    const active = stored.preset || select.dataset.themeActive || '';
+    const label = root.querySelector ? root.querySelector('#theme-preset-active-label') : getVisibleThemeControl('theme-preset-active-label');
+    const active = stored.preset || (label ? label.textContent.trim() : '') || '';
     if (active && presets[active]) {
-        select.value = active;
+        syncThemePresetSelect(active);
         applyThemePreset(presets[active]);
     }
 }
 
-window.vyasaApplyThemePreset = function vyasaApplyThemePreset(next) {
+window.vyasaToggleThemePresetMenu = function vyasaToggleThemePresetMenu(source) {
+    const menu = getThemeSwitcher(source)?.querySelector('#theme-preset-menu') || getVisibleThemeControl('theme-preset-menu');
+    if (!menu) return;
+    menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+};
+
+window.vyasaApplyThemePreset = function vyasaApplyThemePreset(next, source) {
     const presets = window.__VYASA_THEME_PRESETS__ || {};
     const franken = JSON.parse(localStorage.getItem('__FRANKEN__') || '{"mode":"light"}');
     if (next && presets[next]) {
+        syncThemePresetSelect(next, source);
         applyThemePreset(presets[next]);
         franken.preset = next;
     } else {
@@ -1645,15 +1689,14 @@ window.vyasaApplyThemePreset = function vyasaApplyThemePreset(next) {
     localStorage.setItem('__FRANKEN__', JSON.stringify(franken));
 };
 
-window.vyasaApplyRandomThemePreset = function vyasaApplyRandomThemePreset() {
+window.vyasaApplyRandomThemePreset = function vyasaApplyRandomThemePreset(source) {
     const presets = Object.keys(window.__VYASA_THEME_PRESETS__ || {});
     if (!presets.length) return;
-    const select = document.getElementById('theme-preset-select');
-    const current = select ? select.value : '';
+    const label = getThemeSwitcher(source)?.querySelector('#theme-preset-active-label') || getVisibleThemeControl('theme-preset-active-label');
+    const current = label ? label.textContent.trim() : '';
     const pool = presets.length > 1 ? presets.filter((name) => name !== current) : presets;
     const next = pool[Math.floor(Math.random() * pool.length)];
-    if (select) select.value = next;
-    window.vyasaApplyThemePreset(next);
+    window.vyasaApplyThemePreset(next, source);
 };
 
 function getDynamicGanttWidth() {

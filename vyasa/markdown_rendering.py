@@ -177,6 +177,18 @@ def _render_todo_html(html_out):
     return re.sub(r"<todo>[\s\S]*?</todo>", _rewrite_todo, html_out)
 
 
+def _render_double_rules(html_out):
+    pattern = re.compile(r'(<hr[^>]*>\s*){2,}', re.IGNORECASE)
+
+    def repl(match):
+        hrs = re.findall(r"<hr[^>]*>", match.group(0), flags=re.IGNORECASE)
+        if len(hrs) == 2:
+            return '<div class="vyasa-double-rule" aria-hidden="true"><hr><hr></div>'
+        return match.group(0)
+
+    return pattern.sub(repl, html_out)
+
+
 class FrankenRenderer(mst.HTMLRenderer):
     def __init__(self, *args, img_dir=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -647,5 +659,6 @@ def from_md(content, img_dir=None, current_path=None):
             placeholder = f'<div class="vyasa-code-include-placeholder" data-include-id="{include_id}"></div>'
             html_out = html_out.replace(placeholder, rendered)
     html_out = _render_todo_html(html_out)
+    html_out = _render_double_rules(html_out)
     html_out = re.sub(r"(<table\b[\s\S]*?</table>)", r'<div class="vyasa-table-scroll">\1</div>', html_out, flags=re.IGNORECASE)
     return Div(Link(rel="stylesheet", href=_asset_url("/static/sidenote.css")), NotStr(apply_classes(html_out, class_map_mods=mods)), cls="w-full")
