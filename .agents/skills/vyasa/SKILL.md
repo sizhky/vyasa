@@ -40,6 +40,7 @@ Core rules:
 - For custom callout types, rely on `data-callout="your-type"` plus `custom.css` rather than inventing special renderer logic unless the user explicitly wants core support.
 - For navbar, footer, sidebar, and mobile-panel styling, do not teach or rely on positional selectors like `#site-navbar > *`, `#site-footer > *`, or `#posts-sidebar details > summary`; target the explicit Vyasa hook classes instead so runtime and static-build themes stay stable.
 - For Mermaid labels, use literal `<br/>` for line breaks inside nodes and edge text; do not emit `\n`.
+- For markdown tables with long cell content, prefer manual line breaks inside the cell using literal `<br/>`; wrap prose cells to roughly 8 words per line so readers do not need to horizontally scroll for a single wide column.
 - Do not invent unsupported frontmatter keys, sort modes, or config keys.
 - Supported root `.vyasa` app-level keys now include `theme_preset` for selecting a bundled preset and `theme_primary` for overriding the primary accent color without editing CSS.
 - Bundled presets now live inside the package, so `theme_preset = "serene-manuscript"`, `theme_preset = "kinetic-scholar"`, or `theme_preset = "ultra-soft"` should work in normal `pip install vyasa` deployments even without a local `.vyasa-themes` folder.
