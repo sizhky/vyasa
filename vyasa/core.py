@@ -621,12 +621,26 @@ def theme_toggle():
         Script(f"window.__VYASA_THEME_PRESETS__ = {json.dumps(presets)};"),
         NotStr(
             f"""
-            <select id="theme-preset-select" data-theme-active="{active}"
-                onchange="window.vyasaApplyThemePreset && window.vyasaApplyThemePreset(this.value)"
-                class="min-w-44 rounded-md bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none ring-1 ring-white/10">
-                <option value="">Theme</option>
-                {"".join(f'<option value="{name}"{" selected" if name == active else ""}>{name}</option>' for name in presets)}
-            </select>
+            <div class="flex items-center gap-2">
+                <select id="theme-preset-select" data-theme-active="{active}"
+                    onchange="window.vyasaApplyThemePreset && window.vyasaApplyThemePreset(this.value)"
+                    class="min-w-44 rounded-md bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none ring-1 ring-white/10">
+                    <option value="">Theme</option>
+                    {"".join(f'<option value="{name}"{" selected" if name == active else ""}>{name}</option>' for name in presets)}
+                </select>
+                <button type="button" title="Random theme font"
+                    onclick="window.vyasaApplyRandomThemePreset && window.vyasaApplyRandomThemePreset()"
+                    class="rounded-md bg-slate-950/70 px-3 py-2 text-slate-100 ring-1 ring-white/10 hover:bg-slate-900/80">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 7h10"/>
+                        <path d="M11 4l3 3-3 3"/>
+                        <path d="M20 17H10"/>
+                        <path d="M13 14l-3 3 3 3"/>
+                        <path d="M17 7c1.8 0 3 1.2 3 3"/>
+                        <path d="M7 17c-1.8 0-3-1.2-3-3"/>
+                    </svg>
+                </button>
+            </div>
             """
         ),
         button,

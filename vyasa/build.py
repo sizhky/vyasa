@@ -193,6 +193,7 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
         .vyasa-code-line { display: block; white-space: pre; margin: 0 -1rem; padding: 0 1rem; }
         .code-block .vyasa-code-line-highlight { background: var(--vyasa-code-highlight-bg); box-shadow: inset 6px 0 0 var(--vyasa-code-highlight-accent); }
         .code-block pre, .code-block pre code, pre code.hljs { background: var(--vyasa-code-bg); color: var(--vyasa-code-fg); }
+        .code-block pre code, pre code.hljs { line-height: 1.2; }
         .code-block pre { border: 1px solid var(--vyasa-code-border); border-radius: 12px; }
         .hljs-comment, .hljs-quote { color: var(--vyasa-code-comment); }
         .hljs-keyword, .hljs-selector-tag, .hljs-literal { color: var(--vyasa-code-keyword); }
