@@ -42,12 +42,14 @@ async def handle_admin_rbac(htmx, request, *, get_auth_from_request, rbac_rules,
         return Response("Forbidden", status_code=403)
     error = success = None
     cfg = rbac_cfg
+    form_values = None
     if request.method == "POST":
         form = await request.form()
+        form_values = {key: str(form.get(key, "")) for key in ("default_roles", "role_users_json", "user_roles_json", "rules_json")}
         new_cfg, error = parse_rbac_form(form, parse_roles_text)
         if not error:
             try:
-                rbac_db_write(new_cfg); write_rbac_to_vyasa(new_cfg); set_rbac_cfg(new_cfg); cached_build_post_tree.cache_clear(); cached_posts_sidebar_html.cache_clear(); success = "RBAC settings saved."; cfg = new_cfg
+                rbac_db_write(new_cfg); write_rbac_to_vyasa(new_cfg); set_rbac_cfg(new_cfg); cached_build_post_tree.cache_clear(); cached_posts_sidebar_html.cache_clear(); success = "RBAC settings saved."; cfg = new_cfg; form_values = None
             except Exception as exc:
                 error = f"Failed to save RBAC settings: {exc}"
-    return layout(rbac_admin_content(cfg, error, success, render_rbac_toml(cfg)), htmx=htmx, title="RBAC Admin", show_sidebar=False, auth=auth, htmx_nav=False)
+    return layout(rbac_admin_content(cfg, error, success, render_rbac_toml(cfg), form_values=form_values), htmx=htmx, title="RBAC Admin", show_sidebar=False, auth=auth, htmx_nav=False)

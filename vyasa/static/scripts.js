@@ -2672,6 +2672,30 @@ function initIframeFullscreenToggle() {
     });
 }
 
+function initJsonFocusToggle() {
+    const close = () => document.getElementById('json-focus-modal')?.remove();
+    document.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-json-focus-target]');
+        if (!button) return;
+        const textarea = document.getElementById(button.getAttribute('data-json-focus-target'));
+        if (!textarea) return;
+        const title = button.getAttribute('data-json-focus-title') || 'JSON';
+        close();
+        const modal = document.createElement('div');
+        modal.id = 'json-focus-modal';
+        modal.className = 'fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm p-4 flex items-center justify-center';
+        modal.innerHTML = `<div class="w-full max-w-6xl h-[92vh] bg-white dark:bg-slate-950 rounded-xl shadow-2xl flex flex-col"><div class="flex items-center justify-between gap-3 p-4 border-b border-slate-200 dark:border-slate-800"><div class="text-sm font-semibold text-slate-900 dark:text-slate-100">${title}</div><div class="flex items-center gap-2"><button type="button" class="json-focus-save px-3 py-2 text-sm rounded-md bg-blue-600 text-white">Save</button><button type="button" class="json-focus-close px-3 py-2 text-sm rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200">Close</button></div></div><div class="p-4 flex-1"><textarea class="w-full h-full vyasa-admin-json px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/85 dark:bg-slate-900/70"></textarea></div></div>`;
+        const editor = modal.querySelector('textarea');
+        editor.value = textarea.value;
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+        modal.querySelector('.json-focus-close').addEventListener('click', close);
+        modal.querySelector('.json-focus-save').addEventListener('click', () => { textarea.value = editor.value; close(); });
+        document.body.appendChild(modal);
+        editor.focus();
+    });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
+}
+
 function replaceEscapedDollarPlaceholders(root) {
     const placeholder = '@@VYASA_DOLLAR@@';
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -2739,6 +2763,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initKeyboardShortcuts();
     initPdfFocusToggle();
     initIframeFullscreenToggle();
+    initJsonFocusToggle();
     initSearchPlaceholderCycle(document);
     initPostsSearchPersistence(document);
     initCodeBlockCopyButtons(document);

@@ -336,6 +336,20 @@ summary {
     color: color-mix(in srgb, var(--vyasa-ink) 72%, var(--vyasa-primary) 28%) !important;
 }
 
+.vyasa-admin-field {
+    font: 500 0.95rem/1.55 var(--vyasa-font-ui);
+    color: var(--vyasa-ink);
+}
+
+.vyasa-admin-json {
+    font: 500 0.92rem/1.6 "IBM Plex Mono", monospace;
+    color: var(--vyasa-ink);
+    min-height: 14rem;
+    resize: vertical;
+    white-space: pre;
+    tab-size: 2;
+}
+
 .chat-row-block { padding: 14px 0; }
 .chat-panel {
     background: #ffffff;
