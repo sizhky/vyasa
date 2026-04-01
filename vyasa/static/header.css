@@ -81,6 +81,41 @@ hr::after {
     border: 1px solid rgba(69, 101, 91, 0.42);
     transform: translate(-50%, -50%);
 }
+.vyasa-double-rule {
+    width: min(100%, 34rem);
+    margin: 2.75rem auto;
+    position: relative;
+    height: 0.6rem;
+}
+.vyasa-double-rule hr {
+    display: none;
+}
+.vyasa-double-rule::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1rem;
+    height: 1rem;
+    background: color-mix(in srgb, var(--vyasa-ink) 88%, black);
+    border: 1px solid color-mix(in srgb, black 82%, var(--vyasa-ink));
+    transform: translate(-50%, -50%) rotate(45deg);
+    box-shadow: 0 0 0 0.14rem color-mix(in srgb, var(--vyasa-paper) 88%, transparent);
+}
+.vyasa-double-rule::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 0.56rem;
+    transform: translateY(-50%);
+    background:
+        radial-gradient(ellipse at center, color-mix(in srgb, var(--vyasa-ink) 12%, transparent) 0%, color-mix(in srgb, var(--vyasa-ink) 8%, transparent) 42%, transparent 100%),
+        linear-gradient(90deg, transparent, color-mix(in srgb, var(--vyasa-ink) 4%, transparent) 14%, color-mix(in srgb, var(--vyasa-ink) 10%, transparent) 50%, color-mix(in srgb, var(--vyasa-ink) 4%, transparent) 86%, transparent);
+    filter: blur(0.22rem);
+    border-radius: 999px;
+}
 .uk-text-meta, kbd, .toc-link, summary, button, .vyasa-caption {
     font-family: var(--vyasa-font-ui);
 }

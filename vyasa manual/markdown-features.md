@@ -232,9 +232,23 @@ def hello_world():
 
 :::tabs
 ::tab{title="Rendered"}
+Single rule:
+
+---
+
+Double rule:
+
+---
 ---
 ::tab{title="Markdown Source"}
 ```markdown
+Single rule:
+
+---
+
+Double rule:
+
+---
 ---
 ```
 :::

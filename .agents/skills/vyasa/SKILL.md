@@ -38,6 +38,7 @@ Core rules:
 - For richer task cards, prefer markdown task-list items like `- [ ] Task | owner: Jane | deadline: Tomorrow | priority: high` over custom HTML tags; supported metadata families live in `references/markdown.md`.
 - Use `+` and `-` fold markers when the callout should clearly default open or closed, and prefer nested `> > [!todo]` callouts over ad hoc indentation patterns.
 - For custom callout types, rely on `data-callout="your-type"` plus `custom.css` rather than inventing special renderer logic unless the user explicitly wants core support.
+- For long-form writing where a single thematic break is too light, use two back-to-back `---` lines to create a stronger section separator; Vyasa renders doubled rules distinctly from a single `---`.
 - For navbar, footer, sidebar, and mobile-panel styling, do not teach or rely on positional selectors like `#site-navbar > *`, `#site-footer > *`, or `#posts-sidebar details > summary`; target the explicit Vyasa hook classes instead so runtime and static-build themes stay stable.
 - For Mermaid labels, use literal `<br/>` for line breaks inside nodes and edge text; do not emit `\n`.
 - For markdown tables with long cell content, prefer manual line breaks inside the cell using literal `<br/>`; wrap prose cells to roughly 8 words per line so readers do not need to horizontally scroll for a single wide column.
