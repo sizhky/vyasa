@@ -168,6 +168,15 @@ def get_post_title(file_path: str | Path, abbreviations=None) -> str:
     title, _ = resolve_markdown_title(file_path, abbreviations=abbreviations)
     return title
 
+def estimate_read_time_minutes(text: str, words_per_minute: int = 200) -> int:
+    cleaned = re.sub(r"```.*?```", " ", text or "", flags=re.DOTALL)
+    cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
+    cleaned = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", cleaned)
+    cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", cleaned)
+    cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+    words = re.findall(r"\b[\w'-]+\b", cleaned)
+    return max(1, (len(words) + words_per_minute - 1) // words_per_minute)
+
 def get_adjacent_posts(root: Path, current_path: str | Path, abbreviations=None):
     current_rel = Path(current_path)
     if current_rel.suffix != ".md":

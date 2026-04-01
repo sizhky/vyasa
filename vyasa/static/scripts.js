@@ -1607,6 +1607,20 @@ function applyThemePreset(theme) {
     const root = document.documentElement;
     const page = document.getElementById('page-container');
     const targets = [root, page].filter(Boolean);
+    const runtimeThemeVars = new Set();
+    Object.values(window.__VYASA_THEME_PRESETS__ || {}).forEach((preset) => {
+        Object.keys(preset || {}).forEach((key) => {
+            if (!key.startsWith('theme_') || key === 'theme_preset') return;
+            const cssName = key === 'theme_body_font' ? '--vyasa-font-body'
+                : key === 'theme_heading_font' ? '--vyasa-font-heading'
+                : key === 'theme_ui_font' ? '--vyasa-font-ui'
+                : `--vyasa-${key.slice(6).replace(/_/g, '-')}`;
+            runtimeThemeVars.add(cssName);
+        });
+    });
+    targets.forEach((el) => {
+        runtimeThemeVars.forEach((cssName) => el.style.removeProperty(cssName));
+    });
     Object.entries(theme).forEach(([key, value]) => {
         if (!key.startsWith('theme_') || !value || key === 'theme_preset') return;
         const cssName = key === 'theme_body_font' ? '--vyasa-font-body'

@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 from fasthtml.common import A, Button, Div, H1, Li, NotStr, Ol, P, Response, Script, Span, Strong, Textarea
 from monsterui.all import UkIcon
-from .helpers import get_adjacent_posts
+from .helpers import estimate_read_time_minutes, get_adjacent_posts
 
 PAGE_TITLE_CLS = "vyasa-page-title text-4xl font-bold"
 
@@ -45,6 +45,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     md_start = time.time()
     content = from_md(render_content, current_path=path)
     logger.debug(f"[DEBUG] Markdown rendering took {(time.time() - md_start) * 1000:.2f}ms")
+    read_time = P(f"{estimate_read_time_minutes(render_content)}-min read", cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2")
     copy_button = Button(
         UkIcon("clipboard", cls="w-4 h-4"),
         Span("Copy Markdown", cls="text-sm font-medium"),
@@ -74,7 +75,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         cls="fixed top-6 right-6 z-[9999] max-w-md rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 shadow-xl transition-all duration-500 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100",
     ) if frontmatter_error else None
     error_script = Script("setTimeout(()=>{const el=document.getElementById('frontmatter-error-toast');if(!el)return;el.classList.add('opacity-0','translate-x-8');setTimeout(()=>el.remove(),500);},3200)") if frontmatter_error else None
-    post_content = Div(Div(H1(post_title, cls=PAGE_TITLE_CLS), Div(error_chip if error_chip else Div(), present_button, copy_button, cls="flex items-center gap-2 flex-wrap"), cls="flex items-center justify-between gap-4 flex-wrap mb-8"), metadata_block if metadata_block else Div(), error_toast if error_toast else Div(), error_script if error_script else Div(), Div("Copied Raw Markdown!", id="raw-md-toast", cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"), Textarea(raw_content, id="raw-md-clipboard", cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"), content, pager if pager else Div())
+    post_content = Div(Div(Div(H1(post_title, cls=PAGE_TITLE_CLS), read_time, cls="min-w-0"), Div(error_chip if error_chip else Div(), present_button, copy_button, cls="flex items-center gap-2 flex-wrap"), cls="flex items-start justify-between gap-4 flex-wrap mb-8"), metadata_block if metadata_block else Div(), error_toast if error_toast else Div(), error_script if error_script else Div(), Div("Copied Raw Markdown!", id="raw-md-toast", cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"), Textarea(raw_content, id="raw-md-clipboard", cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"), content, pager if pager else Div())
     layout_start = time.time()
     result = layout(post_content, htmx=htmx, title=f"{post_title} - {get_blog_title()}", show_sidebar=True, toc_content=raw_content, current_path=path, auth=request.scope.get("auth"))
     logger.debug(f"[DEBUG] Layout generation took {(time.time() - layout_start) * 1000:.2f}ms")
@@ -181,7 +182,8 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
         _, raw_content = parse_frontmatter(index_file)
         page_title, render_content = resolve_markdown_title(index_file)
         index_path = str(index_file.relative_to(get_root_folder()).with_suffix(""))
-        page_content = Div(H1(page_title, cls="text-4xl font-bold mb-8"), from_md(render_content, current_path=index_path))
+        read_time = P(f"{estimate_read_time_minutes(render_content)}-min read", cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2")
+        page_content = Div(Div(H1(page_title, cls="text-4xl font-bold"), read_time, cls="mb-8"), from_md(render_content, current_path=index_path))
         result = layout(page_content, htmx=htmx, title=f"{page_title} - {blog_title}", show_sidebar=True, toc_content=raw_content, current_path=index_path, auth=request.scope.get("auth"))
         if logger:
             logger.debug("Request complete path=/ route=index total={:.2f}ms", (time.time() - request_start) * 1000)
