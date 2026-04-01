@@ -23,6 +23,7 @@ from .markdown_tabs import preprocess_tabs
 from .sidebar_helpers import build_toc_items, extract_toc
 from .config import get_config, reload_config
 from .assets import asset_url
+from .favicon import favicon_href as resolve_favicon_href, write_generated_favicon
 from .tree_service import get_tree_entries
 
 _asset_url = asset_url
@@ -192,6 +193,7 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
         .vyasa-code-line { display: block; white-space: pre; margin: 0 -1rem; padding: 0 1rem; }
         .code-block .vyasa-code-line-highlight { background: var(--vyasa-code-highlight-bg); box-shadow: inset 6px 0 0 var(--vyasa-code-highlight-accent); }
         .code-block pre, .code-block pre code, pre code.hljs { background: var(--vyasa-code-bg); color: var(--vyasa-code-fg); }
+        .code-block pre code, pre code.hljs { line-height: 1.2; }
         .code-block pre { border: 1px solid var(--vyasa-code-border); border-radius: 12px; }
         .hljs-comment, .hljs-quote { color: var(--vyasa-code-comment); }
         .hljs-keyword, .hljs-selector-tag, .hljs-literal { color: var(--vyasa-code-keyword); }
@@ -592,7 +594,7 @@ def build_static_site(input_dir=None, output_dir=None):
     # Build navigation tree with static .html links
     nav_tree = build_post_tree_static(root_folder, root_folder, show_hidden=show_hidden)
     root_icon = root_folder / "static" / "icon.png"
-    favicon_href = "/static/icon.png"
+    favicon_href = resolve_favicon_href(root_folder)
     
     # Find all markdown files (only in the specified root folder, not parent directories)
     ignore_list = _effective_ignore_list(root_folder)
@@ -676,6 +678,10 @@ def build_static_site(input_dir=None, output_dir=None):
         static_dst = output_dir / 'static'
         static_dst.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root_icon, static_dst / "icon.png")
+    else:
+        static_dst = output_dir / 'static'
+        static_dst.mkdir(parents=True, exist_ok=True)
+        write_generated_favicon(root_folder, static_dst / "icon.svg")
     
     # Generate index.html if it doesn't exist
     index_path = output_dir / 'index.html'

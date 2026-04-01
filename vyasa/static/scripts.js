@@ -1531,14 +1531,55 @@ function getCurrentTheme() {
 }
 
 const GOOGLE_FONT_QUERIES = {
+    'Alegreya': 'family=Alegreya:wght@400;500;600;700',
+    Arimo: 'family=Arimo:wght@400;500;600;700',
+    Archivo: 'family=Archivo:wght@400;500;600;700',
+    Asap: 'family=Asap:wght@400;500;600;700',
+    Assistant: 'family=Assistant:wght@400;500;600;700;800',
     'Be Vietnam Pro': 'family=Be+Vietnam+Pro:wght@400;500;600;700',
+    Besley: 'family=Besley:wght@400;500;600;700',
+    Bitter: 'family=Bitter:wght@400;500;600;700',
+    'Bricolage Grotesque': 'family=Bricolage+Grotesque:wght@400;500;600;700',
+    Cabin: 'family=Cabin:wght@400;500;600;700',
+    Cardo: 'family=Cardo:wght@400;700',
+    Chivo: 'family=Chivo:wght@400;500;600;700',
+    'Crimson Pro': 'family=Crimson+Pro:wght@400;500;600;700',
+    'DM Sans': 'family=DM+Sans:wght@400;500;700',
+    Domine: 'family=Domine:wght@400;500;600;700',
+    'EB Garamond': 'family=EB+Garamond:wght@400;500;600;700',
+    'Fauna One': 'family=Fauna+One',
+    Figtree: 'family=Figtree:wght@400;500;600;700;800',
+    'Hanken Grotesk': 'family=Hanken+Grotesk:wght@400;500;600;700;800',
+    'Hepta Slab': 'family=Hepta+Slab:wght@400;500;600;700',
     Inter: 'family=Inter:wght@400;500;600;700;800',
+    'Instrument Serif': 'family=Instrument+Serif:ital@0;1',
+    Karla: 'family=Karla:wght@400;500;600;700;800',
+    Lexend: 'family=Lexend:wght@400;500;600;700;800',
+    'Libre Baskerville': 'family=Libre+Baskerville:wght@400;700',
+    'Libre Franklin': 'family=Libre+Franklin:wght@400;500;600;700;800',
     Manrope: 'family=Manrope:wght@400;500;700;800',
+    Merriweather: 'family=Merriweather:wght@400;700',
+    'Merriweather Sans': 'family=Merriweather+Sans:wght@400;500;600;700;800',
+    Montserrat: 'family=Montserrat:wght@400;500;600;700;800',
+    Mulish: 'family=Mulish:wght@400;500;600;700;800',
     Newsreader: 'family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600',
     'Noto Serif': 'family=Noto+Serif:wght@400;500;600;700',
+    'Nunito Sans': 'family=Nunito+Sans:wght@400;500;600;700;800',
+    Onest: 'family=Onest:wght@400;500;600;700;800',
     'Plus Jakarta Sans': 'family=Plus+Jakarta+Sans:wght@400;500;600;700;800',
+    'PT Serif': 'family=PT+Serif:wght@400;700',
     'Public Sans': 'family=Public+Sans:wght@400;500;600;700;800',
+    Raleway: 'family=Raleway:wght@400;500;600;700;800',
+    'Red Hat Display': 'family=Red+Hat+Display:wght@400;500;600;700;800',
+    'Red Hat Text': 'family=Red+Hat+Text:wght@400;500;600;700',
+    'Roboto Slab': 'family=Roboto+Slab:wght@400;500;600;700',
+    'Schibsted Grotesk': 'family=Schibsted+Grotesk:wght@400;500;600;700;800',
+    'Source Sans 3': 'family=Source+Sans+3:wght@400;500;600;700;800',
+    'Source Serif 4': 'family=Source+Serif+4:wght@400;500;600;700',
     'Space Grotesk': 'family=Space+Grotesk:wght@400;500;700',
+    Spectral: 'family=Spectral:wght@400;500;600;700',
+    Sora: 'family=Sora:wght@400;500;600;700;800',
+    Urbanist: 'family=Urbanist:wght@400;500;600;700;800',
     'Work Sans': 'family=Work+Sans:wght@400;500;600;700;800',
 };
 
@@ -1602,6 +1643,17 @@ window.vyasaApplyThemePreset = function vyasaApplyThemePreset(next) {
         return;
     }
     localStorage.setItem('__FRANKEN__', JSON.stringify(franken));
+};
+
+window.vyasaApplyRandomThemePreset = function vyasaApplyRandomThemePreset() {
+    const presets = Object.keys(window.__VYASA_THEME_PRESETS__ || {});
+    if (!presets.length) return;
+    const select = document.getElementById('theme-preset-select');
+    const current = select ? select.value : '';
+    const pool = presets.length > 1 ? presets.filter((name) => name !== current) : presets;
+    const next = pool[Math.floor(Math.random() * pool.length)];
+    if (select) select.value = next;
+    window.vyasaApplyThemePreset(next);
 };
 
 function getDynamicGanttWidth() {

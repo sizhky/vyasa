@@ -255,6 +255,11 @@ kbd {
     max-width: 46rem;
 }
 
+#content-with-sidebars .vyasa-main-shell > *:not(.vyasa-table-scroll):not(.mermaid-container):not(.d2-container):not(.code-block) {
+    max-width: none;
+    width: 100%;
+}
+
 .vyasa-main-shell > h1,
 .vyasa-main-shell > h2,
 .vyasa-main-shell > h3,
@@ -264,6 +269,17 @@ kbd {
 .vyasa-main-shell > blockquote,
 .vyasa-main-shell > .vyasa-prev-next {
     margin-left: clamp(0rem, 3vw, 2.25rem);
+}
+
+#content-with-sidebars .vyasa-main-shell > h1,
+#content-with-sidebars .vyasa-main-shell > h2,
+#content-with-sidebars .vyasa-main-shell > h3,
+#content-with-sidebars .vyasa-main-shell > p,
+#content-with-sidebars .vyasa-main-shell > ul,
+#content-with-sidebars .vyasa-main-shell > ol,
+#content-with-sidebars .vyasa-main-shell > blockquote,
+#content-with-sidebars .vyasa-main-shell > .vyasa-prev-next {
+    margin-left: 0;
 }
 
 .vyasa-footer-card {
@@ -408,7 +424,7 @@ todo .deadline { margin-left: 0.45rem; }
 .code-block pre, .code-block pre code, pre code.hljs { background: var(--vyasa-code-bg); color: var(--vyasa-code-fg); }
 .code-block { margin: 1.4rem 0 1.8rem; }
 .code-block pre { border: 1px solid var(--vyasa-code-border); border-radius: 1rem; padding: 1.15rem 1.3rem !important; box-shadow: 0 16px 24px -22px rgba(45, 52, 52, 0.18); }
-.code-block pre code, pre code.hljs { font-size: 0.95rem; line-height: 1.55; }
+.code-block pre code, pre code.hljs { font-size: 0.95rem; line-height: 1.2; }
 .code-block [class*="copy"], .code-copy-button { font-family: 'Inter', sans-serif; }
 .hljs-comment, .hljs-quote { color: var(--vyasa-code-comment); }
 .hljs-keyword, .hljs-selector-tag, .hljs-literal { color: var(--vyasa-code-keyword); }

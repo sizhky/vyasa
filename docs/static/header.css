@@ -208,7 +208,7 @@ body.iframe-fullscreen-open { overflow: hidden; }
 .code-block pre, .code-block pre code, pre code.hljs { background: var(--vyasa-code-bg); color: var(--vyasa-code-fg); }
 .code-block { margin: 1.4rem 0 1.8rem; }
 .code-block pre { border: 1px solid var(--vyasa-code-border); border-radius: 1rem; padding: 1.15rem 1.3rem !important; box-shadow: 0 16px 24px -22px rgba(45, 52, 52, 0.18); }
-.code-block pre code, pre code.hljs { font-size: 0.95rem; line-height: 1.55; }
+.code-block pre code, pre code.hljs { font-size: 0.95rem; line-height: 1.2; }
 .posts-search-block { background: transparent !important; margin-bottom: 1rem; }
 .posts-search-label { color: #5a6060 !important; }
 .posts-search-input {

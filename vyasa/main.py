@@ -125,9 +125,8 @@ def cli():
             sys.exit(1)
         os.environ['VYASA_ROOT'] = str(root)
     
-    # Initialize or reload config to pick up .vyasa file
-    # This ensures .vyasa file is loaded and config is refreshed
-    config = reload_config() if args.directory else get_config()
+    # Initialize config after CLI/env overrides are in place.
+    config = reload_config()
     
     # Get host and port from arguments, config, or use defaults
     host = args.host or config.get_host()
@@ -142,7 +141,8 @@ def cli():
     if args.show_hidden:
         os.environ['VYASA_SHOW_HIDDEN'] = 'true'
         config = reload_config()
-    if args.theme_debug:
+    theme_debug_enabled = args.theme_debug or str(os.environ.get('VYASA_THEME_DEBUG', '')).strip().lower() in {'true', '1', 'yes', 'on'}
+    if theme_debug_enabled:
         os.environ['VYASA_THEME_DEBUG'] = 'true'
         config = reload_config()
 
@@ -162,18 +162,27 @@ def cli():
     reload_kwargs = {}
     if reload:
         blog_root = config.get_root_folder()
+        source_dir = os.environ.get("VYASA_SOURCE_DIR", "").strip()
+        reload_dirs = [str(blog_root)]
+        if source_dir:
+            source_path = Path(source_dir).expanduser().resolve()
+            if source_path.exists():
+                reload_dirs.append(str(source_path))
+            else:
+                print(f"Warning: VYASA_SOURCE_DIR does not exist: {source_path}")
         reload_excludes = [f"*/{name}/*" for name in config.get_reload_excludes()]
         reload_excludes.append(".py[cod]")
         reload_excludes.append(".sw.*")
         reload_excludes.append("~*")
         reload_kwargs = {
             "reload": True,
-            "reload_dirs": [str(blog_root)],
-            "reload_includes": ["*.md", "*.pdf", "*.vyasa", ".vyasa", ".*"],
+            "reload_dirs": reload_dirs,
+            "reload_includes": ["*.md", "*.pdf", "*.py", "*.vyasa", ".vyasa", ".*"],
             "reload_excludes": reload_excludes,
         }
     else:
         reload_kwargs = {"reload": False}
+    print(f"Reload enabled: {reload} for directories: {reload_kwargs.get('reload_dirs', [])}")
 
     _ensure_logging_configured()
     uvicorn.run("vyasa.main:app", host=host, port=port, log_config=None, **reload_kwargs)
