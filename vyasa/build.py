@@ -468,12 +468,12 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     navbar = f'''
     <div class="vyasa-navbar-card bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
         <div class="flex items-center justify-between md:hidden">
-            <button id="mobile-posts-toggle" title="Toggle file tree" class="p-2 rounded transition-colors hover:bg-slate-800" type="button">
+            <button id="mobile-posts-toggle" title="Toggle file tree" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaTogglePostsPanel && window.__vyasaTogglePostsPanel()">
                 <span uk-icon="menu" class="w-5 h-5"></span>
             </button>
             <a href="/index.html" class="flex-1 px-4 text-center truncate">{blog_title}</a>
             <div class="flex items-center gap-1">
-                <button id="mobile-toc-toggle" title="Toggle table of contents" class="p-2 rounded transition-colors hover:bg-slate-800" type="button">
+                <button id="mobile-toc-toggle" title="Toggle table of contents" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()">
                     <span uk-icon="list" class="w-5 h-5"></span>
                 </button>
                 {theme_toggle}

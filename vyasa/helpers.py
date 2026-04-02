@@ -8,6 +8,40 @@ from pathlib import Path
 import frontmatter
 from loguru import logger
 
+_DEFAULT_ABBREVIATIONS = [
+    "acl", "adb", "admin", "aes", "ai", "aop", "api", "apis", "arn", "aws",
+    "b2b", "b2c", "bi", "bom", "bpm", "cdn", "ceo", "ci", "cidr", "ciso",
+    "cli", "cmo", "cms", "coo", "cpu", "crm", "cron", "csp", "css", "csv",
+    "cto", "cve", "dag", "db", "ddos", "dns", "dto", "e2e", "eda", "erp",
+    "etl", "faq", "gcp", "git", "gpu", "grpc", "hld", "html", "http", "https",
+    "iac", "iam", "ide", "ingress", "ios", "jwt", "json", "k8s", "kanban",
+    "kafka", "kpi", "lambda", "ldap", "lld", "llm", "mcp", "mfa", "ml",
+    "mvp", "nat", "nlp", "nosql", "oauth", "ocr", "okta", "okr", "olap",
+    "oltp", "oncall", "openid", "otp", "pdf", "php", "pii", "pkce", "poc",
+    "postgres", "prd", "promql", "qa", "rag", "ram", "rbac", "rest", "rfc",
+    "roi", "rpc", "rsa", "rtfm", "saas", "sdk", "seo", "sftp", "sla", "sli",
+    "slo", "smtp", "snyk", "soap", "soc", "sop", "sso", "ssl", "sql", "sre",
+    "ssh", "tcp", "tds", "tls", "todo", "udp", "ui", "url", "usb", "ux",
+    "vpc", "vpn", "waf", "webhook", "wiki", "xml", "yaml", "yml",
+]
+
+
+def _merge_abbreviations(*groups):
+    merged = []
+    seen = set()
+    for group in groups:
+        for item in group or []:
+            word = str(item).strip()
+            if not word:
+                continue
+            lowered = word.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            merged.append(word)
+    return merged
+
+
 def slug_to_title(s: str, abbreviations=None) -> str:
     abbreviations = abbreviations or []
     abbrev_set = {str(word).strip().lower() for word in abbreviations if str(word).strip()}
@@ -332,7 +366,7 @@ def _normalize_vyasa_config(parsed):
 
 def _effective_abbreviations(root: Path, folder: Path | None = None):
     root_config = get_vyasa_config(root)
-    root_abbrevs = root_config.get("abbreviations") or []
+    root_abbrevs = _merge_abbreviations(_DEFAULT_ABBREVIATIONS, root_config.get("abbreviations") or [])
     if folder is None or folder == root:
         return root_abbrevs
     current = folder
@@ -340,7 +374,7 @@ def _effective_abbreviations(root: Path, folder: Path | None = None):
         folder_config = get_vyasa_config(current)
         folder_abbrevs = folder_config.get("abbreviations")
         if folder_abbrevs is not None:
-            return folder_abbrevs
+            return _merge_abbreviations(_DEFAULT_ABBREVIATIONS, folder_abbrevs)
         if current == root:
             return root_abbrevs
         if root not in current.parents:
