@@ -2435,64 +2435,74 @@ observer.observe(document.documentElement, {
 
 // Mobile menu toggle functionality
 function initMobileMenus() {
-    const postsToggle = document.getElementById('mobile-posts-toggle');
-    const tocToggle = document.getElementById('mobile-toc-toggle');
-    const postsPanel = document.getElementById('mobile-posts-panel');
-    const tocPanel = document.getElementById('mobile-toc-panel');
-    const closePostsBtn = document.getElementById('close-mobile-posts');
-    const closeTocBtn = document.getElementById('close-mobile-toc');
+    const getPostsPanel = () => document.getElementById('mobile-posts-panel');
+    const getTocPanel = () => document.getElementById('mobile-toc-panel');
+    const postsPanel = getPostsPanel();
+    const tocPanel = getTocPanel();
 
-    // Open posts panel
-    if (postsToggle) {
-        postsToggle.addEventListener('click', () => {
-            if (postsPanel) {
-                postsPanel.classList.remove('-translate-x-full');
-                postsPanel.classList.add('translate-x-0');
-                postsPanel.querySelectorAll('details[data-sidebar="posts"]').forEach((sidebar) => {
-                    revealInSidebar(sidebar);
-                });
-                // Close TOC panel if open
-                if (tocPanel) {
-                    tocPanel.classList.remove('translate-x-0');
-                    tocPanel.classList.add('translate-x-full');
-                }
+    const togglePostsPanel = () => {
+        const postsPanel = getPostsPanel();
+        const tocPanel = getTocPanel();
+        if (!postsPanel) return;
+        const isOpen = postsPanel.classList.contains('translate-x-0');
+        if (isOpen) {
+            postsPanel.classList.remove('translate-x-0');
+            postsPanel.classList.add('-translate-x-full');
+            return;
+        }
+        postsPanel.classList.remove('-translate-x-full');
+        postsPanel.classList.add('translate-x-0');
+        postsPanel.querySelectorAll('details[data-sidebar="posts"]').forEach((sidebar) => {
+            sidebar.open = true;
+            revealInSidebar(sidebar);
+        });
+        if (tocPanel) {
+            tocPanel.classList.remove('translate-x-0');
+            tocPanel.classList.add('translate-x-full');
+        }
+    };
+
+    const toggleTocPanel = () => {
+        const tocPanel = getTocPanel();
+        const postsPanel = getPostsPanel();
+        if (!tocPanel) return;
+        const isOpen = tocPanel.classList.contains('translate-x-0');
+        if (isOpen) {
+            tocPanel.classList.remove('translate-x-0');
+            tocPanel.classList.add('translate-x-full');
+            return;
+        }
+        tocPanel.classList.remove('translate-x-full');
+        tocPanel.classList.add('translate-x-0');
+        tocPanel.querySelectorAll('details').forEach((sidebar) => {
+            sidebar.open = true;
+        });
+        if (postsPanel) {
+            postsPanel.classList.remove('translate-x-0');
+            postsPanel.classList.add('-translate-x-full');
+        }
+    };
+
+    window.__vyasaTogglePostsPanel = togglePostsPanel;
+    window.__vyasaToggleTocPanel = toggleTocPanel;
+
+    if (!window.__vyasaMobileMenusBound) {
+        document.addEventListener('click', (event) => {
+            if (event.target.closest('#close-mobile-posts')) {
+                event.preventDefault();
+                const postsPanel = document.getElementById('mobile-posts-panel');
+                postsPanel?.classList.remove('translate-x-0');
+                postsPanel?.classList.add('-translate-x-full');
+                return;
+            }
+            if (event.target.closest('#close-mobile-toc')) {
+                event.preventDefault();
+                const tocPanel = document.getElementById('mobile-toc-panel');
+                tocPanel?.classList.remove('translate-x-0');
+                tocPanel?.classList.add('translate-x-full');
             }
         });
-    }
-    
-    // Open TOC panel
-    if (tocToggle) {
-        tocToggle.addEventListener('click', () => {
-            if (tocPanel) {
-                tocPanel.classList.remove('translate-x-full');
-                tocPanel.classList.add('translate-x-0');
-                // Close posts panel if open
-                if (postsPanel) {
-                    postsPanel.classList.remove('translate-x-0');
-                    postsPanel.classList.add('-translate-x-full');
-                }
-            }
-        });
-    }
-    
-    // Close posts panel
-    if (closePostsBtn) {
-        closePostsBtn.addEventListener('click', () => {
-            if (postsPanel) {
-                postsPanel.classList.remove('translate-x-0');
-                postsPanel.classList.add('-translate-x-full');
-            }
-        });
-    }
-    
-    // Close TOC panel
-    if (closeTocBtn) {
-        closeTocBtn.addEventListener('click', () => {
-            if (tocPanel) {
-                tocPanel.classList.remove('translate-x-0');
-                tocPanel.classList.add('translate-x-full');
-            }
-        });
+        window.__vyasaMobileMenusBound = true;
     }
     
     // Close panels on link click (for better mobile UX)
@@ -2524,6 +2534,7 @@ function initKeyboardShortcuts() {
     // Prewarm the selectors to avoid lazy compilation delays
     const postsSidebars = document.querySelectorAll('details[data-sidebar="posts"]');
     const tocSidebar = document.querySelector('#toc-sidebar details');
+    const isMobileSidebarMode = () => window.matchMedia('(max-width: 1279px)').matches;
     
     document.addEventListener('keydown', (e) => {
         // Skip if user is typing in an input field
@@ -2534,6 +2545,10 @@ function initKeyboardShortcuts() {
         // Z: Toggle posts panel
         if (e.key === 'z' || e.key === 'Z') {
             e.preventDefault();
+            if (isMobileSidebarMode()) {
+                window.__vyasaTogglePostsPanel?.();
+                return;
+            }
             const postsSidebars = document.querySelectorAll('details[data-sidebar="posts"]');
             postsSidebars.forEach(sidebar => {
                 sidebar.open = !sidebar.open;
@@ -2543,6 +2558,10 @@ function initKeyboardShortcuts() {
         // X: Toggle TOC panel
         if (e.key === 'x' || e.key === 'X') {
             e.preventDefault();
+            if (isMobileSidebarMode()) {
+                window.__vyasaToggleTocPanel?.();
+                return;
+            }
             const tocSidebar = document.querySelector('#toc-sidebar details');
             if (tocSidebar) {
                 tocSidebar.open = !tocSidebar.open;
