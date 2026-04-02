@@ -514,7 +514,6 @@ todo .deadline { margin-left: 0.45rem; }
 .vyasa-heading-action-children,
 .vyasa-heading-permalink { margin-left: 0 !important; flex: 0 0 2.2rem; width: 2.2rem; height: 2.2rem; }
 .vyasa-heading-permalink { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
-.vyasa-heading-action-children { margin-left: 0 !important; }
 .vyasa-heading-icon-collapse { display: none; }
 .vyasa-heading-action-children[data-subtree-state="collapse"] .vyasa-heading-icon-expand { display: none; }
 .vyasa-heading-action-children[data-subtree-state="collapse"] .vyasa-heading-icon-collapse { display: inline-flex; }
