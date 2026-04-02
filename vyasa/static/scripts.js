@@ -845,7 +845,12 @@ function initD2Interaction(rootElement = document) {
             const rect = currentStage.getBoundingClientRect();
             const mouseX = e.clientX - rect.left - rect.width / 2;
             const mouseY = e.clientY - rect.top - rect.height / 2;
-            const zoomIntensity = 0.01;
+            const oversizeFactor = Math.max(
+                rect.width / Math.max(window.innerWidth, 1),
+                rect.height / Math.max(window.innerHeight, 1),
+                1
+            );
+            const zoomIntensity = Math.min(0.01 * oversizeFactor, 0.04);
             const delta = e.deltaY > 0 ? 1 - zoomIntensity : 1 + zoomIntensity;
             const newScale = Math.min(Math.max(0.1, state.scale * delta), 55);
             const scaleFactor = newScale / state.scale - 1;
@@ -1246,7 +1251,8 @@ function initMermaidInteraction() {
         
         // For very wide diagrams (like Gantt charts), prefer width scaling even if it exceeds height
         const aspectRatio = svgRect.width / svgRect.height;
-        const maxUpscale = 1;
+        const isFullscreenWrapper = wrapper.dataset.mermaidFullscreen === 'true';
+        const maxUpscale = isFullscreenWrapper ? Number.POSITIVE_INFINITY : 1;
         let initialScale;
         if (aspectRatio > 3) {
             // Wide diagram: scale to fit width, but do not upscale by default
@@ -1328,7 +1334,12 @@ function initMermaidInteraction() {
             const mouseX = e.clientX - rect.left - rect.width / 2;
             const mouseY = e.clientY - rect.top - rect.height / 2;
             
-            const zoomIntensity = 0.01;
+            const oversizeFactor = Math.max(
+                rect.width / Math.max(window.innerWidth, 1),
+                rect.height / Math.max(window.innerHeight, 1),
+                1
+            );
+            const zoomIntensity = Math.min(0.01 * oversizeFactor, 0.04);
             const delta = e.deltaY > 0 ? 1 - zoomIntensity : 1 + zoomIntensity; // Zoom out or in speed
             const newScale = Math.min(Math.max(0.1, state.scale * delta), 55);
             
@@ -1489,6 +1500,7 @@ window.openMermaidFullscreen = function(id) {
     fullscreenWrapper.id = fullscreenId;
     fullscreenWrapper.className = 'mermaid-wrapper w-full h-full flex items-center justify-center';
     fullscreenWrapper.setAttribute('data-mermaid-code', originalCode);
+    fullscreenWrapper.setAttribute('data-mermaid-fullscreen', 'true');
     
     const pre = document.createElement('pre');
     pre.className = 'mermaid';
