@@ -482,7 +482,9 @@ class ContentRenderer(FrankenRenderer):
             f'<a href="#{anchor}" class="vyasa-heading-permalink no-underline '
             f'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" '
             f'aria-label="Link to {html.escape(heading_text)}">'
-            f'{to_xml(UkIcon("link"))}'
+            f'<span class="vyasa-heading-permalink-icon">{to_xml(UkIcon("link"))}</span>'
+            f'<span class="vyasa-heading-permalink-copied">'
+            f'{to_xml(UkIcon("check"))}<span>URL copied</span></span>'
             '</a>'
         )
         return f'<h{level} id="{anchor}"><span class="vyasa-heading-text">{html.escape(heading_text)}</span>{fold_children}{permalink}</h{level}>'
