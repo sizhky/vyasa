@@ -558,6 +558,12 @@ todo .deadline { margin-left: 0.45rem; }
 .vyasa-heading-fold-summary > h1, .vyasa-heading-fold-summary > h2, .vyasa-heading-fold-summary > h3, .vyasa-heading-fold-summary > h4, .vyasa-heading-fold-summary > h5, .vyasa-heading-fold-summary > h6 { margin: 0; flex: 1; order: 2; }
 .vyasa-heading-fold-chevron { display: none; }
 .vyasa-heading-fold-body { padding-left: 0.4rem; }
+.vyasa-heading-fold-body > :first-child { margin-top: 0.95rem; }
+.vyasa-heading-fold-body ul,
+.vyasa-heading-fold-body ol { margin-top: 0.95rem; margin-bottom: 0.95rem; }
+.vyasa-heading-fold-body li > p { margin: 0; }
+.vyasa-heading-fold-body li > ul,
+.vyasa-heading-fold-body li > ol { margin-top: 0.3rem; }
 .code-block pre, .code-block pre code, pre code.hljs { background: var(--vyasa-code-bg); color: var(--vyasa-code-fg); }
 .code-block { margin: 1.4rem 0 1.8rem; }
 .code-block pre { border: 1px solid var(--vyasa-code-border); border-radius: 1rem; padding: 1.15rem 1.3rem !important; box-shadow: 0 16px 24px -22px rgba(45, 52, 52, 0.18); }
