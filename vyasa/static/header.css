@@ -482,7 +482,59 @@ todo .deadline { margin-left: 0.45rem; }
 .vyasa-code-line { display: block; white-space: pre; margin: 0 -1rem; padding: 0 1rem; }
 .code-block .vyasa-code-line-highlight { background: var(--vyasa-code-highlight-bg); box-shadow: inset 6px 0 0 var(--vyasa-code-highlight-accent); }
 .vyasa-heading-permalink { opacity: 0; transition: opacity 120ms ease; }
-.vyasa-heading-text:hover + .vyasa-heading-permalink, .vyasa-heading-permalink:hover, .vyasa-heading-permalink:focus { opacity: 1; }
+.vyasa-heading-action { opacity: 0; border: 0; background: transparent; color: var(--vyasa-ink-soft); width: 2rem; height: 2rem; display: inline-flex; align-items: center; justify-content: center; padding: 0; vertical-align: middle; transition: opacity 120ms ease, color 120ms ease; cursor: pointer; }
+.vyasa-heading-action [uk-icon], .vyasa-heading-permalink [uk-icon] { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; }
+.vyasa-heading-action [uk-icon] svg, .vyasa-heading-permalink [uk-icon] svg { width: 1.75rem; height: 1.75rem; }
+.vyasa-doc-heading { display: flex; align-items: center; width: 100%; gap: 0.15rem; justify-content: flex-start; }
+.vyasa-heading-text { flex: 0 1 auto; min-width: 0; }
+.vyasa-heading-fold-summary .vyasa-heading-text::after {
+    content: "";
+    display: inline-block;
+    width: 0.88rem;
+    height: 0.88rem;
+    margin-left: 0.4rem;
+    background-color: currentColor;
+    opacity: 0.58;
+    vertical-align: middle;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+}
+.vyasa-heading-fold[open] .vyasa-heading-text::after {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.25 6 8l4-3.75' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.25 6 8l4-3.75' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.vyasa-heading-fold:not([open]) .vyasa-heading-text::after {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4.25 2 8 6l-3.75 4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4.25 2 8 6l-3.75 4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.vyasa-heading-action-children,
+.vyasa-heading-permalink { margin-left: 0 !important; flex: 0 0 2.2rem; width: 2.2rem; height: 2.2rem; }
+.vyasa-heading-permalink { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+.vyasa-heading-icon-collapse { display: none; }
+.vyasa-heading-action-children[data-subtree-state="collapse"] .vyasa-heading-icon-expand { display: none; }
+.vyasa-heading-action-children[data-subtree-state="collapse"] .vyasa-heading-icon-collapse { display: inline-flex; }
+.vyasa-doc-heading:hover .vyasa-heading-action, .vyasa-doc-heading:hover .vyasa-heading-permalink, .vyasa-heading-action:hover, .vyasa-heading-action:focus, .vyasa-heading-permalink:hover, .vyasa-heading-permalink:focus { opacity: 1; }
+.vyasa-heading-action:hover, .vyasa-heading-action:focus, .vyasa-heading-permalink:hover, .vyasa-heading-permalink:focus { color: var(--vyasa-primary) !important; }
+.vyasa-heading-fold { margin: 1.15rem 0; }
+.vyasa-fold-all-button { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.5rem 0.75rem; border: 1px solid rgb(226 232 240 / 1); border-radius: 0.375rem; background: transparent; color: rgb(71 85 105 / 1); font: 500 0.875rem/1 var(--vyasa-font-ui); transition: color 160ms ease, border-color 160ms ease, background 160ms ease; }
+.dark .vyasa-fold-all-button { border-color: rgb(51 65 85 / 1); color: rgb(203 213 225 / 1); }
+.vyasa-fold-all-button:hover { color: rgb(15 23 42 / 1); border-color: rgb(203 213 225 / 1); background: rgb(248 250 252 / 1); }
+.dark .vyasa-fold-all-button:hover { color: rgb(255 255 255 / 1); border-color: rgb(100 116 139 / 1); background: rgb(30 41 59 / 1); }
+.vyasa-fold-all-icon { width: 1rem; height: 1rem; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.vyasa-scroll-top-button { position: fixed; bottom: 1.25rem; width: 3.15rem; height: 3.15rem; display: inline-flex; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--vyasa-primary) 38%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--vyasa-paper) 82%, var(--vyasa-primary) 18%); color: var(--vyasa-primary); box-shadow: 0 18px 34px -20px rgba(15, 23, 42, 0.42); backdrop-filter: blur(10px); opacity: 0; pointer-events: none; transform: translateY(0.4rem) scale(0.96); transition: opacity 160ms ease, transform 160ms ease, background 160ms ease; z-index: 30; }
+.vyasa-scroll-top-button.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.vyasa-scroll-top-button:hover { background: color-mix(in srgb, var(--vyasa-paper) 70%, var(--vyasa-primary) 30%); }
+.vyasa-scroll-top-icon { width: 1.4rem; height: 1.4rem; stroke: currentColor; stroke-width: 1.9; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.vyasa-heading-fold-summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 0.1rem; }
+.vyasa-heading-fold-summary::-webkit-details-marker { display: none; }
+.vyasa-heading-fold-summary::marker { content: ""; }
+.vyasa-heading-fold-summary > h1, .vyasa-heading-fold-summary > h2, .vyasa-heading-fold-summary > h3, .vyasa-heading-fold-summary > h4, .vyasa-heading-fold-summary > h5, .vyasa-heading-fold-summary > h6 { margin: 0; flex: 1; order: 2; }
+.vyasa-heading-fold-chevron { display: none; }
+.vyasa-heading-fold-body { padding-left: 0.4rem; }
 .code-block pre, .code-block pre code, pre code.hljs { background: var(--vyasa-code-bg); color: var(--vyasa-code-fg); }
 .code-block { margin: 1.4rem 0 1.8rem; }
 .code-block pre { border: 1px solid var(--vyasa-code-border); border-radius: 1rem; padding: 1.15rem 1.3rem !important; box-shadow: 0 16px 24px -22px rgba(45, 52, 52, 0.18); }
