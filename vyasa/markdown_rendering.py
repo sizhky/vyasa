@@ -470,12 +470,22 @@ class ContentRenderer(FrankenRenderer):
         inner = self.render_inner(token)
         plain = _plain_text_from_html(inner)
         heading_text, anchor = resolve_heading_anchor(plain, self.heading_counts)
-        permalink = (
-            f'<a href="#{anchor}" class="vyasa-heading-permalink ml-2 no-underline '
-            f'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" '
-            f'aria-label="Link to {html.escape(heading_text)}">¶</a>'
+        fold_children = (
+            f'<button type="button" class="vyasa-heading-action vyasa-heading-action-children" '
+            f'data-heading-action="children" data-heading-anchor="{anchor}" '
+            f'aria-label="Toggle child sections under {html.escape(heading_text)}">'
+            f'<span class="vyasa-heading-icon-expand">{to_xml(UkIcon("expand"))}</span>'
+            f'<span class="vyasa-heading-icon-collapse">{to_xml(UkIcon("shrink"))}</span>'
+            '</button>'
         )
-        return f'<h{level} id="{anchor}"><span class="vyasa-heading-text">{html.escape(heading_text)}</span>{permalink}</h{level}>'
+        permalink = (
+            f'<a href="#{anchor}" class="vyasa-heading-permalink no-underline '
+            f'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" '
+            f'aria-label="Link to {html.escape(heading_text)}">'
+            f'{to_xml(UkIcon("link"))}'
+            '</a>'
+        )
+        return f'<h{level} id="{anchor}"><span class="vyasa-heading-text">{html.escape(heading_text)}</span>{fold_children}{permalink}</h{level}>'
 
     def render_superscript(self, token):
         return f"<sup>{token.content}</sup>"

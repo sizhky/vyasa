@@ -2225,6 +2225,24 @@ document.addEventListener('click', (event) => {
             : '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 14 3-3 3 3"/></svg><span>Unfold all</span>';
         return;
     }
+    const headingAction = event.target.closest('[data-heading-action]');
+    if (headingAction) {
+        event.preventDefault();
+        event.stopPropagation();
+        const details = headingAction.closest('.vyasa-heading-fold');
+        if (!(details instanceof HTMLDetailsElement)) return;
+        const descendants = Array.from(details.querySelectorAll(':scope > .vyasa-heading-fold-body .vyasa-heading-fold'));
+        const shouldOpen = !details.open || descendants.some((fold) => !fold.open);
+        if (shouldOpen) {
+            details.open = true;
+            descendants.forEach((fold) => { fold.open = true; });
+            syncHeadingActionStates(document);
+            return;
+        }
+        descendants.forEach((fold) => { fold.open = false; });
+        syncHeadingActionStates(document);
+        return;
+    }
     const summary = event.target.closest('.vyasa-heading-fold-summary');
     if (!summary || event.target.closest('.vyasa-heading-permalink')) {
         return;
@@ -2233,8 +2251,21 @@ document.addEventListener('click', (event) => {
     const details = summary.parentElement;
     if (details instanceof HTMLDetailsElement) {
         details.open = !details.open;
+        syncHeadingActionStates(document);
     }
 });
+
+function syncHeadingActionStates(root = document) {
+    (root.querySelectorAll?.('.vyasa-heading-action-children') || []).forEach((button) => {
+        const details = button.closest('.vyasa-heading-fold');
+        if (!(details instanceof HTMLDetailsElement)) return;
+        const descendants = Array.from(details.querySelectorAll(':scope > .vyasa-heading-fold-body .vyasa-heading-fold'));
+        button.hidden = descendants.length === 0;
+        const allOpen = details.open && descendants.every((fold) => fold.open);
+        button.dataset.subtreeState = allOpen ? 'collapse' : 'expand';
+        button.setAttribute('aria-label', allOpen ? 'Collapse child sections' : 'Expand child sections');
+    });
+}
 
 // Update active post link in sidebar
 function updateActivePostLink() {
@@ -2895,6 +2926,7 @@ function scheduleHighlightedCodeIncludes(root) {
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     initHeadingFolds(document);
+    syncHeadingActionStates(document);
     initScrollTopButton(document);
     syncThemePresetDebug(document);
     replaceEscapedDollarPlaceholders(document.body);
@@ -2932,6 +2964,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
         return;
     }
     initHeadingFolds(event.target);
+    syncHeadingActionStates(document);
     initScrollTopButton(document);
     syncThemePresetDebug(document);
     replaceEscapedDollarPlaceholders(event.target);
