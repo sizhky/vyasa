@@ -2202,11 +2202,39 @@ document.addEventListener('toggle', (event) => {
     if (!(details instanceof HTMLDetailsElement)) {
         return;
     }
+    if (details.matches('.vyasa-heading-fold')) {
+        details.classList.toggle('is-open', details.open);
+        return;
+    }
     if (!details.matches('details[data-folder="true"]')) {
         return;
     }
     details.classList.toggle('is-open', details.open);
 }, true);
+
+document.addEventListener('click', (event) => {
+    const toggle = event.target.closest('[data-vyasa-fold-all]');
+    if (toggle) {
+        const main = document.getElementById('main-content');
+        const folds = Array.from(main?.querySelectorAll('.vyasa-heading-fold') || []);
+        const shouldOpen = toggle.dataset.vyasaFoldAll !== 'open';
+        folds.forEach((fold) => { fold.open = shouldOpen; });
+        toggle.dataset.vyasaFoldAll = shouldOpen ? 'open' : 'closed';
+        toggle.innerHTML = shouldOpen
+            ? '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 10 3 3 3-3"/></svg><span>Fold all</span>'
+            : '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 14 3-3 3 3"/></svg><span>Unfold all</span>';
+        return;
+    }
+    const summary = event.target.closest('.vyasa-heading-fold-summary');
+    if (!summary || event.target.closest('.vyasa-heading-permalink')) {
+        return;
+    }
+    event.preventDefault();
+    const details = summary.parentElement;
+    if (details instanceof HTMLDetailsElement) {
+        details.open = !details.open;
+    }
+});
 
 // Update active post link in sidebar
 function updateActivePostLink() {
@@ -2240,6 +2268,9 @@ function alignToCurrentHash() {
     if (!target) {
         return;
     }
+    for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+        if (parent.matches?.('.vyasa-heading-fold')) parent.open = true;
+    }
     target.scrollIntoView({ block: 'start' });
     requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
 }
@@ -2247,6 +2278,86 @@ function alignToCurrentHash() {
 function scheduleHashAlignment() {
     alignToCurrentHash();
     [80, 220, 500, 1200].forEach((delay) => setTimeout(alignToCurrentHash, delay));
+}
+
+function initHeadingFolds(root = document) {
+    const main = root.id === 'main-content' ? root : root.querySelector?.('#main-content');
+    if (!main || main.dataset.headingFoldsInit === '1') return;
+    if (!main.querySelector('[data-vyasa-fold-all]')) {
+        const control = document.createElement('button');
+        control.type = 'button';
+        control.className = 'vyasa-fold-all-button';
+        control.dataset.vyasaFoldAll = 'open';
+        control.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 10 3 3 3-3"/></svg><span>Fold all</span>';
+        const copyButton = Array.from(main.querySelectorAll('button')).find((button) =>
+            button.textContent?.includes('Copy Markdown')
+        );
+        const actions = copyButton?.parentElement;
+        if (actions) actions.insertBefore(control, copyButton);
+        else main.prepend(control);
+    }
+    const containers = [main, ...main.querySelectorAll('div, section, article')].filter((el) =>
+        !el.closest('.vyasa-heading-fold-body') &&
+        Array.from(el.children).some((child) => /^H[1-6]$/.test(child.tagName))
+    );
+    containers.forEach((container) => {
+        if (container.dataset.headingFoldsInit === '1') return;
+        const nodes = Array.from(container.childNodes);
+        const stack = [{ level: 0, body: container }];
+        nodes.forEach((node) => {
+            const match = node instanceof HTMLElement ? node.tagName.match(/^H([1-6])$/) : null;
+            if (node instanceof HTMLElement && node.matches('.vyasa-page-title')) {
+                stack.at(-1).body.appendChild(node);
+                return;
+            }
+            if (!match || node.closest('.vyasa-heading-fold')) return void stack.at(-1).body.appendChild(node);
+            const level = Number(match[1]);
+            while (stack.length > 1 && stack.at(-1).level >= level) stack.pop();
+            const fold = document.createElement('details');
+            const summary = document.createElement('summary');
+            const body = document.createElement('div');
+            const chevron = document.createElement('span');
+            fold.className = 'vyasa-heading-fold';
+            fold.dataset.level = `h${level}`;
+            fold.open = true;
+            fold.classList.add('is-open');
+            summary.className = 'vyasa-heading-fold-summary';
+            body.className = 'vyasa-heading-fold-body';
+            chevron.className = 'vyasa-heading-fold-chevron';
+            chevron.setAttribute('aria-hidden', 'true');
+            summary.append(node, chevron);
+            fold.append(summary, body);
+            stack.at(-1).body.appendChild(fold);
+            stack.push({ level, body });
+        });
+        container.dataset.headingFoldsInit = '1';
+    });
+    main.dataset.headingFoldsInit = '1';
+}
+
+function initScrollTopButton(root = document) {
+    const page = root.getElementById?.('page-container') || document.getElementById('page-container');
+    if (!page || document.getElementById('vyasa-scroll-top')) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'vyasa-scroll-top';
+    button.className = 'vyasa-scroll-top-button';
+    button.setAttribute('aria-label', 'Go to top');
+    button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-scroll-top-icon"><path d="M12 19V7"/><path d="m6.75 12.25 5.25-5.25 5.25 5.25"/></svg>';
+    button.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    document.body.appendChild(button);
+    const sync = () => {
+        const main = document.getElementById('main-content');
+        const rect = main?.getBoundingClientRect();
+        if (rect) {
+            const left = Math.max(16, rect.right - button.offsetWidth);
+            button.style.left = `${left}px`;
+        }
+        button.classList.toggle('is-visible', window.scrollY > 0);
+    };
+    window.addEventListener('scroll', sync, { passive: true });
+    window.addEventListener('resize', sync, { passive: true });
+    sync();
 }
 
 function normalizeCriticalTextColors(root = document) {
@@ -2419,6 +2530,7 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
         scheduleMermaidInteraction();
     });
     renderD2Diagrams(event.target || document);
+    initHeadingFolds(event.target || document);
     normalizeCriticalTextColors(event.target || document);
     scheduleHashAlignment();
     updateActivePostLink();
@@ -2782,6 +2894,8 @@ function scheduleHighlightedCodeIncludes(root) {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    initHeadingFolds(document);
+    initScrollTopButton(document);
     syncThemePresetDebug(document);
     replaceEscapedDollarPlaceholders(document.body);
     renderMathSafely(document.body);
@@ -2817,6 +2931,8 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     if (!event.target) {
         return;
     }
+    initHeadingFolds(event.target);
+    initScrollTopButton(document);
     syncThemePresetDebug(document);
     replaceEscapedDollarPlaceholders(event.target);
     renderMathSafely(event.target);
