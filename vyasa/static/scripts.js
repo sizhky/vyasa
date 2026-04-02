@@ -2059,6 +2059,44 @@ function initCodeBlockCopyButtons(rootElement = document) {
     });
 }
 
+function copyText(text, done) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopyText(text, done));
+        return;
+    }
+    fallbackCopyText(text, done);
+}
+
+function fallbackCopyText(text, done) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'absolute';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    done();
+}
+
+function initHeadingPermalinkCopy(root = document) {
+    root.querySelectorAll('.vyasa-heading-permalink').forEach((link) => {
+        if (link.dataset.copyBound === 'true') return;
+        link.dataset.copyBound = 'true';
+        link.addEventListener('click', (event) => {
+            const url = new URL(link.getAttribute('href') || '', window.location.href).toString();
+            event.preventDefault();
+            history.replaceState(null, '', url);
+            copyText(url, () => {
+                link.classList.add('is-copied');
+                clearTimeout(link._copiedTimer);
+                link._copiedTimer = setTimeout(() => link.classList.remove('is-copied'), 1400);
+            });
+        });
+    });
+}
+
 function initPostsSearchPersistence(rootElement = document) {
     const input = rootElement.querySelector('.posts-search-block input[type="search"][name="q"]');
     const results = rootElement.querySelector('.posts-search-results');
@@ -2944,6 +2982,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSearchPlaceholderCycle(document);
     initPostsSearchPersistence(document);
     initCodeBlockCopyButtons(document);
+    initHeadingPermalinkCopy(document);
     scheduleHighlightedCodeIncludes(document);
     initSearchClearButtons(document);
     ensurePdfFocusState();
@@ -2973,6 +3012,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initSearchPlaceholderCycle(event.target);
     initPostsSearchPersistence(event.target);
     initCodeBlockCopyButtons(event.target);
+    initHeadingPermalinkCopy(event.target);
     scheduleHighlightedCodeIncludes(event.target);
     initExcalidrawHosts(event.target || document);
     initExcalidrawName(event.target || document);
