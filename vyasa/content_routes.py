@@ -21,6 +21,21 @@ def _prev_next_nav(root, current_path, abbreviations):
     return Div(prev_link, next_link, cls="vyasa-prev-next")
 
 
+def _breadcrumbs(path, slug_to_title, abbreviations):
+    parts = [part for part in str(path).split("/") if part]
+    if len(parts) < 2:
+        return None
+    items = [A("Posts", href="/", cls="hover:underline")]
+    acc = []
+    for part in parts[:-1]:
+        acc.append(part)
+        items.extend((
+            Span(UkIcon("chevron-right", cls="w-3 h-3"), cls="opacity-50"),
+            A(slug_to_title(part, abbreviations=abbreviations), href=f"/posts/{'/'.join(acc)}", cls="hover:underline"),
+        ))
+    return Div(*items, cls="vyasa-breadcrumbs mb-3 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400")
+
+
 def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbreviations, find_folder_note_file, slug_to_title, layout, get_blog_title, not_found, parse_frontmatter, resolve_markdown_title, from_md, logger, PathCls=Path):
     request_start = time.time()
     logger.info(f"\n[DEBUG] ########## REQUEST START: /posts/{path} ##########")
@@ -36,7 +51,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         if pdf_path.exists():
             post_title = f"{slug_to_title(PathCls(path).name, abbreviations=abbreviations)} (PDF)"
             pdf_src = f"/posts/{path}.pdf"
-            pdf_content = Div(Div(H1(post_title, cls=PAGE_TITLE_CLS), Button("Focus PDF", cls="pdf-focus-toggle inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors", type="button", data_pdf_focus_toggle="true", data_pdf_focus_label="Focus PDF", data_pdf_exit_label="Exit focus", aria_pressed="false"), cls="flex items-center justify-between gap-4 flex-wrap mb-6"), NotStr(f'<object data="{pdf_src}" type="application/pdf" class="pdf-viewer w-full h-[calc(100vh-14rem)] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><p class="p-4 text-sm text-slate-600 dark:text-slate-300">PDF preview not available. <a href="{pdf_src}" class="text-blue-600 hover:underline">Download PDF</a>.</p></object>'))
+            pdf_content = Div(_breadcrumbs(path, slug_to_title, abbreviations), Div(H1(post_title, cls=PAGE_TITLE_CLS), Button("Focus PDF", cls="pdf-focus-toggle inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors", type="button", data_pdf_focus_toggle="true", data_pdf_focus_label="Focus PDF", data_pdf_exit_label="Exit focus", aria_pressed="false"), cls="flex items-center justify-between gap-4 flex-wrap mb-6"), NotStr(f'<object data="{pdf_src}" type="application/pdf" class="pdf-viewer w-full h-[calc(100vh-14rem)] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><p class="p-4 text-sm text-slate-600 dark:text-slate-300">PDF preview not available. <a href="{pdf_src}" class="text-blue-600 hover:underline">Download PDF</a>.</p></object>'))
             return layout(pdf_content, htmx=htmx, title=f"{post_title} - {get_blog_title()}", show_sidebar=True, toc_content=None, current_path=path, show_toc=False, auth=request.scope.get("auth"))
         return not_found(htmx, auth=request.scope.get("auth"))
     metadata, raw_content = parse_frontmatter(file_path)
@@ -58,6 +73,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     pager = _prev_next_nav(root, path, abbreviations)
     error_chip = Span("Bad Front Matter", cls="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50/70 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200") if frontmatter_error else None
     metadata_items = [(k, v) for k, v in metadata.items() if k not in {"__frontmatter_error__", "title", "slides", "reveal"} and isinstance(v, str) and v.strip()]
+    breadcrumbs = _breadcrumbs(path, slug_to_title, abbreviations)
     metadata_block = NotStr(
         '<details class="mb-8 overflow-hidden rounded-2xl border border-[rgba(126,154,144,0.28)] bg-[linear-gradient(180deg,rgba(248,250,249,0.96),rgba(241,246,244,0.92))] px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.05)] dark:border-[rgba(126,154,144,0.22)] dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.52),rgba(15,23,42,0.3))]">'
         '<summary class="cursor-pointer text-xs font-medium uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Front Matter</summary>'
@@ -77,6 +93,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     error_script = Script("setTimeout(()=>{const el=document.getElementById('frontmatter-error-toast');if(!el)return;el.classList.add('opacity-0','translate-x-8');setTimeout(()=>el.remove(),500);},3200)") if frontmatter_error else None
     post_content = Div(
         Div(
+            breadcrumbs,
             Div(H1(post_title, cls=PAGE_TITLE_CLS), Div(error_chip if error_chip else Div(), present_button, copy_button, cls="flex items-center gap-2 flex-wrap"), cls="flex items-start justify-between gap-4 flex-wrap"),
             read_time,
             cls="mb-8",
