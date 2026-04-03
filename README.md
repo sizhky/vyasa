@@ -68,11 +68,11 @@ mindmap
       Title Abbreviations
       Folder Notes
     🎨 Interactive Elements
-      Reveal.js Slides
+      Zen Slides
         Present Mode
-        Horizontal + Vertical Slides
-        Frontmatter Config Support
-        Theme + Highlight Control
+        Real Slide URLs
+        H2/H3 Structural Splits
+        Doc Theme Inheritance
       Mermaid Diagrams
         Flowcharts
         Sequence Diagrams
@@ -149,15 +149,15 @@ mindmap
 
 See the full list in [Markdown Writing Features](vyasa%20manual/markdown-features.md).
 
-### 🎬 Reveal.js Slides
-- **One-click Present Mode**: Add `slides: true` in frontmatter and Vyāsa shows a `Present` button that opens `/slides/<path>` in Reveal.js
-- **Markdown-Native Slide Splits**: Use `---` for horizontal slides and `--` for vertical slides (customizable with `separator` and `separatorVertical`)
-- **Frontmatter Config Support**: Set Reveal options via nested `reveal:` or top-level `reveal_*` keys; these are passed into `Reveal.initialize(...)`
-- **Theme + Highlight Control**: Configure `theme` and `highlightTheme` for deck appearance and code styling
-- **Optional Linear Right-Arrow Navigation**: Use `reveal_rightAdvancesAll: true` (or `reveal: { rightAdvancesAll: true }`) so Right Arrow advances through every slide, including vertical/below slides
-- **Slides with Existing Vyāsa Features**: Mermaid, D2, code highlighting, and math rendering all work inside slides
+### 🎬 Zen Slides
+- **One-click Present Mode**: Add `slides: true` in frontmatter and Vyāsa shows a `Present` button that opens `/slides/<path>/slide-1`
+- **Structural Slide Splits**: `##` starts a horizontal slide and `###` plus deeper headings become detail slides under the current section
+- **Real Slide URLs**: Every slide is addressable as `/slides/<path>/slide-N`, so refresh, copy-link, and open-in-new-tab work like normal pages
+- **Doc Theme Inheritance**: Slide pages reuse the normal doc shell, so fonts, background, theme preset, and `custom.css` stay aligned with reading view
+- **HTMX Navigation**: Left/right movement uses the same `#main-content` swap contract as normal Vyāsa navigation instead of a separate deck runtime
+- **Slides with Existing Vyāsa Features**: Mermaid, D2, tabs, code highlighting, math, and long-form sections continue to work in slide view
 
-See the working example in [Reveal Slides Demo](demo/reveal-slides.md).
+See the working example in [Vyasa Slides Demo](demo/vyasa-slides.md).
 
 ### 🎨 Modern UI
 - **Responsive Design**: Works beautifully on all screen sizes with mobile-first approach

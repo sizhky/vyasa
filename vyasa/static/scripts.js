@@ -2282,7 +2282,7 @@ document.addEventListener('click', (event) => {
         return;
     }
     const summary = event.target.closest('.vyasa-heading-fold-summary');
-    if (!summary || event.target.closest('.vyasa-heading-permalink')) {
+    if (!summary || event.target.closest('.vyasa-heading-permalink, .vyasa-heading-launch')) {
         return;
     }
     event.preventDefault();
@@ -2352,6 +2352,7 @@ function scheduleHashAlignment() {
 function initHeadingFolds(root = document) {
     const main = root.id === 'main-content' ? root : root.querySelector?.('#main-content');
     if (!main || main.dataset.headingFoldsInit === '1') return;
+    if (main.querySelector('.vyasa-zen-content')) return;
     if (!main.querySelector('[data-vyasa-fold-all]')) {
         const control = document.createElement('button');
         control.type = 'button';

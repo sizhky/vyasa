@@ -18,6 +18,7 @@ from .helpers import (
     resolve_heading_anchor,
     text_to_anchor,
 )
+from .slides import present_href_for_anchor
 from .markdown_pipeline import (
     extract_footnotes,
     preprocess_callouts,
@@ -213,6 +214,42 @@ def get_root_folder():
     return get_config().get_root_folder()
 
 
+def _resolve_raw_html_url(url, current_path):
+    if not current_path or not url:
+        return url
+    match = re.match(r"^([^?#]*)(.*)$", url)
+    base, suffix = match.groups() if match else (url, "")
+    if not base or base.startswith(("/", "#", "//")) or re.match(r"^[a-zA-Z][\w+.-]*:", base):
+        return url
+    root = get_root_folder().resolve()
+    current_dir = (root / current_path).parent
+    resolved = (current_dir / base).resolve()
+    try:
+        rel = resolved.relative_to(root).as_posix()
+    except ValueError:
+        return url
+    mapped = f"/posts/{rel[:-3]}" if rel.endswith(".md") else f"/{'static' if rel.startswith('static/') else 'posts'}/{rel if not rel.startswith('static/') else rel[7:]}"
+    return mapped + suffix
+
+
+def _rewrite_raw_html_urls(content, current_path):
+    def rewrite_attr(match):
+        name, quote, value = match.groups()
+        if name.lower() == "srcset":
+            parts = []
+            for item in value.split(","):
+                tokens = item.strip().split(None, 1)
+                if not tokens:
+                    continue
+                tokens[0] = _resolve_raw_html_url(tokens[0], current_path)
+                parts.append(" ".join(tokens))
+            value = ", ".join(parts)
+        else:
+            value = _resolve_raw_html_url(value, current_path)
+        return f'{name}={quote}{value}{quote}'
+    return re.sub(r'\b(src|href|poster|srcset)=(["\'])(.*?)\2', rewrite_attr, content, flags=re.IGNORECASE)
+
+
 def _escape_attr(value):
     if value is None:
         return None
@@ -292,10 +329,11 @@ def _render_mermaid_block(code):
 
 
 class ContentRenderer(FrankenRenderer):
-    def __init__(self, *extras, img_dir=None, footnotes=None, current_path=None, **kwargs):
+    def __init__(self, *extras, img_dir=None, footnotes=None, current_path=None, slide_mode=False, **kwargs):
         super().__init__(*extras, img_dir=img_dir, **kwargs)
         self.footnotes, self.fn_counter = footnotes or {}, 0
         self.current_path = current_path
+        self.slide_mode = slide_mode
         self.heading_counts = {}
         self.mermaid_counter = 0
         self.iframe_counter = 0
@@ -470,14 +508,21 @@ class ContentRenderer(FrankenRenderer):
         inner = self.render_inner(token)
         plain = _plain_text_from_html(inner)
         heading_text, anchor = resolve_heading_anchor(plain, self.heading_counts)
-        fold_children = (
-            f'<button type="button" class="vyasa-heading-action vyasa-heading-action-children" '
-            f'data-heading-action="children" data-heading-anchor="{anchor}" '
-            f'aria-label="Toggle child sections under {html.escape(heading_text)}">'
-            f'<span class="vyasa-heading-icon-expand">{to_xml(UkIcon("expand"))}</span>'
-            f'<span class="vyasa-heading-icon-collapse">{to_xml(UkIcon("shrink"))}</span>'
-            '</button>'
-        )
+        fold_children = ""
+        present_here = ""
+        if not self.slide_mode:
+            fold_children = (
+                f'<button type="button" class="vyasa-heading-action vyasa-heading-action-children" '
+                f'data-heading-action="children" data-heading-anchor="{anchor}" '
+                f'aria-label="Toggle child sections under {html.escape(heading_text)}">'
+                f'<span class="vyasa-heading-icon-expand">{to_xml(UkIcon("expand"))}</span>'
+                f'<span class="vyasa-heading-icon-collapse">{to_xml(UkIcon("shrink"))}</span></button>'
+            )
+            if self.current_path:
+                md_path = get_root_folder() / f"{self.current_path}.md"
+                if md_path.exists():
+                    present_href = present_href_for_anchor(md_path.read_text(encoding="utf-8"), self.current_path, anchor)
+                    present_here = f'<a href="{present_href}" class="vyasa-heading-action vyasa-heading-launch no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" aria-label="Present from here" hx-boost="false">{to_xml(UkIcon("play-circle"))}</a>'
         permalink = (
             f'<a href="#{anchor}" class="vyasa-heading-permalink no-underline '
             f'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" '
@@ -487,7 +532,7 @@ class ContentRenderer(FrankenRenderer):
             f'{to_xml(UkIcon("check"))}<span>URL copied</span></span>'
             '</a>'
         )
-        return f'<h{level} id="{anchor}"><span class="vyasa-heading-text">{html.escape(heading_text)}</span>{fold_children}{permalink}</h{level}>'
+        return f'<h{level} id="{anchor}"><span class="vyasa-heading-text">{html.escape(heading_text)}</span>{fold_children}{present_here}{permalink}</h{level}>'
 
     def render_superscript(self, token):
         return f"<sup>{token.content}</sup>"
@@ -596,7 +641,8 @@ class ContentRenderer(FrankenRenderer):
         return f'<a href="{href}"{hx}{ext}{download_attr}{boost_attr} class="{link_class}"{title}>{inner}</a>'
 
 
-def from_md(content, img_dir=None, current_path=None):
+def from_md(content, img_dir=None, current_path=None, slide_mode=False):
+    content = _rewrite_raw_html_urls(content, current_path)
     if img_dir is None and current_path:
         path_parts = Path(current_path).parts
         img_dir = "/posts/" + "/".join(path_parts[:-1]) if len(path_parts) > 1 else "/posts"
@@ -632,7 +678,7 @@ def from_md(content, img_dir=None, current_path=None):
     with ContentRenderer(
         YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough,
         FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes,
-        current_path=current_path,
+        current_path=current_path, slide_mode=slide_mode,
     ) as renderer:
         html_out = renderer.render(mst.Document(content))
     if tab_data_store:

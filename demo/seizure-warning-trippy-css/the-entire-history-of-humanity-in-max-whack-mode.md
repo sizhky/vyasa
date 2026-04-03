@@ -17,6 +17,12 @@ title: THE ENTIRE HISTORY OF HUMANITY IN MAX WHACK MODE
   counter.id = "visitor-counter";
   counter.textContent = `VISITORS: ${values[Math.floor(Math.random() * values.length)]}`;
   document.body.appendChild(counter);
+  document.querySelectorAll('img[src*="cataas.com"]').forEach((img) => {
+    img.addEventListener("error", () => {
+      img.src = "/static/icon.png";
+      img.alt = `${img.alt || "Cat"} fallback`;
+    }, { once: true });
+  });
 })();
 </script>
 
