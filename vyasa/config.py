@@ -311,6 +311,13 @@ class VyasaConfig:
             return value.lower() in ('true', '1', 'yes', 'on')
         return bool(value)
 
+    def get_log_to_file(self) -> bool:
+        """Get whether Vyasa should write a vyasa.log file in the blog root."""
+        value = self.get('log_to_file', 'VYASA_LOG_TO_FILE', False)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
+
     def get_reload_excludes(self) -> list[str]:
         """Get extra reload excludes, merged with sane defaults."""
         defaults = [

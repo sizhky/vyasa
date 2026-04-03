@@ -114,6 +114,7 @@ def cli():
     parser.add_argument('--password', help='Login password (overrides config/env)')
     parser.add_argument('--show-hidden', action='store_true', help='Include hidden files and folders in listings')
     parser.add_argument('--theme-debug', action='store_true', help='Show runtime theme preset switcher for debugging')
+    parser.add_argument('--log-to-file', action='store_true', help='Write vyasa.log in the blog root')
     
     args = parser.parse_args()
     
@@ -140,6 +141,9 @@ def cli():
         os.environ['VYASA_PASSWORD'] = args.password
     if args.show_hidden:
         os.environ['VYASA_SHOW_HIDDEN'] = 'true'
+        config = reload_config()
+    if args.log_to_file:
+        os.environ['VYASA_LOG_TO_FILE'] = 'true'
         config = reload_config()
     theme_debug_enabled = args.theme_debug or str(os.environ.get('VYASA_THEME_DEBUG', '')).strip().lower() in {'true', '1', 'yes', 'on'}
     if theme_debug_enabled:
