@@ -1,5 +1,4 @@
 import html
-import json
 import re
 import time
 from pathlib import Path
@@ -8,6 +7,7 @@ from urllib.parse import quote
 from fasthtml.common import A, Button, Div, H1, Li, NotStr, Ol, P, Response, Script, Span, Strong, Textarea
 from monsterui.all import UkIcon
 from .helpers import estimate_read_time_minutes, get_adjacent_posts
+from .slides import SlideDeckRenderer, build_slide_entries
 
 PAGE_TITLE_CLS = "vyasa-page-title text-4xl font-bold"
 
@@ -58,7 +58,32 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     frontmatter_error = metadata.get("__frontmatter_error__")
     post_title, render_content = resolve_markdown_title(file_path, abbreviations=abbreviations)
     md_start = time.time()
-    content = from_md(render_content, current_path=path)
+    if bool(metadata.get("slides", False)):
+        slide_entries = build_slide_entries(raw_content, path, from_md, sanitize=False)
+        content = Div(*[
+            Div(
+                Div(
+                    Span(f"Slide {slide['index']}", cls="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400"),
+                    A(
+                        "Present from here",
+                        href=f"/slides/{path}/slide-{slide['index']}",
+                        target="_blank",
+                        rel="noopener noreferrer",
+                        cls="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white",
+                    ),
+                    cls="mb-4 flex items-center justify-between gap-3",
+                ),
+                NotStr(slide["html"]),
+                cls="vyasa-reading-slide mb-10 border-t border-slate-200/80 pt-6 dark:border-slate-800/80",
+                data_slide_start="true",
+                data_slide_index=str(slide["index"]),
+                data_slide_id=slide["id"],
+                data_present_url=f"/slides/{path}/slide-{slide['index']}",
+            )
+            for slide in slide_entries
+        ]) if slide_entries else from_md(render_content, current_path=path)
+    else:
+        content = from_md(render_content, current_path=path)
     logger.debug(f"[DEBUG] Markdown rendering took {(time.time() - md_start) * 1000:.2f}ms")
     read_time = P(f"{estimate_read_time_minutes(render_content)}-min read", cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2")
     copy_button = Button(
@@ -69,7 +94,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         onclick="(function(){const el=document.getElementById('raw-md-clipboard');const toast=document.getElementById('raw-md-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()",
         cls="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors text-sm",
     )
-    present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{path}", target="_blank", rel="noopener noreferrer", cls="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors text-sm") if bool(metadata.get("slides", False)) else None
+    present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{path}/slide-1", target="_blank", rel="noopener noreferrer", cls="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors text-sm") if bool(metadata.get("slides", False)) else None
     pager = _prev_next_nav(root, path, abbreviations)
     error_chip = Span("Bad Front Matter", cls="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50/70 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200") if frontmatter_error else None
     metadata_items = [(k, v) for k, v in metadata.items() if k not in {"__frontmatter_error__", "title", "slides", "reveal"} and isinstance(v, str) and v.strip()]
@@ -131,63 +156,30 @@ def render_drawing_detail(path, htmx, request, *, get_root_folder, not_found, ge
 
 
 def render_slide_deck(path, request, *, get_root_folder, not_found, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, is_allowed, parse_frontmatter, slug_to_title, effective_abbreviations, from_md, asset_url):
-    root, file_path = get_root_folder(), get_root_folder() / f"{path}.md"
+    slide_match = re.match(r"^(?P<base>.+)/slide-(?P<num>\d+)$", path)
+    deck_path, slide_number = (slide_match.group("base"), int(slide_match.group("num"))) if slide_match else (path, None)
+    root, file_path = get_root_folder(), get_root_folder() / f"{deck_path}.md"
     if not file_path.exists():
         return not_found(auth=request.scope.get("auth"))
     roles = get_roles_from_auth(request.scope.get("auth"), rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list)
-    if not is_allowed(f"/posts/{path}", roles or [], rbac_rules):
+    if not is_allowed(f"/posts/{deck_path}", roles or [], rbac_rules):
         return not_found(auth=request.scope.get("auth"))
     metadata, raw_content = parse_frontmatter(file_path)
     title = metadata.get("title", slug_to_title(Path(path).name, abbreviations=effective_abbreviations(root)))
     safe_title = html.escape(f"{title} - Slides")
-    reveal_block = metadata.get("reveal", {}) if isinstance(metadata.get("reveal"), dict) else {}
-    reveal_cfg = {**reveal_block, **{k[7:]: v for k, v in metadata.items() if k.startswith("reveal_")}}
-    theme = str(reveal_cfg.pop("theme", "black")).strip() or "black"
-    highlight_theme = str(reveal_cfg.pop("highlightTheme", "monokai")).strip() or "monokai"
-    theme = theme if re.fullmatch(r"[a-zA-Z0-9_-]+", theme) else "black"
-    highlight_theme = highlight_theme if re.fullmatch(r"[a-zA-Z0-9_-]+", highlight_theme) else "monokai"
-    md_separator, md_separator_vertical = str(reveal_cfg.pop("separator", "^---$")), str(reveal_cfg.pop("separatorVertical", "^--$"))
-    reveal_cfg.pop("separatorNotes", None)
-    slide_padding = str(reveal_cfg.pop("slidePadding", "1.25rem")).strip() or "1.25rem"
-    reveal_cfg.pop("margin", None)
-    font_size = str(reveal_cfg.pop("fontSize", "18px")).strip() or "18px"
-    right_advances_all = reveal_cfg.pop("rightAdvancesAll", False)
-    if isinstance(right_advances_all, str):
-        right_advances_all = right_advances_all.strip().lower() in {"1", "true", "yes", "on"}
-    if right_advances_all and "navigationMode" not in reveal_cfg:
-        reveal_cfg["navigationMode"] = "linear"
-    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?(?:px|rem|em|vw|vh|%)", font_size):
-        font_size = "18px"
-    reveal_init_json, sep_re, sep_v_re = json.dumps({"hash": True, "slideNumber": True, "margin": 0, **reveal_cfg}, ensure_ascii=False), re.compile(md_separator), re.compile(md_separator_vertical)
-
-    def _split_slide_groups(md_text):
-        groups, group, buf, in_fence, fence_char, fence_len = [], [], [], False, "", 0
-        for line in md_text.splitlines():
-            s = line.strip()
-            m = re.match(r"^(```+|~~~+)", s)
-            if m:
-                tok = m.group(1)
-                if not in_fence:
-                    in_fence, fence_char, fence_len = True, tok[0], len(tok)
-                elif tok[0] == fence_char and len(tok) >= fence_len:
-                    in_fence = False
-            if not in_fence and sep_re.fullmatch(s):
-                group.append("\n".join(buf).strip()); groups.append([x for x in group if x.strip()]); group, buf = [], []; continue
-            if not in_fence and sep_v_re.fullmatch(s):
-                group.append("\n".join(buf).strip()); buf = []; continue
-            buf.append(line)
-        group.append("\n".join(buf).strip()); groups.append([x for x in group if x.strip()])
-        return [g for g in groups if g]
-
-    def _render_slide_fragment(md_fragment):
-        from fasthtml.common import to_xml
-        return re.sub(r"<link[^>]*sidenote\\.css[^>]*>", "", to_xml(from_md(md_fragment, current_path=path)), count=1)
-
-    sections = []
-    for group in _split_slide_groups(raw_content):
-        sections.append(f"<section>{_render_slide_fragment(group[0])}</section>" if len(group) == 1 else f"<section>{''.join(f'<section>{_render_slide_fragment(item)}</section>' for item in group)}</section>")
-    slides_markup = "".join(sections) if sections else "<section><h2>Empty deck</h2></section>"
-    page_html = f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{safe_title}</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/{theme}.css" id="theme"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/{highlight_theme}.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"><style>:root{{--vyasa-slide-padding:{slide_padding};--vyasa-slide-font-size:{font_size};}}.reveal{{font-size:var(--vyasa-slide-font-size);}}.reveal .slides section{{padding:var(--vyasa-slide-padding);}}.reveal pre code{{max-height:none;}}.reveal .slides section.present{{left:0!important;}}.reveal section img{{max-height:72vh;}}.reveal .mermaid-container,.reveal .d2-container{{position:relative;border:1px solid rgba(15,23,42,.18)!important;border-radius:10px!important;box-shadow:none!important;background:transparent!important;padding:14px!important;box-sizing:border-box!important;left:auto!important;transform:none!important;margin:0 auto!important;width:85%!important;max-width:85%!important;height:85%!important;max-height:85%!important;min-height:0!important;align-self:center!important;}}.reveal .mermaid-controls,.reveal .d2-controls{{display:none!important;}}.reveal .mermaid-wrapper,.reveal .d2-wrapper{{overflow:visible;min-height:0!important;height:100%!important;width:100%!important;justify-content:center!important;align-items:center!important;}}.reveal .mermaid-wrapper svg,.reveal .d2-wrapper svg{{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;}}.reveal .slides section:has(.mermaid-container),.reveal .slides section:has(.d2-container){{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;padding:0!important;width:100%!important;height:100%!important;min-height:100%!important;}}.reveal .slides section:has(.mermaid-container)>*,.reveal .slides section:has(.d2-container)>*{{width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;}}.reveal .mermaid,.reveal .mermaid svg{{font-size:16px!important;line-height:1.2!important;}}.reveal .mermaid svg text,.reveal .mermaid svg tspan{{fill:#1f2937!important;}}.reveal .mermaid .nodeLabel,.reveal .mermaid .edgeLabel,.reveal .mermaid foreignObject div,.reveal .mermaid foreignObject span,.reveal .mermaid foreignObject p{{color:#1f2937!important;fill:#1f2937!important;}}.reveal .code-copy-button,.reveal .code-block [id$="-toast"]{{display:none!important;}}.reveal .code-block textarea{{position:absolute!important;left:-9999px!important;top:0!important;opacity:0!important;pointer-events:none!important;}}</style></head><body><div class="reveal"><div class="slides">{slides_markup}</div></div><script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script><script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.js"></script><script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script><script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script><script type="module" src="{asset_url('/static/scripts.js')}"></script><script>const cfg = {reveal_init_json};cfg.plugins = [RevealHighlight];Reveal.initialize(cfg);function runMathPass(node) {{if (typeof renderMathInElement !== 'function') return;renderMathInElement(node || document.body, {{delimiters: [{{left: '$$', right: '$$', display: true}},{{left: '$', right: '$', display: false}},{{left: '\\\\[', right: '\\\\]', display: true}},{{left: '\\\\(', right: '\\\\)', display: false}}],throwOnError: false}});}}runMathPass(document.body);Reveal.on('ready', () => runMathPass(document.body));Reveal.on('slidechanged', (e) => runMathPass(e.currentSlide || document.body));</script></body></html>"""
+    renderer = SlideDeckRenderer.from_markdown(
+        path=deck_path,
+        title=title,
+        safe_title=safe_title,
+        metadata=metadata,
+        raw_content=raw_content,
+        from_md=from_md,
+        asset_url=asset_url,
+    )
+    if slide_number is None:
+        from starlette.responses import RedirectResponse
+        return RedirectResponse(f"/slides/{deck_path}/slide-1", status_code=307)
+    page_html = renderer.single_slide_html(slide_number)
     return Response(page_html, media_type="text/html; charset=utf-8")
 
 
