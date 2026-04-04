@@ -108,3 +108,34 @@ def test_fenced_code_inside_obsidian_callout_renders():
     assert '@@VYASA_CALLOUT_BLOCK_' not in html
     assert 'print("hi")' in html
     assert '&gt; ```' not in html
+
+
+def test_raw_html_external_img_src_is_not_rewritten():
+    html = to_xml(from_md('<img src="https://cataas.com/cat?width=320&height=180">', current_path="demo/headings"))
+
+    assert 'src="https://cataas.com/cat?width=320&amp;height=180"' in html
+    assert '/posts/demo/https:' not in html
+
+
+def test_raw_html_relative_img_src_is_resolved_from_current_path():
+    html = to_xml(from_md('<img src="./yeshwanth-stamp.png">', current_path="demo/quick-styling-inline-css"))
+
+    assert 'src="/posts/demo/yeshwanth-stamp.png"' in html
+
+
+def test_raw_html_relative_markdown_href_is_resolved_to_posts_route():
+    html = to_xml(from_md('<a href="../README.md">Root</a>', current_path="demo/headings"))
+
+    assert 'href="/posts/README"' in html
+
+
+def test_raw_html_root_static_src_is_left_alone():
+    html = to_xml(from_md('<img src="/static/icon.png">', current_path="demo/headings"))
+
+    assert 'src="/static/icon.png"' in html
+
+
+def test_raw_html_srcset_rewrites_only_relative_candidates():
+    html = to_xml(from_md('<img srcset="./a.png 1x, https://x.test/b.png 2x">', current_path="demo/headings"))
+
+    assert 'srcset="/posts/demo/a.png 1x, https://x.test/b.png 2x"' in html

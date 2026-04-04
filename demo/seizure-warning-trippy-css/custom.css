@@ -1,11 +1,4 @@
 
-background-color: rgba(255, 255, 255, 0.72) !important;
-background-image: none !important;
-border: 6px double rgba(255, 0, 255, 0.72);
-box-shadow: 0 0 30px rgba(255, 0, 255, 0.35), 0 0 60px rgba(0, 255, 255, 0.2), 0 18px 48px rgba(0, 0, 0, 0.18), inset 0 0 0 2px rgba(255, 255, 255, 0.55);
-padding: 2rem !important;
-border-radius: 18px;
-
 .under-construction-row,
 .gif-chaos-strip,
 .cat-banner-grid {
@@ -935,18 +928,6 @@ span.firework::before {
     content: "🎆 ";
 }
 
-/* ULTRA MEGA GIGA TERA WHACK SUPREME: The body itself */
-body {
-    animation: vibrate 5s infinite;
-    background: repeating-linear-gradient(
-        45deg,
-        rgba(255, 0, 0, 0.02) 0px,
-        rgba(0, 255, 0, 0.02) 50px,
-        rgba(0, 0, 255, 0.02) 100px,
-        rgba(255, 255, 0, 0.02) 150px
-    );
-}
-
 /* 🎭 PHRASES GET EXTRA WHACK - Works with multi-word spans! */
 span[class*="mega"],
 span[class*="ultra"],
@@ -957,9 +938,7 @@ span[class*="hyper"] {
     filter: saturate(300%) !important;
 }
 
-} /* Close the #main-content scope we opened */
-
-/* The system will add another closing brace for its wrapper */* ULTRA WHACK: Paragraphs get the treatment too */
+/* ULTRA WHACK: Paragraphs get the treatment too */
 p:has(span.highlight) {
     background: repeating-linear-gradient(
         90deg,
@@ -1022,9 +1001,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ULTRA MEGA GIGA TERA WHACK SUPREME: 90s GIF TILING MADNESS! */
-/* Target the main content AND the body */
-& {
-    animation: vibrate 5s infinite !important;
+#main-content > .w-full {
     background: rgba(255, 255, 255, 0.92) !important;
     border: 6px double rgba(255, 0, 255, 0.72);
     box-shadow: 0 0 30px rgba(255, 0, 255, 0.35), 0 0 60px rgba(0, 255, 255, 0.2), 0 18px 48px rgba(0, 0, 0, 0.18), inset 0 0 0 2px rgba(255, 255, 255, 0.55);

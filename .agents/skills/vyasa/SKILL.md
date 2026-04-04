@@ -42,6 +42,12 @@ Core rules:
 - For navbar, footer, sidebar, and mobile-panel styling, do not teach or rely on positional selectors like `#site-navbar > *`, `#site-footer > *`, or `#posts-sidebar details > summary`; target the explicit Vyasa hook classes instead so runtime and static-build themes stay stable.
 - For Mermaid labels, use literal `<br/>` for line breaks inside nodes and edge text; do not emit `\n`.
 - For markdown tables with long cell content, prefer manual line breaks inside the cell using literal `<br/>`; wrap prose cells to roughly 8 words per line so readers do not need to horizontally scroll for a single wide column.
+- For the current slide system, do not talk about Reveal.js, `---`/`--` separators, or `reveal_*` frontmatter unless the user explicitly says they are on the old engine; Vyasa now uses the document itself as the deck source.
+- The current zen-slide split is structural: `##` starts a horizontal slide, `###+` becomes a downward/detail slide under the active `##`, and empty `##` parent slides should be skipped.
+- Slide pages must inherit the normal document shell, theme, fonts, and `custom.css`; if a slide page theme diverges from doc view, fix the layout/scoping path before adding more slide CSS.
+- When slide navigation should preserve sidebars on exit, prefer full navigation (`hx_boost="false"`) for links that return to normal doc routes such as navbar/home, breadcrumbs, title, and "Back to doc view".
+- For slide-to-slide movement, prefer the same HTMX main-content swap contract Vyasa already uses for normal page changes; avoid building a parallel client-side deck state machine unless the user explicitly asks for that tradeoff.
+- When splitting markdown into slides, make the splitter fence-aware: headings inside code fences or `:::tabs` blocks are content, not slide boundaries.
 - Do not invent unsupported frontmatter keys, sort modes, or config keys.
 - Supported root `.vyasa` app-level keys now include `theme_preset` for selecting a bundled preset and `theme_primary` for overriding the primary accent color without editing CSS.
 - Bundled presets now live inside the package, so `theme_preset = "serene-manuscript"`, `theme_preset = "kinetic-scholar"`, or `theme_preset = "ultra-soft"` should work in normal `pip install vyasa` deployments even without a local `.vyasa-themes` folder.

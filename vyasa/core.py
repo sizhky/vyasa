@@ -1060,9 +1060,10 @@ def drawing_detail(path: str, htmx, request: Request):
 
 
 @rt("/slides/{path:path}")
-def slide_deck(path: str, request: Request):
+def slide_deck(path: str, htmx, request: Request):
     return render_slide_deck(
         path,
+        htmx,
         request,
         get_root_folder=get_root_folder,
         not_found=not_found,
@@ -1076,7 +1077,7 @@ def slide_deck(path: str, request: Request):
         slug_to_title=slug_to_title,
         effective_abbreviations=_effective_abbreviations,
         from_md=from_md,
-        asset_url=_asset_url,
+        layout=layout,
     )
 
 

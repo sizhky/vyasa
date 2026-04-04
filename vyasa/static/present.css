@@ -1,0 +1,42 @@
+.vyasa-zen-present {
+  background: var(--vyasa-paper, inherit);
+  color: var(--vyasa-ink, inherit);
+}
+.vyasa-zen-present .vyasa-fold-all-button { display: none !important; }
+.vyasa-zen-content .vyasa-heading-action,
+.vyasa-zen-content .vyasa-heading-action-children,
+.vyasa-zen-content .vyasa-heading-launch,
+.vyasa-zen-content .vyasa-heading-permalink { display: none !important; }
+.vyasa-zen-content {
+  --vyasa-zen-slide-max-width: 78rem;
+  max-width: min(var(--vyasa-zen-slide-max-width), calc(100vw - 2rem));
+}
+.vyasa-zen-title {
+  margin: 0;
+  width: 100%;
+  text-align: center;
+}
+.vyasa-zen-shell {
+  min-height: 100vh;
+  padding: 1.5rem 0 3rem;
+}
+.vyasa-zen-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.vyasa-zen-nav {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .5rem .9rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vyasa-paper, #fff) 82%, transparent);
+  backdrop-filter: blur(10px);
+}
+.vyasa-zen-nav a { text-decoration: none; color: inherit; }
+.vyasa-zen-slide-body { width: 100%; }
