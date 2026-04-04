@@ -52,7 +52,7 @@ Vyāsa is a Python-first blogging platform designed to turn your Markdown files 
 
 ## Key Features
 
-### 🚀 Vyāsa at a Glanc
+### 🚀 Vyāsa at a Glance
 
 Hiding in plain sight, Vyāsa packs a powerful punch of features that transform simple Markdown files into dynamic, interactive websites. From advanced Markdown capabilities to modern UI/UX design and technical robustness, Vyāsa is built to empower creators of all levels. Here's a high-level overview of what Vyāsa brings to the table:
 
