@@ -163,7 +163,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
     overview_panel = Div(
         NotStr('<table class="uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle w-full"><tbody>' + "".join(overview_rows) + '</tbody></table>'),
         id="slide-overview",
-        cls="hidden fixed top-24 bottom-24 left-1/2 -translate-x-1/2 z-30 w-[min(78rem,calc(100vw-3rem))] overflow-y-auto rounded-xl border bg-white/95 dark:bg-slate-900/95 p-4 shadow-2xl",
+        cls="hidden fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 w-[min(78rem,calc(100vw-3rem))] max-h-[70vh] overflow-y-auto rounded-xl border bg-white/95 dark:bg-slate-900/95 p-4 shadow-2xl",
     )
     footer_links = Div(Button("Overview", type="button", data_zen_overview_toggle="true", cls="underline underline-offset-4"), Span(UkIcon("more-horizontal", cls="w-4 h-4 opacity-70")), A("Back to doc view", href=doc_href, hx_boost="false", cls="underline underline-offset-4"), cls="fixed bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3")
     if slide_num == 1 or slide_num == total:
