@@ -161,9 +161,12 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         for item in overview
     ]
     overview_panel = Div(
-        NotStr('<table class="uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle w-full"><tbody>' + "".join(overview_rows) + '</tbody></table>'),
+        Div(
+            NotStr('<table class="uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle w-full"><tbody>' + "".join(overview_rows) + '</tbody></table>'),
+            cls="w-[min(78rem,calc(100vw-3rem))] max-h-[70vh] overflow-y-auto rounded-xl border bg-white/95 dark:bg-slate-900/95 p-4 shadow-2xl pointer-events-auto",
+        ),
         id="slide-overview",
-        cls="hidden fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 w-[min(78rem,calc(100vw-3rem))] max-h-[70vh] overflow-y-auto rounded-xl border bg-white/95 dark:bg-slate-900/95 p-4 shadow-2xl",
+        cls="hidden fixed inset-0 z-30 flex items-center justify-center p-6 pointer-events-none",
     )
     footer_links = Div(Button("Overview", type="button", data_zen_overview_toggle="true", cls="underline underline-offset-4"), Span(UkIcon("more-horizontal", cls="w-4 h-4 opacity-70")), A("Back to doc view", href=doc_href, hx_boost="false", cls="underline underline-offset-4"), cls="fixed bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3")
     if slide_num == 1 or slide_num == total:
@@ -215,7 +218,25 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
         page_title, render_content = resolve_markdown_title(index_file)
         index_path = str(index_file.relative_to(get_root_folder()).with_suffix(""))
         read_time = P(f"{estimate_read_time_minutes(render_content)}-min read", cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2")
-        page_content = Div(Div(H1(page_title, cls="text-4xl font-bold"), read_time, cls="mb-8"), from_md(render_content, current_path=index_path))
+        copy_button = Button(
+            UkIcon("clipboard", cls="w-4 h-4"),
+            Span("Copy Markdown", cls="text-sm font-medium"),
+            type="button",
+            title="Copy raw markdown",
+            onclick="(function(){const el=document.getElementById('raw-md-clipboard');const toast=document.getElementById('raw-md-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()",
+            cls="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors text-sm",
+        )
+        present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{index_path}/slide-1", target="_blank", rel="noopener noreferrer", cls="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors text-sm")
+        page_content = Div(
+            Div(
+                Div(H1(page_title, cls=PAGE_TITLE_CLS), Div(present_button, copy_button, cls="flex items-center gap-2 flex-wrap"), cls="flex items-start justify-between gap-4 flex-wrap"),
+                read_time,
+                cls="mb-8",
+            ),
+            Div("Copied Raw Markdown!", id="raw-md-toast", cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"),
+            Textarea(raw_content, id="raw-md-clipboard", cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"),
+            from_md(render_content, current_path=index_path),
+        )
         result = layout(page_content, htmx=htmx, title=f"{page_title} - {blog_title}", show_sidebar=True, toc_content=raw_content, current_path=index_path, auth=request.scope.get("auth"))
         if logger:
             logger.debug("Request complete path=/ route=index total={:.2f}ms", (time.time() - request_start) * 1000)
