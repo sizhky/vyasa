@@ -225,11 +225,13 @@ Theme presets are bundled with the package, so `theme_preset = "ultra-soft"` wor
 
 Short, focused guides for deeper topics. Start with configuration and writing content, then dive into architecture and advanced details.
 
-- [Configuration & CLI](vyasa%20manual/configuration.md)
-- [Markdown Writing Features](vyasa%20manual/markdown-features.md)
-- [Mermaid Diagrams](vyasa%20manual/mermaid-diagrams.md)
-- [D2 Diagrams](vyasa%20manual/d2-diagrams.md)
-- [Architecture Overview](vyasa%20manual/architecture.md)
-- [Theming & CSS](vyasa%20manual/theming.md)
-- [Security & Auth](vyasa%20manual/security.md)
-- [Advanced Behavior](vyasa%20manual/advanced.md)
+| Guide | Docs | Slides |
+|---|---|---|
+| Configuration & CLI | [Open](vyasa%20manual/configuration.md) | [Present](/slides/vyasa%20manual/configuration/slide-1) |
+| Markdown Writing Features | [Open](vyasa%20manual/markdown-features.md) | [Present](/slides/vyasa%20manual/markdown-features/slide-1) |
+| Mermaid Diagrams | [Open](vyasa%20manual/mermaid-diagrams.md) | [Present](/slides/vyasa%20manual/mermaid-diagrams/slide-1) |
+| D2 Diagrams | [Open](vyasa%20manual/d2-diagrams.md) | [Present](/slides/vyasa%20manual/d2-diagrams/slide-1) |
+| Architecture Overview | [Open](vyasa%20manual/architecture.md) | [Present](/slides/vyasa%20manual/architecture/slide-1) |
+| Theming & CSS | [Open](vyasa%20manual/theming.md) | [Present](/slides/vyasa%20manual/theming/slide-1) |
+| Security & Auth | [Open](vyasa%20manual/security.md) | [Present](/slides/vyasa%20manual/security/slide-1) |
+| Advanced Behavior | [Open](vyasa%20manual/advanced.md) | [Present](/slides/vyasa%20manual/advanced/slide-1) |

@@ -627,10 +627,12 @@ class ContentRenderer(FrankenRenderer):
             else:
                 is_external = True
         is_internal = is_absolute_internal and "." not in href.split("/")[-1]
-        hx = f' hx-get="{href}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top"' if is_internal else ""
+        slide_internal = self.slide_mode and href.startswith("/slides/")
+        doc_escape = self.slide_mode and is_absolute_internal and not href.startswith("/slides/")
+        hx = f' hx-get="{href}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top"' if (is_internal and not doc_escape) else ""
         ext = "" if (is_internal or is_absolute_internal or is_hash) else ' target="_blank" rel="noopener noreferrer"'
         download_attr = ""
-        boost_attr = ""
+        boost_attr = ' hx-boost="false"' if doc_escape else ""
         if download_flag:
             download_attr = " download"
             boost_attr = ' hx-boost="false"'
