@@ -10,6 +10,7 @@
 .vyasa-zen-content {
   --vyasa-zen-slide-max-width: 78rem;
   max-width: min(var(--vyasa-zen-slide-max-width), calc(100vw - 2rem));
+  font-size: 2em;
 }
 .vyasa-zen-title {
   margin: 0;

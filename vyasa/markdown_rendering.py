@@ -592,7 +592,8 @@ class ContentRenderer(FrankenRenderer):
             f'transition-colors" aria-label="Copy code" onclick="(function(){{const el=document.getElementById(\'{textarea_id}\');const toast=document.getElementById(\'{toast_id}\');if(!el){{return;}}el.focus();el.select();const text=el.value;const done=()=>{{if(!toast){{return;}}toast.classList.remove(\'opacity-0\');toast.classList.add(\'opacity-100\');setTimeout(()=>{{toast.classList.remove(\'opacity-100\');toast.classList.add(\'opacity-0\');}},1400);}};if(navigator.clipboard&&window.isSecureContext){{navigator.clipboard.writeText(text).then(done).catch(()=>{{document.execCommand(\'copy\');done();}});}}else{{document.execCommand(\'copy\');done();}}}})()">'
             f'{icon_html}<span class="sr-only">Copy code</span></button>'
             f'<div id="{toast_id}" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div>'
-            f'<textarea id="{textarea_id}" class="absolute left-[-9999px] top-0 opacity-0 pointer-events-none">{escaped_raw}</textarea>'
+            f'<textarea id="{textarea_id}" hidden readonly aria-hidden="true" tabindex="-1" '
+            f'class="pointer-events-none select-none">{escaped_raw}</textarea>'
             f"<pre><code{lang_class}>{code}</code></pre></div>"
         )
 
