@@ -1,0 +1,120 @@
+/* ─── Pokemon-themed article styles ─────────────────────────────────── */
+
+/* Inline badge classes used in markdown via `text`{.class} */
+span.ability-badge {
+  background: rgba(61, 125, 202, 0.12);
+  color: #1d4ed8;
+  border: 1px solid rgba(61, 125, 202, 0.28);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.85em;
+}
+
+span.pokemon-badge {
+  background: rgba(204, 0, 0, 0.08);
+  color: #b91c1c;
+  border: 1px solid rgba(204, 0, 0, 0.22);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+span.move-badge {
+  background: rgba(255, 203, 5, 0.14);
+  color: #78350f;
+  border: 1px solid rgba(255, 203, 5, 0.38);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+span.subtitle-badge {
+  background: rgba(0, 58, 112, 0.07);
+  color: #1e3a5f;
+  border: 1px solid rgba(0, 58, 112, 0.18);
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 0.82em;
+  display: inline-block;
+  letter-spacing: 0.01em;
+}
+
+/* Dark mode overrides */
+.dark span.ability-badge  { color: #93c5fd; background: rgba(147,197,253,.1); border-color: rgba(147,197,253,.2); }
+.dark span.pokemon-badge  { color: #fca5a5; background: rgba(252,165,165,.1); border-color: rgba(252,165,165,.2); }
+.dark span.move-badge     { color: #fcd34d; background: rgba(252,211,77,.1);  border-color: rgba(252,211,77,.2);  }
+.dark span.subtitle-badge { color: #93c5fd; background: rgba(147,197,253,.07); border-color: rgba(147,197,253,.18); }
+
+/* h2 slide-level headings get a red left bar */
+h2 {
+  border-left: 4px solid var(--pokemon-red, #cc0000);
+  padding-left: 0.75rem;
+  margin-top: 2.5rem;
+}
+
+/* Pokémon artwork */
+.pokemon-art {
+  animation: float-up 60s ease-in-out infinite;
+  position: relative !important;
+  z-index: 20 !important;
+}
+.vyasa-reveal-unit:has(.pokemon-art) {
+  position: relative !important;
+  z-index: 20 !important;
+}
+.pokemon-art-hero {
+  display: block;
+  height: 360px;
+  margin: 0 auto;
+}
+.pokemon-art-float {
+  float: right;
+  height: 130px;
+  margin: 0 0 1rem 1.5rem;
+  z-index: 20 !important;
+}
+.pokemon-art-finale {
+  height: 150px;
+}
+.pokemon-art-mewtwo {
+  filter: drop-shadow(0 8px 32px rgba(204, 0, 0, 0.45));
+}
+.pokemon-art-charizard {
+  filter: drop-shadow(0 8px 28px rgba(255, 100, 0, 0.5));
+}
+.pokemon-art-venusaur {
+  height: 120px;
+  opacity: 0.95;
+}
+
+/* Cite callout: gold left border */
+.vyasa-callout[data-callout="cite"] {
+  background: rgba(255, 203, 5, 0.05);
+  border-left-color: #d97706;
+}
+
+/* Error callout: strong red */
+.vyasa-callout[data-callout="error"] {
+  background: rgba(204, 0, 0, 0.05);
+  border-left-color: #cc0000;
+}
+
+/* Mermaid diagram containers */
+.mermaid-wrapper {
+  border-radius: 10px;
+  border: 1px solid rgba(0, 58, 112, 0.15);
+}
+.dark .mermaid-wrapper {
+  border-color: rgba(147, 197, 253, 0.12);
+}
+
+/* Code block palette */
+:root {
+  --vyasa-code-bg: #f8f6f0;
+  --vyasa-code-fg: #1e293b;
+  --vyasa-code-border: rgba(0, 58, 112, 0.12);
+  --vyasa-code-highlight-bg: rgba(204, 0, 0, 0.08);
+  --vyasa-code-highlight-accent: #cc0000;
+}

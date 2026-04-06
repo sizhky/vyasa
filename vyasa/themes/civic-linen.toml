@@ -1,4 +1,5 @@
 theme_primary = "#355b7c"
+theme_button_radius = "0.35rem"
 theme_heading_font = "\"Libre Baskerville\", Georgia, serif"
 theme_body_font = "\"Libre Franklin\", sans-serif"
 theme_ui_font = "\"Libre Franklin\", sans-serif"

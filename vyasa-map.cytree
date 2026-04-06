@@ -1,0 +1,143 @@
+# Compact Cytograph tree source
+# indent = parent/child
+# ids are derived from the full label path
+# state markers: ! explored, * frontier, blank unexplored
+# @base <path> sets the URL base for following sibling lines in the same block
+# url forms: -> full path, -> #fragment (same base as nearest ancestor/base), -> = (same base, no fragment)
+
+! Vyasa
+  * Writing and Markdown
+    @base posts/vyasa manual/markdown-features
+    * Markdown Features -> =
+    * Headings and anchors -> #headings
+      Plain-text headings -> #headings
+      Heading IDs -> #heading-ids
+      Folder notes -> posts/vyasa manual/advanced#indexreadme-behavior
+    * Lists and task lists -> #lists
+      Task lists -> #task-list
+      Line blocks -> #line-block
+    * Code and includes -> #code
+      File snippet include -> #file-snippet-include
+      Fenced code blocks -> #fenced-code-block
+    * Links and embedded media -> #links
+      Relative links -> #relative-links
+      Embedded media -> #embedded-media
+      Raw HTML blocks -> #raw-html-blocks
+    * Footnotes and references -> #footnotes
+      Footnotes as sidenotes -> #footnotes
+      Definition lists -> #definition-lists
+      Citation -> #citation
+    * Text semantics -> #strikethrough
+      Strikethrough -> #strikethrough
+      Title abbreviations -> #abbreviations
+      Superscript and subscript -> #superscript-and-subscript
+      Smart typography -> #smart-typography
+    * Math and diagrams -> #mathematical-notation
+      Mathematical notation -> #mathematical-notation
+      Escaping dollar signs -> #escaping-dollar-signs
+      Markdown diagrams block -> #diagrams
+    * Callouts and tabs -> #callouts
+      Rich callouts -> #callouts
+      Collapsible sections -> #collapsible-sections
+      Tabbed content -> #tabbed-content
+      Cascading folder CSS -> #cascading-folder-specific-css
+  * Reading Experience
+    @base posts/vyasa manual/theming
+    * Theming Guide -> =
+    * README Overview -> posts/README#-vyasa-at-a-glance
+    * Where to put CSS -> #1-where-to-put-your-css
+    Section scope class -> #2-how-to-find-the-section-scope-class
+    DOM map -> #3-dom-map-what-you-can-target
+    * Global theming -> #4-global-theming-background-typography-links
+      @base posts/README
+      Dark mode -> #-modern-ui
+      Theme presets -> #-modern-ui
+      Theme primary override -> #-modern-ui
+    Navbar and footer -> #5-navbar-and-footer
+    Sidebars and TOC -> #6-sidebars-and-toc
+    Code block theming -> #7-code-blocks-and-inline-code
+    Mermaid theming -> #8-mermaid-diagrams
+    Footnotes and sidenotes -> #9-footnotes--sidenotes
+    Tabs styling -> #10-tabs
+    Images and media -> #11-images-and-media
+    * Behavior via CSS and JS -> #12-change-behavior-js--html
+    Change HTML structure -> #13-advanced-change-the-html-structure
+    Troubleshooting -> #14-troubleshooting
+  * Presentation and Media
+    @base posts/vyasa manual/mermaid-diagrams
+    * Zen Slides -> posts/demo/vyasa-slides
+    * Mermaid Diagrams -> #basic-usage
+    * D2 Diagrams -> posts/vyasa manual/d2-diagrams#basic-usage
+    * Slide structure -> posts/demo/vyasa-slides#the-split-is-natural
+      Vertical slides -> #vertical-slides-come-from-deeper-headings
+      Real slide URLs -> #every-slide-has-a-real-url
+      Present from here -> #present-from-here
+      Navigation stays lightweight -> #navigation-stays-lightweight
+      Theme inheritance -> #the-theme-is-the-document-theme
+      Escape hatches -> #the-escape-hatches-are-obvious
+      Long sections scroll -> #long-sections-still-read-like-pages
+    Mermaid frontmatter -> #frontmatter-controls
+    D2 frontmatter -> posts/vyasa manual/d2-diagrams#frontmatter-controls
+    Mermaid interactions -> #interactions
+      Mermaid zoom and pan -> #mermaid-zoom--pan
+      Theme-aware re-render -> #theme-aware-re-rendering
+      Mermaid HTMX integration -> #htmx-integration
+    D2 interactions -> posts/vyasa manual/d2-diagrams#interactions
+      Service architecture -> #service-architecture
+      Sequence-style diagram -> #sequence-style-diagram
+      Cloud topology -> #cloud-network-topology
+      D2 composition animation -> #d2-composition-animation-scenarios
+  * Collaboration
+    * Inline annotations -> posts/vyasa manual/configuration#annotations-optional
+      @base posts/README
+      Text selection comments -> #-advanced-markdown-features
+      Margin threads and replies -> #-advanced-markdown-features
+      Bloom highlighting -> #-advanced-markdown-features
+      Auth-aware authors -> #-advanced-markdown-features
+      Disabled in slide view -> posts/vyasa manual/configuration#annotations-optional
+    * Excalidraw pages -> posts/README#-advanced-markdown-features
+      Shared editing -> #-advanced-markdown-features
+      Presence names -> #-advanced-markdown-features
+      Download and open external -> #-advanced-markdown-features
+  * Security and Access
+    @base posts/vyasa manual/security
+    * Security and Auth -> =
+    * Authentication -> #authentication-optional
+      Beforeware middleware -> #authentication-optional
+    * Google OAuth -> #google-oauth-optional
+      Allowed domains and emails -> #google-oauth-optional
+    * RBAC -> #rbac-optional
+      Default roles and rules -> #rbac-optional
+    Security features -> #security-features
+  * Platform and Runtime
+    @base posts/vyasa manual/advanced
+    * Architecture Overview -> posts/vyasa manual/architecture
+    * Configuration and CLI -> posts/vyasa manual/configuration
+    * Advanced Behavior -> =
+    Request flow -> posts/vyasa manual/architecture#request-flow
+    Markdown pipeline -> posts/vyasa manual/architecture#markdown-processing-pipeline
+    Mermaid lifecycle -> posts/vyasa manual/architecture#mermaid-lifecycle
+    Layout components -> posts/vyasa manual/architecture#layout-components
+    HTMX optimization -> posts/vyasa manual/architecture#htmx-optimization
+    Sidebar features -> posts/vyasa manual/architecture#sidebar-features
+    CSS scoping -> posts/vyasa manual/architecture#css-scoping
+    Performance logging -> posts/vyasa manual/architecture#performance-logging
+    * CLI -> posts/vyasa manual/configuration#cli
+    .vyasa config file -> posts/vyasa manual/configuration#using-a-vyasa-configuration-file
+    Layout width configuration -> posts/vyasa manual/configuration#layout-width-configuration
+    Custom sidebar ordering -> posts/vyasa manual/configuration#custom-sidebar-ordering
+    Environment variables -> posts/vyasa manual/configuration#environment-variables
+    Annotations config -> posts/vyasa manual/configuration#annotations-optional
+    RBAC config -> posts/vyasa manual/configuration#rbac-configuration-optional
+    Examples -> posts/vyasa manual/configuration#examples
+    Index and README behavior -> #indexreadme-behavior
+    Smart 404 -> #smart-404
+    Performance -> #performance
+    Technical highlights -> #-technical-highlights
+    Custom renderers -> #custom-renderers
+    Caching strategy -> #caching-strategy
+    Advanced HTMX integration -> #htmx-integration
+    Code highlighting -> #code-highlighting
+    Image handling -> #image-handling
+    Frontmatter support -> #frontmatter-support
+    Static build support -> posts/static-build

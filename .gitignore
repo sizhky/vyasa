@@ -1,6 +1,10 @@
+tests/
+.vyasa*
+.omx
 *.html
 _docs/
 _plans/
+_plan/
 _proc/
 
 *.bak

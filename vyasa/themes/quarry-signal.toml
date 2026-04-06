@@ -1,4 +1,5 @@
 theme_primary = "#667446"
+theme_button_radius = "0.4rem"
 theme_heading_font = "Domine, Georgia, serif"
 theme_body_font = "Lexend, sans-serif"
 theme_ui_font = "Lexend, sans-serif"

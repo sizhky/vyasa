@@ -40,3 +40,8 @@ class InlineCodeAttr(mst.span_token.SpanToken):
 class Strikethrough(mst.span_token.SpanToken):
     pattern = re.compile(r"~~(.+?)~~"); parse_inner = True; parse_group = 1; precedence = 7
     def __init__(self, match): self.children = []
+
+
+class Highlight(mst.span_token.SpanToken):
+    pattern = re.compile(r"==(.+?)=="); parse_inner = True; parse_group = 1; precedence = 7
+    def __init__(self, match): self.children = []

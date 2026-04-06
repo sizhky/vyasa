@@ -1,4 +1,5 @@
 theme_primary = "#c96f4b"
+theme_button_radius = "0.45rem"
 theme_heading_font = "\"Red Hat Display\", sans-serif"
 theme_body_font = "Montserrat, sans-serif"
 theme_ui_font = "Montserrat, sans-serif"

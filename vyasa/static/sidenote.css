@@ -4,10 +4,12 @@
     font-size: 1rem; vertical-align: top; line-height: 1;
     padding: 0 0.28rem; border-radius: 999px; margin-left: 0.1rem;
     font-family: 'Inter', sans-serif;
+    -webkit-user-select: none; user-select: none;
 }
 .sidenote-ref:after { content: "›"; }
 .dark .sidenote-ref { color: #c7eade; background-color: rgba(199, 234, 222, 0.18); }
-.sidenote { display: none; }
+.sidenote { display: none; -webkit-user-select: none; user-select: none; list-style: none; }
+.sidenote::marker { content: ""; }
 @media (max-width: 1279px) {
     .sidenote-ref:after { content: "⌃"; }
     .sidenote-ref { transform: rotate(180deg); }
@@ -16,6 +18,7 @@
 }
 @media (min-width: 1280px) {
     .sidenote { display: block; float: right; clear: right; width: 17rem; margin-right: -19rem; margin-top: 0.35rem; margin-bottom: 1rem; color: #5a6060; font-family: 'Newsreader', Georgia, serif; }
+    .sidenote.annotation-reply { float: none; clear: none; width: 100%; margin-right: 0; margin-top: 0.5rem; margin-bottom: 0; }
     .sidenote.hl { background-color: rgba(199, 234, 222, 0.18); }
     .dark .sidenote.hl { background-color: rgba(199, 234, 222, 0.12); }
 }

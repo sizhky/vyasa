@@ -59,6 +59,7 @@ from .drawing_auth import (
     unlock_drawing,
 )
 from .auth.oauth_bootstrap import build_google_oauth
+from .annotations_store import AnnotationRow, delete_annotation, get_annotations_table, list_annotations, upsert_annotation
 from .page_views import not_found_content
 from .rbac_config import normalize_rbac_cfg, render_rbac_toml, write_rbac_to_vyasa
 from .rbac_store import load_rbac_cfg, write_rbac_cfg
@@ -114,6 +115,11 @@ hdrs = (
             --vyasa-ink: #edf2f1 !important;
             --vyasa-paper-low: color-mix(in srgb, #121716 76%, #45655b 24%) !important;
         }
+        @keyframes vyasaAnnotationBloom {
+            0% { background: rgba(245, 158, 11, 0); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+            18% { background: rgba(245, 158, 11, 0.34); box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.38); }
+            100% { background: rgba(245, 158, 11, 0); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
         """
     ),
     *Theme.slate.headers(highlightjs=True),
@@ -160,6 +166,7 @@ _auth_required = _config.get_auth_required()
 
 
 _rbac_store_cache = {"db": None, "tbl": None}
+_annotations_store_cache = {"db": None, "tbl": None}
 
 
 def _normalize_rbac_cfg(cfg):
@@ -179,6 +186,18 @@ def _rbac_db_write(cfg):
         write_rbac_cfg(get_config().get_root_folder(), _rbac_store_cache, cfg, _normalize_rbac_cfg)
     except Exception as exc:
         logger.warning(f"RBAC DB unavailable: {exc}")
+
+
+def _annotations_db_list(path: str):
+    return list_annotations(get_config().get_root_folder(), _annotations_store_cache, path)
+
+
+def _annotations_db_upsert(row):
+    upsert_annotation(get_config().get_root_folder(), _annotations_store_cache, row)
+
+
+def _annotations_db_delete(annotation_id: str):
+    return delete_annotation(get_config().get_root_folder(), _annotations_store_cache, annotation_id)
 
 
 def _load_rbac_cfg_from_store():
@@ -553,6 +572,81 @@ async def save_excalidraw(path: str, request: Request):
     return Response('{"ok":true}', media_type="application/json")
 
 
+@rt("/api/annotations/{path:path}", methods=["GET"])
+async def get_annotations(path: str, request: Request):
+    if not _config.get_annotations_enabled():
+        return Response("Not Found", status_code=404)
+    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
+    if roles is not None and not is_allowed(f"/posts/{path}", roles or [], _rbac_rules):
+        return Response("Forbidden", status_code=403)
+    rows = _annotations_db_list(path)
+    payload = [
+        {
+            "id": row.id, "path": row.path, "parent_id": getattr(row, "parent_id", ""), "quote": row.quote, "prefix": row.prefix, "suffix": row.suffix, "anchor": getattr(row, "anchor", ""),
+            "comment": row.comment, "author": row.author, "created_at": row.created_at, "updated_at": row.updated_at,
+        }
+        for row in rows
+    ]
+    return Response(json.dumps(payload), media_type="application/json")
+
+
+@rt("/api/annotations/{path:path}", methods=["POST"])
+async def save_annotation(path: str, request: Request):
+    if not _config.get_annotations_enabled():
+        return Response("Not Found", status_code=404)
+    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
+    if roles is not None and not is_allowed(f"/posts/{path}", roles or [], _rbac_rules):
+        return Response("Forbidden", status_code=403)
+    try:
+        payload = json.loads((await request.body()).decode("utf-8"))
+    except Exception:
+        return Response("Invalid JSON", status_code=400)
+    if not isinstance(payload, dict):
+        return Response("Expected JSON object", status_code=400)
+    auth = get_auth_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) or {}
+    author = auth.get("name") or auth.get("email") or auth.get("username") or "anonymous"
+    now = payload.get("updated_at") or __import__("datetime").datetime.utcnow().isoformat()
+    row = AnnotationRow(
+        id=str(payload.get("id") or ""),
+        path=path.strip("/"),
+        parent_id=str(payload.get("parent_id") or ""),
+        quote=str(payload.get("quote") or ""),
+        prefix=str(payload.get("prefix") or ""),
+        suffix=str(payload.get("suffix") or ""),
+        anchor=json.dumps(payload.get("anchor") or {}),
+        comment=str(payload.get("comment") or ""),
+        author=author,
+        created_at=str(payload.get("created_at") or now),
+        updated_at=str(now),
+    )
+    if not row.id or not row.comment:
+        return Response("Missing annotation fields", status_code=400)
+    _annotations_db_upsert(row)
+    return Response(json.dumps({"ok": True, "author": author}), media_type="application/json")
+
+
+@rt("/api/annotations/{path:path}/{annotation_id}", methods=["DELETE"])
+async def remove_annotation(path: str, annotation_id: str, request: Request):
+    if not _config.get_annotations_enabled():
+        return Response("Not Found", status_code=404)
+    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
+    if roles is not None and not is_allowed(f"/posts/{path}", roles or [], _rbac_rules):
+        return Response("Forbidden", status_code=403)
+    rows = _annotations_db_list(path)
+    ids = {annotation_id}
+    changed = True
+    while changed:
+        changed = False
+        for row in rows:
+            if getattr(row, "parent_id", "") in ids and row.id not in ids:
+                ids.add(row.id)
+                changed = True
+    ok = False
+    for item_id in ids:
+        ok = _annotations_db_delete(item_id) or ok
+    return Response(json.dumps({"ok": ok}), media_type="application/json")
+
+
 @app.ws("/ws/excalidraw/{path:path}", conn=_collab_conn, disconn=_collab_disconn)
 async def excalidraw_collab(ws: WebSocket, data: dict):
     room = ws.path_params.get("path", "")
@@ -610,7 +704,7 @@ def theme_toggle():
         UkIcon("sun", cls="hidden dark:block"),
         _=theme_script,
         id="theme-mode-toggle",
-        cls="p-1 hover:scale-110 shadow-none",
+        cls="vyasa-emphasis-control vyasa-emphasis-control-icon p-1 hover:scale-110 shadow-none",
         type="button",
     )
     cfg = get_config()
@@ -621,7 +715,7 @@ def theme_toggle():
     menu_items = "".join(
         f'<button type="button" data-theme-name="{name}" '
         f'onclick="window.vyasaApplyThemePreset && window.vyasaApplyThemePreset(this.dataset.themeName, this)" '
-        f'class="theme-preset-option block w-full rounded px-3 py-2 text-left hover:bg-white/10">{name}</button>'
+        f'class="theme-preset-option vyasa-emphasis-control-option block w-full rounded px-3 py-2 text-left">{name}</button>'
         for name in presets
     )
     return Div(
@@ -632,17 +726,17 @@ def theme_toggle():
                 <div id="theme-preset-dropdown" class="relative min-w-44" style="position:relative;min-width:11rem;">
                     <button type="button" id="theme-preset-toggle"
                         onclick="window.vyasaToggleThemePresetMenu && window.vyasaToggleThemePresetMenu(this)"
-                        class="flex w-full items-center justify-between rounded-md bg-slate-950/70 px-3 py-2 text-sm text-slate-100 ring-1 ring-white/10">
+                        class="vyasa-emphasis-control vyasa-emphasis-control-field flex w-full items-center justify-between rounded-md px-3 py-2 text-sm">
                         <span id="theme-preset-active-label" class="truncate">{active or "Theme"}</span>
-                        <span class="ml-3 text-slate-300">⌄</span>
+                        <span class="ml-3">⌄</span>
                     </button>
-                    <div id="theme-preset-menu" style="display:none;position:absolute;left:0;top:calc(100% + 0.5rem);z-index:1400;max-height:18rem;width:16rem;overflow-y:auto;border-radius:0.375rem;background:rgba(2,6,23,0.95);padding:0.25rem;box-shadow:0 10px 30px rgba(15,23,42,0.35);border:1px solid rgba(255,255,255,0.1);">
+                    <div id="theme-preset-menu" class="vyasa-emphasis-control-menu" style="display:none;position:absolute;left:0;top:calc(100% + 0.5rem);z-index:1400;max-height:18rem;width:16rem;overflow-y:auto;">
                         {menu_items}
                     </div>
                 </div>
                 <button type="button" title="Random theme font"
                     onclick="window.vyasaApplyRandomThemePreset && window.vyasaApplyRandomThemePreset(this)"
-                    class="rounded-md bg-slate-950/70 px-3 py-2 text-slate-100 ring-1 ring-white/10 hover:bg-slate-900/80">
+                    class="vyasa-emphasis-control vyasa-emphasis-control-icon rounded-md px-3 py-2">
                     <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M4 7h10"/>
                         <path d="M11 4l3 3-3 3"/>
@@ -871,6 +965,7 @@ def layout(
     full_width=False,
     show_footer=True,
     no_scroll=False,
+    slide_mode=False,
 ):
     return render_layout(
         *content,
@@ -886,6 +981,7 @@ def layout(
         full_width=full_width,
         show_footer=show_footer,
         no_scroll=no_scroll,
+        slide_mode=slide_mode,
         logger=logger,
         resolve_layout_config=_resolve_layout_config,
         width_class_and_style=_width_class_and_style,
@@ -1074,6 +1170,7 @@ def slide_deck(path: str, htmx, request: Request):
         coerce_list=_config._coerce_list,
         is_allowed=is_allowed,
         parse_frontmatter=parse_frontmatter,
+        resolve_markdown_title=resolve_markdown_title,
         slug_to_title=slug_to_title,
         effective_abbreviations=_effective_abbreviations,
         from_md=from_md,

@@ -311,6 +311,22 @@ class VyasaConfig:
             return value.lower() in ('true', '1', 'yes', 'on')
         return bool(value)
 
+    def get_annotations_enabled(self) -> bool:
+        cfg = self._config.get('annotations', {})
+        if not isinstance(cfg, dict):
+            cfg = {}
+        value = cfg.get('enabled', self.get('annotations_enabled', 'VYASA_ANNOTATIONS_ENABLED', False))
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
+
+    def get_log_file_enabled(self) -> bool:
+        """Get whether file logging to vyasa.log should be enabled."""
+        value = self.get('log_file', 'VYASA_LOG_FILE', False)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
+
     def get_reload_excludes(self) -> list[str]:
         """Get extra reload excludes, merged with sane defaults."""
         defaults = [

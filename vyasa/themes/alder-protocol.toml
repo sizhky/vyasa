@@ -1,4 +1,5 @@
 theme_primary = "#4b6b55"
+theme_button_radius = "0.4rem"
 theme_heading_font = "Cardo, Georgia, serif"
 theme_body_font = "Arimo, sans-serif"
 theme_ui_font = "Arimo, sans-serif"

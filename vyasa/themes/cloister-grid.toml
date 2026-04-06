@@ -1,4 +1,5 @@
 theme_primary = "#8a4d4b"
+theme_button_radius = "0.55rem"
 theme_heading_font = "\"Fauna One\", Georgia, serif"
 theme_body_font = "Cabin, sans-serif"
 theme_ui_font = "Cabin, sans-serif"
