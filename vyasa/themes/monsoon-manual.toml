@@ -1,4 +1,5 @@
 theme_primary = "#3d7380"
+theme_button_radius = "0.45rem"
 theme_heading_font = "\"Merriweather Sans\", sans-serif"
 theme_body_font = "Sora, sans-serif"
 theme_ui_font = "Sora, sans-serif"

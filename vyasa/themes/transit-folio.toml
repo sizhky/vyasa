@@ -1,4 +1,5 @@
 theme_primary = "#2f6d75"
+theme_button_radius = "0.32rem"
 theme_heading_font = "Raleway, sans-serif"
 theme_body_font = "Asap, sans-serif"
 theme_ui_font = "Asap, sans-serif"

@@ -1,0 +1,115 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+
+:root {
+  --pokemon-red: #cc0000;
+  --pokemon-yellow: #ffcb05;
+  --pokemon-blue: #3d7dca;
+  --pokemon-dark: #003a70;
+  --pokemon-nav-joltik-x: clamp(1.5rem, 5vw, 7rem);
+  --pokemon-nav-joltik-size: 7.25rem;
+}
+
+@keyframes pokeball-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes float-up {
+  0%   { transform: translateY(0px); }
+  50%  { transform: translateY(-8px); }
+  100% { transform: translateY(0px); }
+}
+
+@keyframes pokemon-nav-hang {
+  0%   { transform: rotate(-2deg) translateY(0); }
+  50%  { transform: rotate(2deg) translateY(4px); }
+  100% { transform: rotate(-2deg) translateY(0); }
+}
+
+@keyframes pokemon-nav-drop {
+  from { top: 4.8rem; }
+  to   { top: calc(100vh - var(--pokemon-nav-joltik-size) - 1.75rem); }
+}
+
+@keyframes pokemon-nav-thread-drop {
+  from { height: 3.2rem; }
+  to   { height: calc(100vh - var(--pokemon-nav-joltik-size) - 3.2rem); }
+}
+
+body {
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+#site-navbar {
+  overflow: visible !important;
+}
+
+#site-navbar::before {
+  content: "";
+  position: absolute;
+  right: var(--pokemon-nav-joltik-x);
+  top: 4.8rem;
+  width: var(--pokemon-nav-joltik-size);
+  height: var(--pokemon-nav-joltik-size);
+  background-image: url("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/595.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.24));
+  pointer-events: none;
+  transform-origin: 50% 0;
+  animation: pokemon-nav-hang 60s ease-in-out infinite;
+  z-index: 3;
+}
+
+#site-navbar::after {
+  content: "";
+  position: absolute;
+  right: calc(var(--pokemon-nav-joltik-x) + (var(--pokemon-nav-joltik-size) / 2) - 1px);
+  top: 5.65rem;
+  width: 2px;
+  height: 3.2rem;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.72),
+    rgba(0, 0, 0, 0.28)
+  );
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+@supports (animation-timeline: scroll(root block)) {
+  #site-navbar::before {
+    animation:
+      pokemon-nav-drop linear both,
+      pokemon-nav-hang 60s ease-in-out infinite;
+    animation-timeline: scroll(root block), auto;
+    animation-range: 0% 100%, normal;
+  }
+
+  #site-navbar::after {
+    animation: pokemon-nav-thread-drop linear both;
+    animation-timeline: scroll(root block);
+    animation-range: 0% 100%;
+  }
+}
+
+#page-container.vyasa-zen-present #site-navbar::before {
+  top: 6rem !important;
+  animation: pokemon-nav-hang 60s ease-in-out infinite !important;
+  animation-timeline: auto !important;
+  animation-range: normal !important;
+}
+
+#page-container.vyasa-zen-present #site-navbar::after {
+  height: 4.4rem !important;
+  animation: none !important;
+  animation-timeline: auto !important;
+  animation-range: normal !important;
+}
+
+.vyasa-navbar-card {
+  position: relative;
+  overflow: visible !important;
+}

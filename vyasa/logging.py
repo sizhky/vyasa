@@ -19,13 +19,17 @@ class InterceptHandler(logging.Handler):
 def configure_logging():
     debug_enabled = os.getenv("VYASA_DEBUG", "").lower() in {"1", "true", "yes", "on"}
     console_level = "DEBUG" if debug_enabled else "INFO"
+    file_logging_enabled = False
     try:
-        log_path = get_config().get_root_folder() / "vyasa.log"
+        config = get_config()
+        file_logging_enabled = config.get_log_file_enabled()
+        log_path = config.get_root_folder() / "vyasa.log"
     except Exception:
         log_path = Path.cwd() / "vyasa.log"
     logger.remove()
     logger.add(sys.stdout, level=console_level)
-    logger.add(str(log_path), rotation="10 MB", retention="10 days", level="DEBUG")
+    if file_logging_enabled:
+        logger.add(str(log_path), rotation="10 MB", retention="10 days", level="DEBUG")
     handler = InterceptHandler()
     logging.root.handlers = [handler]
     logging.root.setLevel(logging.DEBUG if debug_enabled else logging.INFO)

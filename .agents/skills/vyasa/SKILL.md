@@ -27,6 +27,7 @@ Start here:
 8. For shell theming, prefer Vyasa's explicit stable hooks over positional selectors: `.vyasa-navbar-shell`, `.vyasa-navbar-card`, `.vyasa-content-grid`, `.vyasa-main-shell`, `.vyasa-sidebar`, `.vyasa-sidebar-card`, `.vyasa-sidebar-toggle`, `.vyasa-sidebar-body`, `.vyasa-posts-sidebar`, `.vyasa-toc-sidebar`, `.vyasa-mobile-panel`, `.vyasa-mobile-panel-header`, `.vyasa-mobile-panel-body`, `.vyasa-footer-shell`, `.vyasa-footer-card`.
 9. For FastHTML or MonsterUI form controls, inspect the rendered HTML before wiring DOM events; helper components may wrap or hide the native input. If you need a direct `change` handler or debug-only control, prefer a plain native element over a styled helper.
 10. For Vyasa boot-time scripts, only depend on data available in the head. Do not read globals from `head-init.js` that are emitted later from body/navbar markup; if the data is body-scoped, apply it from the main runtime script after DOM creation.
+11. For Cytograph work, always read `references/diagrams.md` before proposing syntax, layout defaults, or interaction behavior; Cytograph has project-specific presets (`vyasa`, `dagre`, `cola`) and large-tree conventions that differ from generic Cytoscape advice.
 
 Core rules:
 
@@ -42,6 +43,14 @@ Core rules:
 - For navbar, footer, sidebar, and mobile-panel styling, do not teach or rely on positional selectors like `#site-navbar > *`, `#site-footer > *`, or `#posts-sidebar details > summary`; target the explicit Vyasa hook classes instead so runtime and static-build themes stay stable.
 - For Mermaid labels, use literal `<br/>` for line breaks inside nodes and edge text; do not emit `\n`.
 - For markdown tables with long cell content, prefer manual line breaks inside the cell using literal `<br/>`; wrap prose cells to roughly 8 words per line so readers do not need to horizontally scroll for a single wide column.
+- For Cytograph, prefer `layout: vyasa` by default unless the user explicitly wants `dagre` or `cola`.
+- For Cytograph, prefer a `source:` sidecar for large trees instead of embedding hundreds of nodes directly in the markdown fence; keep the page payload and live viewport graph small.
+- For Cytograph, prefer `.cytree` over JSON for large tree-shaped sources; it is materially smaller for LLM read/write loops because hierarchy, ids, and shared URL bases are implicit instead of repeated.
+- For Cytograph, `source:` for non-markdown files should resolve to a raw file route such as `/download/...`, not `/posts/...`; `/posts/...` renders HTML and will poison the graph loader.
+- For large Cytograph trees, optimize the graph shape before tweaking spacing: keep the top-level graph at concept/module level, shorten labels, group high-fanout branches, and move file-level leaves into linked subgraphs or follow-on pages instead of dumping every leaf into one graph.
+- For large Cytograph trees, prefer `initial_depth: 1`, treat `All` as a diagnostic affordance rather than the primary reading mode, and split graphs once visible node count or label width makes the graph sparse or unreadable.
+- For source-backed Cytograph graphs, `All` should mean “expand all currently visible/materialized parents,” not “load and expand the entire backing tree.”
+- For text-heavy Cytograph labels, treat horizontal space as scarce and vertical space as cheaper; prefer the reading-oriented `vyasa` preset over top-down DAG layouts unless the semantic flow truly requires top-to-bottom ranks.
 - For the current slide system, do not talk about Reveal.js, `---`/`--` separators, or `reveal_*` frontmatter unless the user explicitly says they are on the old engine; Vyasa now uses the document itself as the deck source.
 - The current zen-slide split is structural: `##` starts a horizontal slide, `###+` becomes a downward/detail slide under the active `##`, and empty `##` parent slides should be skipped.
 - Slide pages must inherit the normal document shell, theme, fonts, and `custom.css`; if a slide page theme diverges from doc view, fix the layout/scoping path before adding more slide CSS.

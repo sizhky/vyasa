@@ -18,7 +18,7 @@ title: Vyāsa
 Vyāsa is a Python-first blogging platform designed to turn your Markdown files into a fully-featured website in seconds. Write your content in clean, simple Markdown—no boilerplate, no configuration hassles—and watch your site come alive instantly. Whether you're a minimalist who wants it just to work or a CSS enthusiast ready to craft pixel-perfect designs, Vyāsa adapts to your needs. Start with zero configuration and customize every pixel when you're ready.[^1]
 
 [^1]: If you're curious about how the intro was styled, [visit this page](https://github.com/sizhky/vyasa/blob/fa9a671931ad69b24139ba9d105bbadd8753b85b/custom.css#L36C1-L36C13).<br>
-    Check out the [Theming & CSS](vyasa%20manual/theming.md) guide for details on customizing your blog's appearance.
+    Check out the [Theming & CSS](vyasa%20manual/theming.md) guide for details on customizing your blog's appearance
 
 > [!info]
 > **Vyāsa** is named after the legendary sage **Krishna Dvaipayana Vyāsa**, who is credited with compiling the ancient Indian epic - the Mahabharata, 18 puranas and many more spiritually significant works.
@@ -56,63 +56,13 @@ Vyāsa is a Python-first blogging platform designed to turn your Markdown files 
 
 Hiding in plain sight, Vyāsa packs a powerful punch of features that transform simple Markdown files into dynamic, interactive websites. From advanced Markdown capabilities to modern UI/UX design and technical robustness, Vyāsa is built to empower creators of all levels. Here's a high-level overview of what Vyāsa brings to the table:
 
-```mermaid
-mindmap
-  root((🚀 Vyāsa Features))
-    📝 Markdown
-      Footnotes as Sidenotes
-      YouTube Embeds
-      Task Lists
-      Math Notation
-      Superscript & Subscript
-      Strikethrough
-      Relative Links
-      Plain-Text Headings
-      Pandoc-style Attributes
-      Title Abbreviations
-      Folder Notes
-    🎨 Interactive Elements
-      Zen Slides
-        Present Mode
-        Real Slide URLs
-        H2/H3 Structural Splits
-        Doc Theme Inheritance
-      Mermaid Diagrams
-        Flowcharts
-        Sequence Diagrams
-        State Diagrams
-        Gantt Charts
-      D2 Diagrams
-        Layouts & Themes
-        Composition Animation
-        Scenario/Layers Support
-      Interactive Diagrams
-        Zoom & Pan
-        Fullscreen Mode
-        Dark Mode Support
-        Auto-scaling
-      Tabbed Content
-      Custom CSS Cascade
-     UI/UX
-      Responsive Design
-      Dark Mode
-      Three-Panel Layout
-      HTMX Navigation
-      Collapsible Folders
-      Sidebar Search
-      Auto-Generated TOC
-      Mobile Menus
-      Sticky Navigation
-      Active Link Highlighting
-      PDF Support
-      Copy Button
-    ⚙️ Technical
-      FastHTML Foundation
-      Configuration File Support
-      CLI Arguments
-      Environment Variables
-      Security & Auth
-      Advanced Customization
+```cytograph
+---
+height: 65vh
+layout: vyasa
+initial_depth: 1
+source: ./vyasa-map.cytree
+---
 ```
 
 ### ✨ Advanced Markdown Features
@@ -140,6 +90,7 @@ mindmap
     - If `title` is provided, it is used for fullscreen modal title and as a small centered caption under the diagram
 - **Tabbed Content**: Create multi-tab sections using `:::tabs` and `::tab{title="..."}` syntax with smooth transitions
 - **Code Snippet Includes**: Embed external source files with `{* path ln[1:24] hl[9:11,22] *}` and highlight selected source lines
+- **Inline Annotations**: Select text to add margin comments with hover/click bloom highlighting, replies, and author-aware edit/delete controls
 - **Rich Callouts**: Supports Obsidian-style `> [!warning]- Title` callouts with aliases, folding, nesting, and CSS-targetable custom types
 - **Relative Links**: Full support for relative markdown links (`./file.md`, `../other.md`) with automatic path resolution
 - **Plain-Text Headings**: Inline markdown in headings is stripped for clean display and consistent anchor slugs
@@ -161,7 +112,7 @@ See the full list in [Markdown Writing Features](vyasa%20manual/markdown-feature
 - **HTMX Navigation**: Left/right movement uses the same `#main-content` swap contract as normal Vyāsa navigation instead of a separate deck runtime
 - **Slides with Existing Vyāsa Features**: Mermaid, D2, tabs, code highlighting, math, and long-form sections continue to work in slide view
 
-See the working example in [Vyasa Slides Demo](demo/vyasa-slides.md).
+See the working example in [Vyasa Slides Demo](/slides/demo/vyasa-slides).
 
 ### 🎨 Modern UI
 - **Responsive Design**: Works beautifully on all screen sizes with mobile-first approach
@@ -189,6 +140,7 @@ See the working example in [Vyasa Slides Demo](demo/vyasa-slides.md).
 | Advanced Markdown Support   | Content  | —                                                 | Footnotes as sidenotes, YouTube embeds, task lists, Mermaid + D2 diagrams, math notation, tabbed content, and more | enabled    | —                             |
 | Modern UI                   | UI       | `sidebars_open`, `layout_max_width`, `theme_preset`, `theme_primary` | Responsive three-panel layout with dark mode, HTMX navigation, frosted glass sidebars, configurable width, bundled theme presets, and optional primary override | `false`, unset, `serene-manuscript`, forest green | `VYASA_SIDEBARS_OPEN`, `VYASA_THEME_PRESET`, `VYASA_THEME_PRIMARY` |
 | Interactive Diagrams        | Content  | `[drawings_passwords]`                            | Zoomable, pannable Mermaid and D2 diagrams with fullscreen support and optional per-drawing password protection | unprotected   | —                             |
+| Annotations                 | Content  | `[annotations]`                                  | Text selection comments with margin threads in doc view; disabled in slide view                                | disabled      | `VYASA_ANNOTATIONS_ENABLED`   |
 | Auth & RBAC                 | Security | `[google_oauth]`, `[rbac]`                        | Google OAuth login with allowed domains/emails, role-based access control rules scoped per path               | disabled       | `VYASA_GOOGLE_CLIENT_ID`, `VYASA_RBAC_ENABLED` |
 | Sidebar Navigation          | UI       | `folder_tabs`, `folders_first`, `order`, `sort`   | Collapsible file tree with tab grouping, custom entry ordering, sort direction, and smart abbreviation expansion | `false`, name_asc | —                          |
 | Content Filtering           | Config   | `ignore`, `include`, `show_hidden`                | Fine-grained control over which files and folders appear in listings, with hidden-file visibility toggle       | all visible    | `VYASA_SHOW_HIDDEN`           |

@@ -1,4 +1,5 @@
 theme_primary = "#905166"
+theme_button_radius = "0.8rem"
 theme_heading_font = "\"Instrument Serif\", Georgia, serif"
 theme_body_font = "Chivo, sans-serif"
 theme_ui_font = "Chivo, sans-serif"

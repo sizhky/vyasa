@@ -61,6 +61,10 @@ client_id = "your-google-client-id"
 client_secret = "your-google-client-secret"
 allowed_domains = ["example.com"] # optional
 allowed_emails = ["alice@example.com"] # optional
+
+# Optional inline annotations in doc view
+[annotations]
+enabled = true
 ```
 
 All settings in the `.vyasa` file are optional. The configuration is managed by the `Config` class in `vyasa/config.py`.
@@ -115,6 +119,16 @@ You can also use environment variables as a fallback:
 - `VYASA_GOOGLE_CLIENT_SECRET`: Google OAuth client secret (optional)
 - `VYASA_GOOGLE_ALLOWED_DOMAINS`: Comma-separated allowed email domains (optional)
 - `VYASA_GOOGLE_ALLOWED_EMAILS`: Comma-separated allowed emails (optional)
+- `VYASA_ANNOTATIONS_ENABLED`: Enable text-selection annotations in normal doc view (true/false)
+
+### Annotations (optional)
+
+Enable inline annotations to let readers select text and leave margin comments.
+
+- Works in normal document view and is disabled in slide view.
+- Hovering or clicking a comment blooms the linked text in the document.
+- Replies are grouped under the parent comment in the margin thread.
+- New comments use the logged-in name when auth is enabled, otherwise they remain `anonymous`.
 
 ### RBAC Configuration (optional)
 

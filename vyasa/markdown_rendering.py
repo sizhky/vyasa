@@ -1,4 +1,5 @@
 import html
+import json
 import re
 from functools import partial
 from itertools import count
@@ -13,10 +14,7 @@ from .assets import asset_url
 from .config import get_config
 from .helpers import (
     _plain_text_from_html,
-    _unique_anchor,
-    parse_frontmatter,
     resolve_heading_anchor,
-    text_to_anchor,
 )
 from .slides import present_href_for_anchor
 from .markdown_pipeline import (
@@ -31,6 +29,7 @@ from .markdown_tabs import preprocess_tabs as preprocess_md_tabs
 from .markdown_tokens import (
     DownloadEmbed,
     FootnoteRef,
+    Highlight,
     IframeEmbed,
     InlineCodeAttr,
     Strikethrough,
@@ -116,10 +115,33 @@ def _render_callout(kind, body, render_body, title=None, fold=None):
     return f'<div class="vyasa-callout vyasa-callout-{theme_kind} my-6 rounded-xl border px-5 py-4" data-callout="{html.escape(kind)}">{head}{body_html}</div>'
 
 
-def _render_markdown_fragment(body, img_dir=None, current_path=None):
-    rendered = to_xml(from_md(body, img_dir=img_dir, current_path=current_path))
+def _render_markdown_fragment(body, img_dir=None, current_path=None, slide_mode=False):
+    rendered = to_xml(from_md(body, img_dir=img_dir, current_path=current_path, slide_mode=slide_mode))
     rendered = re.sub(r'^<div class="w-full">\s*<link[^>]+>\s*', "", rendered)
     return re.sub(r"\s*</div>\s*$", "", rendered)
+
+
+def _resolve_cytograph_source_url(source, current_path):
+    if not current_path or not source:
+        return source
+    match = re.match(r"^([^?#]*)(.*)$", source)
+    base, suffix = match.groups() if match else (source, "")
+    if not base or base.startswith(("/", "#", "//")) or re.match(r"^[a-zA-Z][\w+.-]*:", base):
+        return source
+    root = get_root_folder().resolve()
+    current_dir = (root / current_path).parent
+    resolved = (current_dir / base).resolve()
+    try:
+        rel = resolved.relative_to(root).as_posix()
+    except ValueError:
+        return source
+    if rel.endswith(".md"):
+        mapped = f"/posts/{rel[:-3]}"
+    elif rel.startswith("static/"):
+        mapped = f"/static/{rel[7:]}"
+    else:
+        mapped = f"/download/{rel}"
+    return mapped + suffix
 
 
 def _infer_code_language(path):
@@ -263,6 +285,54 @@ def _escape_attr(value):
     )
 
 
+def _split_fence_frontmatter(code):
+    frontmatter_match = re.match(r"^---\s*\n(.*?)\n---\s*\n", code, re.DOTALL)
+    if not frontmatter_match:
+        return {}, code
+    config = {}
+    for line in frontmatter_match.group(1).strip().splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        config[key.strip()] = value.strip()
+    return config, code[frontmatter_match.end():]
+
+
+_CYTOGRAPH_LARGE_TREE_NODE_THRESHOLD = 120
+_CYTOGRAPH_LONG_LABEL_THRESHOLD = 32
+
+
+def _is_large_cytograph(nodes):
+    return len(nodes) >= _CYTOGRAPH_LARGE_TREE_NODE_THRESHOLD
+
+
+def _compact_cytograph_label(label):
+    text = str(label or "").strip()
+    if not text:
+        return text
+    if "/" in text:
+        tail = text.split("/")[-1]
+        if tail:
+            return tail
+    if len(text) <= _CYTOGRAPH_LONG_LABEL_THRESHOLD:
+        return text
+    return f"{text[:_CYTOGRAPH_LONG_LABEL_THRESHOLD - 1].rstrip()}…"
+
+
+def _optimize_cytograph_nodes(nodes):
+    if not _is_large_cytograph(nodes):
+        return nodes
+    optimized = []
+    for node in nodes:
+        item = dict(node)
+        label = item.get("label") or item.get("id") or ""
+        compact_label = _compact_cytograph_label(label)
+        item["full_label"] = str(label)
+        item["label"] = compact_label
+        optimized.append(item)
+    return optimized
+
+
 def _render_d2_block(code):
     frontmatter_pattern = r"^---\s*\n(.*?)\n---\s*\n"
     frontmatter_match = re.match(frontmatter_pattern, code, re.DOTALL)
@@ -326,6 +396,84 @@ def _render_mermaid_block(code):
     mermaid_title_attr = f' data-mermaid-title="{html.escape(str(mermaid_title))}"' if mermaid_title else ""
     caption_html = f'<div class="text-xs text-slate-500 dark:text-slate-400 text-center px-3 pb-2">{html.escape(str(mermaid_title))}</div>' if mermaid_title else ""
     return f"""<div class="mermaid-container relative border-4 rounded-md my-4 shadow-2xl" style="{container_style}"><div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded"><button onclick="openMermaidFullscreen('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button><button onclick="resetMermaidZoom('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button><button onclick="zoomMermaidIn('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button><button onclick="zoomMermaidOut('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button></div><div id="{diagram_id}" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: {min_height}; height: {height};" data-mermaid-code="{escaped_code}"{gantt_data_attr}{mermaid_title_attr}><pre class="mermaid" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">{code}</pre></div>{caption_html}</div>"""
+
+
+def _render_cytograph_block(code, current_path=None):
+    import yaml
+    height, layout, initial_depth = "60vh", "vyasa", 2
+    config, code = _split_fence_frontmatter(code)
+    explicit_initial_depth = "initial_depth" in config
+    source = None
+    if config:
+        try:
+            height = config.get("height", height)
+            layout = config.get("layout", layout)
+            initial_depth = int(config.get("initial_depth", initial_depth))
+            source = _resolve_cytograph_source_url(config.get("source"), current_path)
+        except Exception as e:
+            print(f"Error parsing cytograph frontmatter: {e}")
+    try:
+        body = yaml.safe_load(code)
+        nodes = body.get("nodes", []) if isinstance(body, dict) else []
+        edges = body.get("edges", []) if isinstance(body, dict) else []
+    except Exception as e:
+        print(f"Error parsing cytograph body: {e}")
+        nodes, edges = [], []
+    if (source or _is_large_cytograph(nodes)) and not explicit_initial_depth:
+        initial_depth = 1
+    nodes = _optimize_cytograph_nodes(nodes)
+    diagram_id = f"cytograph-{abs(hash(code)) & 0xFFFFFF}-{next(_diagram_uid_counter)}"
+    payload = html.escape(json.dumps({"nodes": nodes, "edges": edges, "layout": layout, "initial_depth": initial_depth, "source": source}), quote=True)
+    controls = (
+        f'<div class="cytograph-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded">'
+        f'<button onclick="toggleCytographLayout(\'{diagram_id}\', this)" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Toggle layout">Layout: {html.escape(layout)}</button>'
+        f'<button onclick="expandAllCytograph(\'{diagram_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Expand all">All</button>'
+        f'<button onclick="resetCytographGraph(\'{diagram_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset graph">Reset</button>'
+        f'<button onclick="resetCytograph(\'{diagram_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fit graph">Fit</button>'
+        f'<button onclick="zoomCytographIn(\'{diagram_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button>'
+        f'<button onclick="zoomCytographOut(\'{diagram_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button>'
+        f'</div>'
+    )
+    return (
+        f'<div class="cytograph-container relative my-4 rounded-md border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden" '
+        f'id="{diagram_id}" style="height: {height};" data-cytograph="{payload}">'
+        f'{controls}'
+        f'</div>'
+    )
+
+
+def _render_cryptograph_block(code):
+    title = "Cryptograph"
+    hint = ""
+    answer = ""
+    config, code = _split_fence_frontmatter(code)
+    if config:
+        try:
+            title = config.get("title", title)
+            hint = config.get("hint", hint)
+            answer = config.get("answer", answer)
+        except Exception as e:
+            print(f"Error parsing cryptograph frontmatter: {e}")
+    ciphertext = code.strip()
+    if not ciphertext:
+        return _render_callout(
+            "warning",
+            "Cryptograph blocks need ciphertext in the block body.",
+            lambda body: mst.markdown(body, partial(ContentRenderer)).strip(),
+        )
+    hint_html = f'<p class="mt-2 text-sm text-slate-600 dark:text-slate-300">{html.escape(hint)}</p>' if hint else ""
+    return (
+        '<div class="vyasa-cryptograph my-8 rounded-3xl border border-slate-200/80 bg-white/80 p-5 shadow-sm '
+        'dark:border-slate-700/80 dark:bg-slate-950/70" '
+        f'data-cryptograph-widget="true" data-cryptograph-title="{_escape_attr(title)}" '
+        f'data-cryptograph-hint="{_escape_attr(hint)}" data-cryptograph-cipher="{_escape_attr(ciphertext)}" '
+        f'data-cryptograph-answer="{_escape_attr(answer)}">'
+        f'<div class="mb-4 flex items-start justify-between gap-3"><div><div class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Cryptograph</div><h3 class="m-0 text-xl font-semibold text-slate-900 dark:text-slate-100">{html.escape(title)}</h3>'
+        f'{hint_html}'
+        '</div><div class="rounded-full border border-slate-200/80 px-3 py-1 text-xs font-medium text-slate-500 dark:border-slate-700/80 dark:text-slate-300">Interactive solver</div></div>'
+        f'<pre class="m-0 overflow-x-auto rounded-2xl bg-slate-100/80 px-4 py-3 text-sm leading-7 text-slate-700 dark:bg-slate-900/80 dark:text-slate-200">{html.escape(ciphertext)}</pre>'
+        '</div>'
+    )
 
 
 class ContentRenderer(FrankenRenderer):
@@ -500,7 +648,8 @@ class ContentRenderer(FrankenRenderer):
         toggle = f"on click if window.innerWidth >= 1280 then add .hl to #sn-{n} then wait 1s then remove .hl from #sn-{n} else toggle .open on me then toggle .show on #sn-{n}"
         ref = Span(id=f"snref-{n}", role="doc-noteref", aria_label=f"Sidenote {n}", cls="sidenote-ref cursor-pointer", _=toggle)
         note = Span(NotStr(rendered), id=f"sn-{n}", role="doc-footnote", aria_labelledby=f"snref-{n}", cls=f"sidenote {style}")
-        hide = lambda c: to_xml(Span(c, cls="hidden", aria_hidden="true"))
+        def hide(content):
+            return to_xml(Span(content, cls="hidden", aria_hidden="true"))
         return hide(" (") + to_xml(ref) + to_xml(note) + hide(")")
 
     def render_heading(self, token):
@@ -543,6 +692,9 @@ class ContentRenderer(FrankenRenderer):
     def render_strikethrough(self, token):
         return f"<del>{self.render_inner(token)}</del>"
 
+    def render_highlight(self, token):
+        return f'<mark class="vyasa-mark">{self.render_inner(token)}</mark>'
+
     def render_inline_code_attr(self, token):
         code = html.escape(token.code)
         attrs = token.attrs.strip()
@@ -572,6 +724,10 @@ class ContentRenderer(FrankenRenderer):
             return _render_d2_block(code)
         if lang == "mermaid":
             return _render_mermaid_block(code)
+        if lang == "cryptograph":
+            return _render_cryptograph_block(code)
+        if lang == "cytograph":
+            return _render_cytograph_block(code, current_path=self.current_path)
         raw_code = code
         code = html.unescape(code)
         if lang and lang.lower() != "markdown":
@@ -628,7 +784,6 @@ class ContentRenderer(FrankenRenderer):
             else:
                 is_external = True
         is_internal = is_absolute_internal and "." not in href.split("/")[-1]
-        slide_internal = self.slide_mode and href.startswith("/slides/")
         doc_escape = self.slide_mode and is_absolute_internal and not href.startswith("/slides/")
         hx = f' hx-get="{href}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top"' if (is_internal and not doc_escape) else ""
         ext = "" if (is_internal or is_absolute_internal or is_hash) else ' target="_blank" rel="noopener noreferrer"'
@@ -679,7 +834,7 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
         "table": "uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle my-6",
     }
     with ContentRenderer(
-        YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough,
+        YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough, Highlight,
         FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes,
         current_path=current_path, slide_mode=slide_mode,
     ) as renderer:
@@ -687,7 +842,7 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
     if tab_data_store:
         def _render_tab_content(tab_content):
             with ContentRenderer(
-                YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough,
+                YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough, Highlight,
                 FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes,
                 current_path=current_path,
             ) as renderer:
@@ -719,6 +874,8 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
                 )
             placeholder = f'<div class="vyasa-code-include-placeholder" data-include-id="{include_id}"></div>'
             html_out = html_out.replace(placeholder, rendered)
+    if slide_mode:
+        html_out = re.sub(r"<details(?![^>]*\bopen\b)([^>]*)>", r"<details open\1>", html_out)
     html_out = _render_todo_html(html_out)
     html_out = _render_double_rules(html_out)
     html_out = re.sub(r"(<table\b[\s\S]*?</table>)", r'<div class="vyasa-table-scroll">\1</div>', html_out, flags=re.IGNORECASE)

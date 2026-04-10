@@ -8,3 +8,4 @@ Browse the subfolders to explore specific examples.
 
 Try the Reveal.js presentation example:
 - [Reveal Slides Demo](./reveal-slides.md)
+- [Cryptograph Demo](./cryptograph.md)

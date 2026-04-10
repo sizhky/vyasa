@@ -1,4 +1,5 @@
 theme_primary = "#a73a00"
+theme_button_radius = "0.24rem"
 theme_heading_font = "\"Space Grotesk\", Inter, sans-serif"
 theme_body_font = "\"Public Sans\", Inter, sans-serif"
 theme_ui_font = "\"Space Grotesk\", Inter, sans-serif"

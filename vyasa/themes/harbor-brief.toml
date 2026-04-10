@@ -1,4 +1,5 @@
 theme_primary = "#2f7a78"
+theme_button_radius = "0.5rem"
 theme_heading_font = "\"EB Garamond\", Georgia, serif"
 theme_body_font = "Figtree, sans-serif"
 theme_ui_font = "Figtree, sans-serif"

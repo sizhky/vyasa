@@ -1,4 +1,5 @@
 theme_primary = "#4a6289"
+theme_button_radius = "0.35rem"
 theme_heading_font = "Merriweather, Georgia, serif"
 theme_body_font = "\"Source Sans 3\", sans-serif"
 theme_ui_font = "\"Source Sans 3\", sans-serif"

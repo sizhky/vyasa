@@ -1,4 +1,5 @@
 theme_primary = "#a25a34"
+theme_button_radius = "0.38rem"
 theme_heading_font = "Bitter, Georgia, serif"
 theme_body_font = "\"Hanken Grotesk\", sans-serif"
 theme_ui_font = "\"Hanken Grotesk\", sans-serif"

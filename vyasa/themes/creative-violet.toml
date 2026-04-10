@@ -1,4 +1,5 @@
 theme_primary = "#8523dd"
+theme_button_radius = "0.8rem"
 theme_heading_font = "\"Playfair Display\", Georgia, serif"
 theme_body_font = "\"Bricolage Grotesque\", Inter, sans-serif"
 theme_ui_font = "\"Bricolage Grotesque\", Inter, sans-serif"

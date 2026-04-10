@@ -1,4 +1,5 @@
 theme_primary = "#4d6f86"
+theme_button_radius = "0.32rem"
 theme_heading_font = "\"Schibsted Grotesk\", sans-serif"
 theme_body_font = "\"Nunito Sans\", sans-serif"
 theme_ui_font = "\"Nunito Sans\", sans-serif"
