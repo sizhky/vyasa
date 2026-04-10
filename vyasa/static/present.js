@@ -65,9 +65,11 @@ if (!window.__vyasaZenBound) {
 
   const getRevealViewportInsets = () => {
     const navbarBottom = document.getElementById('site-navbar')?.getBoundingClientRect().bottom || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    const bottomComfort = Math.min(220, Math.max(96, Math.round(viewportHeight * 0.18)));
     return {
       top: Math.max(24, Math.ceil(navbarBottom + 16)),
-      bottom: 24,
+      bottom: bottomComfort,
     };
   };
 
@@ -80,12 +82,18 @@ if (!window.__vyasaZenBound) {
     const visibleTop = inset.top;
     const visibleBottom = viewportHeight - inset.bottom;
     const availableHeight = Math.max(1, visibleBottom - visibleTop);
+    const preferredTop = Math.min(
+      visibleBottom - Math.min(160, Math.round(viewportHeight * 0.14)),
+      visibleTop + Math.round(availableHeight * 0.58),
+    );
     let targetTop = null;
     if (rect.top < visibleTop) {
       targetTop = window.scrollY + rect.top - visibleTop;
     } else if (rect.bottom > visibleBottom) {
       if (rect.height >= availableHeight) {
         targetTop = window.scrollY + rect.top - visibleTop;
+      } else if (rect.top > preferredTop) {
+        targetTop = window.scrollY + rect.top - preferredTop;
       } else {
         targetTop = window.scrollY + rect.bottom - visibleBottom;
       }
@@ -108,6 +116,20 @@ if (!window.__vyasaZenBound) {
     });
   };
 
+  const refreshRevealedTables = (unit) => {
+    if (!unit?.querySelector('.vyasa-table-scroll')) return;
+    [0, 80, 220].forEach((delay) => {
+      window.setTimeout(() => {
+        unit.querySelectorAll('.vyasa-table-scroll').forEach((table) => {
+          table.scrollLeft = table.scrollLeft;
+        });
+        if (typeof window.refreshVyasaTableScrollShadows === 'function') {
+          window.refreshVyasaTableScrollShadows(unit);
+        }
+      }, delay);
+    });
+  };
+
   const showUnit = (unit, { keepVisible = true } = {}) => {
     unit.dataset.revealState = 'entering';
     if (keepVisible) {
@@ -126,6 +148,7 @@ if (!window.__vyasaZenBound) {
           ) {
             window.vyasaRefreshDiagramInteractions(unit);
           }
+          refreshRevealedTables(unit);
           if (keepVisible) {
             keepUnitInView(unit);
           }

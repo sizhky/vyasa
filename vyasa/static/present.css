@@ -201,6 +201,7 @@
   --vyasa-reveal-stagger: 220ms;
   --vyasa-reveal-distance: 1.75rem;
   --vyasa-reveal-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  padding-bottom: min(28vh, 18rem);
 }
 .vyasa-reveal-unit {
   display: block;
@@ -229,6 +230,11 @@
   opacity: 1;
   transform: translate3d(0, 0, 0);
   filter: blur(0);
+}
+.vyasa-reveal-unit:has(.vyasa-table-scroll) {
+  transform: none !important;
+  filter: none !important;
+  will-change: opacity;
 }
 .vyasa-reveal-unit[data-reveal-style="fade"] {
   transform: none;

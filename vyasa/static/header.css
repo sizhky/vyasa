@@ -739,18 +739,55 @@ todo .deadline { margin-left: 0.45rem; }
 .dark .vyasa-table-scroll.has-left-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.42); }
 .dark .vyasa-table-scroll.has-left-overflow.has-right-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.42), inset -18px 0 16px -14px rgba(2, 6, 23, 0.42); }
 .katex-display {
+    width: 100%;
     max-width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 0.2rem 0.1rem;
+    padding: 0.35rem 0.1rem;
+    margin: 1.5rem 0;
     -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable both-edges;
+    box-shadow: none;
+    transition: box-shadow 160ms ease;
 }
 .katex-display > .katex {
     display: inline-block;
     max-width: none;
 }
+@media (min-width: 641px) {
+    .katex-display {
+        width: min(var(--vyasa-breakout-width, 80vw), 80vw);
+        max-width: 80vw;
+        position: relative;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    .katex-display::before,
+    .katex-display::after {
+        content: "";
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        display: inline-block;
+        width: 1.25rem;
+        min-height: 1.2em;
+        pointer-events: none;
+    }
+    .katex-display::before {
+        left: 0;
+        margin-right: -1.25rem;
+        background: linear-gradient(90deg, color-mix(in srgb, var(--vyasa-paper) 92%, transparent), transparent);
+    }
+    .katex-display::after {
+        right: 0;
+        margin-left: -1.25rem;
+        background: linear-gradient(270deg, color-mix(in srgb, var(--vyasa-paper) 92%, transparent), transparent);
+    }
+}
 @media (max-width: 640px) {
     .katex-display {
+        width: 100%;
+        max-width: 100%;
         margin: 1rem 0;
         scrollbar-width: thin;
     }
