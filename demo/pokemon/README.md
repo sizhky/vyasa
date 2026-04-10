@@ -455,3 +455,6 @@ When somebody asks *why is competitive Pokémon hard* - this is what we mean. No
 | Choose a team from 10^218^ options | Without knowing what you'll face |
 
 None of these games or any other, as far as we know, does all five quite the same way.
+ 
+## Source
+[yt:wrR6MquGU6A]
