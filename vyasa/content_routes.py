@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
-from fasthtml.common import A, Button, Div, H1, Li, Main, NotStr, Ol, P, Response, Script, Span, Strong, Textarea, to_xml
+from fasthtml.common import A, Button, Div, H1, Kbd, Li, Main, NotStr, Ol, P, Response, Script, Span, Strong, Textarea, to_xml
 from monsterui.all import UkIcon
 from .helpers import estimate_read_time_minutes, get_adjacent_posts
 from .markdown_rendering import _render_markdown_fragment
@@ -170,10 +170,10 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
     total = len(deck.slides) + 2
     slide_num = max(1, min(slide_num, total))
     doc_href = f"/posts/{doc_path}" if slide_num == 1 else deck.doc_href(doc_path, len(deck.slides) if slide_num == total else slide_num - 1)
-    nav_link = lambda label, href, side: A(label, href=href, data_zen_nav=side, hx_get=href, hx_target="#main-content", hx_swap="outerHTML show:window:top settle:0.1s", hx_push_url="true", cls="no-underline")
+    nav_link = lambda label, href, side: Button(Kbd(label, cls="vyasa-zen-nav-kbd"), type="button", data_zen_nav=side, data_zen_href=href, cls="vyasa-zen-nav-key")
     nav_state = {"index": slide_num, "total": total, "left": f"/slides/{doc_path}/{slide_slug(slide_num - 1)}", "right": f"/slides/{doc_path}/{slide_slug(slide_num + 1)}"}
-    left_control = nav_link("←", nav_state["left"], "left") if nav_state["index"] > 1 else Span("←", cls="opacity-30 pointer-events-none")
-    right_control = nav_link("→", nav_state["right"], "right") if nav_state["index"] < nav_state["total"] else Span("→", cls="opacity-30 pointer-events-none")
+    left_control = nav_link("←", nav_state["left"], "left") if nav_state["index"] > 1 else Kbd("←", cls="vyasa-zen-nav-kbd opacity-30 pointer-events-none")
+    right_control = nav_link("→", nav_state["right"], "right") if nav_state["index"] < nav_state["total"] else Kbd("→", cls="vyasa-zen-nav-kbd opacity-30 pointer-events-none")
     nav = Div(
         left_control,
         Button(f'{nav_state["index"]} / {nav_state["total"]}', type="button", data_zen_overview_toggle="true", cls="underline underline-offset-4"),
