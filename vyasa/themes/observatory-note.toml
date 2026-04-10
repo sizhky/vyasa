@@ -1,4 +1,5 @@
 theme_primary = "#6a587f"
+theme_button_radius = "0.6rem"
 theme_heading_font = "Spectral, Georgia, serif"
 theme_body_font = "Urbanist, sans-serif"
 theme_ui_font = "Urbanist, sans-serif"

@@ -1,4 +1,6 @@
 theme_primary = "#ffb95f"
+theme_primary_text = "#1f2430"
+theme_button_radius = "0.38rem"
 theme_heading_font = "Newsreader, Georgia, serif"
 theme_body_font = "Inter, sans-serif"
 theme_ui_font = "Inter, sans-serif"

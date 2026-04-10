@@ -2275,6 +2275,7 @@ function initKeyboardShortcuts() {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
             return;
         }
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
         
         // Z: Toggle posts panel
         if (e.key === 'z' || e.key === 'Z') {
@@ -2292,6 +2293,13 @@ function initKeyboardShortcuts() {
             if (tocSidebar) {
                 tocSidebar.open = !tocSidebar.open;
             }
+        }
+
+        if (e.key === 'c' || e.key === 'C') {
+            const foldToggle = document.querySelector('#main-content [data-vyasa-fold-all]');
+            if (!foldToggle) return;
+            e.preventDefault();
+            foldToggle.click();
         }
     });
 }

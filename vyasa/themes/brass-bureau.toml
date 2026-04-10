@@ -1,4 +1,5 @@
 theme_primary = "#9a6d2f"
+theme_button_radius = "0.4rem"
 theme_heading_font = "\"Roboto Slab\", Georgia, serif"
 theme_body_font = "Assistant, sans-serif"
 theme_ui_font = "Assistant, sans-serif"

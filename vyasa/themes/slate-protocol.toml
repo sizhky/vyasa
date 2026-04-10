@@ -1,4 +1,5 @@
 theme_primary = "#0053db"
+theme_button_radius = "0.22rem"
 theme_heading_font = "Manrope, Inter, sans-serif"
 theme_body_font = "Inter, sans-serif"
 theme_ui_font = "Inter, sans-serif"

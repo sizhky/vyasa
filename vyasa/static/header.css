@@ -19,6 +19,16 @@ code, pre { font-family: 'IBM Plex Mono', monospace; }
     --vyasa-ink-soft: #5a6060;
     --vyasa-primary: #45655b;
     --vyasa-primary-dim: #39584f;
+    --vyasa-primary-text: var(--vyasa-selection-fg);
+    --vyasa-button-radius: 0.375rem;
+    --vyasa-rect-radius: var(--vyasa-button-radius);
+    --vyasa-link: color-mix(in srgb, var(--vyasa-primary) 68%, var(--vyasa-ink) 32%);
+    --vyasa-link-hover: color-mix(in srgb, var(--vyasa-primary-dim) 58%, var(--vyasa-ink) 42%);
+    --vyasa-emphasis-control-text: var(--vyasa-primary-text);
+    --vyasa-emphasis-control-bg: color-mix(in srgb, var(--vyasa-primary-text) 18%, transparent);
+    --vyasa-emphasis-control-bg-hover: color-mix(in srgb, var(--vyasa-primary-text) 26%, transparent);
+    --vyasa-emphasis-control-border: color-mix(in srgb, var(--vyasa-primary-text) 20%, transparent);
+    --vyasa-emphasis-control-menu-bg: color-mix(in srgb, var(--vyasa-primary-dim) 64%, color-mix(in srgb, var(--vyasa-primary-text) 14%, black) 36%);
     --vyasa-selection-bg: var(--vyasa-primary);
     --vyasa-selection-fg: #f2f4f3;
     --vyasa-outline-ghost: rgba(90, 96, 96, 0.2);
@@ -46,11 +56,36 @@ code, pre { font-family: 'IBM Plex Mono', monospace; }
     --vyasa-code-bg: var(--vyasa-dark-code-bg, color-mix(in srgb, #17202a 82%, var(--vyasa-primary) 18%)) !important;
     --vyasa-code-border: var(--vyasa-dark-code-border, color-mix(in srgb, rgba(181, 195, 191, 0.18) 70%, var(--vyasa-primary) 30%)) !important;
     --vyasa-code-highlight-bg: var(--vyasa-dark-code-highlight-bg, color-mix(in srgb, rgba(255,255,255,0.1) 55%, var(--vyasa-primary) 45%)) !important;
+    --vyasa-primary-text: var(--vyasa-dark-primary-text, var(--vyasa-primary-text)) !important;
 }
 
 body { color: var(--vyasa-ink); }
-a { color: var(--vyasa-primary); transition: color 300ms ease-out, background-color 300ms ease-out, opacity 300ms ease-out; }
-a:hover { color: var(--vyasa-primary-dim); }
+a { color: var(--vyasa-link); transition: color 300ms ease-out, background-color 300ms ease-out, opacity 300ms ease-out; }
+a:hover { color: var(--vyasa-link-hover); }
+.vyasa-mark {
+    color: color-mix(in srgb, var(--vyasa-ink) 88%, black);
+    background: linear-gradient(
+        180deg,
+        transparent 8%,
+        color-mix(in srgb, #facc15 38%, transparent) 8%,
+        color-mix(in srgb, #facc15 46%, transparent) 92%,
+        transparent 92%
+    );
+    border-radius: 0.18em;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    padding: 0.02em 0.16em;
+}
+.dark .vyasa-mark {
+    color: var(--vyasa-ink);
+    background: linear-gradient(
+        180deg,
+        transparent 8%,
+        color-mix(in srgb, #facc15 30%, transparent) 8%,
+        color-mix(in srgb, #facc15 38%, transparent) 92%,
+        transparent 92%
+    );
+}
 html, body { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
 body.bg-background, body.text-foreground { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
 #page-container { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
@@ -158,10 +193,10 @@ summary {
 }
 #main-content a,
 #main-content a:visited {
-    color: var(--vyasa-primary) !important;
+    color: var(--vyasa-link) !important;
 }
 #main-content a:hover {
-    color: var(--vyasa-primary-dim) !important;
+    color: var(--vyasa-link-hover) !important;
 }
 
 #main-content h1,
@@ -236,8 +271,8 @@ summary {
 
 .vyasa-navbar-card {
     background: linear-gradient(135deg, var(--vyasa-primary), var(--vyasa-primary-dim)) !important;
-    color: #f2f4f3 !important;
-    border-radius: 0.9rem;
+    color: var(--vyasa-primary-text) !important;
+    border-radius: var(--vyasa-rect-radius) !important;
     box-shadow: 0 24px 40px -32px rgba(45, 52, 52, 0.32);
 }
 
@@ -245,12 +280,62 @@ summary {
 .vyasa-navbar-card button,
 .vyasa-navbar-card summary,
 .vyasa-navbar-card [uk-icon] {
-    color: #f2f4f3 !important;
+    color: var(--vyasa-primary-text) !important;
 }
 
 .vyasa-navbar-card button:hover,
 .vyasa-navbar-card summary:hover {
     background: rgba(242, 244, 243, 0.14) !important;
+}
+
+.vyasa-emphasis-control {
+    color: var(--vyasa-emphasis-control-text) !important;
+    background: var(--vyasa-emphasis-control-bg) !important;
+    border: 1px solid var(--vyasa-emphasis-control-border) !important;
+    border-radius: var(--vyasa-rect-radius) !important;
+    box-shadow: 0 10px 24px -18px rgba(15, 23, 42, 0.32);
+    transition: color 160ms ease, background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.vyasa-emphasis-control:hover,
+.vyasa-emphasis-control:focus {
+    color: var(--vyasa-emphasis-control-text) !important;
+    background: var(--vyasa-emphasis-control-bg-hover) !important;
+    border-color: color-mix(in srgb, var(--vyasa-emphasis-control-text) 26%, transparent) !important;
+}
+
+.vyasa-emphasis-control-field {
+    min-height: 2.75rem;
+}
+
+.vyasa-emphasis-control-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+}
+
+.vyasa-emphasis-control-menu {
+    border-radius: var(--vyasa-rect-radius);
+    background: var(--vyasa-emphasis-control-menu-bg);
+    padding: 0.25rem;
+    box-shadow: 0 10px 30px rgba(15,23,42,0.35);
+    border: 1px solid var(--vyasa-emphasis-control-border);
+    backdrop-filter: blur(12px);
+}
+
+.vyasa-emphasis-control-option {
+    color: var(--vyasa-emphasis-control-text) !important;
+    border-radius: calc(var(--vyasa-rect-radius) - 0.1rem);
+    transition: background 160ms ease, color 160ms ease;
+}
+
+.vyasa-emphasis-control-option:hover,
+.vyasa-emphasis-control-option:focus,
+.vyasa-emphasis-control-option.is-active {
+    color: var(--vyasa-emphasis-control-text) !important;
+    background: var(--vyasa-emphasis-control-bg-hover) !important;
 }
 
 .vyasa-sidebar-body,
@@ -273,7 +358,7 @@ summary {
 
 .vyasa-sidebar-toggle,
 .vyasa-sidebar-body {
-    border-radius: 1rem !important;
+    border-radius: var(--vyasa-rect-radius) !important;
 }
 
 .vyasa-sidebar-toggle {
@@ -319,7 +404,7 @@ summary {
 .vyasa-footer-card {
     background: var(--vyasa-paper-low) !important;
     color: var(--vyasa-ink) !important;
-    border-radius: 1rem;
+    border-radius: var(--vyasa-rect-radius) !important;
 }
 
 .vyasa-footer-card a,
@@ -334,6 +419,24 @@ summary {
 .vyasa-footer-card button:hover,
 .vyasa-footer-card summary:hover {
     color: color-mix(in srgb, var(--vyasa-ink) 72%, var(--vyasa-primary) 28%) !important;
+}
+
+.vyasa-breadcrumbs {
+    color: var(--vyasa-ink-soft) !important;
+}
+
+.vyasa-breadcrumbs a,
+.vyasa-breadcrumbs a:visited {
+    color: var(--vyasa-link) !important;
+}
+
+.vyasa-breadcrumbs a:hover,
+.vyasa-breadcrumbs a:focus {
+    color: var(--vyasa-link-hover) !important;
+}
+
+.vyasa-read-time {
+    color: var(--vyasa-ink-soft) !important;
 }
 
 .vyasa-admin-field {
@@ -407,7 +510,7 @@ body.iframe-fullscreen-open { overflow: hidden; }
 .iframe-fullscreen-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(2, 6, 23, 0.85); display: flex; flex-direction: column; }
 .iframe-fullscreen-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 1rem; color: #e2e8f0; font-size: 0.9rem; background: rgba(15, 23, 42, 0.9); border-bottom: 1px solid rgba(148, 163, 184, 0.3); }
 .iframe-fullscreen-body { flex: 1; padding: 0.75rem; }
-.iframe-fullscreen-frame { width: 100%; height: 100%; border: 0; border-radius: 0.5rem; background: #0f172a; }
+.iframe-fullscreen-frame { width: 100%; height: 100%; border: 0; border-radius: var(--vyasa-rect-radius) !important; background: #0f172a; }
 
 .layout-fluid {
     --layout-breakpoint: 1280px;
@@ -415,9 +518,9 @@ body.iframe-fullscreen-open { overflow: hidden; }
     max-width: calc(100% - (100% - var(--layout-max-width)) * clamp(0, (100vw - var(--layout-breakpoint)) / var(--layout-blend), 1)) !important;
 }
 
-.tabs-container { margin: 2.5rem 0; border: none; border-radius: 1rem; overflow: visible; background: var(--vyasa-paper-low); box-shadow: 0 28px 48px -44px rgba(45, 52, 52, 0.28); }
+.tabs-container { margin: 2.5rem 0; border: none; border-radius: var(--vyasa-rect-radius) !important; overflow: visible; background: var(--vyasa-paper-low); box-shadow: 0 28px 48px -44px rgba(45, 52, 52, 0.28); }
 .tabs-header { display: flex; background: transparent; border-bottom: none; gap: 0.35rem; padding: 0.4rem; }
-.tab-button { flex: 1; padding: 0.9rem 1.35rem; background: transparent; border: none; cursor: pointer; font-weight: 600; font-size: 0.82rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--vyasa-ink-soft); transition: all 300ms ease-out; position: relative; border-radius: 0.8rem; }
+.tab-button { flex: 1; padding: 0.9rem 1.35rem; background: transparent; border: none; cursor: pointer; font-weight: 600; font-size: 0.82rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--vyasa-ink-soft); transition: all 300ms ease-out; position: relative; border-radius: var(--vyasa-rect-radius) !important; }
 .tab-button:hover:not(.active) { background: rgba(69, 101, 91, 0.08); color: var(--vyasa-ink); }
 .tab-button.active { color: var(--vyasa-primary); background: rgba(199, 234, 222, 0.45); font-weight: 700; }
 .tabs-content { background: transparent; position: relative; overflow: visible; }
@@ -448,7 +551,7 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .vyasa-callout-body > *:last-child { margin-bottom: 0 !important; }
 .vyasa-callout-note, .vyasa-callout-info, .vyasa-callout-abstract, .vyasa-callout-tip, .vyasa-callout-success, .vyasa-callout-todo, .vyasa-callout-warning, .vyasa-callout-important, .vyasa-callout-question, .vyasa-callout-failure, .vyasa-callout-danger, .vyasa-callout-bug, .vyasa-callout-example, .vyasa-callout-quote { --vyasa-callout-accent: var(--vyasa-primary); }
 .uk-list-bullet .vyasa-task-card::before, .uk-list-decimal .vyasa-task-card::before { content: none !important; }
-.vyasa-task-card { list-style: none; margin: 0.28rem 0; padding: 0.7rem 0.9rem 0.75rem; border: 1px solid color-mix(in srgb, var(--vyasa-callout-accent) 10%, transparent); border-radius: 0.9rem; background-color: color-mix(in srgb, var(--vyasa-paper-low) 98%, var(--vyasa-callout-accent) 2%); background-image: linear-gradient(rgba(255,255,255,0.82), rgba(255,255,255,0.82)), url("/static/3px-tile.png"); background-size: auto, 120px 120px; background-repeat: repeat, repeat; background-blend-mode: normal; box-shadow: 0 10px 24px -18px rgba(20, 24, 28, 0.18), 0 2px 8px -6px rgba(20, 24, 28, 0.1); position: relative; }
+.vyasa-task-card { list-style: none; margin: 0.28rem 0; padding: 0.7rem 0.9rem 0.75rem; border: 1px solid color-mix(in srgb, var(--vyasa-callout-accent) 10%, transparent); border-radius: var(--vyasa-rect-radius) !important; background-color: color-mix(in srgb, var(--vyasa-paper-low) 98%, var(--vyasa-callout-accent) 2%); background-image: linear-gradient(rgba(255,255,255,0.82), rgba(255,255,255,0.82)), url("/static/3px-tile.png"); background-size: auto, 120px 120px; background-repeat: repeat, repeat; background-blend-mode: normal; box-shadow: 0 10px 24px -18px rgba(20, 24, 28, 0.18), 0 2px 8px -6px rgba(20, 24, 28, 0.1); position: relative; }
 .vyasa-task-card::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32); opacity: 1; }
 .vyasa-task-pill { display: flex; width: max-content; margin-bottom: 0.45rem; padding: 0.18rem 0.5rem; border-radius: 999px; background: color-mix(in srgb, var(--vyasa-callout-accent) 10%, transparent); color: color-mix(in srgb, var(--vyasa-ink-soft) 78%, var(--vyasa-callout-accent) 22%); font: 700 0.62rem/1 var(--vyasa-font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
 .vyasa-task-copy { color: var(--vyasa-ink); font-size: 1rem; line-height: 1.45; font-style: italic; text-wrap: pretty; }
@@ -463,7 +566,7 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
     12% { opacity: 0.68; }
     100% { opacity: 0; transform: scale(1.34); }
 }
-todo { --vyasa-callout-accent: var(--vyasa-primary); --vyasa-todo-chip-bg: color-mix(in srgb, var(--vyasa-callout-accent) 10%, transparent); --vyasa-todo-meta: color-mix(in srgb, var(--vyasa-ink-soft) 76%, var(--vyasa-callout-accent) 24%); display: block; margin: 0.4rem 0; border: 1px solid color-mix(in srgb, var(--vyasa-callout-accent) 16%, transparent); background: var(--vyasa-paper-low); border-radius: 1.25rem; padding: 1.1rem 1.15rem 1rem; position: relative; z-index: 1; overflow: hidden; box-shadow: 0 22px 34px -30px rgba(45, 52, 52, 0.24); font-size: 1rem; line-height: 1.75; color: var(--vyasa-ink); font-style: italic; text-wrap: pretty; }
+todo { --vyasa-callout-accent: var(--vyasa-primary); --vyasa-todo-chip-bg: color-mix(in srgb, var(--vyasa-callout-accent) 10%, transparent); --vyasa-todo-meta: color-mix(in srgb, var(--vyasa-ink-soft) 76%, var(--vyasa-callout-accent) 24%); display: block; margin: 0.4rem 0; border: 1px solid color-mix(in srgb, var(--vyasa-callout-accent) 16%, transparent); background: var(--vyasa-paper-low); border-radius: var(--vyasa-rect-radius) !important; padding: 1.1rem 1.15rem 1rem; position: relative; z-index: 1; overflow: hidden; box-shadow: 0 22px 34px -30px rgba(45, 52, 52, 0.24); font-size: 1rem; line-height: 1.75; color: var(--vyasa-ink); font-style: italic; text-wrap: pretty; }
 p:has(> todo) { margin: 0.4rem 0 !important; }
 p:has(> todo) + p:has(> todo) { margin-top: 0 !important; }
 todo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, color-mix(in srgb, var(--vyasa-callout-accent) 8%, transparent), transparent 45%, color-mix(in srgb, white 18%, transparent)); pointer-events: none; }
@@ -543,10 +646,52 @@ todo .deadline { margin-left: 0.45rem; }
 .vyasa-doc-heading:hover .vyasa-heading-action, .vyasa-doc-heading:hover .vyasa-heading-permalink, .vyasa-heading-action:hover, .vyasa-heading-action:focus, .vyasa-heading-permalink:hover, .vyasa-heading-permalink:focus { opacity: 1; }
 .vyasa-heading-action:hover, .vyasa-heading-action:focus, .vyasa-heading-permalink:hover, .vyasa-heading-permalink:focus { color: var(--vyasa-primary) !important; }
 .vyasa-heading-fold { margin: 1.15rem 0; }
-.vyasa-fold-all-button { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.5rem 0.75rem; border: 1px solid rgb(226 232 240 / 1); border-radius: 0.375rem; background: transparent; color: rgb(71 85 105 / 1); font: 500 0.875rem/1 var(--vyasa-font-ui); transition: color 160ms ease, border-color 160ms ease, background 160ms ease; }
-.dark .vyasa-fold-all-button { border-color: rgb(51 65 85 / 1); color: rgb(203 213 225 / 1); }
-.vyasa-fold-all-button:hover { color: rgb(15 23 42 / 1); border-color: rgb(203 213 225 / 1); background: rgb(248 250 252 / 1); }
-.dark .vyasa-fold-all-button:hover { color: rgb(255 255 255 / 1); border-color: rgb(100 116 139 / 1); background: rgb(30 41 59 / 1); }
+.vyasa-page-action-button,
+.vyasa-fold-all-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--vyasa-primary) 70%, transparent);
+    border-radius: var(--vyasa-rect-radius) !important;
+    background: var(--vyasa-primary);
+    color: var(--vyasa-primary-text, var(--vyasa-selection-fg, #ffffff)) !important;
+    font: 500 0.875rem/1 var(--vyasa-font-ui);
+    text-decoration: none;
+    box-shadow: 0 10px 22px -18px color-mix(in srgb, var(--vyasa-primary) 72%, black);
+    transition: color 160ms ease, border-color 160ms ease, background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+#main-content a.vyasa-page-action-button,
+#main-content a.vyasa-page-action-button:visited {
+    color: var(--vyasa-primary-text, var(--vyasa-selection-fg, #ffffff)) !important;
+}
+.vyasa-page-action-button:hover,
+.vyasa-page-action-button:focus,
+.vyasa-fold-all-button:hover,
+.vyasa-fold-all-button:focus {
+    background: var(--vyasa-primary-dim);
+    border-color: color-mix(in srgb, var(--vyasa-primary) 82%, black 18%);
+    color: var(--vyasa-primary-text, var(--vyasa-selection-fg, #ffffff)) !important;
+    text-decoration: none;
+    box-shadow: 0 14px 28px -18px color-mix(in srgb, var(--vyasa-primary) 78%, black);
+}
+#main-content a.vyasa-page-action-button:hover,
+#main-content a.vyasa-page-action-button:focus,
+#main-content a.vyasa-page-action-button:active {
+    color: var(--vyasa-primary-text, var(--vyasa-selection-fg, #ffffff)) !important;
+}
+.vyasa-page-action-button:active,
+.vyasa-fold-all-button:active {
+    transform: translateY(1px);
+}
+
+.vyasa-inline-action-demo {
+    position: relative;
+    top: -0.14em;
+    vertical-align: middle;
+}
+
 .vyasa-fold-all-icon { width: 1rem; height: 1rem; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .vyasa-scroll-top-button { position: fixed; bottom: 1.25rem; width: 3.15rem; height: 3.15rem; display: inline-flex; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--vyasa-primary) 38%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--vyasa-paper) 82%, var(--vyasa-primary) 18%); color: var(--vyasa-primary); box-shadow: 0 18px 34px -20px rgba(15, 23, 42, 0.42); backdrop-filter: blur(10px); opacity: 0; pointer-events: none; transform: translateY(0.4rem) scale(0.96); transition: opacity 160ms ease, transform 160ms ease, background 160ms ease; z-index: 30; }
 .vyasa-scroll-top-button.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
@@ -566,7 +711,7 @@ todo .deadline { margin-left: 0.45rem; }
 .vyasa-heading-fold-body li > ol { margin-top: 0.3rem; }
 .code-block pre, .code-block pre code, pre code.hljs { background: var(--vyasa-code-bg); color: var(--vyasa-code-fg); }
 .code-block { margin: 1.4rem 0 1.8rem; }
-.code-block pre { border: 1px solid var(--vyasa-code-border); border-radius: 1rem; padding: 1.15rem 1.3rem !important; box-shadow: 0 16px 24px -22px rgba(45, 52, 52, 0.18); }
+.code-block pre { border: 1px solid var(--vyasa-code-border); border-radius: var(--vyasa-rect-radius) !important; padding: 1.15rem 1.3rem !important; box-shadow: 0 16px 24px -22px rgba(45, 52, 52, 0.18); }
 .code-block pre code, pre code.hljs { font-size: 0.95rem; line-height: 1.2; }
 .code-block [class*="copy"], .code-copy-button { font-family: 'Inter', sans-serif; }
 .hljs-comment, .hljs-quote { color: var(--vyasa-code-comment); }

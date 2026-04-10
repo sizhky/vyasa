@@ -5,7 +5,8 @@ slides: true
 
 ## Slides Start from the Document
 
-What are slides, really, except docs wearing a cleaner shirt and trying to make eye contact before the meeting dies. Vyasa does not ask you to write a second deck. It takes the same markdown you already use for reading view and lets you enter a calmer presentation mode from the **Present** button.
+What are slides, really, except docs wearing a cleaner shirt and trying to make eye contact before the meeting dies. Vyasa does not ask you to write a second deck. It takes the same markdown you already use for reading view and lets you enter a calmer presentation mode from the <span class="vyasa-page-action-button vyasa-inline-action-demo"><uk-icon icon="monitor" class="w-4 h-4"></uk-icon><span>Present</span></span> button.
+
 
 The reading page stays the source of truth. The slide page is only another way to walk through the same document.
 

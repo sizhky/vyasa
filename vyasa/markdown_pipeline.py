@@ -125,7 +125,7 @@ def preprocess_code_includes(content, current_path=None, root_folder=None):
         return f"@@VYASA_CODE_BLOCK_{len(protected)-1}@@"
 
     include_store = {}
-    pattern = re.compile(r"^\{\*\s+(.+?)\s+\*\}\s*$", re.MULTILINE)
+    pattern = re.compile(r"^[ \t]*\{\*\s+(.+?)\s+\*\}[ \t]*$", re.MULTILINE)
     base_dir = (Path(root_folder) / Path(current_path).parent) if current_path and root_folder else None
     content = re.sub(r"(```+|~~~+)[\s\S]*?\1", protect, content, flags=re.MULTILINE)
 

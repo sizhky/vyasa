@@ -1,4 +1,6 @@
 theme_primary = "#a1faff"
+theme_primary_text = "#101718"
+theme_button_radius = "0.16rem"
 theme_heading_font = "\"Space Grotesk\", Inter, sans-serif"
 theme_body_font = "Inter, sans-serif"
 theme_ui_font = "\"IBM Plex Mono\", monospace"
@@ -11,4 +13,3 @@ theme_dark_paper_low = "#151515"
 theme_dark_paper_raised = "#232323"
 theme_dark_ink = "#e7ffff"
 theme_selection_bg = "#a1faff"
-

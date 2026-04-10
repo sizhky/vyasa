@@ -1,4 +1,5 @@
 theme_primary = "#7e6954"
+theme_button_radius = "0.42rem"
 theme_heading_font = "Besley, Georgia, serif"
 theme_body_font = "Archivo, sans-serif"
 theme_ui_font = "Archivo, sans-serif"

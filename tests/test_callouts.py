@@ -1,11 +1,10 @@
-from pathlib import Path
 from unittest.mock import patch
 
 from fasthtml.common import to_xml
 
 from vyasa.markdown_rendering import from_md
 from vyasa.sidebar_helpers import extract_toc
-from vyasa.helpers import _strip_inline_markdown, _unique_anchor, resolve_heading_anchor, text_to_anchor
+from vyasa.helpers import _strip_inline_markdown, _unique_anchor, text_to_anchor
 
 
 def test_slash_callout_renders_info_block():
@@ -65,6 +64,12 @@ def test_markdown_after_callout_still_renders():
     html = to_xml(from_md(md))
 
     assert '<strong>Key columns:</strong>' in html
+
+
+def test_double_equals_renders_mark_highlight():
+    html = to_xml(from_md("This is ==important== text."))
+
+    assert '<mark class="vyasa-mark">important</mark>' in html
 
 
 def test_obsidian_callout_alias_and_fold_render():

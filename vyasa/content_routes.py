@@ -8,7 +8,8 @@ from urllib.parse import quote
 from fasthtml.common import A, Button, Div, H1, Li, Main, NotStr, Ol, P, Response, Script, Span, Strong, Textarea, to_xml
 from monsterui.all import UkIcon
 from .helpers import estimate_read_time_minutes, get_adjacent_posts
-from .slides import ZenSlideDeck, slide_slug
+from .markdown_rendering import _render_markdown_fragment
+from .slides import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
 
 PAGE_TITLE_CLS = "vyasa-page-title text-4xl font-bold"
 
@@ -22,18 +23,29 @@ def _prev_next_nav(root, current_path, abbreviations):
     return Div(prev_link, next_link, cls="vyasa-prev-next")
 
 
-def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False):
+def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, include_current=False, current_anchor=None):
     parts = [part for part in str(path).split("/") if part]
     if len(parts) < 2:
         return None
     boost_attrs = {"hx_boost": "false"} if disable_boost else {}
     items = [A("Posts", href="/", cls="hover:underline", **boost_attrs)]
     acc = []
-    for part in parts[:-1]:
+    breadcrumb_parts = parts if include_current else parts[:-1]
+    for part in breadcrumb_parts:
         acc.append(part)
         items.extend((
             Span(UkIcon("chevron-right", cls="w-3 h-3"), cls="opacity-50"),
             A(slug_to_title(part, abbreviations=abbreviations), href=f"/posts/{'/'.join(acc)}", cls="hover:underline", **boost_attrs),
+        ))
+    if include_current and current_anchor:
+        items.extend((
+            Span(UkIcon("chevron-right", cls="w-3 h-3"), cls="opacity-50"),
+            A(
+                slug_to_title(current_anchor.replace("-", " "), abbreviations=abbreviations),
+                href=f"/posts/{'/'.join(parts)}#{current_anchor}",
+                cls="hover:underline",
+                **boost_attrs,
+            ),
         ))
     return Div(*items, cls="vyasa-breadcrumbs mb-3 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400")
 
@@ -69,9 +81,9 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         type="button",
         title="Copy raw markdown",
         onclick="(function(){const el=document.getElementById('raw-md-clipboard');const toast=document.getElementById('raw-md-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()",
-        cls="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors text-sm",
+        cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
     )
-    present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{path}/slide-1", target="_blank", rel="noopener noreferrer", cls="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors text-sm")
+    present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{path}/slide-1", target="_blank", rel="noopener noreferrer", cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm")
     pager = _prev_next_nav(root, path, abbreviations)
     error_chip = Span("Bad Front Matter", cls="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50/70 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200") if frontmatter_error else None
     metadata_items = [(k, v) for k, v in metadata.items() if k not in {"__frontmatter_error__", "title", "slides", "reveal"} and isinstance(v, str) and v.strip()]
@@ -132,9 +144,17 @@ def render_drawing_detail(path, htmx, request, *, get_root_folder, not_found, ge
     return layout(post_content, htmx=htmx, title=f"{title} - {get_blog_title()}", show_sidebar=True, toc_content=None, current_path=path, show_toc=False, auth=request.scope.get("auth"), full_width=True, show_footer=False, no_scroll=True)
 
 
-def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, is_allowed, parse_frontmatter, slug_to_title, effective_abbreviations, from_md, layout):
-    match = re.match(r"^(?P<doc>.+?)(?:/slide-(?P<num>\d+))?$", path)
-    doc_path, slide_num = match.group("doc"), int(match.group("num") or "1")
+def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, is_allowed, parse_frontmatter, resolve_markdown_title, slug_to_title, effective_abbreviations, from_md, layout):
+    trimmed_path = path.rstrip("/")
+    match = re.match(r"^(?P<doc>.+?)(?:/slide-(?P<num>\d+))?$", trimmed_path)
+    if not match:
+        return not_found(auth=request.scope.get("auth"))
+    doc_path = match.group("doc")
+    slide_token = match.group("num")
+    if slide_token is None:
+        from starlette.responses import RedirectResponse
+        return RedirectResponse(f"/slides/{doc_path}/{slide_slug(1)}", status_code=307)
+    slide_num = int(slide_token)
     root, file_path = get_root_folder(), get_root_folder() / f"{doc_path}.md"
     if not file_path.exists():
         return not_found(auth=request.scope.get("auth"))
@@ -143,8 +163,9 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         return not_found(auth=request.scope.get("auth"))
     metadata, raw_content = parse_frontmatter(file_path)
     abbreviations = effective_abbreviations(root)
-    title = metadata.get("title") or slug_to_title(Path(doc_path).name, abbreviations=effective_abbreviations(root))
-    deck = ZenSlideDeck(raw_content or "")
+    title, render_content = resolve_markdown_title(file_path, abbreviations=abbreviations)
+    reveal_config = resolve_slide_reveal_config(metadata)
+    deck = ZenSlideDeck(render_content or "")
     overview = deck.outline(doc_path)
     total = len(deck.slides) + 2
     slide_num = max(1, min(slide_num, total))
@@ -153,7 +174,12 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
     nav_state = {"index": slide_num, "total": total, "left": f"/slides/{doc_path}/{slide_slug(slide_num - 1)}", "right": f"/slides/{doc_path}/{slide_slug(slide_num + 1)}"}
     left_control = nav_link("←", nav_state["left"], "left") if nav_state["index"] > 1 else Span("←", cls="opacity-30 pointer-events-none")
     right_control = nav_link("→", nav_state["right"], "right") if nav_state["index"] < nav_state["total"] else Span("→", cls="opacity-30 pointer-events-none")
-    nav = Div(left_control, Span(f'{nav_state["index"]} / {nav_state["total"]}'), right_control, cls="inline-flex items-center gap-4")
+    nav = Div(
+        left_control,
+        Button(f'{nav_state["index"]} / {nav_state["total"]}', type="button", data_zen_overview_toggle="true", cls="underline underline-offset-4"),
+        right_control,
+        cls="inline-flex items-center gap-4",
+    )
     overview_rows = [
         f'<tr><td class="pr-4 align-top whitespace-nowrap opacity-70"><span class="inline-flex items-center gap-1">{to_xml(UkIcon("file-text", cls="w-4 h-4"))}<span>{item["index"]}</span></span></td>'
         f'<td class="align-top"><a href="{item["href"]}" hx-get="{item["href"]}" hx-target="#main-content" '
@@ -168,32 +194,80 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         id="slide-overview",
         cls="hidden fixed inset-0 z-30 flex items-center justify-center p-6 pointer-events-none",
     )
-    footer_links = Div(Button("Overview", type="button", data_zen_overview_toggle="true", cls="underline underline-offset-4"), Span(UkIcon("more-horizontal", cls="w-4 h-4 opacity-70")), A("Back to doc view", href=doc_href, hx_boost="false", cls="underline underline-offset-4"), cls="fixed bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3")
     if slide_num == 1 or slide_num == total:
         card = title if slide_num == 1 else "Fin"
         content = Div(
             Div(nav, cls="flex justify-center"),
-            Div(card, cls="vyasa-zen-title text-center text-6xl font-bold min-h-[60vh] flex items-center justify-center"),
+            Div(card, cls="vyasa-zen-title min-h-[60vh] flex items-center justify-center"),
             overview_panel,
-            footer_links,
             Script(f"window.__vyasaZen={json.dumps(nav_state)};"),
             Script(src="/static/present.js", type="module"),
             cls="vyasa-zen-content w-full mx-auto space-y-8",
         )
     else:
-        slide_body = from_md(deck.body(slide_num - 1), current_path=doc_path, slide_mode=True)
+        slide_markdown = deck.body(slide_num - 1)
+        reveal_units = build_slide_reveal_units(
+            slide_markdown,
+            render_fragment=_render_markdown_fragment,
+            current_path=doc_path,
+            config=reveal_config,
+        ) if reveal_config.enabled else []
+        if reveal_units:
+            slide_body = Div(
+                *[
+                    Div(
+                        NotStr(unit["html"]),
+                        cls="vyasa-reveal-unit",
+                        data_reveal_index=str(index),
+                        data_reveal_state=(
+                            "visible"
+                            if (
+                                (unit.get("style") or reveal_config.style) in {"none", "instant"}
+                                or (reveal_config.policy == "step" and unit.get("kind") == "heading")
+                                or (
+                                    reveal_config.policy == "step"
+                                    and not any(u.get("kind") == "heading" for u in reveal_units)
+                                    and index == 0
+                                )
+                            )
+                            else "hidden"
+                        ),
+                        data_reveal_kind=str(unit.get("kind") or "content"),
+                        data_reveal_style=str(unit.get("style") or reveal_config.style),
+                        data_reveal_delay=str(unit.get("delay") or ""),
+                        data_reveal_duration=str(unit.get("duration") or ""),
+                        data_reveal_distance=str(unit.get("distance") or ""),
+                        data_reveal_easing=str(unit.get("easing") or ""),
+                    )
+                    for index, unit in enumerate(reveal_units)
+                ],
+                cls="vyasa-zen-slide-body",
+                data_reveal_mode="stagger",
+                data_reveal_policy=reveal_config.policy,
+                data_reveal_unit=reveal_config.unit,
+                data_reveal_style=reveal_config.style,
+                style="; ".join(
+                    part for part in (
+                        f"--vyasa-reveal-stagger: {reveal_config.stagger_ms}ms",
+                        f"--vyasa-reveal-duration: {reveal_config.duration_ms}ms",
+                        f"--vyasa-reveal-distance: {reveal_config.distance}",
+                        f"--vyasa-reveal-easing: {reveal_config.easing}",
+                    ) if part
+                ),
+            )
+        else:
+            slide_body = Div(from_md(slide_markdown, current_path=doc_path, slide_mode=True), cls="vyasa-zen-slide-body")
         content = Div(
-            _breadcrumbs(doc_path, slug_to_title, abbreviations, disable_boost=True),
-            Div(A(title, href=doc_href, hx_boost="false", cls=f"vyasa-zen-title {PAGE_TITLE_CLS} text-center underline underline-offset-4"), cls="flex justify-center"),
+            _breadcrumbs(doc_path, slug_to_title, abbreviations, disable_boost=True, include_current=True, current_anchor=deck.anchor(slide_num - 1)),
+            Div(H1(title, cls="vyasa-zen-title"), cls="flex justify-center"),
             Div(nav, cls="flex justify-center"),
-            Div(slide_body, cls="vyasa-zen-slide-body"),
+            slide_body,
             overview_panel,
-            footer_links,
             Script(f"window.__vyasaZen={json.dumps(nav_state)};"),
             Script(src="/static/present.js", type="module"),
             cls="vyasa-zen-content w-full mx-auto space-y-8",
         )
-    return layout(content, htmx=htmx, title=f"{title} - Zen", show_sidebar=False, toc_content=None, current_path=doc_path, show_toc=False, auth=request.scope.get("auth"), htmx_nav=False, show_footer=False)
+    return layout(content, htmx=htmx, title=f"{title} - Zen", show_sidebar=False, toc_content=None, current_path=doc_path, show_toc=False, auth=request.scope.get("auth"), htmx_nav=False, show_footer=False, slide_mode=True)
 
 
 def find_index_file(get_root_folder):
@@ -224,9 +298,9 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
             type="button",
             title="Copy raw markdown",
             onclick="(function(){const el=document.getElementById('raw-md-clipboard');const toast=document.getElementById('raw-md-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()",
-            cls="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors text-sm",
+            cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
         )
-        present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{index_path}/slide-1", target="_blank", rel="noopener noreferrer", cls="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors text-sm")
+        present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{index_path}/slide-1", target="_blank", rel="noopener noreferrer", cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm")
         page_content = Div(
             Div(
                 Div(H1(page_title, cls=PAGE_TITLE_CLS), Div(present_button, copy_button, cls="flex items-center gap-2 flex-wrap"), cls="flex items-start justify-between gap-4 flex-wrap"),
@@ -241,7 +315,7 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
         if logger:
             logger.debug("Request complete path=/ route=index total={:.2f}ms", (time.time() - request_start) * 1000)
         return result
-    result = layout(Div(H1(f"Welcome to {blog_title}!", cls="text-4xl font-bold tracking-tight mb-8"), NotStr('<h2 class="text-lg font-medium text-slate-700 dark:text-slate-300 mb-4">Quick start tutorial</h2><ul class="list-disc pl-6 space-y-2 text-base text-slate-600 dark:text-slate-400 mb-4"><li>Use the left sidebar to browse the files and folders in your blog. Use <kbd>Z</kbd> to toggle the sidebar.</li><li>Use the right sidebar to browse the table of contents of the current file. Use <kbd>X</kbd> to toggle the sidebar.</li><li>Open a markdown file to preview it instantly.</li></ul>'), P("More guides, examples, and documentation are available at ", A("vyasa.yeshwanth.com", href="https://vyasa.yeshwanth.com", cls="text-slate-900 dark:text-slate-100 underline underline-offset-4"), ".", cls="text-base text-slate-600 dark:text-slate-400"), cls="w-full"), htmx=htmx, title=f"Home - {blog_title}", show_sidebar=True, auth=request.scope.get("auth"))
+    result = layout(Div(H1(f"Welcome to {blog_title}!", cls="text-4xl font-bold tracking-tight mb-8"), NotStr('<h2 class="text-lg font-medium text-slate-700 dark:text-slate-300 mb-4">Quick start tutorial</h2><ul class="list-disc pl-6 space-y-2 text-base text-slate-600 dark:text-slate-400 mb-4"><li>Use the left sidebar to browse the files and folders in your blog. Use <kbd>Z</kbd> to toggle the sidebar.</li><li>Use the right sidebar to browse the table of contents of the current file. Use <kbd>X</kbd> to toggle the sidebar.</li><li>In docs view, use <kbd>C</kbd> to toggle the fold all and unfold all sections button.</li><li>Open a markdown file to preview it instantly.</li></ul>'), P("More guides, examples, and documentation are available at ", A("vyasa.yeshwanth.com", href="https://vyasa.yeshwanth.com", cls="text-slate-900 dark:text-slate-100 underline underline-offset-4"), ".", cls="text-base text-slate-600 dark:text-slate-400"), cls="w-full"), htmx=htmx, title=f"Home - {blog_title}", show_sidebar=True, auth=request.scope.get("auth"))
     if logger:
         logger.debug("Request complete path=/ route=index total={:.2f}ms", (time.time() - request_start) * 1000)
     return result

@@ -48,6 +48,7 @@ auth_required = true     # default: true when any auth is configured
 layout_max_width = "75vw"   # Tailwind class (e.g. "max-w-7xl") or CSS size ("90vw", "1200px")
 sidebars_open    = false    # open sidebars on load
 show_hidden      = false    # show dotfiles in sidebar
+log_file         = false    # write DEBUG logs to vyasa.log
 
 # Reload exclusions (merged with built-in defaults)
 reload_exclude = [".obsidian", "cache"]
@@ -56,6 +57,10 @@ reload_exclude = [".obsidian", "cache"]
 abbreviations = ["API", "UI", "DB"]   # words to keep uppercase in titles
 ignore  = ["drafts", "private"]       # folders to hide
 include = ["posts", "docs"]           # whitelist (empty = show all)
+
+# Annotations (inline text highlighting and comments)
+[annotations]
+enabled = true   # default: false
 
 # Per-drawing passwords
 [drawings_passwords]
@@ -154,6 +159,7 @@ folders_first = true
 | `VYASA_GOOGLE_ALLOWED_DOMAINS` | — | Comma-separated domains |
 | `VYASA_GOOGLE_ALLOWED_EMAILS` | — | Comma-separated emails |
 | `VYASA_RBAC_ENABLED` | — | Force enable/disable RBAC |
+| `VYASA_ANNOTATIONS_ENABLED` | `false` | Enable inline annotations |
 
 ## Auth notes
 

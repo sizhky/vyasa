@@ -114,6 +114,7 @@ def cli():
     parser.add_argument('--password', help='Login password (overrides config/env)')
     parser.add_argument('--show-hidden', action='store_true', help='Include hidden files and folders in listings')
     parser.add_argument('--theme-debug', action='store_true', help='Show runtime theme preset switcher for debugging')
+    parser.add_argument('--log-file', action='store_true', help='Write DEBUG logs to vyasa.log')
     
     args = parser.parse_args()
     
@@ -144,6 +145,9 @@ def cli():
     theme_debug_enabled = args.theme_debug or str(os.environ.get('VYASA_THEME_DEBUG', '')).strip().lower() in {'true', '1', 'yes', 'on'}
     if theme_debug_enabled:
         os.environ['VYASA_THEME_DEBUG'] = 'true'
+        config = reload_config()
+    if args.log_file:
+        os.environ['VYASA_LOG_FILE'] = 'true'
         config = reload_config()
 
     print(f"Starting Vyasa server...")
