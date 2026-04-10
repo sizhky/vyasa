@@ -28,26 +28,37 @@ def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, inc
     if len(parts) < 2:
         return None
     boost_attrs = {"hx_boost": "false"} if disable_boost else {}
-    items = [A("Posts", href="/", cls="hover:underline", **boost_attrs)]
+    items = [Span(A("Posts", href="/", cls="hover:underline whitespace-nowrap", **boost_attrs), cls="inline-flex min-w-0 items-center")]
     acc = []
     breadcrumb_parts = parts if include_current else parts[:-1]
     for part in breadcrumb_parts:
         acc.append(part)
-        items.extend((
-            Span(UkIcon("chevron-right", cls="w-3 h-3"), cls="opacity-50"),
-            A(slug_to_title(part, abbreviations=abbreviations), href=f"/posts/{'/'.join(acc)}", cls="hover:underline", **boost_attrs),
-        ))
+        items.append(
+            Span(
+                Span(UkIcon("chevron-right", cls="w-3 h-3"), cls="opacity-50"),
+                A(
+                    slug_to_title(part, abbreviations=abbreviations),
+                    href=f"/posts/{'/'.join(acc)}",
+                    cls="hover:underline whitespace-nowrap",
+                    **boost_attrs,
+                ),
+                cls="inline-flex min-w-0 items-center gap-2",
+            )
+        )
     if include_current and current_anchor:
-        items.extend((
-            Span(UkIcon("chevron-right", cls="w-3 h-3"), cls="opacity-50"),
-            A(
-                slug_to_title(current_anchor.replace("-", " "), abbreviations=abbreviations),
-                href=f"/posts/{'/'.join(parts)}#{current_anchor}",
-                cls="hover:underline",
-                **boost_attrs,
-            ),
-        ))
-    return Div(*items, cls="vyasa-breadcrumbs mb-3 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400")
+        items.append(
+            Span(
+                Span(UkIcon("chevron-right", cls="w-3 h-3"), cls="opacity-50"),
+                A(
+                    slug_to_title(current_anchor.replace("-", " "), abbreviations=abbreviations),
+                    href=f"/posts/{'/'.join(parts)}#{current_anchor}",
+                    cls="hover:underline whitespace-nowrap",
+                    **boost_attrs,
+                ),
+                cls="inline-flex min-w-0 items-center gap-2",
+            )
+        )
+    return Div(*items, cls="vyasa-breadcrumbs mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400")
 
 
 def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbreviations, find_folder_note_file, slug_to_title, layout, get_blog_title, not_found, parse_frontmatter, resolve_markdown_title, from_md, logger, PathCls=Path):
@@ -113,7 +124,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     post_content = Div(
         Div(
             breadcrumbs,
-            Div(H1(post_title, cls=PAGE_TITLE_CLS), Div(error_chip if error_chip else Div(), present_button, copy_button, cls="flex items-center gap-2 flex-wrap"), cls="flex items-start justify-between gap-4 flex-wrap"),
+            Div(H1(post_title, cls=PAGE_TITLE_CLS), Div(error_chip if error_chip else Div(), present_button, copy_button, cls="flex items-center gap-2 flex-wrap", data_vyasa_page_actions="true"), cls="flex items-start justify-between gap-4 flex-wrap"),
             read_time,
             cls="mb-8",
         ),
@@ -206,7 +217,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         cls="hidden fixed inset-0 z-30 flex items-center justify-center p-6 pointer-events-none",
     )
     if slide_num == 1 or slide_num == total:
-        card = title if slide_num == 1 else "Fin"
+        card = title if slide_num == 1 else "शुभम्"
         content = Div(
             Div(nav, cls="flex justify-center"),
             Div(card, cls="vyasa-zen-title min-h-[60vh] flex items-center justify-center"),
@@ -314,7 +325,7 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
         present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{index_path}/slide-1", target="_blank", rel="noopener noreferrer", cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm")
         page_content = Div(
             Div(
-                Div(H1(page_title, cls=PAGE_TITLE_CLS), Div(present_button, copy_button, cls="flex items-center gap-2 flex-wrap"), cls="flex items-start justify-between gap-4 flex-wrap"),
+                Div(H1(page_title, cls=PAGE_TITLE_CLS), Div(present_button, copy_button, cls="flex items-center gap-2 flex-wrap", data_vyasa_page_actions="true"), cls="flex items-start justify-between gap-4 flex-wrap"),
                 read_time,
                 cls="mb-8",
             ),

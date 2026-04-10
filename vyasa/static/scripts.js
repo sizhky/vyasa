@@ -2603,10 +2603,10 @@ function initHeadingFolds(root = document) {
         control.className = 'vyasa-fold-all-button';
         control.dataset.vyasaFoldAll = 'open';
         control.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 10 3 3 3-3"/></svg><span>Fold all</span>';
-        const copyButton = Array.from(main.querySelectorAll('button')).find((button) =>
+        const actions = main.querySelector('[data-vyasa-page-actions]');
+        const copyButton = Array.from(actions?.querySelectorAll('button') || []).find((button) =>
             button.textContent?.includes('Copy Markdown')
         );
-        const actions = copyButton?.parentElement;
         if (actions) actions.insertBefore(control, copyButton);
         else main.prepend(control);
     }
