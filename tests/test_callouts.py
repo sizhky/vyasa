@@ -2,9 +2,18 @@ from unittest.mock import patch
 
 from fasthtml.common import to_xml
 
+from vyasa.config import reload_config
 from vyasa.markdown_rendering import from_md
 from vyasa.sidebar_helpers import extract_toc
-from vyasa.helpers import _strip_inline_markdown, _unique_anchor, text_to_anchor
+from vyasa.helpers import (
+    _strip_inline_markdown,
+    _unique_anchor,
+    content_path_for_slug,
+    content_slug_for_path,
+    get_content_mounts,
+    text_to_anchor,
+)
+from vyasa.tree_service import get_tree_entries
 
 
 def test_slash_callout_renders_info_block():
@@ -36,6 +45,61 @@ def test_code_include_renders_selected_lines_and_highlight_metadata(tmp_path):
     assert 'line 25' not in html
     assert 'data-code-source-start="1"' in html
     assert 'data-code-highlight-lines="9-11,22"' in html
+
+
+def test_vyasa_roots_mount_as_top_level_folders(monkeypatch, tmp_path):
+    root = tmp_path / "site"
+    extra = tmp_path / "notes"
+    root.mkdir()
+    extra.mkdir()
+    (extra / "page.md").write_text("# Page\n", encoding="utf-8")
+    (root / ".vyasa").write_text('vyasa_roots = ["../notes"]\n', encoding="utf-8")
+    monkeypatch.chdir(root)
+
+    reload_config(root / ".vyasa")
+
+    assert get_content_mounts() == [("", root.resolve()), ("notes", extra.resolve())]
+    assert content_path_for_slug("notes/page", ".md") == (extra / "page.md").resolve()
+    assert content_slug_for_path(extra / "page.md") == "notes/page"
+    assert extra.resolve() in get_tree_entries(root, root, True, set(), (".md",))
+
+
+def test_primary_root_names_win_over_vyasa_root_aliases(monkeypatch, tmp_path):
+    root = tmp_path / "site"
+    extra = tmp_path / "notes"
+    root.mkdir()
+    extra.mkdir()
+    (root / "notes").mkdir()
+    (root / ".vyasa").write_text('vyasa_roots = ["../notes"]\n', encoding="utf-8")
+    monkeypatch.chdir(root)
+
+    reload_config(root / ".vyasa")
+
+    assert get_content_mounts() == [("", root.resolve())]
+    assert content_path_for_slug("notes/page", ".md") == (root / "notes" / "page.md").resolve()
+
+
+def test_ignore_cwd_as_root_exposes_only_vyasa_roots(monkeypatch, tmp_path):
+    root = tmp_path / "site"
+    extra = tmp_path / "notes"
+    root.mkdir()
+    extra.mkdir()
+    (root / "notes").mkdir()
+    (root / "local.md").write_text("# Local\n", encoding="utf-8")
+    (extra / "page.md").write_text("# Page\n", encoding="utf-8")
+    (root / ".vyasa").write_text(
+        'ignore_cwd_as_root = true\nvyasa_roots = ["../notes"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(root)
+
+    reload_config(root / ".vyasa")
+
+    assert get_content_mounts() == [("notes", extra.resolve())]
+    assert content_path_for_slug("local", ".md") is None
+    assert content_path_for_slug("notes/page", ".md") == (extra / "page.md").resolve()
+    assert extra.resolve() in get_tree_entries(root, root, True, set(), (".md",))
+    assert root / "local.md" not in get_tree_entries(root, root, True, set(), (".md",))
 
 
 def test_heading_permalink_and_explicit_id_are_used_in_html_and_toc():

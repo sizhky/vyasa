@@ -14,6 +14,10 @@ from .assets import asset_url
 from .config import get_config
 from .helpers import (
     _plain_text_from_html,
+    content_path_for_slug,
+    get_content_mounts,
+    content_root_and_relative,
+    content_slug_for_path,
     resolve_heading_anchor,
 )
 from .slides import present_href_for_anchor
@@ -128,12 +132,13 @@ def _resolve_cytograph_source_url(source, current_path):
     base, suffix = match.groups() if match else (source, "")
     if not base or base.startswith(("/", "#", "//")) or re.match(r"^[a-zA-Z][\w+.-]*:", base):
         return source
-    root = get_root_folder().resolve()
-    current_dir = (root / current_path).parent
+    current_file = _current_content_path(current_path)
+    if not current_file:
+        return source
+    current_dir = current_file.parent
     resolved = (current_dir / base).resolve()
-    try:
-        rel = resolved.relative_to(root).as_posix()
-    except ValueError:
+    rel = _slug_for_resolved_path(resolved, current_path, strip_suffix=False)
+    if not rel:
         return source
     if rel.endswith(".md"):
         mapped = f"/posts/{rel[:-3]}"
@@ -235,6 +240,31 @@ def _asset_url(path):
 def get_root_folder():
     return get_config().get_root_folder()
 
+def _current_content_path(current_path):
+    parts = Path(str(current_path).strip("/")).parts
+    aliases = {alias for alias, _ in get_content_mounts() if alias}
+    if parts and parts[0] in aliases:
+        return content_path_for_slug(current_path)
+    return (get_root_folder().resolve() / current_path).resolve()
+
+def _current_content_root_and_relative(current_path):
+    parts = Path(str(current_path).strip("/")).parts
+    aliases = {alias for alias, _ in get_content_mounts() if alias}
+    if parts and parts[0] in aliases:
+        return content_root_and_relative(current_path)
+    return get_root_folder(), Path(current_path)
+
+def _slug_for_resolved_path(resolved, current_path, strip_suffix=True):
+    parts = Path(str(current_path).strip("/")).parts
+    aliases = {alias for alias, _ in get_content_mounts() if alias}
+    if parts and parts[0] in aliases:
+        return content_slug_for_path(resolved, strip_suffix=strip_suffix)
+    try:
+        rel = resolved.relative_to(get_root_folder().resolve())
+    except ValueError:
+        return None
+    return rel.with_suffix("").as_posix() if strip_suffix else rel.as_posix()
+
 
 def _resolve_raw_html_url(url, current_path):
     if not current_path or not url:
@@ -243,12 +273,13 @@ def _resolve_raw_html_url(url, current_path):
     base, suffix = match.groups() if match else (url, "")
     if not base or base.startswith(("/", "#", "//")) or re.match(r"^[a-zA-Z][\w+.-]*:", base):
         return url
-    root = get_root_folder().resolve()
-    current_dir = (root / current_path).parent
+    current_file = _current_content_path(current_path)
+    if not current_file:
+        return url
+    current_dir = current_file.parent
     resolved = (current_dir / base).resolve()
-    try:
-        rel = resolved.relative_to(root).as_posix()
-    except ValueError:
+    rel = _slug_for_resolved_path(resolved, current_path, strip_suffix=False)
+    if not rel:
         return url
     mapped = f"/posts/{rel[:-3]}" if rel.endswith(".md") else f"/{'static' if rel.startswith('static/') else 'posts'}/{rel if not rel.startswith('static/') else rel[7:]}"
     return mapped + suffix
@@ -615,14 +646,13 @@ class ContentRenderer(FrankenRenderer):
         raw_path = token.path.strip()
         label = getattr(token, "label", None)
         if self.current_path:
-            root = get_root_folder().resolve()
-            current_file_full = root / self.current_path
-            current_dir = current_file_full.parent
-            resolved = (current_dir / raw_path).resolve()
-            try:
-                rel_path = resolved.relative_to(root).as_posix()
+            current_file_full = _current_content_path(self.current_path)
+            current_dir = current_file_full.parent if current_file_full else None
+            resolved = (current_dir / raw_path).resolve() if current_dir else None
+            rel_path = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=False) if resolved else None
+            if rel_path:
                 download_path = f"/download/{rel_path}"
-            except ValueError:
+            else:
                 download_path = raw_path
         else:
             download_path = f"/download/{raw_path}"
@@ -668,8 +698,9 @@ class ContentRenderer(FrankenRenderer):
                 f'<span class="vyasa-heading-icon-collapse">{to_xml(UkIcon("shrink"))}</span></button>'
             )
             if self.current_path:
-                md_path = get_root_folder() / f"{self.current_path}.md"
-                if md_path.exists():
+                md_slug = self.current_path if str(self.current_path).endswith(".md") else f"{self.current_path}.md"
+                md_path = _current_content_path(md_slug)
+                if md_path and md_path.exists():
                     present_href = present_href_for_anchor(md_path.read_text(encoding="utf-8"), self.current_path, anchor)
                     present_here = f'<a href="{present_href}" class="vyasa-heading-action vyasa-heading-launch no-underline text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" aria-label="Present from here" hx-boost="false">{to_xml(UkIcon("play-circle"))}</a>'
         permalink = (
@@ -771,16 +802,16 @@ class ContentRenderer(FrankenRenderer):
             if href.endswith(".md"):
                 href = href[:-3]
             if self.current_path:
-                root = get_root_folder().resolve()
-                current_dir = (root / self.current_path).parent
-                resolved = (current_dir / href).resolve()
-                logger.debug(f"DEBUG: original_href={original_href}, current_path={self.current_path}, current_dir={current_dir}, resolved={resolved}, root={root}")
-                try:
-                    href = f"/posts/{resolved.relative_to(root)}"
+                current_file = _current_content_path(self.current_path)
+                current_dir = current_file.parent if current_file else None
+                resolved = (current_dir / href).resolve() if current_dir else None
+                logger.debug(f"DEBUG: original_href={original_href}, current_path={self.current_path}, current_dir={current_dir}, resolved={resolved}")
+                rel = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=not Path(href).suffix) if resolved else None
+                if rel:
+                    href = f"/posts/{rel}"
                     is_absolute_internal = True
-                except ValueError as e:
+                else:
                     is_external = True
-                    logger.debug(f"DEBUG: FAILED - ValueError: {e}")
             else:
                 is_external = True
         is_internal = is_absolute_internal and "." not in href.split("/")[-1]
@@ -820,8 +851,11 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
     content = _protect_escaped_dollar(content)
     content, footnotes = extract_footnotes(content)
     content = preprocess_super_sub(content)
+    include_root, include_rel = _current_content_root_and_relative(current_path) if current_path else (get_root_folder(), None)
     content, code_include_store = preprocess_code_includes(
-        content, current_path=current_path, root_folder=get_root_folder()
+        content,
+        current_path=include_rel.as_posix() if include_rel is not None else None,
+        root_folder=include_root,
     )
     content, callout_data_store = preprocess_callouts(content)
     content, tab_data_store = preprocess_md_tabs(content)
