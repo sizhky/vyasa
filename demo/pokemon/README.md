@@ -6,9 +6,6 @@ title: The Game Theory of Competitive Pokémon
 <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/150.png"
      alt="Mewtwo"
      class="pokemon-art pokemon-art-hero pokemon-art-mewtwo" />
-
-# The Game Theory of Competitive Pokémon
-
 </div>
 </div>
 
@@ -92,7 +89,7 @@ This is a real tournament game that demonstrates long-term planning in full. `Wh
 ```mermaid
 ---
 width: 80vw
-height: 380px
+height: 45vw
 ---
 sequenceDiagram
     participant A  as Aaron<br/>(Whimsicott + Miraidon)
@@ -399,7 +396,7 @@ Team building and battling form a feedback loop that ==never fully closes==.
 ```mermaid
 ---
 width: 74vw
-height: 340px
+height: 55vh
 ---
 stateDiagram-v2
     [*]          --> Hypothesis : Have an idea
