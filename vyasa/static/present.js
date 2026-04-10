@@ -263,7 +263,10 @@ if (!window.__vyasaZenBound) {
       window.htmx.ajax('GET', href, {
         target: '#main-content',
         swap: 'outerHTML show:window:top settle:0.1s',
-        pushUrl: href,
+      }).then(() => {
+        if (window.location.pathname !== href) {
+          window.history.pushState(null, '', href);
+        }
       });
     } else {
       window.location.href = href;
@@ -302,7 +305,7 @@ if (!window.__vyasaZenBound) {
         event.preventDefault();
         return;
       }
-      if (side === 'left' && follow('left')) {
+      if (side === 'left' && (hidePreviousUnit() || follow('left'))) {
         revealLog('click ArrowLeft handled');
         event.preventDefault();
         return;
@@ -318,7 +321,7 @@ if (!window.__vyasaZenBound) {
     if (event.key === 'Escape') {
       document.getElementById('slide-overview')?.classList.add('hidden');
     }
-    if (event.key === 'ArrowLeft' && follow('left')) {
+    if (event.key === 'ArrowLeft' && (hidePreviousUnit() || follow('left'))) {
       revealLog('keydown ArrowLeft handled');
       event.preventDefault();
     }
@@ -349,7 +352,7 @@ if (!window.__vyasaZenBound) {
       revealLog('touch swipe right->left handled');
       event.preventDefault();
     }
-    if (dx > 0 && follow('left')) {
+    if (dx > 0 && (hidePreviousUnit() || follow('left'))) {
       revealLog('touch swipe left->right handled');
       event.preventDefault();
     }
