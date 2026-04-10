@@ -18,6 +18,10 @@ from .helpers import (
     _effective_include_list,
     _should_include_folder,
     find_folder_note_file,
+    content_path_for_slug,
+    content_root_and_relative,
+    content_slug_for_path,
+    get_content_mounts,
     iter_visible_files,
     should_exclude_dir,
 )
@@ -252,7 +256,10 @@ _set_rbac_cfg(_rbac_cfg)
 
 
 def _drawing_password_for(path: str):
-    return drawing_password_for(get_root_folder(), path)
+    root, rel = content_root_and_relative(path)
+    if root is None:
+        return None
+    return drawing_password_for(root, rel.as_posix())
 
 
 def _drawing_unlocked_in_session(session, path: str) -> bool:
@@ -451,9 +458,8 @@ def posts_sidebar_lazy(request: Request = None, current_path: str = ""):
 @rt("/_sidebar/posts/branch")
 def posts_sidebar_branch(path: str = "", request: Request = None):
     roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    folder = (get_root_folder() / path).resolve()
-    root = get_root_folder().resolve()
-    if not folder.is_dir() or not str(folder).startswith(str(root)):
+    folder = content_path_for_slug(path)
+    if not folder or not folder.is_dir():
         logger.debug("Sidebar branch invalid path={}", path)
         return Response(status_code=404)
     items = build_post_tree(folder, roles=roles, max_depth=0)
@@ -468,8 +474,8 @@ def posts_sidebar_branch(path: str = "", request: Request = None):
 def serve_post_markdown(path: str):
     from starlette.responses import FileResponse
 
-    file_path = get_root_folder() / f"{path}.md"
-    if file_path.exists():
+    file_path = content_path_for_slug(path, ".md")
+    if file_path and file_path.exists():
         return FileResponse(file_path, media_type="text/markdown; charset=utf-8")
     return Response(status_code=404)
 
@@ -498,8 +504,8 @@ def gather_search_results(htmx, q: str = "", request: Request = None):
 def serve_post_static(path: str, ext: str):
     from starlette.responses import FileResponse
 
-    file_path = get_root_folder() / f"{path}.{ext}"
-    if file_path.exists():
+    file_path = content_path_for_slug(path, f".{ext}")
+    if file_path and file_path.exists():
         return FileResponse(file_path)
     return Response(status_code=404)
 
@@ -509,8 +515,8 @@ def serve_post_static(path: str, ext: str):
 def serve_post_json(path: str):
     from starlette.responses import FileResponse
 
-    file_path = get_root_folder() / f"{path}.json"
-    if file_path.exists():
+    file_path = content_path_for_slug(path, ".json")
+    if file_path and file_path.exists():
         return FileResponse(
             file_path,
             headers={"Content-Disposition": f'attachment; filename="{file_path.name}"'},
@@ -522,8 +528,8 @@ def serve_post_json(path: str):
 def serve_post_excalidraw(path: str):
     from starlette.responses import FileResponse
 
-    file_path = get_root_folder() / f"{path}.excalidraw"
-    if file_path.exists():
+    file_path = content_path_for_slug(path, ".excalidraw")
+    if file_path and file_path.exists():
         return FileResponse(file_path, media_type="application/json; charset=utf-8")
     return Response(status_code=404)
 
@@ -546,9 +552,8 @@ async def unlock_excalidraw(path: str, request: Request):
 
 @rt("/api/excalidraw/{path:path}", methods=["PUT"])
 async def save_excalidraw(path: str, request: Request):
-    root = get_root_folder().resolve()
-    file_path = (root / f"{path}.excalidraw").resolve()
-    if not str(file_path).startswith(str(root) + os.sep):
+    file_path = content_path_for_slug(path, ".excalidraw")
+    if not file_path:
         return Response(status_code=403)
     if _drawing_password_for(path) and not _drawing_unlocked(request, path):
         return Response("Forbidden", status_code=403)
@@ -680,9 +685,8 @@ async def excalidraw_collab(ws: WebSocket, data: dict):
 def download_file(path: str):
     from starlette.responses import FileResponse
 
-    root = get_root_folder().resolve()
-    file_path = (root / path).resolve()
-    if not str(file_path).startswith(str(root) + os.sep):
+    file_path = content_path_for_slug(path)
+    if not file_path:
         return Response(status_code=403)
     if file_path.exists() and file_path.is_file():
         return FileResponse(
@@ -761,30 +765,12 @@ def navbar(
 
 
 def _posts_sidebar_fingerprint():
-    root = get_root_folder()
     try:
-        md_mtime = max(
-            (
-                p.stat().st_mtime
-                for p in iter_visible_files(
-                    root, (".md",), get_config().get_show_hidden()
-                )
-            ),
-            default=0,
-        )
-        pdf_mtime = max(
-            (
-                p.stat().st_mtime
-                for p in iter_visible_files(
-                    root, (".pdf",), get_config().get_show_hidden()
-                )
-            ),
-            default=0,
-        )
-        excalidraw_mtime = max(
-            (p.stat().st_mtime for p in root.rglob("*.excalidraw")), default=0
-        )
-        return max(md_mtime, pdf_mtime, excalidraw_mtime)
+        mtimes = []
+        for _, root in get_content_mounts():
+            for suffix in (".md", ".pdf", ".excalidraw", ".vyasa"):
+                mtimes.extend(p.stat().st_mtime for p in iter_visible_files(root, (suffix,), True))
+        return max(mtimes, default=0)
     except Exception:
         return 0
 
@@ -805,41 +791,28 @@ def _find_search_matches_uncached(query, limit=40):
         return [], ""
     regex, regex_error = parse_search_query(trimmed)
     query_norm = normalize_search_text(trimmed) if not regex else ""
-    root = get_root_folder()
     show_hidden = get_config().get_show_hidden()
-    index_file = find_index_file()
-    ignore_list = _effective_ignore_list(root)
-    include_list = _effective_include_list(root)
     results = []
-    for item in iter_visible_files(root, (".md", ".pdf"), show_hidden):
-        if not show_hidden and any(
-            part.startswith(".") for part in item.relative_to(root).parts
-        ):
-            continue
-        if ".vyasa" in item.parts:
-            continue
-        # Check if any folder in path should be excluded based on include/ignore lists
-        path_parts = item.relative_to(root).parts[:-1]  # Exclude filename
-        should_skip = False
-        for part in path_parts:
-            if not _should_include_folder(part, include_list, ignore_list):
-                should_skip = True
-                break
-        if should_skip:
-            continue
-        if index_file and item.resolve() == index_file.resolve():
-            continue
-        rel = item.relative_to(root).with_suffix("")
-        if regex:
-            haystack = f"{item.name} {rel.as_posix()}"
-            is_match = regex.search(haystack)
-        else:
-            haystack = normalize_search_text(f"{item.name} {rel.as_posix()}")
-            is_match = query_norm in haystack
-        if is_match:
-            results.append(item)
-            if len(results) >= limit:
-                break
+    for _, root in get_content_mounts():
+        ignore_list = _effective_ignore_list(root)
+        include_list = _effective_include_list(root)
+        for item in iter_visible_files(root, (".md", ".pdf"), show_hidden):
+            rel_parts = item.relative_to(root).parts
+            if ".vyasa" in rel_parts:
+                continue
+            if any(not _should_include_folder(part, include_list, ignore_list) for part in rel_parts[:-1]):
+                continue
+            rel = content_slug_for_path(item)
+            if not rel:
+                continue
+            haystack = f"{item.name} {rel}" if regex else normalize_search_text(f"{item.name} {rel}")
+            is_match = bool(regex.search(haystack)) if regex else query_norm in haystack
+            if is_match:
+                results.append(item)
+                if len(results) >= limit:
+                    break
+        if len(results) >= limit:
+            break
     return tuple(results), regex_error
 
 
@@ -847,15 +820,17 @@ def _render_posts_search_results(query, roles=None):
     trimmed = (query or "").strip()
     matches, regex_error = _find_search_matches(trimmed)
     if roles is not None:
-        root = get_root_folder()
         filtered = []
         for item in matches:
-            slug = item.relative_to(root).with_suffix("")
-            if is_allowed(f"/posts/{slug}", roles or [], _rbac_rules):
+            slug = content_slug_for_path(item)
+            if slug and is_allowed(f"/posts/{slug}", roles or [], _rbac_rules):
                 filtered.append(item)
         matches = filtered
-    root = get_root_folder()
-    rendered_matches = [(str(item.relative_to(root).with_suffix("")), item.relative_to(root).as_posix() if item.suffix == ".pdf" else item.relative_to(root).with_suffix("").as_posix()) for item in matches]
+    rendered_matches = [
+        (slug, content_slug_for_path(item, strip_suffix=False) if item.suffix == ".pdf" else slug)
+        for item in matches
+        if (slug := content_slug_for_path(item))
+    ]
     return render_posts_search_results(trimmed, rendered_matches, regex_error)
 
 
@@ -887,18 +862,16 @@ def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden, current_path
 
 
 def _log_startup_content_stats():
-    root = get_root_folder()
     show_hidden = get_config().get_show_hidden()
     excludes = get_config().get_reload_excludes()
-    md_count = sum(1 for _ in iter_visible_files(root, (".md",), show_hidden))
-    pdf_count = sum(1 for _ in iter_visible_files(root, (".pdf",), show_hidden))
-    excalidraw_count = sum(
-        1 for _ in iter_visible_files(root, (".excalidraw",), show_hidden)
-    )
-    vyasa_count = sum(1 for _ in iter_visible_files(root, (".vyasa",), True))
+    roots = get_content_mounts()
+    md_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".md",), show_hidden))
+    pdf_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".pdf",), show_hidden))
+    excalidraw_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".excalidraw",), show_hidden))
+    vyasa_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".vyasa",), True))
     logger.info(
         "Startup scan root={} show_hidden={} md={} pdf={} excalidraw={} vyasa={} excludes={}",
-        root,
+        [str(root) for _, root in roots],
         show_hidden,
         md_count,
         pdf_count,
@@ -1049,31 +1022,12 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
 
 
 def _posts_tree_fingerprint():
-    root = get_root_folder()
     try:
-        md_mtime = max(
-            (
-                p.stat().st_mtime
-                for p in iter_visible_files(
-                    root, (".md",), get_config().get_show_hidden()
-                )
-            ),
-            default=0,
-        )
-        pdf_mtime = max(
-            (
-                p.stat().st_mtime
-                for p in iter_visible_files(
-                    root, (".pdf",), get_config().get_show_hidden()
-                )
-            ),
-            default=0,
-        )
-        excalidraw_mtime = max(
-            (p.stat().st_mtime for p in root.rglob("*.excalidraw")), default=0
-        )
-        vyasa_mtime = max((p.stat().st_mtime for p in root.rglob(".vyasa")), default=0)
-        return max(md_mtime, pdf_mtime, excalidraw_mtime, vyasa_mtime)
+        mtimes = []
+        for _, root in get_content_mounts():
+            for suffix in (".md", ".pdf", ".excalidraw", ".vyasa"):
+                mtimes.extend(p.stat().st_mtime for p in iter_visible_files(root, (suffix,), True))
+        return max(mtimes, default=0)
     except Exception:
         return 0
 
@@ -1179,6 +1133,8 @@ def slide_deck(path: str, htmx, request: Request):
 
 
 def find_index_file():
+    if get_config().get_ignore_cwd_as_root():
+        return None
     return find_index_file_helper(get_root_folder)
 
 

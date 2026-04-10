@@ -135,6 +135,27 @@ class VyasaConfig:
         """Get the blog root folder path."""
         root = self.get('root', 'VYASA_ROOT', '.')
         return Path(root).resolve()
+
+    def get_vyasa_roots(self) -> list[Path]:
+        """Get extra folders to expose as top-level content roots."""
+        raw_roots = self.get('vyasa_roots', 'VYASA_ROOTS', [])
+        base = self._loaded_config_path.parent if self._loaded_config_path else Path.cwd()
+        roots = []
+        for value in self._coerce_list(raw_roots):
+            path = Path(str(value)).expanduser()
+            if not path.is_absolute():
+                path = base / path
+            path = path.resolve()
+            if path.is_dir() and path != self.get_root_folder():
+                roots.append(path)
+        return list(dict.fromkeys(roots))
+
+    def get_ignore_cwd_as_root(self) -> bool:
+        """Get whether the primary root should be hidden from content discovery."""
+        value = self.get('ignore_cwd_as_root', 'VYASA_IGNORE_CWD_AS_ROOT', False)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
     
     def get_blog_title(self) -> str:
         """Get the blog title."""

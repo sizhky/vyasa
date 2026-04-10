@@ -41,6 +41,12 @@ title = "My Awesome Blog"
 # Root folder containing markdown files (default: current directory)
 root = "."
 
+# Extra folders exposed as first-level folders beside the root contents.
+vyasa_roots = ["/path/to/research", "/path/to/reference"]
+
+# Optional: set true to expose only vyasa_roots, not the current/root directory contents.
+ignore_cwd_as_root = true
+
 # Server host (default: 127.0.0.1)
 # Use "0.0.0.0" to make the server accessible from network
 host = "127.0.0.1"
@@ -68,6 +74,16 @@ enabled = true
 ```
 
 All settings in the `.vyasa` file are optional. The configuration is managed by the `Config` class in `vyasa/config.py`.
+
+`vyasa_roots` mounts each listed directory under its folder name, so `/path/to/research/notes.md` is served at `/posts/research/notes`.
+
+Name clashes are resolved by the first visible owner of that top-level name:
+
+- If `ignore_cwd_as_root = false`, the normal root directory is visible and its top-level files/folders win over `vyasa_roots` with the same name.
+- If `ignore_cwd_as_root = true`, the normal root directory is hidden, so its names do not block `vyasa_roots`.
+- If two `vyasa_roots` have the same folder name, the first path in the list wins and later duplicates are skipped.
+
+Set `ignore_cwd_as_root = true` when the `.vyasa` file is only a launcher/config file and the current directory should not be discovered or watched as content.
 
 ### Layout Width Configuration
 
@@ -109,6 +125,8 @@ Notes:
 You can also use environment variables as a fallback:
 
 - `VYASA_ROOT`: Path to your markdown files (default: current directory)
+- `VYASA_ROOTS`: Comma-separated extra folders to expose as top-level folders
+- `VYASA_IGNORE_CWD_AS_ROOT`: Hide the current/root directory from content discovery (true/false)
 - `VYASA_TITLE`: Your blog's title (default: folder name converted via `slug_to_title()`)
 - `VYASA_HOST`: Server host (default: 127.0.0.1)
 - `VYASA_PORT`: Server port (default: 5001)

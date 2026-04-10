@@ -57,6 +57,69 @@ def slug_to_title(s: str, abbreviations=None) -> str:
             titled.append(word[0].upper() + word[1:])
     return ' '.join(titled)
 
+def _safe_child(base: Path, relative: str | Path) -> Path | None:
+    base = base.resolve()
+    target = (base / relative).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError:
+        return None
+    return target
+
+def get_content_mounts() -> list[tuple[str, Path]]:
+    """Return primary and configured content roots as URL slug mounts."""
+    from .config import get_config
+
+    cfg = get_config()
+    primary = cfg.get_root_folder().resolve()
+    ignore_primary = cfg.get_ignore_cwd_as_root()
+    mounts = [] if ignore_primary else [("", primary)]
+    reserved = set()
+    if not ignore_primary:
+        try:
+            for item in primary.iterdir():
+                reserved.add(item.name)
+                if item.is_file():
+                    reserved.add(item.stem)
+        except OSError:
+            pass
+    aliases = set(reserved)
+    for root in cfg.get_vyasa_roots():
+        alias = root.name
+        if not alias or alias in aliases:
+            continue
+        aliases.add(alias)
+        mounts.append((alias, root.resolve()))
+    return mounts
+
+def content_root_and_relative(slug: str | Path) -> tuple[Path | None, Path]:
+    parts = Path(str(slug).strip("/")).parts
+    mounts = get_content_mounts()
+    for alias, root in mounts:
+        if parts and parts[0] == alias:
+            return root, Path(*parts[1:]) if len(parts) > 1 else Path()
+    if mounts and mounts[0][0] == "":
+        return mounts[0][1], Path(*parts) if parts else Path()
+    return None, Path(*parts) if parts else Path()
+
+def content_path_for_slug(slug: str | Path, suffix: str = "") -> Path | None:
+    root, relative = content_root_and_relative(slug)
+    if root is None:
+        return None
+    return _safe_child(root, f"{relative.as_posix()}{suffix}")
+
+def content_slug_for_path(path: Path, strip_suffix: bool = True) -> str | None:
+    resolved = path.resolve()
+    for alias, root in get_content_mounts():
+        try:
+            rel = resolved.relative_to(root.resolve())
+        except ValueError:
+            continue
+        if strip_suffix:
+            rel = rel.with_suffix("")
+        return (Path(alias) / rel).as_posix() if alias else rel.as_posix()
+    return None
+
 def _strip_inline_markdown(text: str) -> str:
     cleaned = text or ""
     cleaned = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', cleaned)

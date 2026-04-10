@@ -167,7 +167,8 @@ def cli():
     if reload:
         blog_root = config.get_root_folder()
         source_dir = os.environ.get("VYASA_SOURCE_DIR", "").strip()
-        reload_dirs = [str(blog_root)]
+        reload_dirs = [] if config.get_ignore_cwd_as_root() else [str(blog_root)]
+        reload_dirs.extend(str(path) for path in config.get_vyasa_roots())
         if source_dir:
             source_path = Path(source_dir).expanduser().resolve()
             if source_path.exists():

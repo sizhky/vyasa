@@ -3,6 +3,7 @@ from urllib.parse import quote
 
 from fasthtml.common import A, Details, Li, Span, Summary, Ul
 from monsterui.all import UkIcon
+from .helpers import content_slug_for_path
 
 
 def _folder_summary(title_node, branch_href=None):
@@ -26,7 +27,9 @@ def folder_has_visible_descendant(folder, roles, depth, *, root, show_hidden, ex
             if depth > 0 and folder_has_visible_descendant(item, roles, depth - 1, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, is_allowed_fn=is_allowed_fn, rbac_rules=rbac_rules):
                 return True
             continue
-        slug = str(item.relative_to(root).with_suffix(""))
+        slug = content_slug_for_path(item)
+        if not slug:
+            continue
         route = f"/drawings/{slug}" if item.suffix == ".excalidraw" else f"/posts/{slug}"
         if is_allowed_fn(route, roles or [], rbac_rules):
             return True
@@ -46,12 +49,14 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             if should_exclude_dir_fn(item.name, excluded_dirs) or (not show_hidden and item.name.startswith(".")):
                 continue
             folder_title = slug_to_title_fn(item.name, abbreviations=abbreviations)
-            rel_folder = str(item.relative_to(root))
+            rel_folder = content_slug_for_path(item, strip_suffix=False)
+            if not rel_folder:
+                continue
             child_active = tuple(active_parts[1:]) if active_parts and active_parts[0] == item.name else ()
             should_expand = bool(active_parts and active_parts[0] == item.name)
             if max_depth == 0:
                 note_file = find_folder_note_file_fn(item)
-                note_slug = str(note_file.relative_to(root).with_suffix("")) if note_file else None
+                note_slug = content_slug_for_path(note_file) if note_file else None
                 note_allowed = bool(note_slug and is_allowed_fn(f"/posts/{note_slug}", roles or [], rbac_rules))
                 note_link = A(
                     href=f"/posts/{note_slug}",
@@ -75,7 +80,7 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
                 continue
             sub_items = build_post_tree_render(item, roles=roles, max_depth=None if should_expand else (None if max_depth is None else max_depth - 1), active_parts=child_active, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, effective_abbreviations=effective_abbreviations, should_exclude_dir_fn=should_exclude_dir_fn, slug_to_title_fn=slug_to_title_fn, find_folder_note_file_fn=find_folder_note_file_fn, is_allowed_fn=is_allowed_fn, parse_frontmatter_fn=parse_frontmatter_fn, rbac_rules=rbac_rules, logger=logger, suppress_note_file=True)
             note_file = find_folder_note_file_fn(item)
-            note_slug = str(note_file.relative_to(root).with_suffix("")) if note_file else None
+            note_slug = content_slug_for_path(note_file) if note_file else None
             note_allowed = bool(note_slug and is_allowed_fn(f"/posts/{note_slug}", roles or [], rbac_rules))
             note_link = A(href=f"/posts/{note_slug}", hx_get=f"/posts/{note_slug}", hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link folder-note-link whitespace-nowrap", title=f"Open {folder_title}", onclick="event.stopPropagation();", data_path=note_slug)(folder_title) if note_allowed else None
             if not sub_items and not note_allowed:
@@ -89,7 +94,9 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             continue
         if folder_note_file and item.resolve() == folder_note_file.resolve():
             continue
-        slug = str(item.relative_to(root).with_suffix(""))
+        slug = content_slug_for_path(item)
+        if not slug:
+            continue
         route = f"/drawings/{slug}" if item.suffix == ".excalidraw" else f"/posts/{slug}"
         if not is_allowed_fn(route, roles or [], rbac_rules):
             continue
@@ -103,5 +110,5 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
         else:
             icon, title, label, href = "pencil", slug_to_title_fn(item.stem, abbreviations=abbreviations), f"{slug_to_title_fn(item.stem, abbreviations=abbreviations)} (Excalidraw)", f"/drawings/{slug}"
         items.append(Li(A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon(icon, cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(label, cls="whitespace-nowrap", title=title), href=href, hx_get=href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="vyasa-tree-row post-link inline-flex items-center py-1 px-2 rounded transition-colors whitespace-nowrap", data_path=slug)))
-    logger.debug(f"[DEBUG] build_post_tree for {folder.relative_to(root) if folder != root else '.'} completed in {(time.time() - start_time) * 1000:.2f}ms")
+    logger.debug(f"[DEBUG] build_post_tree for {content_slug_for_path(folder, strip_suffix=False) or '.'} completed in {(time.time() - start_time) * 1000:.2f}ms")
     return items

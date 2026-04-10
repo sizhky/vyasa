@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 from fasthtml.common import A, Button, Div, H1, Kbd, Li, Main, NotStr, Ol, P, Response, Script, Span, Strong, Textarea, to_xml
 from monsterui.all import UkIcon
-from .helpers import estimate_read_time_minutes, get_adjacent_posts
+from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, estimate_read_time_minutes, get_adjacent_posts
 from .markdown_rendering import _render_markdown_fragment
 from .slides import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
 
@@ -53,16 +53,21 @@ def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, inc
 def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbreviations, find_folder_note_file, slug_to_title, layout, get_blog_title, not_found, parse_frontmatter, resolve_markdown_title, from_md, logger, PathCls=Path):
     request_start = time.time()
     logger.info(f"\n[DEBUG] ########## REQUEST START: /posts/{path} ##########")
-    root = get_root_folder()
+    root, relative_path = content_root_and_relative(path)
+    if root is None:
+        return not_found(htmx, auth=request.scope.get("auth"))
+    relative_slug = relative_path.as_posix()
     abbreviations = effective_abbreviations(root)
-    file_path, pdf_path, excalidraw_path, folder_path = root / f"{path}.md", root / f"{path}.pdf", root / f"{path}.excalidraw", root / path
-    if not file_path.exists():
-        if folder_path.exists() and folder_path.is_dir():
+    file_path = content_path_for_slug(path, ".md")
+    pdf_path = content_path_for_slug(path, ".pdf")
+    folder_path = content_path_for_slug(path)
+    if not file_path or not file_path.exists():
+        if folder_path and folder_path.exists() and folder_path.is_dir():
             note_file = find_folder_note_file(folder_path)
             if note_file:
                 from starlette.responses import RedirectResponse
-                return RedirectResponse(f"/posts/{note_file.relative_to(root).with_suffix('')}", status_code=307)
-        if pdf_path.exists():
+                return RedirectResponse(f"/posts/{content_slug_for_path(note_file)}", status_code=307)
+        if pdf_path and pdf_path.exists():
             post_title = f"{slug_to_title(PathCls(path).name, abbreviations=abbreviations)} (PDF)"
             pdf_src = f"/posts/{path}.pdf"
             pdf_content = Div(_breadcrumbs(path, slug_to_title, abbreviations), Div(H1(post_title, cls=PAGE_TITLE_CLS), Button("Focus PDF", cls="pdf-focus-toggle inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors", type="button", data_pdf_focus_toggle="true", data_pdf_focus_label="Focus PDF", data_pdf_exit_label="Exit focus", aria_pressed="false"), cls="flex items-center justify-between gap-4 flex-wrap mb-6"), NotStr(f'<object data="{pdf_src}" type="application/pdf" class="pdf-viewer w-full h-[calc(100vh-14rem)] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><p class="p-4 text-sm text-slate-600 dark:text-slate-300">PDF preview not available. <a href="{pdf_src}" class="text-blue-600 hover:underline">Download PDF</a>.</p></object>'))
@@ -84,7 +89,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
     )
     present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{path}/slide-1", target="_blank", rel="noopener noreferrer", cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm")
-    pager = _prev_next_nav(root, path, abbreviations)
+    pager = _prev_next_nav(root, relative_slug, abbreviations)
     error_chip = Span("Bad Front Matter", cls="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50/70 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200") if frontmatter_error else None
     metadata_items = [(k, v) for k, v in metadata.items() if k not in {"__frontmatter_error__", "title", "slides", "reveal"} and isinstance(v, str) and v.strip()]
     breadcrumbs = _breadcrumbs(path, slug_to_title, abbreviations)
@@ -128,8 +133,11 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
 
 
 def render_drawing_detail(path, htmx, request, *, get_root_folder, not_found, get_roles_from_request, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, is_allowed, slug_to_title, effective_abbreviations, drawing_password_for, get_blog_title, layout):
-    root, file_path = get_root_folder(), get_root_folder() / f"{path}.excalidraw"
-    if not file_path.exists():
+    root, _ = content_root_and_relative(path)
+    if root is None:
+        return not_found(htmx, auth=request.scope.get("auth"))
+    file_path = content_path_for_slug(path, ".excalidraw")
+    if not file_path or not file_path.exists():
         return not_found(htmx, auth=request.scope.get("auth"))
     if htmx and getattr(htmx, "request", None):
         return Response(status_code=200, headers={"HX-Redirect": f"/drawings/{path}"})
@@ -155,8 +163,11 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         from starlette.responses import RedirectResponse
         return RedirectResponse(f"/slides/{doc_path}/{slide_slug(1)}", status_code=307)
     slide_num = int(slide_token)
-    root, file_path = get_root_folder(), get_root_folder() / f"{doc_path}.md"
-    if not file_path.exists():
+    root, _ = content_root_and_relative(doc_path)
+    if root is None:
+        return not_found(auth=request.scope.get("auth"))
+    file_path = content_path_for_slug(doc_path, ".md")
+    if not file_path or not file_path.exists():
         return not_found(auth=request.scope.get("auth"))
     roles = get_roles_from_auth(request.scope.get("auth"), rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list)
     if not is_allowed(f"/posts/{doc_path}", roles or [], rbac_rules):

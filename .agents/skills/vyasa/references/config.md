@@ -36,6 +36,8 @@ Place `.vyasa` in your blog root (or any subfolder for folder-level ordering).
 # Server
 title    = "My Blog"     # default: derived from folder name
 root     = "."           # path to markdown files
+vyasa_roots = ["/path/to/a", "/path/to/b"] # extra top-level folders
+ignore_cwd_as_root = true # expose only vyasa_roots
 host     = "127.0.0.1"  # use "0.0.0.0" for network access
 port     = 5001
 
@@ -91,6 +93,10 @@ roles   = ["admin"]
 
 ### Folder-level ordering keys
 
+### `vyasa_roots` name clashes
+
+`vyasa_roots` uses each directory basename as its first-level route folder. If `ignore_cwd_as_root = false`, visible root entries win name clashes with mounted roots. If `ignore_cwd_as_root = true`, root entries are hidden and do not reserve names. If two `vyasa_roots` have the same basename, the first listed path wins and later duplicates are skipped.
+
 Place a `.vyasa` file inside any content folder to control how its contents are listed in the sidebar. Only these keys are used at folder level:
 
 ```toml
@@ -144,6 +150,8 @@ folders_first = true
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VYASA_ROOT` | `.` | Path to markdown files |
+| `VYASA_ROOTS` | — | Comma-separated extra folders exposed as first-level folders |
+| `VYASA_IGNORE_CWD_AS_ROOT` | `false` | Hide the current/root directory from content discovery |
 | `VYASA_TITLE` | folder name | Blog title |
 | `VYASA_HOST` | `127.0.0.1` | Server host |
 | `VYASA_PORT` | `5001` | Server port |
