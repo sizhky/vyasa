@@ -254,9 +254,50 @@
   margin-bottom: 0;
 }
 
+.vyasa-zen-nav-key {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+.vyasa-zen-nav-kbd {
+  display: inline-flex;
+  min-width: 2.1rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--vyasa-ink-soft) 22%, var(--vyasa-outline-ghost));
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, var(--vyasa-paper-raised) 88%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 42%, transparent),
+    0 2px 0 color-mix(in srgb, var(--vyasa-ink-soft) 16%, transparent),
+    0 10px 24px -20px color-mix(in srgb, var(--vyasa-ink) 32%, transparent);
+  color: var(--vyasa-ink-soft);
+  font-family: var(--vyasa-zen-font-ui);
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.vyasa-zen-nav-key:hover .vyasa-zen-nav-kbd,
+.vyasa-zen-nav-key:focus-visible .vyasa-zen-nav-kbd {
+  border-color: color-mix(in srgb, var(--vyasa-ink) 30%, var(--vyasa-outline-ghost));
+  background: color-mix(in srgb, var(--vyasa-paper-raised) 72%, var(--vyasa-paper-low) 28%);
+  color: var(--vyasa-ink);
+}
+.vyasa-zen-nav-key:active .vyasa-zen-nav-kbd {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 42%, transparent),
+    0 1px 0 color-mix(in srgb, var(--vyasa-ink-soft) 16%, transparent);
+}
+
 .vyasa-zen-present .vyasa-breadcrumbs,
 .vyasa-zen-present [data-zen-overview-toggle="true"],
 .vyasa-zen-present [data-zen-overview-toggle="true"] + span,
-.vyasa-zen-present [data-zen-overview-toggle="true"] ~ a {
+.vyasa-zen-present [data-zen-overview-toggle="true"] ~ a,
+.vyasa-zen-nav-key {
   font-family: var(--vyasa-zen-font-ui);
 }
