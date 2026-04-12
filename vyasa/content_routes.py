@@ -12,6 +12,19 @@ from .markdown_rendering import _render_markdown_fragment
 from .slides import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
 
 PAGE_TITLE_CLS = "vyasa-page-title text-4xl font-bold"
+FALLBACK_HOME_SLUG = "__home__"
+
+
+def _fallback_home_markdown(blog_title):
+    return (
+        "## Quick start tutorial\n\n"
+        "- Use the left sidebar to browse the files and folders in your blog. Use `Z` to toggle the sidebar.\n"
+        "- Use the right sidebar to browse the table of contents of the current file. Use `X` to toggle the sidebar.\n"
+        "- In docs view, use `C` to toggle the fold all and unfold all sections button.\n"
+        "- Use the <span class=\"vyasa-page-action-button vyasa-inline-action-demo\"><uk-icon icon=\"monitor\" class=\"w-4 h-4\"></uk-icon><span>Present</span></span> button to launch slide view for any document.\n"
+        "\n"
+        "More guides, examples, and documentation are available at [vyasa.yeshwanth.dev](https://vyasa.yeshwanth.dev).\n"
+    )
 
 
 def _prev_next_nav(root, current_path, abbreviations):
@@ -99,7 +112,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         onclick="(function(){const el=document.getElementById('raw-md-clipboard');const toast=document.getElementById('raw-md-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()",
         cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
     )
-    present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{path}/slide-1", target="_blank", rel="noopener noreferrer", cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm")
+    present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{path}/slide-1", hx_boost="false", cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm")
     pager = _prev_next_nav(root, relative_slug, abbreviations)
     error_chip = Span("Bad Front Matter", cls="inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50/70 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200") if frontmatter_error else None
     metadata_items = [(k, v) for k, v in metadata.items() if k not in {"__frontmatter_error__", "title", "slides", "reveal"} and isinstance(v, str) and v.strip()]
@@ -174,24 +187,36 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         from starlette.responses import RedirectResponse
         return RedirectResponse(f"/slides/{doc_path}/{slide_slug(1)}", status_code=307)
     slide_num = int(slide_token)
-    root, _ = content_root_and_relative(doc_path)
-    if root is None:
-        return not_found(auth=request.scope.get("auth"))
-    file_path = content_path_for_slug(doc_path, ".md")
-    if not file_path or not file_path.exists():
-        return not_found(auth=request.scope.get("auth"))
-    roles = get_roles_from_auth(request.scope.get("auth"), rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list)
-    if not is_allowed(f"/posts/{doc_path}", roles or [], rbac_rules):
-        return not_found(auth=request.scope.get("auth"))
-    metadata, raw_content = parse_frontmatter(file_path)
-    abbreviations = effective_abbreviations(root)
-    title, render_content = resolve_markdown_title(file_path, abbreviations=abbreviations)
-    reveal_config = resolve_slide_reveal_config(metadata)
-    deck = ZenSlideDeck(render_content or "")
-    overview = deck.outline(doc_path)
-    total = len(deck.slides) + 2
-    slide_num = max(1, min(slide_num, total))
-    doc_href = f"/posts/{doc_path}" if slide_num == 1 else deck.doc_href(doc_path, len(deck.slides) if slide_num == total else slide_num - 1)
+    if doc_path == FALLBACK_HOME_SLUG:
+        root = get_root_folder()
+        abbreviations = effective_abbreviations(root)
+        title = f"Welcome to {get_root_folder().name.upper()}!"
+        render_content = _fallback_home_markdown(get_root_folder().name.upper())
+        reveal_config = resolve_slide_reveal_config({})
+        deck = ZenSlideDeck(render_content)
+        overview = deck.outline(doc_path)
+        total = len(deck.slides) + 2
+        slide_num = max(1, min(slide_num, total))
+        doc_href = "/"
+    else:
+        root, _ = content_root_and_relative(doc_path)
+        if root is None:
+            return not_found(auth=request.scope.get("auth"))
+        file_path = content_path_for_slug(doc_path, ".md")
+        if not file_path or not file_path.exists():
+            return not_found(auth=request.scope.get("auth"))
+        roles = get_roles_from_auth(request.scope.get("auth"), rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list)
+        if not is_allowed(f"/posts/{doc_path}", roles or [], rbac_rules):
+            return not_found(auth=request.scope.get("auth"))
+        metadata, raw_content = parse_frontmatter(file_path)
+        abbreviations = effective_abbreviations(root)
+        title, render_content = resolve_markdown_title(file_path, abbreviations=abbreviations)
+        reveal_config = resolve_slide_reveal_config(metadata)
+        deck = ZenSlideDeck(render_content or "")
+        overview = deck.outline(doc_path)
+        total = len(deck.slides) + 2
+        slide_num = max(1, min(slide_num, total))
+        doc_href = f"/posts/{doc_path}" if slide_num == 1 else deck.doc_href(doc_path, len(deck.slides) if slide_num == total else slide_num - 1)
     nav_link = lambda label, href, side: Button(Kbd(label, cls="vyasa-zen-nav-kbd"), type="button", data_zen_nav=side, data_zen_href=href, cls="vyasa-zen-nav-key")
     nav_state = {"index": slide_num, "total": total, "left": f"/slides/{doc_path}/{slide_slug(slide_num - 1)}", "right": f"/slides/{doc_path}/{slide_slug(slide_num + 1)}"}
     left_control = nav_link("←", nav_state["left"], "left") if nav_state["index"] > 1 else Kbd("←", cls="vyasa-zen-nav-kbd opacity-30 pointer-events-none")
@@ -203,7 +228,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         cls="inline-flex items-center gap-4",
     )
     overview_rows = [
-        f'<tr><td class="pr-4 align-top whitespace-nowrap opacity-70"><span class="inline-flex items-center gap-1">{to_xml(UkIcon("file-text", cls="w-4 h-4"))}<span>{item["index"]}</span></span></td>'
+        f'<tr data-zen-overview-href="{item["href"]}" class="cursor-pointer"><td class="pr-4 align-top whitespace-nowrap opacity-70"><span class="inline-flex items-center gap-1">{to_xml(UkIcon("file-text", cls="w-4 h-4"))}<span>{item["index"]}</span></span></td>'
         f'<td class="align-top"><a href="{item["href"]}" hx-get="{item["href"]}" hx-target="#main-content" '
         f'hx-swap="outerHTML show:window:top settle:0.1s" hx-push-url="true">{item["text"]}</a></td></tr>'
         for item in overview
@@ -217,10 +242,13 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         cls="hidden fixed inset-0 z-30 flex items-center justify-center p-6 pointer-events-none",
     )
     if slide_num == 1 or slide_num == total:
-        card = title if slide_num == 1 else "शुभम्"
+        card = title if slide_num == 1 else "स्वस्ति"
         content = Div(
             Div(nav, cls="flex justify-center"),
-            Div(card, cls="vyasa-zen-title min-h-[60vh] flex items-center justify-center"),
+            Div(
+                A(card, href=doc_href, hx_boost="false", cls="underline underline-offset-8 hover:no-underline"),
+                cls="vyasa-zen-title min-h-[60vh] flex items-center justify-center",
+            ),
             overview_panel,
             Script(f"window.__vyasaZen={json.dumps(nav_state)};"),
             Script(src="/static/present.js", type="module"),
@@ -322,7 +350,7 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
             onclick="(function(){const el=document.getElementById('raw-md-clipboard');const toast=document.getElementById('raw-md-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()",
             cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
         )
-        present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{index_path}/slide-1", target="_blank", rel="noopener noreferrer", cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm")
+        present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{index_path}/slide-1", hx_boost="false", cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm")
         page_content = Div(
             Div(
                 Div(H1(page_title, cls=PAGE_TITLE_CLS), Div(present_button, copy_button, cls="flex items-center gap-2 flex-wrap", data_vyasa_page_actions="true"), cls="flex items-start justify-between gap-4 flex-wrap"),
@@ -337,7 +365,10 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
         if logger:
             logger.debug("Request complete path=/ route=index total={:.2f}ms", (time.time() - request_start) * 1000)
         return result
-    result = layout(Div(H1(f"Welcome to {blog_title}!", cls="text-4xl font-bold tracking-tight mb-8"), NotStr('<h2 class="text-lg font-medium text-slate-700 dark:text-slate-300 mb-4">Quick start tutorial</h2><ul class="list-disc pl-6 space-y-2 text-base text-slate-600 dark:text-slate-400 mb-4"><li>Use the left sidebar to browse the files and folders in your blog. Use <kbd>Z</kbd> to toggle the sidebar.</li><li>Use the right sidebar to browse the table of contents of the current file. Use <kbd>X</kbd> to toggle the sidebar.</li><li>In docs view, use <kbd>C</kbd> to toggle the fold all and unfold all sections button.</li><li>Open a markdown file to preview it instantly.</li></ul>'), P("More guides, examples, and documentation are available at ", A("vyasa.yeshwanth.com", href="https://vyasa.yeshwanth.com", cls="text-slate-900 dark:text-slate-100 underline underline-offset-4"), ".", cls="text-base text-slate-600 dark:text-slate-400"), cls="w-full"), htmx=htmx, title=f"Home - {blog_title}", show_sidebar=True, auth=request.scope.get("auth"))
+    raw_content = _fallback_home_markdown(blog_title)
+    present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{FALLBACK_HOME_SLUG}/slide-1", hx_boost="false", cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm")
+    copy_button = Button(UkIcon("clipboard", cls="w-4 h-4"), Span("Copy Markdown", cls="text-sm font-medium"), type="button", title="Copy raw markdown", onclick="(function(){const el=document.getElementById('raw-md-clipboard');const toast=document.getElementById('raw-md-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()", cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm")
+    result = layout(Div(Div(Div(H1(f"Welcome to {blog_title}!", cls=PAGE_TITLE_CLS), Div(present_button, copy_button, cls="flex items-center gap-2 flex-wrap", data_vyasa_page_actions="true"), cls="flex items-start justify-between gap-4 flex-wrap"), P(f"{estimate_read_time_minutes(raw_content)}-min read", cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2"), cls="mb-8"), Div("Copied Raw Markdown!", id="raw-md-toast", cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"), Textarea(raw_content, id="raw-md-clipboard", cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"), from_md(raw_content, current_path=FALLBACK_HOME_SLUG), cls="w-full"), htmx=htmx, title=f"Home - {blog_title}", show_sidebar=True, toc_content=raw_content, current_path=FALLBACK_HOME_SLUG, auth=request.scope.get("auth"))
     if logger:
         logger.debug("Request complete path=/ route=index total={:.2f}ms", (time.time() - request_start) * 1000)
     return result

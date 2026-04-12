@@ -147,6 +147,8 @@ def split_markdown_paragraph_groups(markdown_text):
     tabs_depth = 0
     for line in markdown_text.splitlines():
         stripped = line.strip()
+        if line == '---':
+            continue
         if re.match(r"^(```+|~~~+)", stripped):
             in_fence = not in_fence
         elif not in_fence and stripped == ":::tabs":
@@ -397,5 +399,5 @@ def present_href_for_anchor(markdown_text, doc_path, target_anchor):
                 continue
             _, anchor = resolve_heading_anchor(match.group(2).strip(), counts)
             if anchor == target_anchor:
-                return f"/slides/{doc_path}/{slide_slug(index + 1)}"
+                return f"/slides/{doc_path}/{slide_slug(index)}"
     return f"/slides/{doc_path}/slide-2"
