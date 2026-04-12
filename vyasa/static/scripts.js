@@ -2597,19 +2597,7 @@ function initHeadingFolds(root = document) {
     const main = root.id === 'main-content' ? root : root.querySelector?.('#main-content');
     if (!main || main.dataset.headingFoldsInit === '1') return;
     if (main.querySelector('.vyasa-zen-content')) return;
-    if (!main.querySelector('[data-vyasa-fold-all]')) {
-        const control = document.createElement('button');
-        control.type = 'button';
-        control.className = 'vyasa-fold-all-button';
-        control.dataset.vyasaFoldAll = 'open';
-        control.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 10 3 3 3-3"/></svg><span>Fold all</span>';
-        const actions = main.querySelector('[data-vyasa-page-actions]');
-        const copyButton = Array.from(actions?.querySelectorAll('button') || []).find((button) =>
-            button.textContent?.includes('Copy Markdown')
-        );
-        if (actions) actions.insertBefore(control, copyButton);
-        else main.prepend(control);
-    }
+    let createdFold = false;
     const containers = [main, ...main.querySelectorAll('div, section, article')].filter((el) =>
         !el.closest('.vyasa-heading-fold-body') &&
         Array.from(el.children).some((child) => /^H[1-6]$/.test(child.tagName))
@@ -2635,6 +2623,7 @@ function initHeadingFolds(root = document) {
             fold.dataset.level = `h${level}`;
             fold.open = true;
             fold.classList.add('is-open');
+            createdFold = true;
             summary.className = 'vyasa-heading-fold-summary';
             body.className = 'vyasa-heading-fold-body';
             chevron.className = 'vyasa-heading-fold-chevron';
@@ -2646,6 +2635,16 @@ function initHeadingFolds(root = document) {
         });
         container.dataset.headingFoldsInit = '1';
     });
+    const actions = main.querySelector('[data-vyasa-page-actions]');
+    if (createdFold && actions && !main.querySelector('[data-vyasa-fold-all]')) {
+        const control = document.createElement('button');
+        control.type = 'button';
+        control.className = 'vyasa-fold-all-button';
+        control.dataset.vyasaFoldAll = 'open';
+        control.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 10 3 3 3-3"/></svg><span>Fold all</span>';
+        const copyButton = Array.from(actions.querySelectorAll('button')).find((button) => button.textContent?.includes('Copy Markdown'));
+        actions.insertBefore(control, copyButton);
+    }
     main.dataset.headingFoldsInit = '1';
 }
 

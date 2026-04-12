@@ -450,7 +450,7 @@ def posts_sidebar_lazy(request: Request = None, current_path: str = ""):
     )
     return Aside(
         NotStr(html),
-        cls="hidden xl:block w-72 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]",
+        cls="hidden xl:block w-[var(--vyasa-sidebar-width,26rem)] shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]",
         id="posts-sidebar",
     )
 

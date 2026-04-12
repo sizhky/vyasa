@@ -256,9 +256,13 @@ if (!window.__vyasaZenBound) {
     const control = document.querySelector(`[data-zen-nav="${side}"]`);
     if (!control) return false;
     const href = control.dataset.zenHref || control.getAttribute('href');
+    return followHref(href, side === 'left' ? 'back' : 'forward');
+  };
+
+  const followHref = (href, direction = 'forward') => {
     if (!href) return false;
-    pendingRevealDirection = side === 'left' ? 'back' : 'forward';
-    pendingSlideBottomScroll = side === 'left';
+    pendingRevealDirection = direction;
+    pendingSlideBottomScroll = direction === 'back';
     if (window.htmx && typeof window.htmx.ajax === 'function') {
       window.htmx.ajax('GET', href, {
         target: '#main-content',
@@ -307,6 +311,14 @@ if (!window.__vyasaZenBound) {
       }
       if (side === 'left' && (hidePreviousUnit() || follow('left'))) {
         revealLog('click ArrowLeft handled');
+        event.preventDefault();
+        return;
+      }
+    }
+    const overviewRow = event.target.closest('[data-zen-overview-href]');
+    if (overviewRow && !event.target.closest('a, button, input, textarea, select, summary')) {
+      if (followHref(overviewRow.dataset.zenOverviewHref, 'forward')) {
+        document.getElementById('slide-overview')?.classList.add('hidden');
         event.preventDefault();
         return;
       }

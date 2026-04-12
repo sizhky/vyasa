@@ -698,7 +698,7 @@ def build_static_site(input_dir=None, output_dir=None):
         </ul>
         <p class="text-base text-slate-600 dark:text-slate-400">
             More guides, examples, and documentation are available at
-            <a href="https://vyasa.yeshwanth.com" class="text-slate-900 dark:text-slate-100 underline underline-offset-4">vyasa.yeshwanth.com</a>.
+            <a href="https://vyasa.yeshwanth.dev" class="text-slate-900 dark:text-slate-100 underline underline-offset-4">vyasa.yeshwanth.dev</a>.
         </p>
         '''
         
