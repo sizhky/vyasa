@@ -32,3 +32,16 @@ Markdown tables now render with a default per-cell max width of `33vw`, which ke
 ## The Escape Hatches Are Obvious
 
 Vyasa supports inline highlights, superscript, subscript, YouTube embeds, KaTeX math, relative links, and code includes without asking you to leave Markdown. The preprocessors in [`vyasa/markdown_pipeline.py`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/markdown_pipeline.py) protect code fences and math blocks first, so expressive inline syntax does not leak into places where it should stay literal. If you are deciding between raw HTML and a built-in feature, prefer the built-in feature first because it survives theme changes, HTMX swaps, and future renderer cleanup better.
+
+## Fenced Code Blocks
+
+Regular fenced blocks now accept lightweight attrs on the info string, so they can carry the same presentation hints as source includes without leaving Markdown.
+
+```markdown
+```python title="loader.py" hl=3,5-7 wrap
+from pathlib import Path
+print(Path.cwd())
+```
+```
+
+Use `title="..."` for the small file badge, `hl=...` for highlighted source lines, and `wrap` when horizontal scrolling hurts readability more than line breaks would. Line numbers are on by default; use `nln` on a fence or include to suppress them for one snippet, or `ln` to force them back on when the site default is off. The renderer parses those attrs in [`render_block_code()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/markdown_rendering.py), then the browser runtime applies syntax highlighting and line wrappers from [`vyasa/static/scripts.js`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/static/scripts.js).

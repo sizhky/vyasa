@@ -1,5 +1,6 @@
 (function () {
-    let franken = { mode: 'light' };
+    const prefersDark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    let franken = { mode: prefersDark ? 'dark' : 'light' };
     try {
         const stored = localStorage.getItem('__FRANKEN__');
         if (stored) {
@@ -15,6 +16,22 @@
     } else {
         document.documentElement.classList.remove('dark');
     }
+
+    function syncHighlightTheme() {
+        const dark = document.documentElement.classList.contains('dark');
+        const lightLink = document.getElementById('hljs-light');
+        const darkLink = document.getElementById('hljs-dark');
+        if (lightLink) lightLink.disabled = dark;
+        if (darkLink) darkLink.disabled = !dark;
+    }
+
+    syncHighlightTheme();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', syncHighlightTheme, { once: true });
+    } else {
+        syncHighlightTheme();
+    }
+    new MutationObserver(syncHighlightTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
     function normalizeBodyThemeClasses() {
         if (!document.body) return;

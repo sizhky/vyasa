@@ -6,11 +6,12 @@ body {
     color: inherit !important;
     line-height: 1.6;
 }
-code, pre { font-family: 'IBM Plex Mono', monospace; }
+code, pre { font-family: var(--vyasa-font-mono); }
 :root {
     --vyasa-font-body: 'Newsreader', Georgia, serif;
     --vyasa-font-heading: 'Manrope', 'Inter', sans-serif;
     --vyasa-font-ui: 'Inter', sans-serif;
+    --vyasa-font-mono: 'IBM Plex Mono', monospace;
     --vyasa-paper: #f9f9f9;
     --vyasa-paper-low: #f2f4f3;
     --vyasa-paper-raised: #ffffff;
@@ -37,6 +38,9 @@ code, pre { font-family: 'IBM Plex Mono', monospace; }
     --vyasa-code-border: rgba(45, 52, 52, 0.12);
     --vyasa-code-highlight-bg: rgba(9, 105, 218, 0.12);
     --vyasa-code-highlight-accent: #0969da;
+    --vyasa-inline-code-bg: color-mix(in srgb, var(--vyasa-code-bg) 86%, white 14%);
+    --vyasa-inline-code-fg: var(--vyasa-code-fg);
+    --vyasa-inline-code-border: color-mix(in srgb, var(--vyasa-code-border) 78%, transparent);
     --vyasa-code-comment: #6e7781;
     --vyasa-code-keyword: #cf222e;
     --vyasa-code-string: #0a3069;
@@ -56,6 +60,9 @@ code, pre { font-family: 'IBM Plex Mono', monospace; }
     --vyasa-code-bg: var(--vyasa-dark-code-bg, color-mix(in srgb, #17202a 82%, var(--vyasa-primary) 18%)) !important;
     --vyasa-code-border: var(--vyasa-dark-code-border, color-mix(in srgb, rgba(181, 195, 191, 0.18) 70%, var(--vyasa-primary) 30%)) !important;
     --vyasa-code-highlight-bg: var(--vyasa-dark-code-highlight-bg, color-mix(in srgb, rgba(255,255,255,0.1) 55%, var(--vyasa-primary) 45%)) !important;
+    --vyasa-inline-code-bg: var(--vyasa-dark-inline-code-bg, color-mix(in srgb, var(--vyasa-code-bg) 84%, black 16%)) !important;
+    --vyasa-inline-code-fg: var(--vyasa-dark-inline-code-fg, var(--vyasa-code-fg)) !important;
+    --vyasa-inline-code-border: var(--vyasa-dark-inline-code-border, color-mix(in srgb, var(--vyasa-code-border) 76%, transparent)) !important;
     --vyasa-primary-text: var(--vyasa-dark-primary-text, var(--vyasa-primary-text)) !important;
 }
 
@@ -445,7 +452,7 @@ summary {
 }
 
 .vyasa-admin-json {
-    font: 500 0.92rem/1.6 "IBM Plex Mono", monospace;
+    font: 500 0.92rem/1.6 var(--vyasa-font-mono);
     color: var(--vyasa-ink);
     min-height: 14rem;
     resize: vertical;
@@ -530,7 +537,7 @@ body.iframe-fullscreen-open { overflow: hidden; }
 .tab-panel > *:first-child { margin-top: 0 !important; }
 .tab-panel > *:last-child { margin-bottom: 0 !important; }
 .tab-panel pre { border-radius: 0.375rem; font-size: 0.875rem; }
-.tab-panel code { font-family: 'IBM Plex Mono', monospace; }
+.tab-panel code { font-family: var(--vyasa-font-mono); }
 @media (max-width: 640px) {
     .tabs-container { width: 100%; }
     .tabs-header { justify-content: flex-start; }
@@ -588,8 +595,25 @@ todo .deadline { margin-left: 0.45rem; }
 .vyasa-todo-meta-icon { display: inline-flex; align-items: center; justify-content: center; width: 0.85rem; height: 0.85rem; flex: 0 0 0.85rem; color: currentColor; }
 .vyasa-todo-meta-icon svg { display: block; width: 100%; height: 100%; stroke-linecap: round; stroke-linejoin: round; }
 .vyasa-code-lines { display: block; white-space: normal !important; }
-.vyasa-code-line { display: block; white-space: pre; margin: 0 -1rem; padding: 0 1rem; }
-.code-block .vyasa-code-line-highlight { background: var(--vyasa-code-highlight-bg); box-shadow: inset 6px 0 0 var(--vyasa-code-highlight-accent); }
+.vyasa-code-line { display: block; width: calc(100% + 2rem); box-sizing: border-box; white-space: pre; margin: 0 -1rem; padding: 0 1rem; }
+.code-block pre.vyasa-code-wrap .vyasa-code-line { white-space: pre-wrap; overflow-wrap: anywhere; }
+.code-block .vyasa-code-line-highlight {
+    background: color-mix(in srgb, var(--vyasa-code-highlight-bg) 82%, transparent);
+    box-shadow: inset 3px 0 0 var(--vyasa-code-highlight-accent);
+}
+.code-block .vyasa-code-line-highlight-start {
+    border-top-right-radius: 0.45rem;
+    border-bottom-right-radius: 0.12rem;
+    margin-top: 0.1rem;
+}
+.code-block .vyasa-code-line-highlight-end {
+    border-top-right-radius: 0.12rem;
+    border-bottom-right-radius: 0.45rem;
+    margin-bottom: 0.1rem;
+}
+.code-block .vyasa-code-line-highlight-start.vyasa-code-line-highlight-end {
+    border-radius: 0 0.45rem 0.45rem 0;
+}
 .vyasa-heading-permalink { opacity: 0; transition: opacity 120ms ease; }
 .vyasa-heading-action { opacity: 0; border: 0; background: transparent; color: var(--vyasa-ink-soft); width: 2rem; height: 2rem; display: inline-flex; align-items: center; justify-content: center; padding: 0; vertical-align: middle; transition: opacity 120ms ease, color 120ms ease; cursor: pointer; }
 .vyasa-heading-action [uk-icon], .vyasa-heading-permalink [uk-icon] { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; }
@@ -715,16 +739,18 @@ todo .deadline { margin-left: 0.45rem; }
 .vyasa-heading-fold-body li > p { margin: 0; }
 .vyasa-heading-fold-body li > ul,
 .vyasa-heading-fold-body li > ol { margin-top: 0.3rem; }
+.code-block pre, .code-block pre *, .code-block pre code, .code-block pre code *, pre code.hljs, pre code.hljs * { font-family: var(--vyasa-font-mono) !important; }
 .code-block pre, .code-block pre code, pre code.hljs { background: var(--vyasa-code-bg); color: var(--vyasa-code-fg); }
+:not(pre) > code { background: var(--vyasa-inline-code-bg); color: var(--vyasa-inline-code-fg); border: 1px solid var(--vyasa-inline-code-border); padding: 0.1em 0.35em; border-radius: 0.25rem; }
 .code-block { margin: 1.4rem 0 1.8rem; }
 .code-block pre { border: 1px solid var(--vyasa-code-border); border-radius: var(--vyasa-rect-radius) !important; padding: 1.15rem 1.3rem !important; box-shadow: 0 16px 24px -22px rgba(45, 52, 52, 0.18); }
-.code-block pre code, pre code.hljs { font-size: 0.95rem; line-height: 1.2; }
+.code-block pre code, pre code.hljs { display: block; width: 100%; box-sizing: border-box; font-size: 0.95rem; line-height: 1.2; }
+.code-block pre.vyasa-code-wrap code, .code-block pre.vyasa-code-wrap code.hljs { white-space: pre-wrap; overflow-wrap: anywhere; }
+.code-block code.vyasa-code-lines { counter-reset: vyasa-code-line; }
+.code-block code[data-code-line-numbers="true"] .vyasa-code-line { padding-left: 2.85rem; position: relative; }
+.code-block code[data-code-line-numbers="true"] .vyasa-code-line::before { content: attr(data-source-line); position: absolute; left: 0.2rem; width: 1.75rem; text-align: right; color: color-mix(in srgb, var(--vyasa-code-fg) 48%, transparent); }
+.code-block code[data-code-line-numbers="true"] .vyasa-code-line-highlight::before { color: color-mix(in srgb, var(--vyasa-code-highlight-accent) 48%, var(--vyasa-code-fg) 52%); }
 .code-block [class*="copy"], .code-copy-button { font-family: 'Inter', sans-serif; }
-.hljs-comment, .hljs-quote { color: var(--vyasa-code-comment); }
-.hljs-keyword, .hljs-selector-tag, .hljs-literal { color: var(--vyasa-code-keyword); }
-.hljs-string, .hljs-doctag, .hljs-regexp { color: var(--vyasa-code-string); }
-.hljs-title, .hljs-title.function_, .hljs-section, .hljs-attribute { color: var(--vyasa-code-title); }
-.hljs-number, .hljs-symbol, .hljs-variable, .hljs-template-variable, .hljs-type, .hljs-built_in { color: var(--vyasa-code-number); }
 .vyasa-prev-next { display:flex; justify-content:space-between; gap:1rem; margin-top:3.5rem; padding-top:0.5rem; border-top:none; }
 .vyasa-prev-link, .vyasa-next-link { max-width:48%; text-decoration:none; color:var(--vyasa-primary); font-weight:600; font-family: 'Inter', sans-serif; font-size: 0.8rem; letter-spacing: 0.05em; text-transform: uppercase; }
 .vyasa-next-link { text-align:right; margin-left:auto; }

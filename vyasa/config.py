@@ -173,6 +173,20 @@ class VyasaConfig:
     def get_theme_preset(self) -> str | None:
         value = self.get('theme_preset', 'VYASA_THEME_PRESET', None)
         return str(value).strip() if value else None
+
+    def get_code_theme_light(self) -> str:
+        value = self.get('code_theme_light', 'VYASA_CODE_THEME_LIGHT', 'github')
+        return str(value).strip() or 'github'
+
+    def get_code_theme_dark(self) -> str:
+        value = self.get('code_theme_dark', 'VYASA_CODE_THEME_DARK', 'github-dark')
+        return str(value).strip() or 'github-dark'
+
+    def get_code_line_numbers(self) -> bool:
+        value = self.get('code_line_numbers', 'VYASA_CODE_LINE_NUMBERS', True)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
     
     def get_theme_body_font(self) -> str | None:
         value = self.get('theme_body_font', 'VYASA_THEME_BODY_FONT', None)
@@ -184,6 +198,10 @@ class VyasaConfig:
     
     def get_theme_ui_font(self) -> str | None:
         value = self.get('theme_ui_font', 'VYASA_THEME_UI_FONT', None)
+        return str(value).strip() if value else None
+
+    def get_theme_mono_font(self) -> str | None:
+        value = self.get('theme_mono_font', 'VYASA_THEME_MONO_FONT', None)
         return str(value).strip() if value else None
 
     def get_theme_debug(self) -> bool:
@@ -203,7 +221,7 @@ class VyasaConfig:
     def get_theme_tokens(self) -> dict[str, str]:
         tokens = {}
         for key, value in self._config.items():
-            if not key.startswith("theme_") or key in {"theme_preset", "theme_primary", "theme_body_font", "theme_heading_font", "theme_ui_font"}:
+            if not key.startswith("theme_") or key in {"theme_preset", "theme_primary", "theme_body_font", "theme_heading_font", "theme_ui_font", "theme_mono_font"}:
                 continue
             if value is None:
                 continue

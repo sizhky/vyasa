@@ -134,6 +134,8 @@ See the working example in [Vyasa Slides Demo](/slides/demo/vyasa-slides).
 - **Frosted Glass Sidebars**: Backdrop blur and transparency effects on sidebar components
 - **Theme Presets**: Set `theme_preset` in `.vyasa` to use a bundled theme like `serene-manuscript`, `kinetic-scholar`, or `ultra-soft`
 - **Theme Primary Override**: Set `theme_primary` in `.vyasa` to swap the app accent color without editing CSS
+- **Configurable Code Themes**: Set `code_theme_light` and `code_theme_dark` in `.vyasa` to choose the live highlight.js themes for light and dark mode
+- **Default Line Numbers**: Control default code line numbers with `code_line_numbers`, then override per snippet with `ln` or `nln`
 
 | Feature                     | Category | Config Key                                        | Description                                                                                                    | Default        | Env Override                  |
 |-----------------------------|----------|---------------------------------------------------|----------------------------------------------------------------------------------------------------------------|----------------|-------------------------------|

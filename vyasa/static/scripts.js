@@ -1104,19 +1104,13 @@ function handleCodeCopyClick(event) {
     event.preventDefault();
     event.stopPropagation();
     const container = button.closest('.code-block') || button.closest('pre') || button.parentElement;
-    const textarea = container ? container.querySelector('textarea[id$="-clipboard"]') : null;
-    let text = '';
-    if (textarea && textarea.value) {
-        text = textarea.value;
-    } else {
-        const codeEl = (container && container.querySelector('pre > code')) ||
-            (container && container.querySelector('code')) ||
-            button.closest('pre');
-        if (!codeEl) {
-            return;
-        }
-        text = codeEl.innerText || codeEl.textContent || '';
+    const codeEl = (container && container.querySelector('pre > code')) ||
+        (container && container.querySelector('code')) ||
+        button.closest('pre');
+    if (!codeEl) {
+        return;
     }
+    const text = codeEl.innerText || codeEl.textContent || '';
     const showToast = () => {
         let toast = document.getElementById('code-copy-toast');
         if (!toast) {
@@ -1605,6 +1599,7 @@ const GOOGLE_FONT_QUERIES = {
     Archivo: 'family=Archivo:wght@400;500;600;700',
     Asap: 'family=Asap:wght@400;500;600;700',
     Assistant: 'family=Assistant:wght@400;500;600;700;800',
+    'Azeret Mono': 'family=Azeret+Mono:wght@400;500;600;700',
     'Be Vietnam Pro': 'family=Be+Vietnam+Pro:wght@400;500;600;700',
     Besley: 'family=Besley:wght@400;500;600;700',
     Bitter: 'family=Bitter:wght@400;500;600;700',
@@ -1613,15 +1608,20 @@ const GOOGLE_FONT_QUERIES = {
     Cardo: 'family=Cardo:wght@400;700',
     Chivo: 'family=Chivo:wght@400;500;600;700',
     'Crimson Pro': 'family=Crimson+Pro:wght@400;500;600;700',
+    'Cutive Mono': 'family=Cutive+Mono',
     'DM Sans': 'family=DM+Sans:wght@400;500;700',
     Domine: 'family=Domine:wght@400;500;600;700',
     'EB Garamond': 'family=EB+Garamond:wght@400;500;600;700',
     'Fauna One': 'family=Fauna+One',
     Figtree: 'family=Figtree:wght@400;500;600;700;800',
+    'Fira Code': 'family=Fira+Code:wght@400;500;600;700',
     'Hanken Grotesk': 'family=Hanken+Grotesk:wght@400;500;600;700;800',
     'Hepta Slab': 'family=Hepta+Slab:wght@400;500;600;700',
+    'IBM Plex Mono': 'family=IBM+Plex+Mono:wght@400;500;600;700',
+    Inconsolata: 'family=Inconsolata:wght@400;500;600;700',
     Inter: 'family=Inter:wght@400;500;600;700;800',
     'Instrument Serif': 'family=Instrument+Serif:ital@0;1',
+    'JetBrains Mono': 'family=JetBrains+Mono:wght@400;500;600;700;800',
     Karla: 'family=Karla:wght@400;500;600;700;800',
     Lexend: 'family=Lexend:wght@400;500;600;700;800',
     'Libre Baskerville': 'family=Libre+Baskerville:wght@400;700',
@@ -1639,21 +1639,29 @@ const GOOGLE_FONT_QUERIES = {
     'PT Serif': 'family=PT+Serif:wght@400;700',
     'Public Sans': 'family=Public+Sans:wght@400;500;600;700;800',
     Raleway: 'family=Raleway:wght@400;500;600;700;800',
+    'Reddit Mono': 'family=Reddit+Mono:wght@400;500;600;700',
     'Red Hat Display': 'family=Red+Hat+Display:wght@400;500;600;700;800',
     'Red Hat Text': 'family=Red+Hat+Text:wght@400;500;600;700',
+    Recursive: 'family=Recursive:wght@400;500;600;700',
     'Roboto Slab': 'family=Roboto+Slab:wght@400;500;600;700',
     'Schibsted Grotesk': 'family=Schibsted+Grotesk:wght@400;500;600;700;800',
+    'Share Tech Mono': 'family=Share+Tech+Mono',
     'Source Sans 3': 'family=Source+Sans+3:wght@400;500;600;700;800',
+    'Source Code Pro': 'family=Source+Code+Pro:wght@400;500;600;700',
     'Source Serif 4': 'family=Source+Serif+4:wght@400;500;600;700',
+    'Space Mono': 'family=Space+Mono:wght@400;700',
     'Space Grotesk': 'family=Space+Grotesk:wght@400;500;700',
+    'Sometype Mono': 'family=Sometype+Mono:wght@400;500;600;700',
     Spectral: 'family=Spectral:wght@400;500;600;700',
     Sora: 'family=Sora:wght@400;500;600;700;800',
+    'Ubuntu Mono': 'family=Ubuntu+Mono:wght@400;700',
     Urbanist: 'family=Urbanist:wght@400;500;600;700;800',
+    VT323: 'family=VT323',
     'Work Sans': 'family=Work+Sans:wght@400;500;600;700;800',
 };
 
 function ensureThemeFonts(theme) {
-    const stacks = [theme.theme_body_font, theme.theme_heading_font, theme.theme_ui_font].filter(Boolean);
+    const stacks = [theme.theme_body_font, theme.theme_heading_font, theme.theme_ui_font, theme.theme_mono_font].filter(Boolean);
     const queries = new Set();
     stacks.forEach((stack) => {
         stack.split(',').map((part) => part.trim().replace(/^['"]|['"]$/g, '')).forEach((name) => {
@@ -1669,6 +1677,24 @@ function ensureThemeFonts(theme) {
         document.head.appendChild(link);
     }
     link.href = `https://fonts.googleapis.com/css2?${Array.from(queries).join('&')}&display=swap`;
+    console.log('[vyasa] ensureThemeFonts', { stacks, href: link.href });
+}
+
+function getHljsThemeHref(themeName) {
+    return `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${themeName}.min.css`;
+}
+
+function syncCodeThemeLinks(theme) {
+    const lightLink = document.getElementById('hljs-light');
+    const darkLink = document.getElementById('hljs-dark');
+    if (!lightLink || !darkLink) return;
+    const lightTheme = theme?.code_theme_light || lightLink.dataset.defaultTheme;
+    const darkTheme = theme?.code_theme_dark || darkLink.dataset.defaultTheme;
+    if (lightTheme) lightLink.href = getHljsThemeHref(lightTheme);
+    if (darkTheme) darkLink.href = getHljsThemeHref(darkTheme);
+    const dark = document.documentElement.classList.contains('dark');
+    lightLink.disabled = dark;
+    darkLink.disabled = !dark;
 }
 
 function applyThemePreset(theme) {
@@ -1683,6 +1709,7 @@ function applyThemePreset(theme) {
             const cssName = key === 'theme_body_font' ? '--vyasa-font-body'
                 : key === 'theme_heading_font' ? '--vyasa-font-heading'
                 : key === 'theme_ui_font' ? '--vyasa-font-ui'
+                : key === 'theme_mono_font' ? '--vyasa-font-mono'
                 : `--vyasa-${key.slice(6).replace(/_/g, '-')}`;
             runtimeThemeVars.add(cssName);
         });
@@ -1695,11 +1722,19 @@ function applyThemePreset(theme) {
         const cssName = key === 'theme_body_font' ? '--vyasa-font-body'
             : key === 'theme_heading_font' ? '--vyasa-font-heading'
             : key === 'theme_ui_font' ? '--vyasa-font-ui'
+            : key === 'theme_mono_font' ? '--vyasa-font-mono'
             : `--vyasa-${key.slice(6).replace(/_/g, '-')}`;
         targets.forEach((el) => el.style.setProperty(cssName, String(value)));
     });
     if (theme.theme_primary) targets.forEach((el) => el.style.setProperty('--vyasa-primary-dim', `color-mix(in srgb, ${theme.theme_primary} 82%, black)`));
     ensureThemeFonts(theme);
+    syncCodeThemeLinks(theme);
+    console.log('[vyasa] applyThemePreset', {
+        presetPrimary: theme.theme_primary,
+        monoFont: theme.theme_mono_font,
+        codeLight: theme.code_theme_light,
+        codeDark: theme.code_theme_dark,
+    });
 }
 
 function getVisibleThemeControl(id) {
@@ -1764,6 +1799,7 @@ window.vyasaApplyRandomThemePreset = function vyasaApplyRandomThemePreset(source
     const current = label ? label.textContent.trim() : '';
     const pool = presets.length > 1 ? presets.filter((name) => name !== current) : presets;
     const next = pool[Math.floor(Math.random() * pool.length)];
+    console.log('[vyasa] random preset click', { current, next, presets: presets.length });
     window.vyasaApplyThemePreset(next, source);
 };
 
@@ -2073,49 +2109,32 @@ function initSearchPlaceholderCycle(rootElement = document) {
 }
 
 function initCodeBlockCopyButtons(rootElement = document) {
-    const buttons = rootElement.querySelectorAll('.code-copy-button');
-    buttons.forEach((button) => {
-        if (button.dataset.copyBound === 'true') {
+    const template = document.getElementById('vyasa-code-copy-tpl');
+    if (!template) {
+        return;
+    }
+    rootElement.querySelectorAll('.code-block').forEach((block) => {
+        if (block.querySelector('.code-copy-button')) {
             return;
         }
-        button.dataset.copyBound = 'true';
-        button.addEventListener('click', () => {
-            const container = button.closest('.code-block');
-            const codeEl = container ? container.querySelector('pre > code') : null;
-            if (!codeEl) {
-                return;
-            }
-            const text = codeEl.innerText || codeEl.textContent || '';
-            const done = () => {
-                button.classList.add('is-copied');
-                setTimeout(() => button.classList.remove('is-copied'), 1200);
-            };
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text).then(done).catch(() => {
-                    const textarea = document.createElement('textarea');
-                    textarea.value = text;
-                    textarea.setAttribute('readonly', '');
-                    textarea.style.position = 'absolute';
-                    textarea.style.left = '-9999px';
-                    document.body.appendChild(textarea);
-                    textarea.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(textarea);
-                    done();
-                });
-            } else {
-                const textarea = document.createElement('textarea');
-                textarea.value = text;
-                textarea.setAttribute('readonly', '');
-                textarea.style.position = 'absolute';
-                textarea.style.left = '-9999px';
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-                done();
-            }
-        });
+        const button = template.content.firstElementChild.cloneNode(true);
+        block.insertBefore(button, block.firstChild);
+    });
+}
+
+function initCodeHighlighting(rootElement = document) {
+    if (!window.hljs) {
+        return;
+    }
+    rootElement.querySelectorAll('pre > code').forEach((code) => {
+        if (code.dataset.hljsBound === 'true') {
+            return;
+        }
+        if (code.closest('.mermaid-wrapper,[data-cytograph-root],[data-cryptograph-widget="true"],.d2-wrapper')) {
+            return;
+        }
+        window.hljs.highlightElement(code);
+        code.dataset.hljsBound = 'true';
     });
 }
 
@@ -3591,30 +3610,53 @@ function renderMathSafely(root) {
 }
 
 function initHighlightedCodeIncludes(root) {
-    (root || document).querySelectorAll('code[data-code-highlight-lines]').forEach((code) => {
+    (root || document).querySelectorAll('code[data-code-highlight-lines], code[data-code-line-numbers="true"]').forEach((code) => {
         if (code.querySelector('.vyasa-code-line')) return;
         const start = Number(code.dataset.codeSourceStart || '1');
+        const languageClass = Array.from(code.classList).find((cls) => cls.startsWith('language-'));
+        const language = languageClass ? languageClass.replace(/^language-/, '') : '';
         const ranges = String(code.dataset.codeHighlightLines || '').split(',').map((part) => part.trim()).filter(Boolean);
         const highlighted = new Set();
         ranges.forEach((part) => {
             const [a, b] = part.split('-').map((value) => Number(value));
             for (let n = a; n <= (b || a); n += 1) highlighted.add(n);
         });
-        const lines = code.innerHTML.split('\n');
+        const lines = code.textContent.split('\n');
+        if (lines.length > 1 && lines[lines.length - 1] === '') {
+            lines.pop();
+        }
         code.innerHTML = lines.map((line, index) => {
             const lineNo = start + index;
-            const cls = highlighted.has(lineNo) ? 'vyasa-code-line vyasa-code-line-highlight' : 'vyasa-code-line';
-            return `<span class="${cls}" data-source-line="${lineNo}">${line || '&nbsp;'}</span>`;
+            const isHighlighted = highlighted.has(lineNo);
+            const isStart = isHighlighted && !highlighted.has(lineNo - 1);
+            const isEnd = isHighlighted && !highlighted.has(lineNo + 1);
+            const cls = [
+                'vyasa-code-line',
+                isHighlighted ? 'vyasa-code-line-highlight' : '',
+                isStart ? 'vyasa-code-line-highlight-start' : '',
+                isEnd ? 'vyasa-code-line-highlight-end' : '',
+            ].filter(Boolean).join(' ');
+            let htmlLine = line ? line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '&nbsp;';
+            if (line && window.hljs) {
+                try {
+                    htmlLine = language && window.hljs.getLanguage(language)
+                        ? window.hljs.highlight(line, { language, ignoreIllegals: true }).value
+                        : window.hljs.highlightAuto(line).value;
+                } catch (_) {}
+            }
+            return `<span class="${cls}" data-source-line="${lineNo}">${htmlLine}</span>`;
         }).join('\n');
         code.classList.add('vyasa-code-lines');
+        code.dataset.hljsBound = 'true';
     });
 }
 
 function scheduleHighlightedCodeIncludes(root) {
     const target = root || document;
+    initCodeHighlighting(target);
     initHighlightedCodeIncludes(target);
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => initHighlightedCodeIncludes(target));
-    [40, 140, 320].forEach((delay) => setTimeout(() => initHighlightedCodeIncludes(target), delay));
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { initCodeHighlighting(target); initHighlightedCodeIncludes(target); });
+    [40, 140, 320].forEach((delay) => setTimeout(() => { initCodeHighlighting(target); initHighlightedCodeIncludes(target); }, delay));
 }
 
 // ── Cytograph moved to cytograph.mindmap.js ─────────────────────────────────
