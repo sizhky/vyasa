@@ -796,6 +796,7 @@ todo .deadline { margin-left: 0.45rem; }
     }
 }
 .vyasa-table-scroll > table, .vyasa-table-scroll > .uk-table { width: max-content !important; min-width: 0; table-layout: auto; margin: 0 auto; }
+.vyasa-table-scroll th, .vyasa-table-scroll td { max-width: var(--vyasa-table-col-max, 33vw); white-space: normal; overflow-wrap: anywhere; word-break: normal; }
 .uk-table-striped tbody tr:nth-of-type(odd) { background-color: rgba(69, 101, 91, 0.04); }
 .uk-table-striped tbody tr:hover { background-color: rgba(69, 101, 91, 0.08); }
 .uk-table thead { border-bottom: none; }

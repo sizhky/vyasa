@@ -1,80 +1,29 @@
-# Security & Auth
+# Security And Access
 
-Vyasa supports optional basic authentication for local or internal deployments.
+Vyasa security is route-aware rather than content-export oriented: the live app decides whether a request should pass, redirect to login, or stop with `403` before the page is rendered. The core checks are assembled in [`make_user_auth_before()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/auth/runtime.py), with config coming from [`VyasaConfig.get_google_oauth()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/config.py) and [`VyasaConfig.get_rbac()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/config.py). This guide is about how to think about auth in a live Vyasa site, not how to build a generic identity system. The important distinction is between "who may log in" and "which paths those people may read."
 
-## Authentication (optional)
-
-Set `username` and `password` in your `.vyasa` file or via `VYASA_USER` / `VYASA_PASSWORD` environment variables to enable session-based authentication. When enabled:
-
-- **Beforeware middleware**: Intercepts all requests (except login page, static files, and CSS/JS)
-- **Login flow**: 
-  - Unauthenticated users redirected to `/login` with `next` URL saved in session
-  - Login form uses MonsterUI styling (UK input classes, styled buttons)
-  - Successful login stores username in `request.session["auth"]`
-  - Redirects to original `next` URL after authentication
-- **Error handling**: Invalid credentials show red error message below form
-- **Route exclusions**: RegEx patterns skip auth for `^/login$`, `^/_sidebar/.*`, `^/static/.*`, `.*\.css`, `.*\.js`
-
-Authentication is completely optional—if no credentials configured, Beforeware is set to `None` and all routes are publicly accessible.
-
-## Google OAuth (optional)
-
-Vyasa can also use Google OAuth for login if configured. This is fully optional and only activated when `client_id` and `client_secret` are set.
-
-Install OAuth dependency (optional):
-
-```bash
-pip install "vyasa[auth]"
-```
+## What You Can Turn On
 
 ```toml
+auth_required = true
+
 [google_oauth]
-client_id = "your-google-client-id"
-client_secret = "your-google-client-secret"
-allowed_domains = ["example.com"] # optional
-allowed_emails = ["alice@example.com"] # optional
-```
+client_id = "REPLACE_ME"
+client_secret = "REPLACE_ME"
+allowed_domains = ["example.com"]
 
-Environment variables:
-
-- `VYASA_GOOGLE_CLIENT_ID`
-- `VYASA_GOOGLE_CLIENT_SECRET`
-- `VYASA_GOOGLE_ALLOWED_DOMAINS` (comma-separated)
-- `VYASA_GOOGLE_ALLOWED_EMAILS` (comma-separated)
-
-When enabled:
-- Login page shows a **Continue with Google** button.
-- Google users are stored in the session with `provider = "google"` and their email.
-- If `allowed_domains` or `allowed_emails` are set, only matching accounts can sign in.
-
-## RBAC (optional)
-
-Role-based access control can be configured to protect specific paths. If `rbac` is configured without any auth provider, RBAC is ignored to avoid lockouts.
-
-```toml
 [rbac]
 enabled = true
 default_roles = ["reader"]
-user_roles = { "alice@example.com" = ["admin"], "bob" = ["editor"] }
-role_users = { "admin" = ["alice@example.com"], "editor" = ["bob"] }
-
-[[rbac.rules]]
-pattern = "^/admin"
-roles = ["admin"]
-
-[[rbac.rules]]
-pattern = "^/private"
-roles = ["admin", "editor"]
 ```
 
-Notes:
-- If `auth_required = false`, only the RBAC-protected paths require login.
-- If `auth_required = true` (default when any auth is configured), all routes require login.
-- If both `user_roles` and `role_users` are provided, roles are unioned at runtime.
+Local username/password auth and Google OAuth can coexist on the same login page. RBAC then maps users to roles and roles to path patterns through [`resolve_roles()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/auth/policy.py) and [`is_allowed()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/auth/policy.py).
 
-### Security Features
-- **HTML escaping**: Code blocks automatically escaped via `html.escape()`
-- **External link protection**: `rel="noopener noreferrer"` on external links
-- **Path validation**: Relative path resolution checks if resolved path is within root
-- **Session-based auth**: Uses Starlette sessions, not exposed in URLs
-- **CSRF protection**: Forms use POST with `enctype="multipart/form-data"`
+## Why The Split Exists
+
+| Concern | Why it is separate |
+|---|---|
+| login provider | Answers who may establish an identity at all. |
+| role resolution | Turns identity into stable capabilities. |
+| path rules | Lets one site host public and restricted branches together. |
+| drawing passwords | Protects individual Excalidraw assets without inventing full RBAC for every sketch. |

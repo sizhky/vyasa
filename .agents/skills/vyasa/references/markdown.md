@@ -52,6 +52,17 @@ On desktop (xl breakpoint), footnotes render as interactive margin sidenotes. Cl
 | row 2    | data     |
 ```
 
+Markdown tables render inside a horizontal scroll wrapper. By default, each cell is capped at `33vw` so one verbose column does not consume the whole viewport.
+
+Use a per-table override when needed:
+
+```markdown
+<!-- table max-col=24vw -->
+| Column A | Column B |
+|----------|----------|
+| long prose | more prose |
+```
+
 ## Definition lists
 
 ```markdown

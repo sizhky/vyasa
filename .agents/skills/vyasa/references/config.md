@@ -48,6 +48,7 @@ auth_required = true     # default: true when any auth is configured
 
 # Layout
 layout_max_width = "75vw"   # Tailwind class (e.g. "max-w-7xl") or CSS size ("90vw", "1200px")
+table_col_max_width = "33vw" # default max width for rendered table cells
 sidebars_open    = false    # open sidebars on load
 show_hidden      = false    # show dotfiles in sidebar
 log_file         = false    # write DEBUG logs to vyasa.log
@@ -159,6 +160,7 @@ folders_first = true
 | `VYASA_PASSWORD` | — | Basic auth password |
 | `VYASA_AUTH_REQUIRED` | — | `true`/`false` |
 | `VYASA_LAYOUT_MAX_WIDTH` | `75vw` | Layout width |
+| `VYASA_TABLE_COL_MAX_WIDTH` | `33vw` | Default max width for rendered table cells |
 | `VYASA_SIDEBARS_OPEN` | `false` | Sidebars open on load |
 | `VYASA_SHOW_HIDDEN` | `false` | Show hidden files |
 | `VYASA_RELOAD_EXCLUDE` | — | Comma-separated extra excludes |

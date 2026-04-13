@@ -168,14 +168,20 @@ def _parse_highlight_spec(spec):
     return match.group(1).replace(":", "-").replace(" ", "") if match else ""
 
 
-def _render_code_include(snippet, lang="", start=1, highlight_spec=""):
+def _render_code_include(snippet, lang="", start=1, highlight_spec="", title=""):
     attrs = [f'data-code-source-start="{start}"']
     if highlight_spec:
         attrs.append(f'data-code-highlight-lines="{html.escape(highlight_spec)}"')
     lang_class = f' class="language-{lang}"' if lang else ""
+    title_html = (
+        f'<div class="px-3 pt-0 pb-0 text-xs font-medium tracking-wide '
+        f'text-slate-500 dark:text-slate-400">{html.escape(title)}</div>'
+        if title else ""
+    )
     return (
-        '<div class="code-block relative my-4">'
-        f'<pre><code{lang_class} {" ".join(attrs)}>{html.escape(snippet)}</code></pre>'
+        '<div class="code-block relative mt-0 mb-2">'
+        f"{title_html}"
+        f'<pre style="margin-top: 0.25rem;"><code{lang_class} {" ".join(attrs)}>{html.escape(snippet)}</code></pre>'
         '</div>'
     )
 
@@ -213,6 +219,25 @@ def _render_double_rules(html_out):
         if len(hrs) == 2:
             return '<div class="vyasa-double-rule" aria-hidden="true"><hr><hr></div>'
         return match.group(0)
+
+    return pattern.sub(repl, html_out)
+
+
+def _sanitize_css_size(value):
+    text = str(value or "").strip()
+    return text if re.fullmatch(r"[\w\s.%(),+\-/*]+", text) else ""
+
+
+def _wrap_tables(html_out, default_max_col=""):
+    pattern = re.compile(
+        r"(?:\s*<!--\s*table\s+max-col=(?P<max>[^>]+?)\s*-->\s*)?(?P<table><table\b[\s\S]*?</table>)",
+        re.IGNORECASE,
+    )
+
+    def repl(match):
+        max_col = _sanitize_css_size(match.group("max") or default_max_col)
+        style = f' style="--vyasa-table-col-max: {html.escape(max_col)};"' if max_col else ""
+        return f'<div class="vyasa-table-scroll"{style}>{match.group("table")}</div>'
 
     return pattern.sub(repl, html_out)
 
@@ -899,7 +924,14 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
                 snippet = "\n".join(lines[start - 1:end])
                 lang = _infer_code_language(include["path_text"])
                 hl = _parse_highlight_spec(include["spec"])
-                rendered = _render_code_include(snippet, lang=lang, start=start, highlight_spec=hl)
+                title = content_slug_for_path(include["file_path"], strip_suffix=False) or include["path_text"]
+                rendered = _render_code_include(
+                    snippet,
+                    lang=lang,
+                    start=start,
+                    highlight_spec=hl,
+                    title=title,
+                )
             else:
                 rendered = _render_callout(
                     "warning",
@@ -912,5 +944,5 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
         html_out = re.sub(r"<details(?![^>]*\bopen\b)([^>]*)>", r"<details open\1>", html_out)
     html_out = _render_todo_html(html_out)
     html_out = _render_double_rules(html_out)
-    html_out = re.sub(r"(<table\b[\s\S]*?</table>)", r'<div class="vyasa-table-scroll">\1</div>', html_out, flags=re.IGNORECASE)
+    html_out = _wrap_tables(html_out, get_config().get_table_col_max_width())
     return Div(Link(rel="stylesheet", href=_asset_url("/static/sidenote.css")), NotStr(apply_classes(html_out, class_map_mods=mods)), cls="w-full")

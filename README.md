@@ -92,6 +92,7 @@ source: ./vyasa-map.cytree
 - **Code Snippet Includes**: Embed external source files with `{* path ln[1:24] hl[9:11,22] *}` and highlight selected source lines
 - **Inline Annotations**: Select text to add margin comments with hover/click bloom highlighting, replies, and author-aware edit/delete controls
 - **Rich Callouts**: Supports Obsidian-style `> [!warning]- Title` callouts with aliases, folding, nesting, and CSS-targetable custom types
+- **Readable Tables by Default**: Markdown tables cap each cell at `33vw` by default, with global and per-table overrides when a document needs a different width
 - **Relative Links**: Full support for relative markdown links (`./file.md`, `../other.md`) with automatic path resolution
 - **Plain-Text Headings**: Inline markdown in headings is stripped for clean display and consistent anchor slugs
 - **Math Notation**: KaTeX support for inline `$E=mc^2$` and block `$$` math equations, auto-renders after HTMX swaps
