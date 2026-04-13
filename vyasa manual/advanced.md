@@ -1,144 +1,16 @@
----
-title: Advanced Behavior
-description: Smaller details that are useful once you’re past the basics. The blog covers index/README behavior, smart 404 page, performance logging, and technical implementation details.
----
 # Advanced Behavior
 
-Smaller details that are useful once you’re past the basics.
+Vyasa stays simple at the entry point, but it has a few deeper behaviors that change how you structure long-running docs and presentations. This page is for the moment when the basics already work and you want to lean into slides, richer navigation, or document-shaped demos. By the end, you should know which "advanced" features are still just Markdown with better routing. The safest way to think about them is that Vyasa keeps reusing the same source document in more than one reading mode.
 
-## Index/README behavior
+## Slides Are A Document View, Not A Second Artifact
 
-`index.md` or `README.md` in a folder can act as the folder landing page.
+[`demo/vyasa-slides.md`](/Users/yeshwanth/Code/Personal/vyasa/demo/vyasa-slides.md) is the best reusable example in the repo, because it explains the slide system in the same medium it uses. Slide decks are assembled in [`render_slide_deck()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/content_routes.py) and [`vyasa/slides.py`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/slides.py): `##` splits horizontal slides, deeper headings become downward detail, and each slide gets a real URL. That means the normal document stays the source of truth while presentation mode becomes another route, not another file to maintain.
 
-## Smart 404
+## Other Useful Escape Hatches
 
-Missing posts render a friendly 404 page with links back into the sidebar.
-
-## Performance
-
-Vyasa logs render timings to `/tmp/vyasa_core.log` for profiling.
-
-### 🚀 Technical Highlights
-- Built on **FastHTML** for modern Python web development with integrated HTMX
-- Uses **Mistletoe** for extensible Markdown parsing with custom token renderers
-- **TailwindCSS** + **MonsterUI** for utility-first styling and UI components
-- **Hyperscript** for declarative interactive behaviors (theme toggle, sidenote interactions)
-- **Mermaid.js v11** for diagram rendering with custom zoom/pan/fullscreen controls via ES modules
-- **KaTeX** for mathematical notation rendering with auto-render on content swaps
-- **Smart Link Resolution**: Automatically converts relative links to proper routes with HTMX attributes
-- **Frontmatter Caching**: LRU cache for parsed frontmatter based on file modification time
-- **Lazy Sidebar Loading**: Posts sidebar loaded progressively via HTMX endpoint for faster initial load
-- **Performance Logging**: Debug-level logging tracks render times and bottlenecks to `/tmp/vyasa_core.log`
-- **Custom 404 Page**: Elegant error page with navigation options and helpful tips
-- **Static File Serving**: Serves images and assets from blog directories via `/posts/{path}.{ext}` routes
-- **Raw Markdown Access**: Append `.md` to any post URL (e.g. `/posts/demo.md`) to fetch source content
-- **Optional Authentication**: Session-based auth with Beforeware when username/password configured
-
-### Quick Usage Examples
-- Sidebar search: type a filename fragment like `write up` or `write-up` to filter results without collapsing the tree
-- Raw markdown: fetch a post's source via `/posts/demo.md`
-
-## Technical Implementation Details
-
-### Markdown Processing Pipeline
-1. **Frontmatter extraction**: `parse_frontmatter()` with file mtime-based caching
-2. **Footnote extraction**: `extract_footnotes()` using regex to find `[^label]:` definitions
-3. **Superscript/subscript preprocessing**: `preprocess_super_sub()` converts `^text^` and `~text~` to HTML
-4. **Callout preprocessing**: `preprocess_callouts()` replaces Obsidian-style callouts such as `> [!info]` and `> [!warning]- Title` with placeholders, stores callout data
-5. **Tab preprocessing**: `preprocess_tabs()` replaces `:::tabs` blocks with placeholders, stores tab data
-6. **Mistletoe parsing**: Custom `ContentRenderer` with registered tokens:
-   - `YoutubeEmbed` (precedence 6): `[yt:VIDEO_ID|caption]` syntax
-   - `FootnoteRef`: `[^label]` references
-   - `InlineCodeAttr` (precedence 8): `` `code`{.class} `` syntax
-   - `Superscript` (precedence 7): `^text^` (if not preprocessed)
-   - `Subscript` (precedence 7): `~text~` (if not preprocessed)
-   - `Strikethrough` (precedence 7): `~~text~~`
-7. **Token rendering**: Each token has custom `render_*` method in `ContentRenderer`
-8. **Tab postprocessing**: `postprocess_tabs()` replaces placeholders with rendered tab HTML
-9. **Callout postprocessing**: placeholder callouts are rendered back into themed HTML blocks
-10. **CSS class application**: `apply_classes()` adds Tailwind classes to HTML elements
-
-### Custom Renderers
-- **`render_list_item`**: Detects `[ ]` / `[x]` patterns, renders custom checkboxes
-- **`render_youtube_embed`**: Creates responsive iframe with aspect-video container
-- **`render_footnote_ref`**: Generates sidenote with hyperscript toggle behavior
-- **`render_heading`**: Adds anchor ID using `text_to_anchor()` function
-- **`render_block_code`**: Special handling for `mermaid` language, parses frontmatter
-- **`render_link`**: Resolves relative paths, adds HTMX attributes or `target="_blank"`
-- **`render_inline_code_attr`**: Parses Pandoc attributes, renders as `<span>` with classes
-- **`render_image`**: Resolves relative image paths using `img_dir`
-
-### Caching Strategy
-- **Frontmatter cache**: `_frontmatter_cache` dict with `(mtime, data)` tuples
-- **Posts tree cache**: `@lru_cache(maxsize=1)` on `_cached_build_post_tree(fingerprint)`
-- **Sidebar HTML cache**: `@lru_cache(maxsize=1)` on `_cached_posts_sidebar_html(fingerprint)`
-- **Fingerprint**: Max mtime of all `.md` files via `root.rglob("*.md")`
-- Cache invalidation: Automatic when fingerprint changes (file modified)
-
-### HTMX Integration
-- **Main content swap**: `hx-get="/posts/path" hx-target="#main-content" hx-swap="innerHTML show:window:top"`
-- **Out-of-band swaps**: TOC sidebar and CSS container use `hx_swap_oob="true"`
-- **Push URL**: `hx-push-url="true"` updates browser history
-- **Lazy loading**: Posts sidebar uses `hx-get="/_sidebar/posts" hx-trigger="load"`
-- **Event handling**: JavaScript listens to `htmx:afterSwap` for re-initialization
-
-### Logging & Debugging
-- **Loguru**: Two handlers - stdout (INFO+) and file (DEBUG+)
-- **Log file**: `/tmp/vyasa_core.log` with 10 MB rotation, 10 days retention
-- **Performance tracking**: `time.time()` checkpoints throughout request handling
-- **Debug groups**: `console.group()` in JavaScript for Mermaid operations
-- **Request markers**: `########## REQUEST START/COMPLETE ##########` for easy grepping
-
-### Responsive Breakpoints
-- **Mobile**: < 768px (md breakpoint) - Shows mobile menu buttons, hides sidebars
-- **Tablet**: 768px - 1279px - Shows sidebars but no sidenote margins
-- **Desktop**: 1280px+ (xl breakpoint) - Full three-panel layout with sidenotes in margin
-
-### Font Stack
-- **Body text**: IBM Plex Sans (weights: 400, 500, 600, 700)
-- **Code**: IBM Plex Mono (monospace)
-- **Fallback**: System font stack via TailwindCSS defaults
-- **Loading**: Preconnect to Google Fonts with `crossorigin` for speed
-
-## Advanced Features
-
-### Index/README Files
-Place an `index.md` or `README.md` (case-insensitive) in your blog root directory to customize the home page. If neither exists, Vyasa shows a default welcome message. The index file:
-- Takes precedence over README if both exist
-- Renders with full sidebar and TOC support
-- Uses the file's frontmatter `title` or blog title as page title
-- Supports all markdown features (tabs, diagrams, footnotes, etc.)
-
-### Smart 404 Page
-When a route doesn't exist, Vyasa shows a custom 404 page with:
-- Large "404" heading in gray
-- Helpful error message explaining the situation
-- Action buttons: "Go to Home" and "Go Back" with icons
-- Tip section suggesting to check the sidebar
-- Full sidebar included for easy navigation to correct page
-
-### Code Highlighting
-Code blocks are styled with proper language classes (`class="language-{lang}"`) for syntax highlighting. HTML/XML code is automatically escaped for display, while markdown code blocks preserve raw source. IBM Plex Mono font provides clear, readable monospace text.
-
-### Heading Anchors
-All headings (`h1` through `h6`) automatically get `id` attributes based on their text content using the `text_to_anchor()` function:
-- Removes special characters
-- Converts to lowercase
-- Replaces spaces with hyphens
-- Enables direct linking via `#anchor-slug`
-- Powers TOC navigation with smooth scrolling (scroll margin 7rem for navbar offset)
-
-### Image Handling
-The `FrankenRenderer` class provides smart image handling:
-- Responsive styling: `max-w-full h-auto rounded-lg mb-6`
-- Relative path resolution: prepends `img_dir` based on post location
-- Protocol detection: skips prepending for absolute URLs (`http://`, `https://`, `attachment:`, `blob:`, `data:`)
-- Title attribute support: renders `title` if present in markdown
-- Alt text: extracted from markdown image syntax
-
-### Frontmatter Support
-All markdown files support YAML frontmatter for metadata:
-- `title`: Override default title (derived from filename)
-- Parsed with `python-frontmatter` library
-- Cached based on file modification time
-- Missing frontmatter gracefully handled (empty dict + raw content)
+| Feature | Why you would reach for it |
+|---|---|
+| slide reveal config | Control how dense slides appear without rewriting the doc. |
+| Excalidraw routes | Keep editable drawings inside the same content tree. |
+| folder-local ordering | Turn a branch of notes into a deliberate reading sequence. |
+| inline HTML demos | Prove a visual idea quickly before hardening it into theme CSS. |

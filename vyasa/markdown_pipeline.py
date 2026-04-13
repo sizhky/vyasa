@@ -131,7 +131,7 @@ def preprocess_code_includes(content, current_path=None, root_folder=None):
 
     def replace(match):
         spec = match.group(1).strip()
-        path_text = spec.split(" ln[", 1)[0].split(" hl[", 1)[0].strip()
+        path_text = spec.split()[0]
         file_path = (base_dir / path_text).resolve() if base_dir else Path(path_text).resolve()
         include_id = _placeholder_id(match.group(0))
         include_store[include_id] = {"spec": spec, "path_text": path_text, "file_path": file_path}

@@ -104,6 +104,10 @@ def get_favicon_href():
     return favicon_href(get_root_folder())
 
 
+def _hljs_theme_href(theme_name: str) -> str:
+    return f"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/{theme_name}.min.css"
+
+
 hdrs = (
     Script(src=_asset_url("/static/head-init.js")),
     Style(
@@ -126,7 +130,10 @@ hdrs = (
         }
         """
     ),
-    *Theme.slate.headers(highlightjs=True),
+    *Theme.slate.headers(highlightjs=False),
+    Link(rel="stylesheet", href=_hljs_theme_href(get_config().get_code_theme_light()), id="hljs-light", data_default_theme=get_config().get_code_theme_light()),
+    Link(rel="stylesheet", href=_hljs_theme_href(get_config().get_code_theme_dark()), id="hljs-dark", data_default_theme=get_config().get_code_theme_dark()),
+    Script(src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"),
     Link(rel="icon", href=get_favicon_href()),
     Script(src="https://unpkg.com/hyperscript.org@0.9.12"),
     Script(src=_asset_url("/static/scripts.js"), type="module"),
@@ -143,6 +150,7 @@ hdrs = (
         .dark .vyasa-table-scroll.has-left-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62); }
         .dark .vyasa-table-scroll.has-left-overflow.has-right-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62), inset -18px 0 16px -14px rgba(2, 6, 23, 0.62); }
         .vyasa-table-scroll > table, .vyasa-table-scroll > .uk-table { width: max-content !important; min-width: 0; table-layout: auto; margin: 0 auto; }
+        .vyasa-table-scroll th, .vyasa-table-scroll td { max-width: var(--vyasa-table-col-max, 33vw); white-space: normal; overflow-wrap: anywhere; word-break: normal; }
         """
     ),
     Link(

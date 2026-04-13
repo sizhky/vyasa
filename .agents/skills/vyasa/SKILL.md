@@ -44,7 +44,8 @@ Core rules:
 - For long-form writing where a single thematic break is too light, use two back-to-back `---` lines to create a stronger section separator; Vyasa renders doubled rules distinctly from a single `---`.
 - For navbar, footer, sidebar, and mobile-panel styling, do not teach or rely on positional selectors like `#site-navbar > *`, `#site-footer > *`, or `#posts-sidebar details > summary`; target the explicit Vyasa hook classes instead so runtime and static-build themes stay stable.
 - For Mermaid labels, use literal `<br/>` for line breaks inside nodes and edge text; do not emit `\n`.
-- For markdown tables with long cell content, prefer manual line breaks inside the cell using literal `<br/>`; wrap prose cells to roughly 8 words per line so readers do not need to horizontally scroll for a single wide column.
+- Markdown tables now default to a per-cell max width of `33vw`; override globally with `.vyasa` `table_col_max_width` or per table with `<!-- table max-col=24vw -->` immediately above the table.
+- For markdown tables with long cell content, still prefer manual line breaks inside the cell using literal `<br/>` when prose would otherwise become visually noisy even within the width cap.
 - For Cytograph, prefer `layout: vyasa` by default unless the user explicitly wants `dagre` or `cola`.
 - For Cytograph, prefer a `source:` sidecar for large trees instead of embedding hundreds of nodes directly in the markdown fence; keep the page payload and live viewport graph small.
 - For Cytograph, prefer `.cytree` over JSON for large tree-shaped sources; it is materially smaller for LLM read/write loops because hierarchy, ids, and shared URL bases are implicit instead of repeated.

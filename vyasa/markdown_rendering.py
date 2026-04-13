@@ -1,6 +1,7 @@
 import html
 import json
 import re
+import shlex
 from functools import partial
 from itertools import count
 from pathlib import Path
@@ -168,16 +169,65 @@ def _parse_highlight_spec(spec):
     return match.group(1).replace(":", "-").replace(" ", "") if match else ""
 
 
-def _render_code_include(snippet, lang="", start=1, highlight_spec=""):
+def _parse_fence_attrs(info_string):
+    parts = shlex.split((info_string or "").strip())
+    if not parts:
+        return "", {}
+    lang = parts[0]
+    attrs = {}
+    for part in parts[1:]:
+        if "=" in part:
+            key, value = part.split("=", 1)
+            attrs[key] = value
+        else:
+            attrs[part] = True
+    return lang, attrs
+
+
+def _resolve_line_numbers(default_enabled, attrs=None, spec=""):
+    attrs = attrs or {}
+    false_flags = {"nln", "noln", "no-ln", "no_line_numbers", "no-line-numbers"}
+    true_flags = {"ln", "line_numbers", "line-numbers"}
+    for key in false_flags:
+        value = attrs.get(key)
+        if value is True or str(value).lower() in {"true", "1", "yes", "on"}:
+            return False
+    for key in true_flags:
+        value = attrs.get(key)
+        if value is True or str(value).lower() in {"true", "1", "yes", "on"}:
+            return True
+        if value is not None and str(value).lower() in {"false", "0", "no", "off"}:
+            return False
+    if re.search(r"(?:^|\s)(?:nln|noln|no-ln|no_line_numbers|no-line-numbers)(?:\s|$)", spec):
+        return False
+    if re.search(r"(?:^|\s)ln(?:\s|$)", spec):
+        return True
+    return default_enabled
+
+
+def _emit_code_shell(snippet, lang="", *, start=1, highlight_spec="", title="", line_numbers=False, wrap=False):
     attrs = [f'data-code-source-start="{start}"']
     if highlight_spec:
         attrs.append(f'data-code-highlight-lines="{html.escape(highlight_spec)}"')
+    if line_numbers:
+        attrs.append('data-code-line-numbers="true"')
     lang_class = f' class="language-{lang}"' if lang else ""
+    pre_class = ' class="vyasa-code-wrap"' if wrap else ""
+    title_html = (
+        f'<div class="px-3 pt-0 pb-0 text-xs font-medium tracking-wide '
+        f'text-slate-500 dark:text-slate-400">{html.escape(title)}</div>'
+        if title else ""
+    )
     return (
-        '<div class="code-block relative my-4">'
-        f'<pre><code{lang_class} {" ".join(attrs)}>{html.escape(snippet)}</code></pre>'
+        '<div class="code-block relative mt-0 mb-2">'
+        f"{title_html}"
+        f'<pre{pre_class} style="margin-top: 0.25rem;"><code{lang_class} {" ".join(attrs)}>{html.escape(snippet)}</code></pre>'
         '</div>'
     )
+
+
+def _render_code_include(snippet, lang="", start=1, highlight_spec="", title="", line_numbers=False):
+    return _emit_code_shell(snippet, lang, start=start, highlight_spec=highlight_spec, title=title, line_numbers=line_numbers)
 
 
 def _render_todo_html(html_out):
@@ -213,6 +263,25 @@ def _render_double_rules(html_out):
         if len(hrs) == 2:
             return '<div class="vyasa-double-rule" aria-hidden="true"><hr><hr></div>'
         return match.group(0)
+
+    return pattern.sub(repl, html_out)
+
+
+def _sanitize_css_size(value):
+    text = str(value or "").strip()
+    return text if re.fullmatch(r"[\w\s.%(),+\-/*]+", text) else ""
+
+
+def _wrap_tables(html_out, default_max_col=""):
+    pattern = re.compile(
+        r"(?:\s*<!--\s*table\s+max-col=(?P<max>[^>]+?)\s*-->\s*)?(?P<table><table\b[\s\S]*?</table>)",
+        re.IGNORECASE,
+    )
+
+    def repl(match):
+        max_col = _sanitize_css_size(match.group("max") or default_max_col)
+        style = f' style="--vyasa-table-col-max: {html.escape(max_col)};"' if max_col else ""
+        return f'<div class="vyasa-table-scroll"{style}>{match.group("table")}</div>'
 
     return pattern.sub(repl, html_out)
 
@@ -749,7 +818,7 @@ class ContentRenderer(FrankenRenderer):
         return f"<span{attr_str}>{code}</span>"
 
     def render_block_code(self, token):
-        lang = getattr(token, "language", "")
+        lang, attrs = _parse_fence_attrs(getattr(token, "language", ""))
         code = self.render_raw_text(token)
         if lang == "d2":
             return _render_d2_block(code)
@@ -761,27 +830,16 @@ class ContentRenderer(FrankenRenderer):
             return _render_cytograph_block(code, current_path=self.current_path)
         raw_code = code
         code = html.unescape(code)
-        if lang and lang.lower() != "markdown":
-            code = html.escape(code)
-        lang_class = f' class="language-{lang}"' if lang else ""
-        icon_html = to_xml(UkIcon("copy", cls="w-4 h-4"))
-        code_id = f"codeblock-{abs(hash(raw_code)) & 0xFFFFFF}"
-        toast_id = f"{code_id}-toast"
-        textarea_id = f"{code_id}-clipboard"
-        escaped_raw = html.escape(raw_code)
-        return (
-            '<div class="code-block relative my-4">'
-            f'<button type="button" class="code-copy-button absolute top-2 right-2 '
-            "inline-flex items-center justify-center rounded border border-slate-200 "
-            "dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 "
-            "text-slate-600 dark:text-slate-300 hover:text-slate-900 "
-            "dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 "
-            f'transition-colors" aria-label="Copy code" onclick="(function(){{const el=document.getElementById(\'{textarea_id}\');const toast=document.getElementById(\'{toast_id}\');if(!el){{return;}}el.focus();el.select();const text=el.value;const done=()=>{{if(!toast){{return;}}toast.classList.remove(\'opacity-0\');toast.classList.add(\'opacity-100\');setTimeout(()=>{{toast.classList.remove(\'opacity-100\');toast.classList.add(\'opacity-0\');}},1400);}};if(navigator.clipboard&&window.isSecureContext){{navigator.clipboard.writeText(text).then(done).catch(()=>{{document.execCommand(\'copy\');done();}});}}else{{document.execCommand(\'copy\');done();}}}})()">'
-            f'{icon_html}<span class="sr-only">Copy code</span></button>'
-            f'<div id="{toast_id}" class="absolute top-2 right-10 text-xs bg-slate-900 text-white px-2 py-1 rounded opacity-0 transition-opacity duration-300">Copied</div>'
-            f'<textarea id="{textarea_id}" hidden readonly aria-hidden="true" tabindex="-1" '
-            f'class="pointer-events-none select-none">{escaped_raw}</textarea>'
-            f"<pre><code{lang_class}>{code}</code></pre></div>"
+        line_numbers = bool(lang) and _resolve_line_numbers(get_config().get_code_line_numbers(), attrs=attrs)
+        highlight_spec = str(attrs.get("hl", "")).replace(":", "-").replace(" ", "")
+        return _emit_code_shell(
+            code,
+            lang,
+            start=1,
+            highlight_spec=highlight_spec,
+            title=attrs.get("title", ""),
+            line_numbers=line_numbers,
+            wrap=bool(attrs.get("wrap")),
         )
 
     def render_link(self, token):
@@ -899,7 +957,16 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
                 snippet = "\n".join(lines[start - 1:end])
                 lang = _infer_code_language(include["path_text"])
                 hl = _parse_highlight_spec(include["spec"])
-                rendered = _render_code_include(snippet, lang=lang, start=start, highlight_spec=hl)
+                title = content_slug_for_path(include["file_path"], strip_suffix=False) or include["path_text"]
+                line_numbers = _resolve_line_numbers(get_config().get_code_line_numbers(), spec=include["spec"])
+                rendered = _render_code_include(
+                    snippet,
+                    lang=lang,
+                    start=start,
+                    highlight_spec=hl,
+                    title=title,
+                    line_numbers=line_numbers,
+                )
             else:
                 rendered = _render_callout(
                     "warning",
@@ -912,5 +979,5 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
         html_out = re.sub(r"<details(?![^>]*\bopen\b)([^>]*)>", r"<details open\1>", html_out)
     html_out = _render_todo_html(html_out)
     html_out = _render_double_rules(html_out)
-    html_out = re.sub(r"(<table\b[\s\S]*?</table>)", r'<div class="vyasa-table-scroll">\1</div>', html_out, flags=re.IGNORECASE)
+    html_out = _wrap_tables(html_out, get_config().get_table_col_max_width())
     return Div(Link(rel="stylesheet", href=_asset_url("/static/sidenote.css")), NotStr(apply_classes(html_out, class_map_mods=mods)), cls="w-full")

@@ -12,6 +12,7 @@ _GOOGLE_FONT_QUERIES = {
     "Archivo": "family=Archivo:wght@400;500;600;700",
     "Asap": "family=Asap:wght@400;500;600;700",
     "Assistant": "family=Assistant:wght@400;500;600;700;800",
+    "Azeret Mono": "family=Azeret+Mono:wght@400;500;600;700",
     "Be Vietnam Pro": "family=Be+Vietnam+Pro:wght@400;500;600;700",
     "Besley": "family=Besley:wght@400;500;600;700",
     "Bitter": "family=Bitter:wght@400;500;600;700",
@@ -21,17 +22,21 @@ _GOOGLE_FONT_QUERIES = {
     "Chivo": "family=Chivo:wght@400;500;600;700",
     "Cormorant Garamond": "family=Cormorant+Garamond:wght@400;500;600;700",
     "Crimson Pro": "family=Crimson+Pro:wght@400;500;600;700",
+    "Cutive Mono": "family=Cutive+Mono",
     "DM Sans": "family=DM+Sans:wght@400;500;700",
     "Domine": "family=Domine:wght@400;500;600;700",
     "EB Garamond": "family=EB+Garamond:wght@400;500;600;700",
     "Fauna One": "family=Fauna+One",
     "Figtree": "family=Figtree:wght@400;500;600;700;800",
+    "Fira Code": "family=Fira+Code:wght@400;500;600;700",
     "Fraunces": "family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1",
     "Hanken Grotesk": "family=Hanken+Grotesk:wght@400;500;600;700;800",
     "Hepta Slab": "family=Hepta+Slab:wght@400;500;600;700",
     "IBM Plex Mono": "family=IBM+Plex+Mono:wght@400;500;600;700",
+    "Inconsolata": "family=Inconsolata:wght@400;500;600;700",
     "Instrument Serif": "family=Instrument+Serif:ital@0;1",
     "Inter": "family=Inter:wght@400;500;600;700;800",
+    "JetBrains Mono": "family=JetBrains+Mono:wght@400;500;600;700;800",
     "Karla": "family=Karla:wght@400;500;600;700;800",
     "Lexend": "family=Lexend:wght@400;500;600;700;800",
     "Libre Baskerville": "family=Libre+Baskerville:wght@400;700",
@@ -52,16 +57,24 @@ _GOOGLE_FONT_QUERIES = {
     "PT Serif": "family=PT+Serif:wght@400;700",
     "Public Sans": "family=Public+Sans:wght@400;500;600;700;800",
     "Raleway": "family=Raleway:wght@400;500;600;700;800",
+    "Reddit Mono": "family=Reddit+Mono:wght@400;500;600;700",
     "Red Hat Display": "family=Red+Hat+Display:wght@400;500;600;700;800",
     "Red Hat Text": "family=Red+Hat+Text:wght@400;500;600;700",
+    "Recursive": "family=Recursive:wght@400;500;600;700",
     "Roboto Slab": "family=Roboto+Slab:wght@400;500;600;700",
     "Schibsted Grotesk": "family=Schibsted+Grotesk:wght@400;500;600;700;800",
+    "Share Tech Mono": "family=Share+Tech+Mono",
+    "Space Mono": "family=Space+Mono:wght@400;700",
+    "Sometype Mono": "family=Sometype+Mono:wght@400;500;600;700",
     "Source Sans 3": "family=Source+Sans+3:wght@400;500;600;700;800",
+    "Source Code Pro": "family=Source+Code+Pro:wght@400;500;600;700",
     "Source Serif 4": "family=Source+Serif+4:wght@400;500;600;700",
     "Space Grotesk": "family=Space+Grotesk:wght@400;500;700",
     "Spectral": "family=Spectral:wght@400;500;600;700",
     "Sora": "family=Sora:wght@400;500;600;700;800",
+    "Ubuntu Mono": "family=Ubuntu+Mono:wght@400;700",
     "Urbanist": "family=Urbanist:wght@400;500;600;700;800",
+    "VT323": "family=VT323",
     "Work Sans": "family=Work+Sans:wght@400;500;600;700;800",
 }
 
@@ -122,13 +135,15 @@ def render_layout(*content, htmx, title=None, show_sidebar=False, toc_content=No
     body_font = layout_config.get("theme_body_font")
     heading_font = layout_config.get("theme_heading_font")
     ui_font = layout_config.get("theme_ui_font")
+    mono_font = layout_config.get("theme_mono_font")
     theme_tokens = layout_config.get("theme_tokens") or {}
     font_style = "; ".join(part for part in (
         f"--vyasa-font-body: {body_font}" if body_font else "",
         f"--vyasa-font-heading: {heading_font}" if heading_font else "",
         f"--vyasa-font-ui: {ui_font}" if ui_font else "",
+        f"--vyasa-font-mono: {mono_font}" if mono_font else "",
     ) if part)
-    theme_font_links = _theme_font_links(body_font, heading_font, ui_font)
+    theme_font_links = _theme_font_links(body_font, heading_font, ui_font, mono_font)
     token_style = "; ".join(
         f"--vyasa-{name}: {value}" for name, value in theme_tokens.items() if value
     )
@@ -213,6 +228,7 @@ def _render_htmx_layout(content, title, show_sidebar, toc_content, current_path,
 
 def _render_full_layout(content, title, show_sidebar, toc_content, current_path, show_toc, auth, htmx_nav, nav_posts_menu, show_footer, no_scroll, slide_mode, logger, t_section, layout_start_time, layout_fluid_class, layout_max_class, layout_max_style, page_style, main_spacing_cls, page_container_cls, navbar_margin_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar, style_attr, footer_node):
     slide_assets = [Link(rel="stylesheet", href="/static/present.css")] if slide_mode else []
+    code_copy_template = NotStr('<template id="vyasa-code-copy-tpl"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code"><span class="w-4 h-4" aria-hidden="true">⧉</span><span class="sr-only">Copy code</span></button></template>')
     if show_sidebar:
         toc_sidebar = None
         if show_toc:
@@ -227,10 +243,10 @@ def _render_full_layout(content, title, show_sidebar, toc_content, current_path,
         mobile_toc_panel = Div(Div(Button(UkIcon("x", cls="w-5 h-5"), id="close-mobile-toc", cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto", type="button"), cls="vyasa-mobile-panel-header flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"), Div(build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if (show_toc and toc_items) else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")), cls="vyasa-mobile-panel-body p-4 overflow-y-auto"), id="mobile-toc-panel", cls="vyasa-mobile-panel fixed inset-0 bg-white dark:bg-slate-950 z-[9999] xl:hidden transform translate-x-full transition-transform duration-300") if show_toc else None
         nav_posts_items = get_posts(list(roles_key) if roles_key else [], current_path=current_path or "") if nav_posts_menu else None
         content_with_sidebars = Div(cls=f"vyasa-content-grid layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 flex gap-6 flex-1 {'min-h-0' if no_scroll else ''}".strip(), id="content-with-sidebars", **style_attr(layout_max_style))((Aside(Div(UkIcon("loader", cls="w-5 h-5 animate-spin"), Span("Loading posts…", cls="ml-2 text-sm"), cls="flex items-center justify-center h-32 text-slate-400"), cls="vyasa-sidebar vyasa-posts-sidebar hidden xl:block w-[var(--vyasa-sidebar-width,26rem)] shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]", id="posts-sidebar", hx_get=f"/_sidebar/posts?current_path={quote(current_path or '', safe='')}", hx_trigger="load", hx_swap="outerHTML") if not nav_posts_menu else None), main_content_container, toc_sidebar if toc_sidebar else None)
-        body_content = Div(id="page-container", cls=page_container_cls, **style_attr(page_style))(Div(navbar(show_mobile_menus=True, htmx_nav=htmx_nav, posts_menu_items=nav_posts_items, compact_mode=nav_posts_menu), cls=f"vyasa-navbar-shell layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-[1300] {navbar_margin_cls}".strip(), id="site-navbar", **style_attr(layout_max_style)), mobile_posts_panel, mobile_toc_panel if mobile_toc_panel else None, content_with_sidebars, footer_node(f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(), style_attr(layout_max_style)) if show_footer else None)
+        body_content = Div(id="page-container", cls=page_container_cls, **style_attr(page_style))(code_copy_template, Div(navbar(show_mobile_menus=True, htmx_nav=htmx_nav, posts_menu_items=nav_posts_items, compact_mode=nav_posts_menu), cls=f"vyasa-navbar-shell layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-[1300] {navbar_margin_cls}".strip(), id="site-navbar", **style_attr(layout_max_style)), mobile_posts_panel, mobile_toc_panel if mobile_toc_panel else None, content_with_sidebars, footer_node(f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(), style_attr(layout_max_style)) if show_footer else None)
     else:
         custom_css_links = get_sidebar_custom_css_links(get_root_folder(), current_path, section_class) if current_path else []
-        body_content = Div(id="page-container", cls=f"flex flex-col min-h-screen {'vyasa-zen-present' if slide_mode else ''}".strip(), **style_attr(page_style))(Div(navbar(htmx_nav=htmx_nav), cls=f"vyasa-navbar-shell layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-[1300] mt-4".strip(), id="site-navbar", **style_attr(layout_max_style)), Main(*content, cls=f"vyasa-main-shell {'vyasa-zen-present' if slide_mode else ''} layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 py-8 space-y-8 {section_class}".strip(), id="main-content", hx_boost="true", hx_target="#main-content", hx_swap="outerHTML show:window:top settle:0.1s", **_annotation_attrs(current_path, auth, get_config, slide_mode=slide_mode), **style_attr(layout_max_style)), footer_node(f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(), style_attr(layout_max_style)) if show_footer else None)
+        body_content = Div(id="page-container", cls=f"flex flex-col min-h-screen {'vyasa-zen-present' if slide_mode else ''}".strip(), **style_attr(page_style))(code_copy_template, Div(navbar(htmx_nav=htmx_nav), cls=f"vyasa-navbar-shell layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 sticky top-0 z-[1300] mt-4".strip(), id="site-navbar", **style_attr(layout_max_style)), Main(*content, cls=f"vyasa-main-shell {'vyasa-zen-present' if slide_mode else ''} layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 py-8 space-y-8 {section_class}".strip(), id="main-content", hx_boost="true", hx_target="#main-content", hx_swap="outerHTML show:window:top settle:0.1s", **_annotation_attrs(current_path, auth, get_config, slide_mode=slide_mode), **style_attr(layout_max_style)), footer_node(f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 mt-auto mb-6".strip(), style_attr(layout_max_style)) if show_footer else None)
     result = [Title(title), *theme_font_links, *slide_assets, Div(*custom_css_links, id="scoped-css-container") if custom_css_links else Div(id="scoped-css-container"), body_content]
     logger.debug(f"[LAYOUT] FULL PAGE assembled in {(time.time() - layout_start_time)*1000:.2f}ms")
     return tuple(result)

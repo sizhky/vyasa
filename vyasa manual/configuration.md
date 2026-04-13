@@ -1,231 +1,43 @@
-# Configuration & CLI
+# Configuration And CLI
 
-This guide centralizes the runtime flags, `.vyasa` settings, and environment variables.
+Vyasa is a live Python server first: `vyasa.main:cli` resolves the content root, reloads config, picks a host and port, and then hands the request cycle to the app in [`vyasa/core.py`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/core.py). This guide is about the path from a folder of Markdown files to a running site you can keep editing. By the end, you should know which knob belongs on the command line, which belongs in `.vyasa`, and which settings are only meaningful inside a content folder. The only model to keep in your head is precedence: CLI overrides config, config overrides environment, and environment overrides defaults.
 
-## CLI
+## Start Here
 
 ```bash
-# Run on a directory (default port 5001)
+pip install vyasa
 vyasa .
-
-# Custom host/port
-vyasa . --host 0.0.0.0 --port 8000
-
-# Disable auto-reload
-vyasa . --no-reload
-
-# Enable auth
-vyasa . --user admin --password secret
-
-# Build static site
-vyasa build . -o ./dist
+vyasa notes --host 0.0.0.0 --port 8080
 ```
 
-## Configuration
+The CLI lives in [`vyasa/main.py`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/main.py). If you omit `port`, [`VyasaConfig.get_port()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/config.py) derives one from the working directory, which avoids the "every local project wants 5001" problem.
 
-Vyasa supports four ways to configure your blog (in priority order):
-
-1. cli arguments (e.g. `vyasa /path/to/markdown`) - Highest priority
-1. **[`.vyasa` configuration file](#using-a-.vyasa-configuration-file)** (TOML format)
-2. **Environment variables** - Fallback
-3. **Default values** - Final fallback
-
-### Using a `.vyasa` Configuration File
-
-Create a `.vyasa` file in your blog directory or current directory:
+## Put Stable Choices In `.vyasa`
 
 ```toml
-# Blog title (default: derives from root folder name via slug_to_title)
-title = "My Awesome Blog"
+title = "Team Notes"
+port = 8080
+theme_preset = "serene-manuscript"
+theme_primary = "#2f6fed"
+table_col_max_width = "33vw"
+sidebars_open = true
 
-# Root folder containing markdown files (default: current directory)
-root = "."
-
-# Extra folders exposed as first-level folders beside the root contents.
-vyasa_roots = ["/path/to/research", "/path/to/reference"]
-
-# Optional: set true to expose only vyasa_roots, not the current/root directory contents.
-ignore_cwd_as_root = true
-
-# Server host (default: 127.0.0.1)
-# Use "0.0.0.0" to make the server accessible from network
-host = "127.0.0.1"
-
-# Server port (default: 5001)
-port = 5001
-
-# Optional authentication credentials (enables Beforeware middleware)
-username = "admin"
-password = "hunter2"
-
-# Optional: require auth for all routes (default: true if any auth provider is configured)
-auth_required = true
-
-# Optional Google OAuth configuration
-[google_oauth]
-client_id = "your-google-client-id"
-client_secret = "your-google-client-secret"
-allowed_domains = ["example.com"] # optional
-allowed_emails = ["alice@example.com"] # optional
-
-# Optional inline annotations in doc view
 [annotations]
 enabled = true
 ```
 
-All settings in the `.vyasa` file are optional. The configuration is managed by the `Config` class in `vyasa/config.py`.
+Root-level `.vyasa` is for app behavior: title, content root, theme tokens, auth, RBAC, and sidebar defaults. Folder-level `.vyasa` is for navigation shape: `order`, `sort`, `folders_first`, and any local layout override that should travel with that subtree rather than the whole site.
 
-`vyasa_roots` mounts each listed directory under its folder name, so `/path/to/research/notes.md` is served at `/posts/research/notes`.
+## Why These Settings Matter
 
-Name clashes are resolved by the first visible owner of that top-level name:
+| Setting | Why it exists |
+|---|---|
+| `root` or CLI `directory` | Decides which folder becomes the visible content tree. |
+| `theme_preset` and `theme_primary` | Feed layout-wide tokens before folder CSS starts overriding details. |
+| `table_col_max_width` | Sets the default max width for markdown table cells across the site. |
+| `sidebars_open` | Changes the default information density of the reading surface. |
+| `reload_exclude` | Keeps local dev fast when the repo contains large generated folders. |
 
-- If `ignore_cwd_as_root = false`, the normal root directory is visible and its top-level files/folders win over `vyasa_roots` with the same name.
-- If `ignore_cwd_as_root = true`, the normal root directory is hidden, so its names do not block `vyasa_roots`.
-- If two `vyasa_roots` have the same folder name, the first path in the list wins and later duplicates are skipped.
+## Keep In Mind
 
-Set `ignore_cwd_as_root = true` when the `.vyasa` file is only a launcher/config file and the current directory should not be discovered or watched as content.
-
-### Layout Width Configuration
-
-Set a single `layout_max_width` to control overall width (applies to both sidebar and non-sidebar pages). Values accept Tailwind max-width classes (e.g. `max-w-7xl`) or raw CSS sizes (e.g. `90vw`, `1200px`). Default is `75vw`.
-
-```toml
-layout_max_width = "90vw"
-```
-
-Environment variable equivalent:
-
-- `VYASA_LAYOUT_MAX_WIDTH`
-
-Responsive behavior:
-- At viewport widths below `1280px`, layout containers are effectively full width.
-- Between `1280px` and `~1520px`, the max width eases from `100%` to your configured value to avoid a hard jump.
-- Above that, the configured width is fully applied.
-
-### Custom Sidebar Ordering
-
-Place a `.vyasa` file in any folder to control the sidebar order for that folder. `.vyasa` uses TOML format. Use `order` to pin items first, then `sort` and `folders_first` for the remainder.
-
-```toml
-# Items listed in order are shown first. Use exact names (include extensions).
-order = ["todo.md", "static-build.md", "docs"]
-
-# Sorting for items not listed in order
-sort = "name_asc"          # name_asc, name_desc, mtime_asc, mtime_desc
-folders_first = true
-folders_always_first = false
-```
-
-Notes:
-- `folders_first` only affects the items not listed in `order`.
-- `folders_always_first` moves all folders to the top after ordering/sorting, while preserving their relative order.
-
-### Environment Variables
-
-You can also use environment variables as a fallback:
-
-- `VYASA_ROOT`: Path to your markdown files (default: current directory)
-- `VYASA_ROOTS`: Comma-separated extra folders to expose as top-level folders
-- `VYASA_IGNORE_CWD_AS_ROOT`: Hide the current/root directory from content discovery (true/false)
-- `VYASA_TITLE`: Your blog's title (default: folder name converted via `slug_to_title()`)
-- `VYASA_HOST`: Server host (default: 127.0.0.1)
-- `VYASA_PORT`: Server port (default: 5001)
-- `VYASA_USER`: Optional username to enable session-based authentication
-- `VYASA_PASSWORD`: Optional password paired with `VYASA_USER`
-- `VYASA_AUTH_REQUIRED`: Require login for all routes (true/false)
-- `VYASA_GOOGLE_CLIENT_ID`: Google OAuth client id (optional)
-- `VYASA_GOOGLE_CLIENT_SECRET`: Google OAuth client secret (optional)
-- `VYASA_GOOGLE_ALLOWED_DOMAINS`: Comma-separated allowed email domains (optional)
-- `VYASA_GOOGLE_ALLOWED_EMAILS`: Comma-separated allowed emails (optional)
-- `VYASA_ANNOTATIONS_ENABLED`: Enable text-selection annotations in normal doc view (true/false)
-
-### Annotations (optional)
-
-Enable inline annotations to let readers select text and leave margin comments.
-
-- Works in normal document view and is disabled in slide view.
-- Hovering or clicking a comment blooms the linked text in the document.
-- Replies are grouped under the parent comment in the margin thread.
-- New comments use the logged-in name when auth is enabled, otherwise they remain `anonymous`.
-
-### RBAC Configuration (optional)
-
-Use `rbac` to protect specific paths by role. This is ignored unless an auth provider is enabled.
-
-```toml
-[rbac]
-enabled = true
-default_roles = ["reader"]
-user_roles = { "alice@example.com" = ["admin"], "bob" = ["editor"] }
-role_users = { "admin" = ["alice@example.com"], "editor" = ["bob"] }
-
-[[rbac.rules]]
-pattern = "^/admin"
-roles = ["admin"]
-
-[[rbac.rules]]
-pattern = "^/private"
-roles = ["admin", "editor"]
-```
-
-Environment variable (optional):
-- `VYASA_RBAC_ENABLED`: Force enable/disable RBAC
-
-Notes:
-- If both `user_roles` and `role_users` are provided, roles are unioned at runtime.
-- Google OAuth requires the optional dependency `vyasa[auth]`.
-
-### Examples
-
-**Using a `.vyasa` file:**
-
-```bash
-# Create a .vyasa file in your blog directory
-title = "My Tech Blog"
-port = 8000
-host = "0.0.0.0"
-```
-
-**Using environment variables:**
-
-```bash
-export VYASA_ROOT=/path/to/your/markdown/files
-export VYASA_TITLE="My Awesome Blog"
-export VYASA_PORT=8000
-export VYASA_HOST="0.0.0.0"
-vyasa
-```
-
-**Passing directory as argument:**
-
-```bash
-vyasa /path/to/your/markdown/files
-```
-
-**Enabling authentication:**
-
-```.env
-# Via .vyasa file
-title = "Private Blog"
-username = "admin"
-password = "secret123"
-auth_required = true
-
-[google_oauth]
-client_id = "your-google-client-id"
-client_secret = "your-google-client-secret"
-allowed_domains = ["example.com"]
-```
-
-```bash
-# Or via environment variables
-export VYASA_USER="admin"
-export VYASA_PASSWORD="secret123"
-export VYASA_GOOGLE_CLIENT_ID="your-google-client-id"
-export VYASA_GOOGLE_CLIENT_SECRET="your-google-client-secret"
-export VYASA_GOOGLE_ALLOWED_DOMAINS="example.com"
-```
-
-**Configuration priority example:**
-
-If you have both a `.vyasa` file with `port = 8000` and an environment variable `VYASA_PORT=9000`, the `.vyasa` file takes precedence and port 8000 will be used.
+If auth is configured, the login and role checks are assembled during startup in [`vyasa/core.py`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/core.py) and [`vyasa/auth/runtime.py`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/auth/runtime.py). If you only need to reorder one branch in the sidebar, create a folder-local `.vyasa` instead of bloating the root config. If a setting seems ignored, check whether you set the same thing in both CLI flags and `.vyasa`; the CLI wins.
