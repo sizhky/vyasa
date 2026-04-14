@@ -2087,7 +2087,10 @@ function initPostsSidebarAutoReveal() {
         }
         sidebar.dataset.revealBound = 'true';
         
-        sidebar.addEventListener('toggle', () => {
+        sidebar.addEventListener('toggle', (event) => {
+            // Only respond to toggles on the sidebar itself, not nested folder details
+            if (event.target !== sidebar) return;
+            
             try {
                 const saved = JSON.parse(localStorage.getItem('vyasa:postsSidebarState') || '{}');
                 localStorage.setItem('vyasa:postsSidebarState', JSON.stringify({ ...saved, library: sidebar.open }));
