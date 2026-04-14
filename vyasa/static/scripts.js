@@ -2022,18 +2022,23 @@ function revealInSidebar(rootElement = document) {
     const activeLink = rootElement.querySelector(`.post-link[data-path="${currentPath}"]`);
     
     if (activeLink) {
-        // Expand all parent details elements within this sidebar
+        const postsSection = activeLink.closest('details[data-section="posts-tree"]');
+        const postsSectionOpen = !postsSection || postsSection.open;
+
+        // Expand folder parents, but do not force sidebar subsections open.
         let parent = activeLink.closest('details');
         while (parent && rootElement.contains(parent)) {
-            parent.open = true;
+            if (!parent.matches('details[data-section]')) {
+                parent.open = true;
+            }
             if (parent === rootElement) {
                 break;
             }
             parent = parent.parentElement.closest('details');
         }
         
-        // Scroll to the active link
-        const scrollContainer = rootElement.querySelector('#sidebar-scroll-container');
+        // Scroll only when the posts section is visible.
+        const scrollContainer = postsSectionOpen ? rootElement.querySelector('#sidebar-scroll-container') : null;
         if (scrollContainer) {
             const linkRect = activeLink.getBoundingClientRect();
             const containerRect = scrollContainer.getBoundingClientRect();
@@ -2050,11 +2055,30 @@ function revealInSidebar(rootElement = document) {
 
 function initPostsSidebarAutoReveal() {
     const postSidebars = document.querySelectorAll('details[data-sidebar="posts"]');
+    let persistedSidebarState = {};
+    try {
+        persistedSidebarState = JSON.parse(localStorage.getItem('vyasa:postsSidebarState') || '{}');
+    } catch (err) {
+        persistedSidebarState = {};
+    }
+    const pendingSidebarState = window.__vyasaPendingPostsSidebarState || null;
     
     postSidebars.forEach((sidebar) => {
-        if (window.__vyasaPostsSidebarWasOpen && !sidebar.open) {
+        const libraryShouldBeOpen = pendingSidebarState
+            ? !!pendingSidebarState.library
+            : (window.__vyasaPostsSidebarWasOpen || persistedSidebarState.library === true);
+        if (libraryShouldBeOpen && !sidebar.open) {
             sidebar.open = true;
         }
+        const sectionState = pendingSidebarState
+            ? { ...(pendingSidebarState.sections || {}) }
+            : { ...persistedSidebarState.sections, ...(window.__vyasaPostsSidebarSectionState || {}) };
+        sidebar.querySelectorAll('details[data-section]').forEach((section) => {
+            const key = section.getAttribute('data-section');
+            if (Object.prototype.hasOwnProperty.call(sectionState, key)) {
+                section.open = !!sectionState[key];
+            }
+        });
         if (sidebar.open) {
             revealInSidebar(sidebar);
         }
@@ -2064,10 +2088,25 @@ function initPostsSidebarAutoReveal() {
         sidebar.dataset.revealBound = 'true';
         
         sidebar.addEventListener('toggle', () => {
+            try {
+                const saved = JSON.parse(localStorage.getItem('vyasa:postsSidebarState') || '{}');
+                localStorage.setItem('vyasa:postsSidebarState', JSON.stringify({ ...saved, library: sidebar.open }));
+            } catch (err) {}
             if (!sidebar.open) {
                 return;
             }
             revealInSidebar(sidebar);
+        });
+        sidebar.querySelectorAll('details[data-section]').forEach((section) => {
+            section.addEventListener('toggle', () => {
+                const key = section.getAttribute('data-section');
+                const nextState = { ...(window.__vyasaPostsSidebarSectionState || {}), [key]: section.open };
+                window.__vyasaPostsSidebarSectionState = nextState;
+                try {
+                    const saved = JSON.parse(localStorage.getItem('vyasa:postsSidebarState') || '{}');
+                    localStorage.setItem('vyasa:postsSidebarState', JSON.stringify({ ...saved, sections: { ...(saved.sections || {}), [key]: section.open } }));
+                } catch (err) {}
+            });
         });
     });
 }
@@ -2589,6 +2628,25 @@ function bindBookmarkButtons(rootElement = document) {
     });
 }
 
+async function refreshPostsTreeForPath(path) {
+    const response = await fetch(`/_sidebar/posts?current_path=${encodeURIComponent(path)}`);
+    if (!response.ok) return;
+    const html = await response.text();
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    const nextList = wrapper.querySelector('#vyasa-posts-section-list');
+    const currentList = document.querySelector('#vyasa-posts-section-list');
+    if (!nextList || !currentList) return;
+    currentList.replaceWith(nextList);
+    initFolderChevronState(document);
+    updateActivePostLink();
+    bindBookmarkButtons(document);
+    const postsSidebar = document.querySelector('details[data-sidebar="posts"]');
+    if (postsSidebar?.open) {
+        revealInSidebar(postsSidebar);
+    }
+}
+
 function bindBookmarkLinks(rootElement = document) {
     rootElement.querySelectorAll('[data-bookmark-link="true"]').forEach((link) => {
         if (link.dataset.bookmarkLinkBound === 'true') return;
@@ -2599,10 +2657,8 @@ function bindBookmarkLinks(rootElement = document) {
             const path = link.getAttribute('data-path') || '';
             if (!href) return;
             if (window.htmx && typeof window.htmx.ajax === 'function') {
-                const postsSidebar = document.querySelector('details[data-sidebar="posts"]');
-                window.__vyasaPostsSidebarWasOpen = !!postsSidebar?.open;
                 window.htmx.ajax('GET', href, { target: '#main-content', swap: 'outerHTML show:window:top settle:0.1s', pushURL: true });
-                window.htmx.ajax('GET', `/_sidebar/posts?current_path=${encodeURIComponent(path)}`, { target: '#posts-sidebar', swap: 'outerHTML' });
+                refreshPostsTreeForPath(path);
                 return;
             }
             window.location.assign(href);
@@ -2664,7 +2720,7 @@ document.addEventListener('toggle', (event) => {
         details.classList.toggle('is-open', details.open);
         return;
     }
-    if (!details.matches('details[data-folder="true"]')) {
+    if (!details.matches('details[data-folder="true"], details[data-section]')) {
         return;
     }
     details.classList.toggle('is-open', details.open);
@@ -3884,6 +3940,9 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initAnnotations(event.target || document);
     ensurePdfFocusState();
     initTabPanelHeights(event.target || document);
+    if (event.target.id === 'posts-sidebar') {
+        window.__vyasaPendingPostsSidebarState = null;
+    }
 });
 
 window.addEventListener('load', () => {

@@ -83,6 +83,7 @@ from .sidebar_helpers import (
     collapsible_sidebar as build_collapsible_sidebar,
     extract_toc as extract_sidebar_toc,
     get_custom_css_links as get_sidebar_custom_css_links,
+    sidebar_section,
 )
 from .markdown_rendering import from_md
 from .tree_service import get_tree_entries
@@ -926,23 +927,30 @@ def _posts_search_block():
 @lru_cache(maxsize=16)
 def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden, current_path=""):
     sidebars_open = get_config().get_sidebars_open()
+    posts_items = get_posts(list(roles_key) if roles_key else [], current_path=current_path)
     sidebar = build_collapsible_sidebar(
         "menu",
         "Library",
-        get_posts(list(roles_key) if roles_key else [], current_path=current_path),
+        [],
         is_open=sidebars_open,
         data_sidebar="posts",
         shortcut_key="Z",
         extra_content=[
-            _posts_search_block(),
-            bookmarks_block(),
-            Div(cls="h-px w-full bg-slate-200/80 dark:bg-slate-700/70 my-2"),
-            Div(
+            sidebar_section("Filter", _posts_search_block(), is_open=True, data_section="filter", body_cls="pt-1"),
+            sidebar_section("Bookmarks", bookmarks_block(), is_open=True, data_section="bookmarks", body_cls="pt-1"),
+            sidebar_section(
                 "Posts",
-                cls="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1",
+                Div(
+                    Ul(*posts_items, cls="list-none pt-1 sidebar-scroll-container", id="sidebar-scroll-container"),
+                    cls="min-w-0 flex-1 min-h-0 overflow-x-auto overflow-y-auto",
+                    id="vyasa-posts-section-list",
+                ),
+                is_open=True,
+                data_section="posts-tree",
+                body_cls="pt-1",
             ),
         ],
-        scroll_target="list",
+        scroll_target="container",
     )
     return to_xml(sidebar)
 
