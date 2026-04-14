@@ -2087,10 +2087,7 @@ function initPostsSidebarAutoReveal() {
         }
         sidebar.dataset.revealBound = 'true';
         
-        sidebar.addEventListener('toggle', (event) => {
-            // Only respond to toggles on the sidebar itself, not nested folder details
-            if (event.target !== sidebar) return;
-            
+        sidebar.addEventListener('toggle', () => {
             try {
                 const saved = JSON.parse(localStorage.getItem('vyasa:postsSidebarState') || '{}');
                 localStorage.setItem('vyasa:postsSidebarState', JSON.stringify({ ...saved, library: sidebar.open }));
@@ -3083,7 +3080,11 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
     updateActivePostLink();
     updateActiveTocLink();
     initMobileMenus(); // Reinitialize mobile menu handlers
-    initPostsSidebarAutoReveal();
+    // Only reveal/scroll sidebar when main content changes, not on sidebar tree folder expansions
+    const isMainContentSwap = event.target?.id === 'main-content';
+    if (isMainContentSwap) {
+        initPostsSidebarAutoReveal();
+    }
     if (event.target?.id === 'posts-sidebar') {
         window.__vyasaPostsSidebarWasOpen = false;
     }
