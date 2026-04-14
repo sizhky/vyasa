@@ -12,181 +12,64 @@ title: Vyāsa
   CSS reigns supreme
 </p>
 
+Vyasa turns a folder of Markdown into a navigable site served by Python. It is for people who want notes, docs, books, or a blog to feel like a real site without adding a JavaScript build stack. This README is the shortest path from `pip install vyasa` to a working local site. By the end, you should know how to run it, what it is good at, and which manual page to open next when the simple path stops being enough.
 
----
+# Vyasa
 
-Vyāsa is a Python-first blogging platform designed to turn your Markdown files into a fully-featured website in seconds. Write your content in clean, simple Markdown—no boilerplate, no configuration hassles—and watch your site come alive instantly. Whether you're a minimalist who wants it just to work or a CSS enthusiast ready to craft pixel-perfect designs, Vyāsa adapts to your needs. Start with zero configuration and customize every pixel when you're ready.[^1]
+Vyasa is a lightweight Markdown site engine built on FastHTML. It gives you a live local server, folder-aware navigation, rich Markdown features, CSS-first theming, and a static build path from the same content tree.
 
-[^1]: If you're curious about how the intro was styled, [visit this page](https://github.com/sizhky/vyasa/blob/fa9a671931ad69b24139ba9d105bbadd8753b85b/custom.css#L36C1-L36C13).<br>
-    Check out the [Theming & CSS](vyasa%20manual/theming.md) guide for details on customizing your blog's appearance
-
-> [!info]
-> **Vyāsa** is named after the legendary sage **Krishna Dvaipayana Vyāsa**, who is credited with compiling the ancient Indian epic - the Mahabharata, 18 puranas and many more spiritually significant works.
->
-> Just as Vyāsa organized vast knowledge into a coherent narrative, Vyāsa the blogging platform helps you organize your thoughts and content into a beautiful, functional website with ease.
-
----
-
-## Quick Start
-1. Install Vyāsa:
-   ```bash
-   pip install vyasa
-   ```
-
-2. Create a directory with your markdown files:
-   ```bash
-   mkdir my-blog
-   cd my-blog
-   echo "# Hello World" > hello.md
-   mkdir -p posts
-   echo "# My First Post\nThis is a sample blog post." > posts/first-post.md
-   ```
-
-3. Run Vyāsa:
-   ```bash
-   vyasa .
-   ```
-
-4. Open your browser at `http://127.0.0.1:5001`
-
-
-## Key Features
-
-### 🚀 Vyāsa at a Glance
-
-Hiding in plain sight, Vyāsa packs a powerful punch of features that transform simple Markdown files into dynamic, interactive websites. From advanced Markdown capabilities to modern UI/UX design and technical robustness, Vyāsa is built to empower creators of all levels. Here's a high-level overview of what Vyāsa brings to the table:
-
-```cytograph
----
-height: 65vh
-layout: vyasa
-initial_depth: 1
-source: ./vyasa-map.cytree
----
-```
-
-### ✨ Advanced Markdown Features
-- **Footnotes as Sidenotes**: `[^1]` references become elegant margin notes on desktop, expandable on mobile with smooth animations
-- **YouTube Embeds**: Use `[yt:VIDEO_ID]` or `[yt:VIDEO_ID|Caption]` for responsive iframe cards with aspect-ratio containers
-- **Task Lists**: `- [ ]` / `- [x]` render as custom styled checkboxes (green for checked, gray for unchecked) with SVG checkmarks
-- **Mermaid Diagrams**: Full support for flowcharts, sequence diagrams, state diagrams, Gantt charts, etc.
-- **D2 Diagrams**: Supports architecture/process diagrams with interactive rendering and composition animation support.
-- **Interactive Diagrams**: 
-  - Zoom with mouse wheel (zooms towards cursor position)
-  - Pan by dragging with mouse
-  - Built-in controls: fullscreen, reset, zoom in/out buttons
-  - Auto-scaling based on diagram aspect ratio
-  - Fullscreen modal viewer with dark mode support
-- **Theme-aware Rendering**: Diagrams automatically re-render when switching light/dark mode via MutationObserver
-- **Mermaid Frontmatter**: Configure diagram size and metadata with YAML frontmatter (`width`, `height`, `aspect_ratio`, `title`)
-- **D2 Frontmatter**: Configure rendering and animation with YAML frontmatter:
-  - `width`, `height`, `title`
-  - `layout` (`elk`, `dagre`, etc.; default is `elk`), `theme_id`, `dark_theme_id`, `sketch`
-  - `pad`, `scale`
-  - `target` (board/layer target), `animate_interval`/`animate-interval`, `animate`
-  - Notes:
-    - Composition animation is enabled with `animate_interval`
-    - If animation is enabled and `target` is omitted, Vyāsa auto-targets all boards (`*`)
-    - If `title` is provided, it is used for fullscreen modal title and as a small centered caption under the diagram
-- **Tabbed Content**: Create multi-tab sections using `:::tabs` and `::tab{title="..."}` syntax with smooth transitions
-- **Code Snippet Includes**: Embed external source files with `{* path ln[1:24] hl[9:11,22] *}` and highlight selected source lines
-- **Inline Annotations**: Select text to add margin comments with hover/click bloom highlighting, replies, and author-aware edit/delete controls
-- **Rich Callouts**: Supports Obsidian-style `> [!warning]- Title` callouts with aliases, folding, nesting, and CSS-targetable custom types
-- **Readable Tables by Default**: Markdown tables cap each cell at `33vw` by default, with global and per-table overrides when a document needs a different width
-- **Relative Links**: Full support for relative markdown links (`./file.md`, `../other.md`) with automatic path resolution
-- **Plain-Text Headings**: Inline markdown in headings is stripped for clean display and consistent anchor slugs
-- **Math Notation**: KaTeX support for inline `$E=mc^2$` and block `$$` math equations, auto-renders after HTMX swaps
-- **Superscript & Subscript**: Use `^text^` for superscript and `~text~` for subscript (preprocessed before rendering)
-- **Strikethrough**: Use `~~text~~` for strikethrough formatting
-- **Pandoc-style Attributes**: Add classes to inline text with `` `text`{.class #id} `` syntax for semantic markup (renders as `<span>` tags, not `<code>`)
-- **Cascading Custom CSS**: Add `custom.css` or `style.css` files at multiple levels (root, folders) with automatic scoping
-- **Title Abbreviations**: Configure `.vyasa` `abbreviations` to force uppercase acronyms in sidebar and slug-based titles (e.g., `ai-features` $\to$ `AI Features`)
-- **Folder Notes**: `index.md`, `README.md`, or `<folder>.md` can act as a folder summary; clicking the folder name opens it
-
-See the full list in [Markdown Writing Features](vyasa%20manual/markdown-features.md).
-
-### 🎬 Zen Slides
-- **One-click Present Mode**: Add `slides: true` in frontmatter and Vyāsa shows a `Present` button that opens `/slides/<path>/slide-1`
-- **Structural Slide Splits**: `##` starts a horizontal slide and `###` plus deeper headings become detail slides under the current section
-- **Real Slide URLs**: Every slide is addressable as `/slides/<path>/slide-N`, so refresh, copy-link, and open-in-new-tab work like normal pages
-- **Doc Theme Inheritance**: Slide pages reuse the normal doc shell, so fonts, background, theme preset, and `custom.css` stay aligned with reading view
-- **HTMX Navigation**: Left/right movement uses the same `#main-content` swap contract as normal Vyāsa navigation instead of a separate deck runtime
-- **Slides with Existing Vyāsa Features**: Mermaid, D2, tabs, code highlighting, math, and long-form sections continue to work in slide view
-
-See the working example in [Vyasa Slides Demo](/slides/demo/vyasa-slides).
-
-### 🎨 Modern UI
-- **Responsive Design**: Works beautifully on all screen sizes with mobile-first approach
-- **Three-Panel Layout**: Posts sidebar, main content, and table of contents for easy navigation
-- **Dark Mode**: Automatic theme switching with localStorage persistence and instant visual feedback
-- **HTMX Navigation**: Fast, SPA-like navigation without full page reloads using `hx-get`, `hx-target`, and `hx-push-url`
-- **Collapsible Folders**: Organize posts in nested directories with chevron indicators and smooth expand/collapse
-- **Sidebar Search**: HTMX-powered filename search with results shown below the search bar (tree stays intact)
-- **PDF Posts**: PDFs show up in the sidebar and open inline in the main content area
-- **Auto-Generated TOC**: Table of contents automatically extracted from headings with scroll-based active highlighting
-- **TOC Autoscroll + Accurate Highlights**: Active TOC item stays in view and highlight logic handles duplicate headings
-- **Inline Copy Button**: Copy raw markdown from a button placed right next to the post title
-- **Mobile Menus**: Slide-in panels for posts and TOC on mobile devices with smooth transitions
-- **Sticky Navigation**: Navbar stays at top while scrolling, with mobile menu toggles
-- **Active Link Highlighting**: Current post and TOC section highlighted with blue accents
-- **Auto-Reveal in Sidebar**: Active post automatically expanded and scrolled into view when opening sidebar
-- **Ultra-Thin Scrollbars**: Custom styled 3px scrollbars that adapt to light/dark theme
-- **Frosted Glass Sidebars**: Backdrop blur and transparency effects on sidebar components
-- **Theme Presets**: Set `theme_preset` in `.vyasa` to use a bundled theme like `serene-manuscript`, `kinetic-scholar`, or `ultra-soft`
-- **Theme Primary Override**: Set `theme_primary` in `.vyasa` to swap the app accent color without editing CSS
-- **Configurable Code Themes**: Set `code_theme_light` and `code_theme_dark` in `.vyasa` to choose the live highlight.js themes for light and dark mode
-- **Default Line Numbers**: Control default code line numbers with `code_line_numbers`, then override per snippet with `ln` or `nln`
-
-| Feature                     | Category | Config Key                                        | Description                                                                                                    | Default        | Env Override                  |
-|-----------------------------|----------|---------------------------------------------------|----------------------------------------------------------------------------------------------------------------|----------------|-------------------------------|
-| FastHTML Integration        | Core     | —                                                 | Built on FastHTML and Starlette for high-performance async rendering without a build step                      | enabled        | —                             |
-| Advanced Markdown Support   | Content  | —                                                 | Footnotes as sidenotes, YouTube embeds, task lists, Mermaid + D2 diagrams, math notation, tabbed content, and more | enabled    | —                             |
-| Modern UI                   | UI       | `sidebars_open`, `layout_max_width`, `theme_preset`, `theme_primary` | Responsive three-panel layout with dark mode, HTMX navigation, frosted glass sidebars, configurable width, bundled theme presets, and optional primary override | `false`, unset, `serene-manuscript`, forest green | `VYASA_SIDEBARS_OPEN`, `VYASA_THEME_PRESET`, `VYASA_THEME_PRIMARY` |
-| Interactive Diagrams        | Content  | `[drawings_passwords]`                            | Zoomable, pannable Mermaid and D2 diagrams with fullscreen support and optional per-drawing password protection | unprotected   | —                             |
-| Annotations                 | Content  | `[annotations]`                                  | Text selection comments with margin threads in doc view; disabled in slide view                                | disabled      | `VYASA_ANNOTATIONS_ENABLED`   |
-| Auth & RBAC                 | Security | `[google_oauth]`, `[rbac]`                        | Google OAuth login with allowed domains/emails, role-based access control rules scoped per path               | disabled       | `VYASA_GOOGLE_CLIENT_ID`, `VYASA_RBAC_ENABLED` |
-| Sidebar Navigation          | UI       | `folder_tabs`, `folders_first`, `order`, `sort`   | Collapsible file tree with tab grouping, custom entry ordering, sort direction, and smart abbreviation expansion | `false`, name_asc | —                          |
-| Content Filtering           | Config   | `ignore`, `include`, `show_hidden`                | Fine-grained control over which files and folders appear in listings, with hidden-file visibility toggle       | all visible    | `VYASA_SHOW_HIDDEN`           |
-| Server Configuration        | Config   | `host`, `port`, `title`, `root`                   | Bind address, deterministic port derived from working directory, site title, and content root path             | `127.0.0.1`    | `VYASA_HOST`, `VYASA_PORT`    |
-
-## Installation
-
-### From PyPI (recommended)
+## Start Here
 
 ```bash
 pip install vyasa
+mkdir my-notes
+cd my-notes
+printf '# Hello\n\nThis is my first Vyasa page.\n' > index.md
+vyasa .
 ```
 
-### From source
+Open `http://127.0.0.1:5001`.
 
-```bash
-git clone https://github.com/yeshwanth/vyasa.git
-cd vyasa
-pip install -e .
+If you want Google login later, install `pip install "vyasa[auth]"`. If you want a static export instead of a live server, run `vyasa build . -o ./dist`.
+
+## The First Configuration Most People Add
+
+```toml
+title = "My Notes"
+theme_preset = "serene-manuscript"
+sidebars_open = true
 ```
 
-## Configuration
+Put that in a `.vyasa` file at the root of your content folder. Configuration precedence is CLI args > `.vyasa` > environment variables > defaults, so you can start simple and still override behavior when you need to.
 
-Vyāsa supports four ways to configure your blog (in priority order):
+## What It Buys You
 
-1. cli arguments (e.g. `vyasa /path/to/markdown`) - Highest priority
-1. **[`.vyasa` configuration file](vyasa%20manual/configuration.md)** (TOML format)
-2. **Environment variables** - Fallback
-3. **Default values** - Final fallback
+- Write plain Markdown, then opt into Vyasa features like callouts, tabs, Mermaid, D2, math, task lists, footnotes as sidenotes, and code snippet includes only when the page needs them.
+- Keep content organized as folders; `index.md` or `README.md` becomes the landing page for that branch.
+- Style the site with normal CSS and bundled theme presets instead of introducing a component system.
+- Use the same content tree for a live local server and a static export.
+- Add auth and RBAC when the content stops being public or personal.
 
-Theme presets are bundled with the package, so `theme_preset = "ultra-soft"` works in normal `pip install vyasa` deployments without copying a local `.vyasa-themes` folder. Local `.vyasa-themes/<name>.toml` files still override bundled presets when present.
+## What A Content Tree Looks Like
 
-## Vyāsa Manual
+```text
+my-notes/
+├── .vyasa
+├── index.md
+├── posts/
+│   ├── first-post.md
+│   └── second-post.md
+└── manual/
+    ├── README.md
+    └── architecture.md
+```
 
-Short, focused guides for deeper topics. Start with configuration and writing content, then dive into architecture and advanced details.
+Folders become navigation groups. `index.md` or `README.md` gives a folder its own landing page, so a blog, a manual, and a notebook can live in the same tree without special routing setup.
 
-| Guide | Docs | Slides |
-|---|---|---|
-| Configuration & CLI | [Open](vyasa%20manual/configuration.md) | [Present](/slides/vyasa%20manual/configuration/slide-1) |
-| Markdown Writing Features | [Open](vyasa%20manual/markdown-features.md) | [Present](/slides/vyasa%20manual/markdown-features/slide-1) |
-| Mermaid Diagrams | [Open](vyasa%20manual/mermaid-diagrams.md) | [Present](/slides/vyasa%20manual/mermaid-diagrams/slide-1) |
-| D2 Diagrams | [Open](vyasa%20manual/d2-diagrams.md) | [Present](/slides/vyasa%20manual/d2-diagrams/slide-1) |
-| Architecture Overview | [Open](vyasa%20manual/architecture.md) | [Present](/slides/vyasa%20manual/architecture/slide-1) |
-| Theming & CSS | [Open](vyasa%20manual/theming.md) | [Present](/slides/vyasa%20manual/theming/slide-1) |
-| Security & Auth | [Open](vyasa%20manual/security.md) | [Present](/slides/vyasa%20manual/security/slide-1) |
-| Advanced Behavior | [Open](vyasa%20manual/advanced.md) | [Present](/slides/vyasa%20manual/advanced/slide-1) |
+## When You Need The Next Layer
+
+If your next question is about shaping the site, open the [configuration guide](vyasa%20manual/configuration.md). If the question is about what the authoring surface can do, go to [Markdown writing features](vyasa%20manual/markdown-features.md). Diagram-specific behavior lives in the [Mermaid guide](vyasa%20manual/mermaid-diagrams.md) and the [D2 guide](vyasa%20manual/d2-diagrams.md), while shell styling and theme presets are covered in [theming](vyasa%20manual/theming.md).
+
+Use [security](vyasa%20manual/security.md) when the site needs login or path rules, [architecture](vyasa%20manual/architecture.md) when you want the request and rendering model, and [advanced behavior](vyasa%20manual/advanced.md) when you are past the happy path and want the edges.
+
+The manual itself starts at [vyasa manual/README.md](vyasa%20manual/README.md), but you should not need it before the quick start above works.

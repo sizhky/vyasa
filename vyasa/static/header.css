@@ -495,6 +495,20 @@ h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
 .vyasa-tree-row * { color: inherit !important; }
 .vyasa-tree-row svg, .vyasa-tree-row [uk-icon] { stroke: currentColor !important; fill: none !important; }
 .vyasa-tree-row:hover, .vyasa-tree-row.is-active { background: var(--vyasa-selection-bg) !important; color: var(--vyasa-selection-fg) !important; border-radius: 0.45rem !important; }
+.vyasa-bookmark-row { width: max-content; max-width: none; }
+.vyasa-bookmark-toggle { opacity: 0; pointer-events: none; }
+.vyasa-bookmark-row:hover .vyasa-bookmark-toggle,
+.vyasa-bookmark-toggle[data-bookmarked="true"] {
+    opacity: 1;
+    pointer-events: auto;
+}
+.vyasa-bookmark-toggle[data-bookmarked="true"] {
+    color: inherit !important;
+}
+.vyasa-bookmark-delete { opacity: 1; pointer-events: auto; }
+.vyasa-bookmarks-empty { display: block; }
+.vyasa-bookmarks-block.has-items .vyasa-bookmarks-empty { display: none; }
+.vyasa-bookmarks-list { max-width: 100%; }
 .folder-note-link,
 .folder-note-link span {
     text-decoration-line: underline !important;
