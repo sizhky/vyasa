@@ -2642,7 +2642,7 @@ async function refreshPostsTreeForPath(path) {
     if (!nextList || !currentList) return;
     currentList.replaceWith(nextList);
     initFolderChevronState(document);
-    updateActivePostLink();
+    updateActivePostLink(path);
     bindBookmarkButtons(document);
     const postsSidebar = postsContainer.querySelector('details[data-sidebar="posts"]');
     if (postsSidebar?.open) {
@@ -2786,8 +2786,8 @@ function syncHeadingActionStates(root = document) {
 }
 
 // Update active post link in sidebar
-function updateActivePostLink() {
-    const currentPath = normalizeSidebarPath(window.location.pathname);
+function updateActivePostLink(explicitPath = null) {
+    const currentPath = explicitPath || normalizeSidebarPath(window.location.pathname);
     document.querySelectorAll('.vyasa-tree-row').forEach(row => {
         row.classList.remove('is-active');
     });
