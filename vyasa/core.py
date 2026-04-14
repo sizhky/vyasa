@@ -1,5 +1,6 @@
 import re, os
 import json
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from fasthtml.common import *
@@ -64,6 +65,8 @@ from .drawing_auth import (
 )
 from .auth.oauth_bootstrap import build_google_oauth
 from .annotations_store import AnnotationRow, delete_annotation, get_annotations_table, list_annotations, upsert_annotation
+from .bookmark_store import bookmark_owner_from_auth, delete_bookmark, list_bookmarks, upsert_bookmark
+from .bookmark_views import bookmarks_block
 from .page_views import not_found_content
 from .rbac_config import normalize_rbac_cfg, render_rbac_toml, write_rbac_to_vyasa
 from .rbac_store import load_rbac_cfg, write_rbac_cfg
@@ -179,6 +182,7 @@ _auth_required = _config.get_auth_required()
 
 _rbac_store_cache = {"db": None, "tbl": None}
 _annotations_store_cache = {"db": None, "tbl": None}
+_bookmark_store_cache = {"db": None, "tbl": None}
 
 
 def _normalize_rbac_cfg(cfg):
@@ -210,6 +214,44 @@ def _annotations_db_upsert(row):
 
 def _annotations_db_delete(annotation_id: str):
     return delete_annotation(get_config().get_root_folder(), _annotations_store_cache, annotation_id)
+
+
+def _bookmarks_db_list(owner: str):
+    return list_bookmarks(get_config().get_root_folder(), _bookmark_store_cache, owner)
+
+
+def _bookmarks_db_upsert(owner: str, path: str):
+    upsert_bookmark(
+        get_config().get_root_folder(),
+        _bookmark_store_cache,
+        owner,
+        path,
+        datetime.utcnow().isoformat(),
+    )
+
+
+def _bookmarks_db_delete(owner: str, path: str):
+    return delete_bookmark(get_config().get_root_folder(), _bookmark_store_cache, owner, path)
+
+
+def _resolve_bookmark_items(owner: str, roles):
+    items = []
+    root = get_root_folder()
+    for row in _bookmarks_db_list(owner):
+        slug = (row.path or "").strip("/")
+        path = content_path_for_slug(slug)
+        if not slug or not path or path.suffix not in {".md", ".pdf"}:
+            continue
+        if not is_allowed(f"/posts/{slug}", roles or [], _rbac_rules):
+            continue
+        abbreviations = _effective_abbreviations(root, path.parent)
+        if path.suffix == ".md":
+            metadata, _ = parse_frontmatter(path)
+            title = metadata.get("title", slug_to_title(path.stem, abbreviations=abbreviations))
+        else:
+            title = slug_to_title(path.stem, abbreviations=abbreviations)
+        items.append({"path": slug, "href": f"/posts/{slug}", "title": title})
+    return items
 
 
 def _load_rbac_cfg_from_store():
@@ -660,6 +702,41 @@ async def remove_annotation(path: str, annotation_id: str, request: Request):
     return Response(json.dumps({"ok": ok}), media_type="application/json")
 
 
+@rt("/api/bookmarks", methods=["GET"])
+async def get_bookmarks(request: Request):
+    auth = get_auth_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) or {}
+    owner = bookmark_owner_from_auth(auth)
+    if not owner:
+        return Response(json.dumps({"items": [], "mode": "local"}), media_type="application/json")
+    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
+    return Response(json.dumps({"items": _resolve_bookmark_items(owner, roles), "mode": "server"}), media_type="application/json")
+
+
+@rt("/api/bookmarks/{path:path}", methods=["PUT"])
+async def save_bookmark(path: str, request: Request):
+    auth = get_auth_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) or {}
+    owner = bookmark_owner_from_auth(auth)
+    if not owner:
+        return Response("Unauthorized", status_code=401)
+    slug = str(path or "").strip("/")
+    if not content_path_for_slug(slug, ".md") and not content_path_for_slug(slug, ".pdf"):
+        return Response("Not Found", status_code=404)
+    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
+    if not is_allowed(f"/posts/{slug}", roles or [], _rbac_rules):
+        return Response("Forbidden", status_code=403)
+    _bookmarks_db_upsert(owner, slug)
+    return Response(json.dumps({"ok": True}), media_type="application/json")
+
+
+@rt("/api/bookmarks/{path:path}", methods=["DELETE"])
+async def remove_bookmark(path: str, request: Request):
+    auth = get_auth_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) or {}
+    owner = bookmark_owner_from_auth(auth)
+    if not owner:
+        return Response("Unauthorized", status_code=401)
+    return Response(json.dumps({"ok": _bookmarks_db_delete(owner, path)}), media_type="application/json")
+
+
 @app.ws("/ws/excalidraw/{path:path}", conn=_collab_conn, disconn=_collab_disconn)
 async def excalidraw_collab(ws: WebSocket, data: dict):
     room = ws.path_params.get("path", "")
@@ -858,6 +935,7 @@ def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden, current_path
         shortcut_key="Z",
         extra_content=[
             _posts_search_block(),
+            bookmarks_block(),
             Div(cls="h-px w-full bg-slate-200/80 dark:bg-slate-700/70 my-2"),
             Div(
                 "Posts",

@@ -1677,7 +1677,6 @@ function ensureThemeFonts(theme) {
         document.head.appendChild(link);
     }
     link.href = `https://fonts.googleapis.com/css2?${Array.from(queries).join('&')}&display=swap`;
-    console.log('[vyasa] ensureThemeFonts', { stacks, href: link.href });
 }
 
 function getHljsThemeHref(themeName) {
@@ -1729,12 +1728,6 @@ function applyThemePreset(theme) {
     if (theme.theme_primary) targets.forEach((el) => el.style.setProperty('--vyasa-primary-dim', `color-mix(in srgb, ${theme.theme_primary} 82%, black)`));
     ensureThemeFonts(theme);
     syncCodeThemeLinks(theme);
-    console.log('[vyasa] applyThemePreset', {
-        presetPrimary: theme.theme_primary,
-        monoFont: theme.theme_mono_font,
-        codeLight: theme.code_theme_light,
-        codeDark: theme.code_theme_dark,
-    });
 }
 
 function getVisibleThemeControl(id) {
@@ -1799,7 +1792,6 @@ window.vyasaApplyRandomThemePreset = function vyasaApplyRandomThemePreset(source
     const current = label ? label.textContent.trim() : '';
     const pool = presets.length > 1 ? presets.filter((name) => name !== current) : presets;
     const next = pool[Math.floor(Math.random() * pool.length)];
-    console.log('[vyasa] random preset click', { current, next, presets: presets.length });
     window.vyasaApplyThemePreset(next, source);
 };
 
@@ -2060,15 +2052,16 @@ function initPostsSidebarAutoReveal() {
     const postSidebars = document.querySelectorAll('details[data-sidebar="posts"]');
     
     postSidebars.forEach((sidebar) => {
+        if (window.__vyasaPostsSidebarWasOpen && !sidebar.open) {
+            sidebar.open = true;
+        }
+        if (sidebar.open) {
+            revealInSidebar(sidebar);
+        }
         if (sidebar.dataset.revealBound === 'true') {
             return;
         }
         sidebar.dataset.revealBound = 'true';
-        
-        // Reveal immediately if sidebar is already open
-        if (sidebar.open) {
-            revealInSidebar(sidebar);
-        }
         
         sidebar.addEventListener('toggle', () => {
             if (!sidebar.open) {
@@ -2498,6 +2491,170 @@ function initSearchClearButtons(rootElement = document) {
     });
 }
 
+const vyasaBookmarks = { mode: null, items: [], loadPromise: null };
+
+function normalizeBookmarkItems(items = []) {
+    const seen = new Set();
+    return items.filter((item) => {
+        const path = String(item && item.path || '').replace(/^\/+|\/+$/g, '');
+        if (!path || seen.has(path)) return false;
+        seen.add(path);
+        item.path = path;
+        item.href = item.href || `/posts/${path}`;
+        item.title = item.title || path;
+        return true;
+    });
+}
+
+function readLocalBookmarks() {
+    try {
+        return normalizeBookmarkItems(JSON.parse(localStorage.getItem('vyasa:bookmarks') || '[]'));
+    } catch (err) {
+        return [];
+    }
+}
+
+function writeLocalBookmarks(items) {
+    try {
+        localStorage.setItem('vyasa:bookmarks', JSON.stringify(normalizeBookmarkItems(items)));
+    } catch (err) {
+        // Ignore storage failures.
+    }
+}
+
+function bookmarkItemFromButton(button) {
+    const path = String(button?.dataset?.bookmarkPath || '').replace(/^\/+|\/+$/g, '');
+    const title = button?.dataset?.bookmarkTitle || path;
+    const href = button?.closest('.vyasa-bookmark-row')?.querySelector('a[href]')?.getAttribute('href') || `/posts/${path}`;
+    return path ? { path, title, href } : null;
+}
+
+function ensureBookmarksLoaded(force = false) {
+    if (vyasaBookmarks.mode && !force) return Promise.resolve(vyasaBookmarks.items);
+    if (vyasaBookmarks.loadPromise && !force) return vyasaBookmarks.loadPromise;
+    vyasaBookmarks.loadPromise = fetch('/api/bookmarks')
+        .then((response) => response.ok ? response.json() : { mode: 'local', items: readLocalBookmarks() })
+        .catch(() => ({ mode: 'local', items: readLocalBookmarks() }))
+        .then((payload) => {
+            vyasaBookmarks.mode = payload.mode === 'server' ? 'server' : 'local';
+            vyasaBookmarks.items = normalizeBookmarkItems(vyasaBookmarks.mode === 'server' ? (payload.items || []) : readLocalBookmarks());
+            return vyasaBookmarks.items;
+        })
+        .finally(() => { vyasaBookmarks.loadPromise = null; });
+    return vyasaBookmarks.loadPromise;
+}
+
+function renderBookmarksBlock(rootElement = document) {
+    const paths = new Set(vyasaBookmarks.items.map((item) => item.path));
+    rootElement.querySelectorAll('[data-bookmark-toggle="true"]').forEach((button) => {
+        const bookmarked = paths.has(button.dataset.bookmarkPath);
+        button.dataset.bookmarked = bookmarked ? 'true' : 'false';
+        const glyph = button.querySelector('.vyasa-bookmark-glyph');
+        if (glyph) glyph.textContent = bookmarked ? '★' : '☆';
+    });
+    rootElement.querySelectorAll('.vyasa-bookmarks-block').forEach((block) => {
+        const list = block.querySelector('.vyasa-bookmarks-list');
+        if (!list) return;
+        list.innerHTML = vyasaBookmarks.items.map((item) => `
+            <div class="vyasa-bookmark-row relative inline-flex items-center w-max">
+                <a href="${item.href}" hx-get="${item.href}" hx-target="#main-content" hx-push-url="true" hx-swap="outerHTML show:window:top settle:0.1s" class="vyasa-tree-row vyasa-bookmark-link inline-flex items-center py-1 pl-2 pr-10 rounded transition-colors whitespace-nowrap" data-path="${item.path}" data-bookmark-link="true">
+                    <span class="whitespace-nowrap" title="${item.path}">${item.path}</span>
+                </a>
+                <button type="button" class="vyasa-bookmark-delete absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-white/90 hover:text-white transition-colors leading-none" data-bookmark-delete="true" data-bookmark-path="${item.path}" data-bookmark-title="${item.title}" aria-label="Remove bookmark for ${item.title}" title="Remove bookmark for ${item.title}">
+                    <span class="flex items-center justify-center" aria-hidden="true"><svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span>
+                </button>
+            </div>`).join('');
+        block.classList.toggle('has-items', vyasaBookmarks.items.length > 0);
+    });
+}
+
+function bindBookmarkButtons(rootElement = document) {
+    rootElement.querySelectorAll('[data-bookmark-toggle="true"]').forEach((button) => {
+        if (button.dataset.bookmarkBound === 'true') return;
+        button.dataset.bookmarkBound = 'true';
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleBookmarkItem(button);
+        }, true);
+    });
+    rootElement.querySelectorAll('[data-bookmark-delete="true"]').forEach((button) => {
+        if (button.dataset.bookmarkDeleteBound === 'true') return;
+        button.dataset.bookmarkDeleteBound = 'true';
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            deleteBookmarkItem(button);
+        }, true);
+    });
+}
+
+function bindBookmarkLinks(rootElement = document) {
+    rootElement.querySelectorAll('[data-bookmark-link="true"]').forEach((link) => {
+        if (link.dataset.bookmarkLinkBound === 'true') return;
+        link.dataset.bookmarkLinkBound = 'true';
+        link.addEventListener('click', (event) => {
+            event.preventDefault();
+            const href = link.getAttribute('href');
+            const path = link.getAttribute('data-path') || '';
+            if (!href) return;
+            if (window.htmx && typeof window.htmx.ajax === 'function') {
+                const postsSidebar = document.querySelector('details[data-sidebar="posts"]');
+                window.__vyasaPostsSidebarWasOpen = !!postsSidebar?.open;
+                window.htmx.ajax('GET', href, { target: '#main-content', swap: 'outerHTML show:window:top settle:0.1s', pushURL: true });
+                window.htmx.ajax('GET', `/_sidebar/posts?current_path=${encodeURIComponent(path)}`, { target: '#posts-sidebar', swap: 'outerHTML' });
+                return;
+            }
+            window.location.assign(href);
+        });
+    });
+}
+
+async function toggleBookmarkItem(button) {
+    const item = bookmarkItemFromButton(button);
+    if (!item) return;
+    await ensureBookmarksLoaded();
+    const exists = vyasaBookmarks.items.some((entry) => entry.path === item.path);
+    if (vyasaBookmarks.mode === 'server') {
+        const routePath = item.path.split('/').map(encodeURIComponent).join('/');
+        await fetch(`/api/bookmarks/${routePath}`, { method: exists ? 'DELETE' : 'PUT' });
+        await ensureBookmarksLoaded(true);
+    } else {
+        vyasaBookmarks.items = exists
+            ? vyasaBookmarks.items.filter((entry) => entry.path !== item.path)
+            : normalizeBookmarkItems([item, ...vyasaBookmarks.items]);
+        writeLocalBookmarks(vyasaBookmarks.items);
+    }
+    renderBookmarksBlock(document);
+    bindBookmarkButtons(document);
+    bindBookmarkLinks(document);
+}
+
+async function deleteBookmarkItem(button) {
+    const item = bookmarkItemFromButton(button);
+    if (!item) return;
+    await ensureBookmarksLoaded();
+    if (vyasaBookmarks.mode === 'server') {
+        const routePath = item.path.split('/').map(encodeURIComponent).join('/');
+        await fetch(`/api/bookmarks/${routePath}`, { method: 'DELETE' });
+        await ensureBookmarksLoaded(true);
+    } else {
+        vyasaBookmarks.items = vyasaBookmarks.items.filter((entry) => entry.path !== item.path);
+        writeLocalBookmarks(vyasaBookmarks.items);
+    }
+    renderBookmarksBlock(document);
+    bindBookmarkButtons(document);
+    bindBookmarkLinks(document);
+}
+
+function initBookmarks(rootElement = document) {
+    ensureBookmarksLoaded().then(() => {
+        renderBookmarksBlock(rootElement);
+        bindBookmarkButtons(rootElement);
+        bindBookmarkLinks(rootElement);
+    });
+}
+
 document.addEventListener('toggle', (event) => {
     const details = event.target;
     if (!(details instanceof HTMLDetailsElement)) {
@@ -2571,19 +2728,13 @@ function syncHeadingActionStates(root = document) {
 // Update active post link in sidebar
 function updateActivePostLink() {
     const currentPath = normalizeSidebarPath(window.location.pathname);
-    document.querySelectorAll('details[data-folder="true"] > summary').forEach(summary => {
-        summary.classList.remove('is-active');
+    document.querySelectorAll('.vyasa-tree-row').forEach(row => {
+        row.classList.remove('is-active');
     });
     document.querySelectorAll('.post-link').forEach(link => {
         const linkPath = normalizeSidebarPath(link.getAttribute('data-path') || '');
         if (linkPath === currentPath) {
-            link.classList.add('is-active');
-            if (link.classList.contains('folder-note-link')) {
-                link.classList.remove('is-active');
-                link.closest('summary')?.classList.add('is-active');
-            }
-        } else {
-            link.classList.remove('is-active');
+            link.closest('.vyasa-tree-row')?.classList.add('is-active');
         }
     });
 }
@@ -2874,6 +3025,9 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
     updateActiveTocLink();
     initMobileMenus(); // Reinitialize mobile menu handlers
     initPostsSidebarAutoReveal();
+    if (event.target?.id === 'posts-sidebar') {
+        window.__vyasaPostsSidebarWasOpen = false;
+    }
     initFolderChevronState();
     initSearchPlaceholderCycle(event.target || document);
     initCodeBlockCopyButtons(event.target || document);
@@ -3682,6 +3836,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initAnnotations(document);
     initSearchPlaceholderCycle(document);
     initPostsSearchPersistence(document);
+    initBookmarks(document);
     initCodeBlockCopyButtons(document);
     initCryptographs(document);
     initCytographs(document);
@@ -3714,6 +3869,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     refreshVyasaTableScrollShadows(event.target);
     initSearchPlaceholderCycle(event.target);
     initPostsSearchPersistence(event.target);
+    initBookmarks(event.target);
     initCodeBlockCopyButtons(event.target);
     initCryptographs(event.target);
     initCytographs(event.target);
