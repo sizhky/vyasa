@@ -11,5 +11,6 @@ Vyasa turns a folder of Markdown files into a navigable site with a live Python 
 | How do diagrams fit into a page? | [Mermaid diagrams](mermaid-diagrams.md) or [D2 diagrams](d2-diagrams.md) | Each renderer has different knobs and runtime behavior. |
 | How do I restyle the shell and article? | [Theming and CSS](theming.md) | It separates page chrome from content styling. |
 | How do auth and path rules work? | [Security and access](security.md) | It explains the live app trust boundaries. |
+| How do I sort homepage cards? | [Configuration and CLI](configuration.md) | `home_sort` lives in root `.vyasa` and only affects the blog-style homepage card feed. |
 | How does the request pipeline hang together? | [Architecture overview](architecture.md) | It maps the server, renderer, and layout flow. |
 | What happens after the basics? | [Advanced behavior](advanced.md) | It covers escape hatches and operational edges. |
