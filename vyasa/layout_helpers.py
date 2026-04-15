@@ -37,7 +37,7 @@ def _resolve_layout_config(current_path):
     config = get_config()
     return {
         "layout_max_width": _coerce_config_str(config.get("layout_max_width", "VYASA_LAYOUT_MAX_WIDTH", "85vw")),
-        "sidebar_width": _coerce_config_str(config.get("sidebar_width", "VYASA_SIDEBAR_WIDTH", "26rem")),
+        "sidebar_width": _coerce_config_str(config.get("sidebar_width", "VYASA_SIDEBAR_WIDTH", "22rem")),
         "theme_primary": _coerce_config_str(config.get_theme_primary()),
         "theme_body_font": _coerce_config_str(config.get_theme_body_font()),
         "theme_heading_font": _coerce_config_str(config.get_theme_heading_font()),
