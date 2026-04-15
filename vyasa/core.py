@@ -24,6 +24,7 @@ from .helpers import (
     content_slug_for_path,
     get_content_mounts,
     iter_visible_files,
+    preview_markdown,
     should_exclude_dir,
 )
 from .layout_helpers import (
@@ -111,29 +112,44 @@ def get_file_created_ts(path: Path) -> float:
         return 0.0
 
 
-def iter_blog_home_files(root: Path, roles=None):
-    for path in iter_visible_files(root, (".md",), include_hidden=False):
-        if path.name.startswith("."):
-            continue
-        if path.parent == root and path.stem.lower() in {"index", "readme"}:
-            continue
-        if roles is not None and not is_allowed(f"/posts/{path.relative_to(root).with_suffix('').as_posix()}", roles, _rbac_rules):
-            continue
-        yield path
+def iter_blog_home_files(roots=None, roles=None):
+    for _, root in roots or get_content_mounts():
+        for path in iter_visible_files(root, (".md",), include_hidden=False):
+            if path.name.startswith("."):
+                continue
+            if path.parent == root and path.stem.lower() in {"index", "readme"}:
+                continue
+            slug = content_slug_for_path(path)
+            if not slug:
+                continue
+            if roles is not None and not is_allowed(f"/posts/{slug}", roles, _rbac_rules):
+                continue
+            yield path, slug
 
 
 def render_blog_home(htmx, request: Request):
-    root = get_root_folder()
+    roots = get_content_mounts()
+    root = roots[0][1] if roots else get_root_folder()
     roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    entries = sorted(iter_blog_home_files(root, roles), key=get_file_created_ts, reverse=True)
-    cards = []
-    for path in entries:
-        title, _ = resolve_markdown_title(path, abbreviations=_effective_abbreviations(root))
-        rel = path.relative_to(root).with_suffix("").as_posix()
-        cards.append(Div(A(title, href=f"/posts/{rel}", cls="text-xl font-semibold hover:underline"), cls="vyasa-task-card rounded-xl p-5"))
-    feed = Div(*cards, id="blog-feed", cls="space-y-4")
+    entries = sorted(iter_blog_home_files(roots, roles), key=lambda item: get_file_created_ts(item[0]), reverse=True)
+    feed = render_blog_home_feed(entries, root, 0)
     shell = Div(H1(f"Welcome to {get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="mt-2 text-slate-500"), feed, Div("Scroll for more", id="blog-feed-sentinel", cls="sr-only"), cls="space-y-6")
     return layout(shell, htmx=htmx, title=f"Home - {get_blog_title()}", show_sidebar=True, current_path="__home__", auth=request.scope.get("auth"))
+
+
+def render_blog_home_feed(entries, root, offset=0, batch_size=4):
+    cards = []
+    chunk = entries[offset:offset + batch_size]
+    for path, slug in chunk:
+        title, _ = resolve_markdown_title(path, abbreviations=_effective_abbreviations(root))
+        preview = from_md(preview_markdown(resolve_markdown_title(path, abbreviations=_effective_abbreviations(root))[1]), current_path=slug)
+        cards.append(Div(
+            A(title, href=f"/posts/{slug}", cls="vyasa-blog-card-title absolute -left-56 top-6 block w-56 text-left text-3xl font-bold leading-tight hover:underline line-clamp-3 overflow-hidden"),
+            Div(Div(preview, cls="prose prose-slate dark:prose-invert max-w-none"), A("continue reading...", href=f"/posts/{slug}", cls="inline-flex mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200 hover:underline"), cls="vyasa-task-card rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white/75 dark:bg-slate-900/45 p-5 shadow-sm min-w-0 w-full"),
+            cls="relative flex w-full items-start",
+        ))
+    sentinel = Div(id="blog-feed-sentinel", cls="h-8", hx_get=f"/_home/feed?offset={offset + batch_size}", hx_trigger="revealed", hx_swap="outerHTML")
+    return Div(*cards, sentinel, id="blog-feed", cls="space-y-4")
 
 
 def get_favicon_href():
@@ -1286,6 +1302,15 @@ def index(htmx, request: Request):
         layout=layout,
         logger=logger,
     )
+
+
+@rt("/_home/feed")
+def home_feed(offset: int = 0, htmx=None, request: Request = None):
+    roots = get_content_mounts()
+    root = roots[0][1] if roots else get_root_folder()
+    roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) if request else None
+    entries = sorted(iter_blog_home_files(roots, roles), key=lambda item: get_file_created_ts(item[0]), reverse=True)
+    return render_blog_home_feed(entries, root, max(0, offset))
 
 
 # Catch-all route for 404 pages (must be last)

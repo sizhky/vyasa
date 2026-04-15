@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 from fasthtml.common import A, Button, Div, H1, Kbd, Li, Main, NotStr, Ol, P, Response, Script, Span, Strong, Textarea, to_xml
 from monsterui.all import UkIcon
-from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, estimate_read_time_minutes, get_adjacent_posts
+from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, estimate_read_time_minutes, get_adjacent_posts, strip_more_marker
 from .markdown_rendering import _render_markdown_fragment
 from .slides import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
 
@@ -101,7 +101,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     frontmatter_error = metadata.get("__frontmatter_error__")
     post_title, render_content = resolve_markdown_title(file_path, abbreviations=abbreviations)
     md_start = time.time()
-    content = from_md(render_content, current_path=path)
+    content = from_md(strip_more_marker(render_content), current_path=path)
     logger.debug(f"[DEBUG] Markdown rendering took {(time.time() - md_start) * 1000:.2f}ms")
     read_time = P(f"{estimate_read_time_minutes(render_content)}-min read", cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2")
     copy_button = Button(
