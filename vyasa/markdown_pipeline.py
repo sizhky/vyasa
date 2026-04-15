@@ -50,20 +50,6 @@ def extract_footnotes(content):
     return content.strip(), defs
 
 
-def preserve_newlines(md):
-    protected = []
-    def protect(pattern, text, flags=0):
-        regex = re.compile(pattern, flags)
-        return regex.sub(lambda m: protected.append(m.group(0)) or f"__VYASA_BLOCK_{len(protected)-1}__", text)
-    md = protect(r"(```+|~~~+)[\s\S]*?\1", md, re.MULTILINE)
-    md = protect(r"\$\$[\s\S]*?\$\$", md, re.MULTILINE)
-    md = protect(r"\\\[[\s\S]*?\\\]", md, re.MULTILINE)
-    md = re.sub(r"(?<!\n)\n(?!\n)", "  \n", md)
-    for i, block in enumerate(protected):
-        md = md.replace(f"__VYASA_BLOCK_{i}__", block)
-    return md
-
-
 def preprocess_callouts(content):
     callout_store = {}
     protected = []

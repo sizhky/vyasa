@@ -130,6 +130,13 @@ def test_markdown_after_callout_still_renders():
     assert '<strong>Key columns:</strong>' in html
 
 
+def test_single_newline_uses_markdown_soft_break_behavior():
+    html = to_xml(from_md("abcd mnop\npqrs xyz"))
+
+    assert 'abcd mnop\npqrs xyz' in html
+    assert 'abcd mnop<br' not in html
+
+
 def test_double_equals_renders_mark_highlight():
     html = to_xml(from_md("This is ==important== text."))
 
