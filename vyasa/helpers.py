@@ -260,12 +260,15 @@ def resolve_markdown_title(file_path: str | Path, abbreviations=None) -> tuple[s
 
     return slug_to_title(file_path.stem, abbreviations=abbreviations), raw_content
 
-def strip_more_marker(text: str) -> str:
-    return re.sub(r"^\s*<!--\s*more\s*-->\s*$", "", text or "", flags=re.MULTILINE)
+_MORE_MARKER_RE = re.compile(r"^\s*<!--\s*more\s*-->\s*$", re.MULTILINE)
 
-def preview_markdown(text: str, max_blocks: int = 3) -> str:
+
+def strip_more_marker(text: str) -> str:
+    return _MORE_MARKER_RE.sub("", text or "")
+
+def preview_markdown(text: str, max_blocks: int = 5) -> str:
     text = text or ""
-    marker = re.search(r"^\s*<!--\s*more\s*-->\s*$", text, flags=re.MULTILINE)
+    marker = _MORE_MARKER_RE.search(text)
     if marker:
         return text[:marker.start()].rstrip()
     blocks = [block.strip() for block in re.split(r"\n\s*\n", text) if block.strip()]
