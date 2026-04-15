@@ -204,6 +204,10 @@ class VyasaConfig:
         value = self.get('theme_mono_font', 'VYASA_THEME_MONO_FONT', None)
         return str(value).strip() if value else None
 
+    def get_home_sort(self) -> str | None:
+        value = self.get('home_sort', 'VYASA_HOME_SORT', None)
+        return value if value in ('name_asc', 'name_desc') else None
+
     def get_theme_debug(self) -> bool:
         value = self.get('theme_debug', 'VYASA_THEME_DEBUG', False)
         if isinstance(value, str):

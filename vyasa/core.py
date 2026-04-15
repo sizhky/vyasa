@@ -17,6 +17,7 @@ from .helpers import (
     _effective_abbreviations,
     _effective_ignore_list,
     _effective_include_list,
+    get_vyasa_config,
     _should_include_folder,
     find_folder_note_file,
     content_path_for_slug,
@@ -117,6 +118,8 @@ def iter_blog_home_files(roots=None, roles=None):
         for path in iter_visible_files(root, (".md",), include_hidden=False):
             if path.name.startswith("."):
                 continue
+            if _blog_home_is_ignored(path, root):
+                continue
             if path.parent == root and path.stem.lower() in {"index", "readme"}:
                 continue
             slug = content_slug_for_path(path)
@@ -131,7 +134,7 @@ def render_blog_home(htmx, request: Request):
     roots = get_content_mounts()
     root = roots[0][1] if roots else get_root_folder()
     roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    entries = sorted(iter_blog_home_files(roots, roles), key=lambda item: get_file_created_ts(item[0]), reverse=True)
+    entries = _sort_blog_home_entries(iter_blog_home_files(roots, roles), root)
     feed = render_blog_home_feed(entries, root, 0)
     shell = Div(H1(f"Welcome to {get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="mt-2 text-slate-500"), feed, cls="space-y-6")
     return layout(shell, htmx=htmx, title=f"Home - {get_blog_title()}", show_sidebar=True, current_path="__home__", auth=request.scope.get("auth"))
@@ -159,6 +162,26 @@ def render_blog_home_feed(entries, root, offset=0, batch_size=4, wrap=True):
     if wrap:
         return Div(*cards, sentinel, id="blog-feed", cls="space-y-4")
     return tuple([*cards, sentinel] if sentinel else cards)
+
+def _sort_blog_home_entries(entries, root):
+    sort = get_config().get_home_sort()
+    items = list(entries)
+    if sort == "name_asc":
+        return sorted(items, key=lambda item: item[1].lower())
+    if sort == "name_desc":
+        return sorted(items, key=lambda item: item[1].lower(), reverse=True)
+    return sorted(items, key=lambda item: get_file_created_ts(item[0]), reverse=True)
+
+def _blog_home_is_ignored(path, root):
+    relative = path.relative_to(root)
+    ignore_names = set()
+    ancestor = root
+    ignore_names.update(str(item).strip() for item in (get_vyasa_config(root).get("ignore") or []) if str(item).strip())
+    for part in relative.parts[:-1]:
+        ancestor = ancestor / part
+        ignore_names.update(str(item).strip() for item in (get_vyasa_config(ancestor).get("ignore") or []) if str(item).strip())
+    candidates = set(relative.parts) | set(relative.with_suffix("").parts) | {path.name, path.stem}
+    return bool(ignore_names.intersection(candidates))
 
 
 def get_favicon_href():
@@ -1318,7 +1341,7 @@ def home_feed(offset: int = 0, htmx=None, request: Request = None):
     roots = get_content_mounts()
     root = roots[0][1] if roots else get_root_folder()
     roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) if request else None
-    entries = sorted(iter_blog_home_files(roots, roles), key=lambda item: get_file_created_ts(item[0]), reverse=True)
+    entries = _sort_blog_home_entries(iter_blog_home_files(roots, roles), root)
     return render_blog_home_feed(entries, root, max(0, offset), wrap=False)
 
 

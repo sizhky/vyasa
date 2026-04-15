@@ -9,7 +9,7 @@ Use this skill for real Vyasa behavior. All reference files are self-contained â
 
 | If you want to... | Read |
 |---|---|
-| Configure `.vyasa`, CLI flags, env vars, RBAC, OAuth | `references/config.md` |
+| Configure `.vyasa`, CLI flags, env vars, RBAC, OAuth, or homepage card sorting | `references/config.md` |
 | Write or explain markdown features | `references/markdown.md` |
 | Embed or explain Mermaid, D2, Cytograph, or `.cytree` diagrams | `references/diagrams.md` |
 | Style with CSS or theming | `references/theming.md` |
@@ -36,6 +36,8 @@ Core rules:
 - Treat `.vyasa` as a TOML file, usually at repo root or a content folder.
 - Respect precedence: CLI args > `.vyasa` > environment variables > defaults.
 - Distinguish root app config from folder-local ordering and navigation config.
+- Use `home_sort = "name_asc"` or `home_sort = "name_desc"` for the blog-style homepage card feed when no root page exists; keep folder `sort` for the sidebar/tree.
+- Treat root `ignore = [...]` as a homepage feed filter too; ignored files should not appear as cards even when the homepage falls back to the post grid.
 - In the lazy posts tree sidebar, a folder-local `.vyasa` is also a branch-visibility marker: even if the folder has no direct markdown files and only nested subfolders, the folder should still appear so the branch can lazy-load.
 - For callouts, emit Obsidian-style callouts like `> [!note] Title` or `> [!warning]- Title`; prefer aliases already supported by Obsidian (`warn`, `error`, `faq`, `check`, `done`, `summary`, `tldr`, `cite`, etc.) rather than inventing new keywords.
 - For richer task cards, prefer markdown task-list items like `- [ ] Task | owner: Jane | deadline: Tomorrow | priority: high` over custom HTML tags; supported metadata families live in `references/markdown.md`.

@@ -28,6 +28,9 @@ enabled = true
 
 Root-level `.vyasa` is for app behavior: title, content root, theme tokens, auth, RBAC, and sidebar defaults. Folder-level `.vyasa` is for navigation shape: `order`, `sort`, `folders_first`, and any local layout override that should travel with that subtree rather than the whole site.
 
+The homepage card feed also respects `home_sort = "name_asc"` or `home_sort = "name_desc"` from the root `.vyasa` file when no root page exists. Leave it unset to keep the default newest-created-first ordering.
+The root `ignore = [...]` list also hides matching files from the homepage card feed, so you can keep drafts and repo clutter out of the landing page without deleting them.
+
 ## Why These Settings Matter
 
 | Setting | Why it exists |
