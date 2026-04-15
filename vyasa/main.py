@@ -179,6 +179,16 @@ def cli():
         reload_excludes.append(".py[cod]")
         reload_excludes.append(".sw.*")
         reload_excludes.append("~*")
+        reload_excludes.extend([
+            "*.db",
+            "*.db-journal",
+            "*.db-wal",
+            "*.db-shm",
+            ".vyasa-*.db",
+            ".vyasa-*.db-journal",
+            ".vyasa-*.db-wal",
+            ".vyasa-*.db-shm",
+        ])
         reload_kwargs = {
             "reload": True,
             "reload_dirs": reload_dirs,

@@ -11,7 +11,12 @@ class BookmarkRow:
 
 def bookmark_owner_from_auth(auth):
     auth = auth or {}
-    return str(auth.get("email") or auth.get("username") or "").strip().lower()
+    owner = auth.get("email") or auth.get("username") or auth.get("sub")
+    if owner:
+        return str(owner).strip().lower()
+    provider = str(auth.get("provider") or "").strip().lower()
+    provider_id = auth.get("id")
+    return f"{provider}:{provider_id}".strip(":").lower() if provider and provider_id else ""
 
 
 def _normalize_bookmark_path(path):

@@ -240,7 +240,7 @@ def _resolve_bookmark_items(owner: str, roles):
     root = get_root_folder()
     for row in _bookmarks_db_list(owner):
         slug = (row.path or "").strip("/")
-        path = content_path_for_slug(slug)
+        path = content_path_for_slug(slug, ".md") or content_path_for_slug(slug, ".pdf")
         if not slug or not path or path.suffix not in {".md", ".pdf"}:
             continue
         if not is_allowed(f"/posts/{slug}", roles or [], _rbac_rules):
@@ -707,16 +707,21 @@ async def remove_annotation(path: str, annotation_id: str, request: Request):
 async def get_bookmarks(request: Request):
     auth = get_auth_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) or {}
     owner = bookmark_owner_from_auth(auth)
+    logger.info(f"[BOOKMARKS][GET] auth={auth} owner={owner!r}")
     if not owner:
-        return Response(json.dumps({"items": [], "mode": "local"}), media_type="application/json")
+        return Response(json.dumps({"items": [], "mode": "local"}), media_type="application/json", headers={"Cache-Control": "no-store"})
     roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    return Response(json.dumps({"items": _resolve_bookmark_items(owner, roles), "mode": "server"}), media_type="application/json")
+    db_rows = [(row.owner, row.path, row.created_at) for row in _bookmarks_db_list(owner)]
+    items = _resolve_bookmark_items(owner, roles)
+    logger.info(f"[BOOKMARKS][GET] owner={owner!r} roles={roles} db_rows={db_rows} returned={[item['path'] for item in items]}")
+    return Response(json.dumps({"items": items, "mode": "server"}), media_type="application/json", headers={"Cache-Control": "no-store"})
 
 
 @rt("/api/bookmarks/{path:path}", methods=["PUT"])
 async def save_bookmark(path: str, request: Request):
     auth = get_auth_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) or {}
     owner = bookmark_owner_from_auth(auth)
+    logger.info(f"[BOOKMARKS][PUT] path={path!r} auth={auth} owner={owner!r}")
     if not owner:
         return Response("Unauthorized", status_code=401)
     slug = str(path or "").strip("/")
@@ -726,7 +731,8 @@ async def save_bookmark(path: str, request: Request):
     if not is_allowed(f"/posts/{slug}", roles or [], _rbac_rules):
         return Response("Forbidden", status_code=403)
     _bookmarks_db_upsert(owner, slug)
-    return Response(json.dumps({"ok": True}), media_type="application/json")
+    logger.info(f"[BOOKMARKS][PUT] owner={owner!r} saved={slug!r} db_rows={[(row.owner, row.path) for row in _bookmarks_db_list(owner)]}")
+    return Response(json.dumps({"ok": True}), media_type="application/json", headers={"Cache-Control": "no-store"})
 
 
 @rt("/api/bookmarks/{path:path}", methods=["DELETE"])
@@ -735,7 +741,7 @@ async def remove_bookmark(path: str, request: Request):
     owner = bookmark_owner_from_auth(auth)
     if not owner:
         return Response("Unauthorized", status_code=401)
-    return Response(json.dumps({"ok": _bookmarks_db_delete(owner, path)}), media_type="application/json")
+    return Response(json.dumps({"ok": _bookmarks_db_delete(owner, path)}), media_type="application/json", headers={"Cache-Control": "no-store"})
 
 
 @app.ws("/ws/excalidraw/{path:path}", conn=_collab_conn, disconn=_collab_disconn)

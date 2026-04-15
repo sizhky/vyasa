@@ -33,9 +33,14 @@ def google_account_allowed(email, google_oauth_cfg):
 
 
 def build_google_auth_payload(userinfo):
+    email = userinfo.get("email") if isinstance(userinfo, dict) else None
+    sub = userinfo.get("sub") if isinstance(userinfo, dict) else None
     return {
         "provider": "google",
-        "email": userinfo.get("email") if isinstance(userinfo, dict) else None,
+        "email": email,
+        "username": userinfo.get("preferred_username") if isinstance(userinfo, dict) else None,
         "name": userinfo.get("name") if isinstance(userinfo, dict) else None,
         "picture": userinfo.get("picture") if isinstance(userinfo, dict) else None,
+        "sub": sub,
+        "id": sub,
     }

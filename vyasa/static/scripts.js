@@ -2533,6 +2533,17 @@ function initSearchClearButtons(rootElement = document) {
 }
 
 const vyasaBookmarks = { mode: null, items: [], loadPromise: null };
+const vyasaBookmarkDebugEnabled = () => {
+    try {
+        return localStorage.getItem('vyasa:debug:bookmarks') === '1';
+    } catch (err) {
+        return false;
+    }
+};
+function vyasaBookmarkDebug(event, payload = {}) {
+    if (!vyasaBookmarkDebugEnabled()) return;
+    console.info('[vyasa bookmarks]', event, payload);
+}
 
 function normalizeBookmarkItems(items = []) {
     const seen = new Set();
@@ -2573,12 +2584,19 @@ function bookmarkItemFromButton(button) {
 function ensureBookmarksLoaded(force = false) {
     if (vyasaBookmarks.mode && !force) return Promise.resolve(vyasaBookmarks.items);
     if (vyasaBookmarks.loadPromise && !force) return vyasaBookmarks.loadPromise;
-    vyasaBookmarks.loadPromise = fetch('/api/bookmarks')
-        .then((response) => response.ok ? response.json() : { mode: 'local', items: readLocalBookmarks() })
-        .catch(() => ({ mode: 'local', items: readLocalBookmarks() }))
+    vyasaBookmarks.loadPromise = fetch('/api/bookmarks', { cache: 'no-store', credentials: 'same-origin' })
+        .then((response) => {
+            vyasaBookmarkDebug('load-response', { force, status: response.status, ok: response.ok });
+            return response.ok ? response.json() : { mode: 'local', items: readLocalBookmarks() };
+        })
+        .catch((error) => {
+            vyasaBookmarkDebug('load-error', { force, error: String(error) });
+            return { mode: 'local', items: readLocalBookmarks() };
+        })
         .then((payload) => {
             vyasaBookmarks.mode = payload.mode === 'server' ? 'server' : 'local';
             vyasaBookmarks.items = normalizeBookmarkItems(vyasaBookmarks.mode === 'server' ? (payload.items || []) : readLocalBookmarks());
+            vyasaBookmarkDebug('load-applied', { force, mode: vyasaBookmarks.mode, paths: vyasaBookmarks.items.map((item) => item.path) });
             return vyasaBookmarks.items;
         })
         .finally(() => { vyasaBookmarks.loadPromise = null; });
@@ -2587,6 +2605,7 @@ function ensureBookmarksLoaded(force = false) {
 
 function renderBookmarksBlock(rootElement = document) {
     const paths = new Set(vyasaBookmarks.items.map((item) => item.path));
+    vyasaBookmarkDebug('render', { mode: vyasaBookmarks.mode, count: vyasaBookmarks.items.length, targetTag: rootElement?.tagName || 'document' });
     rootElement.querySelectorAll('[data-bookmark-toggle="true"]').forEach((button) => {
         const bookmarked = paths.has(button.dataset.bookmarkPath);
         button.dataset.bookmarked = bookmarked ? 'true' : 'false';
@@ -2675,9 +2694,16 @@ async function toggleBookmarkItem(button) {
     if (!item) return;
     await ensureBookmarksLoaded();
     const exists = vyasaBookmarks.items.some((entry) => entry.path === item.path);
+    vyasaBookmarkDebug('toggle-start', { path: item.path, exists, mode: vyasaBookmarks.mode });
     if (vyasaBookmarks.mode === 'server') {
         const routePath = item.path.split('/').map(encodeURIComponent).join('/');
-        await fetch(`/api/bookmarks/${routePath}`, { method: exists ? 'DELETE' : 'PUT' });
+        const response = await fetch(`/api/bookmarks/${routePath}`, {
+            method: exists ? 'DELETE' : 'PUT',
+            cache: 'no-store',
+            credentials: 'same-origin',
+        });
+        vyasaBookmarkDebug('toggle-response', { path: item.path, method: exists ? 'DELETE' : 'PUT', status: response.status, ok: response.ok });
+        if (!response.ok) return;
         await ensureBookmarksLoaded(true);
     } else {
         vyasaBookmarks.items = exists
@@ -2685,6 +2711,7 @@ async function toggleBookmarkItem(button) {
             : normalizeBookmarkItems([item, ...vyasaBookmarks.items]);
         writeLocalBookmarks(vyasaBookmarks.items);
     }
+    vyasaBookmarkDebug('toggle-finished', { path: item.path, mode: vyasaBookmarks.mode, paths: vyasaBookmarks.items.map((entry) => entry.path) });
     renderBookmarksBlock(document);
     bindBookmarkButtons(document);
     bindBookmarkLinks(document);
@@ -2696,7 +2723,12 @@ async function deleteBookmarkItem(button) {
     await ensureBookmarksLoaded();
     if (vyasaBookmarks.mode === 'server') {
         const routePath = item.path.split('/').map(encodeURIComponent).join('/');
-        await fetch(`/api/bookmarks/${routePath}`, { method: 'DELETE' });
+        const response = await fetch(`/api/bookmarks/${routePath}`, {
+            method: 'DELETE',
+            cache: 'no-store',
+            credentials: 'same-origin',
+        });
+        if (!response.ok) return;
         await ensureBookmarksLoaded(true);
     } else {
         vyasaBookmarks.items = vyasaBookmarks.items.filter((entry) => entry.path !== item.path);
