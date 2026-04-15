@@ -1,3 +1,9 @@
+.agents/
+.claude/
+.gemini/
+agents/
+.github/
+docs/
 tests/
 .vyasa*
 .omx

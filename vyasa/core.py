@@ -104,6 +104,38 @@ def get_blog_title():
     return get_config().get_blog_title()
 
 
+def get_file_created_ts(path: Path) -> float:
+    try:
+        return path.stat().st_ctime
+    except OSError:
+        return 0.0
+
+
+def iter_blog_home_files(root: Path, roles=None):
+    for path in iter_visible_files(root, (".md",), include_hidden=False):
+        if path.name.startswith("."):
+            continue
+        if path.parent == root and path.stem.lower() in {"index", "readme"}:
+            continue
+        if roles is not None and not is_allowed(f"/posts/{path.relative_to(root).with_suffix('').as_posix()}", roles, _rbac_rules):
+            continue
+        yield path
+
+
+def render_blog_home(htmx, request: Request):
+    root = get_root_folder()
+    roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
+    entries = sorted(iter_blog_home_files(root, roles), key=get_file_created_ts, reverse=True)
+    cards = []
+    for path in entries:
+        title, _ = resolve_markdown_title(path, abbreviations=_effective_abbreviations(root))
+        rel = path.relative_to(root).with_suffix("").as_posix()
+        cards.append(Div(A(title, href=f"/posts/{rel}", cls="text-xl font-semibold hover:underline"), cls="vyasa-task-card rounded-xl p-5"))
+    feed = Div(*cards, id="blog-feed", cls="space-y-4")
+    shell = Div(H1(f"Welcome to {get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="mt-2 text-slate-500"), feed, Div("Scroll for more", id="blog-feed-sentinel", cls="sr-only"), cls="space-y-6")
+    return layout(shell, htmx=htmx, title=f"Home - {get_blog_title()}", show_sidebar=True, current_path="__home__", auth=request.scope.get("auth"))
+
+
 def get_favicon_href():
     return favicon_href(get_root_folder())
 
@@ -1240,6 +1272,8 @@ def find_index_file():
 
 @rt
 def index(htmx, request: Request):
+    if not find_index_file():
+        return render_blog_home(htmx, request)
     return render_index(
         htmx,
         request,
