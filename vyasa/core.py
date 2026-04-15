@@ -133,11 +133,11 @@ def render_blog_home(htmx, request: Request):
     roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
     entries = sorted(iter_blog_home_files(roots, roles), key=lambda item: get_file_created_ts(item[0]), reverse=True)
     feed = render_blog_home_feed(entries, root, 0)
-    shell = Div(H1(f"Welcome to {get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="mt-2 text-slate-500"), feed, Div("Scroll for more", id="blog-feed-sentinel", cls="sr-only"), cls="space-y-6")
+    shell = Div(H1(f"Welcome to {get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="mt-2 text-slate-500"), feed, cls="space-y-6")
     return layout(shell, htmx=htmx, title=f"Home - {get_blog_title()}", show_sidebar=True, current_path="__home__", auth=request.scope.get("auth"))
 
 
-def render_blog_home_feed(entries, root, offset=0, batch_size=4):
+def render_blog_home_feed(entries, root, offset=0, batch_size=4, wrap=True):
     cards = []
     chunk = entries[offset:offset + batch_size]
     for path, slug in chunk:
@@ -148,8 +148,17 @@ def render_blog_home_feed(entries, root, offset=0, batch_size=4):
             Div(Div(preview, cls="prose prose-slate dark:prose-invert max-w-none"), A("continue reading...", href=f"/posts/{slug}", cls="inline-flex mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200 hover:underline"), cls="vyasa-task-card rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white/75 dark:bg-slate-900/45 p-5 shadow-sm min-w-0 w-full"),
             cls="relative flex w-full items-start",
         ))
-    sentinel = Div(id="blog-feed-sentinel", cls="h-8", hx_get=f"/_home/feed?offset={offset + batch_size}", hx_trigger="revealed", hx_swap="outerHTML")
-    return Div(*cards, sentinel, id="blog-feed", cls="space-y-4")
+    sentinel = Div(
+        id="blog-feed-sentinel",
+        cls="h-8",
+        hx_get=f"/_home/feed?offset={offset + batch_size}",
+        hx_trigger="revealed once",
+        hx_target="this",
+        hx_swap="outerHTML",
+    ) if offset + batch_size < len(entries) else ""
+    if wrap:
+        return Div(*cards, sentinel, id="blog-feed", cls="space-y-4")
+    return tuple([*cards, sentinel] if sentinel else cards)
 
 
 def get_favicon_href():
@@ -1310,7 +1319,7 @@ def home_feed(offset: int = 0, htmx=None, request: Request = None):
     root = roots[0][1] if roots else get_root_folder()
     roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) if request else None
     entries = sorted(iter_blog_home_files(roots, roles), key=lambda item: get_file_created_ts(item[0]), reverse=True)
-    return render_blog_home_feed(entries, root, max(0, offset))
+    return render_blog_home_feed(entries, root, max(0, offset), wrap=False)
 
 
 # Catch-all route for 404 pages (must be last)
