@@ -1,0 +1,142 @@
+{
+  "project": "vyasa",
+  "description": "Homepage blog view module for Vyasa",
+  "client": "Vyasa",
+  "created": "2026-04-15",
+  "daksh_version": "0.2",
+  "weight_class": "small",
+  "weight_rationale": "1 day timeline with one module",
+  "rules": {
+    "stages_combined": [
+      "00+10",
+      "40a+40b"
+    ],
+    "approvals_per_gate": 1,
+    "open_questions": "optional",
+    "cross_module_contracts": false,
+    "jira_sync": "optional",
+    "tend_frequency": "end_of_project"
+  },
+  "team_roster": [
+    {
+      "name": "yeshwanth",
+      "role": "PTL",
+      "email": ""
+    }
+  ],
+  "modules": [
+    "BLOG_VIEW_AS_HOME"
+  ],
+  "stages": {
+    "00+10": {
+      "status": "not_started",
+      "mode": "greenfield",
+      "output": "docs/client-context.md",
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": null,
+      "approvals": [],
+      "revision_history": []
+    },
+    "20": {
+      "status": "not_started",
+      "mode": "greenfield",
+      "output": "docs/business-requirements.md",
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": null,
+      "approvals": [],
+      "revision_history": []
+    },
+    "30": {
+      "status": "not_started",
+      "mode": "greenfield",
+      "output": "docs/implementation-roadmap.md",
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": null,
+      "approvals": [],
+      "revision_history": []
+    },
+    "40a:BLOG_VIEW_AS_HOME": {
+      "status": "approved",
+      "mode": "greenfield",
+      "output": "docs/implementation/BLOG_VIEW_AS_HOME/prd.md",
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": "2e5664b48fc6be2faf82388c60aac42f20f26d00cf7cbe6f21ef6da126eebe0a",
+      "approvals": [
+        {
+          "by": "yeshwanth",
+          "role": "PTL",
+          "date": "2026-04-15",
+          "doc_hash": "2e5664b48fc6be2faf82388c60aac42f20f26d00cf7cbe6f21ef6da126eebe0a"
+        }
+      ],
+      "revision_history": []
+    },
+    "40b:BLOG_VIEW_AS_HOME": {
+      "status": "not_started",
+      "mode": "greenfield",
+      "output": "docs/implementation/BLOG_VIEW_AS_HOME/trd.md",
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": null,
+      "approvals": [],
+      "revision_history": []
+    },
+    "40c:BLOG_VIEW_AS_HOME": {
+      "status": "approved",
+      "mode": "greenfield",
+      "output": "docs/implementation/BLOG_VIEW_AS_HOME/tasks.md",
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": {
+        "docs/implementation/BLOG_VIEW_AS_HOME/tasks.md": "1ab438c314fe9b44c6c57b1a313fb76c1d93435c6845ce431555ee2e915d2a44"
+      },
+      "approvals": [
+        {
+          "by": "yeshwanth",
+          "role": "PTL",
+          "date": "2026-04-15",
+          "doc_hash": {
+            "docs/implementation/BLOG_VIEW_AS_HOME/tasks.md": "1ab438c314fe9b44c6c57b1a313fb76c1d93435c6845ce431555ee2e915d2a44"
+          }
+        }
+      ],
+      "revision_history": []
+    },
+    "50:BLOG_VIEW_AS_HOME": {
+      "status": "not_started",
+      "mode": "greenfield",
+      "output": "docs/implementation/BLOG_VIEW_AS_HOME/tasks.md",
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": null,
+      "approvals": [],
+      "revision_history": []
+    }
+  },
+  "contracts": {},
+  "traceability": {},
+  "change_records": {},
+  "risk_register": [],
+  "discovery_records": {},
+  "required_skills": [
+    "doc-narrator",
+    "vyasa"
+  ],
+  "jira": {
+    "project_key": null,
+    "board_id": null,
+    "synced_at": null,
+    "ticket_map": {},
+    "user_map": {},
+    "workflow_preset": "divami-engineering-jira-standard",
+    "done_statuses": [
+      "Done",
+      "Done - Not Reproducible",
+      "Done - Not A Bug"
+    ]
+  }
+}
