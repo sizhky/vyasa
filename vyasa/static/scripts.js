@@ -2013,12 +2013,12 @@ function normalizeSidebarPath(pathname) {
 }
 
 // Reveal current file in sidebar
-function revealInSidebar(rootElement = document) {
-    if (!window.location.pathname.startsWith('/posts/') && !window.location.pathname.startsWith('/drawings/')) {
+function revealInSidebar(rootElement = document, explicitPath = null) {
+    if (!explicitPath && !window.location.pathname.startsWith('/posts/') && !window.location.pathname.startsWith('/drawings/')) {
         return;
     }
 
-    const currentPath = normalizeSidebarPath(window.location.pathname);
+    const currentPath = explicitPath || normalizeSidebarPath(window.location.pathname);
     const activeLink = rootElement.querySelector(`.post-link[data-path="${currentPath}"]`);
     
     if (activeLink) {
@@ -2080,7 +2080,9 @@ function initPostsSidebarAutoReveal() {
             }
         });
         if (sidebar.open) {
-            revealInSidebar(sidebar);
+            const pendingRevealPath = window.__vyasaPendingRevealPath || null;
+            if (pendingRevealPath) window.__vyasaPendingRevealPath = null;
+            revealInSidebar(sidebar, pendingRevealPath);
         }
         if (sidebar.dataset.revealBound === 'true') {
             return;
@@ -2635,15 +2637,16 @@ async function refreshPostsTreeForPath(path) {
     const wrapper = document.createElement('div');
     wrapper.innerHTML = html;
     const nextList = wrapper.querySelector('#vyasa-posts-section-list');
-    const currentList = document.querySelector('#vyasa-posts-section-list');
+    const postsContainer = document.querySelector('#posts-sidebar') || document;
+    const currentList = postsContainer.querySelector('#vyasa-posts-section-list');
     if (!nextList || !currentList) return;
     currentList.replaceWith(nextList);
     initFolderChevronState(document);
-    updateActivePostLink();
+    updateActivePostLink(path);
     bindBookmarkButtons(document);
-    const postsSidebar = document.querySelector('details[data-sidebar="posts"]');
+    const postsSidebar = postsContainer.querySelector('details[data-sidebar="posts"]');
     if (postsSidebar?.open) {
-        revealInSidebar(postsSidebar);
+        revealInSidebar(postsSidebar, path);
     }
 }
 
@@ -2657,6 +2660,7 @@ function bindBookmarkLinks(rootElement = document) {
             const path = link.getAttribute('data-path') || '';
             if (!href) return;
             if (window.htmx && typeof window.htmx.ajax === 'function') {
+                window.__vyasaPendingRevealPath = path;
                 window.htmx.ajax('GET', href, { target: '#main-content', swap: 'outerHTML show:window:top settle:0.1s', pushURL: true });
                 refreshPostsTreeForPath(path);
                 return;
@@ -2782,8 +2786,8 @@ function syncHeadingActionStates(root = document) {
 }
 
 // Update active post link in sidebar
-function updateActivePostLink() {
-    const currentPath = normalizeSidebarPath(window.location.pathname);
+function updateActivePostLink(explicitPath = null) {
+    const currentPath = explicitPath || normalizeSidebarPath(window.location.pathname);
     document.querySelectorAll('.vyasa-tree-row').forEach(row => {
         row.classList.remove('is-active');
     });
