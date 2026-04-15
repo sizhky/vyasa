@@ -20,6 +20,10 @@ Frontmatter controls page-level metadata, footnotes become sidenotes on large sc
 
 Markdown tables now render with a default per-cell max width of `33vw`, which keeps one verbose column from blowing out the whole page. If one table needs a different cap, place `<!-- table max-col=24vw -->` immediately above it.
 
+## Homepage Previews
+
+Vyasa uses `<!-- more -->` as the homepage preview cut. The homepage feed renders only the content above that marker, while the normal post route strips the marker and still renders the full article. If a post does not include the marker, the homepage preview falls back to the first five blank-line-separated blocks.
+
 ## Features Worth Remembering
 
 | Feature | Why you would use it |
