@@ -32,6 +32,8 @@ def get_tree_entries(folder: Path, root: Path, show_hidden: bool, excluded_dirs:
     for item in [] if ignore_primary_root else folder.iterdir():
         if item.name == ".vyasa":
             continue
+        if folder == root and item.is_dir() and item.name == root.name:
+            continue
         if item.is_dir():
             if should_exclude_dir(item.name, excluded_dirs) or (not show_hidden and item.name.startswith(".")):
                 continue
@@ -43,7 +45,15 @@ def get_tree_entries(folder: Path, root: Path, show_hidden: bool, excluded_dirs:
             entries.append(item)
     if folder == root:
         reserved = {item.name for item in entries} | {item.stem for item in entries if item.is_file()}
+        resolved_entries = set()
+        for item in entries:
+            try:
+                resolved_entries.add(item.resolve())
+            except OSError:
+                continue
         for alias, mounted_root in get_content_mounts():
-            if alias not in reserved:
+            if not alias:
+                continue
+            if alias not in reserved and mounted_root.resolve() not in resolved_entries:
                 entries.append(mounted_root)
     return order_vyasa_entries(entries, get_vyasa_config(folder))

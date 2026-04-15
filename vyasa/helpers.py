@@ -260,6 +260,20 @@ def resolve_markdown_title(file_path: str | Path, abbreviations=None) -> tuple[s
 
     return slug_to_title(file_path.stem, abbreviations=abbreviations), raw_content
 
+_MORE_MARKER_RE = re.compile(r"^\s*<!--\s*more\s*-->\s*$", re.MULTILINE)
+
+
+def strip_more_marker(text: str) -> str:
+    return _MORE_MARKER_RE.sub("", text or "")
+
+def preview_markdown(text: str, max_blocks: int = 5) -> str:
+    text = text or ""
+    marker = _MORE_MARKER_RE.search(text)
+    if marker:
+        return text[:marker.start()].rstrip()
+    blocks = [block.strip() for block in re.split(r"\n\s*\n", text) if block.strip()]
+    return "\n\n".join(blocks[:max_blocks])
+
 def get_post_title(file_path: str | Path, abbreviations=None) -> str:
     """Get post title from frontmatter or filename"""
     title, _ = resolve_markdown_title(file_path, abbreviations=abbreviations)
