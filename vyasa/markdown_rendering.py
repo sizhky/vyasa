@@ -26,6 +26,7 @@ from .markdown_pipeline import (
     extract_footnotes,
     preprocess_callouts,
     preprocess_code_includes,
+    preserve_newlines as preserve_md_newlines,
     preprocess_super_sub,
 )
 from .markdown_tabs import postprocess_tabs as postprocess_md_tabs
@@ -916,6 +917,7 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
     )
     content, callout_data_store = preprocess_callouts(content)
     content, tab_data_store = preprocess_md_tabs(content)
+    content = preserve_md_newlines(content)
     mods = {
         "pre": "my-4", "p": "text-base leading-relaxed mb-6", "li": "text-base leading-relaxed",
         "ul": "uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base", "ol": "uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base",
