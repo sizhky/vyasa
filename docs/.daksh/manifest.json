@@ -25,7 +25,8 @@
     }
   ],
   "modules": [
-    "BLOG_VIEW_AS_HOME"
+    "BLOG_VIEW_AS_HOME",
+    "INTELLIGENT_HYPERLINKING"
   ],
   "stages": {
     "00+10": {
@@ -110,6 +111,46 @@
       "status": "not_started",
       "mode": "greenfield",
       "output": "docs/implementation/BLOG_VIEW_AS_HOME/tasks.md",
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": null,
+      "approvals": [],
+      "revision_history": []
+    },
+    "40a:INTELLIGENT_HYPERLINKING": {
+      "status": "not_started",
+      "mode": "greenfield",
+      "output": "docs/implementation/INTELLIGENT_HYPERLINKING/prd.md",
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": null,
+      "approvals": [],
+      "revision_history": []
+    },
+    "40b:INTELLIGENT_HYPERLINKING": {
+      "status": "not_started",
+      "mode": "greenfield",
+      "output": "docs/implementation/INTELLIGENT_HYPERLINKING/trd.md",
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": null,
+      "approvals": [],
+      "revision_history": []
+    },
+    "40c:INTELLIGENT_HYPERLINKING": {
+      "status": "not_started",
+      "mode": "greenfield",
+      "output": "docs/implementation/INTELLIGENT_HYPERLINKING/tasks.md",
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": null,
+      "approvals": [],
+      "revision_history": []
+    },
+    "50:INTELLIGENT_HYPERLINKING": {
+      "status": "not_started",
+      "mode": "greenfield",
+      "output": "docs/implementation/INTELLIGENT_HYPERLINKING/tasks.md",
       "inherited_ref": null,
       "locked_by": null,
       "doc_hash": null,
