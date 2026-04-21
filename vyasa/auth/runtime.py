@@ -5,8 +5,12 @@ from .policy import is_allowed, normalize_auth, path_requires_roles, resolve_rol
 
 def make_user_auth_before(auth_required, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list):
     def user_auth_before(req, sess):
+        is_api_request = req.url.path.startswith("/api/")
         auth = sess.get("auth", None)
         if not auth:
+            if is_api_request:
+                req.scope["auth"] = None
+                return None
             if auth_required or path_requires_roles(req.url.path, rbac_rules):
                 sess["next"] = req.url.path
                 return RedirectResponse("/login", status_code=303)
