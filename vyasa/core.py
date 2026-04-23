@@ -1,6 +1,6 @@
 import re, os
 import json
-from urllib.parse import unquote
+import base64
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -686,9 +686,17 @@ def search_preview_results(htmx, q: str = "", request: Request = None):
     return render_search_preview_page(htmx, request, q=q)
 
 
-@rt("/search/preview/{query_path:path}")
-def search_preview_results_path(query_path: str = "", htmx=None, request: Request = None):
-    return render_search_preview_page(htmx, request, q=unquote(query_path or ""))
+@rt("/search/preview/s/{query_token}")
+def search_preview_results_path(query_token: str = "", htmx=None, request: Request = None):
+    token = (query_token or "").strip()
+    if not token:
+        return render_search_preview_page(htmx, request, q="")
+    padding = "=" * (-len(token) % 4)
+    try:
+        query = base64.urlsafe_b64decode(f"{token}{padding}".encode("ascii")).decode("utf-8")
+    except Exception:
+        return Response(status_code=404)
+    return render_search_preview_page(htmx, request, q=query)
 
 
 # Route to serve static files (images, SVGs, etc.) from blog posts
