@@ -2425,6 +2425,28 @@ function encodeSearchPreviewTerm(value) {
     return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
+function decodeSearchPreviewTerm(token) {
+    if (!token) return '';
+    try {
+        const normalized = token.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+        const binary = atob(padded);
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        return new TextDecoder().decode(bytes);
+    } catch (err) {
+        return '';
+    }
+}
+
+function getPostsSearchTermFromLocation() {
+    const path = window.location.pathname || '';
+    const previewPrefix = '/search/preview/s/';
+    if (!path.startsWith(previewPrefix)) {
+        return '';
+    }
+    return decodeSearchPreviewTerm(path.slice(previewPrefix.length));
+}
+
 function openPostsSearchPreview(block) {
     if (!block) return;
     const input = block.querySelector('input[type="search"][name="q"]');
@@ -2480,6 +2502,7 @@ function initPostsSearchPersistence(rootElement = document) {
     };
     let storedTerm = '';
     let storedResults = null;
+    const urlTerm = getPostsSearchTermFromLocation();
     try {
         storedTerm = localStorage.getItem(termKey) || '';
         storedResults = localStorage.getItem(resultsKey);
@@ -2487,7 +2510,9 @@ function initPostsSearchPersistence(rootElement = document) {
         storedTerm = '';
         storedResults = null;
     }
-    if (storedTerm && !input.value) {
+    if (urlTerm) {
+        input.value = urlTerm;
+    } else if (storedTerm && !input.value) {
         input.value = storedTerm;
     }
     if (storedResults && input.value) {
