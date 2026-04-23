@@ -140,17 +140,25 @@ def render_blog_home(htmx, request: Request):
     return layout(shell, htmx=htmx, title=f"Home - {get_blog_title()}", show_sidebar=True, current_path="__home__", auth=request.scope.get("auth"))
 
 
+def _render_blog_preview_card(path, slug, root):
+    title, render_content = resolve_markdown_title(path, abbreviations=_effective_abbreviations(root))
+    preview = from_md(preview_markdown(render_content), current_path=slug)
+    return Div(
+        A(title, href=f"/posts/{slug}", cls="vyasa-blog-card-title absolute -left-56 top-6 block w-56 text-left text-3xl font-bold leading-tight hover:underline line-clamp-3 overflow-hidden"),
+        Div(
+            Div(preview, cls="prose prose-slate dark:prose-invert max-w-none"),
+            A("continue reading...", href=f"/posts/{slug}", cls="inline-flex mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200 hover:underline"),
+            cls="vyasa-task-card rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white/75 dark:bg-slate-900/45 p-5 shadow-sm min-w-0 w-full",
+        ),
+        cls="relative flex w-full items-start",
+    )
+
+
 def render_blog_home_feed(entries, root, offset=0, batch_size=4, wrap=True):
     cards = []
     chunk = entries[offset:offset + batch_size]
     for path, slug in chunk:
-        title, _ = resolve_markdown_title(path, abbreviations=_effective_abbreviations(root))
-        preview = from_md(preview_markdown(resolve_markdown_title(path, abbreviations=_effective_abbreviations(root))[1]), current_path=slug)
-        cards.append(Div(
-            A(title, href=f"/posts/{slug}", cls="vyasa-blog-card-title absolute -left-56 top-6 block w-56 text-left text-3xl font-bold leading-tight hover:underline line-clamp-3 overflow-hidden"),
-            Div(Div(preview, cls="prose prose-slate dark:prose-invert max-w-none"), A("continue reading...", href=f"/posts/{slug}", cls="inline-flex mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200 hover:underline"), cls="vyasa-task-card rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white/75 dark:bg-slate-900/45 p-5 shadow-sm min-w-0 w-full"),
-            cls="relative flex w-full items-start",
-        ))
+        cards.append(_render_blog_preview_card(path, slug, root))
     sentinel = Div(
         id="blog-feed-sentinel",
         cls="h-8",
@@ -162,6 +170,45 @@ def render_blog_home_feed(entries, root, offset=0, batch_size=4, wrap=True):
     if wrap:
         return Div(*cards, sentinel, id="blog-feed", cls="space-y-4")
     return tuple([*cards, sentinel] if sentinel else cards)
+
+
+def render_search_preview_feed(entries, root):
+    cards = []
+    for path in entries:
+        slug = content_slug_for_path(path)
+        if not slug:
+            continue
+        cards.append(_render_blog_preview_card(path, slug, root))
+    return Div(*cards, cls="space-y-4", id="search-preview-feed")
+
+
+def render_search_preview_page(htmx, request: Request, q: str = ""):
+    roots = get_content_mounts()
+    root = roots[0][1] if roots else get_root_folder()
+    auth = request.scope.get("auth") if request else None
+    roles = get_roles_from_auth(auth, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
+    previewable, regex_error = _find_search_preview_matches(q, limit=200)
+    previewable = _filter_search_matches_by_roles(previewable, roles)
+    query = (q or "").strip()
+    if not query:
+        shell = Div(H1("Search previews", cls="vyasa-page-title text-4xl font-bold"), P("Type a search term in the sidebar to preview matching pages.", cls="mt-2 text-slate-500"))
+        return layout(shell, htmx=htmx, title=f"Search previews - {get_blog_title()}", show_sidebar=True, current_path="search-previews", auth=auth)
+    if not previewable:
+        shell = Div(
+            H1(f"Search previews: {query}", cls="vyasa-page-title text-4xl font-bold"),
+            (P(regex_error, cls="text-amber-600 dark:text-amber-400 text-sm") if regex_error else None),
+            P("No previewable pages matched this search.", cls="mt-2 text-slate-500"),
+        )
+        return layout(shell, htmx=htmx, title=f"Search previews - {query} - {get_blog_title()}", show_sidebar=True, current_path="search-previews", auth=auth)
+    feed = render_search_preview_feed(previewable, root)
+    shell = Div(
+        H1(f"Search previews: {query}", cls="vyasa-page-title text-4xl font-bold"),
+        (P(regex_error, cls="text-amber-600 dark:text-amber-400 text-sm") if regex_error else None),
+        P(f"{len(previewable)} page preview{'s' if len(previewable) != 1 else ''}", cls="mt-2 text-slate-500"),
+        feed,
+        cls="space-y-6",
+    )
+    return layout(shell, htmx=htmx, title=f"Search previews - {query} - {get_blog_title()}", show_sidebar=True, current_path="search-previews", auth=auth)
 
 def _sort_blog_home_entries(entries, root):
     sort = get_config().get_home_sort()
@@ -630,6 +677,11 @@ def gather_search_results(htmx, q: str = "", request: Request = None):
     )
 
 
+@rt("/search/preview")
+def search_preview_results(htmx, q: str = "", request: Request = None):
+    return render_search_preview_page(htmx, request, q=q)
+
+
 # Route to serve static files (images, SVGs, etc.) from blog posts
 @rt("/posts/{path:path}.{ext:static}")
 def serve_post_static(path: str, ext: str):
@@ -957,7 +1009,17 @@ def _find_search_matches(query, limit=40):
     )
 
 
-def _find_search_matches_uncached(query, limit=40):
+def _find_search_preview_matches(query, limit=200):
+    return find_search_matches(
+        query,
+        limit,
+        _posts_sidebar_fingerprint(),
+        get_config().get_show_hidden(),
+        _find_search_preview_matches_uncached,
+    )
+
+
+def _find_search_candidates(query, limit=40, *, suffixes=(".md", ".pdf")):
     trimmed = (query or "").strip()
     if not trimmed:
         return [], ""
@@ -968,7 +1030,7 @@ def _find_search_matches_uncached(query, limit=40):
     for _, root in get_content_mounts():
         ignore_list = _effective_ignore_list(root)
         include_list = _effective_include_list(root)
-        for item in iter_visible_files(root, (".md", ".pdf"), show_hidden):
+        for item in iter_visible_files(root, suffixes, show_hidden):
             rel_parts = item.relative_to(root).parts
             if ".vyasa" in rel_parts:
                 continue
@@ -982,22 +1044,33 @@ def _find_search_matches_uncached(query, limit=40):
             if is_match:
                 results.append(item)
                 if len(results) >= limit:
-                    break
-        if len(results) >= limit:
-            break
+                    return tuple(results), regex_error
     return tuple(results), regex_error
+
+
+def _find_search_matches_uncached(query, limit=40):
+    return _find_search_candidates(query, limit, suffixes=(".md", ".pdf"))
+
+
+def _find_search_preview_matches_uncached(query, limit=200):
+    return _find_search_candidates(query, limit, suffixes=(".md",))
+
+
+def _filter_search_matches_by_roles(matches, roles):
+    if roles is None:
+        return list(matches)
+    filtered = []
+    for item in matches:
+        slug = content_slug_for_path(item)
+        if slug and is_allowed(f"/posts/{slug}", roles or [], _rbac_rules):
+            filtered.append(item)
+    return filtered
 
 
 def _render_posts_search_results(query, roles=None):
     trimmed = (query or "").strip()
     matches, regex_error = _find_search_matches(trimmed)
-    if roles is not None:
-        filtered = []
-        for item in matches:
-            slug = content_slug_for_path(item)
-            if slug and is_allowed(f"/posts/{slug}", roles or [], _rbac_rules):
-                filtered.append(item)
-        matches = filtered
+    matches = _filter_search_matches_by_roles(matches, roles)
     rendered_matches = [
         (slug, content_slug_for_path(item, strip_suffix=False) if item.suffix == ".pdf" else slug)
         for item in matches

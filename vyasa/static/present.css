@@ -57,6 +57,32 @@
   --vyasa-zen-block-gap: 1.15rem;
   --vyasa-zen-list-gap: 0.55rem;
 }
+
+.vyasa-zen-slide-body .code-block {
+  position: relative;
+}
+
+.vyasa-zen-slide-body .code-copy-button {
+  font-family: var(--vyasa-zen-font-ui);
+  font-size: 0 !important;
+  line-height: 0;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 2;
+}
+
+.vyasa-zen-slide-body .code-copy-button > span:first-child {
+  font-size: 0.95rem !important;
+  width: 0.95rem;
+  height: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
 .vyasa-zen-slide-body h1,
 .vyasa-zen-slide-body h2,
 .vyasa-zen-slide-body h3,

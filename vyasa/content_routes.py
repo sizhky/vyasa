@@ -309,7 +309,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             slide_body = Div(from_md(slide_markdown, current_path=doc_path, slide_mode=True), cls="vyasa-zen-slide-body")
         content = Div(
             _breadcrumbs(doc_path, slug_to_title, abbreviations, disable_boost=True, include_current=True, current_anchor=deck.anchor(slide_num - 1)),
-            Div(H1(title, cls="vyasa-zen-title"), cls="flex justify-center"),
+            Div(H1(title, cls="vyasa-zen-deck-title"), cls="flex justify-center"),
             Div(nav, cls="flex justify-center"),
             slide_body,
             overview_panel,

@@ -31,12 +31,12 @@ async def app(scope, receive, send):
         if (
             scope["type"] == "lifespan"
             and message.get("type") == "lifespan.startup.complete"
-            and _browser_url
+            and (browser_url := os.environ.get("VYASA_BROWSER_URL"))
             and not _browser_opened
         ):
             _browser_opened = True
-            threading.Timer(0.1, lambda: webbrowser.open(_browser_url)).start()
-            print(f"Opening browser at: {_browser_url}")
+            threading.Timer(0.1, lambda: webbrowser.open(browser_url)).start()
+            print(f"Opening browser at: {browser_url}")
         await send(message)
     await _core_app(scope, receive, wrapped_send)
 
@@ -160,6 +160,10 @@ def cli():
     global _browser_url, _browser_opened
     browser_host = '127.0.0.1' if host == '0.0.0.0' else host
     _browser_url = None if args.no_browser else f"http://{browser_host}:{port}"
+    if _browser_url:
+        os.environ['VYASA_BROWSER_URL'] = _browser_url
+    else:
+        os.environ.pop('VYASA_BROWSER_URL', None)
     _browser_opened = False
     
     # Configure reload to watch markdown and PDF files in the blog directory
