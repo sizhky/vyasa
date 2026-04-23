@@ -7,12 +7,19 @@ from urllib.parse import quote
 
 from fasthtml.common import A, Button, Div, H1, Kbd, Li, Main, NotStr, Ol, P, Response, Script, Span, Strong, Textarea, to_xml
 from monsterui.all import UkIcon
-from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, estimate_read_time_minutes, get_adjacent_posts, strip_more_marker
+from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, estimate_read_time_minutes, format_last_modified_label, get_adjacent_posts, strip_more_marker
 from .markdown_rendering import _render_markdown_fragment
 from .slides import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
 
 PAGE_TITLE_CLS = "vyasa-page-title text-4xl font-bold"
 FALLBACK_HOME_SLUG = "__home__"
+
+
+def _meta_line(read_minutes: int, last_modified_label: str | None = None):
+    items = [Span(f"{read_minutes}-min read")]
+    if last_modified_label:
+        items.extend([Span("•", aria_hidden="true"), Span(last_modified_label)])
+    return P(*items, cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2 flex flex-wrap items-center gap-2")
 
 
 def _fallback_home_markdown(blog_title):
@@ -103,7 +110,10 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     md_start = time.time()
     content = from_md(strip_more_marker(render_content), current_path=path)
     logger.debug(f"[DEBUG] Markdown rendering took {(time.time() - md_start) * 1000:.2f}ms")
-    read_time = P(f"{estimate_read_time_minutes(render_content)}-min read", cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2")
+    read_time = _meta_line(
+        estimate_read_time_minutes(render_content),
+        format_last_modified_label(file_path),
+    )
     copy_button = Button(
         UkIcon("clipboard", cls="w-4 h-4"),
         Span("Copy Markdown", cls="text-sm font-medium"),
@@ -341,7 +351,10 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
         _, raw_content = parse_frontmatter(index_file)
         page_title, render_content = resolve_markdown_title(index_file)
         index_path = str(index_file.relative_to(get_root_folder()).with_suffix(""))
-        read_time = P(f"{estimate_read_time_minutes(render_content)}-min read", cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2")
+        read_time = _meta_line(
+            estimate_read_time_minutes(render_content),
+            format_last_modified_label(index_file),
+        )
         copy_button = Button(
             UkIcon("clipboard", cls="w-4 h-4"),
             Span("Copy Markdown", cls="text-sm font-medium"),
@@ -368,7 +381,7 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
     raw_content = _fallback_home_markdown(blog_title)
     present_button = A(UkIcon("monitor", cls="w-4 h-4"), "Present", href=f"/slides/{FALLBACK_HOME_SLUG}/slide-1", hx_boost="false", cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm")
     copy_button = Button(UkIcon("clipboard", cls="w-4 h-4"), Span("Copy Markdown", cls="text-sm font-medium"), type="button", title="Copy raw markdown", onclick="(function(){const el=document.getElementById('raw-md-clipboard');const toast=document.getElementById('raw-md-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()", cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm")
-    result = layout(Div(Div(Div(H1(f"Welcome to {blog_title}!", cls=PAGE_TITLE_CLS), Div(present_button, copy_button, cls="flex items-center gap-2 flex-wrap", data_vyasa_page_actions="true"), cls="flex items-start justify-between gap-4 flex-wrap"), P(f"{estimate_read_time_minutes(raw_content)}-min read", cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2"), cls="mb-8"), Div("Copied Raw Markdown!", id="raw-md-toast", cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"), Textarea(raw_content, id="raw-md-clipboard", cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"), from_md(raw_content, current_path=FALLBACK_HOME_SLUG), cls="w-full"), htmx=htmx, title=f"Home - {blog_title}", show_sidebar=True, toc_content=raw_content, current_path=FALLBACK_HOME_SLUG, auth=request.scope.get("auth"))
+    result = layout(Div(Div(Div(H1(f"Welcome to {blog_title}!", cls=PAGE_TITLE_CLS), Div(present_button, copy_button, cls="flex items-center gap-2 flex-wrap", data_vyasa_page_actions="true"), cls="flex items-start justify-between gap-4 flex-wrap"), _meta_line(estimate_read_time_minutes(raw_content)), cls="mb-8"), Div("Copied Raw Markdown!", id="raw-md-toast", cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"), Textarea(raw_content, id="raw-md-clipboard", cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"), from_md(raw_content, current_path=FALLBACK_HOME_SLUG), cls="w-full"), htmx=htmx, title=f"Home - {blog_title}", show_sidebar=True, toc_content=raw_content, current_path=FALLBACK_HOME_SLUG, auth=request.scope.get("auth"))
     if logger:
         logger.debug("Request complete path=/ route=index total={:.2f}ms", (time.time() - request_start) * 1000)
     return result
