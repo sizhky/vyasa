@@ -2394,9 +2394,55 @@ function initHeadingPermalinkCopy(root = document) {
     });
 }
 
+function syncPostsSearchControls(block) {
+    if (!block) return;
+    const input = block.querySelector('.posts-search-block input[type="search"][name="q"]');
+    const preview = block.querySelector('.posts-search-preview-button');
+    const clear = block.querySelector('.posts-search-clear-button');
+    if (!input) return;
+    const hasValue = !!input.value.trim();
+    const previewBase = preview?.dataset.searchPreviewBase || '/search/preview';
+    const previewHref = hasValue ? `${previewBase}?q=${encodeURIComponent(input.value.trim())}` : previewBase;
+    if (preview) {
+        preview.setAttribute('href', previewHref);
+        preview.setAttribute('hx_get', previewHref);
+        preview.setAttribute('aria-hidden', hasValue ? 'false' : 'true');
+        preview.setAttribute('tabindex', hasValue ? '0' : '-1');
+        preview.style.opacity = hasValue ? '1' : '0';
+        preview.style.pointerEvents = hasValue ? 'auto' : 'none';
+    }
+    if (clear) {
+        clear.style.opacity = hasValue ? '1' : '0';
+        clear.style.pointerEvents = hasValue ? 'auto' : 'none';
+    }
+}
+
+function openPostsSearchPreview(block) {
+    if (!block) return;
+    const input = block.querySelector('input[type="search"][name="q"]');
+    const preview = block.querySelector('.posts-search-preview-button');
+    const trimmed = input?.value.trim();
+    if (!trimmed || !preview) {
+        return;
+    }
+    const previewBase = preview.dataset.searchPreviewBase || '/search/preview';
+    const previewHref = `${previewBase}?q=${encodeURIComponent(trimmed)}`;
+    preview.setAttribute('href', previewHref);
+    if (window.htmx && typeof window.htmx.ajax === 'function') {
+        window.htmx.ajax('GET', previewHref, {
+            target: '#main-content',
+            swap: 'outerHTML show:window:top settle:0.1s',
+            pushURL: true
+        });
+        return;
+    }
+    window.location.href = previewHref;
+}
+
 function initPostsSearchPersistence(rootElement = document) {
     const input = rootElement.querySelector('.posts-search-block input[type="search"][name="q"]');
     const results = rootElement.querySelector('.posts-search-results');
+    const block = input?.closest('.posts-search-block');
     if (!input || !results) {
         return;
     }
@@ -2443,6 +2489,7 @@ function initPostsSearchPersistence(rootElement = document) {
             // Ignore malformed cached payloads.
         }
     }
+    syncPostsSearchControls(block);
     const persistTerm = () => {
         try {
             if (input.value) {
@@ -2456,6 +2503,22 @@ function initPostsSearchPersistence(rootElement = document) {
         }
     };
     input.addEventListener('input', persistTerm);
+    input.addEventListener('input', () => syncPostsSearchControls(block));
+    input.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') {
+            return;
+        }
+        const trimmed = input.value.trim();
+        if (!trimmed) {
+            return;
+        }
+        const preview = block?.querySelector('.posts-search-preview-button');
+        if (!preview) {
+            return;
+        }
+        event.preventDefault();
+        openPostsSearchPreview(block);
+    });
     const fetchResults = (query) => {
         return fetch(`/_sidebar/posts/search?q=${query}`)
             .then((response) => response.text())
@@ -2502,7 +2565,7 @@ function initSearchClearButtons(rootElement = document) {
     blocks.forEach((block) => {
         const input = block.querySelector('input[type="search"][name="q"]');
         const button = block.querySelector('.posts-search-clear-button');
-        const results = block.querySelector('.posts-search-results');
+        const preview = block.querySelector('.posts-search-preview-button');
         if (!input || !button) {
             return;
         }
@@ -2510,15 +2573,13 @@ function initSearchClearButtons(rootElement = document) {
             return;
         }
         button.dataset.clearBound = 'true';
-        const updateVisibility = () => {
-            button.style.opacity = input.value ? '1' : '0';
-            button.style.pointerEvents = input.value ? 'auto' : 'none';
-        };
-        updateVisibility();
-        input.addEventListener('input', updateVisibility);
+        syncPostsSearchControls(block);
+        input.addEventListener('input', () => syncPostsSearchControls(block));
         button.addEventListener('click', () => {
             input.value = '';
             input.dispatchEvent(new Event('input', { bubbles: true }));
+            syncPostsSearchControls(block);
+            const results = block.querySelector('.posts-search-results');
             if (results) {
                 results.innerHTML = '';
             }
@@ -2529,6 +2590,16 @@ function initSearchClearButtons(rootElement = document) {
                 // Ignore storage failures.
             }
         });
+        if (preview) {
+            preview.addEventListener('click', (event) => {
+                if (!input.value.trim()) {
+                    event.preventDefault();
+                    return;
+                }
+                event.preventDefault();
+                openPostsSearchPreview(block);
+            });
+        }
     });
 }
 

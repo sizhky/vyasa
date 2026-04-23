@@ -872,11 +872,13 @@ todo .deadline { margin-left: 0.45rem; }
     border: 0 !important;
     border-bottom: 2px solid var(--vyasa-outline-ghost) !important;
     border-radius: 0 !important;
-    padding: 0.9rem 2.2rem 0.8rem 0 !important;
+    padding: 0.9rem 4.4rem 0.8rem 0 !important;
     box-shadow: none !important;
 }
 .posts-search-input:focus { border-bottom-color: var(--vyasa-primary) !important; box-shadow: none !important; }
 .posts-search-input::placeholder { color: var(--vyasa-ink-soft); }
+.posts-search-preview-button { background: transparent !important; color: var(--vyasa-ink-soft) !important; }
+.posts-search-preview-button:hover { background: rgba(199, 234, 222, 0.35) !important; color: var(--vyasa-primary) !important; }
 .posts-search-clear-button { background: transparent !important; color: var(--vyasa-ink-soft) !important; }
 .posts-search-clear-button:hover { background: rgba(199, 234, 222, 0.35) !important; color: var(--vyasa-primary) !important; }
 .vyasa-spacer-rule {
