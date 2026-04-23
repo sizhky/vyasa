@@ -1,4 +1,4 @@
-from urllib.parse import quote_plus
+from urllib.parse import quote, quote_plus
 
 from fasthtml.common import *
 from monsterui.all import *
@@ -20,6 +20,11 @@ def render_posts_search_results(query, matches, regex_error):
     if regex_error:
         items.append(Li(regex_error, cls="text-[0.7rem] text-center text-amber-600 dark:text-amber-400 mt-1 bg-transparent"))
     return Ul(*items, cls="posts-search-results-list space-y-1 bg-white/0 dark:bg-slate-950/0")
+
+
+def search_preview_href(query):
+    trimmed = (query or "").strip()
+    return "/search/preview" if not trimmed else f"/search/preview/{quote(trimmed, safe='')}"
 
 
 def posts_search_block(initial_results):
