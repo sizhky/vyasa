@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import tomllib
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 import frontmatter
@@ -287,6 +288,14 @@ def estimate_read_time_minutes(text: str, words_per_minute: int = 200) -> int:
     cleaned = re.sub(r"<[^>]+>", " ", cleaned)
     words = re.findall(r"\b[\w'-]+\b", cleaned)
     return max(1, (len(words) + words_per_minute - 1) // words_per_minute)
+
+
+def format_last_modified_label(file_path: str | Path) -> str | None:
+    try:
+        modified_at = datetime.fromtimestamp(Path(file_path).stat().st_mtime)
+    except OSError:
+        return None
+    return f"Updated {modified_at.strftime('%b %d, %Y')}"
 
 def get_adjacent_posts(root: Path, current_path: str | Path, abbreviations=None):
     current_rel = Path(current_path)
