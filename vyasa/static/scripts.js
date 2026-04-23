@@ -2402,10 +2402,9 @@ function syncPostsSearchControls(block) {
     if (!input) return;
     const hasValue = !!input.value.trim();
     const previewBase = preview?.dataset.searchPreviewBase || '/search/preview';
-    const previewHref = hasValue ? `${previewBase}?q=${encodeURIComponent(input.value.trim())}` : previewBase;
+    const previewHref = hasValue ? `${previewBase}/${encodeURIComponent(input.value.trim())}` : previewBase;
     if (preview) {
         preview.setAttribute('href', previewHref);
-        preview.setAttribute('hx_get', previewHref);
         preview.setAttribute('aria-hidden', hasValue ? 'false' : 'true');
         preview.setAttribute('tabindex', hasValue ? '0' : '-1');
         preview.style.opacity = hasValue ? '1' : '0';
@@ -2426,7 +2425,7 @@ function openPostsSearchPreview(block) {
         return;
     }
     const previewBase = preview.dataset.searchPreviewBase || '/search/preview';
-    const previewHref = `${previewBase}?q=${encodeURIComponent(trimmed)}`;
+    const previewHref = `${previewBase}/${encodeURIComponent(trimmed)}`;
     preview.setAttribute('href', previewHref);
     if (window.htmx && typeof window.htmx.ajax === 'function') {
         window.htmx.ajax('GET', previewHref, {

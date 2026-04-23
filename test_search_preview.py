@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from fasthtml.common import to_xml
 
 from vyasa import core
-from vyasa.search_views import posts_search_block
+from vyasa.search_views import posts_search_block, search_preview_href
 
 
 def test_posts_search_block_includes_preview_button():
@@ -13,6 +13,10 @@ def test_posts_search_block_includes_preview_button():
     assert "posts-search-preview-button" in html
     assert "data-search-preview-base=\"/search/preview\"" in html
     assert "→" in html
+
+
+def test_search_preview_href_encodes_regex_terms_as_path():
+    assert search_preview_href("/use-case$|use-case\\//") == "/search/preview/%2Fuse-case%24%7Cuse-case%5C%2F%2F"
 
 
 def test_search_preview_page_renders_blog_style_cards(monkeypatch, tmp_path):
@@ -61,3 +65,18 @@ def test_search_preview_page_uses_markdown_only_matches(monkeypatch, tmp_path):
 
     assert "This is the preview body." in html
     assert "No previewable pages matched this search." not in html
+
+
+def test_search_preview_path_route_decodes_encoded_query(monkeypatch):
+    seen = {}
+
+    def fake_render(htmx, request, q=""):
+        seen["q"] = q
+        return q
+
+    monkeypatch.setattr(core, "render_search_preview_page", fake_render)
+
+    result = core.search_preview_results_path("%2Fuse-case%24%7Cuse-case%5C%2F%2F", None, None)
+
+    assert result == "/use-case$|use-case\\//"
+    assert seen["q"] == "/use-case$|use-case\\//"

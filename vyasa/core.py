@@ -1,5 +1,6 @@
 import re, os
 import json
+from urllib.parse import unquote
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -79,7 +80,10 @@ from .search_service import (
 )
 from .search_pages import gather_search_content
 from .search_http import gather_search_page
-from .search_views import posts_search_block as build_posts_search_block, render_posts_search_results
+from .search_views import (
+    posts_search_block as build_posts_search_block,
+    render_posts_search_results,
+)
 from .sidebar_helpers import (
     build_toc_items as build_sidebar_toc_items,
     collapsible_sidebar as build_collapsible_sidebar,
@@ -680,6 +684,11 @@ def gather_search_results(htmx, q: str = "", request: Request = None):
 @rt("/search/preview")
 def search_preview_results(htmx, q: str = "", request: Request = None):
     return render_search_preview_page(htmx, request, q=q)
+
+
+@rt("/search/preview/{query_path:path}")
+def search_preview_results_path(query_path: str = "", htmx=None, request: Request = None):
+    return render_search_preview_page(htmx, request, q=unquote(query_path or ""))
 
 
 # Route to serve static files (images, SVGs, etc.) from blog posts
