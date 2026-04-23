@@ -1,4 +1,5 @@
-from urllib.parse import quote, quote_plus
+import base64
+from urllib.parse import quote_plus
 
 from fasthtml.common import *
 from monsterui.all import *
@@ -24,7 +25,10 @@ def render_posts_search_results(query, matches, regex_error):
 
 def search_preview_href(query):
     trimmed = (query or "").strip()
-    return "/search/preview" if not trimmed else f"/search/preview/{quote(trimmed, safe='')}"
+    if not trimmed:
+        return "/search/preview"
+    token = base64.urlsafe_b64encode(trimmed.encode("utf-8")).decode("ascii").rstrip("=")
+    return f"/search/preview/s/{token}"
 
 
 def posts_search_block(initial_results):

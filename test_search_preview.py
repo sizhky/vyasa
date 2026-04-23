@@ -16,7 +16,7 @@ def test_posts_search_block_includes_preview_button():
 
 
 def test_search_preview_href_encodes_regex_terms_as_path():
-    assert search_preview_href("/use-case$|use-case\\//") == "/search/preview/%2Fuse-case%24%7Cuse-case%5C%2F%2F"
+    assert search_preview_href("/use-case$|use-case\\//") == "/search/preview/s/L3VzZS1jYXNlJHx1c2UtY2FzZVwvLw"
 
 
 def test_search_preview_page_renders_blog_style_cards(monkeypatch, tmp_path):
@@ -76,7 +76,7 @@ def test_search_preview_path_route_decodes_encoded_query(monkeypatch):
 
     monkeypatch.setattr(core, "render_search_preview_page", fake_render)
 
-    result = core.search_preview_results_path("%2Fuse-case%24%7Cuse-case%5C%2F%2F", None, None)
+    result = core.search_preview_results_path("L3VzZS1jYXNlJHx1c2UtY2FzZVwvLw", None, None)
 
     assert result == "/use-case$|use-case\\//"
     assert seen["q"] == "/use-case$|use-case\\//"

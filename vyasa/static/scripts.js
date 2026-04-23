@@ -2402,7 +2402,7 @@ function syncPostsSearchControls(block) {
     if (!input) return;
     const hasValue = !!input.value.trim();
     const previewBase = preview?.dataset.searchPreviewBase || '/search/preview';
-    const previewHref = hasValue ? `${previewBase}/${encodeURIComponent(input.value.trim())}` : previewBase;
+    const previewHref = hasValue ? `${previewBase}/s/${encodeSearchPreviewTerm(input.value.trim())}` : previewBase;
     if (preview) {
         preview.setAttribute('href', previewHref);
         preview.setAttribute('aria-hidden', hasValue ? 'false' : 'true');
@@ -2416,6 +2416,15 @@ function syncPostsSearchControls(block) {
     }
 }
 
+function encodeSearchPreviewTerm(value) {
+    const bytes = new TextEncoder().encode(value);
+    let binary = '';
+    bytes.forEach((byte) => {
+        binary += String.fromCharCode(byte);
+    });
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
 function openPostsSearchPreview(block) {
     if (!block) return;
     const input = block.querySelector('input[type="search"][name="q"]');
@@ -2425,13 +2434,17 @@ function openPostsSearchPreview(block) {
         return;
     }
     const previewBase = preview.dataset.searchPreviewBase || '/search/preview';
-    const previewHref = `${previewBase}/${encodeURIComponent(trimmed)}`;
+    const previewHref = `${previewBase}/s/${encodeSearchPreviewTerm(trimmed)}`;
     preview.setAttribute('href', previewHref);
     if (window.htmx && typeof window.htmx.ajax === 'function') {
         window.htmx.ajax('GET', previewHref, {
             target: '#main-content',
-            swap: 'outerHTML show:window:top settle:0.1s',
-            pushURL: true
+            swap: 'outerHTML show:window:top settle:0.1s'
+        }).then(() => {
+            const currentUrl = `${window.location.pathname}${window.location.search}`;
+            if (currentUrl !== previewHref) {
+                window.history.pushState(null, '', previewHref);
+            }
         });
         return;
     }
