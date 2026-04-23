@@ -374,7 +374,7 @@ summary {
 
 .vyasa-main-shell {
     background: transparent;
-    padding-top: 2.5rem !important;
+    padding-top: 1rem !important;
 }
 
 .vyasa-main-shell > *:not(.vyasa-table-scroll):not(.mermaid-container):not(.d2-container):not(.code-block) {

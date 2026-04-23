@@ -467,7 +467,7 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     
     # Navbar
     navbar = f'''
-    <div class="vyasa-navbar-card bg-slate-900 text-white p-4 my-4 rounded-lg shadow-md dark:bg-slate-800">
+    <div class="vyasa-navbar-card bg-slate-900 text-white p-4 rounded-lg shadow-md dark:bg-slate-800">
         <div class="flex items-center justify-between md:hidden">
             <button id="mobile-posts-toggle" title="Toggle file tree" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaTogglePostsPanel && window.__vyasaTogglePostsPanel()">
                 <span uk-icon="menu" class="w-5 h-5"></span>
@@ -490,7 +490,7 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     # Build navigation sidebar
     nav_html = to_xml(Ul(*nav_tree, cls="mt-2 list-none"))
     posts_sidebar = f'''
-    <aside id="posts-sidebar" class="vyasa-sidebar vyasa-posts-sidebar hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
+    <aside id="posts-sidebar" class="vyasa-sidebar vyasa-posts-sidebar hidden md:block w-64 shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
         <details open class="vyasa-sidebar-card vyasa-sidebar-card-posts">
             <summary class="vyasa-sidebar-toggle vyasa-sidebar-toggle-posts flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
                 <span uk-icon="menu" class="w-5 h-5 mr-2"></span>
@@ -508,7 +508,7 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     if toc_items:
         toc_list_html = to_xml(Ul(*toc_items, cls="mt-2 list-none"))
         toc_html = f'''
-        <aside id="toc-sidebar" class="vyasa-sidebar vyasa-toc-sidebar hidden md:block w-64 shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
+        <aside id="toc-sidebar" class="vyasa-sidebar vyasa-toc-sidebar hidden md:block w-64 shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
             <details open class="vyasa-sidebar-card vyasa-sidebar-card-table-of-contents">
                 <summary class="vyasa-sidebar-toggle vyasa-sidebar-toggle-table-of-contents flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
                     <span uk-icon="list" class="w-5 h-5 mr-2"></span>
