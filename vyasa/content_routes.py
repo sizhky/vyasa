@@ -10,6 +10,7 @@ from monsterui.all import UkIcon
 from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, estimate_read_time_minutes, format_last_modified_label, get_adjacent_posts, strip_more_marker
 from .markdown_rendering import _render_markdown_fragment
 from .slides import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
+from .tree_file_rendering import render_tree_document, resolve_tree_title
 
 PAGE_TITLE_CLS = "vyasa-page-title text-4xl font-bold"
 FALLBACK_HOME_SLUG = "__home__"
@@ -90,6 +91,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     relative_slug = relative_path.as_posix()
     abbreviations = effective_abbreviations(root)
     file_path = content_path_for_slug(path, ".md")
+    tree_path = content_path_for_slug(path, ".tree")
     pdf_path = content_path_for_slug(path, ".pdf")
     folder_path = content_path_for_slug(path)
     if not file_path or not file_path.exists():
@@ -98,6 +100,33 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
             if note_file:
                 from starlette.responses import RedirectResponse
                 return RedirectResponse(f"/posts/{content_slug_for_path(note_file)}", status_code=307)
+        if tree_path and tree_path.exists():
+            post_title, raw_content, tree_doc = resolve_tree_title(tree_path, abbreviations=abbreviations)
+            read_time = _meta_line(
+                estimate_read_time_minutes(raw_content),
+                format_last_modified_label(tree_path),
+            )
+            copy_button = Button(
+                UkIcon("clipboard", cls="w-4 h-4"),
+                Span("Copy Tree", cls="text-sm font-medium"),
+                type="button",
+                title="Copy raw tree",
+                onclick="(function(){const el=document.getElementById('raw-tree-clipboard');const toast=document.getElementById('raw-tree-toast');if(!el){return;}el.focus();el.select();const text=el.value;const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}})()",
+                cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+            )
+            breadcrumbs = _breadcrumbs(path, slug_to_title, abbreviations)
+            tree_content = Div(
+                Div(
+                    breadcrumbs,
+                    Div(H1(post_title, cls=PAGE_TITLE_CLS), Div(copy_button, cls="flex items-center gap-2 flex-wrap", data_vyasa_page_actions="true"), cls="flex items-start justify-between gap-4 flex-wrap"),
+                    read_time,
+                    cls="mb-8",
+                ),
+                Div("Copied Raw Tree!", id="raw-tree-toast", cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"),
+                Textarea(raw_content, id="raw-tree-clipboard", cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"),
+                render_tree_document(tree_doc),
+            )
+            return layout(tree_content, htmx=htmx, title=f"{post_title} - {get_blog_title()}", show_sidebar=True, toc_content=None, current_path=path, show_toc=False, auth=request.scope.get("auth"))
         if pdf_path and pdf_path.exists():
             post_title = f"{slug_to_title(PathCls(path).name, abbreviations=abbreviations)} (PDF)"
             pdf_src = f"/posts/{path}.pdf"

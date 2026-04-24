@@ -18,7 +18,7 @@ Main text with a note.[^1]
 
 Frontmatter controls page-level metadata, footnotes become sidenotes on large screens, and callouts are normalized by [`preprocess_callouts()`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/markdown_pipeline.py). If you need hidden depth, use `<details>`; if you need parallel views of the same concept, use `:::tabs`.
 
-Markdown tables now render with a default per-cell max width of `33vw`, which keeps one verbose column from blowing out the whole page. If one table needs a different cap, place `<!-- table max-col=24vw -->` immediately above it.
+Markdown tables now render with a default per-cell max width of `45vw`, which keeps one verbose column from blowing out the whole page. If one table needs a different cap, place `<!-- table max-col=24vw -->` immediately above it.
 
 ## Homepage Previews
 

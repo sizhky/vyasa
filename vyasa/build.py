@@ -26,6 +26,7 @@ from .config import get_config, reload_config
 from .assets import asset_url
 from .favicon import favicon_href as resolve_favicon_href, write_generated_favicon
 from .tree_service import get_tree_entries
+from .tree_file_rendering import render_tree_document, resolve_tree_title
 
 _asset_url = asset_url
 
@@ -401,7 +402,7 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
     """Build post tree with static .html links instead of HTMX"""
     items = []
     try:
-        entries = get_tree_entries(folder, root_folder, show_hidden, set(), ('.md',))
+        entries = get_tree_entries(folder, root_folder, show_hidden, set(), ('.md', '.tree'))
         abbreviations = _effective_abbreviations(root_folder, folder)
     except (OSError, PermissionError): 
         return items
@@ -441,14 +442,15 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
                     title_text,
                     href=f'/posts/{note_slug}.html',
                     cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
-        elif item.suffix == '.md':
+        elif item.suffix in {'.md', '.tree'}:
             slug = str(item.relative_to(root_folder).with_suffix(''))
-            title = get_post_title(item, abbreviations=abbreviations)
+            title = get_post_title(item, abbreviations=abbreviations) if item.suffix == '.md' else resolve_tree_title(item, abbreviations=abbreviations)[0]
+            icon = "file-text" if item.suffix == ".md" else "git-branch"
             
             # Use .html extension for static links
             items.append(Li(A(
                 Span(cls="w-4 mr-2 shrink-0"),
-                Span(UkIcon("file-text", cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                Span(UkIcon(icon, cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                 Span(title, cls="truncate min-w-0", title=title),
                 href=f'/posts/{slug}.html',  # Add .html extension
                 cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
@@ -598,14 +600,14 @@ def build_static_site(input_dir=None, output_dir=None):
     root_icon = root_folder / "static" / "icon.png"
     favicon_href = resolve_favicon_href(root_folder)
     
-    # Find all markdown files (only in the specified root folder, not parent directories)
+    # Find all renderable document files (only in the specified root folder, not parent directories)
     ignore_list = _effective_ignore_list(root_folder)
     include_list = _effective_include_list(root_folder)
-    md_files = []
-    for md_file in root_folder.rglob('*.md'):
+    doc_files = []
+    for doc_file in [*root_folder.rglob('*.md'), *root_folder.rglob('*.tree')]:
         # Only include files that are actually inside root_folder
         try:
-            relative_path = md_file.relative_to(root_folder)
+            relative_path = doc_file.relative_to(root_folder)
             if not show_hidden and any(part.startswith('.') for part in relative_path.parts):
                 continue
             # Check if any folder in path should be excluded
@@ -617,36 +619,42 @@ def build_static_site(input_dir=None, output_dir=None):
                     break
             if should_skip:
                 continue
-            md_files.append(md_file)
+            doc_files.append(doc_file)
         except ValueError:
             # Skip files outside root_folder
             continue
     
-    print(f"\nFound {len(md_files)} markdown files")
+    doc_files = sorted(doc_files)
+    print(f"\nFound {len(doc_files)} document files")
     
-    # Process each markdown file
-    for md_file in md_files:
-        relative_path = md_file.relative_to(root_folder)
+    # Process each document file
+    for doc_file in doc_files:
+        relative_path = doc_file.relative_to(root_folder)
         print(f"  Processing: {relative_path}")
-        
-        # Parse frontmatter and content
-        metadata, raw_content = parse_frontmatter(md_file)
-        post_title, render_content = resolve_markdown_title(md_file, abbreviations=abbreviations)
-        
-        # Render markdown to HTML
-        content_div = from_md(render_content, current_path=str(relative_path))
-        read_time = estimate_read_time_minutes(render_content)
-        last_modified = format_last_modified_label(md_file)
+
+        if doc_file.suffix == ".tree":
+            post_title, raw_content, tree_doc = resolve_tree_title(doc_file, abbreviations=abbreviations)
+            content_div = render_tree_document(tree_doc)
+            toc_items = None
+            prev_item = next_item = None
+            read_source = raw_content
+        else:
+            metadata, raw_content = parse_frontmatter(doc_file)
+            post_title, render_content = resolve_markdown_title(doc_file, abbreviations=abbreviations)
+            content_div = from_md(render_content, current_path=str(relative_path))
+            toc_headings = extract_toc(raw_content, _strip_inline_markdown, text_to_anchor, _unique_anchor)
+            toc_items = build_toc_items(toc_headings)
+            prev_item, next_item = get_adjacent_posts(root_folder, relative_path, abbreviations=abbreviations)
+            read_source = render_content
+
+        read_time = estimate_read_time_minutes(read_source)
+        last_modified = format_last_modified_label(doc_file)
         meta_text = f"{read_time}-min read"
         if last_modified:
             meta_text += f" • {last_modified}"
         title_html = f'<div class="mb-8"><h1 class="text-4xl font-bold">{post_title}</h1><p class="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2">{meta_text}</p></div>'
         content_html = title_html + to_xml(content_div)
-        
-        # Extract TOC
-        toc_headings = extract_toc(raw_content, _strip_inline_markdown, text_to_anchor, _unique_anchor)
-        toc_items = build_toc_items(toc_headings)
-        prev_item, next_item = get_adjacent_posts(root_folder, relative_path, abbreviations=abbreviations)
+
         if prev_item or next_item:
             prev_html = f'<a class="vyasa-prev-link" href="{prev_item["static_href"]}">← {prev_item["title"]}</a>' if prev_item else '<div></div>'
             next_html = f'<a class="vyasa-next-link" href="{next_item["static_href"]}">{next_item["title"]} →</a>' if next_item else '<div></div>'
@@ -664,7 +672,7 @@ def build_static_site(input_dir=None, output_dir=None):
         )
         
         # Determine output path
-        if md_file.stem.lower() in ['index', 'readme'] and md_file.parent == root_folder:
+        if doc_file.suffix == ".md" and doc_file.stem.lower() in ['index', 'readme'] and doc_file.parent == root_folder:
             # Root index/readme becomes index.html
             output_path = output_dir / 'index.html'
         else:

@@ -356,7 +356,7 @@ class VyasaConfig:
 
     def get_table_col_max_width(self) -> str | None:
         """Get the default maximum width for rendered table cells."""
-        value = self.get('table_col_max_width', 'VYASA_TABLE_COL_MAX_WIDTH', '33vw')
+        value = self.get('table_col_max_width', 'VYASA_TABLE_COL_MAX_WIDTH', '45vw')
         return str(value).strip() if value else None
 
     def get_annotations_enabled(self) -> bool:
