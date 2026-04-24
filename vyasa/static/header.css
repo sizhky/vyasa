@@ -2,9 +2,15 @@
 body {
     font-family: var(--vyasa-font-body);
     font-size: 18px;
+    margin: 0;
+    padding: 0;
     background: var(--vyasa-paper) !important;
     color: inherit !important;
     line-height: 1.6;
+}
+html,
+body {
+    min-height: 100%;
 }
 code, pre { font-family: var(--vyasa-font-mono); }
 :root {
@@ -95,7 +101,7 @@ a:hover { color: var(--vyasa-link-hover); }
 }
 html, body { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
 body.bg-background, body.text-foreground { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
-#page-container { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
+#page-container { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; min-height: 100vh; }
 .dark #page-container { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
 h1, h2, h3, h4, h5, h6 {
     font-family: var(--vyasa-font-heading);
@@ -276,11 +282,28 @@ summary {
     position: relative;
 }
 
-.vyasa-navbar-card {
-    background: linear-gradient(135deg, var(--vyasa-primary), var(--vyasa-primary-dim)) !important;
+.vyasa-footer-shell {
+    display: block;
+    width: 100%;
+    margin: auto 0 0 0 !important;
+    padding: 0 !important;
+    background: color-mix(in srgb, var(--vyasa-primary) 72%, var(--vyasa-paper) 28%) !important;
     color: var(--vyasa-primary-text) !important;
-    border-radius: var(--vyasa-rect-radius) !important;
-    box-shadow: 0 24px 40px -32px rgba(45, 52, 52, 0.32);
+    border-top: 1px solid color-mix(in srgb, var(--vyasa-primary-text) 12%, transparent);
+    box-sizing: border-box;
+}
+
+.vyasa-navbar-card {
+    background: var(--vyasa-primary) !important;
+    color: var(--vyasa-primary-text) !important;
+    border-radius: 0 !important;
+    box-shadow: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--vyasa-primary-text) 14%, transparent);
+}
+
+.vyasa-footer-card {
+    border-radius: 0 !important;
+    box-shadow: none;
 }
 
 .vyasa-navbar-card a,
@@ -409,9 +432,15 @@ summary {
 }
 
 .vyasa-footer-card {
-    background: var(--vyasa-paper-low) !important;
-    color: var(--vyasa-ink) !important;
-    border-radius: var(--vyasa-rect-radius) !important;
+    background: color-mix(in srgb, var(--vyasa-primary) 72%, var(--vyasa-paper) 28%) !important;
+    color: var(--vyasa-primary-text) !important;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    border-top: 0 !important;
+    margin: 0 !important;
 }
 
 .vyasa-footer-card a,
@@ -419,13 +448,13 @@ summary {
 .vyasa-footer-card button,
 .vyasa-footer-card summary,
 .vyasa-footer-card [uk-icon] {
-    color: var(--vyasa-ink) !important;
+    color: var(--vyasa-primary-text) !important;
 }
 
 .vyasa-footer-card a:hover,
 .vyasa-footer-card button:hover,
 .vyasa-footer-card summary:hover {
-    color: color-mix(in srgb, var(--vyasa-ink) 72%, var(--vyasa-primary) 28%) !important;
+    color: color-mix(in srgb, var(--vyasa-primary-text) 82%, transparent) !important;
 }
 
 .vyasa-breadcrumbs {
@@ -526,6 +555,20 @@ body.pdf-focus #mobile-toc-panel { display: none !important; }
 body.pdf-focus #content-with-sidebars { max-width: none !important; width: 100vw !important; padding: 0 !important; margin: 0 !important; gap: 0 !important; }
 body.pdf-focus #main-content { padding: 1rem !important; }
 body.pdf-focus .pdf-viewer { height: calc(100vh - 6rem) !important; }
+
+.mermaidTooltip:empty {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+}
 
 body.iframe-fullscreen-open { overflow: hidden; }
 .iframe-fullscreen-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(2, 6, 23, 0.85); display: flex; flex-direction: column; }

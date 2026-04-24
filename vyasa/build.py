@@ -36,6 +36,7 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
     static_css = """
     <style>
         body { font-family: 'IBM Plex Sans', sans-serif; margin: 0; padding: 0; }
+        .vyasa-footer-shell { margin: auto 0 0 0 !important; padding: 0 !important; }
         code, pre { font-family: 'IBM Plex Mono', monospace; }
         .folder-chevron {
             display: inline-block;
@@ -467,7 +468,7 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     
     # Navbar
     navbar = f'''
-    <div class="vyasa-navbar-card bg-slate-900 text-white p-4 rounded-lg shadow-md dark:bg-slate-800">
+    <div class="vyasa-navbar-card bg-slate-900 text-white px-4 py-3 dark:bg-slate-800">
         <div class="flex items-center justify-between md:hidden">
             <button id="mobile-posts-toggle" title="Toggle file tree" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaTogglePostsPanel && window.__vyasaTogglePostsPanel()">
                 <span uk-icon="menu" class="w-5 h-5"></span>
@@ -530,8 +531,8 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     
     # Footer
     footer = '''
-    <footer class="vyasa-footer-shell w-full max-w-7xl mx-auto px-6 mt-auto mb-6">
-        <div class="vyasa-footer-card bg-slate-900 text-white rounded-lg p-4 my-4 dark:bg-slate-800 text-right">
+    <footer class="vyasa-footer-shell w-full mt-auto">
+        <div class="vyasa-footer-card bg-slate-900 text-white p-4 dark:bg-slate-800 text-right">
             Powered by Vyasa
         </div>
     </footer>
@@ -540,7 +541,7 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
     # Complete body
     body = f'''
     <div id="page-container" class="flex flex-col min-h-screen">
-        <div class="vyasa-navbar-shell w-full max-w-7xl mx-auto px-4 sticky top-0 z-50 mt-4">
+        <div class="vyasa-navbar-shell w-full sticky top-0 z-50">
             {navbar}
         </div>
         <div id="content-with-sidebars" class="vyasa-content-grid w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1">

@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 import os
+import tempfile
 import threading
 import webbrowser
 from importlib.metadata import PackageNotFoundError, version as pkg_version
@@ -11,6 +12,22 @@ _core_app = None
 _browser_url = None
 _browser_opened = False
 _logging_configured = False
+
+
+def _claim_browser_open(browser_url: str) -> bool:
+    """Return True only once for this CLI launch, even across reload workers."""
+    sentinel = os.environ.get("VYASA_BROWSER_SENTINEL")
+    if not sentinel:
+        return True
+    try:
+        fd = os.open(sentinel, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        return False
+    except OSError:
+        return True
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(browser_url)
+    return True
 
 
 def _ensure_logging_configured():
@@ -35,8 +52,9 @@ async def app(scope, receive, send):
             and not _browser_opened
         ):
             _browser_opened = True
-            threading.Timer(0.1, lambda: webbrowser.open(browser_url)).start()
-            print(f"Opening browser at: {browser_url}")
+            if _claim_browser_open(browser_url):
+                threading.Timer(0.1, lambda: webbrowser.open(browser_url)).start()
+                print(f"Opening browser at: {browser_url}")
         await send(message)
     await _core_app(scope, receive, wrapped_send)
 
@@ -162,8 +180,15 @@ def cli():
     _browser_url = None if args.no_browser else f"http://{browser_host}:{port}"
     if _browser_url:
         os.environ['VYASA_BROWSER_URL'] = _browser_url
+        sentinel = Path(tempfile.gettempdir()) / f"vyasa-browser-{os.getpid()}-{port}.opened"
+        try:
+            sentinel.unlink()
+        except FileNotFoundError:
+            pass
+        os.environ['VYASA_BROWSER_SENTINEL'] = str(sentinel)
     else:
         os.environ.pop('VYASA_BROWSER_URL', None)
+        os.environ.pop('VYASA_BROWSER_SENTINEL', None)
     _browser_opened = False
     
     # Configure reload to watch markdown and PDF files in the blog directory
