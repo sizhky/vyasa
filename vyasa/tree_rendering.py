@@ -5,6 +5,7 @@ from fasthtml.common import A, Details, Li, Span, Summary, Ul
 from monsterui.all import UkIcon
 from .bookmark_views import bookmark_toggle_button
 from .helpers import content_slug_for_path
+from .tree_file_rendering import resolve_tree_title
 
 
 def _folder_summary(title_node, branch_href=None):
@@ -102,7 +103,7 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
                 folder_link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon("folder", cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(folder_title, cls="whitespace-nowrap", title=folder_title), href=f"/posts/{note_slug}", hx_get=f"/posts/{note_slug}", hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link inline-flex items-center whitespace-nowrap", data_path=note_slug)
                 items.append(Li(_bookmarkable_tree_row(folder_link, note_slug, folder_title)))
             continue
-        if item.suffix not in {".md", ".pdf", ".excalidraw"}:
+        if item.suffix not in {".md", ".pdf", ".tree", ".excalidraw"}:
             continue
         if folder_note_file and item.resolve() == folder_note_file.resolve():
             continue
@@ -117,6 +118,10 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             icon = "monitor" if metadata.get("slides", False) else "file-text"
             title = metadata.get("title", slug_to_title_fn(item.stem, abbreviations=abbreviations))
             label, href = title, f"/posts/{slug}"
+        elif item.suffix == ".tree":
+            icon = "git-branch"
+            title = resolve_tree_title(item, abbreviations=abbreviations)[0]
+            label, href = f"{title} (Tree)", f"/posts/{slug}"
         elif item.suffix == ".pdf":
             icon, title, label, href = "file", slug_to_title_fn(item.stem, abbreviations=abbreviations), f"{slug_to_title_fn(item.stem, abbreviations=abbreviations)} (PDF)", f"/posts/{slug}"
         else:

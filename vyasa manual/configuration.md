@@ -19,7 +19,7 @@ title = "Team Notes"
 port = 8080
 theme_preset = "serene-manuscript"
 theme_primary = "#2f6fed"
-table_col_max_width = "33vw"
+table_col_max_width = "45vw"
 sidebars_open = true
 
 [annotations]

@@ -285,7 +285,7 @@ hdrs = (
         .dark .vyasa-table-scroll.has-left-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62); }
         .dark .vyasa-table-scroll.has-left-overflow.has-right-overflow { box-shadow: inset 18px 0 16px -14px rgba(2, 6, 23, 0.62), inset -18px 0 16px -14px rgba(2, 6, 23, 0.62); }
         .vyasa-table-scroll > table, .vyasa-table-scroll > .uk-table { width: max-content !important; min-width: 0; table-layout: auto; margin: 0 auto; }
-        .vyasa-table-scroll th, .vyasa-table-scroll td { max-width: var(--vyasa-table-col-max, 33vw); white-space: normal; overflow-wrap: anywhere; word-break: normal; }
+        .vyasa-table-scroll th, .vyasa-table-scroll td { max-width: var(--vyasa-table-col-max, 45vw); white-space: normal; overflow-wrap: anywhere; word-break: normal; }
         """
     ),
     Link(
@@ -371,8 +371,8 @@ def _resolve_bookmark_items(owner: str, roles):
     root = get_root_folder()
     for row in _bookmarks_db_list(owner):
         slug = (row.path or "").strip("/")
-        path = content_path_for_slug(slug, ".md") or content_path_for_slug(slug, ".pdf")
-        if not slug or not path or path.suffix not in {".md", ".pdf"}:
+        path = content_path_for_slug(slug, ".md") or content_path_for_slug(slug, ".tree") or content_path_for_slug(slug, ".pdf")
+        if not slug or not path or path.suffix not in {".md", ".tree", ".pdf"}:
             continue
         if not is_allowed(f"/posts/{slug}", roles or [], _rbac_rules):
             continue
@@ -1009,7 +1009,7 @@ def _posts_sidebar_fingerprint():
     try:
         mtimes = []
         for _, root in get_content_mounts():
-            for suffix in (".md", ".pdf", ".excalidraw", ".vyasa"):
+            for suffix in (".md", ".tree", ".pdf", ".excalidraw", ".vyasa"):
                 mtimes.extend(p.stat().st_mtime for p in iter_visible_files(root, (suffix,), True))
         return max(mtimes, default=0)
     except Exception:
@@ -1036,7 +1036,7 @@ def _find_search_preview_matches(query, limit=200):
     )
 
 
-def _find_search_candidates(query, limit=40, *, suffixes=(".md", ".pdf")):
+def _find_search_candidates(query, limit=40, *, suffixes=(".md", ".tree", ".pdf")):
     trimmed = (query or "").strip()
     if not trimmed:
         return [], ""
@@ -1066,7 +1066,7 @@ def _find_search_candidates(query, limit=40, *, suffixes=(".md", ".pdf")):
 
 
 def _find_search_matches_uncached(query, limit=40):
-    return _find_search_candidates(query, limit, suffixes=(".md", ".pdf"))
+    return _find_search_candidates(query, limit, suffixes=(".md", ".tree", ".pdf"))
 
 
 def _find_search_preview_matches_uncached(query, limit=200):
@@ -1136,14 +1136,16 @@ def _log_startup_content_stats():
     excludes = get_config().get_reload_excludes()
     roots = get_content_mounts()
     md_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".md",), show_hidden))
+    tree_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".tree",), show_hidden))
     pdf_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".pdf",), show_hidden))
     excalidraw_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".excalidraw",), show_hidden))
     vyasa_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".vyasa",), True))
     logger.info(
-        "Startup scan root={} show_hidden={} md={} pdf={} excalidraw={} vyasa={} excludes={}",
+        "Startup scan root={} show_hidden={} md={} tree={} pdf={} excalidraw={} vyasa={} excludes={}",
         [str(root) for _, root in roots],
         show_hidden,
         md_count,
+        tree_count,
         pdf_count,
         excalidraw_count,
         vyasa_count,
@@ -1265,7 +1267,7 @@ def _get_nav_entries(
     if cached and cached[0] == mtime:
         return cached[1]
     ordered = get_tree_entries(
-        folder, root, show_hidden, excluded_dirs, (".md", ".pdf", ".excalidraw")
+        folder, root, show_hidden, excluded_dirs, (".md", ".tree", ".pdf", ".excalidraw")
     )
     _nav_entries_cache[key] = (mtime, ordered)
     return ordered
@@ -1295,7 +1297,7 @@ def _posts_tree_fingerprint():
     try:
         mtimes = []
         for _, root in get_content_mounts():
-            for suffix in (".md", ".pdf", ".excalidraw", ".vyasa"):
+            for suffix in (".md", ".tree", ".pdf", ".excalidraw", ".vyasa"):
                 mtimes.extend(p.stat().st_mtime for p in iter_visible_files(root, (suffix,), True))
         return max(mtimes, default=0)
     except Exception:
