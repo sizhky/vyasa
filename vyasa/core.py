@@ -148,7 +148,7 @@ def _render_blog_preview_card(path, slug, root):
     title, render_content = resolve_markdown_title(path, abbreviations=_effective_abbreviations(root))
     preview = from_md(preview_markdown(render_content), current_path=slug)
     return Div(
-        A(title, href=f"/posts/{slug}", cls="vyasa-blog-card-title absolute -left-60 top-6 block w-56 text-right text-3xl font-bold leading-tight hover:underline line-clamp-3 overflow-hidden"),
+        A(title, href=f"/posts/{slug}", cls="vyasa-blog-card-title absolute top-6 block text-right text-xl font-bold leading-tight hover:underline line-clamp-3 overflow-hidden"),
         Div(
             Div(preview, cls="prose prose-slate dark:prose-invert max-w-none"),
             A("continue reading...", href=f"/posts/{slug}", cls="inline-flex mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200 hover:underline"),

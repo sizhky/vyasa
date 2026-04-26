@@ -924,6 +924,18 @@ todo .deadline { margin-left: 0.45rem; }
 .posts-search-preview-button:hover { background: rgba(199, 234, 222, 0.35) !important; color: var(--vyasa-primary) !important; }
 .posts-search-clear-button { background: transparent !important; color: var(--vyasa-ink-soft) !important; }
 .posts-search-clear-button:hover { background: rgba(199, 234, 222, 0.35) !important; color: var(--vyasa-primary) !important; }
+.vyasa-blog-card-title {
+    right: calc(100% + 1rem);
+    width: clamp(14rem, calc((100vw - 100% - var(--vyasa-sidebar-width, 22rem) - 8rem) * 0.95), 30rem);
+}
+@media (max-width: 1279px) {
+    .vyasa-blog-card-title {
+        position: static !important;
+        width: 100%;
+        margin-bottom: 0.75rem;
+        text-align: left;
+    }
+}
 .vyasa-tree-doc {
     --vyasa-tree-line: color-mix(in srgb, var(--vyasa-outline) 56%, transparent);
     --vyasa-tree-chip-bg: color-mix(in srgb, var(--vyasa-paper-low) 72%, var(--vyasa-primary) 28%);
@@ -933,28 +945,21 @@ todo .deadline { margin-left: 0.45rem; }
 .vyasa-tree-root,
 .vyasa-tree-children { list-style: none; margin: 0; padding: 0; }
 .vyasa-tree-children {
-    margin-left: 1.1rem;
-    padding-left: 1.1rem;
-    border-left: 1px solid var(--vyasa-tree-line);
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
 }
 .vyasa-tree-item { position: relative; margin: 0.22rem 0; }
 .vyasa-tree-children > .vyasa-tree-item::before {
-    content: "";
-    position: absolute;
-    left: -1.1rem;
-    top: 1.1rem;
-    width: 0.72rem;
-    border-top: 1px solid var(--vyasa-tree-line);
+    content: none;
 }
 .vyasa-tree-summary { display: block; list-style: none; cursor: pointer; }
 .vyasa-tree-summary::-webkit-details-marker { display: none; }
 .vyasa-tree-row {
-    display: grid;
-    grid-template-columns: minmax(14rem, 1fr) max-content;
-    align-items: center;
-    gap: 1rem;
-    width: max-content;
-    min-width: min(100%, 42rem);
+    display: block;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     padding: 0.38rem 0.55rem;
     border-radius: var(--vyasa-rect-radius);
     color: var(--vyasa-ink);
@@ -979,17 +984,25 @@ todo .deadline { margin-left: 0.45rem; }
 }
 .vyasa-tree-label {
     min-width: 0;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    padding-left: calc(var(--vyasa-tree-level, 0) * 1.45rem);
 }
 .vyasa-tree-meta {
-    display: inline-flex;
+    display: grid;
+    grid-template-columns: 2rem 2rem 5.6rem 4.2rem 5.8rem;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: start;
     gap: 0.35rem;
+    width: max-content;
+    margin-top: 0.35rem;
+    padding-left: calc((var(--vyasa-tree-level, 0) * 1.45rem) + 1.35rem);
 }
 .vyasa-tree-chip {
     display: inline-flex;
     align-items: center;
+    justify-self: start;
+    width: max-content;
     min-height: 1.35rem;
     padding: 0.16rem 0.46rem;
     border: 1px solid color-mix(in srgb, var(--vyasa-primary) 14%, transparent);
@@ -1000,6 +1013,58 @@ todo .deadline { margin-left: 0.45rem; }
     letter-spacing: 0;
 }
 .vyasa-tree-empty { color: var(--vyasa-ink-soft); }
+.vyasa-tree-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid color-mix(in srgb, var(--vyasa-outline) 56%, transparent);
+    border-radius: var(--vyasa-rect-radius);
+}
+.vyasa-tree-table {
+    width: 100%;
+    min-width: 58rem;
+    border-collapse: separate;
+    border-spacing: 0;
+    color: var(--vyasa-ink);
+    font-size: 0.92rem;
+}
+.vyasa-tree-table th,
+.vyasa-tree-table td {
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--vyasa-outline) 34%, transparent);
+    text-align: left;
+    vertical-align: top;
+}
+.vyasa-tree-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: color-mix(in srgb, var(--vyasa-paper-low) 82%, var(--vyasa-primary) 18%);
+    color: var(--vyasa-ink);
+    font: 700 0.72rem/1.2 var(--vyasa-font-ui);
+    letter-spacing: 0;
+}
+.vyasa-tree-table tbody tr:last-child > td { border-bottom: 0; }
+.vyasa-tree-table tbody tr:hover > td {
+    background: color-mix(in srgb, var(--vyasa-paper-low) 80%, var(--vyasa-primary) 20%);
+}
+.vyasa-tree-table-h1,
+.vyasa-tree-table-h2 {
+    font-weight: 700;
+    color: color-mix(in srgb, var(--vyasa-ink) 86%, var(--vyasa-primary) 14%);
+}
+.vyasa-tree-table-h3 { min-width: 16rem; }
+.vyasa-tree-table-meta {
+    white-space: nowrap;
+    font-family: var(--vyasa-font-ui);
+    font-size: 0.84rem;
+}
+@media (max-width: 720px) {
+    .vyasa-tree-doc { overflow-x: auto; }
+    .vyasa-tree-row {
+        min-width: 0;
+    }
+    .vyasa-tree-chip { font-size: 0.64rem; }
+}
 .vyasa-spacer-rule {
     border: 0 !important;
     height: 1.5rem !important;
