@@ -251,6 +251,12 @@ def resolve_markdown_title(file_path: str | Path, abbreviations=None) -> tuple[s
     file_path = Path(file_path)
     explicit_title = metadata.get("title")
     if explicit_title:
+        match = re.match(r"^\s*#\s+(.+?)\s*$\n?", raw_content or "", re.MULTILINE)
+        if match:
+            h1_title = _plain_text_from_html(_strip_inline_markdown(match.group(1).strip()))
+            if h1_title == str(explicit_title).strip():
+                body = (raw_content[:match.start()] + raw_content[match.end():]).lstrip("\n")
+                return explicit_title, body
         return explicit_title, raw_content
 
     match = re.match(r"^\s*#\s+(.+?)\s*$\n?", raw_content or "", re.MULTILINE)
