@@ -16,10 +16,7 @@ from .helpers import (
     parse_frontmatter,
     resolve_markdown_title,
     _effective_abbreviations,
-    _effective_ignore_list,
-    _effective_include_list,
     get_vyasa_config,
-    _should_include_folder,
     find_folder_note_file,
     content_path_for_slug,
     content_root_and_relative,
@@ -73,11 +70,6 @@ from .bookmark_views import bookmarks_block
 from .page_views import not_found_content
 from .rbac_config import normalize_rbac_cfg, render_rbac_toml, write_rbac_to_vyasa
 from .rbac_store import load_rbac_cfg, write_rbac_cfg
-from .search_service import (
-    find_search_matches,
-    normalize_search_text,
-    parse_search_query,
-)
 from .search_pages import gather_search_content
 from .search_http import gather_search_page
 from .search_views import (
@@ -98,6 +90,7 @@ from .tree_rendering import (
     folder_has_visible_descendant as tree_folder_has_visible_descendant,
 )
 from .favicon import favicon_href, favicon_svg
+from .file_search import search_file_records
 _asset_url = asset_url
 
 
@@ -1017,52 +1010,21 @@ def _posts_sidebar_fingerprint():
 
 
 def _find_search_matches(query, limit=40):
-    return find_search_matches(
-        query,
-        limit,
-        _posts_sidebar_fingerprint(),
-        get_config().get_show_hidden(),
-        _find_search_matches_uncached,
-    )
+    return _find_search_matches_uncached(query, limit)
 
 
 def _find_search_preview_matches(query, limit=200):
-    return find_search_matches(
-        query,
-        limit,
-        _posts_sidebar_fingerprint(),
-        get_config().get_show_hidden(),
-        _find_search_preview_matches_uncached,
-    )
+    return _find_search_preview_matches_uncached(query, limit)
 
 
 def _find_search_candidates(query, limit=40, *, suffixes=(".md", ".tree", ".pdf")):
-    trimmed = (query or "").strip()
-    if not trimmed:
-        return [], ""
-    regex, regex_error = parse_search_query(trimmed)
-    query_norm = normalize_search_text(trimmed) if not regex else ""
-    show_hidden = get_config().get_show_hidden()
-    results = []
-    for _, root in get_content_mounts():
-        ignore_list = _effective_ignore_list(root)
-        include_list = _effective_include_list(root)
-        for item in iter_visible_files(root, suffixes, show_hidden):
-            rel_parts = item.relative_to(root).parts
-            if ".vyasa" in rel_parts:
-                continue
-            if any(not _should_include_folder(part, include_list, ignore_list) for part in rel_parts[:-1]):
-                continue
-            rel = content_slug_for_path(item)
-            if not rel:
-                continue
-            haystack = f"{item.name} {rel}" if regex else normalize_search_text(f"{item.name} {rel}")
-            is_match = bool(regex.search(haystack)) if regex else query_norm in haystack
-            if is_match:
-                results.append(item)
-                if len(results) >= limit:
-                    return tuple(results), regex_error
-    return tuple(results), regex_error
+    return search_file_records(
+        query,
+        get_content_mounts(),
+        suffixes,
+        get_config().get_show_hidden(),
+        limit,
+    )
 
 
 def _find_search_matches_uncached(query, limit=40):
@@ -1112,7 +1074,18 @@ def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden, current_path
         data_sidebar="posts",
         shortcut_key="Z",
         extra_content=[
-            sidebar_section("Filter", _posts_search_block(), is_open=True, data_section="filter", body_cls="pt-1"),
+            sidebar_section(
+                "Filter",
+                _posts_search_block(),
+                is_open=True,
+                data_section="filter",
+                body_cls="pt-1",
+                title_suffix=Kbd(
+                    "⌘K",
+                    cls="kbd-key ml-2 px-2.5 py-1 text-sm font-mono font-semibold normal-case tracking-normal leading-none",
+                    style="font-size: 0.875rem; line-height: 1; letter-spacing: 0;",
+                ),
+            ),
             sidebar_section("Bookmarks", bookmarks_block(), is_open=True, data_section="bookmarks", body_cls="pt-1"),
             sidebar_section(
                 "Posts",

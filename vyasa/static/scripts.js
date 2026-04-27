@@ -3351,6 +3351,81 @@ function initMobileMenus() {
     }
 }
 
+function initCommandPalette() {
+    if (document.getElementById('vyasa-command-palette')) return;
+    const palette = document.createElement('div');
+    palette.id = 'vyasa-command-palette';
+    palette.className = 'fixed inset-0 z-[9999] hidden bg-slate-950/45 backdrop-blur-sm';
+    palette.innerHTML = `
+        <div class="mx-auto mt-[12vh] w-[min(42rem,calc(100vw-2rem))] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-2xl">
+            <div class="border-b border-slate-200 dark:border-slate-800 p-3">
+                <input type="search" name="q" autocomplete="off" placeholder="Search file names..." class="vyasa-command-palette-input w-full bg-transparent px-2 py-2 text-base text-slate-800 dark:text-slate-100 outline-none" />
+            </div>
+            <div class="vyasa-command-palette-results max-h-[55vh] overflow-y-auto p-3"></div>
+        </div>`;
+    document.body.appendChild(palette);
+    const input = palette.querySelector('input');
+    const results = palette.querySelector('.vyasa-command-palette-results');
+    let timer = null;
+    let activeIndex = -1;
+    const resultLinks = () => Array.from(results.querySelectorAll('a.post-search-link'));
+    const setActive = (index) => {
+        const links = resultLinks();
+        links.forEach((link) => link.classList.remove('is-active'));
+        if (!links.length) {
+            activeIndex = -1;
+            return;
+        }
+        activeIndex = (index + links.length) % links.length;
+        links[activeIndex].classList.add('is-active');
+        links[activeIndex].scrollIntoView({ block: 'nearest' });
+    };
+    const close = () => palette.classList.add('hidden');
+    const open = () => {
+        palette.classList.remove('hidden');
+        input.focus();
+        input.select();
+        if (!results.innerHTML.trim()) results.innerHTML = '<div class="text-xs text-slate-500">Type to search file names.</div>';
+    };
+    const runSearch = () => {
+        const query = encodeURIComponent(input.value.trim());
+        fetch(`/_sidebar/posts/search?q=${query}`).then((response) => response.text()).then((html) => {
+            results.innerHTML = html;
+            setActive(0);
+            bindBookmarkButtons(results);
+        }).catch(() => {});
+    };
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(runSearch, 180);
+    });
+    input.addEventListener('keydown', (event) => {
+        const links = resultLinks();
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setActive(activeIndex + 1);
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setActive(activeIndex - 1);
+        } else if (event.key === 'Enter' && links[activeIndex]) {
+            event.preventDefault();
+            links[activeIndex].click();
+            close();
+        }
+    });
+    palette.addEventListener('click', (event) => {
+        if (event.target === palette || event.target.closest('a')) close();
+    });
+    document.addEventListener('keydown', (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+            event.preventDefault();
+            open();
+        } else if (event.key === 'Escape' && !palette.classList.contains('hidden')) {
+            close();
+        }
+    }, true);
+}
+
 // Keyboard shortcuts for toggling sidebars
 function initKeyboardShortcuts() {
     // Prewarm the selectors to avoid lazy compilation delays
@@ -4033,6 +4108,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initMobileMenus();
     initPostsSidebarAutoReveal();
     initFolderChevronState();
+    initCommandPalette();
     initKeyboardShortcuts();
     initPdfFocusToggle();
     initIframeFullscreenToggle();
