@@ -68,12 +68,13 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
     return Details(Summary(*summary_content, cls=summary_classes, style="margin: 0 0 0.5rem 0;"), Div(*extra_content, list_node, cls=content_classes, id=content_id, style="will-change: auto;"), open=is_open, data_sidebar=data_sidebar, cls=f"vyasa-sidebar-card vyasa-sidebar-card-{sidebar_kind}", style="will-change: auto;")
 
 
-def sidebar_section(title, *content, is_open=True, data_section=None, body_cls="pt-2"):
+def sidebar_section(title, *content, is_open=True, data_section=None, body_cls="pt-2", title_suffix=None):
     section_kind = (data_section or title or "section").strip().lower().replace(" ", "-")
     return Details(
         Summary(
             Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
             Span(title, cls="flex-1"),
+            title_suffix,
             cls=f"vyasa-sidebar-section-toggle vyasa-sidebar-section-toggle-{section_kind} flex items-center text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400 cursor-pointer py-1 px-2 rounded hover:bg-slate-100/70 dark:hover:bg-slate-800/70 list-none",
         ),
         Div(*content, cls=f"vyasa-sidebar-section-body vyasa-sidebar-section-body-{section_kind} {body_cls}"),

@@ -924,6 +924,10 @@ todo .deadline { margin-left: 0.45rem; }
 .posts-search-preview-button:hover { background: rgba(199, 234, 222, 0.35) !important; color: var(--vyasa-primary) !important; }
 .posts-search-clear-button { background: transparent !important; color: var(--vyasa-ink-soft) !important; }
 .posts-search-clear-button:hover { background: rgba(199, 234, 222, 0.35) !important; color: var(--vyasa-primary) !important; }
+.vyasa-command-palette-results .post-search-link.is-active {
+    background: rgba(199, 234, 222, 0.45) !important;
+    color: var(--vyasa-primary) !important;
+}
 .vyasa-blog-card-title {
     right: calc(100% + 1rem);
     width: clamp(14rem, calc((100vw - 100% - var(--vyasa-sidebar-width, 22rem) - 8rem) * 0.95), 30rem);

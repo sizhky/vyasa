@@ -32,6 +32,7 @@ def test_search_preview_page_renders_blog_style_cards(monkeypatch, tmp_path):
     monkeypatch.setattr(core, "get_blog_title", lambda: "Demo")
     monkeypatch.setattr(core, "content_slug_for_path", lambda path, strip_suffix=True: "hello" if path == post else None)
     monkeypatch.setattr(core, "_find_search_matches", lambda query, limit=200: ([post, pdf], ""))
+    monkeypatch.setattr(core, "_find_search_preview_matches", lambda query, limit=200: ([post], ""))
     monkeypatch.setattr(core, "get_roles_from_auth", lambda *args, **kwargs: None)
     monkeypatch.setattr(core, "layout", lambda *content, **kwargs: content)
 
