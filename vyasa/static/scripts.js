@@ -3119,6 +3119,10 @@ function recordStyleProbe(label) {
     localStorage.setItem('vyasa:lastStyleProbe', JSON.stringify(samples.slice(-12)));
 }
 
+function isLightweightSearchSwap(target) {
+    return !!target?.closest?.('.posts-search-results, .vyasa-command-palette-results');
+}
+
 function updateActiveTocLink() {
     const headings = document.querySelectorAll('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]');
     const tocLinks = document.querySelectorAll('.toc-link');
@@ -3198,6 +3202,10 @@ document.addEventListener('click', (event) => {
 
 // Re-run mermaid on HTMX content swaps
 document.body.addEventListener('htmx:afterSwap', function(event) {
+    if (isLightweightSearchSwap(event.target)) {
+        bindBookmarkButtons(event.target);
+        return;
+    }
     mermaidDebugSnapshot('before mermaid.run (htmx:afterSwap)');
     document.querySelectorAll('.mermaid-wrapper').forEach(wrapper => {
         if (!wrapper.id) {
@@ -4138,6 +4146,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 document.body.addEventListener('htmx:afterSwap', (event) => {
     if (!event.target) {
+        return;
+    }
+    if (isLightweightSearchSwap(event.target)) {
+        bindBookmarkButtons(event.target);
         return;
     }
     initHeadingFolds(event.target);
