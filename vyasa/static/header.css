@@ -968,6 +968,13 @@ todo .deadline { margin-left: 0.45rem; }
     border-radius: var(--vyasa-rect-radius);
     color: var(--vyasa-ink);
 }
+.vyasa-sidebar-body .vyasa-tree-row {
+    display: inline-flex;
+    align-items: center;
+    width: max-content;
+    padding: 0.25rem 0.5rem;
+    line-height: 1.25;
+}
 .vyasa-tree-branch > details > .vyasa-tree-summary .vyasa-tree-label::before {
     content: "";
     display: inline-block;
