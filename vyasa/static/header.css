@@ -814,6 +814,14 @@ todo .deadline { margin-left: 0.45rem; }
 .vyasa-prev-link, .vyasa-next-link { max-width:48%; text-decoration:none; color:var(--vyasa-primary); font-weight:600; font-family: 'Inter', sans-serif; font-size: 0.8rem; letter-spacing: 0.05em; text-transform: uppercase; }
 .vyasa-next-link { text-align:right; margin-left:auto; }
 .vyasa-prev-link:hover, .vyasa-next-link:hover { text-decoration:underline; }
+.vyasa-frontmatter-block {
+    border: 1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent);
+    background: color-mix(in srgb, var(--vyasa-paper) 90%, var(--vyasa-primary) 10%);
+    box-shadow: 0 10px 30px color-mix(in srgb, var(--vyasa-primary) 8%, transparent);
+}
+.vyasa-frontmatter-summary {
+    color: var(--vyasa-primary);
+}
 
 .vyasa-table-scroll { width: 100%; max-width: 100%; position: static; left: auto; transform: none; margin: 1.5rem 0; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-gutter: stable both-edges; box-shadow: none; transition: box-shadow 160ms ease; }
 .vyasa-table-scroll.vyasa-table-breakout { width: min(var(--vyasa-breakout-width, 80vw), 80vw); max-width: 80vw; position: relative; left: 50%; transform: translateX(-50%); }

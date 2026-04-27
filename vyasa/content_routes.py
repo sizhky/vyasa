@@ -157,8 +157,8 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     metadata_items = [(k, v) for k, v in metadata.items() if k not in {"__frontmatter_error__", "title", "slides", "reveal"} and isinstance(v, str) and v.strip()]
     breadcrumbs = _breadcrumbs(path, slug_to_title, abbreviations)
     metadata_block = NotStr(
-        '<details class="mb-8 overflow-hidden rounded-2xl border border-[rgba(126,154,144,0.28)] bg-[linear-gradient(180deg,rgba(248,250,249,0.96),rgba(241,246,244,0.92))] px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.05)] dark:border-[rgba(126,154,144,0.22)] dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.52),rgba(15,23,42,0.3))]">'
-        '<summary class="cursor-pointer text-xs font-medium uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Front Matter</summary>'
+        '<details class="vyasa-frontmatter-block mb-8 overflow-hidden rounded-2xl px-4 py-3">'
+        '<summary class="vyasa-frontmatter-summary cursor-pointer text-xs font-medium uppercase tracking-[0.18em]">Front Matter</summary>'
         + ''.join(
             f'<div class="space-y-1 pt-6 first:pt-4"><div class="border-t border-[rgba(126,154,144,0.16)] pb-6 first:border-t-0 first:pb-0"></div><div class="text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{html.escape(k.replace("_", " "))}</div><p class="m-0 text-sm leading-relaxed text-slate-700 dark:text-slate-200">{html.escape(v)}</p></div>'
             for k, v in metadata_items[:4]
