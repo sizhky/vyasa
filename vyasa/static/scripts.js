@@ -3424,6 +3424,9 @@ function initCommandPalette() {
                 swap: 'outerHTML show:window:top settle:0.1s',
                 pushURL: true
             });
+            if (window.location.pathname !== href) {
+                window.history.pushState(null, '', href);
+            }
             return;
         }
         window.location.assign(href);
