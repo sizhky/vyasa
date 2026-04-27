@@ -2438,6 +2438,12 @@ function decodeSearchPreviewTerm(token) {
     }
 }
 
+function extractSearchResultsHtml(html) {
+    const template = document.createElement('template');
+    template.innerHTML = html || '';
+    return template.content.querySelector('.posts-search-results-list')?.outerHTML || html || '';
+}
+
 function getPostsSearchTermFromLocation() {
     const path = window.location.pathname || '';
     const previewPrefix = '/search/preview/s/';
@@ -2557,10 +2563,10 @@ function initPostsSearchPersistence(rootElement = document) {
         openPostsSearchPreview(block);
     });
     const fetchResults = (query) => {
-        return fetch(`/_sidebar/posts/search?q=${query}`)
+        return fetch(`/_sidebar/posts/search?q=${query}`, { headers: { 'HX-Request': 'true' } })
             .then((response) => response.text())
             .then((html) => {
-                results.innerHTML = html;
+                results.innerHTML = extractSearchResultsHtml(html);
                 enhanceGatherLink();
                 try {
                     localStorage.setItem(resultsKey, JSON.stringify({
@@ -3397,8 +3403,8 @@ function initCommandPalette() {
     };
     const runSearch = () => {
         const query = encodeURIComponent(input.value.trim());
-        fetch(`/_sidebar/posts/search?q=${query}`).then((response) => response.text()).then((html) => {
-            results.innerHTML = html;
+        fetch(`/_sidebar/posts/search?q=${query}`, { headers: { 'HX-Request': 'true' } }).then((response) => response.text()).then((html) => {
+            results.innerHTML = extractSearchResultsHtml(html);
             setActive(0);
             bindBookmarkButtons(results);
         }).catch(() => {});
@@ -3407,6 +3413,21 @@ function initCommandPalette() {
         clearTimeout(timer);
         timer = setTimeout(runSearch, 180);
     });
+    const openLink = (link) => {
+        const href = link?.getAttribute('href');
+        if (!href) return;
+        close();
+        document.body.classList.remove('pdf-focus');
+        if (window.htmx && typeof window.htmx.ajax === 'function') {
+            window.htmx.ajax('GET', href, {
+                target: '#main-content',
+                swap: 'outerHTML show:window:top settle:0.1s',
+                pushURL: true
+            });
+            return;
+        }
+        window.location.assign(href);
+    };
     input.addEventListener('keydown', (event) => {
         const links = resultLinks();
         if (event.key === 'ArrowDown') {
@@ -3417,12 +3438,17 @@ function initCommandPalette() {
             setActive(activeIndex - 1);
         } else if (event.key === 'Enter' && links[activeIndex]) {
             event.preventDefault();
-            links[activeIndex].click();
-            close();
+            openLink(links[activeIndex]);
         }
     });
     palette.addEventListener('click', (event) => {
-        if (event.target === palette || event.target.closest('a')) close();
+        const link = event.target.closest('a');
+        if (link) {
+            event.preventDefault();
+            openLink(link);
+            return;
+        }
+        if (event.target === palette) close();
     });
     document.addEventListener('keydown', (event) => {
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
