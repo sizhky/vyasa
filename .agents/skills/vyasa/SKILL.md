@@ -43,12 +43,12 @@ Core rules:
 - For lightweight task callouts, prefer markdown task-list items like `- [ ] Task | owner: Jane | deadline: Tomorrow | priority: high` over custom HTML tags; supported metadata families live in `references/markdown.md`.
 - For dependency planning UIs, use fenced `tasks` blocks inside normal markdown pages instead of separate `.tasks` files.
 - `tasks` fences support frontmatter-style config at the top of the block: `title`, `width`, and `height`, then `---`, then task content.
-- Task block syntax is line-based:
+- Task block syntax is line-based and supports nested groups:
   `task ID "Title"`
   then indented attrs like `estimate: 2d`.
 - First-class task attrs today: `estimate`, `depends_on`, `priority`, `points`, `owner`, `phase`.
 - Graph layout attrs exist but are renderer-owned: `graph_x`, `graph_y`. Do not surface them in user guidance unless debugging persistence.
-- Current `tasks` view is a React Flow graph: draggable cards, connect/delete edges, snap-to-grid, inline edit modal, dependency warnings inside a collapsible details block, and a popout button. Immediate neighbors only in popup: `Dependencies` and `Dependants`.
+- Current `tasks` view is a React Flow graph: draggable cards, connect/delete edges, snap-to-grid, inline edit modal, dependency warnings inside a collapsible details block, and a popout button. Groups render as overview pills; nested groups are written as `group ... end` blocks inside parent groups. Click a group to inspect its direct tasks and child groups in a popover canvas with frozen incoming/outgoing dependency portals. `Esc` or Back closes the popover. Immediate neighbors only in task popup: `Dependencies` and `Dependants`.
 - `tasks` graph persistence is block-scoped through `/api/tasks/blocks/...`; editing a graph rewrites the fenced block source and clears legacy chain state. Do not propose `.tasks` file routes or `.tasks`-specific APIs unless the user explicitly asks for legacy compatibility work.
 - Use `+` and `-` fold markers when the callout should clearly default open or closed, and prefer nested `> > [!todo]` callouts over ad hoc indentation patterns.
 - For custom callout types, rely on `data-callout="your-type"` plus `custom.css` rather than inventing special renderer logic unless the user explicitly wants core support.

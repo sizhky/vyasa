@@ -1,6 +1,7 @@
 import html
 import json
 import re
+import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -21,6 +22,7 @@ class TaskGroup:
     title: str
     tasks: list["TaskItem"] = field(default_factory=list)
     attrs: dict[str, str] = field(default_factory=dict)
+    parent_group_id: str | None = None
 
 
 TASK_RE = re.compile(r'^\s*task\s+(\S+)\s+"([^"]+)"\s*$')
@@ -30,6 +32,7 @@ CHAIN_RE = re.compile(r"^\s*chain\s+(\S+)\s*$")
 ATTR_RE = re.compile(r"^\s+([a-zA-Z_][\w-]*)\s*:\s*(.*?)\s*$")
 ESTIMATE_RE = re.compile(r"^\s*(\d+)\s*d\s*$", re.IGNORECASE)
 TASKS_FENCE_RE = re.compile(r"(?ms)^(?P<fence>`{3,}|~{3,})tasks(?P<info>[^\n]*)\n(?P<body>.*?)(?:\n(?P=fence))[ \t]*$")
+TASKS_BLOCK_FRONTMATTER_RE = re.compile(r"(?s)\A(?P<frontmatter>---\s*\n.*?\n---\s*\n?)(?P<body>.*)\Z")
 CRITICAL_TASK_ATTRS = ("estimate", "owner", "phase", "priority")
 
 
@@ -41,7 +44,7 @@ def parse_tasks_text(text: str) -> list[TaskItem]:
             continue
         task_match = TASK_RE.match(line)
         if task_match:
-            current = TaskItem(task_match.group(1), task_match.group(2))
+            current = TaskItem(task_match.group(1), html.unescape(task_match.group(2)))
             tasks.append(current)
             continue
         attr_match = ATTR_RE.match(line)
@@ -56,24 +59,27 @@ def parse_tasks_document_text(text: str) -> tuple[list[TaskItem], dict[str, list
     groups: list[TaskGroup] = []
     current: TaskItem | None = None
     current_chain: str | None = None
-    current_group: TaskGroup | None = None
+    group_stack: list[TaskGroup] = []
     for line in text.splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         group_match = GROUP_RE.match(line)
         if group_match:
-            current_group = TaskGroup(group_match.group(1), group_match.group(2))
+            parent_group_id = group_stack[-1].id if group_stack else None
+            current_group = TaskGroup(group_match.group(1), html.unescape(group_match.group(2)), parent_group_id=parent_group_id)
             groups.append(current_group)
+            group_stack.append(current_group)
             current = None
             current_chain = None
             continue
-        if current_group and GROUP_END_RE.match(line):
-            current_group = None
+        if group_stack and GROUP_END_RE.match(line):
+            group_stack.pop()
             current = None
             continue
         task_match = TASK_RE.match(line)
         if task_match:
-            current = TaskItem(task_match.group(1), task_match.group(2), group_id=current_group.id if current_group else None)
+            current_group = group_stack[-1] if group_stack else None
+            current = TaskItem(task_match.group(1), html.unescape(task_match.group(2)), group_id=current_group.id if current_group else None)
             if current_group:
                 current_group.tasks.append(current)
             tasks.append(current)
@@ -90,7 +96,8 @@ def parse_tasks_document_text(text: str) -> tuple[list[TaskItem], dict[str, list
             key, value = attr_match.group(1).lower(), attr_match.group(2).strip()
             if current:
                 current.attrs[key] = value
-            elif current_group and not current_chain:
+            elif group_stack and not current_chain:
+                current_group = group_stack[-1]
                 current_group.attrs[key] = value
             continue
         if current_chain and "->" in line:
@@ -99,35 +106,40 @@ def parse_tasks_document_text(text: str) -> tuple[list[TaskItem], dict[str, list
 
 def serialize_tasks_document(tasks: list[TaskItem], chains: dict[str, list[str]], groups: list[TaskGroup] | None = None) -> str:
     lines: list[str] = []
-    grouped_ids: set[str] = set()
-    group_map: dict[str, TaskGroup] = {}
-    if groups:
-        for group in groups:
-            for t in group.tasks:
-                grouped_ids.add(t.id)
-                group_map[t.id] = group
     task_map = {t.id: t for t in tasks}
+    groups = groups or []
+    children_by_group: dict[str | None, list[TaskGroup]] = {}
+    for group in groups:
+        children_by_group.setdefault(group.parent_group_id, []).append(group)
+
+    def emit_task(task: TaskItem, indent: int) -> None:
+        pad = "  " * indent
+        lines.append(f'{pad}task {task.id} "{task.title}"')
+        for key, value in task.attrs.items():
+            lines.append(f"{pad}  {key}: {value}")
+
+    def emit_group(group: TaskGroup, indent: int = 0) -> None:
+        pad = "  " * indent
+        lines.append(f'{pad}group {group.id} "{group.title}"')
+        for key, value in group.attrs.items():
+            lines.append(f"{pad}  {key}: {value}")
+        for gt in group.tasks:
+            if gt.id in task_map:
+                emit_task(gt, indent + 1)
+        for child in children_by_group.get(group.id, []):
+            emit_group(child, indent + 1)
+        lines.append(f"{pad}end")
+
     emitted_groups: set[str] = set()
+    for group in children_by_group.get(None, []):
+        emit_group(group)
+        emitted_groups.add(group.id)
+        lines.append("")
+
     for task in tasks:
-        if task.group_id and task.group_id not in emitted_groups:
-            group = next((g for g in (groups or []) if g.id == task.group_id), None)
-            if group:
-                emitted_groups.add(group.id)
-                lines.append(f'group {group.id} "{group.title}"')
-                for key, value in group.attrs.items():
-                    lines.append(f"  {key}: {value}")
-                for gt in group.tasks:
-                    lines.append(f'  task {gt.id} "{gt.title}"')
-                    for key, value in gt.attrs.items():
-                        lines.append(f"    {key}: {value}")
-                lines.append("end")
-                lines.append("")
-            continue
         if task.group_id:
             continue
-        lines.append(f'task {task.id} "{task.title}"')
-        for key, value in task.attrs.items():
-            lines.append(f"  {key}: {value}")
+        emit_task(task, 0)
         lines.append("")
     for name, ids in chains.items():
         lines.append(f"chain {name}")
@@ -150,7 +162,7 @@ def tasks_payload_text(text: str) -> dict:
     return {
         "tasks": [{"id": task.id, "title": task.title, "attrs": task.attrs, "group_id": task.group_id} for task in tasks],
         "chains": chains,
-        "groups": [{"id": g.id, "title": g.title, "attrs": g.attrs, "task_ids": [t.id for t in g.tasks]} for g in groups],
+        "groups": [{"id": g.id, "title": g.title, "attrs": g.attrs, "task_ids": [t.id for t in g.tasks], "parent_group_id": g.parent_group_id} for g in groups],
     }
 
 
@@ -185,7 +197,8 @@ def payload_to_tasks_document(payload: dict) -> tuple[list[TaskItem], dict[str, 
                 continue
             gattrs = {str(k): str(v) for k, v in dict(item.get("attrs", {})).items()}
             gtasks = [task_map[tid] for tid in item.get("task_ids", []) if tid in task_map]
-            groups.append(TaskGroup(gid, gtitle, gtasks, gattrs))
+            parent_group_id = str(item["parent_group_id"]).strip() if item.get("parent_group_id") else None
+            groups.append(TaskGroup(gid, gtitle, gtasks, gattrs, parent_group_id))
     return tasks, chains, groups
 
 
@@ -194,6 +207,13 @@ def missing_critical_task_attrs(task: TaskItem) -> list[str]:
 
 def list_tasks_fence_blocks(markdown: str) -> list[re.Match[str]]:
     return list(TASKS_FENCE_RE.finditer(markdown))
+
+
+def split_tasks_block_frontmatter(body: str) -> tuple[str, str]:
+    match = TASKS_BLOCK_FRONTMATTER_RE.match(body)
+    if not match:
+        return "", body
+    return match.group("frontmatter"), match.group("body")
 
 
 def tasks_fence_payload(path: Path, block_index: int) -> dict:
@@ -210,7 +230,9 @@ def write_tasks_fence_payload(path: Path, block_index: int, payload: dict) -> No
         raise IndexError(block_index)
     match = matches[block_index]
     tasks, chains, groups = payload_to_tasks_document(payload)
-    replacement = f'{match.group("fence")}tasks{match.group("info")}\n{serialize_tasks_document(tasks, chains, groups).rstrip()}\n{match.group("fence")}'
+    frontmatter, _ = split_tasks_block_frontmatter(match.group("body"))
+    serialized = serialize_tasks_document(tasks, chains, groups).rstrip()
+    replacement = f'{match.group("fence")}tasks{match.group("info")}\n{frontmatter}{serialized}\n{match.group("fence")}'
     path.write_text(markdown[:match.start()] + replacement + markdown[match.end():], encoding="utf-8")
 
 
@@ -373,7 +395,18 @@ def _parse_graph_int(value: str | None) -> int | None:
         return None
 
 
-def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], groups: list[TaskGroup], title: str, *, task_api_url: str | None = None, show_heading: bool = True, width: str = "100%", height: str = "70vh"):
+def _estimate_collapsed_group_size(title: str) -> tuple[int, int]:
+    min_w, max_w = 260, 460
+    side_pad, badge_w = 56, 88
+    line_h, top_bottom_pad = 26, 28
+    width = max(min_w, min(max_w, len(title) * 8 + side_pad + badge_w))
+    text_w = max(16, int((width - side_pad - badge_w) / 8))
+    lines = max(1, len(textwrap.wrap(title, width=text_w, break_long_words=False, break_on_hyphens=False)))
+    height = max(88, lines * line_h + top_bottom_pad)
+    return width, height
+
+
+def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], groups: list[TaskGroup], title: str, *, task_api_url: str | None = None, show_heading: bool = True, width: str = "95vw", height: str = "70vh"):
     warnings = validate_task_dependencies(tasks, chains)
     schedule, schedule_warnings, critical_path = build_task_schedule(tasks, chains)
     warnings.extend(schedule_warnings)
@@ -383,7 +416,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
     dependants_by_task: dict[str, list[str]] = {}
     for source, target in edges:
         dependants_by_task.setdefault(source, []).append(target)
-    node_w, node_h, col_gap, row_gap = 220, 92, 112, 44
+    node_w, node_h, col_gap, row_gap = 320, 92, 112, 44
     columns: dict[int, list[TaskItem]] = {}
     for task in tasks:
         columns.setdefault(schedule.get(task.id, (1, 1))[0], []).append(task)
@@ -424,22 +457,34 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
         )
     group_padding = 24
     header_h = 40
-    COLLAPSED_GROUP_W = 260
-    COLLAPSED_GROUP_H = 60
     group_nodes = []
+    child_groups_by_group: dict[str, list[TaskGroup]] = {}
     for group in groups:
-        if not group.tasks:
-            continue
+        if group.parent_group_id:
+            child_groups_by_group.setdefault(group.parent_group_id, []).append(group)
+
+    def descendant_task_ids(group: TaskGroup) -> set[str]:
+        ids = {t.id for t in group.tasks}
+        for child in child_groups_by_group.get(group.id, []):
+            ids.update(descendant_task_ids(child))
+        return ids
+
+    for group in groups:
         child_ids = {t.id for t in group.tasks}
+        all_child_ids = descendant_task_ids(group)
+        child_group_ids = [g.id for g in child_groups_by_group.get(group.id, [])]
+        if not all_child_ids and not child_group_ids:
+            continue
         has_saved_positions = all(
             _parse_graph_int(t.attrs.get("graph_x")) is not None
-            for t in group.tasks
+            for t in tasks
+            if t.id in all_child_ids
             if t.id in positions
         ) and _parse_graph_int(group.attrs.get("graph_x")) is not None
         if has_saved_positions:
             # child positions already relative to group origin
-            rel_xs = [positions[tid][0] for tid in child_ids if tid in positions]
-            rel_ys = [positions[tid][1] for tid in child_ids if tid in positions]
+            rel_xs = [positions[tid][0] for tid in all_child_ids if tid in positions]
+            rel_ys = [positions[tid][1] for tid in all_child_ids if tid in positions]
             if not rel_xs:
                 continue
             gx = _parse_graph_int(group.attrs.get("graph_x"))
@@ -448,30 +493,31 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
             gh = max(rel_ys) + node_h + group_padding
         else:
             # child positions are absolute canvas coords — compute group origin
-            abs_xs = [positions[tid][0] for tid in child_ids if tid in positions]
-            abs_ys = [positions[tid][1] for tid in child_ids if tid in positions]
+            abs_xs = [positions[tid][0] for tid in all_child_ids if tid in positions]
+            abs_ys = [positions[tid][1] for tid in all_child_ids if tid in positions]
             if not abs_xs:
                 continue
             gx = min(abs_xs) - group_padding
             gy = min(abs_ys) - group_padding - header_h
             gw = max(abs_xs) - min(abs_xs) + node_w + group_padding * 2
             gh = max(abs_ys) - min(abs_ys) + node_h + group_padding * 2 + header_h
-            for tid in child_ids:
+            for tid in all_child_ids:
                 if tid in positions:
                     positions[tid] = (positions[tid][0] - gx, positions[tid][1] - gy)
-        is_collapsed = group.attrs.get("collapsed") == "1"
+        is_collapsed = True
         pill_x = _parse_graph_int(group.attrs.get("pill_x"))
         pill_y = _parse_graph_int(group.attrs.get("pill_y"))
         if is_collapsed and pill_x is not None:
             node_pos = {"x": pill_x, "y": pill_y}
         else:
             node_pos = {"x": gx, "y": gy}
+        collapsed_w, collapsed_h = _estimate_collapsed_group_size(group.title)
         group_nodes.append({
             "id": group.id,
             "type": "group",
             "position": node_pos,
-            "data": {"title": group.title, "task_ids": [t.id for t in group.tasks], "collapsed": is_collapsed, "expanded_w": gw, "expanded_h": gh, "expanded_x": gx, "expanded_y": gy},
-            "style": {"width": COLLAPSED_GROUP_W if is_collapsed else gw, "height": COLLAPSED_GROUP_H if is_collapsed else gh},
+            "data": {"title": group.title, "task_ids": [t.id for t in group.tasks], "descendant_task_ids": sorted(all_child_ids), "child_group_ids": child_group_ids, "parent_group_id": group.parent_group_id, "collapsed": is_collapsed, "expanded_w": gw, "expanded_h": gh, "expanded_x": gx, "expanded_y": gy, "collapsed_w": collapsed_w, "collapsed_h": collapsed_h},
+            "style": {"width": collapsed_w if is_collapsed else gw, "height": collapsed_h if is_collapsed else gh},
         })
     rf_task_nodes = []
     for task in tasks:
@@ -495,7 +541,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
     header_nodes = [H1(title, cls="vyasa-page-title text-4xl font-bold"), P(f"{len(tasks)} task{'s' if len(tasks) != 1 else ''}", cls="mt-2 text-slate-500")] if show_heading else []
     return Div(
         *header_nodes,
-        NotStr(f'<section id="vyasa-task-region" data-task-api-url="{html.escape(task_api_url or "")}" data-task-graph="{html.escape(json.dumps(graph_payload))}" class="mt-8 rounded-lg border border-slate-200 p-4 dark:border-slate-800" style="{panel_style}"><div class="flex items-center justify-between gap-4"><div><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">{html.escape(title)}</h2><p class="mt-1 text-xs text-slate-500">Drag cards. Connect right handle to left handle. Click card to edit.</p></div></div><details id="vyasa-task-warnings" class="{warnings_cls} mt-2"{warnings_open} style="{warnings_style}"><summary class="cursor-pointer font-semibold">Dependency warnings</summary><ul class="mt-2 list-disc pl-5">{warnings_html}</ul></details><div class="relative mt-2"><div class="absolute right-2 top-2 z-10 flex gap-1 rounded bg-white/80 backdrop-blur-sm dark:bg-slate-800/80"><button type="button" id="vyasa-task-popout" class="rounded border px-2 py-1 text-xs hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button></div><div id="vyasa-task-flow-host" class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50" style="height: {html.escape(height)};"></div></div><div id="vyasa-task-preview-store" class="hidden">{"".join(preview_cards)}</div><div id="vyasa-task-preview-modal" class="fixed inset-0 z-[9998] hidden items-center justify-center bg-slate-950/60 p-4"><div class="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900"><div class="mb-3 flex items-center justify-between gap-4"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Task editor</h2><div class="flex items-center gap-2"><button id="vyasa-task-preview-save" type="button" class="rounded bg-blue-600 px-3 py-1 text-sm text-white">Save</button><button id="vyasa-task-preview-close" type="button" class="rounded border border-slate-200 px-3 py-1 text-sm dark:border-slate-700">Close</button></div></div><form id="vyasa-task-preview-form" class="space-y-4"><div id="vyasa-task-preview-body"></div></form><p id="vyasa-task-preview-status" class="mt-3 text-xs text-slate-500"></p></div></div></section>'),
+        NotStr(f'<section id="vyasa-task-region" data-task-api-url="{html.escape(task_api_url or "")}" data-task-graph="{html.escape(json.dumps(graph_payload))}" class="mt-8 rounded-lg border border-slate-200 p-4 dark:border-slate-800" style="{panel_style}"><div class="flex items-center justify-between gap-4"><div><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">{html.escape(title)}</h2><p class="mt-1 text-xs text-slate-500">Drag cards. Connect right handle to left handle. Click card to edit. Click group to inspect tasks.</p></div></div><details id="vyasa-task-warnings" class="{warnings_cls} mt-2"{warnings_open} style="{warnings_style}"><summary class="cursor-pointer font-semibold">Dependency warnings</summary><ul class="mt-2 list-disc pl-5">{warnings_html}</ul></details><div class="relative mt-2"><div class="absolute right-2 top-2 z-10 flex gap-1 rounded bg-white/80 backdrop-blur-sm dark:bg-slate-800/80"><button type="button" id="vyasa-task-popout" class="rounded border px-2 py-1 text-xs hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button></div><div id="vyasa-task-flow-host" class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50" style="height: {html.escape(height)};"></div></div><div id="vyasa-task-preview-store" class="hidden">{"".join(preview_cards)}</div><div id="vyasa-task-preview-modal" class="fixed inset-0 z-[9998] hidden items-center justify-center bg-slate-950/60 p-4"><div class="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900"><div class="mb-3 flex items-center justify-between gap-4"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Task editor</h2><div class="flex items-center gap-2"><button id="vyasa-task-preview-save" type="button" class="rounded bg-blue-600 px-3 py-1 text-sm text-white">Save</button><button id="vyasa-task-preview-close" type="button" class="rounded border border-slate-200 px-3 py-1 text-sm dark:border-slate-700">Close</button></div></div><form id="vyasa-task-preview-form" class="space-y-4"><div id="vyasa-task-preview-body"></div></form><p id="vyasa-task-preview-status" class="mt-3 text-xs text-slate-500"></p></div></div></section>'),
         Script(r"""
 (() => {
   const region = document.getElementById('vyasa-task-region');
@@ -631,26 +677,32 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
     const TaskNode = ({id, data}) => {
       const missing = Array.isArray(data?.missing) ? data.missing : [];
       const warning = missing.length ? React.createElement('span', {className: 'absolute right-3 top-3 text-xs text-amber-500', title: `Missing: ${missing.join(', ')}`}, '⚠︎') : null;
-      return React.createElement('button', {type: 'button', onClick: () => openPreview(id), className: 'relative min-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-lg dark:border-slate-700 dark:bg-slate-900'}, React.createElement(Handle, {type: 'target', position: Position.Left, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}), warning, React.createElement('span', {className: 'block text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500'}, id), React.createElement('span', {className: 'mt-2 block text-sm font-semibold text-slate-900 dark:text-slate-100'}, data.title || id), React.createElement(Handle, {type: 'source', position: Position.Right, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}));
+      return React.createElement('button', {type: 'button', onClick: () => openPreview(id), className: 'relative h-[92px] w-[320px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-lg dark:border-slate-700 dark:bg-slate-900'}, React.createElement(Handle, {type: 'target', position: Position.Left, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}), warning, React.createElement('span', {className: 'block text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500'}, id), React.createElement('span', {className: 'mt-2 block break-words pr-6 text-sm font-semibold text-slate-900 dark:text-slate-100', style: {display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden'}}, data.title || id), React.createElement(Handle, {type: 'source', position: Position.Right, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}));
     };
+    const PortalNode = ({data}) => React.createElement('div', {className: 'relative w-[220px] rounded-xl border border-dashed border-slate-300 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-400'},
+      data?.side === 'in' ? React.createElement(Handle, {type: 'source', position: Position.Right, isConnectable: false, className: '!h-2.5 !w-2.5 !border-slate-400 !bg-white dark:!bg-slate-900'}) : null,
+      React.createElement('span', {className: 'block truncate', title: data?.title || ''}, data?.title || ''),
+      React.createElement('span', {className: 'mt-1 block text-[10px] uppercase tracking-[0.16em] text-slate-400'}, data?.side === 'in' ? 'Incoming' : 'Outgoing'),
+      data?.side === 'out' ? React.createElement(Handle, {type: 'target', position: Position.Left, isConnectable: false, className: '!h-2.5 !w-2.5 !border-slate-400 !bg-white dark:!bg-slate-900'}) : null,
+    );
     const GroupNode = ({id, data, style}) => {
       const collapsed = !!data?.collapsed;
-      const toggleCollapse = React.useCallback((e) => {
+      const openGroup = React.useCallback((e) => {
         e.stopPropagation();
-        if (data?.onToggle) data.onToggle(id);
+        if (data?.onOpen) data.onOpen(id);
       }, [id, data]);
       const count = Array.isArray(data?.task_ids) ? data.task_ids.length : 0;
       if (collapsed) {
         return React.createElement('div', {className: 'relative flex h-full w-full items-center'},
-          React.createElement(Handle, {type: 'target', position: Position.Left, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-800'}),
+          React.createElement(Handle, {type: 'target', position: Position.Left, isConnectable: false, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-800'}),
           React.createElement('button', {
-            type: 'button', onClick: toggleCollapse,
-            className: 'flex h-full w-full items-center gap-4 rounded-full border border-slate-300 bg-white px-8 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700',
+            type: 'button', onClick: openGroup,
+            className: 'flex h-full w-full items-center gap-3 rounded-[28px] border border-slate-300 bg-white px-5 py-3 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700',
           },
-            React.createElement('span', {className: 'text-xs font-bold uppercase tracking-[0.2em] text-slate-600 dark:text-slate-300'}, data?.title || id),
-            React.createElement('span', {className: 'ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-400'}, count),
+            React.createElement('span', {className: 'min-w-0 flex-1 whitespace-normal break-words text-left text-sm font-semibold leading-tight text-slate-700 dark:text-slate-200', title: data?.title || id}, data?.title || id),
+            React.createElement('span', {className: 'shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-400'}, count),
           ),
-          React.createElement(Handle, {type: 'source', position: Position.Right, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-800'}),
+          React.createElement(Handle, {type: 'source', position: Position.Right, isConnectable: false, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-800'}),
         );
       }
       return React.createElement('div', {className: 'relative h-full w-full'},
@@ -661,37 +713,55 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           React.createElement('span', {className: 'text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400'}, data?.title || id),
           React.createElement('button', {
             type: 'button',
-            onClick: toggleCollapse,
+            onClick: openGroup,
             className: 'rounded border border-slate-300 px-1.5 py-0 text-[11px] text-slate-400 hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800',
-          }, '▲'),
+          }, '↗'),
         ),
         React.createElement('div', {className: 'h-full w-full rounded-2xl border-2 border-dashed border-slate-300 bg-white/40 dark:border-slate-700 dark:bg-slate-900/40'}),
       );
     };
-    const nodeTypes = {task: TaskNode, group: GroupNode};
-    const COLLAPSED_GROUP_W = 260, COLLAPSED_GROUP_H = 60;
+    const nodeTypes = {task: TaskNode, group: GroupNode, portal: PortalNode};
     const makeFlowElement = (initialNodes, initialEdges, hostForSnapshot) => {
       const App = () => {
         const rawNodes = initialNodes.map((node) => node.type === 'group' ? node : {...node, type: 'task'});
         const rawEdges = initialEdges.map((edge) => ({...edge, ...edgeDefaults}));
-        const origEdgeEndpoints = React.useRef({});
+        const baseEdgesRef = React.useRef(rawEdges);
+        const projectEdgesForNodes = React.useCallback((baseEdges, nextNodes) => {
+          const taskToGroup = new Map();
+          const groupParent = new Map();
+          const collapsedGroups = new Set();
+          const visibleGroups = new Set();
+          nextNodes.forEach((node) => {
+            if (node.type !== 'group') return;
+            if (!node.hidden) visibleGroups.add(node.id);
+            if (node.data?.parent_group_id) groupParent.set(node.id, node.data.parent_group_id);
+            const taskIds = Array.isArray(node.data?.task_ids) ? node.data.task_ids : [];
+            taskIds.forEach((taskId) => taskToGroup.set(taskId, node.id));
+            if (node.data?.collapsed) collapsedGroups.add(node.id);
+          });
+          const endpointForTask = (taskId) => {
+            let groupId = taskToGroup.get(taskId);
+            while (groupId) {
+              if (collapsedGroups.has(groupId) && visibleGroups.has(groupId)) return groupId;
+              groupId = groupParent.get(groupId);
+            }
+            return taskId;
+          };
+          return baseEdges.map((edge) => {
+            const nextSource = endpointForTask(edge.source);
+            const nextTarget = endpointForTask(edge.target);
+            if (nextSource === nextTarget && (nextSource !== edge.source || nextTarget !== edge.target)) return {...edge, source: nextSource, target: nextTarget, hidden: true};
+            return {...edge, source: nextSource, target: nextTarget, hidden: false};
+          });
+        }, []);
         const {startNodes, startEdges} = React.useMemo(() => {
           let ns = rawNodes;
-          let es = rawEdges;
           for (const gn of rawNodes.filter((n) => n.type === 'group' && n.data?.collapsed)) {
-            const childIds = new Set(Array.isArray(gn.data?.task_ids) ? gn.data.task_ids : []);
-            ns = ns.map((n) => childIds.has(n.id) ? {...n, hidden: true} : n);
-            es = es.map((e) => {
-              const srcIn = childIds.has(e.source), tgtIn = childIds.has(e.target);
-              if (!srcIn && !tgtIn) return e;
-              origEdgeEndpoints.current[e.id] = {source: e.source, target: e.target};
-              const newSource = srcIn ? gn.id : e.source;
-              const newTarget = tgtIn ? gn.id : e.target;
-              if (newSource === newTarget) return {...e, hidden: true};
-              return {...e, source: newSource, target: newTarget};
-            });
+            const taskIds = new Set(Array.isArray(gn.data?.descendant_task_ids) ? gn.data.descendant_task_ids : (gn.data?.task_ids || []));
+            const groupIds = new Set(Array.isArray(gn.data?.child_group_ids) ? gn.data.child_group_ids : []);
+            ns = ns.map((n) => (taskIds.has(n.id) || groupIds.has(n.id)) ? {...n, hidden: true} : n);
           }
-          return {startNodes: ns, startEdges: es};
+          return {startNodes: ns, startEdges: projectEdgesForNodes(rawEdges, ns)};
         }, []);
         const origGroupStyles = React.useRef(Object.fromEntries(
           initialNodes.filter((n) => n.type === 'group').map((n) => [
@@ -707,17 +777,20 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
         ));
         const [nodes, setNodes] = React.useState(startNodes);
         const [edges, setEdges] = React.useState(startEdges);
+        const [drillGroupId, setDrillGroupId] = React.useState(null);
         const toggleGroup = React.useCallback(async (groupId) => {
-          let nextCollapsed, childIds;
+          let nextCollapsed;
+          let nextNodesSnapshot = null;
           setNodes((prev) => {
             const groupNode = prev.find((n) => n.id === groupId);
             if (!groupNode) return prev;
             nextCollapsed = !groupNode.data?.collapsed;
-            childIds = new Set(Array.isArray(groupNode.data?.task_ids) ? groupNode.data.task_ids : []);
-            return prev.map((n) => {
+            const childIds = new Set(Array.isArray(groupNode.data?.task_ids) ? groupNode.data.task_ids : []);
+            nextNodesSnapshot = prev.map((n) => {
               if (n.id === groupId) {
+                const collapsedStyle = {width: n.data?.collapsed_w || 360, height: n.data?.collapsed_h || 88};
                 const nextStyle = nextCollapsed
-                  ? {width: COLLAPSED_GROUP_W, height: COLLAPSED_GROUP_H}
+                  ? collapsedStyle
                   : (origGroupStyles.current[groupId] || n.style);
                 const nextPos = nextCollapsed ? n.position : (origGroupPositions.current[groupId] || n.position);
                 return {...n, data: {...n.data, collapsed: nextCollapsed}, style: nextStyle, position: nextPos};
@@ -725,50 +798,172 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
               if (childIds.has(n.id)) return {...n, hidden: nextCollapsed};
               return n;
             });
+            return nextNodesSnapshot;
           });
-          setEdges((prev) => {
-            if (childIds === undefined) return prev;
-            if (nextCollapsed) {
-              return prev.map((e) => {
-                const srcIn = childIds.has(e.source);
-                const tgtIn = childIds.has(e.target);
-                if (!srcIn && !tgtIn) return e;
-                origEdgeEndpoints.current[e.id] = {source: e.source, target: e.target};
-                const newSource = srcIn ? groupId : e.source;
-                const newTarget = tgtIn ? groupId : e.target;
-                if (newSource === newTarget) return {...e, hidden: true};
-                return {...e, source: newSource, target: newTarget, hidden: false};
-              });
-            } else {
-              return prev.map((e) => {
-                const orig = origEdgeEndpoints.current[e.id];
-                if (!orig) return e;
-                delete origEdgeEndpoints.current[e.id];
-                return {...e, source: orig.source, target: orig.target, hidden: false};
-              });
-            }
-          });
+          if (nextNodesSnapshot) setEdges(projectEdgesForNodes(baseEdgesRef.current, nextNodesSnapshot));
           await saveGraphMutation((payload) => {
             const group = (payload.groups || []).find((g) => g.id === groupId);
             if (!group) return;
             group.attrs = {...(group.attrs || {}), collapsed: nextCollapsed ? '1' : '0'};
           });
-        }, []);
+        }, [projectEdgesForNodes]);
+        const setAllGroupsCollapsed = React.useCallback(async (collapsed) => {
+          const groupIds = new Set();
+          let nextNodesSnapshot = null;
+          setNodes((prev) => nextNodesSnapshot = prev.map((n) => {
+            if (n.type !== 'group') return n;
+            groupIds.add(n.id);
+            const collapsedStyle = {width: n.data?.collapsed_w || 360, height: n.data?.collapsed_h || 88};
+            const nextStyle = collapsed
+              ? collapsedStyle
+              : (origGroupStyles.current[n.id] || n.style);
+            const nextPos = collapsed ? n.position : (origGroupPositions.current[n.id] || n.position);
+            return {...n, data: {...n.data, collapsed}, style: nextStyle, position: nextPos};
+          }).map((n) => n.parentId && groupIds.has(n.parentId) ? {...n, hidden: collapsed} : n));
+          if (nextNodesSnapshot) setEdges(projectEdgesForNodes(baseEdgesRef.current, nextNodesSnapshot));
+          await saveGraphMutation((payload) => {
+            (payload.groups || []).forEach((group) => {
+              if (!groupIds.has(group.id)) return;
+              group.attrs = {...(group.attrs || {}), collapsed: collapsed ? '1' : '0'};
+            });
+          });
+        }, [projectEdgesForNodes]);
         const nodesWithToggle = React.useMemo(() =>
-          nodes.map((n) => n.type === 'group' ? {...n, data: {...n.data, onToggle: toggleGroup}} : n),
-        [nodes, toggleGroup]);
+          nodes.map((n) => n.type === 'group' ? {...n, data: {...n.data, onOpen: setDrillGroupId}} : n),
+        [nodes]);
+        const buildDrillGraph = React.useCallback((groupId) => {
+          const group = nodes.find((n) => n.id === groupId && n.type === 'group');
+          if (!group) return null;
+          const childIds = new Set(Array.isArray(group.data?.task_ids) ? group.data.task_ids : []);
+          const childGroupIds = new Set(Array.isArray(group.data?.child_group_ids) ? group.data.child_group_ids : []);
+          const scopeTaskIds = new Set(Array.isArray(group.data?.descendant_task_ids) ? group.data.descendant_task_ids : group.data?.task_ids || []);
+          const taskToGroup = new Map();
+          const childGroupByTask = new Map();
+          nodes.filter((n) => n.type === 'group').forEach((g) => {
+            (g.data?.task_ids || []).forEach((taskId) => taskToGroup.set(taskId, g.id));
+            if (childGroupIds.has(g.id)) (g.data?.descendant_task_ids || g.data?.task_ids || []).forEach((taskId) => childGroupByTask.set(taskId, g.id));
+          });
+          const endpointForScopedTask = (taskId) => {
+            if (childIds.has(taskId)) return taskId;
+            return childGroupByTask.get(taskId) || null;
+          };
+          const titleFor = (id) => {
+            const ownerGroupId = taskToGroup.get(id);
+            if (ownerGroupId && ownerGroupId !== groupId) return nodes.find((n) => n.id === ownerGroupId)?.data?.title || ownerGroupId;
+            return nodes.find((n) => n.id === id)?.data?.title || id;
+          };
+          const childNodes = nodes.filter((n) => childIds.has(n.id) || childGroupIds.has(n.id));
+          const minX = childNodes.length ? Math.min(...childNodes.map((n) => n.position?.x || 0)) : 0;
+          const minY = childNodes.length ? Math.min(...childNodes.map((n) => n.position?.y || 0)) : 0;
+          const maxX = childNodes.length ? Math.max(...childNodes.map((n) => n.position?.x || 0)) : 0;
+          const xOffset = 320 - minX;
+          const yOffset = 96 - minY;
+          const drillNodes = childNodes.map((n) => ({
+            ...n,
+            type: n.type === 'group' ? 'group' : 'task',
+            parentId: undefined,
+            hidden: false,
+            selected: false,
+            position: {x: (n.position?.x || 0) + xOffset, y: (n.position?.y || 0) + yOffset},
+            data: {...(n.data || {}), onOpen: setDrillGroupId, drill_x_offset: xOffset, drill_y_offset: yOffset},
+          }));
+          const portalNodes = [];
+          const drillEdges = [];
+          let incoming = 0, outgoing = 0;
+          const outX = Math.max(760, maxX - minX + 680);
+          baseEdgesRef.current.forEach((edge) => {
+            const sourceEndpoint = endpointForScopedTask(edge.source);
+            const targetEndpoint = endpointForScopedTask(edge.target);
+            const sourceInside = scopeTaskIds.has(edge.source);
+            const targetInside = scopeTaskIds.has(edge.target);
+            if (sourceEndpoint && targetEndpoint) {
+              if (sourceEndpoint !== targetEndpoint) drillEdges.push({...edge, source: sourceEndpoint, target: targetEndpoint, ...edgeDefaults});
+            } else if (!sourceInside && targetEndpoint) {
+              const portalId = `portal-in-${edge.source}`;
+              if (!portalNodes.some((n) => n.id === portalId)) portalNodes.push({id: portalId, type: 'portal', position: {x: 40, y: 96 + incoming++ * 112}, draggable: false, selectable: false, data: {title: titleFor(edge.source), side: 'in'}});
+              drillEdges.push({...edge, id: `${portalId}->${targetEndpoint}`, source: portalId, target: targetEndpoint, ...edgeDefaults});
+            } else if (sourceEndpoint && !targetInside) {
+              const portalId = `portal-out-${edge.target}`;
+              if (!portalNodes.some((n) => n.id === portalId)) portalNodes.push({id: portalId, type: 'portal', position: {x: outX, y: 96 + outgoing++ * 112}, draggable: false, selectable: false, data: {title: titleFor(edge.target), side: 'out'}});
+              drillEdges.push({...edge, id: `${sourceEndpoint}->${portalId}`, source: sourceEndpoint, target: portalId, ...edgeDefaults});
+            }
+          });
+          return {group, nodes: [...drillNodes, ...portalNodes], edges: drillEdges};
+        }, [nodes]);
+        const DrillOverlay = ({groupId}) => {
+          const drill = React.useMemo(() => buildDrillGraph(groupId), [groupId, buildDrillGraph]);
+          const [drillNodes, setDrillNodes] = React.useState(drill?.nodes || []);
+          const [drillEdges, setDrillEdges] = React.useState(drill?.edges || []);
+          React.useEffect(() => {
+            setDrillNodes(drill?.nodes || []);
+            setDrillEdges(drill?.edges || []);
+          }, [drill]);
+          if (!drill) return null;
+          const saveDrillPosition = async (_event, node) => {
+            if (node.type !== 'task') return;
+            const realPosition = {
+              x: node.position.x - (node.data?.drill_x_offset || 0),
+              y: node.position.y - (node.data?.drill_y_offset || 0),
+            };
+            setNodes((prev) => prev.map((n) => n.id === node.id ? {...n, position: realPosition} : n));
+            await saveGraphMutation((payload) => {
+              const task = (payload.tasks || []).find((item) => item.id === node.id);
+              if (!task) return;
+              task.attrs = {...(task.attrs || {}), graph_x: String(Math.round(realPosition.x)), graph_y: String(Math.round(realPosition.y))};
+            });
+          };
+          return React.createElement('div', {className: 'absolute inset-4 z-20 flex flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950'},
+            React.createElement('div', {className: 'flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800'},
+              React.createElement('div', {className: 'min-w-0'},
+                React.createElement('div', {className: 'text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400'}, 'Tasks / Group'),
+                React.createElement('div', {className: 'truncate text-sm font-semibold text-slate-800 dark:text-slate-100'}, drill.group.data?.title || groupId),
+              ),
+              React.createElement('button', {type: 'button', onClick: () => setDrillGroupId(null), className: 'rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}, 'Back'),
+            ),
+            React.createElement('div', {className: 'min-h-0 flex-1'},
+              React.createElement(ReactFlow, {nodes: drillNodes, edges: drillEdges, onNodesChange: (changes) => setDrillNodes((items) => applyNodeChanges(changes, items)), onNodeDragStop: saveDrillPosition, nodeTypes, fitView: true, minZoom: 0.15, snapToGrid: true, snapGrid: grid, colorMode: document.documentElement.classList.contains('dark') ? 'dark' : 'light', className: 'bg-transparent'}, React.createElement(Background, {gap: grid[0], size: 1}), React.createElement(Controls)),
+            ),
+          );
+        };
         React.useEffect(() => {
           if (hostForSnapshot) hostForSnapshot.__vyasaTaskSnapshot = {nodes, edges};
         }, [nodes, edges]);
+        React.useEffect(() => {
+          const onKeyDown = (event) => {
+            const host = hostForSnapshot;
+            const modal = document.getElementById('vyasa-task-fullscreen-modal');
+            const hostInModal = !!host?.closest?.('#vyasa-task-fullscreen-modal');
+            if ((modal && !hostInModal) || (!modal && hostInModal)) return;
+            const target = event.target;
+            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return;
+            const key = String(event.key || '').toLowerCase();
+            if (key === 'escape' && drillGroupId) {
+              event.preventDefault();
+              setDrillGroupId(null);
+              return;
+            }
+            if (!event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
+            if (key === 'f') {
+              event.preventDefault();
+              setAllGroupsCollapsed(true);
+            }
+          };
+          document.addEventListener('keydown', onKeyDown);
+          return () => document.removeEventListener('keydown', onKeyDown);
+        }, [drillGroupId, setAllGroupsCollapsed]);
         const onNodesChange = React.useCallback((changes) => setNodes((items) => applyNodeChanges(changes, items)), []);
         const onEdgesChange = React.useCallback((changes) => setEdges((items) => applyEdgeChanges(changes, items)), []);
         const onConnect = async (params) => {
           if (!params.source || !params.target || params.source === params.target) return;
-          const nextEdges = addEdge({...params, ...edgeDefaults}, edges);
+          const groupIds = new Set(nodes.filter((node) => node.type === 'group').map((node) => node.id));
+          if (groupIds.has(params.source) || groupIds.has(params.target)) return;
+          const nextBaseEdges = addEdge({...params, ...edgeDefaults}, baseEdgesRef.current);
+          baseEdgesRef.current = nextBaseEdges;
+          const nextEdges = projectEdgesForNodes(nextBaseEdges, nodes);
           setEdges(nextEdges);
-          await saveGraphMutation((payload) => persistGraphEdges(payload, nextEdges));
+          await saveGraphMutation((payload) => persistGraphEdges(payload, nextBaseEdges));
         };
-        const NODE_W = 220, NODE_H = 92, GROUP_PAD = 24;
+        const NODE_W = 320, NODE_H = 92, GROUP_PAD = 24;
         const pendingGroupState = React.useRef(null);
         const recomputeGroupBounds = (draggedNode, prev) => {
           if (!draggedNode.parentId) return prev;
@@ -808,7 +1003,14 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
               if (!group) return;
               const isCollapsed = group.attrs?.collapsed === '1';
               if (isCollapsed) {
-                group.attrs = {...(group.attrs || {}), pill_x: String(Math.round(node.position.x)), pill_y: String(Math.round(node.position.y))};
+                group.attrs = {
+                  ...(group.attrs || {}),
+                  pill_x: String(Math.round(node.position.x)),
+                  pill_y: String(Math.round(node.position.y)),
+                  graph_x: String(Math.round(node.position.x)),
+                  graph_y: String(Math.round(node.position.y)),
+                };
+                origGroupPositions.current[node.id] = {x: node.position.x, y: node.position.y};
               } else {
                 group.attrs = {...(group.attrs || {}), graph_x: String(Math.round(node.position.x)), graph_y: String(Math.round(node.position.y))};
                 origGroupPositions.current[node.id] = {x: node.position.x, y: node.position.y};
@@ -835,12 +1037,21 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           });
         };
         const onEdgesDelete = async (deleted) => {
-          const deletedIds = new Set((deleted || []).map((edge) => edge.id));
-          const nextEdges = edges.filter((edge) => !deletedIds.has(edge.id));
+          const groupIds = new Set(nodes.filter((node) => node.type === 'group').map((node) => node.id));
+          const deletedIds = new Set((deleted || [])
+            .filter((edge) => !groupIds.has(edge.source) && !groupIds.has(edge.target))
+            .map((edge) => edge.id));
+          if (!deletedIds.size) return;
+          const nextBaseEdges = baseEdgesRef.current.filter((edge) => !deletedIds.has(edge.id));
+          baseEdgesRef.current = nextBaseEdges;
+          const nextEdges = projectEdgesForNodes(nextBaseEdges, nodes);
           setEdges(nextEdges);
-          await saveGraphMutation((payload) => persistGraphEdges(payload, nextEdges));
+          await saveGraphMutation((payload) => persistGraphEdges(payload, nextBaseEdges));
         };
-        return React.createElement(ReactFlow, {nodes: nodesWithToggle, edges, onNodesChange, onEdgesChange, onEdgesDelete, onConnect, onNodeDrag, onNodeDragStop, nodeTypes, fitView: true, snapToGrid: true, snapGrid: grid, colorMode: document.documentElement.classList.contains('dark') ? 'dark' : 'light', className: 'bg-transparent'}, React.createElement(Background, {gap: grid[0], size: 1}), React.createElement(Controls));
+        return React.createElement('div', {className: 'relative h-full w-full'},
+          React.createElement(ReactFlow, {nodes: nodesWithToggle, edges, onNodesChange, onEdgesChange, onEdgesDelete, onConnect, onNodeDrag, onNodeDragStop, nodeTypes, fitView: true, minZoom: 0.05, snapToGrid: true, snapGrid: grid, colorMode: document.documentElement.classList.contains('dark') ? 'dark' : 'light', className: 'bg-transparent'}, React.createElement(Background, {gap: grid[0], size: 1}), React.createElement(Controls)),
+          drillGroupId ? React.createElement(DrillOverlay, {groupId: drillGroupId}) : null,
+        );
       };
       return React.createElement(App);
     };
@@ -875,7 +1086,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
       const host = modal.querySelector('.vyasa-task-fullscreen-host');
       const snapshot = flowHost?.__vyasaTaskSnapshot || {nodes: taskGraph.nodes, edges: taskGraph.edges};
       const fullscreenRoot = mountApi.ReactDOMClient.createRoot(host);
-      fullscreenRoot.render(mountApi.makeFlowElement(snapshot.nodes, snapshot.edges, null));
+      fullscreenRoot.render(mountApi.makeFlowElement(snapshot.nodes, snapshot.edges, host));
     } catch (error) {
       console.error('[vyasa][tasks] popout failed', error);
     }
@@ -893,6 +1104,6 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
 })();
 """),
     )
-def render_tasks_board_text(text: str, title: str = "Tasks", *, task_api_url: str | None = None, show_heading: bool = False, width: str = "100%", height: str = "70vh"):
+def render_tasks_board_text(text: str, title: str = "Tasks", *, task_api_url: str | None = None, show_heading: bool = False, width: str = "95vw", height: str = "70vh"):
     tasks, chains, groups = parse_tasks_document_text(text)
     return _render_tasks_board(tasks, chains, groups, title, task_api_url=task_api_url, show_heading=show_heading, width=width, height=height)

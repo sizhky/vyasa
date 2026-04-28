@@ -247,6 +247,14 @@ group G-FE "Frontend"
     depends_on: [T-001]
 end
 
+group P1 "Phase 1"
+  group G-API "API"
+    task T-010 "Endpoint contract"
+      estimate: 1d
+      owner: Alice
+  end
+end
+
 task T-003 "Backend"
   estimate: 3d
   owner: Bob
@@ -261,15 +269,16 @@ Notes:
 
 - `title`, `width`, and `height` belong in the fence frontmatter before `---`.
 - Each task starts with `task ID "Title"` with indented attrs below.
-- Tasks can be grouped with `group ID "Title" ... end`. Tasks inside inherit `group_id`; the group renders as a collapsible frame in the graph.
+- Tasks can be grouped with `group ID "Title" ... end`. Groups can be nested by putting a `group` block inside another `group` block.
 - Supported first-class attrs: `estimate`, `depends_on`, `priority`, `points`, `owner`, `phase`.
 - `depends_on` uses bracket form: `[T-001, T-002]`.
 - `chain Name` followed by `  A -> B -> C` lines declares sequential dependency chains.
-- Groups support collapse/expand in the UI. Collapsed state, pill position, and expanded position are persisted back to the file.
-- Renderer-owned layout attrs (`graph_x`, `graph_y`, `collapsed`, `pill_x`, `pill_y`) appear in saved source after interaction; treat as implementation detail, not authoring API.
+- Groups render as overview pills. Click a group to open a popover canvas showing direct tasks, child groups, and frozen incoming/outgoing dependency portals.
+- Press `Esc` or Back to close the group popover.
+- Renderer-owned layout attrs (`graph_x`, `graph_y`, `collapsed`, `pill_x`, `pill_y`) may appear in saved source after interaction; treat as implementation detail, not authoring API.
 - The block renders as an interactive React Flow graph, not as a code sample.
 - Cards are draggable, snap to grid, support edge create/delete and popup editing.
-- Group bounds auto-resize as children are dragged; shrink and grow in all directions.
+- Nested group structure is persisted when the fenced block is rewritten.
 - Warnings (missing deps, cycles, owner overlaps) render in a collapsible panel inside the graph.
 - Persisted edits rewrite the fenced block source in the markdown file itself.
 

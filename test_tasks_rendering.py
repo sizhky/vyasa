@@ -237,3 +237,24 @@ def test_group_roundtrip():
     assert len(groups2) == 1
     assert [t.id for t in groups2[0].tasks] == ["T-001", "T-002"]
     assert tasks2[2].group_id is None
+
+
+def test_nested_group_roundtrip():
+    source = (
+        'group P1 "Phase 1"\n'
+        '  group G-001 "Frontend"\n'
+        '    task T-001 "Design"\n'
+        '      estimate: 2d\n'
+        '  end\n'
+        'end\n'
+    )
+    tasks, chains, groups = parse_tasks_document_text(source)
+    assert tasks[0].group_id == "G-001"
+    assert groups[0].parent_group_id is None
+    assert groups[1].parent_group_id == "P1"
+    out = serialize_tasks_document(tasks, chains, groups)
+    assert '  group G-001 "Frontend"' in out
+    assert '    task T-001 "Design"' in out
+    tasks2, _, groups2 = parse_tasks_document_text(out)
+    assert tasks2[0].group_id == "G-001"
+    assert groups2[1].parent_group_id == "P1"
