@@ -690,12 +690,20 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
       const warning = missing.length ? React.createElement('span', {className: 'absolute right-3 top-3 text-xs text-amber-500', title: `Missing: ${missing.join(', ')}`}, '⚠︎') : null;
       return React.createElement('button', {type: 'button', onClick: () => openPreview(id), className: 'relative h-[92px] w-[320px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-lg dark:border-slate-700 dark:bg-slate-900'}, React.createElement(Handle, {type: 'target', position: Position.Left, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}), warning, React.createElement('span', {className: 'block text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500'}, id), React.createElement('span', {className: 'mt-2 block break-words pr-6 text-sm font-semibold text-slate-900 dark:text-slate-100', style: {display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden'}}, data.title || id), React.createElement(Handle, {type: 'source', position: Position.Right, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}));
     };
-    const PortalNode = ({data}) => React.createElement('div', {className: 'relative w-[220px] rounded-xl border border-dashed border-slate-300 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-400'},
+    const PortalNode = ({data}) => {
+      const open = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (data?.onOpenPath) data.onOpenPath(data.target_path || []);
+      };
+      const stop = (event) => event.stopPropagation();
+      return React.createElement('button', {type: 'button', onPointerDownCapture: stop, onMouseDownCapture: stop, onPointerUpCapture: open, onMouseUpCapture: open, onClickCapture: open, className: 'nodrag nopan relative w-[220px] rounded-xl border border-dashed border-slate-300 bg-white/90 px-3 py-2 text-left text-xs font-semibold text-slate-500 shadow-sm hover:border-slate-400 hover:bg-white dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-400 dark:hover:bg-slate-900'},
       data?.side === 'in' ? React.createElement(Handle, {type: 'source', position: Position.Right, isConnectable: false, className: '!h-2.5 !w-2.5 !border-slate-400 !bg-white dark:!bg-slate-900'}) : null,
       React.createElement('span', {className: 'block truncate', title: data?.title || ''}, data?.title || ''),
       React.createElement('span', {className: 'mt-1 block text-[10px] uppercase tracking-[0.16em] text-slate-400'}, data?.side === 'in' ? 'Incoming' : 'Outgoing'),
       data?.side === 'out' ? React.createElement(Handle, {type: 'target', position: Position.Left, isConnectable: false, className: '!h-2.5 !w-2.5 !border-slate-400 !bg-white dark:!bg-slate-900'}) : null,
-    );
+      );
+    };
     const GroupNode = ({id, data, style}) => {
       const collapsed = !!data?.collapsed;
       const openGroup = React.useCallback((e) => {
@@ -793,6 +801,10 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
         const openDrillGroup = React.useCallback((groupId) => {
           setDrillPath((path) => path.includes(groupId) ? path.slice(0, path.indexOf(groupId) + 1) : [...path, groupId]);
         }, []);
+        const openDrillPath = React.useCallback((path) => {
+          const cleanPath = Array.isArray(path) ? path.filter(Boolean) : [];
+          if (cleanPath.length) setDrillPath(cleanPath);
+        }, []);
         const closeDrillGroup = React.useCallback(() => setDrillPath((path) => path.slice(0, -1)), []);
         const toggleGroup = React.useCallback(async (groupId) => {
           let nextCollapsed;
@@ -855,10 +867,24 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           const scopeTaskIds = new Set(Array.isArray(group.data?.descendant_task_ids) ? group.data.descendant_task_ids : group.data?.task_ids || []);
           const taskToGroup = new Map();
           const childGroupByTask = new Map();
+          const groupParent = new Map();
           nodes.filter((n) => n.type === 'group').forEach((g) => {
+            if (g.data?.parent_group_id) groupParent.set(g.id, g.data.parent_group_id);
             (g.data?.task_ids || []).forEach((taskId) => taskToGroup.set(taskId, g.id));
             if (childGroupIds.has(g.id)) (g.data?.descendant_task_ids || g.data?.task_ids || []).forEach((taskId) => childGroupByTask.set(taskId, g.id));
           });
+          const pathForGroup = (targetGroupId) => {
+            const path = [];
+            let current = targetGroupId;
+            const seen = new Set();
+            while (current && !seen.has(current)) {
+              seen.add(current);
+              path.unshift(current);
+              current = groupParent.get(current);
+            }
+            return path;
+          };
+          const pathForTask = (taskId) => pathForGroup(taskToGroup.get(taskId));
           const endpointForScopedTask = (taskId) => {
             if (childIds.has(taskId)) return taskId;
             return childGroupByTask.get(taskId) || null;
@@ -890,7 +916,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           }));
           const portalNodes = [];
           const drillEdges = [];
-          let incoming = 0, outgoing = 0;
+          const portalEdgeSpecs = [];
           const outX = useCompactLayout ? 320 + Math.min(childNodes.length, 3) * 432 + 120 : Math.max(760, maxX - minX + 680);
           baseEdgesRef.current.forEach((edge) => {
             const sourceEndpoint = endpointForScopedTask(edge.source);
@@ -900,17 +926,30 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
             if (sourceEndpoint && targetEndpoint) {
               if (sourceEndpoint !== targetEndpoint) drillEdges.push({...edge, source: sourceEndpoint, target: targetEndpoint, ...edgeDefaults});
             } else if (!sourceInside && targetEndpoint) {
-              const portalId = `portal-in-${edge.source}`;
-              if (!portalNodes.some((n) => n.id === portalId)) portalNodes.push({id: portalId, type: 'portal', position: {x: 40, y: 96 + incoming++ * 112}, draggable: false, selectable: false, data: {title: titleFor(edge.source), side: 'in'}});
-              drillEdges.push({...edge, id: `${portalId}->${targetEndpoint}`, source: portalId, target: targetEndpoint, ...edgeDefaults});
+              const targetPath = pathForTask(edge.source);
+              const portalKey = targetPath.length ? targetPath.join(':') : edge.source;
+              const portalId = `portal-in-${portalKey}`;
+              if (!portalNodes.some((n) => n.id === portalId)) portalNodes.push({id: portalId, type: 'portal', position: {x: 40, y: 96}, draggable: false, selectable: false, zIndex: 20, style: {pointerEvents: 'all', zIndex: 20}, data: {title: titleFor(edge.source), side: 'in', target_path: targetPath, onOpenPath: openDrillPath}});
+              if (!portalEdgeSpecs.some((e) => e.source === portalId && e.target === targetEndpoint)) portalEdgeSpecs.push({...edge, id: `${portalId}->${targetEndpoint}`, source: portalId, target: targetEndpoint, ...edgeDefaults});
             } else if (sourceEndpoint && !targetInside) {
-              const portalId = `portal-out-${edge.target}`;
-              if (!portalNodes.some((n) => n.id === portalId)) portalNodes.push({id: portalId, type: 'portal', position: {x: outX, y: 96 + outgoing++ * 112}, draggable: false, selectable: false, data: {title: titleFor(edge.target), side: 'out'}});
-              drillEdges.push({...edge, id: `${sourceEndpoint}->${portalId}`, source: sourceEndpoint, target: portalId, ...edgeDefaults});
+              const targetPath = pathForTask(edge.target);
+              const portalKey = targetPath.length ? targetPath.join(':') : edge.target;
+              const portalId = `portal-out-${portalKey}`;
+              if (!portalNodes.some((n) => n.id === portalId)) portalNodes.push({id: portalId, type: 'portal', position: {x: outX, y: 96}, draggable: false, selectable: false, zIndex: 20, style: {pointerEvents: 'all', zIndex: 20}, data: {title: titleFor(edge.target), side: 'out', target_path: targetPath, onOpenPath: openDrillPath}});
+              if (!portalEdgeSpecs.some((e) => e.source === sourceEndpoint && e.target === portalId)) portalEdgeSpecs.push({...edge, id: `${sourceEndpoint}->${portalId}`, source: sourceEndpoint, target: portalId, ...edgeDefaults});
             }
           });
-          return {group, nodes: [...drillNodes, ...portalNodes], edges: drillEdges};
-        }, [nodes]);
+          const centerPortals = (side) => {
+            const sideNodes = portalNodes.filter((n) => n.data?.side === side);
+            const visibleY = drillNodes.map((n) => n.position?.y || 0);
+            const centerY = visibleY.length ? (Math.min(...visibleY) + Math.max(...visibleY)) / 2 : 96;
+            const startY = centerY - ((sideNodes.length - 1) * 112) / 2;
+            sideNodes.forEach((node, index) => { node.position.y = Math.max(40, startY + index * 112); });
+          };
+          centerPortals('in');
+          centerPortals('out');
+          return {group, nodes: [...drillNodes, ...portalNodes], edges: [...drillEdges, ...portalEdgeSpecs]};
+        }, [nodes, openDrillGroup, openDrillPath]);
         const DrillOverlay = ({groupId, path}) => {
           const drill = React.useMemo(() => buildDrillGraph(groupId), [groupId, buildDrillGraph]);
           const [drillNodes, setDrillNodes] = React.useState(drill?.nodes || []);
