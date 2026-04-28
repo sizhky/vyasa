@@ -406,7 +406,7 @@ def _estimate_collapsed_group_size(title: str) -> tuple[int, int]:
     return width, height
 
 
-def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], groups: list[TaskGroup], title: str, *, task_api_url: str | None = None, show_heading: bool = True, width: str = "95vw", height: str = "70vh"):
+def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], groups: list[TaskGroup], title: str, *, task_api_url: str | None = None, show_heading: bool = True, width: str = "95vw", height: str = "70vh", direction: str = "lr"):
     warnings = validate_task_dependencies(tasks, chains)
     schedule, schedule_warnings, critical_path = build_task_schedule(tasks, chains)
     warnings.extend(schedule_warnings)
@@ -417,6 +417,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
     for source, target in edges:
         dependants_by_task.setdefault(source, []).append(target)
     node_w, node_h, col_gap, row_gap = 320, 92, 112, 44
+    is_td = direction.lower() == "td"
     columns: dict[int, list[TaskItem]] = {}
     for task in tasks:
         columns.setdefault(schedule.get(task.id, (1, 1))[0], []).append(task)
@@ -426,10 +427,16 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
     positions: dict[str, tuple[int, int]] = {}
     for start_day, items in sorted(columns.items()):
         for row, task in enumerate(items):
-            positions[task.id] = (
-                _parse_graph_int(task.attrs.get("graph_x")) or (40 + (start_day - 1) * (node_w + col_gap)),
-                _parse_graph_int(task.attrs.get("graph_y")) or (40 + row * (node_h + row_gap)),
-            )
+            if is_td:
+                positions[task.id] = (
+                    _parse_graph_int(task.attrs.get("graph_x")) or (40 + row * (node_w + col_gap)),
+                    _parse_graph_int(task.attrs.get("graph_y")) or (40 + (start_day - 1) * (node_h + row_gap)),
+                )
+            else:
+                positions[task.id] = (
+                    _parse_graph_int(task.attrs.get("graph_x")) or (40 + (start_day - 1) * (node_w + col_gap)),
+                    _parse_graph_int(task.attrs.get("graph_y")) or (40 + row * (node_h + row_gap)),
+                )
     for index, task in enumerate(tasks, start=1):
         chips = "".join(
             _chip(k.replace("_", " "), v)
@@ -552,7 +559,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
     header_nodes = [H1(title, cls="vyasa-page-title text-4xl font-bold"), P(f"{len(tasks)} task{'s' if len(tasks) != 1 else ''}", cls="mt-2 text-slate-500")] if show_heading else []
     return Div(
         *header_nodes,
-        NotStr(f'<section id="vyasa-task-region" data-task-api-url="{html.escape(task_api_url or "")}" data-task-graph="{html.escape(json.dumps(graph_payload))}" class="mt-8 rounded-lg border border-slate-200 p-4 dark:border-slate-800" style="{panel_style}"><div class="flex items-center justify-between gap-4"><div><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">{html.escape(title)}</h2><p class="mt-1 text-xs text-slate-500">Drag cards. Connect right handle to left handle. Click card to edit. Click group to inspect tasks.</p></div></div><details id="vyasa-task-warnings" class="{warnings_cls} mt-2"{warnings_open} style="{warnings_style}"><summary class="cursor-pointer font-semibold">Dependency warnings</summary><ul class="mt-2 list-disc pl-5">{warnings_html}</ul></details><div class="relative mt-2"><div class="absolute right-2 top-2 z-10 flex gap-1 rounded bg-white/80 backdrop-blur-sm dark:bg-slate-800/80"><button type="button" id="vyasa-task-popout" class="rounded border px-2 py-1 text-xs hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button></div><div id="vyasa-task-flow-host" class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50" style="height: {html.escape(height)};"></div></div><div id="vyasa-task-preview-store" class="hidden">{"".join(preview_cards)}</div><div id="vyasa-task-preview-modal" class="fixed inset-0 z-[9998] hidden items-center justify-center bg-slate-950/60 p-4"><div class="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900"><div class="mb-3 flex items-center justify-between gap-4"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Task editor</h2><div class="flex items-center gap-2"><button id="vyasa-task-preview-save" type="button" class="rounded bg-blue-600 px-3 py-1 text-sm text-white">Save</button><button id="vyasa-task-preview-close" type="button" class="rounded border border-slate-200 px-3 py-1 text-sm dark:border-slate-700">Close</button></div></div><form id="vyasa-task-preview-form" class="space-y-4"><div id="vyasa-task-preview-body"></div></form><p id="vyasa-task-preview-status" class="mt-3 text-xs text-slate-500"></p></div></div></section>'),
+        NotStr(f'<section id="vyasa-task-region" data-task-api-url="{html.escape(task_api_url or "")}" data-task-graph="{html.escape(json.dumps(graph_payload))}" data-task-direction="{html.escape(direction.lower())}" class="mt-8 rounded-lg border border-slate-200 p-4 dark:border-slate-800" style="{panel_style}"><div class="flex items-center justify-between gap-4"><div><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">{html.escape(title)}</h2><p class="mt-1 text-xs text-slate-500">Drag cards. Connect right handle to left handle. Click card to edit. Click group to inspect tasks.</p></div></div><details id="vyasa-task-warnings" class="{warnings_cls} mt-2"{warnings_open} style="{warnings_style}"><summary class="cursor-pointer font-semibold">Dependency warnings</summary><ul class="mt-2 list-disc pl-5">{warnings_html}</ul></details><div class="relative mt-2"><div class="absolute right-2 top-2 z-10 flex gap-1 rounded bg-white/80 backdrop-blur-sm dark:bg-slate-800/80"><button type="button" id="vyasa-task-popout" class="rounded border px-2 py-1 text-xs hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button></div><div id="vyasa-task-flow-host" class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50" style="height: {html.escape(height)};"></div></div><div id="vyasa-task-preview-store" class="hidden">{"".join(preview_cards)}</div><div id="vyasa-task-preview-modal" class="fixed inset-0 z-[9998] hidden items-center justify-center bg-slate-950/60 p-4"><div class="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900"><div class="mb-3 flex items-center justify-between gap-4"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Task editor</h2><div class="flex items-center gap-2"><button id="vyasa-task-preview-save" type="button" class="rounded bg-blue-600 px-3 py-1 text-sm text-white">Save</button><button id="vyasa-task-preview-close" type="button" class="rounded border border-slate-200 px-3 py-1 text-sm dark:border-slate-700">Close</button></div></div><form id="vyasa-task-preview-form" class="space-y-4"><div id="vyasa-task-preview-body"></div></form><p id="vyasa-task-preview-status" class="mt-3 text-xs text-slate-500"></p></div></div></section>'),
         Script(r"""
 (() => {
   const region = document.getElementById('vyasa-task-region');
@@ -565,6 +572,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
   const flowHost = region.querySelector('#vyasa-task-flow-host');
   const taskApiUrl = region.dataset.taskApiUrl || '';
   const taskGraph = JSON.parse(region.dataset.taskGraph || '{"nodes":[],"edges":[]}');
+  const taskDirection = (region.dataset.taskDirection || 'lr').toLowerCase();
   let activeTaskId = '';
   let flowLibPromise = null;
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -685,10 +693,13 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
     const {ReactFlow, Background, Controls, Handle, Position, MarkerType, addEdge, applyNodeChanges, applyEdgeChanges} = FlowNS;
     const grid = [24, 24];
     const edgeDefaults = {type: 'bezier', markerEnd: {type: MarkerType.ArrowClosed, width: 16, height: 16}};
+    const isTD = taskDirection === 'td';
+    const handleTarget = isTD ? Position.Top : Position.Left;
+    const handleSource = isTD ? Position.Bottom : Position.Right;
     const TaskNode = ({id, data}) => {
       const missing = Array.isArray(data?.missing) ? data.missing : [];
       const warning = missing.length ? React.createElement('span', {className: 'absolute right-3 top-3 text-xs text-amber-500', title: `Missing: ${missing.join(', ')}`}, '⚠︎') : null;
-      return React.createElement('button', {type: 'button', onClick: () => openPreview(id), className: 'relative h-[92px] w-[320px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-lg dark:border-slate-700 dark:bg-slate-900'}, React.createElement(Handle, {type: 'target', position: Position.Left, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}), warning, React.createElement('span', {className: 'block text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500'}, id), React.createElement('span', {className: 'mt-2 block break-words pr-6 text-sm font-semibold text-slate-900 dark:text-slate-100', style: {display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden'}}, data.title || id), React.createElement(Handle, {type: 'source', position: Position.Right, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}));
+      return React.createElement('button', {type: 'button', onClick: () => openPreview(id), className: 'relative h-[92px] w-[320px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-lg dark:border-slate-700 dark:bg-slate-900'}, React.createElement(Handle, {type: 'target', position: handleTarget, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}), warning, React.createElement('span', {className: 'block text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500'}, id), React.createElement('span', {className: 'mt-2 block break-words pr-6 text-sm font-semibold text-slate-900 dark:text-slate-100', style: {display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden'}}, data.title || id), React.createElement(Handle, {type: 'source', position: handleSource, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}));
     };
     const PortalNode = ({data}) => {
       const open = (event) => {
@@ -713,7 +724,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
       const count = Array.isArray(data?.task_ids) ? data.task_ids.length : 0;
       if (collapsed) {
         return React.createElement('div', {className: 'relative flex h-full w-full items-center'},
-          React.createElement(Handle, {type: 'target', position: Position.Left, isConnectable: false, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-800'}),
+          React.createElement(Handle, {type: 'target', position: handleTarget, isConnectable: false, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-800'}),
           React.createElement('button', {
             type: 'button', onClick: openGroup,
             className: 'flex h-full w-full items-center gap-3 rounded-[28px] border border-slate-300 bg-white px-5 py-3 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700',
@@ -721,7 +732,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
             React.createElement('span', {className: 'min-w-0 flex-1 whitespace-normal break-words text-left text-sm font-semibold leading-tight text-slate-700 dark:text-slate-200', title: data?.title || id}, data?.title || id),
             React.createElement('span', {className: 'shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-400'}, count),
           ),
-          React.createElement(Handle, {type: 'source', position: Position.Right, isConnectable: false, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-800'}),
+          React.createElement(Handle, {type: 'source', position: handleSource, isConnectable: false, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-800'}),
         );
       }
       return React.createElement('div', {className: 'relative h-full w-full'},
@@ -1178,6 +1189,6 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
 })();
 """),
     )
-def render_tasks_board_text(text: str, title: str = "Tasks", *, task_api_url: str | None = None, show_heading: bool = False, width: str = "95vw", height: str = "70vh"):
+def render_tasks_board_text(text: str, title: str = "Tasks", *, task_api_url: str | None = None, show_heading: bool = False, width: str = "95vw", height: str = "70vh", direction: str = "lr"):
     tasks, chains, groups = parse_tasks_document_text(text)
-    return _render_tasks_board(tasks, chains, groups, title, task_api_url=task_api_url, show_heading=show_heading, width=width, height=height)
+    return _render_tasks_board(tasks, chains, groups, title, task_api_url=task_api_url, show_heading=show_heading, width=width, height=height, direction=direction)

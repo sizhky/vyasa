@@ -850,6 +850,7 @@ class ContentRenderer(FrankenRenderer):
                     show_heading=False,
                     width=config.get("width", "100%"),
                     height=config.get("height", "70vh"),
+                    direction=config.get("direction", "lr"),
                 )
             )
         raw_code = code
