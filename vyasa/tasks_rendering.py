@@ -1047,6 +1047,8 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
             if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return;
             const key = String(event.key || '').toLowerCase();
             if (key === 'escape' && drillGroupId) {
+              const preview = document.getElementById('vyasa-task-preview-modal');
+              if (preview && !preview.classList.contains('hidden')) return;
               event.preventDefault();
               closeDrillGroup();
               return;
@@ -1208,8 +1210,11 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
     if (trigger) openPreview(trigger.dataset.taskPreviewTrigger || '');
   });
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && previewModal && !previewModal.classList.contains('hidden')) closePreview();
-  });
+    if (event.key === 'Escape' && previewModal && !previewModal.classList.contains('hidden')) {
+      event.stopImmediatePropagation();
+      closePreview();
+    }
+  }, true);
 })();
 """),
     )
