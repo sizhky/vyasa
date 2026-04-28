@@ -996,12 +996,13 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
             setDrillEdges(drill?.edges || []);
           }, [drill]);
           if (!drill) return null;
+          const calcDrillRealPosition = (node) => ({
+            x: node.data?.drill_x_offset == null ? (node.data?.drill_origin_x || 0) + node.position.x - (node.data?.drill_start_x || 0) : node.position.x - node.data.drill_x_offset,
+            y: node.data?.drill_y_offset == null ? (node.data?.drill_origin_y || 0) + node.position.y - (node.data?.drill_start_y || 0) : node.position.y - node.data.drill_y_offset,
+          });
           const saveDrillPosition = async (_event, node) => {
             if (node.type !== 'task' && node.type !== 'group') return;
-            const realPosition = {
-              x: node.data?.drill_x_offset == null ? (node.data?.drill_origin_x || 0) + node.position.x - (node.data?.drill_start_x || 0) : node.position.x - node.data.drill_x_offset,
-              y: node.data?.drill_y_offset == null ? (node.data?.drill_origin_y || 0) + node.position.y - (node.data?.drill_start_y || 0) : node.position.y - node.data.drill_y_offset,
-            };
+            const realPosition = calcDrillRealPosition(node);
             setNodes((prev) => prev.map((n) => n.id === node.id ? {...n, position: realPosition, data: {...n.data, has_saved_position: true}} : n));
             await saveGraphMutation((payload) => {
               if (node.type === 'group') {
@@ -1012,6 +1013,24 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
               }
               const task = (payload.tasks || []).find((item) => item.id === node.id);
               if (task) task.attrs = {...(task.attrs || {}), graph_x: String(Math.round(realPosition.x)), graph_y: String(Math.round(realPosition.y))};
+            });
+          };
+          const saveDrillPositions = async (_event, movedNodes) => {
+            const eligible = (movedNodes || []).filter((n) => n.type === 'task' || n.type === 'group');
+            if (!eligible.length) return;
+            const realPositions = Object.fromEntries(eligible.map((n) => [n.id, calcDrillRealPosition(n)]));
+            setNodes((prev) => prev.map((n) => realPositions[n.id] ? {...n, position: realPositions[n.id], data: {...n.data, has_saved_position: true}} : n));
+            await saveGraphMutation((payload) => {
+              eligible.forEach((node) => {
+                const rp = realPositions[node.id];
+                if (node.type === 'group') {
+                  const group = (payload.groups || []).find((item) => item.id === node.id);
+                  if (group) group.attrs = {...(group.attrs || {}), pill_x: String(Math.round(rp.x)), pill_y: String(Math.round(rp.y))};
+                } else {
+                  const task = (payload.tasks || []).find((item) => item.id === node.id);
+                  if (task) task.attrs = {...(task.attrs || {}), graph_x: String(Math.round(rp.x)), graph_y: String(Math.round(rp.y))};
+                }
+              });
             });
           };
           return React.createElement('div', {className: 'absolute inset-4 z-20 flex flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950'},
@@ -1032,7 +1051,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
               React.createElement('button', {type: 'button', onClick: closeDrillGroup, className: 'rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}, 'Back'),
             ),
             React.createElement('div', {className: 'min-h-0 flex-1'},
-              React.createElement(ReactFlow, {key: groupId, nodes: drillNodes, edges: drillEdges, onNodesChange: (changes) => setDrillNodes((items) => applyNodeChanges(changes, items)), onNodeDragStop: saveDrillPosition, onInit: (instance) => setTimeout(() => instance.fitView({padding: 0.28, duration: 120}), 50), nodeTypes, fitView: true, fitViewOptions: {padding: 0.28}, minZoom: 0.15, snapToGrid: true, snapGrid: grid, colorMode: document.documentElement.classList.contains('dark') ? 'dark' : 'light', className: 'h-full w-full bg-transparent'}, React.createElement(Background, {gap: grid[0], size: 1}), React.createElement(Controls)),
+              React.createElement(ReactFlow, {key: groupId, nodes: drillNodes, edges: drillEdges, onNodesChange: (changes) => setDrillNodes((items) => applyNodeChanges(changes, items)), onNodeDragStop: saveDrillPosition, onSelectionDragStop: saveDrillPositions, onInit: (instance) => setTimeout(() => instance.fitView({padding: 0.28, duration: 120}), 50), nodeTypes, fitView: true, fitViewOptions: {padding: 0.28}, minZoom: 0.15, snapToGrid: true, snapGrid: grid, colorMode: document.documentElement.classList.contains('dark') ? 'dark' : 'light', className: 'h-full w-full bg-transparent'}, React.createElement(Background, {gap: grid[0], size: 1}), React.createElement(Controls)),
             ),
           );
         };
