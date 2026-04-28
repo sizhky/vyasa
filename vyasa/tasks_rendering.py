@@ -516,19 +516,28 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
         is_collapsed = True
         pill_x = _parse_graph_int(group.attrs.get("pill_x"))
         pill_y = _parse_graph_int(group.attrs.get("pill_y"))
+        collapsed_w, collapsed_h = _estimate_collapsed_group_size(group.title)
+        group_pill_gap = collapsed_h + 32
         if group.parent_group_id:
             parent_index = child_groups_by_group.get(group.parent_group_id, []).index(group)
             if pill_x is not None and pill_y is not None:
                 node_pos = {"x": pill_x, "y": pill_y}
+            elif is_td:
+                node_pos = {"x": 40, "y": 40 + parent_index * group_pill_gap}
             else:
                 node_pos = {"x": 40 + parent_index * (node_w + col_gap), "y": 40}
         elif is_collapsed and pill_x is not None:
             node_pos = {"x": pill_x, "y": pill_y}
             if abs(node_pos["x"]) > graph_w * 2 or abs(node_pos["y"]) > graph_h * 2:
-                node_pos = {"x": 40 + top_group_index.get(group.id, 0) * (node_w + col_gap), "y": 40}
+                if is_td:
+                    node_pos = {"x": 40, "y": 40 + top_group_index.get(group.id, 0) * group_pill_gap}
+                else:
+                    node_pos = {"x": 40 + top_group_index.get(group.id, 0) * (node_w + col_gap), "y": 40}
         else:
-            node_pos = {"x": 40 + top_group_index.get(group.id, 0) * (node_w + col_gap), "y": 40}
-        collapsed_w, collapsed_h = _estimate_collapsed_group_size(group.title)
+            if is_td:
+                node_pos = {"x": 40, "y": 40 + top_group_index.get(group.id, 0) * group_pill_gap}
+            else:
+                node_pos = {"x": 40 + top_group_index.get(group.id, 0) * (node_w + col_gap), "y": 40}
         group_nodes.append({
             "id": group.id,
             "type": "group",
@@ -709,10 +718,10 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
       };
       const stop = (event) => event.stopPropagation();
       return React.createElement('button', {type: 'button', onPointerDownCapture: stop, onMouseDownCapture: stop, onPointerUpCapture: open, onMouseUpCapture: open, onClickCapture: open, className: 'nodrag nopan relative w-[220px] rounded-xl border border-dashed border-slate-300 bg-white/90 px-3 py-2 text-left text-xs font-semibold text-slate-500 shadow-sm hover:border-slate-400 hover:bg-white dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-400 dark:hover:bg-slate-900'},
-      data?.side === 'in' ? React.createElement(Handle, {type: 'source', position: Position.Right, isConnectable: false, className: '!h-2.5 !w-2.5 !border-slate-400 !bg-white dark:!bg-slate-900'}) : null,
+      data?.side === 'in' ? React.createElement(Handle, {type: 'source', position: handleSource, isConnectable: false, className: '!h-2.5 !w-2.5 !border-slate-400 !bg-white dark:!bg-slate-900'}) : null,
       React.createElement('span', {className: 'block truncate', title: data?.title || ''}, data?.title || ''),
       React.createElement('span', {className: 'mt-1 block text-[10px] uppercase tracking-[0.16em] text-slate-400'}, data?.side === 'in' ? 'Incoming' : 'Outgoing'),
-      data?.side === 'out' ? React.createElement(Handle, {type: 'target', position: Position.Left, isConnectable: false, className: '!h-2.5 !w-2.5 !border-slate-400 !bg-white dark:!bg-slate-900'}) : null,
+      data?.side === 'out' ? React.createElement(Handle, {type: 'target', position: handleTarget, isConnectable: false, className: '!h-2.5 !w-2.5 !border-slate-400 !bg-white dark:!bg-slate-900'}) : null,
       );
     };
     const GroupNode = ({id, data, style}) => {
@@ -909,11 +918,16 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           const minX = childNodes.length ? Math.min(...childNodes.map((n) => n.position?.x || 0)) : 0;
           const minY = childNodes.length ? Math.min(...childNodes.map((n) => n.position?.y || 0)) : 0;
           const maxX = childNodes.length ? Math.max(...childNodes.map((n) => n.position?.x || 0)) : 0;
+          const maxY = childNodes.length ? Math.max(...childNodes.map((n) => n.position?.y || 0)) : 0;
           const spreadX = maxX - minX;
+          const spreadY = maxY - minY;
           const hasSavedLayout = childNodes.some((n) => !!n.data?.has_saved_position);
-          const useCompactLayout = !hasSavedLayout && (spreadX > 1600 || childNodes.length <= 4);
+          const useCompactLayout = !hasSavedLayout && (isTD ? (spreadY > 1600 || childNodes.length <= 4) : (spreadX > 1600 || childNodes.length <= 4));
           const xOffset = 320 - minX;
           const yOffset = 96 - minY;
+          const compactPos = (index) => isTD
+            ? {x: 320 + Math.floor(index / 3) * 432, y: 96 + (index % 3) * 136}
+            : {x: 320 + (index % 3) * 432, y: 96 + Math.floor(index / 3) * 136};
           const drillNodes = childNodes.map((n, index) => ({
             ...n,
             type: n.type === 'group' ? 'group' : 'task',
@@ -921,14 +935,15 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
             hidden: false,
             selected: false,
             position: useCompactLayout
-              ? {x: 320 + (index % 3) * 432, y: 96 + Math.floor(index / 3) * 136}
+              ? compactPos(index)
               : {x: (n.position?.x || 0) + xOffset, y: (n.position?.y || 0) + yOffset},
-            data: {...(n.data || {}), onOpen: openDrillGroup, drill_x_offset: useCompactLayout ? null : xOffset, drill_y_offset: useCompactLayout ? null : yOffset, drill_origin_x: n.position?.x || 0, drill_origin_y: n.position?.y || 0, drill_start_x: useCompactLayout ? 320 + (index % 3) * 432 : (n.position?.x || 0) + xOffset, drill_start_y: useCompactLayout ? 96 + Math.floor(index / 3) * 136 : (n.position?.y || 0) + yOffset},
+            data: {...(n.data || {}), onOpen: openDrillGroup, drill_x_offset: useCompactLayout ? null : xOffset, drill_y_offset: useCompactLayout ? null : yOffset, drill_origin_x: n.position?.x || 0, drill_origin_y: n.position?.y || 0, drill_start_x: useCompactLayout ? compactPos(index).x : (n.position?.x || 0) + xOffset, drill_start_y: useCompactLayout ? compactPos(index).y : (n.position?.y || 0) + yOffset},
           }));
           const portalNodes = [];
           const drillEdges = [];
           const portalEdgeSpecs = [];
           const outX = useCompactLayout ? 320 + Math.min(childNodes.length, 3) * 432 + 120 : Math.max(760, maxX - minX + 680);
+          const outY = useCompactLayout ? 96 + Math.ceil(childNodes.length / 3) * 136 + 120 : Math.max(560, maxY - minY + 480);
           baseEdgesRef.current.forEach((edge) => {
             const sourceEndpoint = endpointForScopedTask(edge.source);
             const targetEndpoint = endpointForScopedTask(edge.target);
@@ -940,22 +955,31 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
               const targetPath = pathForTask(edge.source);
               const portalKey = targetPath.length ? targetPath.join(':') : edge.source;
               const portalId = `portal-in-${portalKey}`;
-              if (!portalNodes.some((n) => n.id === portalId)) portalNodes.push({id: portalId, type: 'portal', position: {x: 40, y: 96}, draggable: false, selectable: false, zIndex: 20, style: {pointerEvents: 'all', zIndex: 20}, data: {title: titleFor(edge.source), side: 'in', target_path: targetPath, onOpenPath: openDrillPath}});
+              const initPos = isTD ? {x: 96, y: Math.min(...drillNodes.map((n) => n.position?.y || 0)) - 160} : {x: 40, y: 96};
+              if (!portalNodes.some((n) => n.id === portalId)) portalNodes.push({id: portalId, type: 'portal', position: initPos, draggable: false, selectable: false, zIndex: 20, style: {pointerEvents: 'all', zIndex: 20}, data: {title: titleFor(edge.source), side: 'in', target_path: targetPath, onOpenPath: openDrillPath}});
               if (!portalEdgeSpecs.some((e) => e.source === portalId && e.target === targetEndpoint)) portalEdgeSpecs.push({...edge, id: `${portalId}->${targetEndpoint}`, source: portalId, target: targetEndpoint, ...edgeDefaults});
             } else if (sourceEndpoint && !targetInside) {
               const targetPath = pathForTask(edge.target);
               const portalKey = targetPath.length ? targetPath.join(':') : edge.target;
               const portalId = `portal-out-${portalKey}`;
-              if (!portalNodes.some((n) => n.id === portalId)) portalNodes.push({id: portalId, type: 'portal', position: {x: outX, y: 96}, draggable: false, selectable: false, zIndex: 20, style: {pointerEvents: 'all', zIndex: 20}, data: {title: titleFor(edge.target), side: 'out', target_path: targetPath, onOpenPath: openDrillPath}});
+              const outPos = isTD ? {x: 96, y: Math.max(...drillNodes.map((n) => n.position?.y || 0)) + 160} : {x: outX, y: 96};
+              if (!portalNodes.some((n) => n.id === portalId)) portalNodes.push({id: portalId, type: 'portal', position: outPos, draggable: false, selectable: false, zIndex: 20, style: {pointerEvents: 'all', zIndex: 20}, data: {title: titleFor(edge.target), side: 'out', target_path: targetPath, onOpenPath: openDrillPath}});
               if (!portalEdgeSpecs.some((e) => e.source === sourceEndpoint && e.target === portalId)) portalEdgeSpecs.push({...edge, id: `${sourceEndpoint}->${portalId}`, source: sourceEndpoint, target: portalId, ...edgeDefaults});
             }
           });
           const centerPortals = (side) => {
             const sideNodes = portalNodes.filter((n) => n.data?.side === side);
-            const visibleY = drillNodes.map((n) => n.position?.y || 0);
-            const centerY = visibleY.length ? (Math.min(...visibleY) + Math.max(...visibleY)) / 2 : 96;
-            const startY = centerY - ((sideNodes.length - 1) * 112) / 2;
-            sideNodes.forEach((node, index) => { node.position.y = Math.max(40, startY + index * 112); });
+            if (isTD) {
+              const visibleX = drillNodes.map((n) => n.position?.x || 0);
+              const centerX = visibleX.length ? (Math.min(...visibleX) + Math.max(...visibleX)) / 2 : 96;
+              const startX = centerX - ((sideNodes.length - 1) * 280) / 2;
+              sideNodes.forEach((node, index) => { node.position.x = Math.max(40, startX + index * 280); });
+            } else {
+              const visibleY = drillNodes.map((n) => n.position?.y || 0);
+              const centerY = visibleY.length ? (Math.min(...visibleY) + Math.max(...visibleY)) / 2 : 96;
+              const startY = centerY - ((sideNodes.length - 1) * 112) / 2;
+              sideNodes.forEach((node, index) => { node.position.y = Math.max(40, startY + index * 112); });
+            }
           };
           centerPortals('in');
           centerPortals('out');
