@@ -1,26 +1,34 @@
 from pathlib import Path
 
-from vyasa.tasks_rendering import TaskItem, build_task_schedule, chain_dependencies, delete_task, parse_dependency_ids, parse_estimate_days, parse_tasks_document, parse_tasks_file, render_tasks_board, tasks_payload, upsert_task, validate_owner_overlaps, validate_task_dependencies, write_tasks_chains
+from vyasa.markdown_rendering import from_md
+from vyasa.tasks_rendering import (
+    TaskItem,
+    build_task_schedule,
+    chain_dependencies,
+    parse_dependency_ids,
+    parse_estimate_days,
+    parse_tasks_document_text,
+    parse_tasks_text,
+    payload_to_tasks_document,
+    render_tasks_board_text,
+    tasks_fence_payload,
+    validate_owner_overlaps,
+    validate_task_dependencies,
+    write_tasks_fence_payload,
+)
 
 
-def test_parse_tasks_file(tmp_path: Path):
-    source = tmp_path / "sprint.tasks"
-    source.write_text(
-        '''
-task S4-001 "Agent Response Accuracy"
-  priority: P0
-  points: 5
-  estimate: 2d
-  depends_on: [S4-002]
-  phase: Foundation
-
-task S4-002 "Web Search Enhancements"
-  priority: P1
-'''.strip(),
-        encoding="utf-8",
+def test_parse_tasks_text():
+    tasks = parse_tasks_text(
+        'task S4-001 "Agent Response Accuracy"\n'
+        '  priority: P0\n'
+        '  points: 5\n'
+        '  estimate: 2d\n'
+        '  depends_on: [S4-002]\n'
+        '  phase: Foundation\n\n'
+        'task S4-002 "Web Search Enhancements"\n'
+        '  priority: P1\n'
     )
-
-    tasks = parse_tasks_file(source)
 
     assert [task.id for task in tasks] == ["S4-001", "S4-002"]
     assert tasks[0].title == "Agent Response Accuracy"
@@ -29,21 +37,15 @@ task S4-002 "Web Search Enhancements"
     assert tasks[1].attrs["priority"] == "P1"
 
 
-def test_parse_tasks_document_with_chain(tmp_path: Path):
-    source = tmp_path / "sprint.tasks"
-    source.write_text(
-        '''
-task A "First"
-  estimate: 1d
-task B "Second"
-  estimate: 1d
-chain Main
-  A -> B
-'''.strip(),
-        encoding="utf-8",
+def test_parse_tasks_document_text_with_chain():
+    tasks, chains = parse_tasks_document_text(
+        'task A "First"\n'
+        '  estimate: 1d\n'
+        'task B "Second"\n'
+        '  estimate: 1d\n'
+        'chain Main\n'
+        '  A -> B\n'
     )
-
-    tasks, chains = parse_tasks_document(source)
 
     assert [task.id for task in tasks] == ["A", "B"]
     assert chains == {"Main": ["A", "B"]}
@@ -94,44 +96,48 @@ def test_build_task_schedule_uses_chain_order():
     assert schedule == {"A": (1, 1), "B": (2, 2)}
 
 
-def test_write_tasks_chains_replaces_chain_blocks(tmp_path: Path):
-    source = tmp_path / "sprint.tasks"
-    source.write_text('task A "First"\n  estimate: 1d\n\ntask B "Second"\n  estimate: 1d\n\nchain Old\n  A\n', encoding="utf-8")
-
-    write_tasks_chains(source, {"New": ["A", "B"]})
-
-    assert source.read_text(encoding="utf-8") == 'task A "First"\n  estimate: 1d\n\ntask B "Second"\n  estimate: 1d\n  depends_on: [A]\n\nchain New\n  A -> B\n'
-
-
-def test_task_crud_helpers(tmp_path: Path):
-    source = tmp_path / "sprint.tasks"
-    source.write_text('task A "First"\n  estimate: 1d\n', encoding="utf-8")
-
-    upsert_task(source, "B", "Second", {"estimate": "2d", "owner": "Core"})
-    payload = tasks_payload(source)
-    delete_task(source, "A")
-
-    assert payload["tasks"][1] == {"id": "B", "title": "Second", "attrs": {"estimate": "2d", "owner": "Core"}}
-    assert 'task A "First"' not in source.read_text(encoding="utf-8")
-
-
-def test_write_tasks_payload_can_replace_chain_edges_with_explicit_dependencies(tmp_path: Path):
-    source = tmp_path / "sprint.tasks"
-    source.write_text('task A "First"\n  estimate: 1d\n\ntask B "Second"\n  estimate: 1d\n\ntask C "Third"\n  estimate: 1d\n\nchain Main\n  A -> B -> C\n', encoding="utf-8")
-
-    payload = tasks_payload(source)
-    payload["chains"] = {}
-    payload["tasks"][1]["attrs"]["depends_on"] = "[]"
-    payload["tasks"][2]["attrs"]["depends_on"] = "[B]"
-
-    from vyasa.tasks_rendering import write_tasks_payload
-    write_tasks_payload(source, payload)
-
-    tasks, chains = parse_tasks_document(source)
+def test_payload_to_tasks_document_replaces_chain_edges_with_explicit_dependencies():
+    tasks, chains = payload_to_tasks_document(
+        {
+            "tasks": [
+                {"id": "A", "title": "First", "attrs": {"estimate": "1d"}},
+                {"id": "B", "title": "Second", "attrs": {"estimate": "1d", "depends_on": "[]"}},
+                {"id": "C", "title": "Third", "attrs": {"estimate": "1d", "depends_on": "[B]"}},
+            ],
+            "chains": {},
+        }
+    )
 
     assert chains == {}
     assert tasks[1].attrs.get("depends_on") == "[]"
     assert tasks[2].attrs.get("depends_on") == "[B]"
+
+
+def test_tasks_fence_payload_roundtrip(tmp_path: Path):
+    source = tmp_path / "sprint.md"
+    source.write_text('## Plan\n\n```tasks\n task A "First"\n   estimate: 1d\n\n task B "Second"\n   estimate: 1d\n chain Main\n   A -> B\n```\n', encoding="utf-8")
+
+    payload = tasks_fence_payload(source, 0)
+    payload["chains"] = {}
+    payload["tasks"][1]["attrs"]["depends_on"] = "[]"
+    write_tasks_fence_payload(source, 0, payload)
+
+    rewritten = source.read_text(encoding="utf-8")
+
+    assert "```tasks" in rewritten
+    assert "chain Main" not in rewritten
+    assert "depends_on: []" in rewritten
+
+
+def test_markdown_tasks_fence_renders_inline_board(tmp_path: Path):
+    source = tmp_path / "sprint.md"
+    source.write_text('## Plan\n\n```tasks\n task A "First"\n   estimate: 1d\n\n task B "Second"\n   estimate: 1d\n   depends_on: [A]\n```\n', encoding="utf-8")
+
+    html = str(from_md(source.read_text(encoding="utf-8"), current_path="sprint"))
+
+    assert 'id="vyasa-task-flow-host"' in html
+    assert '/api/tasks/blocks/sprint?block=0' in html
+    assert ">Tasks<" in html
 
 
 def test_parse_estimate_days():
@@ -153,14 +159,23 @@ def test_validate_owner_overlaps():
     assert warnings == ["Jane overlap: A D1-D3 conflicts with B D2-D4"]
 
 
-def test_render_tasks_board_uses_preview_modal_instead_of_bottom_card_wall(tmp_path: Path):
-    source = tmp_path / "sprint.tasks"
-    source.write_text(
-        'task A "First"\n  estimate: 1d\n\ntask B "Second"\n  estimate: 1d\n\ntask C "Third"\n  estimate: 1d\n\ntask D "Fourth"\n  estimate: 1d\n\nchain Main\n  A -> B -> C -> D\n',
-        encoding="utf-8",
+def test_render_tasks_board_text_uses_preview_modal():
+    html = str(
+        render_tasks_board_text(
+            'task A "First"\n'
+            '  estimate: 1d\n\n'
+            'task B "Second"\n'
+            '  estimate: 1d\n'
+            '  depends_on: [A]\n\n'
+            'task C "Third"\n'
+            '  estimate: 1d\n'
+            '  depends_on: [B]\n\n'
+            'task D "Fourth"\n'
+            '  estimate: 1d\n'
+            '  depends_on: [C]\n',
+            task_api_url="/api/tasks/blocks/sprint?block=0",
+        )
     )
-
-    html = str(render_tasks_board(source, "Sprint"))
 
     assert 'id="vyasa-task-preview-modal"' in html
     assert 'data-task-preview="A"' in html
@@ -171,11 +186,10 @@ def test_render_tasks_board_uses_preview_modal_instead_of_bottom_card_wall(tmp_p
     assert 'data-task-preview-trigger="B"' in html
     assert 'data-task-preview-trigger="C"' in html
     assert 'data-task-preview-trigger="D"' in html
-    assert "Dependency graph" in html
+    assert ">Tasks<" in html
     assert "Dependency lanes" not in html
     assert "vyasa-chain-lane" not in html
     assert 'id="vyasa-task-flow-host"' in html
     assert 'data-task-graph="' in html
-    assert 'class="mt-8 space-y-3"' not in html
-    assert 'S4-011' not in html
-    assert 'data-task-preview-trigger="A"' not in html
+    assert '<details id="vyasa-task-warnings"' in html
+    assert html.count('data-task-preview-trigger="A"') == 1

@@ -90,7 +90,7 @@ from .tree_rendering import (
     build_post_tree_render,
     folder_has_visible_descendant as tree_folder_has_visible_descendant,
 )
-from .tasks_rendering import delete_task, tasks_payload, upsert_task, write_tasks_chains, write_tasks_payload
+from .tasks_rendering import tasks_fence_payload, write_tasks_fence_payload
 from .favicon import favicon_href, favicon_svg
 from .file_search import search_file_records
 _asset_url = asset_url
@@ -773,58 +773,35 @@ async def save_excalidraw(path: str, request: Request):
     return Response('{"ok":true}', media_type="application/json")
 
 
-@rt("/api/tasks/chains/{path:path}", methods=["PUT"])
-async def save_tasks_chains(path: str, request: Request):
-    file_path = content_path_for_slug(path, ".tasks")
-    if not file_path or not file_path.exists():
-        return Response(status_code=404)
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    if roles is not None and not is_allowed(f"/posts/{path}", roles or [], _rbac_rules):
-        return Response("Forbidden", status_code=403)
-    try:
-        payload = json.loads((await request.body()).decode("utf-8"))
-        raw_chains = payload.get("chains") if isinstance(payload, dict) else None
-        if not isinstance(raw_chains, dict):
-            return Response("Expected chains object", status_code=400)
-        chains = {
-            str(name): [str(task_id) for task_id in ids if str(task_id).strip()]
-            for name, ids in raw_chains.items()
-            if isinstance(ids, list)
-        }
-        write_tasks_chains(file_path, chains)
-    except json.JSONDecodeError:
-        return Response("Invalid JSON", status_code=400)
-    except Exception as exc:
-        logger.warning(f"Failed to save tasks chains '{path}': {exc}")
-        return Response("Save failed", status_code=500)
-    return Response('{"ok":true}', media_type="application/json")
-
-
-def _tasks_file_for_api(path: str):
-    file_path = content_path_for_slug(path, ".tasks")
-    if not file_path or not file_path.exists():
-        return None
-    return file_path
-
-
 def _tasks_allowed(path: str, request: Request):
     roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
     return roles is None or is_allowed(f"/posts/{path}", roles or [], _rbac_rules)
 
 
-@rt("/api/tasks/{path:path}", methods=["GET"])
-async def get_tasks_document(path: str, request: Request):
-    file_path = _tasks_file_for_api(path)
+def _tasks_markdown_file_for_api(path: str):
+    file_path = content_path_for_slug(path, ".md")
+    if not file_path or not file_path.exists():
+        return None
+    return file_path
+
+
+@rt("/api/tasks/blocks/{path:path}", methods=["GET"])
+async def get_tasks_block(path: str, request: Request, block: int = 0):
+    file_path = _tasks_markdown_file_for_api(path)
     if not file_path:
         return Response(status_code=404)
     if not _tasks_allowed(path, request):
         return Response("Forbidden", status_code=403)
-    return Response(json.dumps(tasks_payload(file_path)), media_type="application/json")
+    try:
+        payload = tasks_fence_payload(file_path, block)
+    except IndexError:
+        return Response(status_code=404)
+    return Response(json.dumps(payload), media_type="application/json")
 
 
-@rt("/api/tasks/{path:path}", methods=["PUT"])
-async def put_tasks_document(path: str, request: Request):
-    file_path = _tasks_file_for_api(path)
+@rt("/api/tasks/blocks/{path:path}", methods=["PUT"])
+async def put_tasks_block(path: str, request: Request, block: int = 0):
+    file_path = _tasks_markdown_file_for_api(path)
     if not file_path:
         return Response(status_code=404)
     if not _tasks_allowed(path, request):
@@ -833,47 +810,14 @@ async def put_tasks_document(path: str, request: Request):
         payload = json.loads((await request.body()).decode("utf-8"))
         if not isinstance(payload, dict):
             return Response("Expected JSON object", status_code=400)
-        write_tasks_payload(file_path, payload)
+        write_tasks_fence_payload(file_path, block, payload)
+    except IndexError:
+        return Response(status_code=404)
     except json.JSONDecodeError:
         return Response("Invalid JSON", status_code=400)
     except Exception as exc:
-        logger.warning(f"Failed to write tasks document '{path}': {exc}")
+        logger.warning(f"Failed to write tasks block '{path}?block={block}': {exc}")
         return Response("Save failed", status_code=500)
-    return Response('{"ok":true}', media_type="application/json")
-
-
-@rt("/api/tasks/{path:path}/{task_id}", methods=["PUT"])
-async def put_task(path: str, task_id: str, request: Request):
-    file_path = _tasks_file_for_api(path)
-    if not file_path:
-        return Response(status_code=404)
-    if not _tasks_allowed(path, request):
-        return Response("Forbidden", status_code=403)
-    try:
-        payload = json.loads((await request.body()).decode("utf-8"))
-        if not isinstance(payload, dict):
-            return Response("Expected JSON object", status_code=400)
-        upsert_task(file_path, task_id, payload.get("title"), payload.get("attrs") or {})
-    except json.JSONDecodeError:
-        return Response("Invalid JSON", status_code=400)
-    except Exception as exc:
-        logger.warning(f"Failed to write task '{path}/{task_id}': {exc}")
-        return Response("Save failed", status_code=500)
-    return Response('{"ok":true}', media_type="application/json")
-
-
-@rt("/api/tasks/{path:path}/{task_id}", methods=["DELETE"])
-async def delete_task_api(path: str, task_id: str, request: Request):
-    file_path = _tasks_file_for_api(path)
-    if not file_path:
-        return Response(status_code=404)
-    if not _tasks_allowed(path, request):
-        return Response("Forbidden", status_code=403)
-    try:
-        delete_task(file_path, task_id)
-    except Exception as exc:
-        logger.warning(f"Failed to delete task '{path}/{task_id}': {exc}")
-        return Response("Delete failed", status_code=500)
     return Response('{"ok":true}', media_type="application/json")
 
 
@@ -1347,7 +1291,7 @@ def _get_nav_entries(
     if cached and cached[0] == mtime:
         return cached[1]
     ordered = get_tree_entries(
-        folder, root, show_hidden, excluded_dirs, (".md", ".tree", ".tasks", ".pdf", ".excalidraw")
+        folder, root, show_hidden, excluded_dirs, (".md", ".tree", ".pdf", ".excalidraw")
     )
     _nav_entries_cache[key] = (mtime, ordered)
     return ordered

@@ -32,6 +32,7 @@ from .markdown_pipeline import (
 )
 from .markdown_tabs import postprocess_tabs as postprocess_md_tabs
 from .markdown_tabs import preprocess_tabs as preprocess_md_tabs
+from .tasks_rendering import render_tasks_board_text
 from .markdown_tokens import (
     DownloadEmbed,
     FootnoteRef,
@@ -591,6 +592,7 @@ class ContentRenderer(FrankenRenderer):
         self.heading_counts = {}
         self.mermaid_counter = 0
         self.iframe_counter = 0
+        self.tasks_block_counter = 0
 
     def render_list_item(self, token):
         inner = self.render_inner(token)
@@ -834,6 +836,22 @@ class ContentRenderer(FrankenRenderer):
             return _render_cryptograph_block(code)
         if lang == "cytograph":
             return _render_cytograph_block(code, current_path=self.current_path)
+        if lang == "tasks":
+            config, code = _split_fence_frontmatter(code)
+            task_api_url = None
+            if self.current_path:
+                task_api_url = content_url_for_slug(self.current_path, prefix="/api/tasks/blocks", fragment=None) + f"?block={self.tasks_block_counter}"
+            self.tasks_block_counter += 1
+            return to_xml(
+                render_tasks_board_text(
+                    code,
+                    config.get("title", attrs.get("title", "Tasks")),
+                    task_api_url=task_api_url,
+                    show_heading=False,
+                    width=config.get("width", "100%"),
+                    height=config.get("height", "70vh"),
+                )
+            )
         raw_code = code
         code = html.unescape(code)
         line_numbers = bool(lang) and _resolve_line_numbers(get_config().get_code_line_numbers(), attrs=attrs)

@@ -227,6 +227,41 @@ Recognized task metadata families:
 - status: `status`, `state`, `phase`
 - project: `project`, `bucket`, `area`, `team`, `stream`
 
+## Inline task graphs
+
+For dependency planning, use a fenced `tasks` block inside a normal markdown page:
+
+```markdown
+```tasks
+title: Sprint Slice
+width: 85vw
+height: 75vh
+---
+task T-001 "Map current behavior"
+  estimate: 1d
+  owner: Core
+  phase: Discovery
+task T-002 "Build inline tasks fence"
+  estimate: 2d
+  priority: P1
+  points: 5
+  depends_on: [T-001]
+```
+```
+
+Notes:
+
+- `title`, `width`, and `height` belong in the fence frontmatter before `---`.
+- Each task starts with `task ID "Title"`.
+- Supported first-class attrs today: `estimate`, `depends_on`, `priority`, `points`, `owner`, `phase`.
+- `depends_on` should use bracket form: `[T-001, T-002]`.
+- Renderer-owned layout attrs `graph_x` and `graph_y` may appear in saved source after graph dragging; treat them as implementation detail, not authoring API.
+- The block renders as an interactive graph, not as a code sample.
+- Cards are draggable, snap to grid, and support edge create/delete.
+- Popup editing shows immediate `Dependencies` and `Dependants`, not full ancestry.
+- Warnings render inside the graph panel in a collapsible details block.
+- Persisted edits rewrite the fenced block source in the markdown file itself.
+
 ## Code snippet includes
 
 ```markdown

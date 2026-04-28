@@ -619,7 +619,7 @@ def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
             continue
         if not include_hidden and any(part.startswith(".") for part in rel_parts):
             continue
-        if path.suffix.lower() not in {".md", ".tree", ".pdf", ".tasks"}:
+        if path.suffix.lower() not in {".md", ".tree", ".pdf"}:
             continue
 
         rel = Path(*rel_parts)
@@ -630,9 +630,6 @@ def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
         elif path.suffix.lower() == ".tree":
             title = slug_to_title(rel.stem, abbreviations=abbreviations)
             kind = "tree"
-        elif path.suffix.lower() == ".tasks":
-            title = slug_to_title(rel.stem, abbreviations=abbreviations)
-            kind = "tasks"
         else:
             title = slug_to_title(rel.stem, abbreviations=abbreviations)
             kind = "pdf"
@@ -664,7 +661,7 @@ def list_vyasa_entries(root: Path, relative: str = ".", include_hidden: bool = F
         if item.is_dir():
             entries.append({"type": "folder", "path": item.relative_to(root).as_posix()})
             continue
-        if item.suffix.lower() not in {".md", ".tree", ".pdf", ".tasks"}:
+        if item.suffix.lower() not in {".md", ".tree", ".pdf"}:
             continue
         rel = item.relative_to(root)
         slug = rel.with_suffix("").as_posix()
@@ -674,9 +671,6 @@ def list_vyasa_entries(root: Path, relative: str = ".", include_hidden: bool = F
         elif item.suffix.lower() == ".tree":
             title = slug_to_title(rel.stem, abbreviations=abbreviations)
             kind = "tree"
-        elif item.suffix.lower() == ".tasks":
-            title = slug_to_title(rel.stem, abbreviations=abbreviations)
-            kind = "tasks"
         else:
             title = slug_to_title(rel.stem, abbreviations=abbreviations)
             kind = "pdf"
