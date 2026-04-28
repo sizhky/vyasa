@@ -469,6 +469,8 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
             ids.update(descendant_task_ids(child))
         return ids
 
+    top_group_order = [g.id for g in groups if not g.parent_group_id]
+    top_group_index = {gid: idx for idx, gid in enumerate(top_group_order)}
     for group in groups:
         child_ids = {t.id for t in group.tasks}
         all_child_ids = descendant_task_ids(group)
@@ -507,24 +509,33 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
         is_collapsed = True
         pill_x = _parse_graph_int(group.attrs.get("pill_x"))
         pill_y = _parse_graph_int(group.attrs.get("pill_y"))
-        if is_collapsed and pill_x is not None:
+        if group.parent_group_id:
+            parent_index = child_groups_by_group.get(group.parent_group_id, []).index(group)
+            if pill_x is not None and pill_y is not None:
+                node_pos = {"x": pill_x, "y": pill_y}
+            else:
+                node_pos = {"x": 40 + parent_index * (node_w + col_gap), "y": 40}
+        elif is_collapsed and pill_x is not None:
             node_pos = {"x": pill_x, "y": pill_y}
+            if abs(node_pos["x"]) > graph_w * 2 or abs(node_pos["y"]) > graph_h * 2:
+                node_pos = {"x": 40 + top_group_index.get(group.id, 0) * (node_w + col_gap), "y": 40}
         else:
-            node_pos = {"x": gx, "y": gy}
+            node_pos = {"x": 40 + top_group_index.get(group.id, 0) * (node_w + col_gap), "y": 40}
         collapsed_w, collapsed_h = _estimate_collapsed_group_size(group.title)
         group_nodes.append({
             "id": group.id,
             "type": "group",
             "position": node_pos,
-            "data": {"title": group.title, "task_ids": [t.id for t in group.tasks], "descendant_task_ids": sorted(all_child_ids), "child_group_ids": child_group_ids, "parent_group_id": group.parent_group_id, "collapsed": is_collapsed, "expanded_w": gw, "expanded_h": gh, "expanded_x": gx, "expanded_y": gy, "collapsed_w": collapsed_w, "collapsed_h": collapsed_h},
+            "data": {"title": group.title, "task_ids": [t.id for t in group.tasks], "descendant_task_ids": sorted(all_child_ids), "child_group_ids": child_group_ids, "parent_group_id": group.parent_group_id, "has_saved_position": pill_x is not None and pill_y is not None, "collapsed": is_collapsed, "expanded_w": gw, "expanded_h": gh, "expanded_x": gx, "expanded_y": gy, "collapsed_w": collapsed_w, "collapsed_h": collapsed_h},
             "style": {"width": collapsed_w if is_collapsed else gw, "height": collapsed_h if is_collapsed else gh},
+            "hidden": bool(group.parent_group_id),
         })
     rf_task_nodes = []
     for task in tasks:
         node: dict = {
             "id": task.id,
             "position": {"x": positions[task.id][0], "y": positions[task.id][1]},
-            "data": {"title": task.title, "missing": missing_critical_task_attrs(task)},
+            "data": {"title": task.title, "missing": missing_critical_task_attrs(task), "has_saved_position": _parse_graph_int(task.attrs.get("graph_x")) is not None and _parse_graph_int(task.attrs.get("graph_y")) is not None},
         }
         if task.group_id:
             node["parentId"] = task.group_id
@@ -777,7 +788,12 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
         ));
         const [nodes, setNodes] = React.useState(startNodes);
         const [edges, setEdges] = React.useState(startEdges);
-        const [drillGroupId, setDrillGroupId] = React.useState(null);
+        const [drillPath, setDrillPath] = React.useState([]);
+        const drillGroupId = drillPath[drillPath.length - 1] || null;
+        const openDrillGroup = React.useCallback((groupId) => {
+          setDrillPath((path) => path.includes(groupId) ? path.slice(0, path.indexOf(groupId) + 1) : [...path, groupId]);
+        }, []);
+        const closeDrillGroup = React.useCallback(() => setDrillPath((path) => path.slice(0, -1)), []);
         const toggleGroup = React.useCallback(async (groupId) => {
           let nextCollapsed;
           let nextNodesSnapshot = null;
@@ -829,8 +845,8 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           });
         }, [projectEdgesForNodes]);
         const nodesWithToggle = React.useMemo(() =>
-          nodes.map((n) => n.type === 'group' ? {...n, data: {...n.data, onOpen: setDrillGroupId}} : n),
-        [nodes]);
+          nodes.map((n) => n.type === 'group' ? {...n, data: {...n.data, onOpen: openDrillGroup}} : n),
+        [nodes, openDrillGroup]);
         const buildDrillGraph = React.useCallback((groupId) => {
           const group = nodes.find((n) => n.id === groupId && n.type === 'group');
           if (!group) return null;
@@ -856,21 +872,26 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           const minX = childNodes.length ? Math.min(...childNodes.map((n) => n.position?.x || 0)) : 0;
           const minY = childNodes.length ? Math.min(...childNodes.map((n) => n.position?.y || 0)) : 0;
           const maxX = childNodes.length ? Math.max(...childNodes.map((n) => n.position?.x || 0)) : 0;
+          const spreadX = maxX - minX;
+          const hasSavedLayout = childNodes.some((n) => !!n.data?.has_saved_position);
+          const useCompactLayout = !hasSavedLayout && (spreadX > 1600 || childNodes.length <= 4);
           const xOffset = 320 - minX;
           const yOffset = 96 - minY;
-          const drillNodes = childNodes.map((n) => ({
+          const drillNodes = childNodes.map((n, index) => ({
             ...n,
             type: n.type === 'group' ? 'group' : 'task',
             parentId: undefined,
             hidden: false,
             selected: false,
-            position: {x: (n.position?.x || 0) + xOffset, y: (n.position?.y || 0) + yOffset},
-            data: {...(n.data || {}), onOpen: setDrillGroupId, drill_x_offset: xOffset, drill_y_offset: yOffset},
+            position: useCompactLayout
+              ? {x: 320 + (index % 3) * 432, y: 96 + Math.floor(index / 3) * 136}
+              : {x: (n.position?.x || 0) + xOffset, y: (n.position?.y || 0) + yOffset},
+            data: {...(n.data || {}), onOpen: openDrillGroup, drill_x_offset: useCompactLayout ? null : xOffset, drill_y_offset: useCompactLayout ? null : yOffset, drill_origin_x: n.position?.x || 0, drill_origin_y: n.position?.y || 0, drill_start_x: useCompactLayout ? 320 + (index % 3) * 432 : (n.position?.x || 0) + xOffset, drill_start_y: useCompactLayout ? 96 + Math.floor(index / 3) * 136 : (n.position?.y || 0) + yOffset},
           }));
           const portalNodes = [];
           const drillEdges = [];
           let incoming = 0, outgoing = 0;
-          const outX = Math.max(760, maxX - minX + 680);
+          const outX = useCompactLayout ? 320 + Math.min(childNodes.length, 3) * 432 + 120 : Math.max(760, maxX - minX + 680);
           baseEdgesRef.current.forEach((edge) => {
             const sourceEndpoint = endpointForScopedTask(edge.source);
             const targetEndpoint = endpointForScopedTask(edge.target);
@@ -890,7 +911,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           });
           return {group, nodes: [...drillNodes, ...portalNodes], edges: drillEdges};
         }, [nodes]);
-        const DrillOverlay = ({groupId}) => {
+        const DrillOverlay = ({groupId, path}) => {
           const drill = React.useMemo(() => buildDrillGraph(groupId), [groupId, buildDrillGraph]);
           const [drillNodes, setDrillNodes] = React.useState(drill?.nodes || []);
           const [drillEdges, setDrillEdges] = React.useState(drill?.edges || []);
@@ -900,28 +921,42 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           }, [drill]);
           if (!drill) return null;
           const saveDrillPosition = async (_event, node) => {
-            if (node.type !== 'task') return;
+            if (node.type !== 'task' && node.type !== 'group') return;
             const realPosition = {
-              x: node.position.x - (node.data?.drill_x_offset || 0),
-              y: node.position.y - (node.data?.drill_y_offset || 0),
+              x: node.data?.drill_x_offset == null ? (node.data?.drill_origin_x || 0) + node.position.x - (node.data?.drill_start_x || 0) : node.position.x - node.data.drill_x_offset,
+              y: node.data?.drill_y_offset == null ? (node.data?.drill_origin_y || 0) + node.position.y - (node.data?.drill_start_y || 0) : node.position.y - node.data.drill_y_offset,
             };
-            setNodes((prev) => prev.map((n) => n.id === node.id ? {...n, position: realPosition} : n));
+            setNodes((prev) => prev.map((n) => n.id === node.id ? {...n, position: realPosition, data: {...n.data, has_saved_position: true}} : n));
             await saveGraphMutation((payload) => {
+              if (node.type === 'group') {
+                const group = (payload.groups || []).find((item) => item.id === node.id);
+                if (!group) return;
+                group.attrs = {...(group.attrs || {}), pill_x: String(Math.round(realPosition.x)), pill_y: String(Math.round(realPosition.y))};
+                return;
+              }
               const task = (payload.tasks || []).find((item) => item.id === node.id);
-              if (!task) return;
-              task.attrs = {...(task.attrs || {}), graph_x: String(Math.round(realPosition.x)), graph_y: String(Math.round(realPosition.y))};
+              if (task) task.attrs = {...(task.attrs || {}), graph_x: String(Math.round(realPosition.x)), graph_y: String(Math.round(realPosition.y))};
             });
           };
           return React.createElement('div', {className: 'absolute inset-4 z-20 flex flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950'},
             React.createElement('div', {className: 'flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800'},
               React.createElement('div', {className: 'min-w-0'},
                 React.createElement('div', {className: 'text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400'}, 'Tasks / Group'),
-                React.createElement('div', {className: 'truncate text-sm font-semibold text-slate-800 dark:text-slate-100'}, drill.group.data?.title || groupId),
+                React.createElement('div', {className: 'flex min-w-0 flex-wrap items-center gap-1 text-sm font-semibold text-slate-800 dark:text-slate-100'},
+                  React.createElement('button', {type: 'button', onClick: () => setDrillPath([]), className: 'rounded px-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}, 'Overview'),
+                  ...(path || []).flatMap((id, index) => {
+                    const node = nodes.find((n) => n.id === id);
+                    return [
+                      React.createElement('span', {className: 'text-slate-300', key: `${id}-sep`}, '/'),
+                      React.createElement('button', {type: 'button', key: id, onClick: () => setDrillPath((items) => items.slice(0, index + 1)), className: 'max-w-[18rem] truncate rounded px-1 hover:bg-slate-100 dark:hover:bg-slate-800'}, node?.data?.title || id),
+                    ];
+                  }),
+                ),
               ),
-              React.createElement('button', {type: 'button', onClick: () => setDrillGroupId(null), className: 'rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}, 'Back'),
+              React.createElement('button', {type: 'button', onClick: closeDrillGroup, className: 'rounded border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}, 'Back'),
             ),
             React.createElement('div', {className: 'min-h-0 flex-1'},
-              React.createElement(ReactFlow, {nodes: drillNodes, edges: drillEdges, onNodesChange: (changes) => setDrillNodes((items) => applyNodeChanges(changes, items)), onNodeDragStop: saveDrillPosition, nodeTypes, fitView: true, minZoom: 0.15, snapToGrid: true, snapGrid: grid, colorMode: document.documentElement.classList.contains('dark') ? 'dark' : 'light', className: 'bg-transparent'}, React.createElement(Background, {gap: grid[0], size: 1}), React.createElement(Controls)),
+              React.createElement(ReactFlow, {key: groupId, nodes: drillNodes, edges: drillEdges, onNodesChange: (changes) => setDrillNodes((items) => applyNodeChanges(changes, items)), onNodeDragStop: saveDrillPosition, onInit: (instance) => setTimeout(() => instance.fitView({padding: 0.28, duration: 120}), 50), nodeTypes, fitView: true, fitViewOptions: {padding: 0.28}, minZoom: 0.15, snapToGrid: true, snapGrid: grid, colorMode: document.documentElement.classList.contains('dark') ? 'dark' : 'light', className: 'h-full w-full bg-transparent'}, React.createElement(Background, {gap: grid[0], size: 1}), React.createElement(Controls)),
             ),
           );
         };
@@ -939,7 +974,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
             const key = String(event.key || '').toLowerCase();
             if (key === 'escape' && drillGroupId) {
               event.preventDefault();
-              setDrillGroupId(null);
+              closeDrillGroup();
               return;
             }
             if (!event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -950,7 +985,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           };
           document.addEventListener('keydown', onKeyDown);
           return () => document.removeEventListener('keydown', onKeyDown);
-        }, [drillGroupId, setAllGroupsCollapsed]);
+        }, [drillGroupId, closeDrillGroup, setAllGroupsCollapsed]);
         const onNodesChange = React.useCallback((changes) => setNodes((items) => applyNodeChanges(changes, items)), []);
         const onEdgesChange = React.useCallback((changes) => setEdges((items) => applyEdgeChanges(changes, items)), []);
         const onConnect = async (params) => {
@@ -1050,7 +1085,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
         };
         return React.createElement('div', {className: 'relative h-full w-full'},
           React.createElement(ReactFlow, {nodes: nodesWithToggle, edges, onNodesChange, onEdgesChange, onEdgesDelete, onConnect, onNodeDrag, onNodeDragStop, nodeTypes, fitView: true, minZoom: 0.05, snapToGrid: true, snapGrid: grid, colorMode: document.documentElement.classList.contains('dark') ? 'dark' : 'light', className: 'bg-transparent'}, React.createElement(Background, {gap: grid[0], size: 1}), React.createElement(Controls)),
-          drillGroupId ? React.createElement(DrillOverlay, {groupId: drillGroupId}) : null,
+          drillGroupId ? React.createElement(DrillOverlay, {groupId: drillGroupId, path: drillPath}) : null,
         );
       };
       return React.createElement(App);
