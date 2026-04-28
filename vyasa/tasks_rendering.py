@@ -815,6 +815,8 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           ])
         ));
         const [nodes, setNodes] = React.useState(startNodes);
+        const nodesRef = React.useRef(startNodes);
+        React.useEffect(() => { nodesRef.current = nodes; }, [nodes]);
         const [edges, setEdges] = React.useState(startEdges);
         const [drillPath, setDrillPath] = React.useState([]);
         const drillGroupId = drillPath[drillPath.length - 1] || null;
@@ -1038,7 +1040,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           if (hostForSnapshot) hostForSnapshot.__vyasaTaskSnapshot = {nodes, edges};
         }, [nodes, edges]);
         React.useEffect(() => {
-          const onKeyDown = (event) => {
+          const onKeyDown = async (event) => {
             const host = hostForSnapshot;
             const modal = document.getElementById('vyasa-task-fullscreen-modal');
             const hostInModal = !!host?.closest?.('#vyasa-task-fullscreen-modal');
@@ -1053,6 +1055,43 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
               closeDrillGroup();
               return;
             }
+            if (key === 'r' && !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
+              event.preventDefault();
+              const currentNodes = nodesRef.current;
+              const scopeIds = new Set();
+              if (drillGroupId) {
+                const group = currentNodes.find((n) => n.id === drillGroupId && n.type === 'group');
+                (group?.data?.task_ids || []).forEach((id) => scopeIds.add(id));
+                (group?.data?.child_group_ids || []).forEach((id) => scopeIds.add(id));
+              } else {
+                currentNodes.forEach((n) => scopeIds.add(n.id));
+              }
+              await saveGraphMutation((payload) => {
+                (payload.tasks || []).forEach((t) => {
+                  if (!scopeIds.has(t.id)) return;
+                  if (t.attrs) { delete t.attrs.graph_x; delete t.attrs.graph_y; delete t.attrs.pill_x; delete t.attrs.pill_y; }
+                });
+                (payload.groups || []).forEach((g) => {
+                  if (!scopeIds.has(g.id)) return;
+                  if (g.attrs) { delete g.attrs.graph_x; delete g.attrs.graph_y; delete g.attrs.pill_x; delete g.attrs.pill_y; }
+                });
+              });
+              if (drillGroupId) {
+                const savedPath = drillPath.slice();
+                setNodes((prev) => prev.map((n) => scopeIds.has(n.id) ? {...n, data: {...(n.data || {}), has_saved_position: false}} : n));
+                setDrillPath([]);
+                setTimeout(() => setDrillPath(savedPath), 0);
+              } else {
+                if (typeof htmx !== 'undefined' && document.getElementById('main-content')) {
+                  const scrollY = window.scrollY;
+                  htmx.ajax('GET', window.location.href, {target: '#main-content', swap: 'outerHTML'});
+                  document.addEventListener('htmx:afterSwap', () => window.scrollTo(0, scrollY), {once: true});
+                } else {
+                  window.location.reload();
+                }
+              }
+              return;
+            }
             if (!event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
             if (key === 'f') {
               event.preventDefault();
@@ -1061,7 +1100,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           };
           document.addEventListener('keydown', onKeyDown);
           return () => document.removeEventListener('keydown', onKeyDown);
-        }, [drillGroupId, closeDrillGroup, setAllGroupsCollapsed]);
+        }, [drillGroupId, drillPath, closeDrillGroup, setAllGroupsCollapsed, saveGraphMutation]);
         const onNodesChange = React.useCallback((changes) => setNodes((items) => applyNodeChanges(changes, items)), []);
         const onEdgesChange = React.useCallback((changes) => setEdges((items) => applyEdgeChanges(changes, items)), []);
         const onConnect = async (params) => {
