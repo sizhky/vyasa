@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from .helpers import resolve_heading_anchor
+from .helpers import content_url_for_slug, resolve_heading_anchor
 
 
 @dataclass(frozen=True)
@@ -277,14 +277,14 @@ class ZenSlideDeck:
         return "\n\n".join(self.slides[self.clamp(index) - 1])
 
     def href(self, doc_path, index):
-        return f"/slides/{doc_path}/{slide_slug(self.clamp(index))}"
+        return content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(self.clamp(index))}")
 
     def anchor(self, index):
         return self.anchors[self.clamp(index) - 1]
 
     def doc_href(self, doc_path, index):
         anchor = self.anchor(index)
-        return f"/posts/{doc_path}#{anchor}" if anchor else f"/posts/{doc_path}"
+        return content_url_for_slug(doc_path, fragment=anchor) if anchor else content_url_for_slug(doc_path)
 
     def nav(self, doc_path, index):
         index = self.clamp(index)
@@ -306,7 +306,7 @@ class ZenSlideDeck:
             items.append({
                 "index": index + 1,
                 "text": "✦ > " + " > ".join(crumbs) if crumbs else "✦",
-                "href": f"/slides/{doc_path}/{slide_slug(index + 1)}",
+                "href": content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index + 1)}"),
             })
         return items
 
@@ -399,5 +399,5 @@ def present_href_for_anchor(markdown_text, doc_path, target_anchor):
                 continue
             _, anchor = resolve_heading_anchor(match.group(2).strip(), counts)
             if anchor == target_anchor:
-                return f"/slides/{doc_path}/{slide_slug(index)}"
-    return f"/slides/{doc_path}/slide-2"
+                return content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index)}")
+    return content_url_for_slug(doc_path, prefix="/slides", suffix="/slide-2")

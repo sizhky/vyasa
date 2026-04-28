@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fasthtml.common import *
 from monsterui.all import *
-from .helpers import resolve_heading_anchor
+from .helpers import content_url_for_slug, resolve_heading_anchor
 
 
 def _scope_css(css_text, scope):
@@ -105,7 +105,7 @@ def get_custom_css_links(root, current_path=None, section_class=None):
     css_elements = []
     for filename in ["global.css", "custom.css", "style.css"]:
         if (root / filename).exists():
-            css_elements.append(Link(rel="stylesheet", href=f"/posts/{filename}"))
+            css_elements.append(Link(rel="stylesheet", href=content_url_for_slug(filename)))
             if filename != "global.css":
                 break
     if current_path and section_class:
@@ -114,7 +114,7 @@ def get_custom_css_links(root, current_path=None, section_class=None):
         for ancestor in ancestors:
             global_css = root / ancestor / "global.css"
             if global_css.exists():
-                css_elements.append(Link(rel="stylesheet", href=f"/posts/{ancestor.as_posix()}/global.css"))
+                css_elements.append(Link(rel="stylesheet", href=content_url_for_slug(f"{ancestor.as_posix()}/global.css")))
         for ancestor in ancestors:
             for filename in ["custom.css", "style.css"]:
                 css_file = root / ancestor / filename

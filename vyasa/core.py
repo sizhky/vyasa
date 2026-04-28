@@ -21,6 +21,7 @@ from .helpers import (
     content_path_for_slug,
     content_root_and_relative,
     content_slug_for_path,
+    content_url_for_slug,
     get_content_mounts,
     iter_visible_files,
     preview_markdown,
@@ -140,11 +141,12 @@ def render_blog_home(htmx, request: Request):
 def _render_blog_preview_card(path, slug, root):
     title, render_content = resolve_markdown_title(path, abbreviations=_effective_abbreviations(root))
     preview = from_md(preview_markdown(render_content), current_path=slug)
+    href = content_url_for_slug(slug)
     return Div(
-        A(title, href=f"/posts/{slug}", cls="vyasa-blog-card-title absolute top-6 block text-right text-xl font-bold leading-tight hover:underline line-clamp-3 overflow-hidden"),
+        A(title, href=href, cls="vyasa-blog-card-title absolute top-6 block text-right text-xl font-bold leading-tight hover:underline line-clamp-3 overflow-hidden"),
         Div(
             Div(preview, cls="prose prose-slate dark:prose-invert max-w-none"),
-            A("continue reading...", href=f"/posts/{slug}", cls="inline-flex mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200 hover:underline"),
+            A("continue reading...", href=href, cls="inline-flex mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200 hover:underline"),
             cls="vyasa-task-card rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white/75 dark:bg-slate-900/45 p-5 shadow-sm min-w-0 w-full",
         ),
         cls="relative flex w-full items-start",
@@ -375,7 +377,7 @@ def _resolve_bookmark_items(owner: str, roles):
             title = metadata.get("title", slug_to_title(path.stem, abbreviations=abbreviations))
         else:
             title = slug_to_title(path.stem, abbreviations=abbreviations)
-        items.append({"path": slug, "href": f"/posts/{slug}", "title": title})
+        items.append({"path": slug, "href": content_url_for_slug(slug), "title": title})
     return items
 
 

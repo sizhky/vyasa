@@ -2,7 +2,7 @@ import html
 
 from fasthtml.common import *
 from monsterui.all import *
-from .helpers import content_slug_for_path
+from .helpers import content_slug_for_path, content_url_for_slug
 
 
 def gather_search_content(query, matches, regex_error, root):
@@ -15,7 +15,7 @@ def gather_search_content(query, matches, regex_error, root):
             continue
         if item.suffix == ".pdf":
             slug = content_slug_for_path(item)
-            pdf_href = f"/posts/{slug}.pdf"
+            pdf_href = content_url_for_slug(slug, suffix=".pdf")
             sections.extend([H2(rel, cls="text-xl font-semibold mb-2"), P("PDF file: ", A(rel, href=pdf_href, cls="text-blue-600 hover:underline"), cls="text-sm text-slate-600 dark:text-slate-300"), (Hr(cls="my-6 border-slate-200 dark:border-slate-800") if idx < len(matches) - 1 else None)])
             copy_parts.append(f"\n---\n\n## {rel}\n\n[PDF file]({pdf_href})\n")
             continue

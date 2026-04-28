@@ -13,7 +13,7 @@ from monsterui.all import *
 from .helpers import (
     _effective_abbreviations, _effective_ignore_list,
     _effective_include_list, _should_include_folder, _strip_inline_markdown,
-    _unique_anchor, estimate_read_time_minutes, find_folder_note_file,
+    _unique_anchor, content_url_for_slug, estimate_read_time_minutes, find_folder_note_file,
     format_last_modified_label,
     get_adjacent_posts, get_post_title, parse_frontmatter, resolve_markdown_title, slug_to_title,
     text_to_anchor,
@@ -419,7 +419,7 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
             if note_file:
                 note_slug = str(note_file.relative_to(root_folder).with_suffix(''))
                 note_link = A(
-                    href=f'/posts/{note_slug}.html',
+                    href=content_url_for_slug(note_slug, suffix=".html"),
                     cls="folder-note-link truncate min-w-0 hover:underline",
                     title=f"Open: {folder_title}",
                     onclick="event.stopPropagation();",
@@ -440,7 +440,7 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
                     Span(cls="w-4 mr-2 shrink-0"),
                     Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                     title_text,
-                    href=f'/posts/{note_slug}.html',
+                    href=content_url_for_slug(note_slug, suffix=".html"),
                     cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
         elif item.suffix in {'.md', '.tree'}:
             slug = str(item.relative_to(root_folder).with_suffix(''))
@@ -452,7 +452,7 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
                 Span(cls="w-4 mr-2 shrink-0"),
                 Span(UkIcon(icon, cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                 Span(title, cls="truncate min-w-0", title=title),
-                href=f'/posts/{slug}.html',  # Add .html extension
+                href=content_url_for_slug(slug, suffix=".html"),
                 cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
     return items
 

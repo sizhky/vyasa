@@ -105,7 +105,7 @@ Place a `.vyasa` file inside any content folder to control how its contents are 
 order = ["intro.md", "getting-started.md", "reference"]
 
 # Sort the remaining items
-sort             = "name_asc"   # name_asc | name_desc | mtime_asc | mtime_desc
+sort             = "name_asc"   # name_asc | name_desc | mtime_asc | mtime_desc | created_asc | created_desc
 folders_first    = true         # folders before files in sorted remainder
 folders_always_first = false    # move ALL folders to top after full ordering
 
