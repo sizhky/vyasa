@@ -284,50 +284,81 @@ def _build_order(task_id: str, tasks: list[TaskItem], chains: dict[str, list[str
     return order
 
 
+def _task_dependency_edges(tasks: list[TaskItem], chains: dict[str, list[str]]) -> list[tuple[str, str]]:
+    chain_deps = chain_dependencies(chains)
+    edges: list[tuple[str, str]] = []
+    for task in tasks:
+        deps = [*parse_dependency_ids(task.attrs.get("depends_on", "")), *chain_deps.get(task.id, [])]
+        edges.extend((dep, task.id) for dep in deps)
+    return list(dict.fromkeys(edges))
+
+
+def _parse_graph_int(value: str | None) -> int | None:
+    try:
+        return int(str(value).strip()) if value is not None and str(value).strip() else None
+    except (TypeError, ValueError):
+        return None
+
+
 def render_tasks_board(path: Path, title: str, save_url: str | None = None, task_api_url: str | None = None):
     tasks, chains = parse_tasks_document(path)
-    chain_deps = chain_dependencies(chains)
     warnings = validate_task_dependencies(tasks, chains)
     schedule, schedule_warnings, critical_path = build_task_schedule(tasks, chains)
     warnings.extend(schedule_warnings)
     warnings.extend(validate_owner_overlaps(tasks, schedule))
     preview_cards = []
-    task_lookup = {task.id: task for task in tasks}
+    edges = _task_dependency_edges(tasks, chains)
+    dependants_by_task: dict[str, list[str]] = {}
+    for source, target in edges:
+        dependants_by_task.setdefault(source, []).append(target)
+    node_w, node_h, col_gap, row_gap = 220, 92, 112, 44
+    columns: dict[int, list[TaskItem]] = {}
+    for task in tasks:
+        columns.setdefault(schedule.get(task.id, (1, 1))[0], []).append(task)
+    max_rows = max((len(items) for items in columns.values()), default=1)
+    graph_w = max(columns.keys(), default=1) * (node_w + col_gap) + 80
+    graph_h = max_rows * (node_h + row_gap) + 80
+    positions: dict[str, tuple[int, int]] = {}
+    for start_day, items in sorted(columns.items()):
+        for row, task in enumerate(items):
+            positions[task.id] = (
+                _parse_graph_int(task.attrs.get("graph_x")) or (40 + (start_day - 1) * (node_w + col_gap)),
+                _parse_graph_int(task.attrs.get("graph_y")) or (40 + row * (node_h + row_gap)),
+            )
     for index, task in enumerate(tasks, start=1):
         chips = "".join(
             _chip(k.replace("_", " "), v)
             for k, v in task.attrs.items()
             if k in {"priority", "points", "estimate", "depends_on", "owner", "phase"}
         )
-        build_order = _build_order(task.id, tasks, chains)
-        build_order_chips = "".join(
+        dependency_ids = parse_dependency_ids(task.attrs.get("depends_on", ""))
+        dependency_chips = "".join(
             f'<button type="button" data-task-preview-trigger="{html.escape(dep)}" class="rounded border border-slate-200 px-2 py-0.5 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">{html.escape(dep)}</button>'
-            for dep in build_order
+            for dep in dependency_ids
+        ) or '<span class="text-slate-400">None</span>'
+        dependant_chips = "".join(
+            f'<button type="button" data-task-preview-trigger="{html.escape(dep)}" class="rounded border border-slate-200 px-2 py-0.5 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">{html.escape(dep)}</button>'
+            for dep in dependants_by_task.get(task.id, [])
         ) or '<span class="text-slate-400">None</span>'
         start_day, end_day = schedule.get(task.id, (1, 1))
         timeline = f'D{start_day}' if start_day == end_day else f'D{start_day}-D{end_day}'
         preview_cards.append(
-            f'<article data-task-preview="{html.escape(task.id)}" data-task-id="{html.escape(task.id)}" data-manual-deps="{html.escape(",".join(parse_dependency_ids(task.attrs.get("depends_on", ""))))}" data-task-title="{html.escape(task.title)}" data-task-attrs="{html.escape(json.dumps(task.attrs))}" data-build-order="{html.escape(json.dumps(build_order))}" data-task-index="{index:02d}" data-task-schedule="{html.escape(timeline)}" data-task-critical="{"yes" if task.id in critical_path else "no"}" class="vyasa-task-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900">'
+            f'<article data-task-preview="{html.escape(task.id)}" data-task-id="{html.escape(task.id)}" data-manual-deps="{html.escape(",".join(parse_dependency_ids(task.attrs.get("depends_on", ""))))}" data-task-title="{html.escape(task.title)}" data-task-attrs="{html.escape(json.dumps(task.attrs))}" data-task-dependencies="{html.escape(json.dumps(dependency_ids))}" data-task-dependants="{html.escape(json.dumps(dependants_by_task.get(task.id, [])))}" data-task-index="{index:02d}" data-task-schedule="{html.escape(timeline)}" data-task-critical="{"yes" if task.id in critical_path else "no"}" class="vyasa-task-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900">'
             f'<div class="flex items-start justify-between gap-4"><div><div class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{html.escape(task.id)}</div>'
             f'<h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-slate-100">{html.escape(task.title)}</h2></div>'
             f'<div class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{index:02d}</div></div>'
             f'<div class="mt-4 flex flex-wrap gap-2">{chips}{_chip("schedule", timeline)}{_chip("critical", "yes" if task.id in critical_path else "no")}</div>'
-            f'<div class="mt-5 grid gap-4 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-[1fr_12rem]"><div><b class="mb-2 block uppercase tracking-wide text-slate-500">Build order</b><div class="flex flex-wrap gap-2">{build_order_chips}</div></div>'
+            f'<div class="mt-5 grid gap-4 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-[1fr_12rem]"><div><b class="mb-2 block uppercase tracking-wide text-slate-500">Dependencies</b><div class="flex flex-wrap gap-2">{dependency_chips}</div><b class="mb-2 mt-4 block uppercase tracking-wide text-slate-500">Dependants</b><div class="flex flex-wrap gap-2">{dependant_chips}</div></div>'
             f'<div><b class="mb-2 block uppercase tracking-wide text-slate-500">Lane status</b><p>{"Critical path" if task.id in critical_path else "Parallel safe"}</p><p class="mt-1 text-xs text-slate-500">Ready after {timeline}</p></div></div>'
             f'</article>'
         )
-    chain_rows = []
-    for name, ids in chains.items():
-        cards_html = "".join(
-            f'<button type="button" draggable="true" data-task-id="{html.escape(task_id)}" class="vyasa-chain-card min-w-[12rem] cursor-grab rounded-xl border border-slate-200 bg-white p-3 text-left text-sm shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-900">'
-            f'<b class="block text-xs text-slate-500">{html.escape(task_id)}</b>{html.escape(task_lookup.get(task_id, TaskItem(task_id, "Missing task")).title)}</button>'
-            for task_id in ids
-        )
-        chain_rows.append(
-            f'<section class="mt-4" data-chain-name="{html.escape(name)}"><h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">{html.escape(name)}</h3>'
-            f'<div class="vyasa-chain-lane flex min-h-20 gap-2 overflow-x-auto rounded-lg border border-dashed border-slate-200 p-2 dark:border-slate-700">{cards_html}</div></section>'
-        )
-    chains_html = "".join(chain_rows)
+    graph_payload = {
+        "nodes": [
+            {"id": task.id, "position": {"x": positions[task.id][0], "y": positions[task.id][1]}, "data": {"title": task.title}}
+            for task in tasks
+        ],
+        "edges": [{"id": f"{source}->{target}", "source": source, "target": target} for source, target in edges],
+    }
     warnings_html = "".join(f"<li>{html.escape(item)}</li>" for item in warnings)
     warnings_cls = "mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
     warnings_style = "" if warnings else "display:none;"
@@ -335,30 +366,48 @@ def render_tasks_board(path: Path, title: str, save_url: str | None = None, task
         H1(title, cls="vyasa-page-title text-4xl font-bold"),
         P(f"{len(tasks)} task{'s' if len(tasks) != 1 else ''}", cls="mt-2 text-slate-500"),
         NotStr(f'<div id="vyasa-task-warnings" class="{warnings_cls}" style="{warnings_style}"><b>Dependency warnings</b><ul class="mt-2 list-disc pl-5">{warnings_html}</ul></div>'),
-        NotStr(f'<section id="vyasa-chain-region" data-save-url="{html.escape(save_url or "")}" data-task-api-url="{html.escape(task_api_url or "")}" class="mt-8 rounded-lg border border-slate-200 p-4 dark:border-slate-800"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Dependency lanes</h2><div id="vyasa-chain-lanes">{chains_html or "<p class=\"mt-3 text-sm text-slate-500\">No chains.</p>"}</div><div id="vyasa-new-chain-drop" class="mt-4 rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500 dark:border-slate-700">Drop card here for new lane</div><p id="vyasa-chain-save-status" class="mt-3 text-xs text-slate-500"></p><div id="vyasa-task-preview-store" class="hidden">{"".join(preview_cards)}</div><div id="vyasa-task-preview-modal" class="fixed inset-0 z-[9998] hidden items-center justify-center bg-slate-950/60 p-4"><div class="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900"><div class="mb-3 flex items-center justify-between gap-4"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Task editor</h2><div class="flex items-center gap-2"><button id="vyasa-task-preview-save" type="button" class="rounded bg-blue-600 px-3 py-1 text-sm text-white">Save</button><button id="vyasa-task-preview-close" type="button" class="rounded border border-slate-200 px-3 py-1 text-sm dark:border-slate-700">Close</button></div></div><form id="vyasa-task-preview-form" class="space-y-4"><div id="vyasa-task-preview-body"></div></form><p id="vyasa-task-preview-status" class="mt-3 text-xs text-slate-500"></p></div></div><div id="vyasa-chain-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-950/50 p-4"><div class="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">New dependency lane</h2><input id="vyasa-chain-name-input" class="mt-4 w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" placeholder="Lane name"><div class="mt-4 flex justify-end gap-2"><button id="vyasa-chain-cancel" type="button" class="rounded border border-slate-200 px-3 py-1 text-sm dark:border-slate-700">Cancel</button><button id="vyasa-chain-create" type="button" class="rounded bg-blue-600 px-3 py-1 text-sm text-white">Create</button></div></div></div></section>'),
-        Script("""
+        NotStr(f'<section id="vyasa-task-region" data-task-api-url="{html.escape(task_api_url or "")}" data-task-graph="{html.escape(json.dumps(graph_payload))}" class="mt-8 rounded-lg border border-slate-200 p-4 dark:border-slate-800"><div class="flex items-center justify-between gap-4"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Dependency graph</h2><p class="text-xs text-slate-500">Drag cards. Connect right handle to left handle. Click card to edit.</p></div><div id="vyasa-task-flow-host" class="mt-4 h-[70vh] overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50"></div><div id="vyasa-task-preview-store" class="hidden">{"".join(preview_cards)}</div><div id="vyasa-task-preview-modal" class="fixed inset-0 z-[9998] hidden items-center justify-center bg-slate-950/60 p-4"><div class="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900"><div class="mb-3 flex items-center justify-between gap-4"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Task editor</h2><div class="flex items-center gap-2"><button id="vyasa-task-preview-save" type="button" class="rounded bg-blue-600 px-3 py-1 text-sm text-white">Save</button><button id="vyasa-task-preview-close" type="button" class="rounded border border-slate-200 px-3 py-1 text-sm dark:border-slate-700">Close</button></div></div><form id="vyasa-task-preview-form" class="space-y-4"><div id="vyasa-task-preview-body"></div></form><p id="vyasa-task-preview-status" class="mt-3 text-xs text-slate-500"></p></div></div></section>'),
+        Script(r"""
 (() => {
-  const region = document.getElementById('vyasa-chain-region');
+  const region = document.getElementById('vyasa-task-region');
   if (!region || region.dataset.bound === 'true') return;
   region.dataset.bound = 'true';
-  let draggedCard = null;
-  let pendingNewLaneCard = null;
-  let pendingNewLaneId = '';
-  const lanesRoot = region.querySelector('#vyasa-chain-lanes');
-  const status = region.querySelector('#vyasa-chain-save-status');
   const previewModal = region.querySelector('#vyasa-task-preview-modal');
   const previewBody = region.querySelector('#vyasa-task-preview-body');
   const previewStore = region.querySelector('#vyasa-task-preview-store');
   const previewStatus = region.querySelector('#vyasa-task-preview-status');
+  const flowHost = region.querySelector('#vyasa-task-flow-host');
   const taskApiUrl = region.dataset.taskApiUrl || '';
+  const taskGraph = JSON.parse(region.dataset.taskGraph || '{"nodes":[],"edges":[]}');
   let activeTaskId = '';
+  let flowLibPromise = null;
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const closePreview = () => { activeTaskId = ''; previewModal?.classList.add('hidden'); previewModal?.classList.remove('flex'); if (previewBody) previewBody.innerHTML = ''; if (previewStatus) previewStatus.textContent = ''; };
+  const ensureFlowCss = () => {
+    if (document.querySelector('link[data-vyasa-react-flow]')) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/@xyflow/react@12.8.4/dist/style.css';
+    link.setAttribute('data-vyasa-react-flow', 'true');
+    document.head.appendChild(link);
+  };
+  const getFlowLib = async () => {
+    if (!flowLibPromise) {
+      flowLibPromise = Promise.all([
+        import('https://esm.sh/react@18.3.1'),
+        import('https://esm.sh/react-dom@18.3.1/client'),
+        import('https://esm.sh/@xyflow/react@12.8.4?deps=react@18.3.1,react-dom@18.3.1'),
+      ]);
+    }
+    return flowLibPromise;
+  };
   const renderEditor = (card) => {
     const attrs = JSON.parse(card.dataset.taskAttrs || '{}');
-    const buildOrder = JSON.parse(card.dataset.buildOrder || '[]');
+    const dependencies = JSON.parse(card.dataset.taskDependencies || '[]');
+    const dependants = JSON.parse(card.dataset.taskDependants || '[]');
     const attrFields = ['priority', 'points', 'estimate', 'depends_on', 'phase', 'owner'];
-    const extraAttrs = Object.entries(attrs).filter(([key]) => !attrFields.includes(key)).map(([key, value]) => `${key}: ${value}`).join('\\n');
+    const hiddenAttrs = new Set(['graph_x', 'graph_y']);
+    const extraAttrs = Object.entries(attrs).filter(([key]) => !attrFields.includes(key) && !hiddenAttrs.has(key)).map(([key, value]) => `${key}: ${value}`).join('\\n');
     return `
       <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
         <div class="grid gap-4 md:grid-cols-[1fr_6rem]">
@@ -371,7 +420,7 @@ def render_tasks_board(path: Path, title: str, save_url: str | None = None, task
         </div>
         <label class="mt-4 block text-sm"><span class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Extra fields</span><textarea name="extra_attrs" rows="5" class="w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" placeholder="key: value&#10;another_key: value">${esc(extraAttrs)}</textarea></label>
         <div class="mt-5 grid gap-4 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-[1fr_12rem]">
-          <div><b class="mb-2 block uppercase tracking-wide text-slate-500">Build order</b><div class="flex flex-wrap gap-2">${buildOrder.length ? buildOrder.map((dep) => `<button type="button" data-task-preview-trigger="${esc(dep)}" class="rounded border border-slate-200 px-2 py-0.5 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">${esc(dep)}</button>`).join('') : '<span class="text-slate-400">None</span>'}</div></div>
+          <div><b class="mb-2 block uppercase tracking-wide text-slate-500">Dependencies</b><div class="flex flex-wrap gap-2">${dependencies.length ? dependencies.map((dep) => `<button type="button" data-task-preview-trigger="${esc(dep)}" class="rounded border border-slate-200 px-2 py-0.5 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">${esc(dep)}</button>`).join('') : '<span class="text-slate-400">None</span>'}</div><b class="mb-2 mt-4 block uppercase tracking-wide text-slate-500">Dependants</b><div class="flex flex-wrap gap-2">${dependants.length ? dependants.map((dep) => `<button type="button" data-task-preview-trigger="${esc(dep)}" class="rounded border border-slate-200 px-2 py-0.5 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">${esc(dep)}</button>`).join('') : '<span class="text-slate-400">None</span>'}</div></div>
           <div><b class="mb-2 block uppercase tracking-wide text-slate-500">Lane status</b><p>${card.dataset.taskCritical === 'yes' ? 'Critical path' : 'Parallel safe'}</p><p class="mt-1 text-xs text-slate-500">Ready after ${esc(card.dataset.taskSchedule || '')}</p></div>
         </div>
       </article>`;
@@ -390,6 +439,31 @@ def render_tasks_board(path: Path, title: str, save_url: str | None = None, task
   }).filter(([key]) => key));
   const replaceRefs = (value, fromId, toId) => parseDependencyIds(value).map((dep) => dep === fromId ? toId : dep);
   const parseDependencyIds = (value) => String(value || '').trim().replace(/^\[/, '').replace(/\]$/, '').split(',').map((part) => part.trim()).filter(Boolean);
+  const persistGraphEdges = async (payload, nextEdges) => {
+    const depsByTask = new Map();
+    for (const edge of nextEdges || []) {
+      if (!edge?.source || !edge?.target || edge.source === edge.target) continue;
+      if (!depsByTask.has(edge.target)) depsByTask.set(edge.target, []);
+      const deps = depsByTask.get(edge.target);
+      if (!deps.includes(edge.source)) deps.push(edge.source);
+    }
+    payload.chains = {};
+    payload.tasks = (payload.tasks || []).map((task) => {
+      const attrs = {...(task.attrs || {})};
+      const deps = depsByTask.get(task.id) || [];
+      if (deps.length) attrs.depends_on = `[${deps.join(', ')}]`;
+      else delete attrs.depends_on;
+      return {...task, attrs};
+    });
+  };
+  const saveGraphMutation = async (mutate) => {
+    if (!taskApiUrl) return false;
+    const response = await fetch(taskApiUrl);
+    const payload = await response.json();
+    mutate(payload);
+    const save = await fetch(taskApiUrl, {method: 'PUT', headers: {'content-type': 'application/json'}, body: JSON.stringify(payload)});
+    return save.ok;
+  };
   const saveTask = async () => {
     if (!taskApiUrl || !activeTaskId || !previewBody) return;
     const form = region.querySelector('#vyasa-task-preview-form');
@@ -422,129 +496,52 @@ def render_tasks_board(path: Path, title: str, save_url: str | None = None, task
     if (previewStatus) previewStatus.textContent = 'Saved. Reloading...';
     window.location.reload();
   };
-  const collectChains = () => Object.fromEntries(Array.from(lanesRoot.querySelectorAll('[data-chain-name]')).map((section) => [
-    section.dataset.chainName,
-    Array.from(section.querySelectorAll('.vyasa-chain-card')).map((card) => card.dataset.taskId).filter(Boolean)
-  ]));
-  const saveChains = () => {
-    const url = region?.dataset.saveUrl || '';
-    if (!url) return;
-    if (status) status.textContent = 'Saving...';
-    fetch(url, {
-      method: 'PUT',
-      headers: {'content-type': 'application/json'},
-      body: JSON.stringify({chains: collectChains()})
-    }).then((response) => {
-      if (!response.ok) throw new Error('save failed');
-      if (status) status.textContent = 'Saved';
-    }).catch(() => { if (status) status.textContent = 'Save failed'; });
-  };
-  const removeEmptyLanes = () => {
-    lanesRoot.querySelectorAll('[data-chain-name]').forEach((section) => {
-      if (!section.querySelector('.vyasa-chain-card')) section.remove();
-    });
-  };
-  const bindLane = (lane) => {
-    if (lane.dataset.bound === 'true') return;
-    lane.dataset.bound = 'true';
-    lane.addEventListener('dragover', (event) => event.preventDefault());
-    lane.addEventListener('drop', (event) => {
-      event.preventDefault();
-      const id = event.dataTransfer.getData('text/plain');
-      const card = draggedCard || region.querySelector(`.vyasa-chain-card[data-task-id="${CSS.escape(id)}"]`);
-      if (!card) return;
-      const after = Array.from(lane.querySelectorAll('.vyasa-chain-card')).find((item) => event.clientX < item.getBoundingClientRect().left + item.offsetWidth / 2);
-      lane.insertBefore(card, after || null);
-      removeEmptyLanes();
-      refreshWarnings();
-      saveChains();
-    });
-  };
-  const refreshWarnings = () => {
-    const taskIds = new Set(Array.from(document.querySelectorAll('.vyasa-task-card')).map((card) => card.dataset.taskId));
-    const graph = Object.fromEntries(Array.from(taskIds).map((id) => [id, []]));
-    document.querySelectorAll('.vyasa-task-card').forEach((card) => {
-      (card.dataset.manualDeps || '').split(',').filter(Boolean).forEach((dep) => graph[card.dataset.taskId]?.push(dep));
-    });
-    lanesRoot.querySelectorAll('.vyasa-chain-lane').forEach((lane) => {
-      const ids = Array.from(lane.querySelectorAll('.vyasa-chain-card')).map((card) => card.dataset.taskId).filter(Boolean);
-      ids.slice(1).forEach((id, index) => graph[id]?.push(ids[index]));
-    });
-    const warnings = [];
-    Object.entries(graph).forEach(([id, deps]) => deps.forEach((dep) => { if (!taskIds.has(dep)) warnings.push(`${id} depends on missing task ${dep}`); }));
-    const visiting = new Set(), visited = new Set();
-    const visit = (id, chain) => {
-      if (visiting.has(id)) {
-        const start = chain.indexOf(id);
-        warnings.push(`Circular dependency: ${(start >= 0 ? chain.slice(start) : chain).join(' -> ')}`);
-        return;
-      }
-      if (visited.has(id)) return;
-      visiting.add(id);
-      (graph[id] || []).filter((dep) => taskIds.has(dep)).forEach((dep) => visit(dep, chain.concat(dep)));
-      visiting.delete(id); visited.add(id);
+  (async () => {
+    if (!flowHost) return;
+    ensureFlowCss();
+    const [ReactNS, ReactDOMNS, FlowNS] = await getFlowLib();
+    const React = ReactNS.default || ReactNS;
+    const ReactDOMClient = ReactDOMNS.default || ReactDOMNS;
+    const {ReactFlow, Background, Controls, Handle, Position, MarkerType, addEdge, applyNodeChanges, applyEdgeChanges} = FlowNS;
+    const root = ReactDOMClient.createRoot(flowHost);
+    const grid = [24, 24];
+    const edgeDefaults = {type: 'bezier', markerEnd: {type: MarkerType.ArrowClosed, width: 16, height: 16}};
+    const TaskNode = ({id, data}) => React.createElement('button', {type: 'button', onClick: () => openPreview(id), className: 'min-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-lg dark:border-slate-700 dark:bg-slate-900'}, React.createElement(Handle, {type: 'target', position: Position.Left, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}), React.createElement('span', {className: 'block text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500'}, id), React.createElement('span', {className: 'mt-2 block text-sm font-semibold text-slate-900 dark:text-slate-100'}, data.title || id), React.createElement(Handle, {type: 'source', position: Position.Right, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}));
+    const nodeTypes = {task: TaskNode};
+    const App = () => {
+      const initialNodes = taskGraph.nodes.map((node) => ({...node, type: 'task'}));
+      const initialEdges = taskGraph.edges.map((edge) => ({...edge, ...edgeDefaults}));
+      const [nodes, setNodes] = React.useState(initialNodes);
+      const [edges, setEdges] = React.useState(initialEdges);
+      const onNodesChange = React.useCallback((changes) => setNodes((items) => applyNodeChanges(changes, items)), []);
+      const onEdgesChange = React.useCallback((changes) => setEdges((items) => applyEdgeChanges(changes, items)), []);
+      const onConnect = async (params) => {
+        if (!params.source || !params.target || params.source === params.target) return;
+        const nextEdges = addEdge({...params, ...edgeDefaults}, edges);
+        setEdges(nextEdges);
+        await saveGraphMutation((payload) => persistGraphEdges(payload, nextEdges));
+      };
+      const onNodeDragStop = async (_event, node) => {
+        await saveGraphMutation((payload) => {
+          const task = (payload.tasks || []).find((item) => item.id === node.id);
+          if (!task) return;
+          task.attrs = {...(task.attrs || {}), graph_x: String(Math.round(node.position.x)), graph_y: String(Math.round(node.position.y))};
+        });
+      };
+      const onEdgesDelete = async (deleted) => {
+        const deletedIds = new Set((deleted || []).map((edge) => edge.id));
+        const nextEdges = edges.filter((edge) => !deletedIds.has(edge.id));
+        await saveGraphMutation((payload) => persistGraphEdges(payload, nextEdges));
+      };
+      return React.createElement(ReactFlow, {nodes, edges, onNodesChange, onEdgesChange, onEdgesDelete, onConnect, onNodeDragStop, nodeTypes, fitView: true, snapToGrid: true, snapGrid: grid, colorMode: document.documentElement.classList.contains('dark') ? 'dark' : 'light', className: 'bg-transparent'}, React.createElement(Background, {gap: grid[0], size: 1}), React.createElement(Controls));
     };
-    taskIds.forEach((id) => visit(id, [id]));
-    const box = document.getElementById('vyasa-task-warnings');
-    const list = box?.querySelector('ul');
-    if (!box || !list) return;
-    list.innerHTML = warnings.map((warning) => `<li>${warning.replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}</li>`).join('');
-    box.style.display = warnings.length ? '' : 'none';
-  };
-  lanesRoot.querySelectorAll('.vyasa-chain-card').forEach((card) => {
-    card.addEventListener('dragstart', (event) => {
-      draggedCard = card;
-      event.dataTransfer.setData('text/plain', card.dataset.taskId || '');
-      card.classList.add('opacity-50');
-    });
-    card.addEventListener('dragend', () => { card.classList.remove('opacity-50'); draggedCard = null; });
+    root.render(React.createElement(App));
+  })().catch((error) => {
+    if (previewStatus) previewStatus.textContent = 'Graph failed to load';
+    console.error('[vyasa][tasks] react flow mount failed', error);
   });
-  lanesRoot.addEventListener('click', (event) => {
-    const card = event.target.closest('.vyasa-chain-card');
-    if (!card || !lanesRoot.contains(card)) return;
-    openPreview(card.dataset.taskId || '');
-  });
-  lanesRoot.querySelectorAll('.vyasa-chain-lane').forEach(bindLane);
-  const modal = region.querySelector('#vyasa-chain-modal');
-  const input = region.querySelector('#vyasa-chain-name-input');
-  const openModal = () => { modal?.classList.remove('hidden'); modal?.classList.add('flex'); if (input) input.value = ''; input?.focus(); };
-  const closeModal = () => { pendingNewLaneCard = null; pendingNewLaneId = ''; modal?.classList.add('hidden'); modal?.classList.remove('flex'); };
-  const createLane = () => {
-    const name = input?.value?.trim();
-    if (!name) return;
-    const safe = name.replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-    const section = document.createElement('section');
-    section.className = 'mt-4';
-    section.dataset.chainName = name;
-    section.innerHTML = `<h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">${safe}</h3><div class="vyasa-chain-lane flex min-h-20 gap-2 overflow-x-auto rounded-lg border border-dashed border-slate-200 p-2 dark:border-slate-700"></div>`;
-    lanesRoot.querySelector('p')?.remove();
-    lanesRoot.appendChild(section);
-    const lane = section.querySelector('.vyasa-chain-lane');
-    bindLane(lane);
-    const card = pendingNewLaneCard || (pendingNewLaneId ? region.querySelector(`.vyasa-chain-card[data-task-id="${CSS.escape(pendingNewLaneId)}"]`) : null);
-    if (card && lane) lane.appendChild(card);
-    pendingNewLaneCard = null;
-    pendingNewLaneId = '';
-    removeEmptyLanes();
-    refreshWarnings();
-    saveChains();
-    modal?.classList.add('hidden'); modal?.classList.remove('flex');
-  };
-  const newDrop = region.querySelector('#vyasa-new-chain-drop');
-  newDrop?.addEventListener('dragover', (event) => event.preventDefault());
-  newDrop?.addEventListener('drop', (event) => {
-    event.preventDefault();
-    const id = event.dataTransfer.getData('text/plain');
-    pendingNewLaneCard = draggedCard || region.querySelector(`.vyasa-chain-card[data-task-id="${CSS.escape(id)}"]`);
-    pendingNewLaneId = id || pendingNewLaneCard?.dataset.taskId || '';
-    if (pendingNewLaneCard || pendingNewLaneId) openModal();
-  });
-  region.querySelector('#vyasa-chain-cancel')?.addEventListener('click', closeModal);
-  region.querySelector('#vyasa-chain-create')?.addEventListener('click', createLane);
   region.querySelector('#vyasa-task-preview-save')?.addEventListener('click', saveTask);
   region.querySelector('#vyasa-task-preview-close')?.addEventListener('click', closePreview);
-  input?.addEventListener('keydown', (event) => { if (event.key === 'Enter') createLane(); if (event.key === 'Escape') closeModal(); });
-  modal?.addEventListener('click', (event) => { if (event.target === modal) closeModal(); });
   previewModal?.addEventListener('click', (event) => { if (event.target === previewModal) closePreview(); });
   document.addEventListener('click', (event) => {
     const trigger = event.target.closest('[data-task-preview-trigger]');
@@ -553,7 +550,6 @@ def render_tasks_board(path: Path, title: str, save_url: str | None = None, task
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && previewModal && !previewModal.classList.contains('hidden')) closePreview();
   });
-  refreshWarnings();
 })();
 """),
     )

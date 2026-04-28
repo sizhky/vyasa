@@ -10,7 +10,7 @@ task S4-002 "Web Search Enhancements"
   priority: P1
   points: 5
   estimate: 2d
-  depends_on: [S4-001]
+  depends_on: [S4-001, S4-005]
   phase: Search
   owner: Core
 
@@ -21,6 +21,8 @@ task S4-003 "UI Agent Orchestration Changes"
   depends_on: [S4-002]
   phase: Agent UX
   owner: Core
+  graph_x: 1408
+  graph_y: 40
 
 task S4-004 "Perspective Based"
   priority: P0
@@ -37,6 +39,8 @@ task S4-005 "Task Steel UX/UI Enhancements"
   depends_on: [S4-004]
   phase: UI
   owner: Tata Steel
+  graph_x: 504
+  graph_y: 312
 
 task S4-006 "Interactive Charts"
   priority: P1
@@ -77,6 +81,8 @@ task S4-010 "Training Life Cycle v2"
   depends_on: [S4-003]
   phase: Training
   owner: Training
+  graph_x: 1766
+  graph_y: 40
 
 task S4-011 "File Based Training Plan"
   priority: P1
@@ -106,7 +112,7 @@ task S4-014 "Dependency Validation UI"
   priority: P1
   points: 3
   estimate: 1d
-  depends_on: [S4-011]
+  depends_on: [S4-011, S4-004]
   phase: Planning
   owner: Knowledge
 
@@ -114,17 +120,25 @@ task S4-015 "Owner Workload Review"
   priority: P2
   points: 2
   estimate: 1d
-  depends_on: [S4-016]
+  depends_on: [S4-001]
   phase: Planning
   owner: Product
+  graph_x: 1056
+  graph_y: 329
 
 task S4-016 "Sprint Plan Publish"
   priority: P0
   points: 2
   estimate: 1d
-  depends_on: []
+  depends_on: [S4-015, S4-013, S4-002]
   phase: Release
   owner: Product
+  graph_x: 1536
+  graph_y: 528
+
+task S4-017 "New Test"
+  graph_x: 552
+  graph_y: 768
 
 chain AgentCore
   S4-001 -> S4-002 -> S4-003 -> S4-010

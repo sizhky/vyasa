@@ -115,6 +115,25 @@ def test_task_crud_helpers(tmp_path: Path):
     assert 'task A "First"' not in source.read_text(encoding="utf-8")
 
 
+def test_write_tasks_payload_can_replace_chain_edges_with_explicit_dependencies(tmp_path: Path):
+    source = tmp_path / "sprint.tasks"
+    source.write_text('task A "First"\n  estimate: 1d\n\ntask B "Second"\n  estimate: 1d\n\ntask C "Third"\n  estimate: 1d\n\nchain Main\n  A -> B -> C\n', encoding="utf-8")
+
+    payload = tasks_payload(source)
+    payload["chains"] = {}
+    payload["tasks"][1]["attrs"]["depends_on"] = "[]"
+    payload["tasks"][2]["attrs"]["depends_on"] = "[B]"
+
+    from vyasa.tasks_rendering import write_tasks_payload
+    write_tasks_payload(source, payload)
+
+    tasks, chains = parse_tasks_document(source)
+
+    assert chains == {}
+    assert tasks[1].attrs.get("depends_on") == "[]"
+    assert tasks[2].attrs.get("depends_on") == "[B]"
+
+
 def test_parse_estimate_days():
     assert parse_estimate_days("3d") == 3
     assert parse_estimate_days(" 12D ") == 12
@@ -145,10 +164,18 @@ def test_render_tasks_board_uses_preview_modal_instead_of_bottom_card_wall(tmp_p
 
     assert 'id="vyasa-task-preview-modal"' in html
     assert 'data-task-preview="A"' in html
-    assert 'data-task-preview-trigger="A"' in html
-    assert 'Build order' in html
+    assert 'Dependencies' in html
+    assert 'Dependants' in html
+    assert 'Build order' not in html
     assert 'data-task-preview="D"' in html
     assert 'data-task-preview-trigger="B"' in html
+    assert 'data-task-preview-trigger="C"' in html
+    assert 'data-task-preview-trigger="D"' in html
+    assert "Dependency graph" in html
+    assert "Dependency lanes" not in html
+    assert "vyasa-chain-lane" not in html
+    assert 'id="vyasa-task-flow-host"' in html
+    assert 'data-task-graph="' in html
     assert 'class="mt-8 space-y-3"' not in html
     assert 'S4-011' not in html
-    assert html.count('data-task-preview-trigger="A"') == 3
+    assert 'data-task-preview-trigger="A"' not in html
