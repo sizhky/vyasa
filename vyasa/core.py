@@ -270,18 +270,18 @@ hdrs = (
     Link(rel="icon", href=get_favicon_href()),
     Script(src="https://unpkg.com/hyperscript.org@0.9.12"),
     Script(src=_asset_url("/static/scripts.js"), type="module"),
-    # Script(
-    #     """
-    #     (() => {
-    #         if (!("EventSource" in window) || window.__vyasaLiveReload) return;
-    #         window.__vyasaLiveReload = false;
-    #         const reload = () => window.location.reload();
-    #         const source = new EventSource("/_vyasa/reload");
-    #         source.addEventListener("reload", reload);
-    #         source.onerror = () => setTimeout(() => fetch("/", { cache: "no-store" }).then(reload).catch(() => {}), 1000);
-    #     })();
-    #     """
-    # ),
+    *([Script(
+        """
+        (() => {
+            if (!("EventSource" in window) || window.__vyasaLiveReload) return;
+            window.__vyasaLiveReload = true;
+            const reload = () => window.location.reload();
+            const source = new EventSource("/_vyasa/reload");
+            source.addEventListener("reload", reload);
+            source.onerror = () => setTimeout(() => fetch("/", { cache: "no-store" }).then(reload).catch(() => {}), 1000);
+        })();
+        """
+    )] if get_config().get_browser_reload_enabled() else []),
     Link(rel="stylesheet", href=_asset_url("/static/header.css")),
     Link(rel="stylesheet", href=_asset_url("/static/kbd.css")),
     Style(
@@ -538,6 +538,8 @@ async def _live_reload_events():
 
 @rt("/_vyasa/reload")
 async def live_reload():
+    if not get_config().get_browser_reload_enabled():
+        return Response(status_code=404)
     return StreamingResponse(_live_reload_events(), media_type="text/event-stream")
 
 

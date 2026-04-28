@@ -470,7 +470,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
             "id": group.id,
             "type": "group",
             "position": node_pos,
-            "data": {"title": group.title, "task_ids": [t.id for t in group.tasks], "collapsed": is_collapsed},
+            "data": {"title": group.title, "task_ids": [t.id for t in group.tasks], "collapsed": is_collapsed, "expanded_w": gw, "expanded_h": gh, "expanded_x": gx, "expanded_y": gy},
             "style": {"width": COLLAPSED_GROUP_W if is_collapsed else gw, "height": COLLAPSED_GROUP_H if is_collapsed else gh},
         })
     rf_task_nodes = []
@@ -694,7 +694,16 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
           return {startNodes: ns, startEdges: es};
         }, []);
         const origGroupStyles = React.useRef(Object.fromEntries(
-          initialNodes.filter((n) => n.type === 'group').map((n) => [n.id, n.style])
+          initialNodes.filter((n) => n.type === 'group').map((n) => [
+            n.id,
+            n.data?.expanded_w ? {width: n.data.expanded_w, height: n.data.expanded_h} : n.style,
+          ])
+        ));
+        const origGroupPositions = React.useRef(Object.fromEntries(
+          initialNodes.filter((n) => n.type === 'group').map((n) => [
+            n.id,
+            n.data?.expanded_x != null ? {x: n.data.expanded_x, y: n.data.expanded_y} : n.position,
+          ])
         ));
         const [nodes, setNodes] = React.useState(startNodes);
         const [edges, setEdges] = React.useState(startEdges);
@@ -710,7 +719,8 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
                 const nextStyle = nextCollapsed
                   ? {width: COLLAPSED_GROUP_W, height: COLLAPSED_GROUP_H}
                   : (origGroupStyles.current[groupId] || n.style);
-                return {...n, data: {...n.data, collapsed: nextCollapsed}, style: nextStyle};
+                const nextPos = nextCollapsed ? n.position : (origGroupPositions.current[groupId] || n.position);
+                return {...n, data: {...n.data, collapsed: nextCollapsed}, style: nextStyle, position: nextPos};
               }
               if (childIds.has(n.id)) return {...n, hidden: nextCollapsed};
               return n;
@@ -801,6 +811,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
                 group.attrs = {...(group.attrs || {}), pill_x: String(Math.round(node.position.x)), pill_y: String(Math.round(node.position.y))};
               } else {
                 group.attrs = {...(group.attrs || {}), graph_x: String(Math.round(node.position.x)), graph_y: String(Math.round(node.position.y))};
+                origGroupPositions.current[node.id] = {x: node.position.x, y: node.position.y};
               }
             });
             return;

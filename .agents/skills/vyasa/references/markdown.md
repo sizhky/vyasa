@@ -237,29 +237,40 @@ title: Sprint Slice
 width: 85vw
 height: 75vh
 ---
-task T-001 "Map current behavior"
-  estimate: 1d
-  owner: Core
-  phase: Discovery
-task T-002 "Build inline tasks fence"
-  estimate: 2d
-  priority: P1
-  points: 5
-  depends_on: [T-001]
+group G-FE "Frontend"
+  task T-001 "Design"
+    estimate: 1d
+    owner: Alice
+  task T-002 "Build"
+    estimate: 2d
+    owner: Alice
+    depends_on: [T-001]
+end
+
+task T-003 "Backend"
+  estimate: 3d
+  owner: Bob
+  depends_on: [T-002]
+
+chain Main
+  T-001 -> T-002 -> T-003
 ```
 ```
 
 Notes:
 
 - `title`, `width`, and `height` belong in the fence frontmatter before `---`.
-- Each task starts with `task ID "Title"`.
-- Supported first-class attrs today: `estimate`, `depends_on`, `priority`, `points`, `owner`, `phase`.
-- `depends_on` should use bracket form: `[T-001, T-002]`.
-- Renderer-owned layout attrs `graph_x` and `graph_y` may appear in saved source after graph dragging; treat them as implementation detail, not authoring API.
-- The block renders as an interactive graph, not as a code sample.
-- Cards are draggable, snap to grid, and support edge create/delete.
-- Popup editing shows immediate `Dependencies` and `Dependants`, not full ancestry.
-- Warnings render inside the graph panel in a collapsible details block.
+- Each task starts with `task ID "Title"` with indented attrs below.
+- Tasks can be grouped with `group ID "Title" ... end`. Tasks inside inherit `group_id`; the group renders as a collapsible frame in the graph.
+- Supported first-class attrs: `estimate`, `depends_on`, `priority`, `points`, `owner`, `phase`.
+- `depends_on` uses bracket form: `[T-001, T-002]`.
+- `chain Name` followed by `  A -> B -> C` lines declares sequential dependency chains.
+- Groups support collapse/expand in the UI. Collapsed state, pill position, and expanded position are persisted back to the file.
+- Renderer-owned layout attrs (`graph_x`, `graph_y`, `collapsed`, `pill_x`, `pill_y`) appear in saved source after interaction; treat as implementation detail, not authoring API.
+- The block renders as an interactive React Flow graph, not as a code sample.
+- Cards are draggable, snap to grid, support edge create/delete and popup editing.
+- Group bounds auto-resize as children are dragged; shrink and grow in all directions.
+- Warnings (missing deps, cycles, owner overlaps) render in a collapsible panel inside the graph.
 - Persisted edits rewrite the fenced block source in the markdown file itself.
 
 ## Code snippet includes
