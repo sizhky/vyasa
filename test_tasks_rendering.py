@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from vyasa.tasks_rendering import TaskItem, build_task_schedule, chain_dependencies, delete_task, parse_dependency_ids, parse_estimate_days, parse_tasks_document, parse_tasks_file, tasks_payload, upsert_task, validate_owner_overlaps, validate_task_dependencies, write_tasks_chains
+from vyasa.tasks_rendering import TaskItem, build_task_schedule, chain_dependencies, delete_task, parse_dependency_ids, parse_estimate_days, parse_tasks_document, parse_tasks_file, render_tasks_board, tasks_payload, upsert_task, validate_owner_overlaps, validate_task_dependencies, write_tasks_chains
 
 
 def test_parse_tasks_file(tmp_path: Path):
@@ -132,3 +132,23 @@ def test_validate_owner_overlaps():
     warnings = validate_owner_overlaps(tasks, schedule)
 
     assert warnings == ["Jane overlap: A D1-D3 conflicts with B D2-D4"]
+
+
+def test_render_tasks_board_uses_preview_modal_instead_of_bottom_card_wall(tmp_path: Path):
+    source = tmp_path / "sprint.tasks"
+    source.write_text(
+        'task A "First"\n  estimate: 1d\n\ntask B "Second"\n  estimate: 1d\n\ntask C "Third"\n  estimate: 1d\n\ntask D "Fourth"\n  estimate: 1d\n\nchain Main\n  A -> B -> C -> D\n',
+        encoding="utf-8",
+    )
+
+    html = str(render_tasks_board(source, "Sprint"))
+
+    assert 'id="vyasa-task-preview-modal"' in html
+    assert 'data-task-preview="A"' in html
+    assert 'data-task-preview-trigger="A"' in html
+    assert 'Build order' in html
+    assert 'data-task-preview="D"' in html
+    assert 'data-task-preview-trigger="B"' in html
+    assert 'class="mt-8 space-y-3"' not in html
+    assert 'S4-011' not in html
+    assert html.count('data-task-preview-trigger="A"') == 3

@@ -132,7 +132,12 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
             post_title = slug_to_title(PathCls(path).name, abbreviations=abbreviations)
             tasks_content = Div(
                 _breadcrumbs(path, slug_to_title, abbreviations),
-                render_tasks_board(tasks_path, post_title, save_url=content_url_for_slug(path, prefix="/api/tasks/chains")),
+                render_tasks_board(
+                    tasks_path,
+                    post_title,
+                    save_url=content_url_for_slug(path, prefix="/api/tasks/chains"),
+                    task_api_url=content_url_for_slug(path, prefix="/api/tasks"),
+                ),
             )
             return layout(tasks_content, htmx=htmx, title=f"{post_title} - {get_blog_title()}", show_sidebar=True, toc_content=None, current_path=path, show_toc=False, auth=request.scope.get("auth"), full_width=True)
         if pdf_path and pdf_path.exists():

@@ -1,4 +1,5 @@
 import html
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -257,40 +258,69 @@ def _chip(label: str, value: str) -> str:
     return f'<span class="rounded border border-slate-200 px-2 py-0.5 text-[11px] dark:border-slate-700"><b>{html.escape(label)}</b> {html.escape(value)}</span>'
 
 
-def render_tasks_board(path: Path, title: str, save_url: str | None = None):
+def _build_order(task_id: str, tasks: list[TaskItem], chains: dict[str, list[str]]) -> list[str]:
+    task_lookup = {task.id: task for task in tasks}
+    chain_deps = chain_dependencies(chains)
+    seen: set[str] = set()
+    order: list[str] = []
+
+    def walk(current_id: str, stack: set[str]) -> None:
+        if current_id in stack:
+            return
+        task = task_lookup.get(current_id)
+        if not task:
+            return
+        next_stack = {*stack, current_id}
+        direct = [*parse_dependency_ids(task.attrs.get("depends_on", "")), *chain_deps.get(current_id, [])]
+        for dep in direct:
+            if dep in seen:
+                continue
+            walk(dep, next_stack)
+            if dep not in seen:
+                seen.add(dep)
+                order.append(dep)
+
+    walk(task_id, set())
+    return order
+
+
+def render_tasks_board(path: Path, title: str, save_url: str | None = None, task_api_url: str | None = None):
     tasks, chains = parse_tasks_document(path)
     chain_deps = chain_dependencies(chains)
     warnings = validate_task_dependencies(tasks, chains)
     schedule, schedule_warnings, critical_path = build_task_schedule(tasks, chains)
     warnings.extend(schedule_warnings)
     warnings.extend(validate_owner_overlaps(tasks, schedule))
-    cards = []
+    preview_cards = []
+    task_lookup = {task.id: task for task in tasks}
     for index, task in enumerate(tasks, start=1):
         chips = "".join(
             _chip(k.replace("_", " "), v)
             for k, v in task.attrs.items()
             if k in {"priority", "points", "estimate", "depends_on", "owner", "phase"}
         )
-        dep_ids = [*parse_dependency_ids(task.attrs.get("depends_on", "")), *chain_deps.get(task.id, [])]
-        dep_chips = "".join(
-            f'<a class="rounded border border-slate-200 px-2 py-0.5 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800" href="#task-{html.escape(dep)}">{html.escape(dep)}</a>'
-            for dep in dep_ids
+        build_order = _build_order(task.id, tasks, chains)
+        build_order_chips = "".join(
+            f'<button type="button" data-task-preview-trigger="{html.escape(dep)}" class="rounded border border-slate-200 px-2 py-0.5 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">{html.escape(dep)}</button>'
+            for dep in build_order
         ) or '<span class="text-slate-400">None</span>'
-        cards.append(
-            f'<article id="task-{html.escape(task.id)}" data-task-id="{html.escape(task.id)}" data-manual-deps="{html.escape(",".join(parse_dependency_ids(task.attrs.get("depends_on", ""))))}" class="vyasa-task-card grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 md:grid-cols-[4rem_1fr_12rem]">'
-            f'<div class="text-2xl font-bold text-slate-300 dark:text-slate-700">{index:02d}</div>'
-            f'<div><div class="text-xs font-semibold uppercase text-slate-500">{html.escape(task.id)}</div>'
-            f'<h2 class="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">{html.escape(task.title)}</h2>'
-            f'<div class="mt-3 flex flex-wrap gap-2">{chips}</div></div>'
-            f'<div class="text-xs text-slate-500"><b class="mb-2 block uppercase tracking-wide">Depends</b><div class="flex flex-wrap gap-1">{dep_chips}</div></div>'
+        start_day, end_day = schedule.get(task.id, (1, 1))
+        timeline = f'D{start_day}' if start_day == end_day else f'D{start_day}-D{end_day}'
+        preview_cards.append(
+            f'<article data-task-preview="{html.escape(task.id)}" data-task-id="{html.escape(task.id)}" data-manual-deps="{html.escape(",".join(parse_dependency_ids(task.attrs.get("depends_on", ""))))}" data-task-title="{html.escape(task.title)}" data-task-attrs="{html.escape(json.dumps(task.attrs))}" data-build-order="{html.escape(json.dumps(build_order))}" data-task-index="{index:02d}" data-task-schedule="{html.escape(timeline)}" data-task-critical="{"yes" if task.id in critical_path else "no"}" class="vyasa-task-card hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900">'
+            f'<div class="flex items-start justify-between gap-4"><div><div class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{html.escape(task.id)}</div>'
+            f'<h2 class="mt-2 text-xl font-semibold text-slate-900 dark:text-slate-100">{html.escape(task.title)}</h2></div>'
+            f'<div class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{index:02d}</div></div>'
+            f'<div class="mt-4 flex flex-wrap gap-2">{chips}{_chip("schedule", timeline)}{_chip("critical", "yes" if task.id in critical_path else "no")}</div>'
+            f'<div class="mt-5 grid gap-4 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-[1fr_12rem]"><div><b class="mb-2 block uppercase tracking-wide text-slate-500">Build order</b><div class="flex flex-wrap gap-2">{build_order_chips}</div></div>'
+            f'<div><b class="mb-2 block uppercase tracking-wide text-slate-500">Lane status</b><p>{"Critical path" if task.id in critical_path else "Parallel safe"}</p><p class="mt-1 text-xs text-slate-500">Ready after {timeline}</p></div></div>'
             f'</article>'
         )
-    chain_lookup = {task.id: task.title for task in tasks}
     chain_rows = []
     for name, ids in chains.items():
         cards_html = "".join(
-            f'<a href="#task-{html.escape(task_id)}" draggable="true" data-task-id="{html.escape(task_id)}" class="vyasa-chain-card min-w-[12rem] cursor-grab rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-900">'
-            f'<b class="block text-xs text-slate-500">{html.escape(task_id)}</b>{html.escape(chain_lookup.get(task_id, "Missing task"))}</a>'
+            f'<button type="button" draggable="true" data-task-id="{html.escape(task_id)}" class="vyasa-chain-card min-w-[12rem] cursor-grab rounded-xl border border-slate-200 bg-white p-3 text-left text-sm shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-900">'
+            f'<b class="block text-xs text-slate-500">{html.escape(task_id)}</b>{html.escape(task_lookup.get(task_id, TaskItem(task_id, "Missing task")).title)}</button>'
             for task_id in ids
         )
         chain_rows.append(
@@ -305,8 +335,7 @@ def render_tasks_board(path: Path, title: str, save_url: str | None = None):
         H1(title, cls="vyasa-page-title text-4xl font-bold"),
         P(f"{len(tasks)} task{'s' if len(tasks) != 1 else ''}", cls="mt-2 text-slate-500"),
         NotStr(f'<div id="vyasa-task-warnings" class="{warnings_cls}" style="{warnings_style}"><b>Dependency warnings</b><ul class="mt-2 list-disc pl-5">{warnings_html}</ul></div>'),
-        NotStr(f'<section id="vyasa-chain-region" data-save-url="{html.escape(save_url or "")}" class="mt-8 rounded-lg border border-slate-200 p-4 dark:border-slate-800"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Dependency lanes</h2><div id="vyasa-chain-lanes">{chains_html or "<p class=\"mt-3 text-sm text-slate-500\">No chains.</p>"}</div><div id="vyasa-new-chain-drop" class="mt-4 rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500 dark:border-slate-700">Drop card here for new lane</div><p id="vyasa-chain-save-status" class="mt-3 text-xs text-slate-500"></p><div id="vyasa-chain-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-950/50 p-4"><div class="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">New dependency lane</h2><input id="vyasa-chain-name-input" class="mt-4 w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" placeholder="Lane name"><div class="mt-4 flex justify-end gap-2"><button id="vyasa-chain-cancel" type="button" class="rounded border border-slate-200 px-3 py-1 text-sm dark:border-slate-700">Cancel</button><button id="vyasa-chain-create" type="button" class="rounded bg-blue-600 px-3 py-1 text-sm text-white">Create</button></div></div></div></section>'),
-        NotStr(f'<div class="mt-8 space-y-3">{"".join(cards)}</div>'),
+        NotStr(f'<section id="vyasa-chain-region" data-save-url="{html.escape(save_url or "")}" data-task-api-url="{html.escape(task_api_url or "")}" class="mt-8 rounded-lg border border-slate-200 p-4 dark:border-slate-800"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Dependency lanes</h2><div id="vyasa-chain-lanes">{chains_html or "<p class=\"mt-3 text-sm text-slate-500\">No chains.</p>"}</div><div id="vyasa-new-chain-drop" class="mt-4 rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500 dark:border-slate-700">Drop card here for new lane</div><p id="vyasa-chain-save-status" class="mt-3 text-xs text-slate-500"></p><div id="vyasa-task-preview-store" class="hidden">{"".join(preview_cards)}</div><div id="vyasa-task-preview-modal" class="fixed inset-0 z-[9998] hidden items-center justify-center bg-slate-950/60 p-4"><div class="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900"><div class="mb-3 flex items-center justify-between gap-4"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Task editor</h2><div class="flex items-center gap-2"><button id="vyasa-task-preview-save" type="button" class="rounded bg-blue-600 px-3 py-1 text-sm text-white">Save</button><button id="vyasa-task-preview-close" type="button" class="rounded border border-slate-200 px-3 py-1 text-sm dark:border-slate-700">Close</button></div></div><form id="vyasa-task-preview-form" class="space-y-4"><div id="vyasa-task-preview-body"></div></form><p id="vyasa-task-preview-status" class="mt-3 text-xs text-slate-500"></p></div></div><div id="vyasa-chain-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-950/50 p-4"><div class="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900"><h2 class="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">New dependency lane</h2><input id="vyasa-chain-name-input" class="mt-4 w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" placeholder="Lane name"><div class="mt-4 flex justify-end gap-2"><button id="vyasa-chain-cancel" type="button" class="rounded border border-slate-200 px-3 py-1 text-sm dark:border-slate-700">Cancel</button><button id="vyasa-chain-create" type="button" class="rounded bg-blue-600 px-3 py-1 text-sm text-white">Create</button></div></div></div></section>'),
         Script("""
 (() => {
   const region = document.getElementById('vyasa-chain-region');
@@ -317,6 +346,82 @@ def render_tasks_board(path: Path, title: str, save_url: str | None = None):
   let pendingNewLaneId = '';
   const lanesRoot = region.querySelector('#vyasa-chain-lanes');
   const status = region.querySelector('#vyasa-chain-save-status');
+  const previewModal = region.querySelector('#vyasa-task-preview-modal');
+  const previewBody = region.querySelector('#vyasa-task-preview-body');
+  const previewStore = region.querySelector('#vyasa-task-preview-store');
+  const previewStatus = region.querySelector('#vyasa-task-preview-status');
+  const taskApiUrl = region.dataset.taskApiUrl || '';
+  let activeTaskId = '';
+  const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const closePreview = () => { activeTaskId = ''; previewModal?.classList.add('hidden'); previewModal?.classList.remove('flex'); if (previewBody) previewBody.innerHTML = ''; if (previewStatus) previewStatus.textContent = ''; };
+  const renderEditor = (card) => {
+    const attrs = JSON.parse(card.dataset.taskAttrs || '{}');
+    const buildOrder = JSON.parse(card.dataset.buildOrder || '[]');
+    const attrFields = ['priority', 'points', 'estimate', 'depends_on', 'phase', 'owner'];
+    const extraAttrs = Object.entries(attrs).filter(([key]) => !attrFields.includes(key)).map(([key, value]) => `${key}: ${value}`).join('\\n');
+    return `
+      <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+        <div class="grid gap-4 md:grid-cols-[1fr_6rem]">
+          <label class="block text-sm"><span class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Task ID</span><input name="id" value="${esc(card.dataset.taskId || '')}" class="w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"></label>
+          <div class="rounded-full bg-slate-100 px-3 py-2 text-center text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">${esc(card.dataset.taskIndex || '')}</div>
+        </div>
+        <label class="mt-4 block text-sm"><span class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Title</span><input name="title" value="${esc(card.dataset.taskTitle || '')}" class="w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"></label>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          ${attrFields.map((key) => `<label class="block text-sm"><span class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">${esc(key.replace('_', ' '))}</span><input name="attr:${esc(key)}" value="${esc(attrs[key] || '')}" class="w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"></label>`).join('')}
+        </div>
+        <label class="mt-4 block text-sm"><span class="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Extra fields</span><textarea name="extra_attrs" rows="5" class="w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" placeholder="key: value&#10;another_key: value">${esc(extraAttrs)}</textarea></label>
+        <div class="mt-5 grid gap-4 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-[1fr_12rem]">
+          <div><b class="mb-2 block uppercase tracking-wide text-slate-500">Build order</b><div class="flex flex-wrap gap-2">${buildOrder.length ? buildOrder.map((dep) => `<button type="button" data-task-preview-trigger="${esc(dep)}" class="rounded border border-slate-200 px-2 py-0.5 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">${esc(dep)}</button>`).join('') : '<span class="text-slate-400">None</span>'}</div></div>
+          <div><b class="mb-2 block uppercase tracking-wide text-slate-500">Lane status</b><p>${card.dataset.taskCritical === 'yes' ? 'Critical path' : 'Parallel safe'}</p><p class="mt-1 text-xs text-slate-500">Ready after ${esc(card.dataset.taskSchedule || '')}</p></div>
+        </div>
+      </article>`;
+  };
+  const openPreview = (taskId) => {
+    const card = previewStore?.querySelector(`[data-task-preview="${CSS.escape(taskId)}"]`);
+    if (!card || !previewBody) return;
+    activeTaskId = taskId;
+    previewBody.innerHTML = renderEditor(card);
+    previewModal?.classList.remove('hidden');
+    previewModal?.classList.add('flex');
+  };
+  const parseExtraAttrs = (text) => Object.fromEntries(String(text || '').split('\\n').map((line) => line.trim()).filter(Boolean).map((line) => {
+    const idx = line.indexOf(':');
+    return idx >= 0 ? [line.slice(0, idx).trim(), line.slice(idx + 1).trim()] : [line.trim(), ''];
+  }).filter(([key]) => key));
+  const replaceRefs = (value, fromId, toId) => parseDependencyIds(value).map((dep) => dep === fromId ? toId : dep);
+  const parseDependencyIds = (value) => String(value || '').trim().replace(/^\[/, '').replace(/\]$/, '').split(',').map((part) => part.trim()).filter(Boolean);
+  const saveTask = async () => {
+    if (!taskApiUrl || !activeTaskId || !previewBody) return;
+    const form = region.querySelector('#vyasa-task-preview-form');
+    const data = new FormData(form);
+    const nextId = String(data.get('id') || '').trim();
+    if (!nextId) { if (previewStatus) previewStatus.textContent = 'Task ID required'; return; }
+    const attrs = parseExtraAttrs(data.get('extra_attrs'));
+    ['priority', 'points', 'estimate', 'depends_on', 'phase', 'owner'].forEach((key) => {
+      const value = String(data.get(`attr:${key}`) || '').trim();
+      if (value) attrs[key] = value;
+    });
+    if (attrs.depends_on && !attrs.depends_on.startsWith('[')) attrs.depends_on = `[${parseDependencyIds(attrs.depends_on).join(', ')}]`;
+    if (previewStatus) previewStatus.textContent = 'Saving...';
+    const response = await fetch(taskApiUrl);
+    const payload = await response.json();
+    payload.tasks = (payload.tasks || []).map((task) => {
+      if (task.id !== activeTaskId) {
+        if (task.attrs?.depends_on && nextId !== activeTaskId) task.attrs.depends_on = `[${replaceRefs(task.attrs.depends_on, activeTaskId, nextId).join(', ')}]`;
+        return task;
+      }
+      return {id: nextId, title: String(data.get('title') || '').trim() || nextId, attrs};
+    });
+    if (nextId !== activeTaskId) {
+      Object.keys(payload.chains || {}).forEach((name) => {
+        payload.chains[name] = (payload.chains[name] || []).map((id) => id === activeTaskId ? nextId : id);
+      });
+    }
+    const save = await fetch(taskApiUrl, {method: 'PUT', headers: {'content-type': 'application/json'}, body: JSON.stringify(payload)});
+    if (!save.ok) { if (previewStatus) previewStatus.textContent = 'Save failed'; return; }
+    if (previewStatus) previewStatus.textContent = 'Saved. Reloading...';
+    window.location.reload();
+  };
   const collectChains = () => Object.fromEntries(Array.from(lanesRoot.querySelectorAll('[data-chain-name]')).map((section) => [
     section.dataset.chainName,
     Array.from(section.querySelectorAll('.vyasa-chain-card')).map((card) => card.dataset.taskId).filter(Boolean)
@@ -394,6 +499,11 @@ def render_tasks_board(path: Path, title: str, save_url: str | None = None):
     });
     card.addEventListener('dragend', () => { card.classList.remove('opacity-50'); draggedCard = null; });
   });
+  lanesRoot.addEventListener('click', (event) => {
+    const card = event.target.closest('.vyasa-chain-card');
+    if (!card || !lanesRoot.contains(card)) return;
+    openPreview(card.dataset.taskId || '');
+  });
   lanesRoot.querySelectorAll('.vyasa-chain-lane').forEach(bindLane);
   const modal = region.querySelector('#vyasa-chain-modal');
   const input = region.querySelector('#vyasa-chain-name-input');
@@ -431,8 +541,18 @@ def render_tasks_board(path: Path, title: str, save_url: str | None = None):
   });
   region.querySelector('#vyasa-chain-cancel')?.addEventListener('click', closeModal);
   region.querySelector('#vyasa-chain-create')?.addEventListener('click', createLane);
+  region.querySelector('#vyasa-task-preview-save')?.addEventListener('click', saveTask);
+  region.querySelector('#vyasa-task-preview-close')?.addEventListener('click', closePreview);
   input?.addEventListener('keydown', (event) => { if (event.key === 'Enter') createLane(); if (event.key === 'Escape') closeModal(); });
   modal?.addEventListener('click', (event) => { if (event.target === modal) closeModal(); });
+  previewModal?.addEventListener('click', (event) => { if (event.target === previewModal) closePreview(); });
+  document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-task-preview-trigger]');
+    if (trigger) openPreview(trigger.dataset.taskPreviewTrigger || '');
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && previewModal && !previewModal.classList.contains('hidden')) closePreview();
+  });
   refreshWarnings();
 })();
 """),
