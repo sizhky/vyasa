@@ -221,7 +221,7 @@ def cli():
         reload_kwargs = {
             "reload": True,
             "reload_dirs": reload_dirs,
-            "reload_includes": ["*.md", "*.tree", "*.pdf", "*.py", "*.vyasa", ".vyasa", ".*"],
+            "reload_includes": ["*.py", "*.vyasa", ".vyasa", ".*"],
             "reload_excludes": reload_excludes,
         }
     else:

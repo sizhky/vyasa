@@ -2,6 +2,7 @@ from pathlib import Path
 
 from vyasa.markdown_rendering import from_md
 from vyasa.tasks_rendering import (
+    TaskGroup,
     TaskItem,
     build_task_schedule,
     chain_dependencies,
@@ -11,6 +12,7 @@ from vyasa.tasks_rendering import (
     parse_tasks_text,
     payload_to_tasks_document,
     render_tasks_board_text,
+    serialize_tasks_document,
     tasks_fence_payload,
     validate_owner_overlaps,
     validate_task_dependencies,
@@ -38,7 +40,7 @@ def test_parse_tasks_text():
 
 
 def test_parse_tasks_document_text_with_chain():
-    tasks, chains = parse_tasks_document_text(
+    tasks, chains, _ = parse_tasks_document_text(
         'task A "First"\n'
         '  estimate: 1d\n'
         'task B "Second"\n'
@@ -97,7 +99,7 @@ def test_build_task_schedule_uses_chain_order():
 
 
 def test_payload_to_tasks_document_replaces_chain_edges_with_explicit_dependencies():
-    tasks, chains = payload_to_tasks_document(
+    tasks, chains, _ = payload_to_tasks_document(
         {
             "tasks": [
                 {"id": "A", "title": "First", "attrs": {"estimate": "1d"}},
@@ -193,3 +195,45 @@ def test_render_tasks_board_text_uses_preview_modal():
     assert 'data-task-graph="' in html
     assert '<details id="vyasa-task-warnings"' in html
     assert html.count('data-task-preview-trigger="A"') == 1
+
+
+def test_parse_tasks_document_text_with_group():
+    tasks, chains, groups = parse_tasks_document_text(
+        'group G-001 "Frontend"\n'
+        '  task T-001 "Design"\n'
+        '    estimate: 2d\n'
+        '  task T-002 "Build"\n'
+        '    estimate: 3d\n'
+        'end\n'
+        'task T-003 "Backend"\n'
+        '  estimate: 1d\n'
+    )
+    assert len(groups) == 1
+    assert groups[0].id == "G-001"
+    assert groups[0].title == "Frontend"
+    assert [t.id for t in groups[0].tasks] == ["T-001", "T-002"]
+    assert len(tasks) == 3
+    assert tasks[0].group_id == "G-001"
+    assert tasks[1].group_id == "G-001"
+    assert tasks[2].group_id is None
+
+
+def test_group_roundtrip():
+    source = (
+        'group G-001 "Frontend"\n'
+        '  task T-001 "Design"\n'
+        '    estimate: 2d\n'
+        '  task T-002 "Build"\n'
+        '    estimate: 3d\n'
+        'end\n'
+        '\n'
+        'task T-003 "Backend"\n'
+        '  estimate: 1d\n'
+    )
+    tasks, chains, groups = parse_tasks_document_text(source)
+    out = serialize_tasks_document(tasks, chains, groups)
+    tasks2, chains2, groups2 = parse_tasks_document_text(out)
+    assert [t.id for t in tasks2] == ["T-001", "T-002", "T-003"]
+    assert len(groups2) == 1
+    assert [t.id for t in groups2[0].tasks] == ["T-001", "T-002"]
+    assert tasks2[2].group_id is None

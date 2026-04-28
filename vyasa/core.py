@@ -1,6 +1,8 @@
+import asyncio
 import re, os
 import json
 import base64
+import time
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -268,6 +270,18 @@ hdrs = (
     Link(rel="icon", href=get_favicon_href()),
     Script(src="https://unpkg.com/hyperscript.org@0.9.12"),
     Script(src=_asset_url("/static/scripts.js"), type="module"),
+    # Script(
+    #     """
+    #     (() => {
+    #         if (!("EventSource" in window) || window.__vyasaLiveReload) return;
+    #         window.__vyasaLiveReload = false;
+    #         const reload = () => window.location.reload();
+    #         const source = new EventSource("/_vyasa/reload");
+    #         source.addEventListener("reload", reload);
+    #         source.onerror = () => setTimeout(() => fetch("/", { cache: "no-store" }).then(reload).catch(() => {}), 1000);
+    #     })();
+    #     """
+    # ),
     Link(rel="stylesheet", href=_asset_url("/static/header.css")),
     Link(rel="stylesheet", href=_asset_url("/static/kbd.css")),
     Style(
@@ -489,10 +503,42 @@ rt = app.route
 
 
 from starlette.requests import Request
-from starlette.responses import RedirectResponse, FileResponse, Response
+from starlette.responses import RedirectResponse, FileResponse, Response, StreamingResponse
 from starlette.websockets import WebSocket
 
 _collab = CollabRuntime()
+
+
+def _live_reload_roots():
+    roots = []
+    for _, root in get_content_mounts():
+        if root.exists() and root not in roots:
+            roots.append(root)
+    return roots or [get_root_folder()]
+
+
+def _is_live_reload_path(path: Path):
+    if any(part in set(get_config().get_reload_excludes()) for part in path.parts):
+        return False
+    return path.name == ".vyasa" or path.suffix in {".md", ".tree", ".pdf", ".css", ".js"}
+
+
+async def _live_reload_events():
+    yield "event: ready\ndata: ok\n\n"
+    try:
+        from watchfiles import awatch
+    except ImportError:
+        while True:
+            await asyncio.sleep(30)
+            yield ": keepalive\n\n"
+    async for changes in awatch(*_live_reload_roots(), debounce=400):
+        if any(_is_live_reload_path(Path(path)) for _, path in changes):
+            yield f"event: reload\ndata: {int(time.time())}\n\n"
+
+
+@rt("/_vyasa/reload")
+async def live_reload():
+    return StreamingResponse(_live_reload_events(), media_type="text/event-stream")
 
 
 async def _collab_broadcast(room, payload, exclude=None):

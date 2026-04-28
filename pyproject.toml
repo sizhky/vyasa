@@ -31,6 +31,7 @@ dependencies = [
     "mistletoe>=1.4.0",
     "python-frontmatter>=1.1.0",
     "uvicorn>=0.30.0",
+    "watchfiles>=1.0.0",
     "monsterui>=0.0.37",
     "loguru>=0.7.3",
     "fastsql>=2.1.2",

@@ -12,9 +12,20 @@ class TaskItem:
     id: str
     title: str
     attrs: dict[str, str] = field(default_factory=dict)
+    group_id: str | None = None
+
+
+@dataclass
+class TaskGroup:
+    id: str
+    title: str
+    tasks: list["TaskItem"] = field(default_factory=list)
+    attrs: dict[str, str] = field(default_factory=dict)
 
 
 TASK_RE = re.compile(r'^\s*task\s+(\S+)\s+"([^"]+)"\s*$')
+GROUP_RE = re.compile(r'^\s*group\s+(\S+)\s+"([^"]+)"\s*$')
+GROUP_END_RE = re.compile(r'^\s*end\s*$')
 CHAIN_RE = re.compile(r"^\s*chain\s+(\S+)\s*$")
 ATTR_RE = re.compile(r"^\s+([a-zA-Z_][\w-]*)\s*:\s*(.*?)\s*$")
 ESTIMATE_RE = re.compile(r"^\s*(\d+)\s*d\s*$", re.IGNORECASE)
@@ -39,17 +50,32 @@ def parse_tasks_text(text: str) -> list[TaskItem]:
     return tasks
 
 
-def parse_tasks_document_text(text: str) -> tuple[list[TaskItem], dict[str, list[str]]]:
+def parse_tasks_document_text(text: str) -> tuple[list[TaskItem], dict[str, list[str]], list[TaskGroup]]:
     tasks: list[TaskItem] = []
     chains: dict[str, list[str]] = {}
+    groups: list[TaskGroup] = []
     current: TaskItem | None = None
     current_chain: str | None = None
+    current_group: TaskGroup | None = None
     for line in text.splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
+        group_match = GROUP_RE.match(line)
+        if group_match:
+            current_group = TaskGroup(group_match.group(1), group_match.group(2))
+            groups.append(current_group)
+            current = None
+            current_chain = None
+            continue
+        if current_group and GROUP_END_RE.match(line):
+            current_group = None
+            current = None
+            continue
         task_match = TASK_RE.match(line)
         if task_match:
-            current = TaskItem(task_match.group(1), task_match.group(2))
+            current = TaskItem(task_match.group(1), task_match.group(2), group_id=current_group.id if current_group else None)
+            if current_group:
+                current_group.tasks.append(current)
             tasks.append(current)
             current_chain = None
             continue
@@ -60,16 +86,45 @@ def parse_tasks_document_text(text: str) -> tuple[list[TaskItem], dict[str, list
             chains.setdefault(current_chain, [])
             continue
         attr_match = ATTR_RE.match(line)
-        if current and attr_match:
-            current.attrs[attr_match.group(1).lower()] = attr_match.group(2).strip()
+        if attr_match:
+            key, value = attr_match.group(1).lower(), attr_match.group(2).strip()
+            if current:
+                current.attrs[key] = value
+            elif current_group and not current_chain:
+                current_group.attrs[key] = value
             continue
         if current_chain and "->" in line:
             chains[current_chain].extend(part.strip() for part in line.split("->") if part.strip())
-    return tasks, chains
+    return tasks, chains, groups
 
-def serialize_tasks_document(tasks: list[TaskItem], chains: dict[str, list[str]]) -> str:
+def serialize_tasks_document(tasks: list[TaskItem], chains: dict[str, list[str]], groups: list[TaskGroup] | None = None) -> str:
     lines: list[str] = []
+    grouped_ids: set[str] = set()
+    group_map: dict[str, TaskGroup] = {}
+    if groups:
+        for group in groups:
+            for t in group.tasks:
+                grouped_ids.add(t.id)
+                group_map[t.id] = group
+    task_map = {t.id: t for t in tasks}
+    emitted_groups: set[str] = set()
     for task in tasks:
+        if task.group_id and task.group_id not in emitted_groups:
+            group = next((g for g in (groups or []) if g.id == task.group_id), None)
+            if group:
+                emitted_groups.add(group.id)
+                lines.append(f'group {group.id} "{group.title}"')
+                for key, value in group.attrs.items():
+                    lines.append(f"  {key}: {value}")
+                for gt in group.tasks:
+                    lines.append(f'  task {gt.id} "{gt.title}"')
+                    for key, value in gt.attrs.items():
+                        lines.append(f"    {key}: {value}")
+                lines.append("end")
+                lines.append("")
+            continue
+        if task.group_id:
+            continue
         lines.append(f'task {task.id} "{task.title}"')
         for key, value in task.attrs.items():
             lines.append(f"  {key}: {value}")
@@ -91,18 +146,25 @@ def apply_chain_dependencies_to_tasks(tasks: list[TaskItem], chains: dict[str, l
             task.attrs["depends_on"] = "[]"
 
 def tasks_payload_text(text: str) -> dict:
-    tasks, chains = parse_tasks_document_text(text)
+    tasks, chains, groups = parse_tasks_document_text(text)
     return {
-        "tasks": [{"id": task.id, "title": task.title, "attrs": task.attrs} for task in tasks],
+        "tasks": [{"id": task.id, "title": task.title, "attrs": task.attrs, "group_id": task.group_id} for task in tasks],
         "chains": chains,
+        "groups": [{"id": g.id, "title": g.title, "attrs": g.attrs, "task_ids": [t.id for t in g.tasks]} for g in groups],
     }
 
 
-def payload_to_tasks_document(payload: dict) -> tuple[list[TaskItem], dict[str, list[str]]]:
+def payload_to_tasks_document(payload: dict) -> tuple[list[TaskItem], dict[str, list[str]], list[TaskGroup]]:
     raw_tasks = payload.get("tasks", [])
     raw_chains = payload.get("chains", {})
+    raw_groups = payload.get("groups", [])
     tasks = [
-        TaskItem(str(item.get("id", "")).strip(), str(item.get("title", "")).strip(), {str(k): str(v) for k, v in dict(item.get("attrs", {})).items()})
+        TaskItem(
+            str(item.get("id", "")).strip(),
+            str(item.get("title", "")).strip(),
+            {str(k): str(v) for k, v in dict(item.get("attrs", {})).items()},
+            group_id=str(item["group_id"]).strip() if item.get("group_id") else None,
+        )
         for item in raw_tasks
         if isinstance(item, dict) and str(item.get("id", "")).strip()
     ]
@@ -111,7 +173,20 @@ def payload_to_tasks_document(payload: dict) -> tuple[list[TaskItem], dict[str, 
         for name, ids in raw_chains.items()
         if isinstance(ids, list)
     } if isinstance(raw_chains, dict) else {}
-    return tasks, chains
+    task_map = {t.id: t for t in tasks}
+    groups: list[TaskGroup] = []
+    if isinstance(raw_groups, list):
+        for item in raw_groups:
+            if not isinstance(item, dict):
+                continue
+            gid = str(item.get("id", "")).strip()
+            gtitle = str(item.get("title", "")).strip()
+            if not gid:
+                continue
+            gattrs = {str(k): str(v) for k, v in dict(item.get("attrs", {})).items()}
+            gtasks = [task_map[tid] for tid in item.get("task_ids", []) if tid in task_map]
+            groups.append(TaskGroup(gid, gtitle, gtasks, gattrs))
+    return tasks, chains, groups
 
 
 def missing_critical_task_attrs(task: TaskItem) -> list[str]:
@@ -134,8 +209,8 @@ def write_tasks_fence_payload(path: Path, block_index: int, payload: dict) -> No
     if block_index < 0 or block_index >= len(matches):
         raise IndexError(block_index)
     match = matches[block_index]
-    tasks, chains = payload_to_tasks_document(payload)
-    replacement = f'{match.group("fence")}tasks{match.group("info")}\n{serialize_tasks_document(tasks, chains).rstrip()}\n{match.group("fence")}'
+    tasks, chains, groups = payload_to_tasks_document(payload)
+    replacement = f'{match.group("fence")}tasks{match.group("info")}\n{serialize_tasks_document(tasks, chains, groups).rstrip()}\n{match.group("fence")}'
     path.write_text(markdown[:match.start()] + replacement + markdown[match.end():], encoding="utf-8")
 
 
@@ -298,7 +373,7 @@ def _parse_graph_int(value: str | None) -> int | None:
         return None
 
 
-def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], title: str, *, task_api_url: str | None = None, show_heading: bool = True, width: str = "100%", height: str = "70vh"):
+def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], groups: list[TaskGroup], title: str, *, task_api_url: str | None = None, show_heading: bool = True, width: str = "100%", height: str = "70vh"):
     warnings = validate_task_dependencies(tasks, chains)
     schedule, schedule_warnings, critical_path = build_task_schedule(tasks, chains)
     warnings.extend(schedule_warnings)
@@ -347,15 +422,69 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], tit
             f'<div class="mt-5 text-sm text-slate-600 dark:text-slate-300"><b class="mb-2 block uppercase tracking-wide text-slate-500">Dependencies</b><div class="flex flex-wrap gap-2">{dependency_chips}</div><b class="mb-2 mt-4 block uppercase tracking-wide text-slate-500">Dependants</b><div class="flex flex-wrap gap-2">{dependant_chips}</div></div>'
             f'</article>'
         )
+    group_padding = 24
+    header_h = 40
+    COLLAPSED_GROUP_W = 260
+    COLLAPSED_GROUP_H = 60
+    group_nodes = []
+    for group in groups:
+        if not group.tasks:
+            continue
+        child_ids = {t.id for t in group.tasks}
+        has_saved_positions = all(
+            _parse_graph_int(t.attrs.get("graph_x")) is not None
+            for t in group.tasks
+            if t.id in positions
+        ) and _parse_graph_int(group.attrs.get("graph_x")) is not None
+        if has_saved_positions:
+            # child positions already relative to group origin
+            rel_xs = [positions[tid][0] for tid in child_ids if tid in positions]
+            rel_ys = [positions[tid][1] for tid in child_ids if tid in positions]
+            if not rel_xs:
+                continue
+            gx = _parse_graph_int(group.attrs.get("graph_x"))
+            gy = _parse_graph_int(group.attrs.get("graph_y"))
+            gw = max(rel_xs) + node_w + group_padding
+            gh = max(rel_ys) + node_h + group_padding
+        else:
+            # child positions are absolute canvas coords — compute group origin
+            abs_xs = [positions[tid][0] for tid in child_ids if tid in positions]
+            abs_ys = [positions[tid][1] for tid in child_ids if tid in positions]
+            if not abs_xs:
+                continue
+            gx = min(abs_xs) - group_padding
+            gy = min(abs_ys) - group_padding - header_h
+            gw = max(abs_xs) - min(abs_xs) + node_w + group_padding * 2
+            gh = max(abs_ys) - min(abs_ys) + node_h + group_padding * 2 + header_h
+            for tid in child_ids:
+                if tid in positions:
+                    positions[tid] = (positions[tid][0] - gx, positions[tid][1] - gy)
+        is_collapsed = group.attrs.get("collapsed") == "1"
+        pill_x = _parse_graph_int(group.attrs.get("pill_x"))
+        pill_y = _parse_graph_int(group.attrs.get("pill_y"))
+        if is_collapsed and pill_x is not None:
+            node_pos = {"x": pill_x, "y": pill_y}
+        else:
+            node_pos = {"x": gx, "y": gy}
+        group_nodes.append({
+            "id": group.id,
+            "type": "group",
+            "position": node_pos,
+            "data": {"title": group.title, "task_ids": [t.id for t in group.tasks], "collapsed": is_collapsed},
+            "style": {"width": COLLAPSED_GROUP_W if is_collapsed else gw, "height": COLLAPSED_GROUP_H if is_collapsed else gh},
+        })
+    rf_task_nodes = []
+    for task in tasks:
+        node: dict = {
+            "id": task.id,
+            "position": {"x": positions[task.id][0], "y": positions[task.id][1]},
+            "data": {"title": task.title, "missing": missing_critical_task_attrs(task)},
+        }
+        if task.group_id:
+            node["parentId"] = task.group_id
+        rf_task_nodes.append(node)
     graph_payload = {
-        "nodes": [
-            {
-                "id": task.id,
-                "position": {"x": positions[task.id][0], "y": positions[task.id][1]},
-                "data": {"title": task.title, "missing": missing_critical_task_attrs(task)},
-            }
-            for task in tasks
-        ],
+        "nodes": [*group_nodes, *rf_task_nodes],
         "edges": [{"id": f"{source}->{target}", "source": source, "target": target} for source, target in edges],
     }
     warnings_html = "".join(f"<li>{html.escape(item)}</li>" for item in warnings)
@@ -504,13 +633,120 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], tit
       const warning = missing.length ? React.createElement('span', {className: 'absolute right-3 top-3 text-xs text-amber-500', title: `Missing: ${missing.join(', ')}`}, '⚠︎') : null;
       return React.createElement('button', {type: 'button', onClick: () => openPreview(id), className: 'relative min-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-lg dark:border-slate-700 dark:bg-slate-900'}, React.createElement(Handle, {type: 'target', position: Position.Left, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}), warning, React.createElement('span', {className: 'block text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500'}, id), React.createElement('span', {className: 'mt-2 block text-sm font-semibold text-slate-900 dark:text-slate-100'}, data.title || id), React.createElement(Handle, {type: 'source', position: Position.Right, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-900'}));
     };
-    const nodeTypes = {task: TaskNode};
+    const GroupNode = ({id, data, style}) => {
+      const collapsed = !!data?.collapsed;
+      const toggleCollapse = React.useCallback((e) => {
+        e.stopPropagation();
+        if (data?.onToggle) data.onToggle(id);
+      }, [id, data]);
+      const count = Array.isArray(data?.task_ids) ? data.task_ids.length : 0;
+      if (collapsed) {
+        return React.createElement('div', {className: 'relative flex h-full w-full items-center'},
+          React.createElement(Handle, {type: 'target', position: Position.Left, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-800'}),
+          React.createElement('button', {
+            type: 'button', onClick: toggleCollapse,
+            className: 'flex h-full w-full items-center gap-4 rounded-full border border-slate-300 bg-white px-8 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700',
+          },
+            React.createElement('span', {className: 'text-xs font-bold uppercase tracking-[0.2em] text-slate-600 dark:text-slate-300'}, data?.title || id),
+            React.createElement('span', {className: 'ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-400'}, count),
+          ),
+          React.createElement(Handle, {type: 'source', position: Position.Right, className: '!h-3 !w-3 !border-slate-400 !bg-white dark:!bg-slate-800'}),
+        );
+      }
+      return React.createElement('div', {className: 'relative h-full w-full'},
+        React.createElement('div', {
+          className: 'absolute flex items-center gap-2',
+          style: {top: -32, left: 0},
+        },
+          React.createElement('span', {className: 'text-xs font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400'}, data?.title || id),
+          React.createElement('button', {
+            type: 'button',
+            onClick: toggleCollapse,
+            className: 'rounded border border-slate-300 px-1.5 py-0 text-[11px] text-slate-400 hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800',
+          }, '▲'),
+        ),
+        React.createElement('div', {className: 'h-full w-full rounded-2xl border-2 border-dashed border-slate-300 bg-white/40 dark:border-slate-700 dark:bg-slate-900/40'}),
+      );
+    };
+    const nodeTypes = {task: TaskNode, group: GroupNode};
+    const COLLAPSED_GROUP_W = 260, COLLAPSED_GROUP_H = 60;
     const makeFlowElement = (initialNodes, initialEdges, hostForSnapshot) => {
       const App = () => {
-        const startNodes = initialNodes.map((node) => ({...node, type: 'task'}));
-        const startEdges = initialEdges.map((edge) => ({...edge, ...edgeDefaults}));
+        const rawNodes = initialNodes.map((node) => node.type === 'group' ? node : {...node, type: 'task'});
+        const rawEdges = initialEdges.map((edge) => ({...edge, ...edgeDefaults}));
+        const origEdgeEndpoints = React.useRef({});
+        const {startNodes, startEdges} = React.useMemo(() => {
+          let ns = rawNodes;
+          let es = rawEdges;
+          for (const gn of rawNodes.filter((n) => n.type === 'group' && n.data?.collapsed)) {
+            const childIds = new Set(Array.isArray(gn.data?.task_ids) ? gn.data.task_ids : []);
+            ns = ns.map((n) => childIds.has(n.id) ? {...n, hidden: true} : n);
+            es = es.map((e) => {
+              const srcIn = childIds.has(e.source), tgtIn = childIds.has(e.target);
+              if (!srcIn && !tgtIn) return e;
+              origEdgeEndpoints.current[e.id] = {source: e.source, target: e.target};
+              const newSource = srcIn ? gn.id : e.source;
+              const newTarget = tgtIn ? gn.id : e.target;
+              if (newSource === newTarget) return {...e, hidden: true};
+              return {...e, source: newSource, target: newTarget};
+            });
+          }
+          return {startNodes: ns, startEdges: es};
+        }, []);
+        const origGroupStyles = React.useRef(Object.fromEntries(
+          initialNodes.filter((n) => n.type === 'group').map((n) => [n.id, n.style])
+        ));
         const [nodes, setNodes] = React.useState(startNodes);
         const [edges, setEdges] = React.useState(startEdges);
+        const toggleGroup = React.useCallback(async (groupId) => {
+          let nextCollapsed, childIds;
+          setNodes((prev) => {
+            const groupNode = prev.find((n) => n.id === groupId);
+            if (!groupNode) return prev;
+            nextCollapsed = !groupNode.data?.collapsed;
+            childIds = new Set(Array.isArray(groupNode.data?.task_ids) ? groupNode.data.task_ids : []);
+            return prev.map((n) => {
+              if (n.id === groupId) {
+                const nextStyle = nextCollapsed
+                  ? {width: COLLAPSED_GROUP_W, height: COLLAPSED_GROUP_H}
+                  : (origGroupStyles.current[groupId] || n.style);
+                return {...n, data: {...n.data, collapsed: nextCollapsed}, style: nextStyle};
+              }
+              if (childIds.has(n.id)) return {...n, hidden: nextCollapsed};
+              return n;
+            });
+          });
+          setEdges((prev) => {
+            if (childIds === undefined) return prev;
+            if (nextCollapsed) {
+              return prev.map((e) => {
+                const srcIn = childIds.has(e.source);
+                const tgtIn = childIds.has(e.target);
+                if (!srcIn && !tgtIn) return e;
+                origEdgeEndpoints.current[e.id] = {source: e.source, target: e.target};
+                const newSource = srcIn ? groupId : e.source;
+                const newTarget = tgtIn ? groupId : e.target;
+                if (newSource === newTarget) return {...e, hidden: true};
+                return {...e, source: newSource, target: newTarget, hidden: false};
+              });
+            } else {
+              return prev.map((e) => {
+                const orig = origEdgeEndpoints.current[e.id];
+                if (!orig) return e;
+                delete origEdgeEndpoints.current[e.id];
+                return {...e, source: orig.source, target: orig.target, hidden: false};
+              });
+            }
+          });
+          await saveGraphMutation((payload) => {
+            const group = (payload.groups || []).find((g) => g.id === groupId);
+            if (!group) return;
+            group.attrs = {...(group.attrs || {}), collapsed: nextCollapsed ? '1' : '0'};
+          });
+        }, []);
+        const nodesWithToggle = React.useMemo(() =>
+          nodes.map((n) => n.type === 'group' ? {...n, data: {...n.data, onToggle: toggleGroup}} : n),
+        [nodes, toggleGroup]);
         React.useEffect(() => {
           if (hostForSnapshot) hostForSnapshot.__vyasaTaskSnapshot = {nodes, edges};
         }, [nodes, edges]);
@@ -522,11 +758,69 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], tit
           setEdges(nextEdges);
           await saveGraphMutation((payload) => persistGraphEdges(payload, nextEdges));
         };
+        const NODE_W = 220, NODE_H = 92, GROUP_PAD = 24;
+        const pendingGroupState = React.useRef(null);
+        const recomputeGroupBounds = (draggedNode, prev) => {
+          if (!draggedNode.parentId) return prev;
+          const groupId = draggedNode.parentId;
+          const children = prev.filter((n) => n.parentId === groupId && !n.hidden);
+          if (!children.length) return prev;
+          const childPositions = children.map((n) => n.id === draggedNode.id ? {id: n.id, pos: draggedNode.position} : {id: n.id, pos: n.position});
+          const minX = Math.min(...childPositions.map((c) => c.pos.x));
+          const minY = Math.min(...childPositions.map((c) => c.pos.y));
+          const maxX = Math.max(...childPositions.map((c) => c.pos.x));
+          const maxY = Math.max(...childPositions.map((c) => c.pos.y));
+          const shiftX = minX - GROUP_PAD;
+          const shiftY = minY - GROUP_PAD;
+          const nextW = maxX - shiftX + NODE_W + GROUP_PAD;
+          const nextH = maxY - shiftY + NODE_H + GROUP_PAD;
+          origGroupStyles.current[groupId] = {width: nextW, height: nextH};
+          const groupNode = prev.find((n) => n.id === groupId);
+          const newGroupPos = {x: (groupNode?.position.x || 0) + shiftX, y: (groupNode?.position.y || 0) + shiftY};
+          const newChildPositions = Object.fromEntries(childPositions.map((c) => [
+            c.id,
+            c.id === draggedNode.id ? draggedNode.position : {x: c.pos.x - shiftX, y: c.pos.y - shiftY},
+          ]));
+          pendingGroupState.current = {groupId, groupPos: newGroupPos, childPositions: newChildPositions};
+          return prev.map((n) => {
+            if (n.id === groupId) return {...n, position: newGroupPos, style: {width: nextW, height: nextH}};
+            if (n.parentId === groupId && n.id !== draggedNode.id) return {...n, position: newChildPositions[n.id]};
+            return n;
+          });
+        };
+        const onNodeDrag = React.useCallback((_event, node) => {
+          if (node.parentId) setNodes((prev) => recomputeGroupBounds(node, prev));
+        }, []);
         const onNodeDragStop = async (_event, node) => {
+          if (node.type === 'group') {
+            await saveGraphMutation((payload) => {
+              const group = (payload.groups || []).find((g) => g.id === node.id);
+              if (!group) return;
+              const isCollapsed = group.attrs?.collapsed === '1';
+              if (isCollapsed) {
+                group.attrs = {...(group.attrs || {}), pill_x: String(Math.round(node.position.x)), pill_y: String(Math.round(node.position.y))};
+              } else {
+                group.attrs = {...(group.attrs || {}), graph_x: String(Math.round(node.position.x)), graph_y: String(Math.round(node.position.y))};
+              }
+            });
+            return;
+          }
           await saveGraphMutation((payload) => {
-            const task = (payload.tasks || []).find((item) => item.id === node.id);
-            if (!task) return;
-            task.attrs = {...(task.attrs || {}), graph_x: String(Math.round(node.position.x)), graph_y: String(Math.round(node.position.y))};
+            const state = pendingGroupState.current;
+            if (state) {
+              const group = (payload.groups || []).find((g) => g.id === state.groupId);
+              if (group) group.attrs = {...(group.attrs || {}), graph_x: String(Math.round(state.groupPos.x)), graph_y: String(Math.round(state.groupPos.y))};
+              (payload.tasks || []).forEach((t) => {
+                if (state.childPositions[t.id]) {
+                  t.attrs = {...(t.attrs || {}), graph_x: String(Math.round(state.childPositions[t.id].x)), graph_y: String(Math.round(state.childPositions[t.id].y))};
+                }
+              });
+              pendingGroupState.current = null;
+            } else {
+              const task = (payload.tasks || []).find((item) => item.id === node.id);
+              if (!task) return;
+              task.attrs = {...(task.attrs || {}), graph_x: String(Math.round(node.position.x)), graph_y: String(Math.round(node.position.y))};
+            }
           });
         };
         const onEdgesDelete = async (deleted) => {
@@ -535,7 +829,7 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], tit
           setEdges(nextEdges);
           await saveGraphMutation((payload) => persistGraphEdges(payload, nextEdges));
         };
-        return React.createElement(ReactFlow, {nodes, edges, onNodesChange, onEdgesChange, onEdgesDelete, onConnect, onNodeDragStop, nodeTypes, fitView: true, snapToGrid: true, snapGrid: grid, colorMode: document.documentElement.classList.contains('dark') ? 'dark' : 'light', className: 'bg-transparent'}, React.createElement(Background, {gap: grid[0], size: 1}), React.createElement(Controls));
+        return React.createElement(ReactFlow, {nodes: nodesWithToggle, edges, onNodesChange, onEdgesChange, onEdgesDelete, onConnect, onNodeDrag, onNodeDragStop, nodeTypes, fitView: true, snapToGrid: true, snapGrid: grid, colorMode: document.documentElement.classList.contains('dark') ? 'dark' : 'light', className: 'bg-transparent'}, React.createElement(Background, {gap: grid[0], size: 1}), React.createElement(Controls));
       };
       return React.createElement(App);
     };
@@ -589,5 +883,5 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], tit
 """),
     )
 def render_tasks_board_text(text: str, title: str = "Tasks", *, task_api_url: str | None = None, show_heading: bool = False, width: str = "100%", height: str = "70vh"):
-    tasks, chains = parse_tasks_document_text(text)
-    return _render_tasks_board(tasks, chains, title, task_api_url=task_api_url, show_heading=show_heading, width=width, height=height)
+    tasks, chains, groups = parse_tasks_document_text(text)
+    return _render_tasks_board(tasks, chains, groups, title, task_api_url=task_api_url, show_heading=show_heading, width=width, height=height)
