@@ -9,6 +9,7 @@ from monsterui.all import UkIcon
 from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, estimate_read_time_minutes, format_last_modified_label, get_adjacent_posts, strip_more_marker
 from .markdown_rendering import _render_markdown_fragment
 from .slides import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
+from .tasks_rendering import render_tasks_board
 from .tree_file_rendering import render_tree_document, resolve_tree_title
 
 PAGE_TITLE_CLS = "vyasa-page-title text-4xl font-bold"
@@ -91,6 +92,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     abbreviations = effective_abbreviations(root)
     file_path = content_path_for_slug(path, ".md")
     tree_path = content_path_for_slug(path, ".tree")
+    tasks_path = content_path_for_slug(path, ".tasks")
     pdf_path = content_path_for_slug(path, ".pdf")
     folder_path = content_path_for_slug(path)
     if not file_path or not file_path.exists():
@@ -126,6 +128,13 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
                 render_tree_document(tree_doc),
             )
             return layout(tree_content, htmx=htmx, title=f"{post_title} - {get_blog_title()}", show_sidebar=True, toc_content=None, current_path=path, show_toc=False, auth=request.scope.get("auth"))
+        if tasks_path and tasks_path.exists():
+            post_title = slug_to_title(PathCls(path).name, abbreviations=abbreviations)
+            tasks_content = Div(
+                _breadcrumbs(path, slug_to_title, abbreviations),
+                render_tasks_board(tasks_path, post_title, save_url=content_url_for_slug(path, prefix="/api/tasks/chains")),
+            )
+            return layout(tasks_content, htmx=htmx, title=f"{post_title} - {get_blog_title()}", show_sidebar=True, toc_content=None, current_path=path, show_toc=False, auth=request.scope.get("auth"), full_width=True)
         if pdf_path and pdf_path.exists():
             post_title = f"{slug_to_title(PathCls(path).name, abbreviations=abbreviations)} (PDF)"
             pdf_src = content_url_for_slug(path, suffix=".pdf")

@@ -27,6 +27,7 @@ from .assets import asset_url
 from .favicon import favicon_href as resolve_favicon_href, write_generated_favicon
 from .tree_service import get_tree_entries
 from .tree_file_rendering import render_tree_document, resolve_tree_title
+from .tasks_rendering import render_tasks_board
 
 _asset_url = asset_url
 
@@ -402,7 +403,7 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
     """Build post tree with static .html links instead of HTMX"""
     items = []
     try:
-        entries = get_tree_entries(folder, root_folder, show_hidden, set(), ('.md', '.tree'))
+        entries = get_tree_entries(folder, root_folder, show_hidden, set(), ('.md', '.tree', '.tasks'))
         abbreviations = _effective_abbreviations(root_folder, folder)
     except (OSError, PermissionError): 
         return items
@@ -442,10 +443,14 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
                     title_text,
                     href=content_url_for_slug(note_slug, suffix=".html"),
                     cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
-        elif item.suffix in {'.md', '.tree'}:
+        elif item.suffix in {'.md', '.tree', '.tasks'}:
             slug = str(item.relative_to(root_folder).with_suffix(''))
-            title = get_post_title(item, abbreviations=abbreviations) if item.suffix == '.md' else resolve_tree_title(item, abbreviations=abbreviations)[0]
-            icon = "file-text" if item.suffix == ".md" else "git-branch"
+            if item.suffix == ".md":
+                title, icon = get_post_title(item, abbreviations=abbreviations), "file-text"
+            elif item.suffix == ".tree":
+                title, icon = resolve_tree_title(item, abbreviations=abbreviations)[0], "git-branch"
+            else:
+                title, icon = slug_to_title(item.stem, abbreviations=abbreviations), "kanban"
             
             # Use .html extension for static links
             items.append(Li(A(
@@ -604,7 +609,7 @@ def build_static_site(input_dir=None, output_dir=None):
     ignore_list = _effective_ignore_list(root_folder)
     include_list = _effective_include_list(root_folder)
     doc_files = []
-    for doc_file in [*root_folder.rglob('*.md'), *root_folder.rglob('*.tree')]:
+    for doc_file in [*root_folder.rglob('*.md'), *root_folder.rglob('*.tree'), *root_folder.rglob('*.tasks')]:
         # Only include files that are actually inside root_folder
         try:
             relative_path = doc_file.relative_to(root_folder)
@@ -638,6 +643,12 @@ def build_static_site(input_dir=None, output_dir=None):
             toc_items = None
             prev_item = next_item = None
             read_source = raw_content
+        elif doc_file.suffix == ".tasks":
+            post_title = slug_to_title(doc_file.stem, abbreviations=abbreviations)
+            content_div = render_tasks_board(doc_file, post_title)
+            toc_items = None
+            prev_item = next_item = None
+            read_source = doc_file.read_text(encoding="utf-8")
         else:
             metadata, raw_content = parse_frontmatter(doc_file)
             post_title, render_content = resolve_markdown_title(doc_file, abbreviations=abbreviations)
