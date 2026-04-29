@@ -26,7 +26,8 @@
   ],
   "modules": [
     "BLOG_VIEW_AS_HOME",
-    "INTELLIGENT_HYPERLINKING"
+    "INTELLIGENT_HYPERLINKING",
+    "HYBRID_TASK_RENDERING"
   ],
   "stages": {
     "00+10": {
@@ -151,6 +152,39 @@
       "status": "not_started",
       "mode": "greenfield",
       "output": "docs/implementation/INTELLIGENT_HYPERLINKING/tasks.md",
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": null,
+      "approvals": [],
+      "revision_history": []
+    },
+    "40a+40b:HYBRID_TASK_RENDERING": {
+      "status": "not_started",
+      "mode": "greenfield",
+      "output": [
+        "docs/implementation/HYBRID_TASK_RENDERING/prd.md",
+        "docs/implementation/HYBRID_TASK_RENDERING/trd.md"
+      ],
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": null,
+      "approvals": [],
+      "revision_history": []
+    },
+    "40c:HYBRID_TASK_RENDERING": {
+      "status": "not_started",
+      "mode": "greenfield",
+      "output": "docs/implementation/HYBRID_TASK_RENDERING/tasks.md",
+      "inherited_ref": null,
+      "locked_by": null,
+      "doc_hash": null,
+      "approvals": [],
+      "revision_history": []
+    },
+    "50:HYBRID_TASK_RENDERING": {
+      "status": "not_started",
+      "mode": "greenfield",
+      "output": "docs/implementation/HYBRID_TASK_RENDERING/tasks.md",
       "inherited_ref": null,
       "locked_by": null,
       "doc_hash": null,

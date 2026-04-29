@@ -563,7 +563,8 @@ def _render_tasks_board(tasks: list[TaskItem], chains: dict[str, list[str]], gro
     warnings_html = "".join(f"<li>{html.escape(item)}</li>" for item in warnings)
     warnings_cls = "mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
     warnings_style = "" if warnings else "display:none;"
-    warnings_open = " open" if warnings else ""
+    # warnings_open = " open" if warnings else ""
+    warnings_open = ""
     panel_style = f'width: {html.escape(width)}; position: relative; left: 50%; transform: translateX(-50%);' if "vw" in str(width).lower() else f'width: {html.escape(width)};'
     header_nodes = [H1(title, cls="vyasa-page-title text-4xl font-bold"), P(f"{len(tasks)} task{'s' if len(tasks) != 1 else ''}", cls="mt-2 text-slate-500")] if show_heading else []
     return Div(
