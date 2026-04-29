@@ -2,9 +2,11 @@ import html
 import json
 import re
 import shlex
+from dataclasses import dataclass
 from functools import partial
 from itertools import count
 from pathlib import Path
+from typing import Protocol
 
 import mistletoe as mst
 from fasthtml.common import Div, Link, NotStr, Span, to_xml
@@ -52,6 +54,30 @@ _CALLOUT_META = {
     "question": ("Question", "question"), "warning": ("Warning", "warning"), "failure": ("Failure", "close"),
     "danger": ("Danger", "warning"), "bug": ("Bug", "bug"), "example": ("Example", "code"), "quote": ("Quote", "quote-right"),
 }
+
+
+@dataclass(frozen=True)
+class RenderContext:
+    current_path: str | None = None
+    img_dir: str | None = None
+    slide_mode: bool = False
+    content_tree: object | None = None
+
+
+class MarkdownFeature(Protocol):
+    def preprocess(self, markdown: str, context: RenderContext) -> str: ...
+    def postprocess(self, html_fragment: str, context: RenderContext) -> str: ...
+
+
+class MarkdownRenderer:
+    def render(self, markdown: str, context: RenderContext | None = None):
+        context = context or RenderContext()
+        return from_md(
+            markdown,
+            img_dir=context.img_dir,
+            current_path=context.current_path,
+            slide_mode=context.slide_mode,
+        )
 _CALLOUT_SVGS = {
     "info": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/></svg>',
     "file-text": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h6"/><path d="M9 9h1"/></svg>',

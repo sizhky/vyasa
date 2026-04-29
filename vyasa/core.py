@@ -1,5 +1,5 @@
 import asyncio
-import re, os
+import re
 import json
 import base64
 import time
@@ -39,6 +39,7 @@ from .nav_views import navbar_view
 from loguru import logger
 from .assets import asset_url
 from .admin_views import rbac_admin_content
+from .annotations_api import CallableAnnotationStore, register_annotations_routes
 from .auth.context import get_auth_from_request, get_roles_from_auth, get_roles_from_request
 from .auth.admin_helpers import apply_impersonation_action, parse_rbac_form
 from .auth.flow_helpers import (
@@ -61,18 +62,21 @@ from .content_routes import (
     render_post_detail,
     render_slide_deck,
 )
+from .content_tree import ContentTree
+from .bookmarks_api import CallableBookmarkStore, register_bookmarks_routes
 from .drawing_auth import (
     drawing_password_for,
     drawing_unlocked_in_session,
     unlock_drawing,
 )
 from .auth.oauth_bootstrap import build_google_oauth
-from .annotations_store import AnnotationRow, delete_annotation, get_annotations_table, list_annotations, upsert_annotation
-from .bookmark_store import bookmark_owner_from_auth, delete_bookmark, list_bookmarks, upsert_bookmark
+from .annotations_store import delete_annotation, list_annotations, upsert_annotation
+from .bookmark_store import delete_bookmark, list_bookmarks, upsert_bookmark
 from .bookmark_views import bookmarks_block
 from .page_views import not_found_content
 from .rbac_config import normalize_rbac_cfg, render_rbac_toml, write_rbac_to_vyasa
 from .rbac_store import load_rbac_cfg, write_rbac_cfg
+from .runtime_context import RuntimeContext
 from .search_pages import gather_search_content
 from .search_http import gather_search_page
 from .search_views import (
@@ -92,7 +96,7 @@ from .tree_rendering import (
     build_post_tree_render,
     folder_has_visible_descendant as tree_folder_has_visible_descendant,
 )
-from .tasks_rendering import tasks_fence_payload, write_tasks_fence_payload
+from .tasks_api import register_tasks_routes
 from .favicon import favicon_href, favicon_svg
 from .file_search import search_file_records
 _asset_url = asset_url
@@ -376,26 +380,6 @@ def _bookmarks_db_delete(owner: str, path: str):
     return delete_bookmark(get_config().get_root_folder(), _bookmark_store_cache, owner, path)
 
 
-def _resolve_bookmark_items(owner: str, roles):
-    items = []
-    root = get_root_folder()
-    for row in _bookmarks_db_list(owner):
-        slug = (row.path or "").strip("/")
-        path = content_path_for_slug(slug, ".md") or content_path_for_slug(slug, ".tree") or content_path_for_slug(slug, ".pdf")
-        if not slug or not path or path.suffix not in {".md", ".tree", ".pdf"}:
-            continue
-        if not is_allowed(f"/posts/{slug}", roles or [], _rbac_rules):
-            continue
-        abbreviations = _effective_abbreviations(root, path.parent)
-        if path.suffix == ".md":
-            metadata, _ = parse_frontmatter(path)
-            title = metadata.get("title", slug_to_title(path.stem, abbreviations=abbreviations))
-        else:
-            title = slug_to_title(path.stem, abbreviations=abbreviations)
-        items.append({"path": slug, "href": content_url_for_slug(slug), "title": title})
-    return items
-
-
 def _load_rbac_cfg_from_store():
     cfg = _rbac_db_load()
     if cfg:
@@ -500,6 +484,14 @@ def _mount_package_static(app_instance):
     mount_package_static(app_instance, Path(__file__).parent)
 
 rt = app.route
+
+_runtime = RuntimeContext(
+    config=_config,
+    rbac_rules=lambda: _rbac_rules,
+    rbac_cfg=lambda: _rbac_cfg,
+    google_oauth_cfg=lambda: _google_oauth_cfg,
+    logger=logger,
+)
 
 
 from starlette.requests import Request
@@ -821,168 +813,18 @@ async def save_excalidraw(path: str, request: Request):
     return Response('{"ok":true}', media_type="application/json")
 
 
-def _tasks_allowed(path: str, request: Request):
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    return roles is None or is_allowed(f"/posts/{path}", roles or [], _rbac_rules)
-
-
-def _tasks_markdown_file_for_api(path: str):
-    file_path = content_path_for_slug(path, ".md")
-    if not file_path or not file_path.exists():
-        return None
-    return file_path
-
-
-@rt("/api/tasks/blocks/{path:path}", methods=["GET"])
-async def get_tasks_block(path: str, request: Request, block: int = 0):
-    file_path = _tasks_markdown_file_for_api(path)
-    if not file_path:
-        return Response(status_code=404)
-    if not _tasks_allowed(path, request):
-        return Response("Forbidden", status_code=403)
-    try:
-        payload = tasks_fence_payload(file_path, block)
-    except IndexError:
-        return Response(status_code=404)
-    return Response(json.dumps(payload), media_type="application/json")
-
-
-@rt("/api/tasks/blocks/{path:path}", methods=["PUT"])
-async def put_tasks_block(path: str, request: Request, block: int = 0):
-    file_path = _tasks_markdown_file_for_api(path)
-    if not file_path:
-        return Response(status_code=404)
-    if not _tasks_allowed(path, request):
-        return Response("Forbidden", status_code=403)
-    try:
-        payload = json.loads((await request.body()).decode("utf-8"))
-        if not isinstance(payload, dict):
-            return Response("Expected JSON object", status_code=400)
-        write_tasks_fence_payload(file_path, block, payload)
-    except IndexError:
-        return Response(status_code=404)
-    except json.JSONDecodeError:
-        return Response("Invalid JSON", status_code=400)
-    except Exception as exc:
-        logger.warning(f"Failed to write tasks block '{path}?block={block}': {exc}")
-        return Response("Save failed", status_code=500)
-    return Response('{"ok":true}', media_type="application/json")
-
-
-@rt("/api/annotations/{path:path}", methods=["GET"])
-async def get_annotations(path: str, request: Request):
-    if not _config.get_annotations_enabled():
-        return Response("Not Found", status_code=404)
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    if roles is not None and not is_allowed(f"/posts/{path}", roles or [], _rbac_rules):
-        return Response("Forbidden", status_code=403)
-    rows = _annotations_db_list(path)
-    payload = [
-        {
-            "id": row.id, "path": row.path, "parent_id": getattr(row, "parent_id", ""), "quote": row.quote, "prefix": row.prefix, "suffix": row.suffix, "anchor": getattr(row, "anchor", ""),
-            "comment": row.comment, "author": row.author, "created_at": row.created_at, "updated_at": row.updated_at,
-        }
-        for row in rows
-    ]
-    return Response(json.dumps(payload), media_type="application/json")
-
-
-@rt("/api/annotations/{path:path}", methods=["POST"])
-async def save_annotation(path: str, request: Request):
-    if not _config.get_annotations_enabled():
-        return Response("Not Found", status_code=404)
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    if roles is not None and not is_allowed(f"/posts/{path}", roles or [], _rbac_rules):
-        return Response("Forbidden", status_code=403)
-    try:
-        payload = json.loads((await request.body()).decode("utf-8"))
-    except Exception:
-        return Response("Invalid JSON", status_code=400)
-    if not isinstance(payload, dict):
-        return Response("Expected JSON object", status_code=400)
-    auth = get_auth_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) or {}
-    author = auth.get("name") or auth.get("email") or auth.get("username") or "anonymous"
-    now = payload.get("updated_at") or __import__("datetime").datetime.utcnow().isoformat()
-    row = AnnotationRow(
-        id=str(payload.get("id") or ""),
-        path=path.strip("/"),
-        parent_id=str(payload.get("parent_id") or ""),
-        quote=str(payload.get("quote") or ""),
-        prefix=str(payload.get("prefix") or ""),
-        suffix=str(payload.get("suffix") or ""),
-        anchor=json.dumps(payload.get("anchor") or {}),
-        comment=str(payload.get("comment") or ""),
-        author=author,
-        created_at=str(payload.get("created_at") or now),
-        updated_at=str(now),
-    )
-    if not row.id or not row.comment:
-        return Response("Missing annotation fields", status_code=400)
-    _annotations_db_upsert(row)
-    return Response(json.dumps({"ok": True, "author": author}), media_type="application/json")
-
-
-@rt("/api/annotations/{path:path}/{annotation_id}", methods=["DELETE"])
-async def remove_annotation(path: str, annotation_id: str, request: Request):
-    if not _config.get_annotations_enabled():
-        return Response("Not Found", status_code=404)
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    if roles is not None and not is_allowed(f"/posts/{path}", roles or [], _rbac_rules):
-        return Response("Forbidden", status_code=403)
-    rows = _annotations_db_list(path)
-    ids = {annotation_id}
-    changed = True
-    while changed:
-        changed = False
-        for row in rows:
-            if getattr(row, "parent_id", "") in ids and row.id not in ids:
-                ids.add(row.id)
-                changed = True
-    ok = False
-    for item_id in ids:
-        ok = _annotations_db_delete(item_id) or ok
-    return Response(json.dumps({"ok": ok}), media_type="application/json")
-
-
-@rt("/api/bookmarks", methods=["GET"])
-async def get_bookmarks(request: Request):
-    auth = get_auth_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) or {}
-    owner = bookmark_owner_from_auth(auth)
-    logger.info(f"[BOOKMARKS][GET] auth={auth} owner={owner!r}")
-    if not owner:
-        return Response(json.dumps({"items": [], "mode": "local"}), media_type="application/json", headers={"Cache-Control": "no-store"})
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    db_rows = [(row.owner, row.path, row.created_at) for row in _bookmarks_db_list(owner)]
-    items = _resolve_bookmark_items(owner, roles)
-    logger.info(f"[BOOKMARKS][GET] owner={owner!r} roles={roles} db_rows={db_rows} returned={[item['path'] for item in items]}")
-    return Response(json.dumps({"items": items, "mode": "server"}), media_type="application/json", headers={"Cache-Control": "no-store"})
-
-
-@rt("/api/bookmarks/{path:path}", methods=["PUT"])
-async def save_bookmark(path: str, request: Request):
-    auth = get_auth_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) or {}
-    owner = bookmark_owner_from_auth(auth)
-    logger.info(f"[BOOKMARKS][PUT] path={path!r} auth={auth} owner={owner!r}")
-    if not owner:
-        return Response("Unauthorized", status_code=401)
-    slug = str(path or "").strip("/")
-    if not content_path_for_slug(slug, ".md") and not content_path_for_slug(slug, ".pdf"):
-        return Response("Not Found", status_code=404)
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    if not is_allowed(f"/posts/{slug}", roles or [], _rbac_rules):
-        return Response("Forbidden", status_code=403)
-    _bookmarks_db_upsert(owner, slug)
-    logger.info(f"[BOOKMARKS][PUT] owner={owner!r} saved={slug!r} db_rows={[(row.owner, row.path) for row in _bookmarks_db_list(owner)]}")
-    return Response(json.dumps({"ok": True}), media_type="application/json", headers={"Cache-Control": "no-store"})
-
-
-@rt("/api/bookmarks/{path:path}", methods=["DELETE"])
-async def remove_bookmark(path: str, request: Request):
-    auth = get_auth_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) or {}
-    owner = bookmark_owner_from_auth(auth)
-    if not owner:
-        return Response("Unauthorized", status_code=401)
-    return Response(json.dumps({"ok": _bookmarks_db_delete(owner, path)}), media_type="application/json", headers={"Cache-Control": "no-store"})
+register_tasks_routes(rt, _runtime)
+register_annotations_routes(
+    rt,
+    _runtime,
+    CallableAnnotationStore(_annotations_db_list, _annotations_db_upsert, _annotations_db_delete),
+)
+register_bookmarks_routes(
+    rt,
+    _runtime,
+    CallableBookmarkStore(_bookmarks_db_list, _bookmarks_db_upsert, _bookmarks_db_delete),
+    root_folder=get_root_folder,
+)
 
 
 @app.ws("/ws/excalidraw/{path:path}", conn=_collab_conn, disconn=_collab_disconn)
@@ -1099,11 +941,7 @@ def navbar(
 
 def _posts_sidebar_fingerprint():
     try:
-        mtimes = []
-        for _, root in get_content_mounts():
-            for suffix in (".md", ".tree", ".pdf", ".excalidraw", ".vyasa"):
-                mtimes.extend(p.stat().st_mtime for p in iter_visible_files(root, (suffix,), True))
-        return max(mtimes, default=0)
+        return ContentTree.from_runtime().fingerprint()
     except Exception:
         return 0
 
@@ -1367,11 +1205,7 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
 
 def _posts_tree_fingerprint():
     try:
-        mtimes = []
-        for _, root in get_content_mounts():
-            for suffix in (".md", ".tree", ".pdf", ".excalidraw", ".vyasa"):
-                mtimes.extend(p.stat().st_mtime for p in iter_visible_files(root, (suffix,), True))
-        return max(mtimes, default=0)
+        return ContentTree.from_runtime().fingerprint()
     except Exception:
         return 0
 

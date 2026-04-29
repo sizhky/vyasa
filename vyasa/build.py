@@ -6,8 +6,6 @@ into a standalone static website with HTML, CSS, and JavaScript files.
 
 from pathlib import Path
 import shutil
-from functools import partial
-import mistletoe as mst
 from fasthtml.common import *
 from monsterui.all import *
 from .helpers import (
@@ -18,13 +16,12 @@ from .helpers import (
     get_adjacent_posts, get_post_title, parse_frontmatter, resolve_markdown_title, slug_to_title,
     text_to_anchor,
 )
-from .markdown_pipeline import extract_footnotes, preprocess_super_sub
-from .markdown_rendering import ContentRenderer, from_md
-from .markdown_tabs import preprocess_tabs
+from .markdown_rendering import from_md
 from .sidebar_helpers import build_toc_items, extract_toc
 from .config import get_config, reload_config
 from .assets import asset_url
 from .favicon import favicon_href as resolve_favicon_href, write_generated_favicon
+from .page_shell import PageShellModel, StaticShellRenderer
 from .tree_service import get_tree_entries
 from .tree_file_rendering import render_tree_document, resolve_tree_title
 
@@ -463,103 +460,16 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
 
 def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, toc_items=None, current_path=None):
     """Generate complete static page layout"""
-    
-    # Theme toggle button
-    theme_toggle = '''
-    <button onclick="toggleTheme()" class="p-1 hover:scale-110 shadow-none" type="button">
-        <span uk-icon="moon" class="dark:hidden"></span>
-        <span uk-icon="sun" class="hidden dark:block"></span>
-    </button>
-    '''
-    
-    # Navbar
-    navbar = f'''
-    <div class="vyasa-navbar-card bg-slate-900 text-white px-4 py-3 dark:bg-slate-800">
-        <div class="flex items-center justify-between md:hidden">
-            <button id="mobile-posts-toggle" title="Toggle file tree" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaTogglePostsPanel && window.__vyasaTogglePostsPanel()">
-                <span uk-icon="menu" class="w-5 h-5"></span>
-            </button>
-            <a href="/index.html" class="flex-1 px-4 text-center truncate">{blog_title}</a>
-            <div class="flex items-center gap-1">
-                <button id="mobile-toc-toggle" title="Toggle table of contents" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()">
-                    <span uk-icon="list" class="w-5 h-5"></span>
-                </button>
-                {theme_toggle}
-            </div>
-        </div>
-        <div class="hidden md:flex items-center justify-between">
-            <a href="/index.html">{blog_title}</a>
-            {theme_toggle}
-        </div>
-    </div>
-    '''
-    
-    # Build navigation sidebar
-    nav_html = to_xml(Ul(*nav_tree, cls="mt-2 list-none"))
-    posts_sidebar = f'''
-    <aside id="posts-sidebar" class="vyasa-sidebar vyasa-posts-sidebar hidden md:block w-64 shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
-        <details open class="vyasa-sidebar-card vyasa-sidebar-card-posts">
-            <summary class="vyasa-sidebar-toggle vyasa-sidebar-toggle-posts flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
-                <span uk-icon="menu" class="w-5 h-5 mr-2"></span>
-                Posts
-            </summary>
-            <div class="vyasa-sidebar-body vyasa-sidebar-body-posts mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
-                {nav_html}
-            </div>
-        </details>
-    </aside>
-    '''
-    
-    # Build TOC sidebar
-    toc_html = ""
-    if toc_items:
-        toc_list_html = to_xml(Ul(*toc_items, cls="mt-2 list-none"))
-        toc_html = f'''
-        <aside id="toc-sidebar" class="vyasa-sidebar vyasa-toc-sidebar hidden md:block w-64 shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
-            <details open class="vyasa-sidebar-card vyasa-sidebar-card-table-of-contents">
-                <summary class="vyasa-sidebar-toggle vyasa-sidebar-toggle-table-of-contents flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
-                    <span uk-icon="list" class="w-5 h-5 mr-2"></span>
-                    Table of Contents
-                </summary>
-                <div class="vyasa-sidebar-body vyasa-sidebar-body-table-of-contents mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
-                    {toc_list_html}
-                </div>
-            </details>
-        </aside>
-        '''
-    
-    # Main content area
-    main_content = f'''
-    <main id="main-content" class="vyasa-main-shell flex-1 min-w-0 px-6 py-8 space-y-8">
-        {content_html}
-    </main>
-    '''
-    
-    # Footer
-    footer = '''
-    <footer class="vyasa-footer-shell w-full mt-auto">
-        <div class="vyasa-footer-card bg-slate-900 text-white p-4 dark:bg-slate-800 text-right">
-            Powered by Vyasa
-        </div>
-    </footer>
-    '''
-    
-    # Complete body
-    body = f'''
-    <div id="page-container" class="flex flex-col min-h-screen">
-        <div class="vyasa-navbar-shell w-full sticky top-0 z-50">
-            {navbar}
-        </div>
-        <div id="content-with-sidebars" class="vyasa-content-grid w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1">
-            {posts_sidebar}
-            {main_content}
-            {toc_html}
-        </div>
-        {footer}
-    </div>
-    '''
-    
-    return generate_static_html(page_title, body, blog_title, favicon_href)
+    model = PageShellModel(
+        title=page_title,
+        blog_title=blog_title,
+        main_html=content_html,
+        nav_tree=nav_tree,
+        favicon_href=favicon_href,
+        toc_items=toc_items,
+        current_path=current_path,
+    )
+    return StaticShellRenderer(generate_static_html).render(model)
 
 
 def build_static_site(input_dir=None, output_dir=None):
