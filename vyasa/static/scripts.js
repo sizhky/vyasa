@@ -3049,6 +3049,31 @@ function initScrollTopButton(root = document) {
     sync();
 }
 
+function initMobileScrollProgress(root = document) {
+    const page = root.getElementById?.('page-container') || document.getElementById('page-container');
+    if (!page) return;
+    let bar = document.getElementById('vyasa-mobile-scroll-progress');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'vyasa-mobile-scroll-progress';
+        bar.className = 'vyasa-mobile-scroll-progress';
+        bar.setAttribute('aria-hidden', 'true');
+        page.appendChild(bar);
+    }
+    const sync = () => {
+        const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+        const progress = Math.min(1, Math.max(0, window.scrollY / max));
+        bar.style.height = `${Math.round(progress * window.innerHeight)}px`;
+    };
+    window.__vyasaSyncMobileScrollProgress = sync;
+    if (!window.__vyasaMobileScrollProgressBound) {
+        window.addEventListener('scroll', () => window.__vyasaSyncMobileScrollProgress?.(), { passive: true });
+        window.addEventListener('resize', () => window.__vyasaSyncMobileScrollProgress?.(), { passive: true });
+        window.__vyasaMobileScrollProgressBound = true;
+    }
+    sync();
+}
+
 function normalizeCriticalTextColors(root = document) {
     const ink = getComputedStyle(document.documentElement).getPropertyValue('--vyasa-ink').trim() || '#2d3434';
     root.querySelectorAll('#main-content h1, #main-content h2, #main-content h3, #main-content h4, #main-content h5, #main-content h6').forEach((el) => {
@@ -4136,6 +4161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initHeadingFolds(document);
     syncHeadingActionStates(document);
     initScrollTopButton(document);
+    initMobileScrollProgress(document);
     syncThemePresetDebug(document);
     replaceEscapedDollarPlaceholders(document.body);
     renderMathSafely(document.body);
@@ -4184,6 +4210,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initHeadingFolds(event.target);
     syncHeadingActionStates(document);
     initScrollTopButton(document);
+    initMobileScrollProgress(document);
     syncThemePresetDebug(document);
     replaceEscapedDollarPlaceholders(event.target);
     renderMathSafely(event.target);
