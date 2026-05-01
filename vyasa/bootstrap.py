@@ -7,6 +7,7 @@ AUTH_SKIP_ROUTES = [
     r"^/login$",
     r"^/login/google$",
     r"^/auth/google/callback$",
+    r"^/_vyasa/.*",
     r"^/_sidebar/.*",
     r"^/static/.*",
     r".*\.css",

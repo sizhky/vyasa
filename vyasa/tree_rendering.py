@@ -4,7 +4,7 @@ from urllib.parse import quote
 from fasthtml.common import A, Details, Li, Span, Summary, Ul
 from monsterui.all import UkIcon
 from .bookmark_views import bookmark_toggle_button
-from .helpers import content_slug_for_path
+from .helpers import content_slug_for_path, content_url_for_slug
 from .tree_file_rendering import resolve_tree_title
 
 
@@ -68,9 +68,10 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
                 note_file = find_folder_note_file_fn(item)
                 note_slug = content_slug_for_path(note_file) if note_file else None
                 note_allowed = bool(note_slug and is_allowed_fn(f"/posts/{note_slug}", roles or [], rbac_rules))
+                note_href = content_url_for_slug(note_slug) if note_slug else ""
                 note_link = A(
-                    href=f"/posts/{note_slug}",
-                    hx_get=f"/posts/{note_slug}",
+                    href=note_href,
+                    hx_get=note_href,
                     hx_target="#main-content",
                     hx_push_url="true",
                     hx_swap="outerHTML show:window:top settle:0.1s",
@@ -93,14 +94,15 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             note_file = find_folder_note_file_fn(item)
             note_slug = content_slug_for_path(note_file) if note_file else None
             note_allowed = bool(note_slug and is_allowed_fn(f"/posts/{note_slug}", roles or [], rbac_rules))
-            note_link = A(href=f"/posts/{note_slug}", hx_get=f"/posts/{note_slug}", hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link folder-note-link whitespace-nowrap", title=f"Open {folder_title}", onclick="event.stopPropagation();", data_path=note_slug)(folder_title) if note_allowed else None
+            note_href = content_url_for_slug(note_slug) if note_slug else ""
+            note_link = A(href=note_href, hx_get=note_href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link folder-note-link whitespace-nowrap", title=f"Open {folder_title}", onclick="event.stopPropagation();", data_path=note_slug)(folder_title) if note_allowed else None
             if not sub_items and not note_allowed:
                 continue
             title_node = _bookmarkable_row(note_link, note_slug, folder_title) if note_allowed else Span(folder_title, cls="whitespace-nowrap", title=folder_title)
             if sub_items:
                 items.append(Li(Details(_folder_summary(title_node), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true", open=should_expand), cls="my-1"))
             elif note_slug:
-                folder_link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon("folder", cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(folder_title, cls="whitespace-nowrap", title=folder_title), href=f"/posts/{note_slug}", hx_get=f"/posts/{note_slug}", hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link inline-flex items-center whitespace-nowrap", data_path=note_slug)
+                folder_link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon("folder", cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(folder_title, cls="whitespace-nowrap", title=folder_title), href=note_href, hx_get=note_href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link inline-flex items-center whitespace-nowrap", data_path=note_slug)
                 items.append(Li(_bookmarkable_tree_row(folder_link, note_slug, folder_title)))
             continue
         if item.suffix not in {".md", ".pdf", ".tree", ".excalidraw"}:
@@ -117,15 +119,15 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             metadata, _ = parse_frontmatter_fn(item)
             icon = "monitor" if metadata.get("slides", False) else "file-text"
             title = metadata.get("title", slug_to_title_fn(item.stem, abbreviations=abbreviations))
-            label, href = title, f"/posts/{slug}"
+            label, href = title, content_url_for_slug(slug)
         elif item.suffix == ".tree":
             icon = "git-branch"
             title = resolve_tree_title(item, abbreviations=abbreviations)[0]
-            label, href = f"{title} (Tree)", f"/posts/{slug}"
+            label, href = f"{title} (Tree)", content_url_for_slug(slug)
         elif item.suffix == ".pdf":
-            icon, title, label, href = "file", slug_to_title_fn(item.stem, abbreviations=abbreviations), f"{slug_to_title_fn(item.stem, abbreviations=abbreviations)} (PDF)", f"/posts/{slug}"
+            icon, title, label, href = "file", slug_to_title_fn(item.stem, abbreviations=abbreviations), f"{slug_to_title_fn(item.stem, abbreviations=abbreviations)} (PDF)", content_url_for_slug(slug)
         else:
-            icon, title, label, href = "pencil", slug_to_title_fn(item.stem, abbreviations=abbreviations), f"{slug_to_title_fn(item.stem, abbreviations=abbreviations)} (Excalidraw)", f"/drawings/{slug}"
+            icon, title, label, href = "pencil", slug_to_title_fn(item.stem, abbreviations=abbreviations), f"{slug_to_title_fn(item.stem, abbreviations=abbreviations)} (Excalidraw)", content_url_for_slug(slug, prefix="/drawings")
         link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon(icon, cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(label, cls="whitespace-nowrap", title=title), href=href, hx_get=href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link inline-flex items-center whitespace-nowrap", data_path=slug)
         row = _bookmarkable_tree_row(link, slug, title) if item.suffix != ".excalidraw" else Span(link, cls="vyasa-tree-row inline-flex items-center py-1 px-2 rounded transition-colors whitespace-nowrap")
         items.append(Li(row))

@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from .helpers import resolve_heading_anchor
+from .helpers import _strip_leading_frontmatter_block, content_url_for_slug, resolve_heading_anchor
 
 
 @dataclass(frozen=True)
@@ -277,14 +277,14 @@ class ZenSlideDeck:
         return "\n\n".join(self.slides[self.clamp(index) - 1])
 
     def href(self, doc_path, index):
-        return f"/slides/{doc_path}/{slide_slug(self.clamp(index))}"
+        return content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(self.clamp(index))}")
 
     def anchor(self, index):
         return self.anchors[self.clamp(index) - 1]
 
     def doc_href(self, doc_path, index):
         anchor = self.anchor(index)
-        return f"/posts/{doc_path}#{anchor}" if anchor else f"/posts/{doc_path}"
+        return content_url_for_slug(doc_path, fragment=anchor) if anchor else content_url_for_slug(doc_path)
 
     def nav(self, doc_path, index):
         index = self.clamp(index)
@@ -306,7 +306,7 @@ class ZenSlideDeck:
             items.append({
                 "index": index + 1,
                 "text": "✦ > " + " > ".join(crumbs) if crumbs else "✦",
-                "href": f"/slides/{doc_path}/{slide_slug(index + 1)}",
+                "href": content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index + 1)}"),
             })
         return items
 
@@ -326,7 +326,7 @@ class ZenSlideDeck:
 
 
 def iter_zen_slides(markdown_text):
-    blocks = _split_blocks(markdown_text)
+    blocks = _split_blocks(_strip_leading_frontmatter_block(markdown_text))
     prelude = []
     context = []
     for block in blocks:
@@ -391,13 +391,8 @@ def slide_slug(index):
 
 
 def present_href_for_anchor(markdown_text, doc_path, target_anchor):
-    counts = {}
-    for index, slide in enumerate(iter_zen_slides(markdown_text), start=1):
-        for block in slide:
-            match = re.match(r"^(#{1,6})\s+(.+)$", block, re.MULTILINE)
-            if not match:
-                continue
-            _, anchor = resolve_heading_anchor(match.group(2).strip(), counts)
-            if anchor == target_anchor:
-                return f"/slides/{doc_path}/{slide_slug(index)}"
-    return f"/slides/{doc_path}/slide-2"
+    deck = ZenSlideDeck(markdown_text)
+    for index, anchor in enumerate(deck.anchors, start=2):
+        if anchor == target_anchor:
+            return content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index)}")
+    return content_url_for_slug(doc_path, prefix="/slides", suffix="/slide-2")

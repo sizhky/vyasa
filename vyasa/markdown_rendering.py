@@ -2,9 +2,11 @@ import html
 import json
 import re
 import shlex
+from dataclasses import dataclass
 from functools import partial
 from itertools import count
 from pathlib import Path
+from typing import Protocol
 
 import mistletoe as mst
 from fasthtml.common import Div, Link, NotStr, Span, to_xml
@@ -16,6 +18,7 @@ from .config import get_config
 from .helpers import (
     _plain_text_from_html,
     content_path_for_slug,
+    content_url_for_slug,
     get_content_mounts,
     content_root_and_relative,
     content_slug_for_path,
@@ -31,6 +34,7 @@ from .markdown_pipeline import (
 )
 from .markdown_tabs import postprocess_tabs as postprocess_md_tabs
 from .markdown_tabs import preprocess_tabs as preprocess_md_tabs
+from .tasks_rendering import render_tasks_board_text
 from .markdown_tokens import (
     DownloadEmbed,
     FootnoteRef,
@@ -50,6 +54,30 @@ _CALLOUT_META = {
     "question": ("Question", "question"), "warning": ("Warning", "warning"), "failure": ("Failure", "close"),
     "danger": ("Danger", "warning"), "bug": ("Bug", "bug"), "example": ("Example", "code"), "quote": ("Quote", "quote-right"),
 }
+
+
+@dataclass(frozen=True)
+class RenderContext:
+    current_path: str | None = None
+    img_dir: str | None = None
+    slide_mode: bool = False
+    content_tree: object | None = None
+
+
+class MarkdownFeature(Protocol):
+    def preprocess(self, markdown: str, context: RenderContext) -> str: ...
+    def postprocess(self, html_fragment: str, context: RenderContext) -> str: ...
+
+
+class MarkdownRenderer:
+    def render(self, markdown: str, context: RenderContext | None = None):
+        context = context or RenderContext()
+        return from_md(
+            markdown,
+            img_dir=context.img_dir,
+            current_path=context.current_path,
+            slide_mode=context.slide_mode,
+        )
 _CALLOUT_SVGS = {
     "info": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/></svg>',
     "file-text": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h6"/><path d="M9 9h1"/></svg>',
@@ -142,11 +170,11 @@ def _resolve_cytograph_source_url(source, current_path):
     if not rel:
         return source
     if rel.endswith(".md"):
-        mapped = f"/posts/{rel[:-3]}"
+        mapped = content_url_for_slug(rel[:-3])
     elif rel.startswith("static/"):
         mapped = f"/static/{rel[7:]}"
     else:
-        mapped = f"/download/{rel}"
+        mapped = content_url_for_slug(rel, prefix="/download")
     return mapped + suffix
 
 
@@ -350,7 +378,12 @@ def _resolve_raw_html_url(url, current_path):
     rel = _slug_for_resolved_path(resolved, current_path, strip_suffix=False)
     if not rel:
         return url
-    mapped = f"/posts/{rel[:-3]}" if rel.endswith(".md") else f"/{'static' if rel.startswith('static/') else 'posts'}/{rel if not rel.startswith('static/') else rel[7:]}"
+    if rel.endswith(".md"):
+        mapped = content_url_for_slug(rel[:-3])
+    elif rel.startswith("static/"):
+        mapped = content_url_for_slug(rel[7:], prefix="/static")
+    else:
+        mapped = content_url_for_slug(rel)
     return mapped + suffix
 
 
@@ -585,6 +618,7 @@ class ContentRenderer(FrankenRenderer):
         self.heading_counts = {}
         self.mermaid_counter = 0
         self.iframe_counter = 0
+        self.tasks_block_counter = 0
 
     def render_list_item(self, token):
         inner = self.render_inner(token)
@@ -720,11 +754,11 @@ class ContentRenderer(FrankenRenderer):
             resolved = (current_dir / raw_path).resolve() if current_dir else None
             rel_path = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=False) if resolved else None
             if rel_path:
-                download_path = f"/download/{rel_path}"
+                download_path = content_url_for_slug(rel_path, prefix="/download")
             else:
                 download_path = raw_path
         else:
-            download_path = f"/download/{raw_path}"
+            download_path = content_url_for_slug(raw_path, prefix="/download")
         if not label:
             label = Path(raw_path).name
         link_class = "underline underline-offset-2 font-medium transition-colors"
@@ -828,6 +862,23 @@ class ContentRenderer(FrankenRenderer):
             return _render_cryptograph_block(code)
         if lang == "cytograph":
             return _render_cytograph_block(code, current_path=self.current_path)
+        if lang == "tasks":
+            config, code = _split_fence_frontmatter(code)
+            task_api_url = None
+            if self.current_path:
+                task_api_url = content_url_for_slug(self.current_path, prefix="/api/tasks/blocks", fragment=None) + f"?block={self.tasks_block_counter}"
+            self.tasks_block_counter += 1
+            return to_xml(
+                render_tasks_board_text(
+                    code,
+                    config.get("title", attrs.get("title", "Tasks")),
+                    task_api_url=task_api_url,
+                    show_heading=False,
+                    width=config.get("width", "100%"),
+                    height=config.get("height", "70vh"),
+                    direction=config.get("direction", "lr"),
+                )
+            )
         raw_code = code
         code = html.unescape(code)
         line_numbers = bool(lang) and _resolve_line_numbers(get_config().get_code_line_numbers(), attrs=attrs)
@@ -866,7 +917,7 @@ class ContentRenderer(FrankenRenderer):
                 logger.debug(f"DEBUG: original_href={original_href}, current_path={self.current_path}, current_dir={current_dir}, resolved={resolved}")
                 rel = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=not Path(href).suffix) if resolved else None
                 if rel:
-                    href = f"/posts/{rel}"
+                    href = content_url_for_slug(rel)
                     is_absolute_internal = True
                 else:
                     is_external = True
@@ -882,7 +933,7 @@ class ContentRenderer(FrankenRenderer):
             download_attr = " download"
             boost_attr = ' hx-boost="false"'
             download_target = href[len("/posts/"):] if href.startswith("/posts/") else href.lstrip("/") if href.startswith("/") else href
-            href = f"/download/{download_target}"
+            href = content_url_for_slug(download_target, prefix="/download")
             hx = ""
         link_class = "underline underline-offset-2 font-medium transition-colors"
         return f'<a href="{href}"{hx}{ext}{download_attr}{boost_attr} class="{link_class}"{title}>{inner}</a>'

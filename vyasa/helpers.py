@@ -6,6 +6,7 @@ import tomllib
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote
 import frontmatter
 from loguru import logger
 
@@ -120,6 +121,11 @@ def content_slug_for_path(path: Path, strip_suffix: bool = True) -> str | None:
             rel = rel.with_suffix("")
         return (Path(alias) / rel).as_posix() if alias else rel.as_posix()
     return None
+
+def content_url_for_slug(slug: str | Path, prefix: str = "/posts", suffix: str = "", fragment: str | None = None) -> str:
+    encoded = quote(str(slug).strip("/"), safe="/")
+    url = f"{prefix.rstrip('/')}/{encoded}{suffix}" if encoded else prefix.rstrip("/") or "/"
+    return f"{url}#{quote(fragment, safe='-._~')}" if fragment else url
 
 def _strip_inline_markdown(text: str) -> str:
     cleaned = text or ""
@@ -349,8 +355,8 @@ def get_adjacent_posts(root: Path, current_path: str | Path, abbreviations=None)
         rel = path.relative_to(root).with_suffix("")
         return {
             "title": get_post_title(path, abbreviations=abbreviations),
-            "href": f"/posts/{rel.as_posix()}",
-            "static_href": f"/posts/{rel.as_posix()}.html",
+            "href": content_url_for_slug(rel.as_posix()),
+            "static_href": content_url_for_slug(rel.as_posix(), suffix=".html"),
         }
 
     prev_item = _item(siblings[idx - 1]) if idx > 0 else None
@@ -406,7 +412,7 @@ def _normalize_vyasa_config(parsed):
             config["order"] = []
 
     sort = parsed.get("sort")
-    if isinstance(sort, str) and sort in ("name_asc", "name_desc", "mtime_asc", "mtime_desc"):
+    if isinstance(sort, str) and sort in ("name_asc", "name_desc", "mtime_asc", "mtime_desc", "created_asc", "created_desc"):
         config["sort"] = sort
 
     folders_first = parsed.get("folders_first")
@@ -573,11 +579,18 @@ def _sort_vyasa_entries(entries, sort_method, folders_first):
     method = sort_method or "name_asc"
     reverse = method.endswith("desc")
     by_mtime = method.startswith("mtime")
+    by_created = method.startswith("created")
 
     def sort_key(item):
         if by_mtime:
             try:
                 return item.stat().st_mtime
+            except OSError:
+                return 0
+        if by_created:
+            try:
+                stat = item.stat()
+                return getattr(stat, "st_birthtime", stat.st_ctime)
             except OSError:
                 return 0
         return item.name.lower()
@@ -592,7 +605,7 @@ def _sort_vyasa_entries(entries, sort_method, folders_first):
     return sorted(entries, key=sort_key, reverse=reverse)
 
 def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
-    """List all posts in the blog root (md + tree + pdf)."""
+    """List all posts in the blog root (md + tree + pdf + tasks)."""
     root = root.resolve()
     root_parts = len(root.parts)
     posts: list[dict] = []

@@ -2,6 +2,12 @@
 title: The Game Theory of Competitive Pokémon
 ---
 
+<span class="pokemon-nav-thread" aria-hidden="true"></span>
+<img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/595.png"
+     alt=""
+     aria-hidden="true"
+     class="pokemon-nav-joltik" />
+
 <div style="text-align:center; padding: 2.5rem 0 1.5rem;">
 <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/150.png"
      alt="Mewtwo"

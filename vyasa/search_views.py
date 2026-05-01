@@ -4,6 +4,7 @@ from urllib.parse import quote_plus
 from fasthtml.common import *
 from monsterui.all import *
 from .bookmark_views import bookmark_toggle_button
+from .helpers import content_url_for_slug
 
 
 def render_posts_search_results(query, matches, regex_error):
@@ -15,7 +16,7 @@ def render_posts_search_results(query, matches, regex_error):
     items, gather_href = [], f"/search/gather?q={quote_plus(trimmed)}"
     items.append(Li(A(Span(UkIcon("layers", cls="w-4 h-4 text-slate-400"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span("Gather all search results for LLM", cls="truncate min-w-0 text-xs text-slate-600 dark:text-slate-300"), href=gather_href, hx_get=gather_href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-search-link flex items-center py-1 px-2 rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0"), cls="bg-transparent"))
     for slug, display in matches:
-        href = f"/posts/{slug}"
+        href = content_url_for_slug(slug)
         link = A(Span(UkIcon("search", cls="w-4 h-4 text-slate-400"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(display, cls="truncate min-w-0 font-mono text-xs text-slate-600 dark:text-slate-300", title=display), href=href, hx_get=href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-search-link flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0 flex-1", data_path=slug)
         items.append(Li(Div(link, bookmark_toggle_button(slug, display), cls="vyasa-bookmark-row flex items-center gap-1 min-w-0"), cls="bg-transparent"))
     if regex_error:

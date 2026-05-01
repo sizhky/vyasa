@@ -44,27 +44,23 @@ body {
   overflow: visible !important;
 }
 
-#site-navbar::before {
-  content: "";
-  position: absolute;
+.pokemon-nav-joltik {
+  position: fixed;
   right: var(--pokemon-nav-joltik-x);
   top: 4.8rem;
+  display: block;
   width: var(--pokemon-nav-joltik-size);
   height: var(--pokemon-nav-joltik-size);
-  background-image: url("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/595.png");
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
+  object-fit: contain;
   filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.24));
   pointer-events: none;
   transform-origin: 50% 0;
   animation: pokemon-nav-hang 60s ease-in-out infinite;
-  z-index: 3;
+  z-index: 1400;
 }
 
-#site-navbar::after {
-  content: "";
-  position: absolute;
+.pokemon-nav-thread {
+  position: fixed;
   right: calc(var(--pokemon-nav-joltik-x) + (var(--pokemon-nav-joltik-size) / 2) - 1px);
   top: 5.65rem;
   width: 2px;
@@ -76,11 +72,11 @@ body {
   );
   border-radius: 999px;
   pointer-events: none;
-  z-index: 2;
+  z-index: 1399;
 }
 
 @supports (animation-timeline: scroll(root block)) {
-  #site-navbar::before {
+  .pokemon-nav-joltik {
     animation:
       pokemon-nav-drop linear both,
       pokemon-nav-hang 60s ease-in-out infinite;
@@ -88,21 +84,21 @@ body {
     animation-range: 0% 100%, normal;
   }
 
-  #site-navbar::after {
+  .pokemon-nav-thread {
     animation: pokemon-nav-thread-drop linear both;
     animation-timeline: scroll(root block);
     animation-range: 0% 100%;
   }
 }
 
-#page-container.vyasa-zen-present #site-navbar::before {
+body:has(#page-container.vyasa-zen-present) .pokemon-nav-joltik {
   top: 6rem !important;
   animation: pokemon-nav-hang 60s ease-in-out infinite !important;
   animation-timeline: auto !important;
   animation-range: normal !important;
 }
 
-#page-container.vyasa-zen-present #site-navbar::after {
+body:has(#page-container.vyasa-zen-present) .pokemon-nav-thread {
   height: 4.4rem !important;
   animation: none !important;
   animation-timeline: auto !important;
@@ -112,4 +108,5 @@ body {
 .vyasa-navbar-card {
   position: relative;
   overflow: visible !important;
+  z-index: 1;
 }

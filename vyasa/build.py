@@ -6,25 +6,22 @@ into a standalone static website with HTML, CSS, and JavaScript files.
 
 from pathlib import Path
 import shutil
-from functools import partial
-import mistletoe as mst
 from fasthtml.common import *
 from monsterui.all import *
 from .helpers import (
     _effective_abbreviations, _effective_ignore_list,
     _effective_include_list, _should_include_folder, _strip_inline_markdown,
-    _unique_anchor, estimate_read_time_minutes, find_folder_note_file,
+    _unique_anchor, content_url_for_slug, estimate_read_time_minutes, find_folder_note_file,
     format_last_modified_label,
     get_adjacent_posts, get_post_title, parse_frontmatter, resolve_markdown_title, slug_to_title,
     text_to_anchor,
 )
-from .markdown_pipeline import extract_footnotes, preprocess_super_sub
-from .markdown_rendering import ContentRenderer, from_md
-from .markdown_tabs import preprocess_tabs
+from .markdown_rendering import from_md
 from .sidebar_helpers import build_toc_items, extract_toc
 from .config import get_config, reload_config
 from .assets import asset_url
 from .favicon import favicon_href as resolve_favicon_href, write_generated_favicon
+from .page_shell import PageShellModel, StaticShellRenderer
 from .tree_service import get_tree_entries
 from .tree_file_rendering import render_tree_document, resolve_tree_title
 
@@ -61,6 +58,8 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
         .dark *::-webkit-scrollbar-thumb { background-color: rgb(71 85 105); }
         .dark *::-webkit-scrollbar-thumb:hover { background-color: rgb(100 116 139); }
         .dark * { scrollbar-color: rgb(71 85 105) transparent; }
+        .vyasa-mobile-scroll-progress { position: fixed; top: 0; left: 0; z-index: 1600; width: 5px; height: 0; pointer-events: none; background: var(--vyasa-primary, #2563eb); opacity: 0; transition: opacity 120ms ease; }
+        @media (max-width: 767px) { .vyasa-mobile-scroll-progress { opacity: 1; } }
         
         /* Tabs styles */
         .tabs-container { 
@@ -268,6 +267,20 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
         
         // Set tab container heights based on tallest panel
         document.addEventListener('DOMContentLoaded', function() {
+            const scrollProgress = document.createElement('div');
+            scrollProgress.id = 'vyasa-mobile-scroll-progress';
+            scrollProgress.className = 'vyasa-mobile-scroll-progress';
+            scrollProgress.setAttribute('aria-hidden', 'true');
+            (document.getElementById('page-container') || document.body).appendChild(scrollProgress);
+            const syncScrollProgress = () => {
+                const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+                const progress = Math.min(1, Math.max(0, window.scrollY / max));
+                scrollProgress.style.height = `${Math.round(progress * window.innerHeight)}px`;
+            };
+            window.addEventListener('scroll', syncScrollProgress, { passive: true });
+            window.addEventListener('resize', syncScrollProgress, { passive: true });
+            syncScrollProgress();
+
             setTimeout(() => {
                 document.querySelectorAll('.tabs-container').forEach(container => {
                     const panels = container.querySelectorAll('.tab-panel');
@@ -419,7 +432,7 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
             if note_file:
                 note_slug = str(note_file.relative_to(root_folder).with_suffix(''))
                 note_link = A(
-                    href=f'/posts/{note_slug}.html',
+                    href=content_url_for_slug(note_slug, suffix=".html"),
                     cls="folder-note-link truncate min-w-0 hover:underline",
                     title=f"Open: {folder_title}",
                     onclick="event.stopPropagation();",
@@ -440,122 +453,39 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
                     Span(cls="w-4 mr-2 shrink-0"),
                     Span(UkIcon("folder", cls="text-blue-500 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                     title_text,
-                    href=f'/posts/{note_slug}.html',
+                    href=content_url_for_slug(note_slug, suffix=".html"),
                     cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
         elif item.suffix in {'.md', '.tree'}:
             slug = str(item.relative_to(root_folder).with_suffix(''))
-            title = get_post_title(item, abbreviations=abbreviations) if item.suffix == '.md' else resolve_tree_title(item, abbreviations=abbreviations)[0]
-            icon = "file-text" if item.suffix == ".md" else "git-branch"
+            if item.suffix == ".md":
+                title, icon = get_post_title(item, abbreviations=abbreviations), "file-text"
+            elif item.suffix == ".tree":
+                title, icon = resolve_tree_title(item, abbreviations=abbreviations)[0], "git-branch"
+            else:
+                title, icon = slug_to_title(item.stem, abbreviations=abbreviations), "kanban"
             
             # Use .html extension for static links
             items.append(Li(A(
                 Span(cls="w-4 mr-2 shrink-0"),
                 Span(UkIcon(icon, cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
                 Span(title, cls="truncate min-w-0", title=title),
-                href=f'/posts/{slug}.html',  # Add .html extension
+                href=content_url_for_slug(slug, suffix=".html"),
                 cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
     return items
 
 
 def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, toc_items=None, current_path=None):
     """Generate complete static page layout"""
-    
-    # Theme toggle button
-    theme_toggle = '''
-    <button onclick="toggleTheme()" class="p-1 hover:scale-110 shadow-none" type="button">
-        <span uk-icon="moon" class="dark:hidden"></span>
-        <span uk-icon="sun" class="hidden dark:block"></span>
-    </button>
-    '''
-    
-    # Navbar
-    navbar = f'''
-    <div class="vyasa-navbar-card bg-slate-900 text-white px-4 py-3 dark:bg-slate-800">
-        <div class="flex items-center justify-between md:hidden">
-            <button id="mobile-posts-toggle" title="Toggle file tree" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaTogglePostsPanel && window.__vyasaTogglePostsPanel()">
-                <span uk-icon="menu" class="w-5 h-5"></span>
-            </button>
-            <a href="/index.html" class="flex-1 px-4 text-center truncate">{blog_title}</a>
-            <div class="flex items-center gap-1">
-                <button id="mobile-toc-toggle" title="Toggle table of contents" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()">
-                    <span uk-icon="list" class="w-5 h-5"></span>
-                </button>
-                {theme_toggle}
-            </div>
-        </div>
-        <div class="hidden md:flex items-center justify-between">
-            <a href="/index.html">{blog_title}</a>
-            {theme_toggle}
-        </div>
-    </div>
-    '''
-    
-    # Build navigation sidebar
-    nav_html = to_xml(Ul(*nav_tree, cls="mt-2 list-none"))
-    posts_sidebar = f'''
-    <aside id="posts-sidebar" class="vyasa-sidebar vyasa-posts-sidebar hidden md:block w-64 shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
-        <details open class="vyasa-sidebar-card vyasa-sidebar-card-posts">
-            <summary class="vyasa-sidebar-toggle vyasa-sidebar-toggle-posts flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
-                <span uk-icon="menu" class="w-5 h-5 mr-2"></span>
-                Posts
-            </summary>
-            <div class="vyasa-sidebar-body vyasa-sidebar-body-posts mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
-                {nav_html}
-            </div>
-        </details>
-    </aside>
-    '''
-    
-    # Build TOC sidebar
-    toc_html = ""
-    if toc_items:
-        toc_list_html = to_xml(Ul(*toc_items, cls="mt-2 list-none"))
-        toc_html = f'''
-        <aside id="toc-sidebar" class="vyasa-sidebar vyasa-toc-sidebar hidden md:block w-64 shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
-            <details open class="vyasa-sidebar-card vyasa-sidebar-card-table-of-contents">
-                <summary class="vyasa-sidebar-toggle vyasa-sidebar-toggle-table-of-contents flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
-                    <span uk-icon="list" class="w-5 h-5 mr-2"></span>
-                    Table of Contents
-                </summary>
-                <div class="vyasa-sidebar-body vyasa-sidebar-body-table-of-contents mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
-                    {toc_list_html}
-                </div>
-            </details>
-        </aside>
-        '''
-    
-    # Main content area
-    main_content = f'''
-    <main id="main-content" class="vyasa-main-shell flex-1 min-w-0 px-6 py-8 space-y-8">
-        {content_html}
-    </main>
-    '''
-    
-    # Footer
-    footer = '''
-    <footer class="vyasa-footer-shell w-full mt-auto">
-        <div class="vyasa-footer-card bg-slate-900 text-white p-4 dark:bg-slate-800 text-right">
-            Powered by Vyasa
-        </div>
-    </footer>
-    '''
-    
-    # Complete body
-    body = f'''
-    <div id="page-container" class="flex flex-col min-h-screen">
-        <div class="vyasa-navbar-shell w-full sticky top-0 z-50">
-            {navbar}
-        </div>
-        <div id="content-with-sidebars" class="vyasa-content-grid w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1">
-            {posts_sidebar}
-            {main_content}
-            {toc_html}
-        </div>
-        {footer}
-    </div>
-    '''
-    
-    return generate_static_html(page_title, body, blog_title, favicon_href)
+    model = PageShellModel(
+        title=page_title,
+        blog_title=blog_title,
+        main_html=content_html,
+        nav_tree=nav_tree,
+        favicon_href=favicon_href,
+        toc_items=toc_items,
+        current_path=current_path,
+    )
+    return StaticShellRenderer(generate_static_html).render(model)
 
 
 def build_static_site(input_dir=None, output_dir=None):
