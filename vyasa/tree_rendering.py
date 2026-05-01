@@ -5,7 +5,6 @@ from fasthtml.common import A, Details, Li, Span, Summary, Ul
 from monsterui.all import UkIcon
 from .bookmark_views import bookmark_toggle_button
 from .helpers import content_slug_for_path, content_url_for_slug
-from .tree_file_rendering import resolve_tree_title
 
 
 def _folder_summary(title_node, branch_href=None):
@@ -40,7 +39,7 @@ def folder_has_visible_descendant(folder, roles, depth, *, root, show_hidden, ex
         slug = content_slug_for_path(item)
         if not slug:
             continue
-        route = f"/drawings/{slug}" if item.suffix == ".excalidraw" else f"/posts/{slug}"
+        route = f"/posts/{slug}"
         if is_allowed_fn(route, roles or [], rbac_rules):
             return True
     return False
@@ -105,14 +104,14 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
                 folder_link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon("folder", cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(folder_title, cls="whitespace-nowrap", title=folder_title), href=note_href, hx_get=note_href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link inline-flex items-center whitespace-nowrap", data_path=note_slug)
                 items.append(Li(_bookmarkable_tree_row(folder_link, note_slug, folder_title)))
             continue
-        if item.suffix not in {".md", ".pdf", ".tree", ".excalidraw"}:
+        if item.suffix not in {".md", ".pdf"}:
             continue
         if folder_note_file and item.resolve() == folder_note_file.resolve():
             continue
         slug = content_slug_for_path(item)
         if not slug:
             continue
-        route = f"/drawings/{slug}" if item.suffix == ".excalidraw" else f"/posts/{slug}"
+        route = f"/posts/{slug}"
         if not is_allowed_fn(route, roles or [], rbac_rules):
             continue
         if item.suffix == ".md":
@@ -120,16 +119,9 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             icon = "monitor" if metadata.get("slides", False) else "file-text"
             title = metadata.get("title", slug_to_title_fn(item.stem, abbreviations=abbreviations))
             label, href = title, content_url_for_slug(slug)
-        elif item.suffix == ".tree":
-            icon = "git-branch"
-            title = resolve_tree_title(item, abbreviations=abbreviations)[0]
-            label, href = f"{title} (Tree)", content_url_for_slug(slug)
         elif item.suffix == ".pdf":
             icon, title, label, href = "file", slug_to_title_fn(item.stem, abbreviations=abbreviations), f"{slug_to_title_fn(item.stem, abbreviations=abbreviations)} (PDF)", content_url_for_slug(slug)
-        else:
-            icon, title, label, href = "pencil", slug_to_title_fn(item.stem, abbreviations=abbreviations), f"{slug_to_title_fn(item.stem, abbreviations=abbreviations)} (Excalidraw)", content_url_for_slug(slug, prefix="/drawings")
         link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon(icon, cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(label, cls="whitespace-nowrap", title=title), href=href, hx_get=href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link inline-flex items-center whitespace-nowrap", data_path=slug)
-        row = _bookmarkable_tree_row(link, slug, title) if item.suffix != ".excalidraw" else Span(link, cls="vyasa-tree-row inline-flex items-center py-1 px-2 rounded transition-colors whitespace-nowrap")
-        items.append(Li(row))
+        items.append(Li(_bookmarkable_tree_row(link, slug, title)))
     logger.debug(f"[DEBUG] build_post_tree for {content_slug_for_path(folder, strip_suffix=False) or '.'} completed in {(time.time() - start_time) * 1000:.2f}ms")
     return items

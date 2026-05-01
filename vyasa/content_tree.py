@@ -20,9 +20,7 @@ from .helpers import (
     should_exclude_dir,
     slug_to_title,
 )
-from .tree_file_rendering import resolve_tree_title
-
-ContentKind = Literal["folder", "markdown", "tree", "pdf", "excalidraw"]
+ContentKind = Literal["folder", "markdown", "pdf"]
 
 
 class VisibilityPolicy(Protocol):
@@ -71,7 +69,7 @@ class ContentTree:
         root: Path,
         show_hidden: bool = False,
         excluded_dirs: set[str] | None = None,
-        allowed_suffixes: tuple[str, ...] = (".md", ".tree", ".pdf", ".excalidraw"),
+        allowed_suffixes: tuple[str, ...] = (".md", ".pdf"),
         visibility: VisibilityPolicy | None = None,
         mounts: list[tuple[str, Path]] | None = None,
         ignore_primary_root: bool = False,
@@ -89,7 +87,7 @@ class ContentTree:
         cls,
         *,
         visibility: VisibilityPolicy | None = None,
-        allowed_suffixes: tuple[str, ...] = (".md", ".tree", ".pdf", ".excalidraw"),
+        allowed_suffixes: tuple[str, ...] = (".md", ".pdf"),
     ) -> "ContentTree":
         from .config import get_config
 
@@ -126,11 +124,10 @@ class ContentTree:
                 if note_slug:
                     return ResolvedDocument(note_slug, note, "markdown", content_url_for_slug(note_slug), folder_note=note)
             return ResolvedDocument(clean_slug, folder_path, "folder", content_url_for_slug(clean_slug))
-        for suffix, kind in ((".md", "markdown"), (".tree", "tree"), (".pdf", "pdf"), (".excalidraw", "excalidraw")):
+        for suffix, kind in ((".md", "markdown"), (".pdf", "pdf")):
             path = self._path_for_slug(clean_slug, suffix)
             if path and path.exists():
-                prefix = "/drawings" if suffix == ".excalidraw" else "/posts"
-                return ResolvedDocument(clean_slug, path, kind, content_url_for_slug(clean_slug, prefix=prefix))
+                return ResolvedDocument(clean_slug, path, kind, content_url_for_slug(clean_slug, prefix="/posts"))
         return None
 
     def find_folder_note(self, folder_slug: str | Path = "") -> Path | None:
@@ -211,8 +208,8 @@ class ContentTree:
             has_note = bool(find_folder_note_file(path))
             return ContentEntry(slug, path, "folder", title, route, True, has_note)
         slug = self._slug_for_path(path) or path.with_suffix("").name
-        kind = {".md": "markdown", ".tree": "tree", ".pdf": "pdf", ".excalidraw": "excalidraw"}[path.suffix]
-        route = content_url_for_slug(slug, prefix="/drawings" if kind == "excalidraw" else "/posts")
+        kind = {".md": "markdown", ".pdf": "pdf"}[path.suffix]
+        route = content_url_for_slug(slug, prefix="/posts")
         visible = self.visibility.can_read(route, roles)
         return ContentEntry(slug, path, kind, self._title_for_file(path, kind), route, visible, False)
 
@@ -220,12 +217,8 @@ class ContentTree:
         abbreviations = _effective_abbreviations(self.root, path.parent)
         if kind == "markdown":
             return get_post_title(path, abbreviations=abbreviations)
-        if kind == "tree":
-            return f"{resolve_tree_title(path, abbreviations=abbreviations)[0]} (Tree)"
         if kind == "pdf":
             return f"{slug_to_title(path.stem, abbreviations=abbreviations)} (PDF)"
-        if kind == "excalidraw":
-            return f"{slug_to_title(path.stem, abbreviations=abbreviations)} (Excalidraw)"
         return slug_to_title(path.name, abbreviations=abbreviations)
 
     def _append_mount_entries(self, entries: list[Path]) -> None:

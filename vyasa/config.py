@@ -332,13 +332,6 @@ class VyasaConfig:
             "rules": rules,
         }
 
-    def get_drawings_passwords(self):
-        """Get optional per-drawing passwords keyed by drawing path."""
-        cfg = self._config.get('drawings_passwords', {})
-        if not isinstance(cfg, dict):
-            return {}
-        return {str(k).strip('/'): str(v) for k, v in cfg.items() if k and v}
-    
     def get_sidebars_open(self) -> bool:
         """Get whether sidebars should be open by default."""
         value = self.get('sidebars_open', 'VYASA_SIDEBARS_OPEN', False)

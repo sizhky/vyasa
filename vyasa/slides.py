@@ -147,14 +147,14 @@ def split_markdown_paragraph_groups(markdown_text):
     tabs_depth = 0
     for line in markdown_text.splitlines():
         stripped = line.strip()
-        if line == '---':
-            continue
         if re.match(r"^(```+|~~~+)", stripped):
             in_fence = not in_fence
         elif not in_fence and stripped == ":::tabs":
             tabs_depth += 1
         elif not in_fence and tabs_depth and stripped == ":::":
             tabs_depth -= 1
+        if not in_fence and stripped == "---":
+            continue
         if not in_fence and not tabs_depth and not stripped:
             if current:
                 groups.append("\n".join(current).strip())
