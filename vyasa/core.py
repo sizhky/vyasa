@@ -1267,6 +1267,35 @@ def post_detail(path: str, htmx, request: Request):
     )
 
 
+@rt("/canvas/{path:path}")
+def canvas_detail(path: str, htmx, request: Request):
+    file_path = content_path_for_slug(path, ".md")
+    if not file_path or not file_path.exists():
+        return not_found(htmx, auth=request.scope.get("auth"))
+    title, render_content = resolve_markdown_title(file_path, abbreviations=_effective_abbreviations(file_path.parent))
+    css = """
+    <style>
+    .vyasa-canvas{height:calc(100vh - 7rem);overflow:auto;background-image:radial-gradient(circle,#94a3b855 1px,transparent 1px);background-size:24px 24px}
+    .vyasa-canvas-card{position:absolute;resize:both;overflow:auto;min-width:22rem;min-height:18rem;box-shadow:0 24px 70px -45px #0f172a}
+    .vyasa-canvas-grip{cursor:grab;user-select:none}
+    </style>
+    """
+    js = """
+    <script>
+    document.querySelectorAll('.vyasa-canvas-card').forEach(card=>{
+      const grip=card.querySelector('.vyasa-canvas-grip'); let sx=0,sy=0,l=0,t=0,drag=false;
+      grip.onpointerdown=e=>{drag=true;sx=e.clientX;sy=e.clientY;l=card.offsetLeft;t=card.offsetTop;grip.setPointerCapture(e.pointerId)};
+      grip.onpointermove=e=>{if(!drag)return;card.style.left=l+e.clientX-sx+'px';card.style.top=t+e.clientY-sy+'px'};
+      grip.onpointerup=()=>drag=false;
+    });
+    </script>
+    """
+    lanes = [Div(H1(name, cls="text-base font-semibold"), P("Drop thinking here.", cls="text-sm text-slate-500"), cls="rounded-md border border-dashed border-slate-300 bg-white/80 p-4 dark:border-slate-700 dark:bg-slate-950/80") for name in ("Questions", "Decisions", "Risks")]
+    doc_card = Div(Div(f"Doc: {title}", cls="vyasa-canvas-grip border-b border-slate-200 px-4 py-2 text-sm font-semibold dark:border-slate-800"), Div(from_md(render_content, current_path=path), cls="p-5"), cls="vyasa-canvas-card rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950", style="left:2rem;top:2rem;width:46rem;height:34rem")
+    board = Div(NotStr(css), Div(doc_card, Div(*lanes, cls="absolute left-[52rem] top-8 grid w-80 gap-4"), cls="relative min-h-[80rem] min-w-[90rem]"), NotStr(js), cls="vyasa-canvas rounded-md border border-slate-200 dark:border-slate-800")
+    return layout(board, htmx=htmx, title=f"{title} - Canvas", show_sidebar=False, show_toc=False, auth=request.scope.get("auth"), full_width=True, show_footer=False, no_scroll=True)
+
+
 @rt("/drawings/{path:path}")
 def drawing_detail(path: str, htmx, request: Request):
     return render_drawing_detail(
