@@ -4,7 +4,7 @@ This page shows task graph inside normal markdown, including task groups.
 
 ```tasks
 group P1 "Phase 1"
-  graph_x: -216
+  graph_x: 984
   graph_y: 48
   group G-FE "Frontend"
     graph_x: 24
