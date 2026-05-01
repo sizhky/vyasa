@@ -368,6 +368,13 @@ class VyasaConfig:
             return value.lower() in ('true', '1', 'yes', 'on')
         return bool(value)
 
+    def get_browser_reload_enabled(self) -> bool:
+        """Get whether browser live reload should be enabled."""
+        value = self.get('browser_reload', 'VYASA_BROWSER_RELOAD', False)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
+
     def get_log_file_enabled(self) -> bool:
         """Get whether file logging to vyasa.log should be enabled."""
         value = self.get('log_file', 'VYASA_LOG_FILE', False)

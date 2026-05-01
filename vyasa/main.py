@@ -131,6 +131,7 @@ def cli():
     parser.add_argument('--user', help='Login username (overrides config/env)')
     parser.add_argument('--password', help='Login password (overrides config/env)')
     parser.add_argument('--show-hidden', action='store_true', help='Include hidden files and folders in listings')
+    parser.add_argument('--browser-reload', action='store_true', help='Reload browser on content file changes')
     parser.add_argument('--theme-debug', action='store_true', help='Show runtime theme preset switcher for debugging')
     parser.add_argument('--log-file', action='store_true', help='Write DEBUG logs to vyasa.log')
     
@@ -160,6 +161,9 @@ def cli():
     if args.show_hidden:
         os.environ['VYASA_SHOW_HIDDEN'] = 'true'
         config = reload_config()
+    if args.browser_reload:
+        os.environ['VYASA_BROWSER_RELOAD'] = 'true'
+        config = reload_config()
     theme_debug_enabled = args.theme_debug or str(os.environ.get('VYASA_THEME_DEBUG', '')).strip().lower() in {'true', '1', 'yes', 'on'}
     if theme_debug_enabled:
         os.environ['VYASA_THEME_DEBUG'] = 'true'
@@ -172,6 +176,7 @@ def cli():
     print(f"Blog root: {config.get_root_folder()}")
     print(f"Blog title: {config.get_blog_title()}")
     print(f"Serving at: http://{host}:{port}")
+    print(f"Browser reload enabled: {config.get_browser_reload_enabled()}")
     if host == '0.0.0.0':
         print(f"Server accessible from network at: http://<your-ip>:{port}")
 
@@ -221,7 +226,7 @@ def cli():
         reload_kwargs = {
             "reload": True,
             "reload_dirs": reload_dirs,
-            "reload_includes": ["*.md", "*.tree", "*.pdf", "*.py", "*.vyasa", ".vyasa", ".*"],
+            "reload_includes": ["*.py", "*.vyasa", ".vyasa", ".*"],
             "reload_excludes": reload_excludes,
         }
     else:

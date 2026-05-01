@@ -2,9 +2,11 @@ import html
 import json
 import re
 import shlex
+from dataclasses import dataclass
 from functools import partial
 from itertools import count
 from pathlib import Path
+from typing import Protocol
 
 import mistletoe as mst
 from fasthtml.common import Div, Link, NotStr, Span, to_xml
@@ -32,6 +34,7 @@ from .markdown_pipeline import (
 )
 from .markdown_tabs import postprocess_tabs as postprocess_md_tabs
 from .markdown_tabs import preprocess_tabs as preprocess_md_tabs
+from .tasks_rendering import render_tasks_board_text
 from .markdown_tokens import (
     DownloadEmbed,
     FootnoteRef,
@@ -51,6 +54,30 @@ _CALLOUT_META = {
     "question": ("Question", "question"), "warning": ("Warning", "warning"), "failure": ("Failure", "close"),
     "danger": ("Danger", "warning"), "bug": ("Bug", "bug"), "example": ("Example", "code"), "quote": ("Quote", "quote-right"),
 }
+
+
+@dataclass(frozen=True)
+class RenderContext:
+    current_path: str | None = None
+    img_dir: str | None = None
+    slide_mode: bool = False
+    content_tree: object | None = None
+
+
+class MarkdownFeature(Protocol):
+    def preprocess(self, markdown: str, context: RenderContext) -> str: ...
+    def postprocess(self, html_fragment: str, context: RenderContext) -> str: ...
+
+
+class MarkdownRenderer:
+    def render(self, markdown: str, context: RenderContext | None = None):
+        context = context or RenderContext()
+        return from_md(
+            markdown,
+            img_dir=context.img_dir,
+            current_path=context.current_path,
+            slide_mode=context.slide_mode,
+        )
 _CALLOUT_SVGS = {
     "info": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/></svg>',
     "file-text": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h6"/><path d="M9 9h1"/></svg>',
@@ -591,6 +618,7 @@ class ContentRenderer(FrankenRenderer):
         self.heading_counts = {}
         self.mermaid_counter = 0
         self.iframe_counter = 0
+        self.tasks_block_counter = 0
 
     def render_list_item(self, token):
         inner = self.render_inner(token)
@@ -834,6 +862,23 @@ class ContentRenderer(FrankenRenderer):
             return _render_cryptograph_block(code)
         if lang == "cytograph":
             return _render_cytograph_block(code, current_path=self.current_path)
+        if lang == "tasks":
+            config, code = _split_fence_frontmatter(code)
+            task_api_url = None
+            if self.current_path:
+                task_api_url = content_url_for_slug(self.current_path, prefix="/api/tasks/blocks", fragment=None) + f"?block={self.tasks_block_counter}"
+            self.tasks_block_counter += 1
+            return to_xml(
+                render_tasks_board_text(
+                    code,
+                    config.get("title", attrs.get("title", "Tasks")),
+                    task_api_url=task_api_url,
+                    show_heading=False,
+                    width=config.get("width", "100%"),
+                    height=config.get("height", "70vh"),
+                    direction=config.get("direction", "lr"),
+                )
+            )
         raw_code = code
         code = html.unescape(code)
         line_numbers = bool(lang) and _resolve_line_numbers(get_config().get_code_line_numbers(), attrs=attrs)

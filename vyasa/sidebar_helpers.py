@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fasthtml.common import *
 from monsterui.all import *
-from .helpers import content_url_for_slug, resolve_heading_anchor
+from .helpers import content_root_and_relative, content_slug_for_path, content_url_for_slug, resolve_heading_anchor
 
 
 def _scope_css(css_text, scope):
@@ -102,19 +102,28 @@ def build_toc_items(headings):
 
 
 def get_custom_css_links(root, current_path=None, section_class=None):
+    active_root, relative_path = content_root_and_relative(current_path) if current_path else (None, None)
+    root = active_root or root
+
+    def css_href(path):
+        slug = content_slug_for_path(path, strip_suffix=False)
+        href = content_url_for_slug(slug) if slug else content_url_for_slug(path.relative_to(root))
+        return f"{href}?v={path.stat().st_mtime_ns}"
+
     css_elements = []
     for filename in ["global.css", "custom.css", "style.css"]:
-        if (root / filename).exists():
-            css_elements.append(Link(rel="stylesheet", href=content_url_for_slug(filename)))
+        css_file = root / filename
+        if css_file.exists():
+            css_elements.append(Link(rel="stylesheet", href=css_href(css_file)))
             if filename != "global.css":
                 break
     if current_path and section_class:
-        post_dir = Path(current_path).parent if "/" in current_path else Path(".")
+        post_dir = relative_path.parent if relative_path and relative_path.parts else Path(".")
         ancestors = [] if str(post_dir) == "." else [Path(*post_dir.parts[:idx]) for idx in range(1, len(post_dir.parts) + 1)]
         for ancestor in ancestors:
             global_css = root / ancestor / "global.css"
             if global_css.exists():
-                css_elements.append(Link(rel="stylesheet", href=content_url_for_slug(f"{ancestor.as_posix()}/global.css")))
+                css_elements.append(Link(rel="stylesheet", href=css_href(global_css)))
         for ancestor in ancestors:
             for filename in ["custom.css", "style.css"]:
                 css_file = root / ancestor / filename

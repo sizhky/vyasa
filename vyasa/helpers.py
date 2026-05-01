@@ -605,7 +605,7 @@ def _sort_vyasa_entries(entries, sort_method, folders_first):
     return sorted(entries, key=sort_key, reverse=reverse)
 
 def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
-    """List all posts in the blog root (md + tree + pdf)."""
+    """List all posts in the blog root (md + tree + pdf + tasks)."""
     root = root.resolve()
     root_parts = len(root.parts)
     posts: list[dict] = []

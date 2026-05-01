@@ -1,6 +1,7 @@
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 import { D2 } from 'https://esm.sh/@terrastruct/d2@0.1.33?bundle';
 import { initCytographs, refreshCytographStyles } from './cytograph.mindmap.js';
+import { initTaskRegions } from './task-graph.js';
 
 const mermaidStates = {};
 const d2States = {};
@@ -2730,11 +2731,11 @@ function renderBookmarksBlock(rootElement = document) {
         const list = block.querySelector('.vyasa-bookmarks-list');
         if (!list) return;
         list.innerHTML = vyasaBookmarks.items.map((item) => `
-            <div class="vyasa-bookmark-row relative inline-flex items-center w-max">
-                <a href="${item.href}" hx-get="${item.href}" hx-target="#main-content" hx-push-url="true" hx-swap="outerHTML show:window:top settle:0.1s" class="vyasa-tree-row vyasa-bookmark-link inline-flex items-center py-1 pl-2 pr-10 rounded transition-colors whitespace-nowrap" data-path="${item.path}" data-bookmark-link="true">
+            <div class="vyasa-bookmark-row inline-flex items-center gap-1 w-max">
+                <a href="${item.href}" hx-get="${item.href}" hx-target="#main-content" hx-push-url="true" hx-swap="outerHTML show:window:top settle:0.1s" class="vyasa-tree-row vyasa-bookmark-link inline-flex items-center py-1 px-2 rounded transition-colors whitespace-nowrap" data-path="${item.path}" data-bookmark-link="true">
                     <span class="whitespace-nowrap" title="${item.path}">${item.path}</span>
                 </a>
-                <button type="button" class="vyasa-bookmark-delete absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-white/90 hover:text-white transition-colors leading-none" data-bookmark-delete="true" data-bookmark-path="${item.path}" data-bookmark-title="${item.title}" aria-label="Remove bookmark for ${item.title}" title="Remove bookmark for ${item.title}">
+                <button type="button" class="vyasa-bookmark-delete shrink-0 rounded p-1.5 text-slate-400 hover:text-rose-500 transition-colors leading-none" data-bookmark-delete="true" data-bookmark-path="${item.path}" data-bookmark-title="${item.title}" aria-label="Remove bookmark for ${item.title}" title="Remove bookmark for ${item.title}">
                     <span class="flex items-center justify-center" aria-hidden="true"><svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span>
                 </button>
             </div>`).join('');
@@ -3046,6 +3047,31 @@ function initScrollTopButton(root = document) {
     };
     window.addEventListener('scroll', sync, { passive: true });
     window.addEventListener('resize', sync, { passive: true });
+    sync();
+}
+
+function initMobileScrollProgress(root = document) {
+    const page = root.getElementById?.('page-container') || document.getElementById('page-container');
+    if (!page) return;
+    let bar = document.getElementById('vyasa-mobile-scroll-progress');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'vyasa-mobile-scroll-progress';
+        bar.className = 'vyasa-mobile-scroll-progress';
+        bar.setAttribute('aria-hidden', 'true');
+        page.appendChild(bar);
+    }
+    const sync = () => {
+        const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+        const progress = Math.min(1, Math.max(0, window.scrollY / max));
+        bar.style.height = `${Math.round(progress * window.innerHeight)}px`;
+    };
+    window.__vyasaSyncMobileScrollProgress = sync;
+    if (!window.__vyasaMobileScrollProgressBound) {
+        window.addEventListener('scroll', () => window.__vyasaSyncMobileScrollProgress?.(), { passive: true });
+        window.addEventListener('resize', () => window.__vyasaSyncMobileScrollProgress?.(), { passive: true });
+        window.__vyasaMobileScrollProgressBound = true;
+    }
     sync();
 }
 
@@ -4136,6 +4162,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initHeadingFolds(document);
     syncHeadingActionStates(document);
     initScrollTopButton(document);
+    initMobileScrollProgress(document);
     syncThemePresetDebug(document);
     replaceEscapedDollarPlaceholders(document.body);
     renderMathSafely(document.body);
@@ -4167,6 +4194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initExcalidrawSave(document);
     initExcalidrawOpenExternal(document);
     initExcalidrawExternalOpen(document);
+    initTaskRegions(document);
     normalizeCriticalTextColors(document);
     recordStyleProbe('domcontentloaded');
     [100, 500, 1500].forEach((ms) => setTimeout(() => recordStyleProbe(`t+${ms}`), ms));
@@ -4184,6 +4212,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initHeadingFolds(event.target);
     syncHeadingActionStates(document);
     initScrollTopButton(document);
+    initMobileScrollProgress(document);
     syncThemePresetDebug(document);
     replaceEscapedDollarPlaceholders(event.target);
     renderMathSafely(event.target);
@@ -4201,6 +4230,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initExcalidrawSave(event.target || document);
     initExcalidrawOpenExternal(event.target || document);
     initExcalidrawExternalOpen(event.target || document);
+    initTaskRegions(event.target || document);
     initSearchClearButtons(event.target);
     initAnnotations(event.target || document);
     ensurePdfFocusState();
