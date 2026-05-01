@@ -39,8 +39,8 @@ def _resolve_bookmark_items(owner: str, roles, *, store: BookmarkStoreAdapter, r
     items = []
     for row in store.list(owner):
         slug = (row.path or "").strip("/")
-        path = content_path_for_slug(slug, ".md") or content_path_for_slug(slug, ".tree") or content_path_for_slug(slug, ".pdf")
-        if not slug or not path or path.suffix not in {".md", ".tree", ".pdf"}:
+        path = content_path_for_slug(slug, ".md") or content_path_for_slug(slug, ".pdf")
+        if not slug or not path or path.suffix not in {".md", ".pdf"}:
             continue
         if not is_allowed(f"/posts/{slug}", roles or [], rbac_rules):
             continue

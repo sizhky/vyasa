@@ -89,7 +89,7 @@ def document_header(title: str, source_text: str, *, actions=(), breadcrumbs=Non
 
 
 def copy_raw_nodes(raw_content: str, *, kind: str = "md"):
-    title = "Copied Raw Tree!" if kind == "tree" else "Copied Raw Markdown!"
+    title = "Copied Raw Markdown!"
     target_id = f"raw-{kind}-clipboard"
     toast_id = f"raw-{kind}-toast"
     return (

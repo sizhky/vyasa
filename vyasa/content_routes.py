@@ -20,7 +20,6 @@ from .document_pages import (
 from .helpers import content_path_for_slug, content_root_and_relative, content_url_for_slug, get_adjacent_posts, strip_more_marker
 from .markdown_rendering import _render_markdown_fragment
 from .slides import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
-from .tree_file_rendering import render_tree_document, resolve_tree_title
 
 FALLBACK_HOME_SLUG = "__home__"
 
@@ -102,18 +101,8 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         from starlette.responses import RedirectResponse
         return RedirectResponse(content_url_for_slug(document.slug), status_code=307)
     file_path = document.path if document.kind == "markdown" else None
-    tree_path = document.path if document.kind == "tree" else None
     pdf_path = document.path if document.kind == "pdf" else None
     if document.kind != "markdown":
-        if document.kind == "tree":
-            post_title, raw_content, tree_doc = resolve_tree_title(tree_path, abbreviations=abbreviations)
-            breadcrumbs = _breadcrumbs(path, slug_to_title, abbreviations)
-            tree_content = Div(
-                document_header(post_title, raw_content, actions=(copy_raw_button("Copy Tree", "raw-tree-clipboard", "raw-tree-toast"),), breadcrumbs=breadcrumbs, file_path=tree_path),
-                *copy_raw_nodes(raw_content, kind="tree"),
-                render_tree_document(tree_doc),
-            )
-            return DocumentPage(post_title, path, tree_content, show_toc=False).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
         if document.kind == "pdf":
             post_title = f"{slug_to_title(PathCls(path).name, abbreviations=abbreviations)} (PDF)"
             pdf_src = content_url_for_slug(path, suffix=".pdf")
@@ -144,26 +133,6 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     logger.debug(f"[DEBUG] Layout generation took {(time.time() - layout_start) * 1000:.2f}ms")
     logger.debug(f"[DEBUG] ########## REQUEST COMPLETE: {(time.time() - request_start) * 1000:.2f}ms TOTAL ##########\n")
     return result
-
-
-def render_drawing_detail(path, htmx, request, *, get_root_folder, not_found, get_roles_from_request, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, is_allowed, slug_to_title, effective_abbreviations, drawing_password_for, get_blog_title, layout):
-    root, _ = content_root_and_relative(path)
-    if root is None:
-        return not_found(htmx, auth=request.scope.get("auth"))
-    file_path = content_path_for_slug(path, ".excalidraw")
-    if not file_path or not file_path.exists():
-        return not_found(htmx, auth=request.scope.get("auth"))
-    if htmx and getattr(htmx, "request", None):
-        return Response(status_code=200, headers={"HX-Redirect": content_url_for_slug(path, prefix="/drawings")})
-    roles = get_roles_from_request(request, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list)
-    if roles is not None and not is_allowed(f"/posts/{path}", roles or [], rbac_rules):
-        return not_found(htmx, auth=request.scope.get("auth"))
-    title = f"{slug_to_title(Path(path).name, abbreviations=effective_abbreviations(root))} (Excalidraw)"
-    host_id, drawing_protected = f"excalidraw-{abs(hash(path)) & 0xFFFFFF}", bool(drawing_password_for(path))
-    download_url, download_name, auth = content_url_for_slug(path, prefix="/download", suffix=".excalidraw"), f"{Path(path).name}.excalidraw", request.scope.get("auth")
-    default_user = (auth.get("name") or auth.get("email") or auth.get("username") or "") if auth else ""
-    post_content = Div(Div(H1(title, cls=PAGE_TITLE_CLS), Div(Button(default_user or "Set your name", type="button", data_excalidraw_name=host_id, data_excalidraw_name_locked="1" if auth else "0", data_excalidraw_name_default=default_user, disabled=bool(auth), cls="px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-sm " + ("opacity-70 cursor-default" if auth else "hover:bg-slate-100 dark:hover:bg-slate-800")), Button("Enable editing", type="button", data_excalidraw_toggle=host_id, cls="px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"), A("Download .excalidraw", href=download_url, download=download_name, cls="px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"), Button("Open Excalidraw", type="button", data_excalidraw_open_external="1", data_excalidraw_download_url=download_url, data_excalidraw_download_name=download_name, cls="px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"), cls="flex items-center gap-3"), cls="flex items-center justify-between gap-3 mb-6 flex-wrap"), Div(id=host_id, cls="excalidraw-host w-full flex-1 min-h-0 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden", data_excalidraw_path=path, data_excalidraw_src=content_url_for_slug(path, suffix=".excalidraw"), data_excalidraw_save_url=content_url_for_slug(path, prefix="/api/excalidraw"), data_excalidraw_unlock_url=content_url_for_slug(path, prefix="/api/excalidraw/unlock"), data_excalidraw_protected="1" if drawing_protected else "0"), cls="h-[calc(100vh-8rem)] flex flex-col overflow-hidden")
-    return layout(post_content, htmx=htmx, title=f"{title} - {get_blog_title()}", show_sidebar=True, toc_content=None, current_path=path, show_toc=False, auth=request.scope.get("auth"), full_width=True, show_footer=False, no_scroll=True)
 
 
 def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, is_allowed, parse_frontmatter, resolve_markdown_title, slug_to_title, effective_abbreviations, from_md, layout):

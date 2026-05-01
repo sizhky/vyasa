@@ -11,6 +11,5 @@ Vyasa stays simple at the entry point, but it has a few deeper behaviors that ch
 | Feature | Why you would reach for it |
 |---|---|
 | slide reveal config | Control how dense slides appear without rewriting the doc. |
-| Excalidraw routes | Keep editable drawings inside the same content tree. |
 | folder-local ordering | Turn a branch of notes into a deliberate reading sequence. |
 | inline HTML demos | Prove a visual idea quickly before hardening it into theme CSS. |

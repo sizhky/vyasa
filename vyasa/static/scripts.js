@@ -1,11 +1,8 @@
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 import { D2 } from 'https://esm.sh/@terrastruct/d2@0.1.33?bundle';
-import { initCytographs, refreshCytographStyles } from './cytograph.mindmap.js';
-import { initTaskRegions } from './task-graph.js';
 
 const mermaidStates = {};
 const d2States = {};
-let excalidrawLibPromise = null;
 
 function bindPanZoomGestures(wrapper, state, { getTarget, applyState, maxScale = 55 }) {
     const pointers = new Map();
@@ -137,323 +134,6 @@ function bindPanZoomGestures(wrapper, state, { getTarget, applyState, maxScale =
     wrapper.addEventListener('pointercancel', stopPointer);
 }
 
-async function getExcalidrawLib() {
-    if (!excalidrawLibPromise) {
-        excalidrawLibPromise = Promise.all([
-            import('https://esm.sh/react@18'),
-            import('https://esm.sh/react-dom@18/client'),
-            import('https://esm.sh/@excalidraw/excalidraw@0.17.6?bundle'),
-        ]);
-    }
-    return excalidrawLibPromise;
-}
-
-async function saveExcalidrawScene(host, status) {
-    const saveUrl = host?.getAttribute('data-excalidraw-save-url');
-    const scene = host?.__excalidrawState;
-    if (!host || !saveUrl || !scene) {
-        return;
-    }
-    try {
-        const appState = { ...(scene.appState || {}) };
-        if (typeof appState.collaborators?.forEach !== 'function') appState.collaborators = [];
-        const payload = {
-            type: 'excalidraw',
-            version: 2,
-            source: 'vyasa',
-            elements: scene.elements || [],
-            appState,
-            files: scene.files || {},
-        };
-        const res = await fetch(saveUrl, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch (error) {
-        console.error('[vyasa][excalidraw] save failed', error);
-    }
-}
-
-function applyExcalidrawEditMode(host, button) {
-    const editable = !!host?.__excalidrawEditable;
-    if (host?.__excalidrawApi?.updateScene && host?.__excalidrawState?.appState) {
-        host.__excalidrawApi.updateScene({
-            appState: { ...host.__excalidrawState.appState, viewModeEnabled: !editable },
-        });
-    }
-    if (button) button.textContent = editable ? 'Disable editing' : 'Enable editing';
-    updateExcalidrawIdentityLabel(host);
-}
-
-function randomExcalidrawName() {
-    const a = ['Swift', 'Quiet', 'Bold', 'Curious', 'Bright', 'Calm', 'Brave', 'Clever', 'Witty', 'Sly', 'Nimble', 'Mighty', 'Gentle', 'Fierce', 'Loyal', 'Wise', 'Happy', 'Grumpy', 'Sleepy', 'Dopey', 'Zany', 'Jolly', 'Lucky', 'Silly', 'Charming', 'Daring', 'Elegant', 'Fancy', 'Gleaming', 'Heroic', 'Inventive', 'Jovial', 'Kindly', 'Lively', 'Merry', 'Noble', 'Playful', 'Quick', 'Radiant', 'Shy', 'Tough', 'Upbeat', 'Vibrant', 'Wandering', 'Xenial', 'Youthful', 'Zealous', 'Adventurous', 'Bright-eyed', 'Cheerful', 'Dazzling', 'Energetic', 'Fearless', 'Gallant', 'Humble', 'Imaginative', 'Joyful', 'Keen', 'Luminous', 'Majestic', 'Nimble-fingered', 'Optimistic', 'Passionate', 'Quick-witted', 'Resilient', 'Spirited', 'Tenacious', 'Unstoppable', 'Valiant', 'Whimsical', 'Xtraordinary', 'Youthful-at-heart', 'Zesty'];
-    const b = ['Otter', 'Falcon', 'Fox', 'Panda', 'Lynx', 'Hawk', 'Wolf', 'Tiger', 'Eagle', 'Bear', 'Shark', 'Dolphin', 'Raven', 'Leopard', 'Panther', 'Cheetah', 'Gorilla', 'Koala', 'Squirrel', 'Rabbit', 'Deer', 'Moose', 'Buffalo', 'Alligator', 'Crocodile', 'Turtle', 'Frog', 'Snake', 'Horse', 'Donkey', 'Zebra', 'Giraffe', 'Elephant', 'Rhino', 'Hippo', 'Armadillo', 'Badger', 'Beaver', 'Camel', 'Chameleon', 'Chipmunk', 'Cougar', 'Crab', 'Crow', 'Ferret', 'Gazelle', 'Gerbil', 'Goat', 'Gopher', 'Guinea Pig', 'Hamster', 'Hedgehog', 'Ibex', 'Jackal', 'Jerboa', 'Kangaroo', 'Koala', 'Lemur', 'Meerkat', 'Mongoose', 'Mule', 'Ocelot', 'Octopus', 'Orangutan', 'Owl', 'Porcupine', 'Prairie Dog', 'Quokka', 'Raccoon', 'Rat', 'Reindeer', 'Salamander', 'Sea Lion', 'Skunk', 'Sloth', 'Swan', 'Tapir', 'Vole', 'Wombat'];
-    return `${a[Math.floor(Math.random() * a.length)]} ${b[Math.floor(Math.random() * b.length)]}`;
-}
-
-function updateExcalidrawIdentityLabel(host) {
-    if (!host) return;
-    const button = document.querySelector(`[data-excalidraw-name="${host.id}"]`);
-    if (!button) return;
-    const name = host.__excalidrawUserName || 'Guest';
-    button.textContent = `${host.__excalidrawEditable ? 'Editing' : 'Viewing'} as ${name}`;
-}
-
-function initExcalidrawName(rootElement = document) {
-    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-name]'));
-    buttons.forEach((button) => {
-        if (button.dataset.excalidrawNameBound === 'true') return;
-        button.dataset.excalidrawNameBound = 'true';
-        const hostId = button.getAttribute('data-excalidraw-name');
-        const host = hostId ? document.getElementById(hostId) : null;
-        if (!host) return;
-        const locked = button.getAttribute('data-excalidraw-name-locked') === '1';
-        const room = host.getAttribute('data-excalidraw-path') || hostId;
-        const defaultName = button.getAttribute('data-excalidraw-name-default') || '';
-        const key = `vyasa.excalidraw.name.${room}`;
-        let name = defaultName || localStorage.getItem(key) || '';
-        if (!name && !locked) name = randomExcalidrawName();
-        if (!locked && name) localStorage.setItem(key, name);
-        host.__excalidrawUserName = name || 'Guest';
-        updateExcalidrawIdentityLabel(host);
-        if (locked) return;
-        button.addEventListener('click', () => {
-            const current = host.__excalidrawUserName || '';
-            const next = window.prompt('Your display name', current);
-            if (!next) return;
-            const cleaned = next.trim();
-            if (!cleaned) return;
-            host.__excalidrawUserName = cleaned;
-            localStorage.setItem(key, cleaned);
-            updateExcalidrawIdentityLabel(host);
-        });
-    });
-}
-
-function connectExcalidrawCollab(host) {
-    const room = host?.getAttribute('data-excalidraw-path');
-    if (!room || host.__excalidrawWs) return;
-    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${window.location.host}/ws/excalidraw/${room}`);
-    const localId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    host.__excalidrawWs = ws;
-    host.__excalidrawWsId = localId;
-    host.__excalidrawPeers = new Map();
-    if (!host.__excalidrawPeerGcTimer) {
-        host.__excalidrawPeerGcTimer = setInterval(() => {
-            const now = Date.now();
-            for (const [id, peer] of host.__excalidrawPeers.entries()) {
-                if (now - (peer.lastSeen || 0) > 4000) host.__excalidrawPeers.delete(id);
-            }
-            host.__excalidrawApi?.updateScene({ collaborators: new Map(host.__excalidrawPeers) });
-        }, 2000);
-    }
-    ws.onmessage = (evt) => {
-        try {
-            const msg = JSON.parse(evt.data || '{}');
-            if (msg.type === 'presence_remove' && msg.id) {
-                host.__excalidrawPeers.delete(msg.id);
-                host.__excalidrawApi?.updateScene({ collaborators: new Map(host.__excalidrawPeers) });
-                return;
-            }
-            if (msg.type === 'presence' && msg.presence?.id && host.__excalidrawApi) {
-                if (msg.presence.id === localId) return;
-                const remotePointer = msg.presence.pointer || null;
-                const isLaser = remotePointer?.tool === 'laser';
-                host.__excalidrawPeers.set(msg.presence.id, {
-                    username: msg.presence.username || 'Guest',
-                    pointer: remotePointer,
-                    button: msg.presence.button || 'up',
-                    selectedElementIds: {},
-                    renderCursor: !isLaser,
-                    lastSeen: Date.now(),
-                });
-                host.__excalidrawApi.updateScene({ collaborators: new Map(host.__excalidrawPeers) });
-                return;
-            }
-            if (msg.type !== 'scene' || !msg.scene || !host.__excalidrawApi) return;
-            if (msg.from && msg.from === localId) return;
-            host.__excalidrawApplyingRemote = true;
-            host.__excalidrawSkipUntil = Date.now() + 180;
-            host.__excalidrawState = {
-                ...host.__excalidrawState,
-                elements: msg.scene.elements || [],
-                files: msg.scene.files || {},
-            };
-            host.__excalidrawApi.updateScene({
-                elements: msg.scene.elements || [],
-                files: msg.scene.files || {},
-            });
-            setTimeout(() => { host.__excalidrawApplyingRemote = false; }, 200);
-        } catch (e) {
-            console.error('[vyasa][collab] bad message', e);
-        }
-    };
-}
-
-async function initExcalidrawHosts(rootElement = document) {
-    const hosts = Array.from(rootElement.querySelectorAll('.excalidraw-host'));
-    for (const host of hosts) {
-        if (host.dataset.excalidrawMounted === 'true') continue;
-        host.dataset.excalidrawMounted = 'true';
-        const src = host.getAttribute('data-excalidraw-src');
-        const status = document.getElementById(`${host.id}-status`);
-        try {
-            const [ReactNS, ReactDOMNS, ExcalidrawNS] = await getExcalidrawLib();
-            const React = ReactNS.default || ReactNS;
-            const ReactDOMClient = ReactDOMNS.default || ReactDOMNS;
-            const ExcalidrawComp =
-                ExcalidrawNS.Excalidraw ||
-                ExcalidrawNS.default?.Excalidraw ||
-                ExcalidrawNS.default;
-            if (!ExcalidrawComp || typeof ReactDOMClient.createRoot !== 'function') {
-                throw new Error('Excalidraw module shape is unsupported');
-            }
-            const scene = src ? await fetch(src).then((r) => r.json()) : { elements: [], appState: {}, files: {} };
-            const appState = scene.appState || {};
-            if (typeof appState.collaborators?.forEach !== 'function') {
-                appState.collaborators = [];
-            }
-            const sceneState = {
-                type: 'excalidraw',
-                version: 2,
-                source: 'vyasa',
-                elements: scene.elements || [],
-                appState: { ...appState, viewModeEnabled: true },
-                files: scene.files || {},
-            };
-            host.__excalidrawState = sceneState;
-            host.__excalidrawEditable = false;
-            host.__excalidrawAutosaveTimer = null;
-            connectExcalidrawCollab(host);
-            const root = ReactDOMClient.createRoot(host);
-            const element = React.createElement(ExcalidrawComp, {
-                initialData: sceneState,
-                theme: getCurrentTheme() === 'dark' ? 'dark' : 'light',
-                excalidrawAPI: (api) => {
-                    host.__excalidrawApi = api;
-                    applyExcalidrawEditMode(host, document.querySelector(`[data-excalidraw-toggle="${host.id}"]`));
-                },
-                onChange: (elements, appState, files) => {
-                    host.__excalidrawState = { ...sceneState, elements, appState, files };
-                    if (!host.__excalidrawEditable) return;
-                    if (host.__excalidrawApplyingRemote || Date.now() < (host.__excalidrawSkipUntil || 0)) return;
-                    if (host.__excalidrawWs?.readyState === WebSocket.OPEN) {
-                        host.__excalidrawWs.send(JSON.stringify({
-                            type: 'scene',
-                            from: host.__excalidrawWsId,
-                            scene: { elements: host.__excalidrawState.elements || [], files: host.__excalidrawState.files || {} },
-                        }));
-                    }
-                    if (host.__excalidrawAutosaveTimer) clearTimeout(host.__excalidrawAutosaveTimer);
-                    host.__excalidrawAutosaveTimer = setTimeout(() => {
-                        saveExcalidrawScene(host, status);
-                    }, 700);
-                },
-                onPointerUpdate: ({ pointer, button }) => {
-                    if (!host.__excalidrawWs || host.__excalidrawWs.readyState !== WebSocket.OPEN) return;
-                    const now = Date.now();
-                    if (now - (host.__excalidrawPresenceTs || 0) < 50) return;
-                    host.__excalidrawPresenceTs = now;
-                    host.__excalidrawWs.send(JSON.stringify({
-                        type: 'presence',
-                        presence: {
-                            id: host.__excalidrawWsId,
-                            username: host.__excalidrawUserName || 'Guest',
-                            pointer: pointer ? { x: pointer.x, y: pointer.y, tool: pointer.tool || 'pointer' } : null,
-                            button: button || 'up',
-                        },
-                    }));
-                },
-            });
-            root.render(element);
-            if (status) status.textContent = 'Loaded';
-        } catch (error) {
-            if (status) status.textContent = 'Failed to load';
-            console.error('[vyasa][excalidraw] mount failed', error);
-        }
-    }
-}
-
-function initExcalidrawSave(rootElement = document) {
-    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-toggle]'));
-    buttons.forEach((button) => {
-        if (button.dataset.excalidrawSaveBound === 'true') return;
-        button.dataset.excalidrawSaveBound = 'true';
-        button.addEventListener('click', async () => {
-            const hostId = button.getAttribute('data-excalidraw-toggle');
-            const host = hostId ? document.getElementById(hostId) : null;
-            if (!host) return;
-            if (!host.__excalidrawEditable && host.getAttribute('data-excalidraw-protected') === '1') {
-                const unlockUrl = host.getAttribute('data-excalidraw-unlock-url');
-                if (unlockUrl) {
-                    const password = prompt('Enter drawing password to enable editing:');
-                    if (password === null) return;
-                    try {
-                        const resp = await fetch(unlockUrl, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ password }),
-                        });
-                        if (!resp.ok) {
-                            alert('Invalid drawing password.');
-                            return;
-                        }
-                    } catch (err) {
-                        console.error('[vyasa][excalidraw] unlock failed', err);
-                        alert('Could not verify drawing password.');
-                        return;
-                    }
-                }
-            }
-            host.__excalidrawEditable = !host.__excalidrawEditable;
-            applyExcalidrawEditMode(host, button);
-        });
-    });
-}
-
-function initExcalidrawOpenExternal(rootElement = document) {
-    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-open-external]'));
-    buttons.forEach((button) => {
-        if (button.dataset.excalidrawOpenBound === 'true') return;
-        button.dataset.excalidrawOpenBound = 'true';
-        button.addEventListener('click', () => {
-            const downloadUrl = button.getAttribute('data-excalidraw-download-url');
-            const downloadName = button.getAttribute('data-excalidraw-download-name') || 'drawing.excalidraw';
-            window.open('https://excalidraw.com', '_blank', 'noopener');
-            if (!downloadUrl) return;
-            const a = document.createElement('a');
-            a.href = downloadUrl;
-            a.download = downloadName;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-        });
-    });
-}
-
-function initExcalidrawExternalOpen(rootElement = document) {
-    const buttons = Array.from(rootElement.querySelectorAll('[data-excalidraw-open-external]'));
-    buttons.forEach((button) => {
-        if (button.dataset.excalidrawOpenBound === 'true') return;
-        button.dataset.excalidrawOpenBound = 'true';
-        button.addEventListener('click', () => {
-            const downloadUrl = button.getAttribute('data-excalidraw-download-url');
-            const downloadName = button.getAttribute('data-excalidraw-download-name') || 'drawing.excalidraw';
-            if (downloadUrl) {
-                const a = document.createElement('a');
-                a.href = downloadUrl;
-                a.download = downloadName;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-            }
-            window.open('https://excalidraw.com', '_blank', 'noopener');
-        });
-    });
-}
 const mermaidDebugEnabled = () => (
     window.VYASA_DEBUG_MERMAID === true ||
     localStorage.getItem('vyasaDebugMermaid') === '1'
@@ -2008,14 +1688,14 @@ initRevealDiagramRefresh();
 function normalizeSidebarPath(pathname) {
     const decoded = decodeURIComponent(pathname || '');
     const trimmed = decoded
-        .replace(/^\/(?:posts|drawings)\//, '')
-        .replace(/(?:\.pdf|\.excalidraw)$/, '');
+        .replace(/^\/posts\//, '')
+        .replace(/(?:\.pdf)$/, '');
     return trimmed.replace(/\/+$/, '');
 }
 
 // Reveal current file in sidebar
 function revealInSidebar(rootElement = document, explicitPath = null) {
-    if (!explicitPath && !window.location.pathname.startsWith('/posts/') && !window.location.pathname.startsWith('/drawings/')) {
+    if (!explicitPath && !window.location.pathname.startsWith('/posts/')) {
         return;
     }
 
@@ -2165,7 +1845,7 @@ function initCodeHighlighting(rootElement = document) {
         if (code.dataset.hljsBound === 'true') {
             return;
         }
-        if (code.closest('.mermaid-wrapper,[data-cytograph-root],[data-cryptograph-widget="true"],.d2-wrapper')) {
+        if (code.closest('.mermaid-wrapper,.d2-wrapper')) {
             return;
         }
         window.hljs.highlightElement(code);
@@ -2192,190 +1872,6 @@ function fallbackCopyText(text, done) {
     document.execCommand('copy');
     document.body.removeChild(textarea);
     done();
-}
-
-function initCryptographs(rootElement = document) {
-    rootElement.querySelectorAll('[data-cryptograph-widget="true"]').forEach((widget, widgetIndex) => {
-        if (widget.dataset.cryptographBound === 'true') {
-            return;
-        }
-        widget.dataset.cryptographBound = 'true';
-        const cipherRaw = widget.dataset.cryptographCipher || '';
-        const answerRaw = widget.dataset.cryptographAnswer || '';
-        const hint = widget.dataset.cryptographHint || '';
-        const title = widget.dataset.cryptographTitle || 'Cryptograph';
-        const cipherText = cipherRaw.toUpperCase();
-        const answerText = answerRaw.toUpperCase();
-        const letters = Array.from(new Set(cipherText.match(/[A-Z]/g) || [])).sort();
-        const frequencies = [...letters]
-            .map((letter) => ({ letter, count: (cipherText.match(new RegExp(letter, 'g')) || []).length }))
-            .sort((left, right) => right.count - left.count || left.letter.localeCompare(right.letter));
-        const mappings = Object.fromEntries(letters.map((letter) => [letter, '']));
-        const widgetId = `cryptograph-${widgetIndex}-${Math.abs(cipherText.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0))}`;
-        const resolveCharacter = (character) => {
-            if (!/[A-Z]/.test(character)) return character;
-            return mappings[character] || '·';
-        };
-        const renderPuzzle = () => {
-            const fragment = document.createDocumentFragment();
-            const line = document.createElement('div');
-            line.className = 'flex flex-wrap gap-x-3 gap-y-3';
-            cipherText.split(/(\s+)/).forEach((token) => {
-                if (!token) return;
-                if (/^\s+$/.test(token)) {
-                    const spacer = document.createElement('span');
-                    spacer.className = 'w-3';
-                    line.appendChild(spacer);
-                    return;
-                }
-                const word = document.createElement('div');
-                word.className = 'flex gap-1';
-                [...token].forEach((character) => {
-                    if (/[A-Z]/.test(character)) {
-                        const cell = document.createElement('button');
-                        cell.type = 'button';
-                        cell.className = 'flex min-w-[2.3rem] flex-col items-center rounded-xl border border-slate-200/80 bg-white/80 px-2 py-2 text-center dark:border-slate-700/80 dark:bg-slate-950/70';
-                        cell.dataset.cryptographLetter = character;
-                        cell.innerHTML = `<span class="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">${character}</span><span class="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">${resolveCharacter(character)}</span>`;
-                        cell.addEventListener('click', () => {
-                            const input = controls.querySelector(`input[data-cryptograph-input="${character}"]`);
-                            input?.focus();
-                            input?.select();
-                        });
-                        word.appendChild(cell);
-                    } else {
-                        const punct = document.createElement('div');
-                        punct.className = 'flex min-w-[1rem] items-end justify-center pb-2 text-lg text-slate-500 dark:text-slate-400';
-                        punct.textContent = character;
-                        word.appendChild(punct);
-                    }
-                });
-                line.appendChild(word);
-            });
-            fragment.appendChild(line);
-            board.replaceChildren(fragment);
-        };
-        const updateStatus = () => {
-            const solvedCount = letters.filter((letter) => mappings[letter]).length;
-            const solved = letters.length > 0 && solvedCount === letters.length;
-            if (answerText) {
-                const guess = cipherText.replace(/[A-Z]/g, (character) => mappings[character] || '_');
-                if (solved && guess === answerText) {
-                    status.textContent = 'Solved. The mapping matches the supplied answer.';
-                    status.className = 'text-sm font-medium text-emerald-700 dark:text-emerald-300';
-                    return;
-                }
-                if (solved) {
-                    status.textContent = 'All letters filled. The answer does not match yet.';
-                    status.className = 'text-sm font-medium text-amber-700 dark:text-amber-300';
-                    return;
-                }
-            }
-            status.textContent = `${solvedCount}/${letters.length} cipher letters mapped${hint ? ` • Hint: ${hint}` : ''}`;
-            status.className = 'text-sm text-slate-600 dark:text-slate-300';
-        };
-        const controls = document.createElement('div');
-        controls.className = 'mt-5 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]';
-        const board = document.createElement('div');
-        board.className = 'rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-700/80 dark:bg-slate-900/50';
-        const side = document.createElement('div');
-        side.className = 'space-y-4';
-        const mappingPanel = document.createElement('div');
-        mappingPanel.className = 'rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-700/80 dark:bg-slate-900/50';
-        const mappingHeader = document.createElement('div');
-        mappingHeader.className = 'mb-3 flex items-center justify-between';
-        mappingHeader.innerHTML = '<div class="text-sm font-semibold text-slate-900 dark:text-slate-100">Letter mapping</div><div class="text-xs uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">Cipher → Guess</div>';
-        mappingPanel.appendChild(mappingHeader);
-        const mappingGrid = document.createElement('div');
-        mappingGrid.className = 'grid grid-cols-2 gap-2 sm:grid-cols-3';
-        letters.forEach((letter) => {
-            const label = document.createElement('label');
-            label.className = 'flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white/85 px-3 py-2 dark:border-slate-700/80 dark:bg-slate-950/75';
-            label.innerHTML = `<span class="min-w-[1.1rem] text-sm font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">${letter}</span>`;
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.maxLength = 1;
-            input.autocomplete = 'off';
-            input.spellcheck = false;
-            input.dataset.cryptographInput = letter;
-            input.className = 'w-full border-0 bg-transparent p-0 text-base font-semibold uppercase text-slate-900 outline-none placeholder:text-slate-300 dark:text-slate-100 dark:placeholder:text-slate-600';
-            input.placeholder = '·';
-            input.addEventListener('input', () => {
-                const nextValue = (input.value || '').replace(/[^a-z]/gi, '').slice(-1).toUpperCase();
-                input.value = nextValue;
-                mappings[letter] = nextValue;
-                renderPuzzle();
-                updateStatus();
-            });
-            label.appendChild(input);
-            mappingGrid.appendChild(label);
-        });
-        mappingPanel.appendChild(mappingGrid);
-        const toolbar = document.createElement('div');
-        toolbar.className = 'flex flex-wrap gap-2';
-        const status = document.createElement('div');
-        status.className = 'text-sm text-slate-600 dark:text-slate-300';
-        const makeButton = (label, onClick, className = '') => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = `rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${className}`.trim();
-            button.textContent = label;
-            button.addEventListener('click', onClick);
-            return button;
-        };
-        toolbar.appendChild(makeButton('Reset', () => {
-            Object.keys(mappings).forEach((letter) => { mappings[letter] = ''; });
-            mappingGrid.querySelectorAll('input').forEach((input) => { input.value = ''; });
-            renderPuzzle();
-            updateStatus();
-        }, 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-500'));
-        toolbar.appendChild(makeButton('Copy ciphertext', () => {
-            copyText(cipherText, () => {
-                status.textContent = 'Ciphertext copied.';
-                status.className = 'text-sm font-medium text-sky-700 dark:text-sky-300';
-                setTimeout(updateStatus, 1200);
-            });
-        }, 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-500'));
-        if (answerText) {
-            toolbar.appendChild(makeButton('Reveal answer', () => {
-                letters.forEach((letter) => {
-                    const matchIndex = cipherText.indexOf(letter);
-                    mappings[letter] = matchIndex >= 0 ? answerText[matchIndex] : '';
-                });
-                mappingGrid.querySelectorAll('input').forEach((input) => {
-                    input.value = mappings[input.dataset.cryptographInput] || '';
-                });
-                renderPuzzle();
-                updateStatus();
-            }, 'border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300 dark:border-amber-700/70 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:border-amber-500'));
-        }
-        const frequencyPanel = document.createElement('div');
-        frequencyPanel.className = 'rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-700/80 dark:bg-slate-900/50';
-        frequencyPanel.innerHTML = '<div class="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-100">Frequency</div>';
-        const frequencyList = document.createElement('div');
-        frequencyList.className = 'grid grid-cols-2 gap-2 sm:grid-cols-3';
-        frequencies.forEach(({ letter, count }) => {
-            const chip = document.createElement('div');
-            chip.className = 'rounded-xl border border-slate-200/80 bg-white/85 px-3 py-2 text-sm dark:border-slate-700/80 dark:bg-slate-950/75';
-            chip.innerHTML = `<div class="font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">${letter}</div><div class="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">${count}</div>`;
-            frequencyList.appendChild(chip);
-        });
-        frequencyPanel.appendChild(frequencyList);
-        side.append(mappingPanel, frequencyPanel);
-        controls.append(board, side);
-        const chrome = document.createElement('div');
-        chrome.className = 'mb-4 flex flex-wrap items-center justify-between gap-3';
-        chrome.innerHTML = `<div><div class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Cryptograph</div><h3 class="m-0 text-xl font-semibold text-slate-900 dark:text-slate-100">${title}</h3></div>`;
-        const actions = document.createElement('div');
-        actions.className = 'flex flex-wrap gap-2';
-        actions.appendChild(toolbar);
-        const statusWrap = document.createElement('div');
-        statusWrap.className = 'mt-3';
-        statusWrap.appendChild(status);
-        widget.replaceChildren(chrome, controls, statusWrap);
-        renderPuzzle();
-        updateStatus();
-    });
 }
 
 function initHeadingPermalinkCopy(root = document) {
@@ -3277,16 +2773,12 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
     initCodeBlockCopyButtons(event.target || document);
 });
 
-// Watch for theme changes and re-render mermaid/D2/cytograph
+// Watch for theme changes and re-render mermaid/D2
 const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
         if (mutation.attributeName === 'class') {
             reinitializeMermaid();
-            renderD2Diagrams();
-            refreshCytographStyles();
-        } else if (mutation.attributeName === 'style') {
-            refreshCytographStyles();
-        }
+            renderD2Diagrams();        } else if (mutation.attributeName === 'style') {        }
     });
 });
 
@@ -4155,8 +3647,6 @@ function scheduleHighlightedCodeIncludes(root) {
     [40, 140, 320].forEach((delay) => setTimeout(() => { initCodeHighlighting(target); initHighlightedCodeIncludes(target); }, delay));
 }
 
-// ── Cytograph moved to cytograph.mindmap.js ─────────────────────────────────
-
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     initHeadingFolds(document);
@@ -4182,19 +3672,11 @@ document.addEventListener('DOMContentLoaded', () => {
     initPostsSearchPersistence(document);
     initBookmarks(document);
     initCodeBlockCopyButtons(document);
-    initCryptographs(document);
-    initCytographs(document);
     initHeadingPermalinkCopy(document);
     scheduleHighlightedCodeIncludes(document);
     initSearchClearButtons(document);
     ensurePdfFocusState();
     initTabPanelHeights(document);
-    initExcalidrawHosts(document);
-    initExcalidrawName(document);
-    initExcalidrawSave(document);
-    initExcalidrawOpenExternal(document);
-    initExcalidrawExternalOpen(document);
-    initTaskRegions(document);
     normalizeCriticalTextColors(document);
     recordStyleProbe('domcontentloaded');
     [100, 500, 1500].forEach((ms) => setTimeout(() => recordStyleProbe(`t+${ms}`), ms));
@@ -4221,16 +3703,8 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initPostsSearchPersistence(event.target);
     initBookmarks(event.target);
     initCodeBlockCopyButtons(event.target);
-    initCryptographs(event.target);
-    initCytographs(event.target);
     initHeadingPermalinkCopy(event.target);
     scheduleHighlightedCodeIncludes(event.target);
-    initExcalidrawHosts(event.target || document);
-    initExcalidrawName(event.target || document);
-    initExcalidrawSave(event.target || document);
-    initExcalidrawOpenExternal(event.target || document);
-    initExcalidrawExternalOpen(event.target || document);
-    initTaskRegions(event.target || document);
     initSearchClearButtons(event.target);
     initAnnotations(event.target || document);
     ensurePdfFocusState();
@@ -4259,7 +3733,7 @@ document.body.addEventListener('htmx:beforeRequest', (event) => {
         return;
     }
     const path = event?.detail?.requestConfig?.path || '';
-    if (!path || path.startsWith('/api/excalidraw/')) {
+    if (!path) {
         return;
     }
     event.preventDefault();

@@ -605,7 +605,7 @@ def _sort_vyasa_entries(entries, sort_method, folders_first):
     return sorted(entries, key=sort_key, reverse=reverse)
 
 def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
-    """List all posts in the blog root (md + tree + pdf + tasks)."""
+    """List all posts in the blog root (md + pdf)."""
     root = root.resolve()
     root_parts = len(root.parts)
     posts: list[dict] = []
@@ -619,7 +619,7 @@ def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
             continue
         if not include_hidden and any(part.startswith(".") for part in rel_parts):
             continue
-        if path.suffix.lower() not in {".md", ".tree", ".pdf"}:
+        if path.suffix.lower() not in {".md", ".pdf"}:
             continue
 
         rel = Path(*rel_parts)
@@ -627,9 +627,6 @@ def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
         if path.suffix.lower() == ".md":
             title = get_post_title(path, abbreviations=abbreviations)
             kind = "md"
-        elif path.suffix.lower() == ".tree":
-            title = slug_to_title(rel.stem, abbreviations=abbreviations)
-            kind = "tree"
         else:
             title = slug_to_title(rel.stem, abbreviations=abbreviations)
             kind = "pdf"
@@ -645,7 +642,7 @@ def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
     return posts
 
 def list_vyasa_entries(root: Path, relative: str = ".", include_hidden: bool = False) -> dict:
-    """List immediate entries (folders + md/tree/pdf files) under a relative path."""
+    """List immediate entries (folders + md/pdf files) under a relative path."""
     root = root.resolve()
     target = (root / relative).resolve()
     if target != root and root not in target.parents:
@@ -661,16 +658,13 @@ def list_vyasa_entries(root: Path, relative: str = ".", include_hidden: bool = F
         if item.is_dir():
             entries.append({"type": "folder", "path": item.relative_to(root).as_posix()})
             continue
-        if item.suffix.lower() not in {".md", ".tree", ".pdf"}:
+        if item.suffix.lower() not in {".md", ".pdf"}:
             continue
         rel = item.relative_to(root)
         slug = rel.with_suffix("").as_posix()
         if item.suffix.lower() == ".md":
             title = get_post_title(item, abbreviations=abbreviations)
             kind = "md"
-        elif item.suffix.lower() == ".tree":
-            title = slug_to_title(rel.stem, abbreviations=abbreviations)
-            kind = "tree"
         else:
             title = slug_to_title(rel.stem, abbreviations=abbreviations)
             kind = "pdf"

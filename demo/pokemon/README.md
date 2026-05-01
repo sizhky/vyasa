@@ -293,17 +293,6 @@ mindmap
 
 </details>
 
-### Interactive Strategy Map {#strategy-map}
-
-```cytograph
----
-source: ./competitive-pokemon.cytree
-layout: vyasa
-height: 55vh
-initial_depth: 2
----
-```
-
 ## How Pokémon Compares {#comparison}
 
 ```d2

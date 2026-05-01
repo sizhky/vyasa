@@ -23,7 +23,6 @@ from .assets import asset_url
 from .favicon import favicon_href as resolve_favicon_href, write_generated_favicon
 from .page_shell import PageShellModel, StaticShellRenderer
 from .tree_service import get_tree_entries
-from .tree_file_rendering import render_tree_document, resolve_tree_title
 
 _asset_url = asset_url
 
@@ -415,7 +414,7 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
     """Build post tree with static .html links instead of HTMX"""
     items = []
     try:
-        entries = get_tree_entries(folder, root_folder, show_hidden, set(), ('.md', '.tree'))
+        entries = get_tree_entries(folder, root_folder, show_hidden, set(), ('.md',))
         abbreviations = _effective_abbreviations(root_folder, folder)
     except (OSError, PermissionError): 
         return items
@@ -455,14 +454,10 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
                     title_text,
                     href=content_url_for_slug(note_slug, suffix=".html"),
                     cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
-        elif item.suffix in {'.md', '.tree'}:
+        elif item.suffix == '.md':
             slug = str(item.relative_to(root_folder).with_suffix(''))
             if item.suffix == ".md":
                 title, icon = get_post_title(item, abbreviations=abbreviations), "file-text"
-            elif item.suffix == ".tree":
-                title, icon = resolve_tree_title(item, abbreviations=abbreviations)[0], "git-branch"
-            else:
-                title, icon = slug_to_title(item.stem, abbreviations=abbreviations), "kanban"
             
             # Use .html extension for static links
             items.append(Li(A(
@@ -534,7 +529,7 @@ def build_static_site(input_dir=None, output_dir=None):
     ignore_list = _effective_ignore_list(root_folder)
     include_list = _effective_include_list(root_folder)
     doc_files = []
-    for doc_file in [*root_folder.rglob('*.md'), *root_folder.rglob('*.tree')]:
+    for doc_file in root_folder.rglob('*.md'):
         # Only include files that are actually inside root_folder
         try:
             relative_path = doc_file.relative_to(root_folder)
@@ -562,20 +557,13 @@ def build_static_site(input_dir=None, output_dir=None):
         relative_path = doc_file.relative_to(root_folder)
         print(f"  Processing: {relative_path}")
 
-        if doc_file.suffix == ".tree":
-            post_title, raw_content, tree_doc = resolve_tree_title(doc_file, abbreviations=abbreviations)
-            content_div = render_tree_document(tree_doc)
-            toc_items = None
-            prev_item = next_item = None
-            read_source = raw_content
-        else:
-            metadata, raw_content = parse_frontmatter(doc_file)
-            post_title, render_content = resolve_markdown_title(doc_file, abbreviations=abbreviations)
-            content_div = from_md(render_content, current_path=str(relative_path))
-            toc_headings = extract_toc(raw_content, _strip_inline_markdown, text_to_anchor, _unique_anchor)
-            toc_items = build_toc_items(toc_headings)
-            prev_item, next_item = get_adjacent_posts(root_folder, relative_path, abbreviations=abbreviations)
-            read_source = render_content
+        metadata, raw_content = parse_frontmatter(doc_file)
+        post_title, render_content = resolve_markdown_title(doc_file, abbreviations=abbreviations)
+        content_div = from_md(render_content, current_path=str(relative_path))
+        toc_headings = extract_toc(raw_content, _strip_inline_markdown, text_to_anchor, _unique_anchor)
+        toc_items = build_toc_items(toc_headings)
+        prev_item, next_item = get_adjacent_posts(root_folder, relative_path, abbreviations=abbreviations)
+        read_source = render_content
 
         read_time = estimate_read_time_minutes(read_source)
         last_modified = format_last_modified_label(doc_file)
