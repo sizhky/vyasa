@@ -1,4 +1,3 @@
-import asyncio
 import re
 import json
 import base64
@@ -21,7 +20,6 @@ from .helpers import (
     get_vyasa_config,
     find_folder_note_file,
     content_path_for_slug,
-    content_root_and_relative,
     content_slug_for_path,
     content_url_for_slug,
     get_content_mounts,
@@ -54,21 +52,14 @@ from .auth.views import impersonate_content, login_content
 from .auth.http import handle_admin_impersonate, handle_admin_rbac, handle_login
 from .auth.policy import is_allowed, resolve_roles
 from .bootstrap import build_app, build_beforeware, mount_package_static
-from .collab_runtime import CollabRuntime
 from .content_routes import (
     find_index_file as find_index_file_helper,
-    render_drawing_detail,
     render_index,
     render_post_detail,
     render_slide_deck,
 )
 from .content_tree import ContentTree
 from .bookmarks_api import CallableBookmarkStore, register_bookmarks_routes
-from .drawing_auth import (
-    drawing_password_for,
-    drawing_unlocked_in_session,
-    unlock_drawing,
-)
 from .auth.oauth_bootstrap import build_google_oauth
 from .annotations_store import delete_annotation, list_annotations, upsert_annotation
 from .bookmark_store import delete_bookmark, list_bookmarks, upsert_bookmark
@@ -96,7 +87,6 @@ from .tree_rendering import (
     build_post_tree_render,
     folder_has_visible_descendant as tree_folder_has_visible_descendant,
 )
-from .tasks_api import register_tasks_routes
 from .favicon import favicon_href, favicon_svg
 from .file_search import search_file_records
 _asset_url = asset_url
@@ -431,27 +421,6 @@ if _auth_required is None:
 
 _rbac_cfg = _load_rbac_cfg_from_store()
 _set_rbac_cfg(_rbac_cfg)
-
-
-def _drawing_password_for(path: str):
-    root, rel = content_root_and_relative(path)
-    if root is None:
-        return None
-    return drawing_password_for(root, rel.as_posix())
-
-
-def _drawing_unlocked_in_session(session, path: str) -> bool:
-    return drawing_unlocked_in_session(session, path)
-
-
-def _drawing_unlocked(request: Request, path: str) -> bool:
-    return _drawing_unlocked_in_session(request.session, path)
-
-
-def _unlock_drawing(request: Request, path: str):
-    unlock_drawing(request.session, path)
-
-
 def _build_beforeware():
     auth_before = make_user_auth_before(_auth_required, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
     return build_beforeware(auth_before, _auth_enabled or (_rbac_cfg.get("enabled") and _rbac_rules))
@@ -498,9 +467,6 @@ _runtime = RuntimeContext(
 
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, FileResponse, Response, StreamingResponse
-from starlette.websockets import WebSocket
-
-_collab = CollabRuntime()
 
 
 def _live_reload_roots():
@@ -514,7 +480,7 @@ def _live_reload_roots():
 def _is_live_reload_path(path: Path):
     if any(part in set(get_config().get_reload_excludes()) for part in path.parts):
         return False
-    return path.name == ".vyasa" or path.suffix in {".md", ".tree", ".pdf", ".css", ".js"}
+    return path.name == ".vyasa" or path.suffix in {".md", ".pdf", ".css", ".js"}
 
 
 async def _live_reload_events():
@@ -535,20 +501,6 @@ async def live_reload():
     if not get_config().get_browser_reload_enabled():
         return Response(status_code=404)
     return StreamingResponse(_live_reload_events(), media_type="text/event-stream")
-
-
-async def _collab_broadcast(room, payload, exclude=None):
-    await _collab.broadcast(room, payload, exclude=exclude)
-
-
-async def _collab_conn(ws: WebSocket):
-    await _collab.connect(ws)
-
-
-async def _collab_disconn(ws: WebSocket):
-    await _collab.disconnect(ws)
-
-
 def _initialize_app(app_instance):
     _mount_package_static(app_instance)
 
@@ -762,60 +714,6 @@ def serve_post_json(path: str):
     return Response(status_code=404)
 
 
-@rt("/posts/{path:path}.excalidraw")
-def serve_post_excalidraw(path: str):
-    from starlette.responses import FileResponse
-
-    file_path = content_path_for_slug(path, ".excalidraw")
-    if file_path and file_path.exists():
-        return FileResponse(file_path, media_type="application/json; charset=utf-8")
-    return Response(status_code=404)
-
-
-@rt("/api/excalidraw/unlock/{path:path}", methods=["POST"])
-async def unlock_excalidraw(path: str, request: Request):
-    expected = _drawing_password_for(path)
-    if not expected:
-        return Response('{"ok":true,"unlocked":true}', media_type="application/json")
-    try:
-        body = await request.body()
-        payload = json.loads(body.decode("utf-8")) if body else {}
-    except Exception:
-        return Response("Invalid JSON", status_code=400)
-    if (payload.get("password") or "") != expected:
-        return Response("Forbidden", status_code=403)
-    _unlock_drawing(request, path)
-    return Response('{"ok":true,"unlocked":true}', media_type="application/json")
-
-
-@rt("/api/excalidraw/{path:path}", methods=["PUT"])
-async def save_excalidraw(path: str, request: Request):
-    file_path = content_path_for_slug(path, ".excalidraw")
-    if not file_path:
-        return Response(status_code=403)
-    if _drawing_password_for(path) and not _drawing_unlocked(request, path):
-        return Response("Forbidden", status_code=403)
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    if roles is not None and not is_allowed(f"/posts/{path}", roles or [], _rbac_rules):
-        return Response("Forbidden", status_code=403)
-    try:
-        payload = await request.body()
-        parsed = json.loads(payload.decode("utf-8"))
-        if not isinstance(parsed, dict):
-            return Response("Expected a JSON object", status_code=400)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(
-            json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-    except json.JSONDecodeError:
-        return Response("Invalid JSON", status_code=400)
-    except Exception as exc:
-        logger.warning(f"Failed to save excalidraw file '{path}': {exc}")
-        return Response("Save failed", status_code=500)
-    return Response('{"ok":true}', media_type="application/json")
-
-
-register_tasks_routes(rt, _runtime)
 register_annotations_routes(
     rt,
     _runtime,
@@ -827,36 +725,6 @@ register_bookmarks_routes(
     CallableBookmarkStore(_bookmarks_db_list, _bookmarks_db_upsert, _bookmarks_db_delete),
     root_folder=get_root_folder,
 )
-
-
-@app.ws("/ws/excalidraw/{path:path}", conn=_collab_conn, disconn=_collab_disconn)
-async def excalidraw_collab(ws: WebSocket, data: dict):
-    room = ws.path_params.get("path", "")
-    kind = data.get("type")
-    if kind == "scene":
-        if _drawing_password_for(room) and not _drawing_unlocked_in_session(
-            ws.scope.get("session"), room
-        ):
-            return
-        scene = data.get("scene")
-        async with _collab.lock:
-            _collab.scenes[room] = scene
-        await _collab_broadcast(
-            room,
-            {"type": "scene", "room": room, "scene": scene},
-            exclude=ws,
-        )
-    elif kind == "presence":
-        pid = (data.get("presence") or {}).get("id")
-        if pid:
-            ws.scope["collab_id"] = pid
-        await _collab_broadcast(
-            room,
-            {"type": "presence", "room": room, "presence": data.get("presence")},
-            exclude=ws,
-        )
-
-
 # Generic download route for any file under the blog root
 @rt("/download/{path:path}")
 def download_file(path: str):
@@ -956,7 +824,7 @@ def _find_search_preview_matches(query, limit=200):
     return _find_search_preview_matches_uncached(query, limit)
 
 
-def _find_search_candidates(query, limit=40, *, suffixes=(".md", ".tree", ".pdf")):
+def _find_search_candidates(query, limit=40, *, suffixes=(".md", ".pdf")):
     return search_file_records(
         query,
         get_content_mounts(),
@@ -967,7 +835,7 @@ def _find_search_candidates(query, limit=40, *, suffixes=(".md", ".tree", ".pdf"
 
 
 def _find_search_matches_uncached(query, limit=40):
-    return _find_search_candidates(query, limit, suffixes=(".md", ".tree", ".pdf"))
+    return _find_search_candidates(query, limit, suffixes=(".md", ".pdf"))
 
 
 def _find_search_preview_matches_uncached(query, limit=200):
@@ -1048,18 +916,14 @@ def _log_startup_content_stats():
     excludes = get_config().get_reload_excludes()
     roots = get_content_mounts()
     md_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".md",), show_hidden))
-    tree_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".tree",), show_hidden))
     pdf_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".pdf",), show_hidden))
-    excalidraw_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".excalidraw",), show_hidden))
     vyasa_count = sum(1 for _, root in roots for _ in iter_visible_files(root, (".vyasa",), True))
     logger.info(
-        "Startup scan root={} show_hidden={} md={} tree={} pdf={} excalidraw={} vyasa={} excludes={}",
+        "Startup scan root={} show_hidden={} md={} pdf={} vyasa={} excludes={}",
         [str(root) for _, root in roots],
         show_hidden,
         md_count,
-        tree_count,
         pdf_count,
-        excalidraw_count,
         vyasa_count,
         excludes,
     )
@@ -1178,9 +1042,7 @@ def _get_nav_entries(
     cached = _nav_entries_cache.get(key)
     if cached and cached[0] == mtime:
         return cached[1]
-    ordered = get_tree_entries(
-        folder, root, show_hidden, excluded_dirs, (".md", ".tree", ".pdf", ".excalidraw")
-    )
+    ordered = get_tree_entries(folder, root, show_hidden, excluded_dirs, (".md", ".pdf"))
     _nav_entries_cache[key] = (mtime, ordered)
     return ordered
 
@@ -1264,28 +1126,6 @@ def post_detail(path: str, htmx, request: Request):
         resolve_markdown_title=resolve_markdown_title,
         from_md=from_md,
         logger=logger,
-    )
-
-
-@rt("/drawings/{path:path}")
-def drawing_detail(path: str, htmx, request: Request):
-    return render_drawing_detail(
-        path,
-        htmx,
-        request,
-        get_root_folder=get_root_folder,
-        not_found=not_found,
-        get_roles_from_request=get_roles_from_request,
-        rbac_rules=_rbac_rules,
-        rbac_cfg=_rbac_cfg,
-        google_oauth_cfg=_google_oauth_cfg,
-        coerce_list=_config._coerce_list,
-        is_allowed=is_allowed,
-        slug_to_title=slug_to_title,
-        effective_abbreviations=_effective_abbreviations,
-        drawing_password_for=_drawing_password_for,
-        get_blog_title=get_blog_title,
-        layout=layout,
     )
 
 

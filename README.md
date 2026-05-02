@@ -44,12 +44,50 @@ Put that in a `.vyasa` file at the root of your content folder. Configuration pr
 
 ## What It Buys You
 
-- Write plain Markdown, then opt into Vyasa features like callouts, tabs, Mermaid, D2, math, task lists, footnotes as sidenotes, and code snippet includes only when the page needs them.
+- Write plain Markdown, then opt into Vyasa features like callouts, tabs, Mermaid, D2, math, footnotes as sidenotes, and code snippet includes only when the page needs them.
 - Keep content organized as folders; `index.md` or `README.md` becomes the landing page for that branch.
 - Use a blog-style homepage at `/` when you want the newest posts first, or set `home_sort = "name_asc"` / `home_sort = "name_desc"` to order homepage cards by filename instead.
 - Style the site with normal CSS and bundled theme presets instead of introducing a component system.
 - Use the same content tree for a live local server and a static export.
 - Add auth and RBAC when the content stops being public or personal.
+
+## Feature Map
+
+```mermaid
+mindmap
+  root((Vyasa))
+    Authoring
+      Markdown
+      Callouts
+      Tabs
+      Footnotes as sidenotes
+      Math
+      Code snippet includes
+      Tasks graphs
+    Diagrams
+      Mermaid
+      D2
+    Navigation
+      Folder-aware tree
+      README or index landing pages
+      Breadcrumbs and TOC
+      Present mode from docs
+    Styling
+      CSS-first theming
+      Theme presets
+      Custom CSS hooks
+    Runtime
+      Live Python server
+      HTMX page swaps
+      Search and rich page chrome
+    Publishing
+      Static export
+      Blog-style homepage
+      Manual, notes, docs, books in one tree
+    Access
+      Google auth
+      RBAC rules
+```
 
 ## What A Content Tree Looks Like
 
