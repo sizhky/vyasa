@@ -34,6 +34,8 @@ from .markdown_pipeline import (
 )
 from .markdown_tabs import postprocess_tabs as postprocess_md_tabs
 from .markdown_tabs import preprocess_tabs as preprocess_md_tabs
+from .tasks_layout import build_collapsed_graph
+from .tasks_model import parse_tasks_text
 from .markdown_tokens import (
     DownloadEmbed,
     FootnoteRef,
@@ -471,6 +473,45 @@ def _render_mermaid_block(code):
     return f"""<div class="mermaid-container relative border-4 rounded-md my-4 shadow-2xl" style="{container_style}"><div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded"><button onclick="openMermaidFullscreen('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button><button onclick="resetMermaidZoom('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button><button onclick="zoomMermaidIn('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button><button onclick="zoomMermaidOut('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button></div><div id="{diagram_id}" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: {min_height}; height: {height};" data-mermaid-code="{escaped_code}"{gantt_data_attr}{mermaid_title_attr}><pre class="mermaid" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">{code}</pre></div>{caption_html}</div>"""
 
 
+def _render_tasks_block(code):
+    try:
+        model = parse_tasks_text(f"```tasks\n{code}\n```")
+        graph = build_collapsed_graph(model)
+    except Exception:
+        model = {
+            "graph_id": f"tasks-{next(_diagram_uid_counter)}",
+            "title": "",
+            "groups": [],
+            "tasks": [],
+            "dependency_edges": [],
+            "group_tree": {},
+            "task_children": {},
+            "document_order": [],
+            "frozen": {},
+        }
+        graph = {"nodes": [], "edges": []}
+    widget_id = f"tasks-{abs(hash(code)) & 0xFFFFFF}-{next(_diagram_uid_counter)}"
+    payload = html.escape(json.dumps(model))
+    graph_payload = html.escape(json.dumps(graph))
+    title = html.escape(model.get("title") or "Tasks")
+    summary = f'{len(model["groups"])} groups, {len(model["tasks"])} tasks, {len(model["dependency_edges"])} edges'
+    return (
+        f'<div class="tasks-container relative my-6 rounded-xl border border-slate-200 dark:border-slate-800" '
+        f'style="width: 85vw; min-height: 85vh; position: relative; left: 50%; transform: translateX(-50%);" '
+        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
+        f'<div class="absolute top-2 right-2 z-10">'
+        f'<button onclick="openTasksFullscreen(\'{widget_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>'
+        f'</div>'
+        f'<div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800">'
+        f'<div class="text-sm font-semibold">{title}</div>'
+        f'<div class="text-xs text-slate-500 dark:text-slate-400">{html.escape(summary)}</div>'
+        f'</div>'
+        '<div class="vyasa-tasks-flow" style="height:calc(85vh - 57px);min-height:420px;overflow:hidden;cursor:grab">'
+        '<div class="vyasa-tasks-scene" style="position:relative;width:100%;height:100%;transform-origin:center center"></div></div>'
+        f'</div>'
+    )
+
+
 class ContentRenderer(FrankenRenderer):
     def __init__(self, *extras, img_dir=None, footnotes=None, current_path=None, slide_mode=False, **kwargs):
         super().__init__(*extras, img_dir=img_dir, **kwargs)
@@ -719,6 +760,8 @@ class ContentRenderer(FrankenRenderer):
             return _render_d2_block(code)
         if lang == "mermaid":
             return _render_mermaid_block(code)
+        if lang == "tasks":
+            return _render_tasks_block(code)
         raw_code = code
         code = html.unescape(code)
         line_numbers = bool(lang) and _resolve_line_numbers(get_config().get_code_line_numbers(), attrs=attrs)

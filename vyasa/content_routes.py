@@ -24,6 +24,15 @@ from .slides import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal
 FALLBACK_HOME_SLUG = "__home__"
 
 
+def _resolve_slide_width(metadata):
+    value = str((metadata or {}).get("slide_width", "") or "").strip()
+    if not value or len(value) > 40:
+        return None
+    if not re.fullmatch(r"[0-9a-zA-Z.%(),\-+\s]+", value):
+        return None
+    return value
+
+
 def _fallback_home_markdown(blog_title):
     return (
         "## Quick start tutorial\n\n"
@@ -152,6 +161,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         title = f"Welcome to {get_root_folder().name.upper()}!"
         render_content = _fallback_home_markdown(get_root_folder().name.upper())
         reveal_config = resolve_slide_reveal_config({})
+        slide_width = None
         deck = ZenSlideDeck(render_content)
         overview = deck.outline(doc_path)
         total = len(deck.slides) + 2
@@ -171,6 +181,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         abbreviations = effective_abbreviations(root)
         title, render_content = resolve_markdown_title(file_path, abbreviations=abbreviations)
         reveal_config = resolve_slide_reveal_config(metadata)
+        slide_width = _resolve_slide_width(metadata)
         deck = ZenSlideDeck(render_content or "")
         overview = deck.outline(doc_path)
         total = len(deck.slides) + 2
@@ -212,6 +223,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             Script(f"window.__vyasaZen={json.dumps(nav_state)};"),
             Script(src="/static/present.js", type="module"),
             cls="vyasa-zen-content w-full mx-auto space-y-8",
+            style=f"--vyasa-zen-slide-max-width: {slide_width};" if slide_width else None,
         )
     else:
         slide_markdown = deck.body(slide_num - 1)
@@ -275,6 +287,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             Script(f"window.__vyasaZen={json.dumps(nav_state)};"),
             Script(src="/static/present.js", type="module"),
             cls="vyasa-zen-content w-full mx-auto space-y-8",
+            style=f"--vyasa-zen-slide-max-width: {slide_width};" if slide_width else None,
         )
     return layout(content, htmx=htmx, title=f"{title} - Zen", show_sidebar=False, toc_content=None, current_path=doc_path, show_toc=False, auth=request.scope.get("auth"), htmx_nav=False, show_footer=False, slide_mode=True)
 
