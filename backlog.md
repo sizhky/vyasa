@@ -6,3 +6,6 @@ when i press the footnote chevron, along with revealing the footnote, the bottom
 
 convert argparse to typer
 make scroll work in non-mobile views
+blogview in mobile views sucks
+
+test complex graph edge bends
