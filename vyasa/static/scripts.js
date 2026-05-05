@@ -13,11 +13,12 @@ const TASKS_ROOT_COLLISION_GAP = 48;
 const TASKS_GROUP_Z = 100;
 const TASKS_EDGE_Z = 1000;
 const TASKS_TASK_Z = 10000;
-const TASKS_TITLE_Z = 10002;
-const TASKS_NODE_BG = 'color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%)';
+const TASKS_TITLE_Z = TASKS_EDGE_Z + 1;
+const TASKS_NODE_BG = 'color-mix(in srgb, var(--vyasa-paper) 86%, var(--vyasa-primary) 14%)';
 const TASKS_GROUP_EXPANDED_BG = 'var(--vyasa-paper)';
-const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 62%, var(--vyasa-primary) 38%)';
-const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-primary) 12%)';
+const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 42%, var(--vyasa-primary) 58%)';
+const TASKS_GROUP_TITLE_BG = 'color-mix(in srgb, var(--vyasa-paper) 76%, var(--vyasa-primary) 24%)';
+const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 74%, var(--vyasa-primary) 26%)';
 window.__vyasaTasksActions = window.__vyasaTasksActions || {};
 
 window.runTasksHeaderAction = function(widgetId, action) {
@@ -658,9 +659,33 @@ async function renderTasksGraphs(rootElement = document) {
                     edges: (rawGraph.edges || []).filter(e => rootGroupIds.has(e.source) && rootGroupIds.has(e.target))
                 };
                 const derived = deriveSquishedExpandedLayout(rootGraph, model, expandedSet, baseLayout, groupLayoutsRef.current);
+                const derivedById = Object.fromEntries((derived.nodes || []).map((node) => [node.id, node]));
+                const depthOf = (node) => {
+                    let depth = 0;
+                    let parent = node.parentId ? derivedById[node.parentId] : null;
+                    while (parent) {
+                        depth += 1;
+                        parent = parent.parentId ? derivedById[parent.parentId] : null;
+                    }
+                    return depth;
+                };
+                const absolutePosition = (node) => {
+                    let x = node.position.x;
+                    let y = node.position.y;
+                    let parent = node.parentId ? derivedById[node.parentId] : null;
+                    while (parent) {
+                        x += parent.position.x;
+                        y += parent.position.y;
+                        parent = parent.parentId ? derivedById[parent.parentId] : null;
+                    }
+                    return { x, y };
+                };
                 const baseNodes = derived.nodes.map((n) => {
-                    const nodeZ = n.kind === 'group' ? TASKS_GROUP_Z : TASKS_TASK_Z;
                     const isExpanded = n.kind === 'group' && expandedSet.has(n.id);
+                    const depth = depthOf(n);
+                    const nodeZ = n.kind !== 'group'
+                        ? TASKS_TASK_Z + depth
+                        : TASKS_GROUP_Z + depth;
                     const background = isExpanded ? TASKS_GROUP_EXPANDED_BG : TASKS_NODE_BG;
                     const rfNode = {
                         id: n.id,
@@ -685,6 +710,31 @@ async function renderTasksGraphs(rootElement = document) {
                     }
                     return rfNode;
                 });
+                for (const n of derived.nodes) {
+                    if (n.kind !== 'group' || !expandedSet.has(n.id)) continue;
+                    const position = absolutePosition(n);
+                    const titleZ = TASKS_TITLE_Z + depthOf(n);
+                    baseNodes.push({
+                        id: `${n.id}__title`,
+                        type: 'vyasaTask',
+                        position: { x: position.x + 8, y: position.y + 8 },
+                        data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, kind: 'groupTitle' },
+                        style: {
+                            width: Math.max(80, n.width - 16),
+                            height: 34,
+                            zIndex: titleZ,
+                            background: TASKS_GROUP_TITLE_BG,
+                            border: 'none',
+                            borderRadius: 6,
+                            boxShadow: 'none',
+                            overflow: 'hidden',
+                            pointerEvents: 'auto',
+                        },
+                        zIndex: titleZ,
+                        draggable: false,
+                        selectable: false,
+                    });
+                }
                 const baseEdges = derived.edges.map((edge) => ({
                     ...edge,
                     type: 'default',
@@ -788,6 +838,40 @@ async function renderTasksGraphs(rootElement = document) {
                 };
             }, [graphRevision, expanded]);
             const CustomNode = React.memo(({ data, id }) => {
+                if (data?.kind === 'groupTitle') {
+                    const handleCollapse = (e) => {
+                        e.stopPropagation();
+                        const next = new Set(expanded);
+                        next.delete(data.sourceGroupId);
+                        setExpanded(next);
+                    };
+                    return React.createElement('div', {
+                        style: {
+                            width: '100%', height: '100%',
+                            boxSizing: 'border-box',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            padding: '4px 6px',
+                            fontWeight: '600',
+                            fontSize: '13px',
+                        }
+                    },
+                        React.createElement('span', {
+                            style: {
+                                minWidth: 0,
+                                overflow: 'hidden',
+                                whiteSpace: 'nowrap',
+                                textOverflow: 'ellipsis',
+                            }
+                        }, data?.label || data.sourceGroupId || id),
+                        React.createElement('button', {
+                            onClick: handleCollapse,
+                            style: { flex: '0 0 auto', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
+                        }, '−')
+                    );
+                }
                 const isGroup = data?.kind === 'group';
                 const isExpanded = expanded.has(id);
                 const highlightMode = data?.highlightMode || 'none';
@@ -810,15 +894,6 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                     },
                         Handle && React.createElement(Handle, { id: 'top', type: 'target', position: Position?.Top || 'top', style: { opacity: 0, pointerEvents: 'none' } }),
-                        React.createElement('div', {
-                            style: { fontWeight: '600', fontSize: '13px', paddingBottom: '4px', opacity: 0.6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: TASKS_TITLE_Z }
-                        },
-                            React.createElement('span', null, data?.label || id),
-                            React.createElement('button', {
-                                onClick: handleExpand,
-                                style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
-                            }, '−')
-                        ),
                         React.createElement('div', { style: { flex: 1, minHeight: '48px', position: 'relative' } }),
                         Handle && React.createElement(Handle, { id: 'bottom', type: 'source', position: Position?.Bottom || 'bottom', style: { opacity: 0, pointerEvents: 'none' } })
                     );
@@ -944,7 +1019,7 @@ async function renderTasksGraphs(rootElement = document) {
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { ref: flowWrapperRef, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: (_, node) => { if (node.data?.kind === 'group') return; setSelectedNodeId((current) => current === node.id ? null : node.id); }, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: (_, node) => { if (node.data?.kind !== 'task') return; setSelectedNodeId((current) => current === node.id ? null : node.id); }, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
@@ -953,7 +1028,7 @@ async function renderTasksGraphs(rootElement = document) {
                     )
                 )
             ) : window.React.createElement('div', { ref: flowWrapperRef, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
-                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: (_, node) => { if (node.data?.kind === 'group') return; setSelectedNodeId((current) => current === node.id ? null : node.id); }, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
+                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: (_, node) => { if (node.data?.kind !== 'task') return; setSelectedNodeId((current) => current === node.id ? null : node.id); }, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),

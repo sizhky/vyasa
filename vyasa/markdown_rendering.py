@@ -475,7 +475,7 @@ def _render_mermaid_block(code):
 
 def _render_tasks_block(code):
     try:
-        model = parse_tasks_text(f"```tasks\n{code}\n```")
+        model = parse_tasks_text(f"```items\n{code}\n```")
         graph = build_collapsed_graph(model)
     except Exception:
         model = {
@@ -493,8 +493,8 @@ def _render_tasks_block(code):
     widget_id = f"tasks-{abs(hash(code)) & 0xFFFFFF}-{next(_diagram_uid_counter)}"
     payload = html.escape(json.dumps(model))
     graph_payload = html.escape(json.dumps(graph))
-    title = html.escape(model.get("title") or "Tasks")
-    summary = f'{len(model["groups"])} groups, {len(model["tasks"])} tasks, {len(model["dependency_edges"])} edges'
+    title = html.escape(model.get("title") or "Items")
+    summary = f'{len(model["groups"])} groups, {len(model["tasks"])} items, {len(model["dependency_edges"])} edges'
     return (
         f'<div class="tasks-container relative my-6 rounded-xl border border-slate-200 dark:border-slate-800" '
         f'style="width: 85vw; min-height: 85vh; position: relative; left: 50%; transform: translateX(-50%);" '
@@ -767,7 +767,7 @@ class ContentRenderer(FrankenRenderer):
             return _render_d2_block(code)
         if lang == "mermaid":
             return _render_mermaid_block(code)
-        if lang == "tasks":
+        if lang == "items":
             return _render_tasks_block(code)
         raw_code = code
         code = html.unescape(code)

@@ -19,9 +19,9 @@ _ATTR_KEYS = {
 
 
 def _extract_tasks_body(text: str) -> str:
-    if "```tasks" in text:
-        return text.split("```tasks", 1)[1].split("```", 1)[0]
-    raise ValueError("No tasks payload found")
+    if "```items" in text:
+        return text.split("```items", 1)[1].split("```", 1)[0]
+    raise ValueError("No items payload found")
 
 
 def _parse_terse_tasks(body: str) -> dict:
@@ -52,7 +52,7 @@ def _parse_terse_tasks(body: str) -> dict:
             graph[keyword] = parts[1] if len(parts) > 1 else ""
             continue
 
-        if keyword in {"group", "task"}:
+        if keyword in {"group", "item"}:
             pop_to(indent)
             tokens = line.split()
             if len(tokens) < 2:
@@ -76,7 +76,7 @@ def _parse_terse_tasks(body: str) -> dict:
                     "group_id": current_group_id(),
                 }
                 graph["tasks"].append(item)
-                stack.append({"kind": "task", "id": item_id, "indent": indent})
+                stack.append({"kind": "item", "id": item_id, "indent": indent})
                 current_task = item
                 current_task_indent = indent
             continue
