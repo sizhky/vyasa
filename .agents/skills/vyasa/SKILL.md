@@ -42,11 +42,10 @@ Core rules:
 - For callouts, emit Obsidian-style callouts like `> [!note] Title` or `> [!warning]- Title`; prefer aliases already supported by Obsidian (`warn`, `error`, `faq`, `check`, `done`, `summary`, `tldr`, `cite`, etc.) rather than inventing new keywords.
 - For lightweight task callouts, prefer markdown task-list items like `- [ ] Task | owner: Jane | deadline: Tomorrow | priority: high` over custom HTML tags; supported metadata families live in `references/markdown.md`.
 - For dependency planning UIs, use fenced `tasks` blocks inside normal markdown pages instead of separate `.tasks` files.
-- `tasks` fences support frontmatter-style config at the top of the block: `title`, `width`, and `height`, then `---`, then task content.
-- Task block syntax is line-based and supports nested groups:
-  `task ID "Title"`
-  then indented attrs like `estimate: 2d`.
-- First-class task attrs today: `estimate`, `depends_on`, `priority`, `points`, `owner`, `phase`.
+- `tasks` fences are terse line-based graphs, not YAML.
+- Canonical syntax: `id <graph-id>`, `title <graph-title>`, `group <id> <label>`, `task <id> <label>`, then indented attrs.
+- Use indentation for nesting. `group` lines nested under `group` lines make child groups. `task` lines nested under a group belong to that group.
+- Use `depends <A> <B>` for DAG edges. First-class task attrs today: `estimate`, `depends`, `priority`, `points`, `owner`, `phase`.
 - Graph layout attrs exist but are renderer-owned: `graph_x`, `graph_y`. Do not surface them in user guidance unless debugging persistence.
 - Current `tasks` view is a React Flow graph: draggable cards, connect/delete edges, snap-to-grid, inline edit modal, dependency warnings inside a collapsible details block, and a popout button. Groups render as overview pills; nested groups are written as `group ... end` blocks inside parent groups. Click a group to inspect its direct tasks and child groups in a popover canvas with frozen incoming/outgoing dependency portals. `Esc` or Back closes the popover. Immediate neighbors only in task popup: `Dependencies` and `Dependants`.
 - `tasks` graph persistence is block-scoped through `/api/tasks/blocks/...`; editing a graph rewrites the fenced block source and clears legacy chain state. Do not propose `.tasks` file routes or `.tasks`-specific APIs unless the user explicitly asks for legacy compatibility work.

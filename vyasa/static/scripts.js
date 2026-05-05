@@ -13,6 +13,14 @@ const TASKS_ROOT_COLLISION_GAP = 48;
 const TASKS_GROUP_Z = 100;
 const TASKS_EDGE_Z = 1000;
 const TASKS_TASK_Z = 10000;
+const TASKS_TITLE_Z = 10002;
+window.__vyasaTasksActions = window.__vyasaTasksActions || {};
+
+window.runTasksHeaderAction = function(widgetId, action) {
+    const actions = window.__vyasaTasksActions?.[widgetId];
+    if (!actions || typeof actions[action] !== 'function') return;
+    actions[action]();
+};
 
 function ensureTasksReactFlow() {
     if (tasksReactFlowReady) return tasksReactFlowReady;
@@ -609,6 +617,7 @@ async function renderTasksGraphs(rootElement = document) {
         if (!mount || !rf) return;
         const model = JSON.parse(wrapper.dataset.tasksPayload || '{"groups":[],"tasks":[],"group_tree":{},"task_children":{},"dependency_edges":[]}');
         const rawGraph = JSON.parse(wrapper.dataset.tasksGraph || '{"nodes":[],"edges":[]}');
+        const widgetId = wrapper.id;
         const TasksGraphApp = (props) => {
             const React = window.React;
             const Handle = rf.Handle;
@@ -622,6 +631,9 @@ async function renderTasksGraphs(rootElement = document) {
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
+            const pendingFitActionRef = React.useRef(null);
+            const reactFlowApiRef = React.useRef(null);
+            const prevExpandedCountRef = React.useRef(0);
             const makeEdgeMarker = React.useCallback((color = 'currentColor', size = 12) => ({
                 type: rf.MarkerType?.ArrowClosed || 'arrowclosed',
                 color,
@@ -743,6 +755,31 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 applyHighlight(selectedNodeId);
             }, [graphRevision, selectedNodeId, applyHighlight]);
+            React.useEffect(() => {
+                const nextCount = expanded.size;
+                if (nextCount > prevExpandedCountRef.current) {
+                    pendingFitActionRef.current = 'expand';
+                }
+                prevExpandedCountRef.current = nextCount;
+            }, [expanded]);
+            React.useEffect(() => {
+                if (!pendingFitActionRef.current) return;
+                let rafId = null;
+                let framesLeft = 25;
+                const step = () => {
+                    if (framesLeft <= 0) {
+                        reactFlowApiRef.current?.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true });
+                        pendingFitActionRef.current = null;
+                        return;
+                    }
+                    framesLeft -= 1;
+                    rafId = window.requestAnimationFrame(step);
+                };
+                rafId = window.requestAnimationFrame(step);
+                return () => {
+                    if (rafId !== null) window.cancelAnimationFrame(rafId);
+                };
+            }, [graphRevision, expanded]);
             const CustomNode = React.memo(({ data, id }) => {
                 const isGroup = data?.kind === 'group';
                 const isExpanded = expanded.has(id);
@@ -761,17 +798,17 @@ async function renderTasksGraphs(rootElement = document) {
                         onClick: () => { if (isGroup) setSelectedNodeId(null); },
                         style: {
                             width: '100%', height: '100%',
-                            background: isHighlighted ? 'color-mix(in srgb, var(--vyasa-primary) 10%, var(--vyasa-paper-raised))' : 'var(--vyasa-paper-raised)',
+                            background: isHighlighted ? 'color-mix(in srgb, var(--vyasa-primary) 4%, transparent)' : 'transparent',
                             border: isHighlighted ? '2px solid var(--vyasa-primary)' : '2px solid color-mix(in srgb, currentColor 35%, transparent)',
                             borderRadius: '12px',
-                            boxSizing: 'border-box', display: 'flex', flexDirection: 'column', position: 'relative', padding: '12px',
+                            boxSizing: 'border-box', display: 'flex', flexDirection: 'column', position: 'relative', padding: '8px',
                             boxShadow: isHighlighted ? '0 0 0 2px color-mix(in srgb, var(--vyasa-primary) 24%, transparent)' : 'inset 0 0 0 9999px transparent',
                             opacity: isDimmed ? 0.22 : 1,
                         }
                     },
                         Handle && React.createElement(Handle, { id: 'top', type: 'target', position: Position?.Top || 'top', style: { opacity: 0, pointerEvents: 'none' } }),
                         React.createElement('div', {
-                            style: { fontWeight: '600', fontSize: '13px', paddingBottom: '8px', opacity: 0.6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
+                            style: { fontWeight: '600', fontSize: '13px', paddingBottom: '4px', opacity: 0.6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: TASKS_TITLE_Z }
                         },
                             React.createElement('span', null, data?.label || id),
                             React.createElement('button', {
@@ -779,7 +816,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
                             }, '−')
                         ),
-                        React.createElement('div', { style: { flex: 1, minHeight: '80px', position: 'relative' } }),
+                        React.createElement('div', { style: { flex: 1, minHeight: '48px', position: 'relative' } }),
                         Handle && React.createElement(Handle, { id: 'bottom', type: 'source', position: Position?.Bottom || 'bottom', style: { opacity: 0, pointerEvents: 'none' } })
                     );
                 }
@@ -877,13 +914,34 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             };
             const clearSelection = () => setSelectedNodeId(null);
+            const ActionBridge = () => {
+                const reactFlow = rf.useReactFlow();
+                reactFlowApiRef.current = reactFlow;
+                React.useEffect(() => {
+                    window.__vyasaTasksActions[widgetId] = {
+                        fit: () => reactFlow.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true }),
+                        expand: () => {
+                            setExpanded(new Set((model.groups || []).map((group) => group.id)));
+                        },
+                        collapse: () => {
+                            pendingFitActionRef.current = 'collapse';
+                            setExpanded(new Set());
+                        },
+                    };
+                    return () => {
+                        delete window.__vyasaTasksActions[widgetId];
+                    };
+                }, [reactFlow]);
+                return null;
+            };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { ref: flowWrapperRef, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: (_, node) => { if (node.data?.kind === 'group') return; setSelectedNodeId((current) => current === node.id ? null : node.id); }, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
-                    window.React.createElement(FitViewHotkey)
+                    window.React.createElement(FitViewHotkey),
+                    window.React.createElement(ActionBridge)
                     )
                 )
             ) : window.React.createElement('div', { ref: flowWrapperRef, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
@@ -891,7 +949,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
-                    window.React.createElement(FitViewHotkey)
+                    window.React.createElement(FitViewHotkey),
+                    window.React.createElement(ActionBridge)
                 )
             );
         };
@@ -1707,10 +1766,28 @@ window.openTasksFullscreen = async function(id) {
     fullscreenWrapper.setAttribute('data-tasks-payload', originalPayload);
     fullscreenWrapper.setAttribute('data-tasks-graph', originalGraph);
     const headerBar = document.createElement('div');
-    headerBar.className = 'px-4 py-3 border-b border-slate-200 dark:border-slate-800';
+    headerBar.className = 'px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3';
     const headerTitle = document.createElement('div');
-    headerTitle.className = 'text-sm font-semibold';
-    headerTitle.textContent = originalTitle;
+    headerTitle.className = 'text-sm font-semibold flex items-center gap-3 min-w-0';
+    const headerName = document.createElement('span');
+    headerName.className = 'truncate';
+    headerName.textContent = originalTitle;
+    const headerHints = document.createElement('div');
+    headerHints.className = 'flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap';
+    const makeHint = (text) => {
+        const kbd = document.createElement('kbd');
+        kbd.textContent = text;
+        kbd.className = 'rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300';
+        return kbd;
+    };
+    const fitHint = makeHint('F');
+    fitHint.title = 'Fit view';
+    const expandHint = makeHint('U');
+    expandHint.title = 'Expand all groups';
+    const collapseHint = makeHint('⇧+U');
+    collapseHint.title = 'Collapse all groups';
+    headerHints.append(fitHint, expandHint, collapseHint);
+    headerTitle.append(headerName, headerHints);
     headerBar.appendChild(headerTitle);
 
     const flow = document.createElement('div');
