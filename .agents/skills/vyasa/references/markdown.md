@@ -227,54 +227,43 @@ Recognized task metadata families:
 - status: `status`, `state`, `phase`
 - project: `project`, `bucket`, `area`, `team`, `stream`
 
-## Inline task graphs
+## Inline item graphs
 
-For dependency planning, use a fenced `tasks` block inside a normal markdown page:
+For dependency planning or structured relationship maps, use a fenced `items` block inside a normal markdown page:
 
 ```markdown
-```tasks
-title: Sprint Slice
-width: 85vw
-height: 75vh
----
-group G-FE "Frontend"
-  task T-001 "Design"
-    estimate: 1d
-    owner: Alice
-  task T-002 "Build"
-    estimate: 2d
-    owner: Alice
-    depends_on: [T-001]
-end
-
-group P1 "Phase 1"
-  group G-API "API"
-    task T-010 "Endpoint contract"
-      estimate: 1d
-      owner: Alice
-  end
-end
-
-task T-003 "Backend"
-  estimate: 3d
-  owner: Bob
-  depends_on: [T-002]
-
-chain Main
-  T-001 -> T-002 -> T-003
+```items
+id sprint-slice
+title Sprint Slice
+group root Sprint Slice
+  group frontend Frontend
+    item T-001 Design
+      estimate 1d
+      owner Alice
+    item T-002 Build
+      estimate 2d
+      owner Alice
+      depends T-001
+  group api API
+    item T-010 Endpoint contract
+      estimate 1d
+      owner Alice
+      depends T-001
+    item T-003 Backend
+      estimate 3d
+      owner Bob
+      depends T-002 T-010
 ```
 ```
 
 Notes:
 
-- `title`, `width`, and `height` belong in the fence frontmatter before `---`.
-- Each task starts with `task ID "Title"` with indented attrs below.
-- Tasks can be grouped with `group ID "Title" ... end`. Groups can be nested by putting a `group` block inside another `group` block.
-- Supported first-class attrs: `estimate`, `depends_on`, `priority`, `points`, `owner`, `phase`.
-- `depends_on` uses bracket form: `[T-001, T-002]`.
-- `chain Name` followed by `  A -> B -> C` lines declares sequential dependency chains.
-- Groups render as overview pills. Click a group to open a popover canvas showing direct tasks, child groups, and frozen incoming/outgoing dependency portals.
-- Press `Esc` or Back to close the group popover.
+- `items` fences are terse line-based graphs, not YAML.
+- `group <id> <label>` nests by indentation. `item <id> <label>` under a group belongs to that group.
+- Use indented attrs for `estimate`, `depends`, `priority`, `points`, `owner`, `phase`.
+- `depends` takes one or more ids on the same line.
+- Groups render as expandable cards in a React Flow graph.
+- Press `F` to fit, `U` to unfold all groups, and `Shift+U` to collapse all groups.
 - Renderer-owned layout attrs (`graph_x`, `graph_y`, `collapsed`, `pill_x`, `pill_y`) may appear in saved source after interaction; treat as implementation detail, not authoring API.
 - The block renders as an interactive React Flow graph, not as a code sample.
 - Cards are draggable, snap to grid, support edge create/delete and popup editing.

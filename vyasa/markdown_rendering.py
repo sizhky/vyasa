@@ -475,7 +475,7 @@ def _render_mermaid_block(code):
 
 def _render_tasks_block(code):
     try:
-        model = parse_tasks_text(f"```tasks\n{code}\n```")
+        model = parse_tasks_text(f"```items\n{code}\n```")
         graph = build_collapsed_graph(model)
     except Exception:
         model = {
@@ -493,18 +493,25 @@ def _render_tasks_block(code):
     widget_id = f"tasks-{abs(hash(code)) & 0xFFFFFF}-{next(_diagram_uid_counter)}"
     payload = html.escape(json.dumps(model))
     graph_payload = html.escape(json.dumps(graph))
-    title = html.escape(model.get("title") or "Tasks")
-    summary = f'{len(model["groups"])} groups, {len(model["tasks"])} tasks, {len(model["dependency_edges"])} edges'
+    title = html.escape(model.get("title") or "Items")
+    summary = f'{len(model["groups"])} groups, {len(model["tasks"])} items, {len(model["dependency_edges"])} edges'
     return (
         f'<div class="tasks-container relative my-6 rounded-xl border border-slate-200 dark:border-slate-800" '
         f'style="width: 85vw; min-height: 85vh; position: relative; left: 50%; transform: translateX(-50%);" '
         f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
-        f'<div class="absolute top-2 right-2 z-10">'
+        f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'
         f'<button onclick="openTasksFullscreen(\'{widget_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>'
+        f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">'
+        f'<button type="button" title="Fit view" onclick="runTasksHeaderAction(\'{widget_id}\', \'fit\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">F</button>'
+        f'<button type="button" title="Unfold all groups" onclick="runTasksHeaderAction(\'{widget_id}\', \'expand\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">U</button>'
+        f'<button type="button" title="Collapse all groups" onclick="runTasksHeaderAction(\'{widget_id}\', \'collapse\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">⇧+U</button>'
         f'</div>'
-        f'<div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800">'
+        f'</div>'
+        f'<div class="px-4 py-3 pr-14 border-b border-slate-200 dark:border-slate-800 flex items-start gap-3">'
+        f'<div class="min-w-0 flex-1">'
         f'<div class="text-sm font-semibold">{title}</div>'
         f'<div class="text-xs text-slate-500 dark:text-slate-400">{html.escape(summary)}</div>'
+        f'</div>'
         f'</div>'
         '<div class="vyasa-tasks-flow" style="height:calc(85vh - 57px);min-height:420px;overflow:hidden;cursor:grab">'
         '<div class="vyasa-tasks-scene" style="position:relative;width:100%;height:100%;transform-origin:center center"></div></div>'
@@ -760,7 +767,7 @@ class ContentRenderer(FrankenRenderer):
             return _render_d2_block(code)
         if lang == "mermaid":
             return _render_mermaid_block(code)
-        if lang == "tasks":
+        if lang == "items":
             return _render_tasks_block(code)
         raw_code = code
         code = html.unescape(code)
