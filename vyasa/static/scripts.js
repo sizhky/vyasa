@@ -14,6 +14,10 @@ const TASKS_GROUP_Z = 100;
 const TASKS_EDGE_Z = 1000;
 const TASKS_TASK_Z = 10000;
 const TASKS_TITLE_Z = 10002;
+const TASKS_NODE_BG = 'color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%)';
+const TASKS_GROUP_EXPANDED_BG = 'var(--vyasa-paper)';
+const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 62%, var(--vyasa-primary) 38%)';
+const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-primary) 12%)';
 window.__vyasaTasksActions = window.__vyasaTasksActions || {};
 
 window.runTasksHeaderAction = function(widgetId, action) {
@@ -634,12 +638,6 @@ async function renderTasksGraphs(rootElement = document) {
             const pendingFitActionRef = React.useRef(null);
             const reactFlowApiRef = React.useRef(null);
             const prevExpandedCountRef = React.useRef(0);
-            const makeEdgeMarker = React.useCallback((color = 'currentColor', size = 12) => ({
-                type: rf.MarkerType?.ArrowClosed || 'arrowclosed',
-                color,
-                width: size,
-                height: size,
-            }), [rf]);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
                 const viewport = reactFlow.getViewport();
                 return reactFlow.setViewport(
@@ -662,11 +660,23 @@ async function renderTasksGraphs(rootElement = document) {
                 const derived = deriveSquishedExpandedLayout(rootGraph, model, expandedSet, baseLayout, groupLayoutsRef.current);
                 const baseNodes = derived.nodes.map((n) => {
                     const nodeZ = n.kind === 'group' ? TASKS_GROUP_Z : TASKS_TASK_Z;
+                    const isExpanded = n.kind === 'group' && expandedSet.has(n.id);
+                    const background = isExpanded ? TASKS_GROUP_EXPANDED_BG : TASKS_NODE_BG;
                     const rfNode = {
                         id: n.id,
+                        type: 'vyasaTask',
                         position: n.position,
                         data: n,
-                        style: { width: n.width, height: n.height, zIndex: nodeZ },
+                        style: {
+                            width: n.width,
+                            height: n.height,
+                            zIndex: nodeZ,
+                            background,
+                            border: TASKS_NODE_BORDER,
+                            borderRadius: isExpanded ? 12 : 6,
+                            boxShadow: 'none',
+                            overflow: 'hidden',
+                        },
                         zIndex: nodeZ,
                     };
                     if (n.parentId) {
@@ -679,18 +689,16 @@ async function renderTasksGraphs(rootElement = document) {
                     ...edge,
                     type: 'default',
                     zIndex: TASKS_EDGE_Z,
-                    markerEnd: makeEdgeMarker(),
                 }));
                 graphBaseRef.current = { nodes: baseNodes, edges: baseEdges };
                 setNodes(baseNodes);
                 setEdges(baseEdges);
                 setGraphRevision((value) => value + 1);
-            }, [ensureBaseLayout, makeEdgeMarker, model]);
+            }, [ensureBaseLayout, model]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: 1, stroke: 'currentColor' },
-                markerEnd: makeEdgeMarker(),
-            }), [makeEdgeMarker]);
+            }), []);
             const applyHighlight = React.useCallback((nodeId) => {
                 const baseNodes = graphBaseRef.current.nodes || [];
                 const baseEdges = graphBaseRef.current.edges || [];
@@ -724,6 +732,9 @@ async function renderTasksGraphs(rootElement = document) {
                         data: { ...node.data, highlightMode: mode },
                         style: {
                             ...node.style,
+                            background: mode === 'dim'
+                                ? node.style.background
+                                : TASKS_NODE_BG_ACTIVE,
                             opacity: mode === 'dim' ? 0.22 : 1,
                         },
                     };
@@ -740,13 +751,9 @@ async function renderTasksGraphs(rootElement = document) {
                             opacity: highlighted ? 0.95 : 0.16,
                             strokeWidth: mode === 'selected' ? 3.5 : 2.5,
                         },
-                        markerEnd: makeEdgeMarker(
-                            highlighted ? 'var(--vyasa-primary)' : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)',
-                            mode === 'selected' ? 16 : 12
-                        ),
                     };
                 }));
-            }, [makeEdgeMarker]);
+            }, []);
             React.useEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -798,11 +805,7 @@ async function renderTasksGraphs(rootElement = document) {
                         onClick: () => { if (isGroup) setSelectedNodeId(null); },
                         style: {
                             width: '100%', height: '100%',
-                            background: isHighlighted ? 'color-mix(in srgb, var(--vyasa-primary) 4%, transparent)' : 'transparent',
-                            border: isHighlighted ? '2px solid var(--vyasa-primary)' : '2px solid color-mix(in srgb, currentColor 35%, transparent)',
-                            borderRadius: '12px',
-                            boxSizing: 'border-box', display: 'flex', flexDirection: 'column', position: 'relative', padding: '8px',
-                            boxShadow: isHighlighted ? '0 0 0 2px color-mix(in srgb, var(--vyasa-primary) 24%, transparent)' : 'inset 0 0 0 9999px transparent',
+                            boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: '8px',
                             opacity: isDimmed ? 0.22 : 1,
                         }
                     },
@@ -824,18 +827,23 @@ async function renderTasksGraphs(rootElement = document) {
                     onClick: () => { if (isGroup) setSelectedNodeId(null); },
                     style: {
                         width: '100%', height: '100%',
-                        background: isHighlighted
-                            ? (isGroup ? 'color-mix(in srgb, var(--vyasa-primary) 8%, var(--vyasa-paper-raised))' : 'color-mix(in srgb, var(--vyasa-primary) 12%, var(--vyasa-paper-raised))')
-                            : (isGroup ? 'transparent' : 'var(--vyasa-paper-raised)'),
-                        border: isHighlighted ? '1px solid var(--vyasa-primary)' : '1px solid color-mix(in srgb, currentColor 35%, transparent)',
-                        borderRadius: '6px',
-                        boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: '600', textAlign: 'center', position: 'relative', cursor: isGroup ? 'pointer' : 'default',
-                        boxShadow: isHighlighted ? '0 0 0 2px color-mix(in srgb, var(--vyasa-primary) 24%, transparent)' : (isGroup ? 'inset 0 0 0 9999px transparent' : 'none'),
+                        boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: '600', textAlign: 'center', cursor: isGroup ? 'pointer' : 'default', padding: '0',
                         opacity: isDimmed ? 0.22 : 1,
                     }
                 },
                     Handle && React.createElement(Handle, { id: 'top', type: 'target', position: Position?.Top || 'top', style: { opacity: 0, pointerEvents: 'none' } }),
-                    React.createElement('span', null, data?.label || id),
+                    React.createElement('span', {
+                        style: {
+                            padding: '10px 12px',
+                            maxWidth: '100%',
+                            maxHeight: '100%',
+                            overflow: 'hidden',
+                            display: '-webkit-box',
+                            WebkitBoxOrient: 'vertical',
+                            WebkitLineClamp: 3,
+                            overflowWrap: 'anywhere',
+                        }
+                    }, data?.label || id),
                     isGroup && React.createElement('button', {
                         onClick: handleExpand,
                         style: { position: 'absolute', right: '8px', top: '8px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
@@ -846,7 +854,7 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 rebuildLayout(expanded);
             }, [expanded, rebuildLayout]);
-            const nodeTypes = React.useMemo(() => ({ default: CustomNode }), [expanded]);
+            const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [expanded]);
             const FitViewHotkey = () => {
                 const reactFlow = rf.useReactFlow();
                 React.useEffect(() => {
