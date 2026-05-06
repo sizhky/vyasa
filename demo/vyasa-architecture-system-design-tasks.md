@@ -3,8 +3,10 @@ Demo for Vyasa itself: markdown, diagrams, navigation, authoring, build, and ops
 Nested groups intentionally stress groups inside groups inside groups.
 
 ```items
-id vyasa-architecture
-title Vyasa Architecture
+---
+title: Vyasa Architecture
+default_open_depth: -1
+---
 group runtime Runtime System
   group content Content Pipeline
     group markdown Markdown Blocks
