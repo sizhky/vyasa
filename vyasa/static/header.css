@@ -18,10 +18,10 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-font-heading: 'Manrope', 'Inter', sans-serif;
     --vyasa-font-ui: 'Inter', sans-serif;
     --vyasa-font-mono: 'IBM Plex Mono', monospace;
-    --vyasa-paper: #f9f9f9;
-    --vyasa-paper-low: #f2f4f3;
-    --vyasa-paper-raised: #ffffff;
-    --vyasa-paper-accent: #dee4e3;
+    --vyasa-paper: color-mix(in srgb, white 90%, var(--vyasa-primary) 10%);
+    --vyasa-paper-low: color-mix(in srgb, white 84%, var(--vyasa-primary) 16%);
+    --vyasa-paper-raised: color-mix(in srgb, white 95%, var(--vyasa-primary) 5%);
+    --vyasa-paper-accent: color-mix(in srgb, white 72%, var(--vyasa-primary) 28%);
     --vyasa-ink: #2d3434;
     --vyasa-ink-soft: #5a6060;
     --vyasa-primary: #45655b;
@@ -44,7 +44,7 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-code-border: rgba(45, 52, 52, 0.12);
     --vyasa-code-highlight-bg: rgba(9, 105, 218, 0.12);
     --vyasa-code-highlight-accent: #0969da;
-    --vyasa-inline-code-bg: color-mix(in srgb, var(--vyasa-code-bg) 86%, white 14%);
+    --vyasa-inline-code-bg: color-mix(in srgb, var(--vyasa-code-bg) 82%, var(--vyasa-paper-raised) 18%);
     --vyasa-inline-code-fg: var(--vyasa-code-fg);
     --vyasa-inline-code-border: color-mix(in srgb, var(--vyasa-code-border) 78%, transparent);
     --vyasa-code-comment: #6e7781;
@@ -55,10 +55,10 @@ code, pre { font-family: var(--vyasa-font-mono); }
 }
 .dark,
 .dark #page-container {
-    --vyasa-paper: var(--vyasa-dark-paper, color-mix(in srgb, #0b0e0d 82%, var(--vyasa-primary) 18%)) !important;
-    --vyasa-paper-low: var(--vyasa-dark-paper-low, color-mix(in srgb, #121716 76%, var(--vyasa-primary) 24%)) !important;
-    --vyasa-paper-raised: var(--vyasa-dark-paper-raised, color-mix(in srgb, #171d1b 70%, var(--vyasa-primary) 30%)) !important;
-    --vyasa-paper-accent: var(--vyasa-dark-paper-accent, color-mix(in srgb, #202826 62%, var(--vyasa-primary) 38%)) !important;
+    --vyasa-paper: var(--vyasa-dark-paper, color-mix(in srgb, #14201c 60%, var(--vyasa-primary) 40%)) !important;
+    --vyasa-paper-low: var(--vyasa-dark-paper-low, color-mix(in srgb, #182622 54%, var(--vyasa-primary) 46%)) !important;
+    --vyasa-paper-raised: var(--vyasa-dark-paper-raised, color-mix(in srgb, #1d2d28 50%, var(--vyasa-primary) 50%)) !important;
+    --vyasa-paper-accent: var(--vyasa-dark-paper-accent, color-mix(in srgb, #223631 44%, var(--vyasa-primary) 56%)) !important;
     --vyasa-ink: var(--vyasa-dark-ink, #edf2f1) !important;
     --vyasa-ink-soft: var(--vyasa-dark-ink-soft, #b5c3bf) !important;
     --vyasa-outline-ghost: var(--vyasa-dark-outline-ghost, rgba(181, 195, 191, 0.2)) !important;
@@ -66,7 +66,7 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-code-bg: var(--vyasa-dark-code-bg, color-mix(in srgb, #17202a 82%, var(--vyasa-primary) 18%)) !important;
     --vyasa-code-border: var(--vyasa-dark-code-border, color-mix(in srgb, rgba(181, 195, 191, 0.18) 70%, var(--vyasa-primary) 30%)) !important;
     --vyasa-code-highlight-bg: var(--vyasa-dark-code-highlight-bg, color-mix(in srgb, rgba(255,255,255,0.1) 55%, var(--vyasa-primary) 45%)) !important;
-    --vyasa-inline-code-bg: var(--vyasa-dark-inline-code-bg, color-mix(in srgb, var(--vyasa-code-bg) 84%, black 16%)) !important;
+    --vyasa-inline-code-bg: var(--vyasa-dark-inline-code-bg, color-mix(in srgb, var(--vyasa-code-bg) 80%, var(--vyasa-paper-raised) 20%)) !important;
     --vyasa-inline-code-fg: var(--vyasa-dark-inline-code-fg, var(--vyasa-code-fg)) !important;
     --vyasa-inline-code-border: var(--vyasa-dark-inline-code-border, color-mix(in srgb, var(--vyasa-code-border) 76%, transparent)) !important;
     --vyasa-primary-text: var(--vyasa-dark-primary-text, var(--vyasa-primary-text)) !important;
@@ -491,8 +491,8 @@ summary {
 
 .chat-row-block { padding: 14px 0; }
 .chat-panel {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
+    background: var(--vyasa-paper-raised);
+    border: 1px solid color-mix(in srgb, var(--vyasa-primary) 14%, var(--vyasa-outline-ghost));
     border-radius: 16px;
     padding: 20px;
 }
@@ -915,6 +915,55 @@ todo .deadline { margin-left: 0.45rem; }
     background: color-mix(in srgb, var(--vyasa-primary) 88%, black 12%) !important;
     color: #f9f9f9 !important;
     border-radius: 0.45rem !important;
+}
+.vyasa-sidebar-action-rail {
+    border-left: 1px solid color-mix(in srgb, var(--vyasa-ink-soft) 22%, transparent);
+    padding-left: 0.55rem;
+}
+.vyasa-sidebar-action-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--vyasa-ink-soft) !important;
+}
+.vyasa-sidebar-action-button::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    right: calc(100% + 0.4rem);
+    top: 50%;
+    transform: translateY(-50%) translateX(0.2rem);
+    opacity: 0;
+    pointer-events: none;
+    white-space: nowrap;
+    padding: 0.25rem 0.45rem;
+    border-radius: 0.4rem;
+    background: color-mix(in srgb, var(--vyasa-paper-raised) 84%, var(--vyasa-primary) 16%);
+    color: var(--vyasa-ink) !important;
+    box-shadow: 0 10px 24px -18px rgba(15, 23, 42, 0.32);
+    transition: opacity 120ms ease, transform 120ms ease;
+    font: 500 0.72rem/1.2 var(--vyasa-font-ui);
+    z-index: 20;
+}
+.vyasa-sidebar-action-button:hover,
+.vyasa-sidebar-action-button:focus-visible {
+    background: color-mix(in srgb, var(--vyasa-primary) 12%, transparent) !important;
+    color: var(--vyasa-primary) !important;
+    outline: none;
+}
+.vyasa-sidebar-action-button:hover::after,
+.vyasa-sidebar-action-button:focus-visible::after {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+}
+.vyasa-sidebar-hover-toggle[data-hover-expand-enabled="true"] {
+    color: var(--vyasa-primary) !important;
+    background: color-mix(in srgb, var(--vyasa-primary) 16%, transparent) !important;
 }
 .posts-search-block { background: transparent !important; margin-bottom: 1rem; }
 .posts-search-label { color: var(--vyasa-ink-soft) !important; }
