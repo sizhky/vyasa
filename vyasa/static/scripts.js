@@ -2914,6 +2914,53 @@ function revealInSidebar(rootElement = document, explicitPath = null) {
     }
 }
 
+function focusCurrentPostInSidebar(source = document) {
+    const sidebar = source?.closest?.('details[data-sidebar="posts"]') || document.querySelector('details[data-sidebar="posts"]');
+    if (!sidebar) {
+        return;
+    }
+    sidebar.open = true;
+    sidebar.querySelectorAll('details[data-section="posts-tree"]').forEach((section) => {
+        section.open = true;
+    });
+    revealInSidebar(sidebar);
+}
+window.focusCurrentPostInSidebar = focusCurrentPostInSidebar;
+
+function postsHoverExpandAvailable() {
+    return true;
+}
+
+function postsHoverExpandEnabled() {
+    if (!postsHoverExpandAvailable()) return false;
+    try {
+        return localStorage.getItem('vyasa:postsHoverExpand') !== '0';
+    } catch (err) {
+        return true;
+    }
+}
+
+function syncPostsHoverToggleButtons(root = document) {
+    const enabled = postsHoverExpandEnabled();
+    root.querySelectorAll?.('[data-sidebar-hover-toggle="true"]').forEach((button) => {
+        button.dataset.hoverExpandEnabled = enabled ? 'true' : 'false';
+        button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        const tooltip = enabled ? 'Disable folder hover expand' : 'Enable folder hover expand';
+        button.dataset.tooltip = tooltip;
+        button.setAttribute('aria-label', tooltip);
+    });
+}
+
+function togglePostsHoverExpand(root = document) {
+    if (!postsHoverExpandAvailable()) return;
+    const next = !postsHoverExpandEnabled();
+    try {
+        localStorage.setItem('vyasa:postsHoverExpand', next ? '1' : '0');
+    } catch (err) {}
+    syncPostsHoverToggleButtons(root || document);
+}
+window.togglePostsHoverExpand = togglePostsHoverExpand;
+
 function initPostsSidebarAutoReveal() {
     const postSidebars = document.querySelectorAll('details[data-sidebar="posts"]');
     let persistedSidebarState = {};
@@ -3538,6 +3585,85 @@ function initBookmarks(rootElement = document) {
     });
 }
 
+function loadSidebarFolderBranch(details) {
+    const summary = details?.querySelector(':scope > summary[hx-get]');
+    const branch = details?.querySelector(':scope > ul');
+    const branchHref = summary?.getAttribute('hx-get');
+    if (!summary || !branch || !branchHref || details.dataset.hoverBranchLoaded === 'true' || details.dataset.hoverBranchLoading === 'true') {
+        return;
+    }
+    const hasContent = Array.from(branch.children).some((child) => child.textContent.trim());
+    if (hasContent) {
+        details.dataset.hoverBranchLoaded = 'true';
+        return;
+    }
+    details.dataset.hoverBranchLoading = 'true';
+    const onDone = () => {
+        details.dataset.hoverBranchLoading = 'false';
+        details.dataset.hoverBranchLoaded = 'true';
+        initFolderHoverExpand(branch);
+        initFolderChevronState();
+    };
+    if (window.htmx?.ajax) {
+        const request = window.htmx.ajax('GET', branchHref, { target: branch, swap: 'innerHTML' });
+        if (request && typeof request.then === 'function') {
+            request.then(onDone).catch(() => {
+                details.dataset.hoverBranchLoading = 'false';
+            });
+        } else {
+            const onSwap = (event) => {
+                if (event.target !== branch) return;
+                document.body.removeEventListener('htmx:afterSwap', onSwap);
+                onDone();
+            };
+            document.body.addEventListener('htmx:afterSwap', onSwap);
+        }
+        return;
+    }
+    fetch(branchHref, { credentials: 'same-origin' })
+        .then((response) => response.ok ? response.text() : Promise.reject(new Error('branch load failed')))
+        .then((html) => {
+            branch.innerHTML = html;
+            onDone();
+        })
+        .catch(() => {
+            details.dataset.hoverBranchLoading = 'false';
+        });
+}
+
+function bindFolderHoverExpand(details) {
+    if (!(details instanceof HTMLDetailsElement) || details.dataset.hoverExpandBound === 'true') {
+        return;
+    }
+    details.dataset.hoverExpandBound = 'true';
+    let leaveTimer = null;
+    details.addEventListener('mouseenter', () => {
+        if (!postsHoverExpandEnabled()) return;
+        if (leaveTimer) {
+            window.clearTimeout(leaveTimer);
+            leaveTimer = null;
+        }
+        details.dataset.hoverOpened = 'true';
+        details.open = true;
+        loadSidebarFolderBranch(details);
+    });
+    details.addEventListener('mouseleave', () => {
+        if (!postsHoverExpandEnabled()) return;
+        leaveTimer = window.setTimeout(() => {
+            if (details.matches(':hover')) return;
+            if (details.dataset.hoverOpened === 'true') {
+                details.open = false;
+            }
+        }, 120);
+    });
+}
+
+function initFolderHoverExpand(root = document) {
+    const postsSidebar = root?.id === 'posts-sidebar' ? root : root?.querySelector?.('#posts-sidebar') || document.getElementById('posts-sidebar');
+    if (!postsSidebar || !postsHoverExpandEnabled()) return;
+    postsSidebar.querySelectorAll('details[data-folder="true"]').forEach(bindFolderHoverExpand);
+}
+
 document.addEventListener('toggle', (event) => {
     const details = event.target;
     if (!(details instanceof HTMLDetailsElement)) {
@@ -3554,6 +3680,20 @@ document.addEventListener('toggle', (event) => {
 }, true);
 
 document.addEventListener('click', (event) => {
+    const sidebarLocate = event.target.closest('[data-sidebar-locate-current="true"]');
+    if (sidebarLocate) {
+        event.preventDefault();
+        event.stopPropagation();
+        focusCurrentPostInSidebar(sidebarLocate);
+        return;
+    }
+    const hoverToggle = event.target.closest('[data-sidebar-hover-toggle="true"]');
+    if (hoverToggle) {
+        event.preventDefault();
+        event.stopPropagation();
+        togglePostsHoverExpand(document);
+        return;
+    }
     const toggle = event.target.closest('[data-vyasa-fold-all]');
     if (toggle) {
         const main = document.getElementById('main-content');
@@ -3950,6 +4090,8 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
         window.__vyasaPostsSidebarWasOpen = false;
     }
     initFolderChevronState();
+    initFolderHoverExpand(event.target || document);
+    syncPostsHoverToggleButtons(event.target || document);
     initSearchPlaceholderCycle(event.target || document);
     initCodeBlockCopyButtons(event.target || document);
 });
@@ -4883,6 +5025,8 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initSearchPlaceholderCycle(event.target);
     initPostsSearchPersistence(event.target);
     initBookmarks(event.target);
+    initFolderHoverExpand(event.target || document);
+    syncPostsHoverToggleButtons(event.target || document);
     initCodeBlockCopyButtons(event.target);
     initHeadingPermalinkCopy(event.target);
     scheduleHighlightedCodeIncludes(event.target);
@@ -4900,6 +5044,8 @@ window.addEventListener('load', () => {
     normalizeCriticalTextColors(document);
     recordStyleProbe('load');
     scheduleHashAlignment();
+    initFolderHoverExpand(document);
+    syncPostsHoverToggleButtons(document);
     scheduleHighlightedCodeIncludes(document);
 });
 

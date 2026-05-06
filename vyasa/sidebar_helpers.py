@@ -56,6 +56,30 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
     summary_content = [Span(UkIcon(icon, cls="w-5 h-5 block"), cls="flex items-center justify-center w-5 h-5 shrink-0 leading-none"), Span(title, cls="flex-1 leading-none")]
     if shortcut_key:
         summary_content.append(Kbd(shortcut_key, cls="kbd-key px-2.5 py-1.5 text-xs font-mono font-semibold bg-gradient-to-b from-slate-50 to-slate-200 dark:from-slate-700 dark:to-slate-900 text-slate-800 dark:text-slate-200 rounded-md border-2 border-slate-300 dark:border-slate-600 shadow-[0_2px_0_0_rgba(0,0,0,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)] dark:shadow-[0_2px_0_0_rgba(0,0,0,0.5),inset_0_1px_0_0_rgba(255,255,255,0.1)]"))
+    if sidebar_kind == "posts":
+        action_nodes = [
+            Button(
+                Span("◎", cls="text-sm leading-none", aria_hidden="true"),
+                type="button",
+                cls="vyasa-sidebar-action-button vyasa-sidebar-locate-current",
+                data_sidebar_locate_current="true",
+                data_tooltip="Reveal current file in sidebar",
+                aria_label="Reveal current file in sidebar",
+                onclick="event.preventDefault(); event.stopPropagation(); window.focusCurrentPostInSidebar && window.focusCurrentPostInSidebar(this);",
+            )
+        ]
+        action_nodes.append(
+            Button(
+                Span("↕", cls="text-sm leading-none", aria_hidden="true"),
+                type="button",
+                cls="vyasa-sidebar-action-button vyasa-sidebar-hover-toggle",
+                data_sidebar_hover_toggle="true",
+                data_tooltip="Toggle folder hover expand",
+                aria_label="Toggle folder hover expand",
+                onclick="event.preventDefault(); event.stopPropagation(); window.togglePostsHoverExpand && window.togglePostsHoverExpand(); return false;",
+            )
+        )
+        summary_content.append(Span(*action_nodes, cls="vyasa-sidebar-action-rail ml-auto inline-flex items-center gap-1"))
     common_frost_style = "bg-white/20 dark:bg-slate-950/70 backdrop-blur-lg border border-slate-900/10 dark:border-slate-700/25 ring-1 ring-white/20 dark:ring-slate-900/30 shadow-[0_24px_60px_-40px_rgba(15,23,42,0.45)] dark:shadow-[0_28px_70px_-45px_rgba(2,6,23,0.85)]"
     summary_classes = f"vyasa-sidebar-toggle vyasa-sidebar-toggle-{sidebar_kind} vyasa-ui-text flex items-center gap-2 font-semibold cursor-pointer py-2.5 px-3 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-lg select-none list-none {common_frost_style} min-h-[56px]"
     content_classes = f"vyasa-sidebar-body vyasa-sidebar-body-{sidebar_kind} p-3 {common_frost_style} rounded-lg max-h-[calc(100vh-18rem)] flex flex-col overflow-hidden min-h-0" if scroll_target == "list" else f"vyasa-sidebar-body vyasa-sidebar-body-{sidebar_kind} p-3 {common_frost_style} rounded-lg overflow-x-auto overflow-y-auto max-h-[calc(100vh-18rem)] sidebar-scroll-container"
