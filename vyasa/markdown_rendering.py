@@ -474,8 +474,11 @@ def _render_mermaid_block(code):
 
 
 def _render_tasks_block(code):
+    config, code = _split_fence_frontmatter(code)
     try:
-        model = parse_tasks_text(f"```items\n{code}\n```")
+        model = parse_tasks_text(f"```tasks\n{code}\n```")
+        if config.get("title") and not model.get("title"):
+            model["title"] = config["title"]
         graph = build_collapsed_graph(model)
     except Exception:
         model = {
@@ -493,12 +496,16 @@ def _render_tasks_block(code):
     widget_id = f"tasks-{abs(hash(code)) & 0xFFFFFF}-{next(_diagram_uid_counter)}"
     payload = html.escape(json.dumps(model))
     graph_payload = html.escape(json.dumps(graph))
-    title = html.escape(model.get("title") or "Items")
+    title = html.escape(config.get("title") or model.get("title") or "Items")
+    default_open_depth = int(config.get("default_open_depth", "0"))
+    width = html.escape(config.get("width", "85vw"))
+    min_height = html.escape(config.get("min_height", "85vh"))
+    flow_height = html.escape(config.get("height", "calc(85vh - 57px)"))
     summary = f'{len(model["groups"])} groups, {len(model["tasks"])} items, {len(model["dependency_edges"])} edges'
     return (
         f'<div class="tasks-container relative my-6 rounded-xl border border-slate-200 dark:border-slate-800" '
-        f'style="width: 85vw; min-height: 85vh; position: relative; left: 50%; transform: translateX(-50%);" '
-        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
+        f'style="width: {width}; min-height: {min_height}; position: relative; left: 50%; transform: translateX(-50%);" '
+        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
         f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'
         f'<button onclick="openTasksFullscreen(\'{widget_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>'
         f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">'
@@ -513,7 +520,7 @@ def _render_tasks_block(code):
         f'<div class="text-xs text-slate-500 dark:text-slate-400">{html.escape(summary)}</div>'
         f'</div>'
         f'</div>'
-        '<div class="vyasa-tasks-flow" style="height:calc(85vh - 57px);min-height:420px;overflow:hidden;cursor:grab">'
+        f'<div class="vyasa-tasks-flow" style="height:{flow_height};min-height:420px;overflow:hidden;cursor:grab">'
         '<div class="vyasa-tasks-scene" style="position:relative;width:100%;height:100%;transform-origin:center center"></div></div>'
         f'</div>'
     )
@@ -767,7 +774,7 @@ class ContentRenderer(FrankenRenderer):
             return _render_d2_block(code)
         if lang == "mermaid":
             return _render_mermaid_block(code)
-        if lang == "items":
+        if lang in {"items", "tasks"}:
             return _render_tasks_block(code)
         raw_code = code
         code = html.unescape(code)

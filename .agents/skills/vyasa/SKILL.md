@@ -41,9 +41,11 @@ Core rules:
 - In the lazy posts tree sidebar, a folder-local `.vyasa` is also a branch-visibility marker: even if the folder has no direct markdown files and only nested subfolders, the folder should still appear so the branch can lazy-load.
 - For callouts, emit Obsidian-style callouts like `> [!note] Title` or `> [!warning]- Title`; prefer aliases already supported by Obsidian (`warn`, `error`, `faq`, `check`, `done`, `summary`, `tldr`, `cite`, etc.) rather than inventing new keywords.
 - For lightweight task callouts, prefer markdown task-list items like `- [ ] Task | owner: Jane | deadline: Tomorrow | priority: high` over custom HTML tags; supported metadata families live in `references/markdown.md`.
-- For dependency planning UIs, use fenced `items` blocks inside normal markdown pages instead of separate graph files.
-- `items` fences are terse line-based graphs, not YAML.
-- Canonical syntax: `id <graph-id>`, `title <graph-title>`, `group <id> <label>`, `item <id> <label>`, then indented attrs.
+- For dependency planning UIs, use fenced `tasks`/`items` blocks inside normal markdown pages instead of separate graph files.
+- `tasks`/`items` fences support optional YAML frontmatter first for renderer options like `title`, `default_open_depth`, `width`, `min_height`, and `height`.
+- The graph body under that frontmatter is still terse line-based syntax, not YAML.
+- Canonical body syntax: `id <graph-id>`, `title <graph-title>`, `group <id> <label>`, `item <id> <label>`, then indented attrs.
+- Do not wrap an entire `items` graph in one top-level group just to create a root node; it renders poorly. Start with multiple meaningful top-level groups, or with direct items when grouping is not useful.
 - Use indentation for nesting. `group` lines nested under `group` lines make child groups. `item` lines nested under a group belong to that group.
 - Use `depends <A> <B>` for DAG edges. First-class item attrs today: `estimate`, `depends`, `priority`, `points`, `owner`, `phase`.
 - Graph layout attrs exist but are renderer-owned: `graph_x`, `graph_y`. Do not surface them in user guidance unless debugging persistence.

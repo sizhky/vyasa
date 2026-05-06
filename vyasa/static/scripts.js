@@ -1,7 +1,7 @@
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 import { D2 } from 'https://esm.sh/@terrastruct/d2@0.1.33?bundle';
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { clampScale, nextWheelState } from './tasks_graph_core.js';
+import { clampScale, nextWheelState, sizeTaskNode } from './tasks_graph_core.js';
 const mermaidStates = {};
 const d2States = {};
 const tasksElk = new ELK();
@@ -76,8 +76,8 @@ function buildVisibleTasksGraph(model, expanded) {
         (model.task_children?.[groupId] || []).forEach((id) => visibleTasks.add(id));
     }
     const visibleNodes = [
-        ...Array.from(visibleGroups).map((id) => ({ id, label: groupsById[id]?.label || id, kind: 'group', width: 250, height: 80 })),
-        ...Array.from(visibleTasks).map((id) => ({ id, label: tasksById[id]?.label || id, kind: 'task', width: 220, height: 60 })),
+        ...Array.from(visibleGroups).map((id) => ({ id, label: groupsById[id]?.label || id, kind: 'group', ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
+        ...Array.from(visibleTasks).map((id) => ({ id, label: tasksById[id]?.label || id, kind: 'task', ...sizeTaskNode(tasksById[id]?.label || id, 'task') })),
     ];
     const parentOfGroup = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
     const parentOfTask = Object.fromEntries((model.tasks || []).map((t) => [t.id, t.group_id || null]));
@@ -102,6 +102,32 @@ function buildVisibleTasksGraph(model, expanded) {
         }
     }
     return { nodes: visibleNodes, edges: visibleEdges };
+}
+
+function normalizeTasksGraphNodes(graph, model) {
+    const groupsById = Object.fromEntries((model.groups || []).map((g) => [g.id, g]));
+    const tasksById = Object.fromEntries((model.tasks || []).map((t) => [t.id, t]));
+    return {
+        ...graph,
+        nodes: (graph.nodes || []).map((node) => {
+            const kind = node.kind || (groupsById[node.id] ? 'group' : 'task');
+            const label = node.label || groupsById[node.id]?.label || tasksById[node.id]?.label || node.id;
+            return { ...node, kind, label, ...sizeTaskNode(label, kind) };
+        }),
+    };
+}
+
+function collectExpandedGroupsByDepth(groupTree, defaultOpenDepth) {
+    if (defaultOpenDepth === 0) return new Set();
+    const expanded = new Set();
+    const queue = (groupTree?.["null"] || []).map((id) => ({ id, depth: 1 }));
+    while (queue.length > 0) {
+        const { id, depth } = queue.shift();
+        if (defaultOpenDepth !== -1 && depth > defaultOpenDepth) continue;
+        expanded.add(id);
+        for (const childId of (groupTree?.[id] || [])) queue.push({ id: childId, depth: depth + 1 });
+    }
+    return expanded;
 }
 
 function reduceTransitiveEdges(edges) {
@@ -297,9 +323,11 @@ async function layoutBaseTasksGraph(graph, model) {
 }
 
 async function layoutGroupInternal(groupId, model, childSizes = {}) {
+    const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
+    const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
     const groupChildren = [
-        ...(model.group_tree?.[groupId] || []).map((id) => ({ id, kind: 'group', width: 250, height: 80 })),
-        ...(model.task_children?.[groupId] || []).map((id) => ({ id, kind: 'task', width: 220, height: 60 })),
+        ...(model.group_tree?.[groupId] || []).map((id) => ({ id, kind: 'group', label: groupsById[id]?.label || id, ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
+        ...(model.task_children?.[groupId] || []).map((id) => ({ id, kind: 'task', label: tasksById[id]?.label || id, ...sizeTaskNode(tasksById[id]?.label || id, 'task') })),
     ].map((child) => childSizes[child.id] ? { ...child, ...childSizes[child.id] } : child);
     if (groupChildren.length === 0) {
         return {
@@ -621,8 +649,10 @@ async function renderTasksGraphs(rootElement = document) {
         const mount = wrapper.querySelector('.vyasa-tasks-flow');
         if (!mount || !rf) return;
         const model = JSON.parse(wrapper.dataset.tasksPayload || '{"groups":[],"tasks":[],"group_tree":{},"task_children":{},"dependency_edges":[]}');
-        const rawGraph = JSON.parse(wrapper.dataset.tasksGraph || '{"nodes":[],"edges":[]}');
+        const rawGraph = normalizeTasksGraphNodes(JSON.parse(wrapper.dataset.tasksGraph || '{"nodes":[],"edges":[]}'), model);
         const widgetId = wrapper.id;
+        const defaultOpenDepth = Number.parseInt(wrapper.dataset.tasksDefaultOpenDepth || '0', 10);
+        const initialExpandedSet = collectExpandedGroupsByDepth(model.group_tree, Number.isNaN(defaultOpenDepth) ? 0 : defaultOpenDepth);
         const TasksGraphApp = (props) => {
             const React = window.React;
             const Handle = rf.Handle;
@@ -631,7 +661,7 @@ async function renderTasksGraphs(rootElement = document) {
             const groupLayoutsRef = React.useRef({});
             const graphBaseRef = React.useRef({ nodes: [], edges: [] });
             const flowWrapperRef = React.useRef(null);
-            const [expanded, setExpanded] = React.useState(new Set());
+            const [expanded, setExpanded] = React.useState(() => new Set(initialExpandedSet));
             const [selectedNodeId, setSelectedNodeId] = React.useState(null);
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
@@ -902,21 +932,33 @@ async function renderTasksGraphs(rootElement = document) {
                     onClick: () => { if (isGroup) setSelectedNodeId(null); },
                     style: {
                         width: '100%', height: '100%',
-                        boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: '600', textAlign: 'center', cursor: isGroup ? 'pointer' : 'default', padding: '0',
+                        boxSizing: 'border-box',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                        textAlign: 'center',
+                        cursor: isGroup ? 'pointer' : 'default',
+                        padding: '10px 12px',
+                        overflow: 'hidden',
                         opacity: isDimmed ? 0.22 : 1,
                     }
                 },
                     Handle && React.createElement(Handle, { id: 'top', type: 'target', position: Position?.Top || 'top', style: { opacity: 0, pointerEvents: 'none' } }),
                     React.createElement('span', {
                         style: {
-                            padding: '10px 12px',
+                            boxSizing: 'border-box',
+                            width: '100%',
                             maxWidth: '100%',
                             maxHeight: '100%',
                             overflow: 'hidden',
-                            display: '-webkit-box',
-                            WebkitBoxOrient: 'vertical',
-                            WebkitLineClamp: 3,
+                            display: 'block',
+                            whiteSpace: 'normal',
+                            lineHeight: '1.25',
                             overflowWrap: 'anywhere',
+                            wordBreak: 'break-word',
                         }
                     }, data?.label || id),
                     isGroup && React.createElement('button', {
@@ -1846,6 +1888,7 @@ window.openTasksFullscreen = async function(id) {
     fullscreenWrapper.setAttribute('data-tasks-widget', 'true');
     fullscreenWrapper.setAttribute('data-tasks-fullscreen', 'true');
     fullscreenWrapper.setAttribute('data-tasks-title', originalTitle);
+    fullscreenWrapper.setAttribute('data-tasks-default-open-depth', wrapper.getAttribute('data-tasks-default-open-depth') || '0');
     fullscreenWrapper.setAttribute('data-tasks-payload', originalPayload);
     fullscreenWrapper.setAttribute('data-tasks-graph', originalGraph);
     const headerBar = document.createElement('div');

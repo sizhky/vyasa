@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { clampScale, nextWheelState } = await import('../vyasa/static/tasks_graph_core.js');
+const { clampScale, nextWheelState, sizeTaskNode } = await import('../vyasa/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -15,4 +15,11 @@ test('nextWheelState zooms around pointer', () => {
     assert.ok(out.scale > 1);
     assert.notEqual(out.translateX, 0);
     assert.notEqual(out.translateY, 0);
+});
+
+test('sizeTaskNode grows height for long labels', () => {
+    const shortNode = sizeTaskNode('short label', 'task');
+    const longNode = sizeTaskNode('Adhoc/flex-gateway-policies/security/ip-allowlist/ip-allowlist-prod', 'task');
+    assert.equal(shortNode.width, 220);
+    assert.ok(longNode.height > shortNode.height);
 });
