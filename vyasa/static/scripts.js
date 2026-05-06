@@ -2934,9 +2934,9 @@ function postsHoverExpandAvailable() {
 function postsHoverExpandEnabled() {
     if (!postsHoverExpandAvailable()) return false;
     try {
-        return localStorage.getItem('vyasa:postsHoverExpand') !== '0';
+        return localStorage.getItem('vyasa:postsHoverExpand') === '1';
     } catch (err) {
-        return true;
+        return false;
     }
 }
 
