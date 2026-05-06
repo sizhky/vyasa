@@ -673,8 +673,8 @@ async function renderTasksGraphs(rootElement = document) {
         const mount = wrapper.querySelector('.vyasa-tasks-flow');
         if (!mount || !rf) return;
         const jitterConfig = {
-            x: Number.parseFloat(wrapper.dataset.tasksJitter || '18'),
-            y: Number.parseFloat(wrapper.dataset.tasksJitterY || wrapper.dataset.tasksJitter || '10'),
+            x: Number.parseFloat(wrapper.dataset.tasksJitter || '0'),
+            y: Number.parseFloat(wrapper.dataset.tasksJitterY || wrapper.dataset.tasksJitter || '0'),
         };
         const model = JSON.parse(wrapper.dataset.tasksPayload || '{"groups":[],"tasks":[],"group_tree":{},"task_children":{},"dependency_edges":[]}');
         const rawGraph = normalizeTasksGraphNodes(JSON.parse(wrapper.dataset.tasksGraph || '{"nodes":[],"edges":[]}'), model);
@@ -1917,8 +1917,8 @@ window.openTasksFullscreen = async function(id) {
     fullscreenWrapper.setAttribute('data-tasks-fullscreen', 'true');
     fullscreenWrapper.setAttribute('data-tasks-title', originalTitle);
     fullscreenWrapper.setAttribute('data-tasks-default-open-depth', wrapper.getAttribute('data-tasks-default-open-depth') || '0');
-    fullscreenWrapper.setAttribute('data-tasks-jitter', wrapper.getAttribute('data-tasks-jitter') || '18');
-    fullscreenWrapper.setAttribute('data-tasks-jitter-y', wrapper.getAttribute('data-tasks-jitter-y') || wrapper.getAttribute('data-tasks-jitter') || '10');
+    fullscreenWrapper.setAttribute('data-tasks-jitter', wrapper.getAttribute('data-tasks-jitter') || '0');
+    fullscreenWrapper.setAttribute('data-tasks-jitter-y', wrapper.getAttribute('data-tasks-jitter-y') || wrapper.getAttribute('data-tasks-jitter') || '0');
     fullscreenWrapper.setAttribute('data-tasks-payload', originalPayload);
     fullscreenWrapper.setAttribute('data-tasks-graph', originalGraph);
     const headerBar = document.createElement('div');

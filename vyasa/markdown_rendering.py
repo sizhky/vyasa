@@ -501,8 +501,8 @@ def _render_tasks_block(code):
     width = html.escape(config.get("width", "85vw"))
     min_height = html.escape(config.get("min_height", "85vh"))
     flow_height = html.escape(config.get("height", "calc(85vh - 57px)"))
-    jitter = html.escape(str(config.get("jitter", "18")))
-    jitter_y = html.escape(str(config.get("jitter_y", config.get("jitter", "10"))))
+    jitter = html.escape(str(config.get("jitter", "0")))
+    jitter_y = html.escape(str(config.get("jitter_y", config.get("jitter", "0"))))
     summary = f'{len(model["groups"])} groups, {len(model["tasks"])} items, {len(model["dependency_edges"])} edges'
     return (
         f'<div class="tasks-container relative my-6 rounded-xl border border-slate-200 dark:border-slate-800" '
