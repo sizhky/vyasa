@@ -231,6 +231,8 @@ Recognized task metadata families:
 
 For dependency planning or structured relationship maps, use a fenced `tasks` block inside a normal markdown page:
 
+Size keys like `width`, `min_height`, and `height` should use full CSS lengths such as `760px`, `70vh`, or `calc(85vh - 57px)`. Do not use bare numbers like `height: 760`.
+
 ```markdown
 ```tasks
 ---

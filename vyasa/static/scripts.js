@@ -157,7 +157,22 @@ function reduceTransitiveEdges(edges) {
     return edges.filter((edge) => !canReach(edge.source, edge.target, `${edge.source}->${edge.target}`));
 }
 
-async function layoutTasksGraph(graph, model, expanded) {
+function stableTaskJitter(id, amplitudeX = 16, amplitudeY = 8) {
+    const text = String(id || '');
+    let hashA = 0;
+    let hashB = 0;
+    for (let i = 0; i < text.length; i += 1) {
+        const code = text.charCodeAt(i);
+        hashA = (hashA * 33 + code) % 1000003;
+        hashB = (hashB * 97 + code) % 1000033;
+    }
+    return {
+        x: ((hashA % 1000) / 999 - 0.5) * amplitudeX,
+        y: ((hashB % 1000) / 999 - 0.5) * amplitudeY,
+    };
+}
+
+async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}) {
     const nodeMap = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
     const layoutEdges = reduceTransitiveEdges(graph.edges || []);
     const parentOf = {};
@@ -261,8 +276,11 @@ async function layoutTasksGraph(graph, model, expanded) {
     const absPosMap = {};
     const relPosMap = {};
     const collectPos = (node, offsetX = 0, offsetY = 0) => {
-        relPosMap[node.id] = { x: node.x || 0, y: node.y || 0 };
-        absPosMap[node.id] = { x: (node.x || 0) + offsetX, y: (node.y || 0) + offsetY };
+        const jitter = stableTaskJitter(node.id, jitterConfig.x ?? 18, jitterConfig.y ?? 10);
+        const localX = (node.x || 0) + jitter.x;
+        const localY = (node.y || 0) + jitter.y;
+        relPosMap[node.id] = { x: localX, y: localY };
+        absPosMap[node.id] = { x: localX + offsetX, y: localY + offsetY };
         if (node.children) {
             node.children.forEach((c) => collectPos(c, absPosMap[node.id].x, absPosMap[node.id].y));
         }
@@ -275,7 +293,7 @@ async function layoutTasksGraph(graph, model, expanded) {
     return laidOut;
 }
 
-async function layoutBaseTasksGraph(graph, model) {
+async function layoutBaseTasksGraph(graph, model, jitterConfig = {}) {
     const rootGroupIds = new Set(model.group_tree?.["null"] || []);
     const taskToGroup = Object.fromEntries((model.tasks || []).map((t) => [t.id, t.group_id || null]));
     const groupParent = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
@@ -307,7 +325,7 @@ async function layoutBaseTasksGraph(graph, model) {
         })
     };
     console.log('rootGraph:', { nodes: rootGraph.nodes.map(n => n.id), edges: rootGraph.edges });
-    const laidOut = await layoutTasksGraph(rootGraph, model, new Set());
+    const laidOut = await layoutTasksGraph(rootGraph, model, new Set(), jitterConfig);
     console.log('laidOut:', { width: laidOut.width, height: laidOut.height, positions: laidOut.absoluteChildPositions });
     const positions = {};
     for (const node of rootGraph.nodes) {
@@ -322,7 +340,7 @@ async function layoutBaseTasksGraph(graph, model) {
     return { positions, width: laidOut.width || 0, height: laidOut.height || 0 };
 }
 
-async function layoutGroupInternal(groupId, model, childSizes = {}) {
+async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig = {}) {
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
     const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
     const groupChildren = [
@@ -374,7 +392,13 @@ async function layoutGroupInternal(groupId, model, childSizes = {}) {
     });
     const positions = {};
     for (const child of (laidOut.children || [])) {
-        positions[child.id] = { x: child.x || 0, y: child.y || 0, width: child.width || 0, height: child.height || 0 };
+        const jitter = stableTaskJitter(child.id, jitterConfig.x ?? 14, jitterConfig.y ?? 8);
+        positions[child.id] = {
+            x: (child.x || 0) + jitter.x,
+            y: (child.y || 0) + jitter.y,
+            width: child.width || 0,
+            height: child.height || 0,
+        };
     }
     return {
         positions,
@@ -385,7 +409,7 @@ async function layoutGroupInternal(groupId, model, childSizes = {}) {
     };
 }
 
-async function layoutExpandedGroups(model, expandedSet) {
+async function layoutExpandedGroups(model, expandedSet, jitterConfig = {}) {
     const expandedIds = Array.from(expandedSet);
     const groupParent = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
     const depthOf = (id) => {
@@ -403,7 +427,7 @@ async function layoutExpandedGroups(model, expandedSet) {
         for (const childId of (model.group_tree?.[groupId] || [])) {
             if (layouts[childId]) childSizes[childId] = layouts[childId].bbox;
         }
-        layouts[groupId] = await layoutGroupInternal(groupId, model, childSizes);
+        layouts[groupId] = await layoutGroupInternal(groupId, model, childSizes, jitterConfig);
     }
     return layouts;
 }
@@ -648,6 +672,10 @@ async function renderTasksGraphs(rootElement = document) {
         if (wrapper.dataset.tasksMounted === 'true') return;
         const mount = wrapper.querySelector('.vyasa-tasks-flow');
         if (!mount || !rf) return;
+        const jitterConfig = {
+            x: Number.parseFloat(wrapper.dataset.tasksJitter || '18'),
+            y: Number.parseFloat(wrapper.dataset.tasksJitterY || wrapper.dataset.tasksJitter || '10'),
+        };
         const model = JSON.parse(wrapper.dataset.tasksPayload || '{"groups":[],"tasks":[],"group_tree":{},"task_children":{},"dependency_edges":[]}');
         const rawGraph = normalizeTasksGraphNodes(JSON.parse(wrapper.dataset.tasksGraph || '{"nodes":[],"edges":[]}'), model);
         const widgetId = wrapper.id;
@@ -677,12 +705,12 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             }, []);
             const ensureBaseLayout = React.useCallback(async () => {
-                if (!baseLayoutRef.current) baseLayoutRef.current = await layoutBaseTasksGraph(rawGraph, model);
+                if (!baseLayoutRef.current) baseLayoutRef.current = await layoutBaseTasksGraph(rawGraph, model, jitterConfig);
                 return baseLayoutRef.current;
             }, [model]);
             const rebuildLayout = React.useCallback(async (expandedSet) => {
                 const baseLayout = await ensureBaseLayout();
-                groupLayoutsRef.current = await layoutExpandedGroups(model, expandedSet);
+                groupLayoutsRef.current = await layoutExpandedGroups(model, expandedSet, jitterConfig);
                 const rootGroupIds = new Set(model.group_tree?.["null"] || []);
                 const rootGraph = {
                     nodes: rawGraph.nodes.filter(n => rootGroupIds.has(n.id)),
@@ -1889,6 +1917,8 @@ window.openTasksFullscreen = async function(id) {
     fullscreenWrapper.setAttribute('data-tasks-fullscreen', 'true');
     fullscreenWrapper.setAttribute('data-tasks-title', originalTitle);
     fullscreenWrapper.setAttribute('data-tasks-default-open-depth', wrapper.getAttribute('data-tasks-default-open-depth') || '0');
+    fullscreenWrapper.setAttribute('data-tasks-jitter', wrapper.getAttribute('data-tasks-jitter') || '18');
+    fullscreenWrapper.setAttribute('data-tasks-jitter-y', wrapper.getAttribute('data-tasks-jitter-y') || wrapper.getAttribute('data-tasks-jitter') || '10');
     fullscreenWrapper.setAttribute('data-tasks-payload', originalPayload);
     fullscreenWrapper.setAttribute('data-tasks-graph', originalGraph);
     const headerBar = document.createElement('div');

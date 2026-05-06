@@ -501,11 +501,13 @@ def _render_tasks_block(code):
     width = html.escape(config.get("width", "85vw"))
     min_height = html.escape(config.get("min_height", "85vh"))
     flow_height = html.escape(config.get("height", "calc(85vh - 57px)"))
+    jitter = html.escape(str(config.get("jitter", "18")))
+    jitter_y = html.escape(str(config.get("jitter_y", config.get("jitter", "10"))))
     summary = f'{len(model["groups"])} groups, {len(model["tasks"])} items, {len(model["dependency_edges"])} edges'
     return (
         f'<div class="tasks-container relative my-6 rounded-xl border border-slate-200 dark:border-slate-800" '
         f'style="width: {width}; min-height: {min_height}; position: relative; left: 50%; transform: translateX(-50%);" '
-        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
+        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
         f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'
         f'<button onclick="openTasksFullscreen(\'{widget_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>'
         f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">'

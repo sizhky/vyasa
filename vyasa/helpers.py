@@ -284,7 +284,27 @@ def preview_markdown(text: str, max_blocks: int = 5) -> str:
     marker = _MORE_MARKER_RE.search(text)
     if marker:
         return text[:marker.start()].rstrip()
-    blocks = [block.strip() for block in re.split(r"\n\s*\n", text) if block.strip()]
+    blocks = []
+    current = []
+    fence = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            token = stripped[:3]
+            fence = None if fence == token else token
+        if not stripped and not fence:
+            block = "\n".join(current).strip()
+            if block:
+                blocks.append(block)
+                if len(blocks) >= max_blocks:
+                    break
+            current = []
+            continue
+        current.append(line)
+    if len(blocks) < max_blocks:
+        block = "\n".join(current).strip()
+        if block:
+            blocks.append(block)
     return "\n\n".join(blocks[:max_blocks])
 
 def get_post_title(file_path: str | Path, abbreviations=None) -> str:
