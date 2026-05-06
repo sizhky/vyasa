@@ -1,5 +1,7 @@
 from collections import defaultdict
 from pathlib import Path
+import re
+import secrets
 
 
 _ATTR_KEYS = {
@@ -19,9 +21,21 @@ _ATTR_KEYS = {
 
 
 def _extract_tasks_body(text: str) -> str:
+    if "```tasks" in text:
+        return text.split("```tasks", 1)[1].split("```", 1)[0]
     if "```items" in text:
         return text.split("```items", 1)[1].split("```", 1)[0]
     raise ValueError("No items payload found")
+
+
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
+    return slug or "tasks"
+
+
+def _generated_graph_id(graph: dict) -> str:
+    base = graph.get("title") or "tasks"
+    return f"{_slugify(base)}-{secrets.token_hex(3)}"
 
 
 def _parse_terse_tasks(body: str) -> dict:
@@ -123,7 +137,7 @@ def parse_tasks_text(text: str) -> dict:
     for task in tasks:
         task_children[task.get("group_id")].append(task["id"])
     return {
-        "graph_id": graph["id"],
+        "graph_id": graph.get("id") or _generated_graph_id(graph),
         "title": graph.get("title", ""),
         "groups": groups,
         "tasks": tasks,

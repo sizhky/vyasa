@@ -227,38 +227,45 @@ Recognized task metadata families:
 - status: `status`, `state`, `phase`
 - project: `project`, `bucket`, `area`, `team`, `stream`
 
-## Inline item graphs
+## Tasks graphs
 
-For dependency planning or structured relationship maps, use a fenced `items` block inside a normal markdown page:
+For dependency planning or structured relationship maps, use a fenced `tasks` block inside a normal markdown page:
 
 ```markdown
-```items
+```tasks
+---
+title: Sprint Slice
+default_open_depth: -1
+width: 80vw
+height: 70vh
+---
 id sprint-slice
-title Sprint Slice
-group root Sprint Slice
-  group frontend Frontend
-    item T-001 Design
-      estimate 1d
-      owner Alice
-    item T-002 Build
-      estimate 2d
-      owner Alice
-      depends T-001
-  group api API
-    item T-010 Endpoint contract
-      estimate 1d
-      owner Alice
-      depends T-001
-    item T-003 Backend
-      estimate 3d
-      owner Bob
-      depends T-002 T-010
+group frontend Frontend
+  item T-001 Design
+    estimate 1d
+    owner Alice
+  item T-002 Build
+    estimate 2d
+    owner Alice
+    depends T-001
+group api API
+  item T-010 Endpoint contract
+    estimate 1d
+    owner Alice
+    depends T-001
+  item T-003 Backend
+    estimate 3d
+    owner Bob
+    depends T-002 T-010
 ```
 ```
 
 Notes:
 
-- `items` fences are terse line-based graphs, not YAML.
+- `tasks` fences support optional YAML frontmatter first. Current renderer keys: `title`, `default_open_depth`, `width`, `min_height`, `height`.
+- `default_open_depth` is an integer. `0` folds all groups, `1` opens root groups, larger values open deeper levels, and `-1` opens all groups.
+- After frontmatter, the graph body is terse line-based syntax, not YAML.
+- Do not wrap the whole graph in one top-level group. Start with multiple meaningful top-level groups, or direct items if grouping adds no value.
 - `group <id> <label>` nests by indentation. `item <id> <label>` under a group belongs to that group.
 - Use indented attrs for `estimate`, `depends`, `priority`, `points`, `owner`, `phase`.
 - `depends` takes one or more ids on the same line.
