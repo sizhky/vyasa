@@ -20,7 +20,7 @@ from .helpers import (
     should_exclude_dir,
     slug_to_title,
 )
-ContentKind = Literal["folder", "markdown", "pdf"]
+ContentKind = Literal["folder", "markdown", "pdf", "tree"]
 
 
 class VisibilityPolicy(Protocol):
@@ -69,7 +69,7 @@ class ContentTree:
         root: Path,
         show_hidden: bool = False,
         excluded_dirs: set[str] | None = None,
-        allowed_suffixes: tuple[str, ...] = (".md", ".pdf"),
+        allowed_suffixes: tuple[str, ...] = (".md", ".pdf", ".tree"),
         visibility: VisibilityPolicy | None = None,
         mounts: list[tuple[str, Path]] | None = None,
         ignore_primary_root: bool = False,
@@ -87,7 +87,7 @@ class ContentTree:
         cls,
         *,
         visibility: VisibilityPolicy | None = None,
-        allowed_suffixes: tuple[str, ...] = (".md", ".pdf"),
+        allowed_suffixes: tuple[str, ...] = (".md", ".pdf", ".tree"),
     ) -> "ContentTree":
         from .config import get_config
 
@@ -124,7 +124,7 @@ class ContentTree:
                 if note_slug:
                     return ResolvedDocument(note_slug, note, "markdown", content_url_for_slug(note_slug), folder_note=note)
             return ResolvedDocument(clean_slug, folder_path, "folder", content_url_for_slug(clean_slug))
-        for suffix, kind in ((".md", "markdown"), (".pdf", "pdf")):
+        for suffix, kind in ((".md", "markdown"), (".pdf", "pdf"), (".tree", "tree")):
             path = self._path_for_slug(clean_slug, suffix)
             if path and path.exists():
                 return ResolvedDocument(clean_slug, path, kind, content_url_for_slug(clean_slug, prefix="/posts"))
@@ -208,7 +208,7 @@ class ContentTree:
             has_note = bool(find_folder_note_file(path))
             return ContentEntry(slug, path, "folder", title, route, True, has_note)
         slug = self._slug_for_path(path) or path.with_suffix("").name
-        kind = {".md": "markdown", ".pdf": "pdf"}[path.suffix]
+        kind = {".md": "markdown", ".pdf": "pdf", ".tree": "tree"}[path.suffix]
         route = content_url_for_slug(slug, prefix="/posts")
         visible = self.visibility.can_read(route, roles)
         return ContentEntry(slug, path, kind, self._title_for_file(path, kind), route, visible, False)
@@ -219,6 +219,8 @@ class ContentTree:
             return get_post_title(path, abbreviations=abbreviations)
         if kind == "pdf":
             return f"{slug_to_title(path.stem, abbreviations=abbreviations)} (PDF)"
+        if kind == "tree":
+            return slug_to_title(path.stem, abbreviations=abbreviations)
         return slug_to_title(path.name, abbreviations=abbreviations)
 
     def _append_mount_entries(self, entries: list[Path]) -> None:

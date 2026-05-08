@@ -18,6 +18,7 @@ from .helpers import (
 )
 from .markdown_rendering import from_md
 from .sidebar_helpers import build_toc_items, extract_toc
+from .tree_tables import TREE_SUFFIXES, parse_tree_table, render_tree_table_html
 from .config import get_config, reload_config
 from .assets import asset_url
 from .favicon import favicon_href as resolve_favicon_href, write_generated_favicon
@@ -414,7 +415,7 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
     """Build post tree with static .html links instead of HTMX"""
     items = []
     try:
-        entries = get_tree_entries(folder, root_folder, show_hidden, set(), ('.md',))
+        entries = get_tree_entries(folder, root_folder, show_hidden, set(), TREE_SUFFIXES)
         abbreviations = _effective_abbreviations(root_folder, folder)
     except (OSError, PermissionError): 
         return items
@@ -454,10 +455,12 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
                     title_text,
                     href=content_url_for_slug(note_slug, suffix=".html"),
                     cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
-        elif item.suffix == '.md':
+        elif item.suffix in {'.md', '.tree'}:
             slug = str(item.relative_to(root_folder).with_suffix(''))
             if item.suffix == ".md":
                 title, icon = get_post_title(item, abbreviations=abbreviations), "file-text"
+            else:
+                title, icon = slug_to_title(item.stem, abbreviations=abbreviations), "table"
             
             # Use .html extension for static links
             items.append(Li(A(
@@ -529,25 +532,18 @@ def build_static_site(input_dir=None, output_dir=None):
     ignore_list = _effective_ignore_list(root_folder)
     include_list = _effective_include_list(root_folder)
     doc_files = []
-    for doc_file in root_folder.rglob('*.md'):
-        # Only include files that are actually inside root_folder
-        try:
-            relative_path = doc_file.relative_to(root_folder)
-            if not show_hidden and any(part.startswith('.') for part in relative_path.parts):
+    for suffix in (".md", ".tree"):
+        for doc_file in root_folder.rglob(f"*{suffix}"):
+            try:
+                relative_path = doc_file.relative_to(root_folder)
+                if not show_hidden and any(part.startswith('.') for part in relative_path.parts):
+                    continue
+                path_parts = relative_path.parts[:-1]
+                if any(not _should_include_folder(part, include_list, ignore_list) for part in path_parts):
+                    continue
+                doc_files.append(doc_file)
+            except ValueError:
                 continue
-            # Check if any folder in path should be excluded
-            path_parts = relative_path.parts[:-1]  # Exclude filename
-            should_skip = False
-            for part in path_parts:
-                if not _should_include_folder(part, include_list, ignore_list):
-                    should_skip = True
-                    break
-            if should_skip:
-                continue
-            doc_files.append(doc_file)
-        except ValueError:
-            # Skip files outside root_folder
-            continue
     
     doc_files = sorted(doc_files)
     print(f"\nFound {len(doc_files)} document files")
@@ -557,13 +553,20 @@ def build_static_site(input_dir=None, output_dir=None):
         relative_path = doc_file.relative_to(root_folder)
         print(f"  Processing: {relative_path}")
 
-        metadata, raw_content = parse_frontmatter(doc_file)
-        post_title, render_content = resolve_markdown_title(doc_file, abbreviations=abbreviations)
-        content_div = from_md(render_content, current_path=str(relative_path))
-        toc_headings = extract_toc(raw_content, _strip_inline_markdown, text_to_anchor, _unique_anchor)
-        toc_items = build_toc_items(toc_headings)
+        if doc_file.suffix == ".md":
+            metadata, raw_content = parse_frontmatter(doc_file)
+            post_title, render_content = resolve_markdown_title(doc_file, abbreviations=abbreviations)
+            content_div = from_md(render_content, current_path=str(relative_path))
+            toc_headings = extract_toc(raw_content, _strip_inline_markdown, text_to_anchor, _unique_anchor)
+            toc_items = build_toc_items(toc_headings)
+            content_html = to_xml(content_div)
+        else:
+            post_title = parse_tree_table(doc_file)["sheet"] or slug_to_title(doc_file.stem, abbreviations=abbreviations)
+            raw_content = doc_file.read_text(encoding="utf-8")
+            toc_items = None
+            content_html = render_tree_table_html(doc_file, include_heading=False)
         prev_item, next_item = get_adjacent_posts(root_folder, relative_path, abbreviations=abbreviations)
-        read_source = render_content
+        read_source = raw_content
 
         read_time = estimate_read_time_minutes(read_source)
         last_modified = format_last_modified_label(doc_file)
@@ -571,7 +574,7 @@ def build_static_site(input_dir=None, output_dir=None):
         if last_modified:
             meta_text += f" • {last_modified}"
         title_html = f'<div class="mb-8"><h1 class="text-4xl font-bold">{post_title}</h1><p class="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2">{meta_text}</p></div>'
-        content_html = title_html + to_xml(content_div)
+        content_html = title_html + content_html
 
         if prev_item or next_item:
             prev_html = f'<a class="vyasa-prev-link" href="{prev_item["static_href"]}">← {prev_item["title"]}</a>' if prev_item else '<div></div>'
