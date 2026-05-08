@@ -265,6 +265,8 @@ Notes:
 - Use global edge lines for dependencies: `a -> b`, `a, b -> c`, or `a ->|edge label| b`.
 - Quote complex ids, labels, attrs, or edge labels as JSON strings: `"task-id" :: "Line one\nLine two with \"quotes\" and [brackets]"`.
 - Groups render as expandable cards in a React Flow graph.
+- Collapsed groups render as selectable summary cards. Expanded groups render as background regions with explicit controls instead of selectable bodies.
+- Edge routing is renderer-owned: shallow center-to-center angles use left/right side handles and terminate in a dot; steeper connections use top/bottom handles and terminate in an arrowhead.
 - Press `F` to fit, `U` to unfold all groups, and `Shift+U` to collapse all groups.
 - Renderer-owned layout attrs (`graph_x`, `graph_y`, `collapsed`, `pill_x`, `pill_y`) may appear in saved source after interaction; treat as implementation detail, not authoring API.
 - The block renders as an interactive React Flow graph, not as a code sample.

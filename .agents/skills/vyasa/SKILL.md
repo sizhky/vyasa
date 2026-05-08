@@ -49,7 +49,9 @@ Core rules:
 - Use indentation for nesting. `Group Label:` lines nested under group lines make child groups. `- id :: Item Label` lines nested under a group belong to that group.
 - Use global edge lines for DAG edges; edge labels are optional. First-class inline item attrs today: `estimate`, `priority`, `points`, `owner`, `phase`.
 - Graph layout attrs exist but are renderer-owned: `graph_x`, `graph_y`. Do not surface them in user guidance unless debugging persistence.
-- Current `items` view is a React Flow graph: draggable cards, dependency edges, group expand/collapse, keyboard fit/unfold controls, and a popout button.
+- Current `items` view is a React Flow graph: draggable cards, dependency edges, collapsed group cards, expandable group regions, keyboard fit/unfold controls, and a popout button.
+- Collapsed groups behave like selectable summary nodes for neighbor inspection. Expanded group regions are background containers, not selectable cards.
+- Edge routing is automatic. Shallow center-to-center angles use left/right side handles and end in a dot cap; steeper angles use top/bottom handles and keep arrowheads.
 - `items` graph persistence is block-scoped through `/api/tasks/blocks/...`; editing a graph rewrites the fenced block source and clears legacy chain state. Do not propose separate item graph files unless the user explicitly asks for legacy compatibility work.
 - Use `+` and `-` fold markers when the callout should clearly default open or closed, and prefer nested `> > [!todo]` callouts over ad hoc indentation patterns.
 - For custom callout types, rely on `data-callout="your-type"` plus `custom.css` rather than inventing special renderer logic unless the user explicitly wants core support.
