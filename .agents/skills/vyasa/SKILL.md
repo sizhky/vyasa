@@ -44,10 +44,10 @@ Core rules:
 - For dependency planning UIs, use fenced `tasks`/`items` blocks inside normal markdown pages instead of separate graph files.
 - `tasks`/`items` fences support optional YAML frontmatter first for renderer options like `title`, `default_open_depth`, `width`, `min_height`, and `height`.
 - The graph body under that frontmatter is still terse line-based syntax, not YAML.
-- Canonical body syntax: `id <graph-id>`, `title <graph-title>`, `group <id> <label>`, `item <id> <label>`, then indented attrs.
+- Canonical body syntax: `id: <graph-id>`, `title: <graph-title>`, indented `Group Label:` lines, `- id :: Item Label` item lines, and global edge lines like `a, b ->|edge label| c`.
 - Do not wrap an entire `items` graph in one top-level group just to create a root node; it renders poorly. Start with multiple meaningful top-level groups, or with direct items when grouping is not useful.
-- Use indentation for nesting. `group` lines nested under `group` lines make child groups. `item` lines nested under a group belong to that group.
-- Use `depends <A> <B>` for DAG edges. First-class item attrs today: `estimate`, `depends`, `priority`, `points`, `owner`, `phase`.
+- Use indentation for nesting. `Group Label:` lines nested under group lines make child groups. `- id :: Item Label` lines nested under a group belong to that group.
+- Use global edge lines for DAG edges; edge labels are optional. First-class inline item attrs today: `estimate`, `priority`, `points`, `owner`, `phase`.
 - Graph layout attrs exist but are renderer-owned: `graph_x`, `graph_y`. Do not surface them in user guidance unless debugging persistence.
 - Current `items` view is a React Flow graph: draggable cards, dependency edges, group expand/collapse, keyboard fit/unfold controls, and a popout button.
 - `items` graph persistence is block-scoped through `/api/tasks/blocks/...`; editing a graph rewrites the fenced block source and clears legacy chain state. Do not propose separate item graph files unless the user explicitly asks for legacy compatibility work.

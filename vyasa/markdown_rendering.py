@@ -474,6 +474,7 @@ def _render_mermaid_block(code):
 
 
 def _render_tasks_block(code):
+    code = html.unescape(code)
     config, code = _split_fence_frontmatter(code)
     try:
         model = parse_tasks_text(f"```tasks\n{code}\n```")

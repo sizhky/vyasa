@@ -98,10 +98,27 @@ function buildVisibleTasksGraph(model, expanded) {
         const key = `${src}->${dst}`;
         if (src !== dst && !seen.has(key)) {
             seen.add(key);
-            visibleEdges.push({ source: src, target: dst });
+            visibleEdges.push({ source: src, target: dst, label: edge.label || '' });
         }
     }
     return { nodes: visibleNodes, edges: visibleEdges };
+}
+
+function appendProjectedEdge(edges, seen, source, target, label = '') {
+    if (!source || !target || source === target) return;
+    const key = `${source}->${target}`;
+    const existing = seen.get(key);
+    if (existing) {
+        if (label && !existing.labels.has(label)) {
+            existing.labels.add(label);
+            existing.edge.label = Array.from(existing.labels).join(', ');
+        }
+        return;
+    }
+    const edge = { source, target };
+    if (label) edge.label = label;
+    edges.push(edge);
+    seen.set(key, { edge, labels: new Set(label ? [label] : []) });
 }
 
 function normalizeTasksGraphNodes(graph, model) {
@@ -154,7 +171,7 @@ function reduceTransitiveEdges(edges) {
         }
         return false;
     };
-    return edges.filter((edge) => !canReach(edge.source, edge.target, `${edge.source}->${edge.target}`));
+    return edges.filter((edge) => edge.label || !canReach(edge.source, edge.target, `${edge.source}->${edge.target}`));
 }
 
 function stableTaskJitter(id, amplitudeX = 16, amplitudeY = 8) {
@@ -306,23 +323,21 @@ async function layoutBaseTasksGraph(graph, model, jitterConfig = {}) {
         return cur;
     };
 
-    const rootEdges = new Set();
+    const rootEdges = [];
+    const seenRootEdges = new Map();
     for (const edge of (model.dependency_edges || [])) {
         const srcGroup = taskToGroup[edge.source] || edge.source;
         const dstGroup = taskToGroup[edge.target] || edge.target;
         const srcRoot = getRoot(srcGroup);
         const dstRoot = getRoot(dstGroup);
         if (srcRoot !== dstRoot && rootGroupIds.has(srcRoot) && rootGroupIds.has(dstRoot)) {
-            rootEdges.add(JSON.stringify([srcRoot, dstRoot]));
+            appendProjectedEdge(rootEdges, seenRootEdges, srcRoot, dstRoot, edge.label || '');
         }
     }
 
     const rootGraph = {
         nodes: graph.nodes.filter(n => rootGroupIds.has(n.id)),
-        edges: Array.from(rootEdges).map(e => {
-            const [src, dst] = JSON.parse(e);
-            return { source: src, target: dst };
-        })
+        edges: rootEdges,
     };
     console.log('rootGraph:', { nodes: rootGraph.nodes.map(n => n.id), edges: rootGraph.edges });
     const laidOut = await layoutTasksGraph(rootGraph, model, new Set(), jitterConfig);
@@ -366,16 +381,13 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
         }
         return null;
     };
-    const seenProjectedEdges = new Set();
+    const seenProjectedEdges = new Map();
     const projectedEdges = [];
     for (const edge of (model.dependency_edges || [])) {
         const source = directChildFor(edge.source);
         const target = directChildFor(edge.target);
         if (!childIds.has(source) || !childIds.has(target) || source === target) continue;
-        const key = `${source}->${target}`;
-        if (seenProjectedEdges.has(key)) continue;
-        seenProjectedEdges.add(key);
-        projectedEdges.push({ source, target });
+        appendProjectedEdge(projectedEdges, seenProjectedEdges, source, target, edge.label || '');
     }
     const reducedProjectedEdges = reduceTransitiveEdges(projectedEdges);
     const laidOut = await tasksElk.layout({
@@ -626,6 +638,7 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
         id: `${e.source}-${e.target}-${i}`,
         source: e.source,
         target: e.target,
+        label: e.label || undefined,
         sourceHandle: 'bottom',
         targetHandle: 'top',
     }));
@@ -797,6 +810,10 @@ async function renderTasksGraphs(rootElement = document) {
                     ...edge,
                     type: 'default',
                     zIndex: TASKS_EDGE_Z,
+                    labelBgPadding: [6, 3],
+                    labelBgBorderRadius: 3,
+                    labelStyle: { fontSize: 11, fontWeight: 600, fill: 'currentColor' },
+                    labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
                 }));
                 graphBaseRef.current = { nodes: baseNodes, edges: baseEdges };
                 setNodes(baseNodes);

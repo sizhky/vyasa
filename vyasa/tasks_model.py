@@ -1,23 +1,11 @@
 from collections import defaultdict
 from pathlib import Path
+import json
 import re
 import secrets
 
 
-_ATTR_KEYS = {
-    "depends",
-    "depends_on",
-    "estimate",
-    "group",
-    "group_id",
-    "owner",
-    "parent",
-    "parent_group",
-    "parent_group_id",
-    "phase",
-    "points",
-    "priority",
-}
+_STRING_DECODER = json.JSONDecoder()
 
 
 def _extract_tasks_body(text: str) -> str:
@@ -28,9 +16,19 @@ def _extract_tasks_body(text: str) -> str:
     raise ValueError("No items payload found")
 
 
+def _strip_fence_frontmatter(body: str) -> str:
+    lines = body.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return body
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            return "\n".join(lines[index + 1:])
+    return body
+
+
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
-    return slug or "tasks"
+    return slug or "item"
 
 
 def _generated_graph_id(graph: dict) -> str:
@@ -38,11 +36,134 @@ def _generated_graph_id(graph: dict) -> str:
     return f"{_slugify(base)}-{secrets.token_hex(3)}"
 
 
-def _parse_terse_tasks(body: str) -> dict:
-    graph = {"groups": [], "tasks": []}
+def _count_indent(raw_line: str) -> int:
+    return len(raw_line) - len(raw_line.lstrip(" "))
+
+
+def _is_escaped(text: str, index: int) -> bool:
+    count = 0
+    cursor = index - 1
+    while cursor >= 0 and text[cursor] == "\\":
+        count += 1
+        cursor -= 1
+    return count % 2 == 1
+
+
+def _find_unquoted(text: str, needle: str) -> int:
+    in_string = False
+    index = 0
+    while index <= len(text) - len(needle):
+        char = text[index]
+        if char == '"' and not _is_escaped(text, index):
+            in_string = not in_string
+        if not in_string and text.startswith(needle, index):
+            return index
+        index += 1
+    return -1
+
+
+def _split_unquoted(text: str, sep: str) -> list[str]:
+    parts = []
+    start = 0
+    index = 0
+    in_string = False
+    while index < len(text):
+        char = text[index]
+        if char == '"' and not _is_escaped(text, index):
+            in_string = not in_string
+        if not in_string and text.startswith(sep, index):
+            parts.append(text[start:index].strip())
+            index += len(sep)
+            start = index
+            continue
+        index += 1
+    parts.append(text[start:].strip())
+    return parts
+
+
+def _read_string(text: str) -> str:
+    text = text.strip()
+    if not text:
+        return ""
+    if text[0] == '"':
+        value, end = _STRING_DECODER.raw_decode(text)
+        if text[end:].strip():
+            raise ValueError(f"Unexpected text after quoted string: {text[end:].strip()}")
+        return str(value)
+    return text
+
+
+def _read_optional_edge_label(text: str) -> tuple[str, str]:
+    text = text.strip()
+    if not text.startswith("|"):
+        return "", text
+    cursor = 1
+    in_string = False
+    while cursor < len(text):
+        char = text[cursor]
+        if char == '"' and not _is_escaped(text, cursor):
+            in_string = not in_string
+        if char == "|" and not in_string:
+            return _read_string(text[1:cursor].strip()), text[cursor + 1:].strip()
+        cursor += 1
+    raise ValueError("Unclosed edge label")
+
+
+def _split_attrs(text: str) -> tuple[str, dict]:
+    parts = _split_unquoted(text, "|")
+    head = parts[0]
+    attrs = {}
+    for part in parts[1:]:
+        if not part:
+            continue
+        key_index = _find_unquoted(part, ":")
+        if key_index < 0:
+            raise ValueError(f"Expected attr key: value, got {part!r}")
+        key = part[:key_index].strip().replace("-", "_")
+        attrs[key] = _read_string(part[key_index + 1:].strip())
+    return head, attrs
+
+
+def _parse_node_def(text: str) -> tuple[str | None, str, dict]:
+    head, attrs = _split_attrs(text)
+    id_index = _find_unquoted(head, "::")
+    if id_index >= 0:
+        node_id = _read_string(head[:id_index].strip())
+        label = _read_string(head[id_index + 2:].strip())
+        return node_id, label, attrs
+    label = _read_string(head)
+    return None, label, attrs
+
+
+def _dedupe_id(base: str, used: set[str]) -> str:
+    node_id = base
+    index = 2
+    while node_id in used:
+        node_id = f"{base}-{index}"
+        index += 1
+    used.add(node_id)
+    return node_id
+
+
+def _parse_edge_refs(text: str) -> list[str]:
+    return [_read_string(part) for part in _split_unquoted(text, ",") if part.strip()]
+
+
+def _add_edges(graph: dict, source_text: str, target_text: str, label: str) -> None:
+    sources = _parse_edge_refs(source_text)
+    targets = _parse_edge_refs(target_text)
+    for source in sources:
+        for target in targets:
+            edge = {"source": source, "target": target}
+            if label:
+                edge["label"] = label
+            graph["dependency_edges"].append(edge)
+
+
+def _parse_items_graph(body: str) -> dict:
+    graph = {"groups": [], "tasks": [], "dependency_edges": []}
     stack: list[dict] = []
-    current_task = None
-    current_task_indent = -1
+    used_ids: set[str] = set()
 
     def pop_to(indent: int) -> None:
         while stack and indent <= stack[-1]["indent"]:
@@ -57,79 +178,54 @@ def _parse_terse_tasks(body: str) -> dict:
     for raw_line in body.splitlines():
         if not raw_line.strip() or raw_line.lstrip().startswith("#"):
             continue
-        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        indent = _count_indent(raw_line)
         line = raw_line.strip()
-        keyword = line.split(None, 1)[0]
 
-        if keyword in {"id", "title"} and indent == 0:
-            parts = line.split(None, 1)
-            graph[keyword] = parts[1] if len(parts) > 1 else ""
-            continue
-
-        if keyword in {"group", "item"}:
-            pop_to(indent)
-            tokens = line.split()
-            if len(tokens) < 2:
+        if indent == 0 and _find_unquoted(line, ":") > 0 and _find_unquoted(line, "->") < 0:
+            key, value = line.split(":", 1)
+            key = key.strip()
+            if key in {"id", "title"}:
+                graph[key] = _read_string(value.strip())
                 continue
-            item_id = tokens[1]
-            label = " ".join(tokens[2:]) if len(tokens) > 2 else ""
-            if keyword == "group":
-                item = {
-                    "id": item_id,
-                    "label": label,
-                    "parent_group_id": current_group_id(),
-                }
-                graph["groups"].append(item)
-                stack.append({"kind": "group", "id": item_id, "indent": indent})
-                current_task = None
-                current_task_indent = -1
-            else:
-                item = {
-                    "id": item_id,
-                    "label": label,
-                    "group_id": current_group_id(),
-                }
-                graph["tasks"].append(item)
-                stack.append({"kind": "item", "id": item_id, "indent": indent})
-                current_task = item
-                current_task_indent = indent
+
+        edge_index = _find_unquoted(line, "->")
+        if edge_index >= 0:
+            source_text = line[:edge_index].strip()
+            label, target_text = _read_optional_edge_label(line[edge_index + 2:])
+            _add_edges(graph, source_text, target_text, label)
             continue
 
-        if current_task is not None and indent > current_task_indent:
-            parts = line.split()
-            key = parts[0]
-            value = " ".join(parts[1:]) if len(parts) > 1 else ""
-            if key in {"depends", "depends_on"}:
-                deps = [token for token in parts[1:] if token]
-                if deps:
-                    current_task.setdefault("depends_on", []).extend(deps)
-            elif key in {"group", "group_id"} and value:
-                current_task["group_id"] = value
-            elif key == "owner" and value:
-                current_task["owner"] = value
-            elif key == "estimate" and value:
-                current_task["estimate"] = value
-            elif key == "priority" and value:
-                current_task["priority"] = value
-            elif key == "points" and value:
-                current_task["points"] = value
-            elif key == "phase" and value:
-                current_task["phase"] = value
-            elif key in {"parent", "parent_group", "parent_group_id"} and value:
-                current_task["parent_group_id"] = value
-            elif key in {"label", "name"} and value:
-                current_task["label"] = value
+        if line.startswith("- "):
+            pop_to(indent)
+            explicit_id, label, attrs = _parse_node_def(line[2:].strip())
+            item_id = _dedupe_id(explicit_id or _slugify(label), used_ids)
+            item = {"id": item_id, "label": label, "group_id": current_group_id()}
+            item.update(attrs)
+            graph["tasks"].append(item)
+            stack.append({"kind": "item", "id": item_id, "indent": indent})
             continue
+
+        if line.endswith(":"):
+            pop_to(indent)
+            explicit_id, label, attrs = _parse_node_def(line[:-1].strip())
+            group_id = _dedupe_id(explicit_id or _slugify(label), used_ids)
+            group = {"id": group_id, "label": label, "parent_group_id": current_group_id()}
+            group.update(attrs)
+            graph["groups"].append(group)
+            stack.append({"kind": "group", "id": group_id, "indent": indent})
+            continue
+
+        raise ValueError(f"Unknown items line: {raw_line}")
 
     return graph
 
 
 def parse_tasks_text(text: str) -> dict:
-    body = _extract_tasks_body(text)
-    graph = _parse_terse_tasks(body)
+    body = _strip_fence_frontmatter(_extract_tasks_body(text).strip())
+    graph = _parse_items_graph(body)
     groups = graph.get("groups", [])
     tasks = graph.get("tasks", [])
-    edges = [{"source": dep, "target": task["id"]} for task in tasks for dep in task.get("depends_on", [])]
+    edges = graph.get("dependency_edges", [])
     group_tree = defaultdict(list)
     task_children = defaultdict(list)
     for group in groups:
