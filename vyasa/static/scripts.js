@@ -991,7 +991,7 @@ async function renderTasksGraphs(rootElement = document) {
                         zIndex: nodeZ,
                         className: `vyasa-tasks-node--${hitArea}`,
                         draggable: false,
-                        selectable: isTasksGraphNodeSelectable(n.kind),
+                        selectable: isTasksGraphNodeSelectable(n.kind, isExpanded),
                     };
                     if (n.parentId) {
                         rfNode.parentId = n.parentId;
@@ -1255,13 +1255,24 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             });
             const CustomNode = React.memo(({ data, id }) => {
+                const handlePosition = (side) => ({
+                    top: Position?.Top || 'top',
+                    right: Position?.Right || 'right',
+                    bottom: Position?.Bottom || 'bottom',
+                    left: Position?.Left || 'left',
+                }[side] || (Position?.Bottom || 'bottom'));
+                const handleStyle = (handle) => (
+                    handle.side === 'left' || handle.side === 'right'
+                        ? { top: `${handle.offsetPct}%`, opacity: 0, pointerEvents: 'none' }
+                        : { left: `${handle.offsetPct}%`, opacity: 0, pointerEvents: 'none' }
+                );
                 const renderHandles = (role) => (data?.handleLayout?.[role] || []).map((handle) => (
                     Handle && React.createElement(Handle, {
                         key: `${role}-${handle.id}`,
                         id: handle.id,
                         type: role,
-                        position: handle.side === 'top' ? (Position?.Top || 'top') : (Position?.Bottom || 'bottom'),
-                        style: { left: `${handle.leftPct}%`, opacity: 0, pointerEvents: 'none' },
+                        position: handlePosition(handle.side),
+                        style: handleStyle(handle),
                     })
                 ));
                 if (data?.kind === 'groupTitle') {
@@ -1473,28 +1484,28 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId(null);
             };
             const selectGraphNode = React.useCallback((_, node) => {
-                if (!isTasksGraphNodeSelectable(node.data?.kind)) return;
+                if (!isTasksGraphNodeSelectable(node.data?.kind, expanded.has(node.id))) return;
                 const sourceNodeId = node.data?.kind === 'groupTitle' ? node.data?.sourceGroupId : node.id;
                 setSelectedNodeId((current) => current === sourceNodeId ? null : sourceNodeId);
                 setHoveredNodeId(null);
-            }, []);
+            }, [expanded]);
             const focusNeighborEdge = React.useCallback((_, node) => {
                 if (!selectedNodeId || !node?.id) return;
-                if (!isTasksGraphNodeSelectable(node.data?.kind)) return;
+                if (!isTasksGraphNodeSelectable(node.data?.kind, expanded.has(node.id))) return;
                 if (hoverClearTimerRef.current) {
                     window.clearTimeout(hoverClearTimerRef.current);
                     hoverClearTimerRef.current = null;
                 }
                 setHoveredNodeId((current) => current === node.id ? current : node.id);
-            }, [selectedNodeId]);
+            }, [expanded, selectedNodeId]);
             const clearNeighborEdgeFocus = React.useCallback((_, node) => {
-                if (!isTasksGraphNodeSelectable(node?.data?.kind)) return;
+                if (!isTasksGraphNodeSelectable(node?.data?.kind, expanded.has(node?.id))) return;
                 if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
                 hoverClearTimerRef.current = window.setTimeout(() => {
                     setHoveredNodeId(null);
                     hoverClearTimerRef.current = null;
                 }, 90);
-            }, []);
+            }, [expanded]);
             React.useEffect(() => () => {
                 if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
             }, []);

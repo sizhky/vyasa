@@ -42,9 +42,9 @@ test('buildTaskEdgeAnchors flips top/bottom by relative node position', () => {
 test('buildTaskEdgeAnchors spreads same-side handles across edge width', () => {
     const nodes = [
         { id: 'src', position: { x: 0, y: 0 }, width: 220, height: 60 },
-        { id: 'left', position: { x: -300, y: 220 }, width: 220, height: 60 },
-        { id: 'mid', position: { x: 0, y: 220 }, width: 220, height: 60 },
-        { id: 'right', position: { x: 300, y: 220 }, width: 220, height: 60 },
+        { id: 'left', position: { x: -300, y: 520 }, width: 220, height: 60 },
+        { id: 'mid', position: { x: 0, y: 520 }, width: 220, height: 60 },
+        { id: 'right', position: { x: 300, y: 520 }, width: 220, height: 60 },
     ];
     const { nodeHandles } = buildTaskEdgeAnchors(nodes, [
         { id: 'a', source: 'src', target: 'left' },
@@ -52,20 +52,47 @@ test('buildTaskEdgeAnchors spreads same-side handles across edge width', () => {
         { id: 'c', source: 'src', target: 'right' },
     ]);
     assert.deepEqual(
-        nodeHandles.src.source.map((handle) => Math.round(handle.leftPct)),
+        nodeHandles.src.source.map((handle) => Math.round(handle.offsetPct)),
         [25, 50, 75],
     );
 });
 
-test('only task nodes are selectable in items graph', () => {
+test('buildTaskEdgeAnchors uses left/right handles for same-row nodes', () => {
+    const nodes = [
+        { id: 'left', position: { x: 0, y: 0 }, width: 220, height: 80 },
+        { id: 'right', position: { x: 360, y: 18 }, width: 220, height: 80 },
+    ];
+    const { edges, nodeHandles } = buildTaskEdgeAnchors(nodes, [
+        { id: 'sideways', source: 'left', target: 'right' },
+    ]);
+    assert.equal(edges[0].sourceHandle, 'source-right-0');
+    assert.equal(edges[0].targetHandle, 'target-left-0');
+    assert.equal(nodeHandles.left.source[0].side, 'right');
+    assert.equal(nodeHandles.right.target[0].side, 'left');
+});
+
+test('buildTaskEdgeAnchors uses left/right handles for shallow diagonal nodes', () => {
+    const nodes = [
+        { id: 'source', position: { x: 0, y: 0 }, width: 220, height: 80 },
+        { id: 'target', position: { x: 520, y: 170 }, width: 220, height: 80 },
+    ];
+    const { edges } = buildTaskEdgeAnchors(nodes, [
+        { id: 'shallow', source: 'source', target: 'target' },
+    ]);
+    assert.equal(edges[0].sourceHandle, 'source-right-0');
+    assert.equal(edges[0].targetHandle, 'target-left-0');
+});
+
+test('task and collapsed group nodes are selectable in items graph', () => {
     assert.equal(isTasksGraphNodeSelectable('task'), true);
-    assert.equal(isTasksGraphNodeSelectable('group'), false);
+    assert.equal(isTasksGraphNodeSelectable('group', false), true);
+    assert.equal(isTasksGraphNodeSelectable('group', true), false);
     assert.equal(isTasksGraphNodeSelectable('groupTitle'), false);
 });
 
 test('group panels use passive hit areas in items graph', () => {
     assert.equal(tasksGraphNodeHitArea('task'), 'selectable');
-    assert.equal(tasksGraphNodeHitArea('group', false), 'passive');
+    assert.equal(tasksGraphNodeHitArea('group', false), 'selectable');
     assert.equal(tasksGraphNodeHitArea('group', true), 'background');
     assert.equal(tasksGraphNodeHitArea('groupTitle'), 'control');
 });
