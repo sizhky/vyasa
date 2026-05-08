@@ -47,3 +47,88 @@ export function sizeTaskNode(label, kind = 'task') {
         height: Math.max(spec.minHeight, Math.ceil(textHeight + spec.padY + 4)),
     };
 }
+
+function edgeHandlePct(index, count) {
+    if (count <= 1) return 50;
+    return Math.max(18, Math.min(82, ((index + 1) / (count + 1)) * 100));
+}
+
+function absoluteNodeRects(nodes) {
+    const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
+    const cache = {};
+    const resolve = (id) => {
+        if (cache[id]) return cache[id];
+        const node = byId[id];
+        if (!node) return null;
+        let x = Number(node.position?.x || 0);
+        let y = Number(node.position?.y || 0);
+        if (node.parentId) {
+            const parent = resolve(node.parentId);
+            if (parent) {
+                x += parent.x;
+                y += parent.y;
+            }
+        }
+        cache[id] = {
+            x,
+            y,
+            width: Number(node.width || node.style?.width || 0),
+            height: Number(node.height || node.style?.height || 0),
+        };
+        return cache[id];
+    };
+    for (const node of (nodes || [])) resolve(node.id);
+    return cache;
+}
+
+export function buildTaskEdgeAnchors(nodes, edges) {
+    const rects = absoluteNodeRects(nodes);
+    const outgoingGroups = new Map();
+    const incomingGroups = new Map();
+    const anchoredEdges = (edges || []).map((edge, index) => {
+        const sourceRect = rects[edge.source];
+        const targetRect = rects[edge.target];
+        if (!sourceRect || !targetRect) return { ...edge, _anchorIndex: index };
+        const sourceCenterY = sourceRect.y + sourceRect.height / 2;
+        const targetCenterY = targetRect.y + targetRect.height / 2;
+        const sourceSide = targetCenterY >= sourceCenterY ? 'bottom' : 'top';
+        const targetSide = sourceSide === 'bottom' ? 'top' : 'bottom';
+        const anchored = {
+            ...edge,
+            _anchorIndex: index,
+            _sourceSide: sourceSide,
+            _targetSide: targetSide,
+        };
+        const outgoingKey = `${edge.source}:source:${sourceSide}`;
+        const incomingKey = `${edge.target}:target:${targetSide}`;
+        if (!outgoingGroups.has(outgoingKey)) outgoingGroups.set(outgoingKey, []);
+        if (!incomingGroups.has(incomingKey)) incomingGroups.set(incomingKey, []);
+        outgoingGroups.get(outgoingKey).push({ edge: anchored, sortX: targetRect.x + targetRect.width / 2 });
+        incomingGroups.get(incomingKey).push({ edge: anchored, sortX: sourceRect.x + sourceRect.width / 2 });
+        return anchored;
+    });
+
+    const nodeHandles = {};
+    const assignGroup = (groups, role) => {
+        for (const [key, entries] of groups.entries()) {
+            const [nodeId, , side] = key.split(':');
+            entries.sort((a, b) => (a.sortX - b.sortX) || (a.edge._anchorIndex - b.edge._anchorIndex));
+            const handles = entries.map(({ edge }, index) => {
+                const handleId = `${role}-${side}-${index}`;
+                if (role === 'source') edge.sourceHandle = handleId;
+                else edge.targetHandle = handleId;
+                return { id: handleId, side, leftPct: edgeHandlePct(index, entries.length) };
+            });
+            nodeHandles[nodeId] = nodeHandles[nodeId] || { source: [], target: [] };
+            nodeHandles[nodeId][role] = handles;
+        }
+    };
+
+    assignGroup(outgoingGroups, 'source');
+    assignGroup(incomingGroups, 'target');
+
+    return {
+        edges: anchoredEdges.map(({ _anchorIndex, _sourceSide, _targetSide, ...edge }) => edge),
+        nodeHandles,
+    };
+}

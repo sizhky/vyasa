@@ -1,7 +1,7 @@
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 import { D2 } from 'https://esm.sh/@terrastruct/d2@0.1.33?bundle';
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { clampScale, nextWheelState, sizeTaskNode } from './tasks_graph_core.js';
+import { buildTaskEdgeAnchors, clampScale, nextWheelState, sizeTaskNode } from './tasks_graph_core.js';
 const mermaidStates = {};
 const d2States = {};
 const tasksElk = new ELK();
@@ -692,8 +692,6 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
         source: e.source,
         target: e.target,
         label: e.label || undefined,
-        sourceHandle: 'bottom',
-        targetHandle: 'top',
     }));
     logTasksDebug('deriveResult', { visibleEdges: visible.edges, finalEdges });
     return {
@@ -859,7 +857,8 @@ async function renderTasksGraphs(rootElement = document) {
                         selectable: false,
                     });
                 }
-                const baseEdges = derived.edges.map((edge) => ({
+                const anchored = buildTaskEdgeAnchors(baseNodes, derived.edges);
+                const baseEdges = anchored.edges.map((edge) => ({
                     ...edge,
                     type: 'default',
                     zIndex: TASKS_EDGE_Z,
@@ -868,11 +867,18 @@ async function renderTasksGraphs(rootElement = document) {
                     labelStyle: { fontSize: 11, fontWeight: 600, fill: 'currentColor' },
                     labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
                 }));
-                graphBaseRef.current = { nodes: baseNodes, edges: baseEdges };
+                const anchoredNodes = baseNodes.map((node) => ({
+                    ...node,
+                    data: {
+                        ...node.data,
+                        handleLayout: anchored.nodeHandles[node.id] || { source: [], target: [] },
+                    },
+                }));
+                graphBaseRef.current = { nodes: anchoredNodes, edges: baseEdges };
                 window.__vyasaTasksDebug.latest = {
                     widgetId,
                     expanded: Array.from(expandedSet),
-                    nodes: baseNodes.map((node) => ({
+                    nodes: anchoredNodes.map((node) => ({
                         id: node.id,
                         label: node.data?.label,
                         kind: node.data?.kind,
@@ -882,7 +888,7 @@ async function renderTasksGraphs(rootElement = document) {
                     edges: baseEdges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, label: edge.label || '' })),
                 };
                 logTasksDebug('reactFlowState', window.__vyasaTasksDebug.latest);
-                setNodes(baseNodes);
+                setNodes(anchoredNodes);
                 setEdges(baseEdges);
                 setGraphRevision((value) => value + 1);
             }, [ensureBaseLayout, model]);
@@ -989,6 +995,15 @@ async function renderTasksGraphs(rootElement = document) {
                 };
             }, [graphRevision, expanded]);
             const CustomNode = React.memo(({ data, id }) => {
+                const renderHandles = (role) => (data?.handleLayout?.[role] || []).map((handle) => (
+                    Handle && React.createElement(Handle, {
+                        key: `${role}-${handle.id}`,
+                        id: handle.id,
+                        type: role,
+                        position: handle.side === 'top' ? (Position?.Top || 'top') : (Position?.Bottom || 'bottom'),
+                        style: { left: `${handle.leftPct}%`, opacity: 0, pointerEvents: 'none' },
+                    })
+                ));
                 if (data?.kind === 'groupTitle') {
                     const handleCollapse = (e) => {
                         e.stopPropagation();
@@ -1042,9 +1057,9 @@ async function renderTasksGraphs(rootElement = document) {
                             opacity: isDimmed ? 0.22 : 1,
                         }
                     },
-                        Handle && React.createElement(Handle, { id: 'top', type: 'target', position: Position?.Top || 'top', style: { opacity: 0, pointerEvents: 'none' } }),
+                        ...renderHandles('target'),
                         React.createElement('div', { style: { flex: 1, minHeight: '48px', position: 'relative' } }),
-                        Handle && React.createElement(Handle, { id: 'bottom', type: 'source', position: Position?.Bottom || 'bottom', style: { opacity: 0, pointerEvents: 'none' } })
+                        ...renderHandles('source')
                     );
                 }
                 return React.createElement('div', {
@@ -1064,7 +1079,7 @@ async function renderTasksGraphs(rootElement = document) {
                         opacity: isDimmed ? 0.22 : 1,
                     }
                 },
-                    Handle && React.createElement(Handle, { id: 'top', type: 'target', position: Position?.Top || 'top', style: { opacity: 0, pointerEvents: 'none' } }),
+                    ...renderHandles('target'),
                     React.createElement('span', {
                         style: {
                             boxSizing: 'border-box',
@@ -1083,7 +1098,7 @@ async function renderTasksGraphs(rootElement = document) {
                         onClick: handleExpand,
                         style: { position: 'absolute', right: '8px', top: '8px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
                     }, '+'),
-                    Handle && React.createElement(Handle, { id: 'bottom', type: 'source', position: Position?.Bottom || 'bottom', style: { opacity: 0, pointerEvents: 'none' } })
+                    ...renderHandles('source')
                 );
             });
             React.useEffect(() => {
