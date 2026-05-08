@@ -50,6 +50,22 @@ function rectSummary(rect) {
     };
 }
 
+function tasksNodeMetaEntries(node) {
+    if (!node) return [];
+    const hidden = new Set([
+        'id', 'label', 'kind', 'group_id', 'parent_group_id',
+        'handleLayout', 'highlightMode', 'sourceGroupId',
+        'width', 'height', 'position', 'parentId',
+    ]);
+    return Object.entries(node)
+        .filter(([key, value]) => !hidden.has(key) && value !== null && value !== undefined && value !== '')
+        .map(([key, value]) => ({
+            key,
+            label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
+            value: String(value),
+        }));
+}
+
 window.runTasksHeaderAction = function(widgetId, action) {
     const actions = window.__vyasaTasksActions?.[widgetId];
     if (!actions || typeof actions[action] !== 'function') return;
@@ -117,8 +133,8 @@ function buildVisibleTasksGraph(model, expanded) {
         (model.task_children?.[groupId] || []).forEach((id) => visibleTasks.add(id));
     }
     const visibleNodes = [
-        ...Array.from(visibleGroups).map((id) => ({ id, label: groupsById[id]?.label || id, kind: 'group', ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
-        ...Array.from(visibleTasks).map((id) => ({ id, label: tasksById[id]?.label || id, kind: 'task', ...sizeTaskNode(tasksById[id]?.label || id, 'task') })),
+        ...Array.from(visibleGroups).map((id) => ({ ...(groupsById[id] || {}), id, label: groupsById[id]?.label || id, kind: 'group', ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
+        ...Array.from(visibleTasks).map((id) => ({ ...(tasksById[id] || {}), id, label: tasksById[id]?.label || id, kind: 'task', ...sizeTaskNode(tasksById[id]?.label || id, 'task') })),
     ];
     const parentOfGroup = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
     const parentOfTask = Object.fromEntries((model.tasks || []).map((t) => [t.id, t.group_id || null]));
@@ -1275,6 +1291,23 @@ async function renderTasksGraphs(rootElement = document) {
                     React.createElement('span')
                 );
             };
+            const SelectedNodePanel = () => {
+                const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === selectedNodeId)?.data || null;
+                const entries = tasksNodeMetaEntries(selectedNode);
+                if (!selectedNode || entries.length === 0) return null;
+                return React.createElement('div', {
+                    style: { position: 'absolute', top: '12px', right: '12px', zIndex: 30, width: '240px', maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
+                },
+                    React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Node Details'),
+                    React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, marginBottom: '10px' } }, selectedNode.label || selectedNode.id),
+                    React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(72px, 88px) 1fr', gap: '6px 10px', fontSize: '12px', lineHeight: 1.35 } },
+                        ...entries.map((entry) => React.createElement(React.Fragment, { key: entry.key },
+                            React.createElement('div', { style: { fontWeight: 700, opacity: 0.7 } }, entry.label),
+                            React.createElement('div', { style: { minWidth: 0, overflowWrap: 'anywhere' } }, entry.value),
+                        ))
+                    )
+                );
+            };
             const clearSelection = () => {
                 setSelectedNodeId(null);
                 setHoveredNodeId(null);
@@ -1352,7 +1385,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(PanControls),
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge)
-                    )
+                    ),
+                    window.React.createElement(SelectedNodePanel)
                 )
             ) : window.React.createElement('div', { ref: flowWrapperRef, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
                 window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
@@ -1361,7 +1395,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(PanControls),
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge)
-                )
+                ),
+                window.React.createElement(SelectedNodePanel)
             );
         };
         if (window.ReactDOM.createRoot) window.ReactDOM.createRoot(mount).render(window.React.createElement(TasksGraphApp)); else window.ReactDOM.render(window.React.createElement(TasksGraphApp), mount);
