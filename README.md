@@ -109,6 +109,6 @@ Folders become navigation groups. `index.md` or `README.md` gives a folder its o
 
 If your next question is about shaping the site, open the [configuration guide](vyasa%20manual/configuration.md). If the question is about what the authoring surface can do, go to [Markdown writing features](vyasa%20manual/markdown-features.md). Diagram-specific behavior lives in the [Mermaid guide](vyasa%20manual/mermaid-diagrams.md) and the [D2 guide](vyasa%20manual/d2-diagrams.md), while shell styling and theme presets are covered in [theming](vyasa%20manual/theming.md).
 
-Use [security](vyasa%20manual/security.md) when the site needs login or path rules, [architecture](vyasa%20manual/architecture.md) when you want the request and rendering model, and [advanced behavior](vyasa%20manual/advanced.md) when you are past the happy path and want the edges.
+Use [security](vyasa%20manual/security.md) when the site needs login or path rules, [architecture demo](demo/vyasa-architecture-system-design-tasks.md) when you want the request and rendering model in graph form, and [advanced behavior](vyasa%20manual/advanced.md) when you are past the happy path and want the edges.
 
 The manual itself starts at [vyasa manual/README.md](vyasa%20manual/README.md), but you should not need it before the quick start above works.
