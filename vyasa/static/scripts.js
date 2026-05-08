@@ -13,6 +13,7 @@ const TASKS_ROOT_COLLISION_GAP = 48;
 const TASKS_GROUP_BG_Z = 10;
 const TASKS_EDGE_Z = 100;
 const TASKS_EDGE_LABEL_Z = 120;
+const TASKS_EDGE_LABEL_FOCUS_Z = 1400;
 const TASKS_GROUP_Z = 180;
 const TASKS_TASK_Z = 1000;
 const TASKS_TITLE_Z = 300;
@@ -21,6 +22,7 @@ const TASKS_GROUP_EXPANDED_BG = 'var(--vyasa-paper)';
 const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 42%, var(--vyasa-primary) 58%)';
 const TASKS_GROUP_TITLE_BG = 'color-mix(in srgb, var(--vyasa-paper) 76%, var(--vyasa-primary) 24%)';
 const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 74%, var(--vyasa-primary) 26%)';
+const TASKS_EDGE_FOCUS_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 45%, #f59e0b 55%)';
 window.__vyasaTasksActions = window.__vyasaTasksActions || {};
 window.__vyasaTasksDebug = window.__vyasaTasksDebug || { events: [] };
 window.__vyasaTasksDebug.enabled = window.__vyasaTasksDebug.enabled === true;
@@ -63,6 +65,18 @@ function ensureTasksReactFlow() {
             link.rel = 'stylesheet';
             link.href = cssHref;
             document.head.appendChild(link);
+        }
+        if (!document.getElementById('vyasa-tasks-reactflow-overrides')) {
+            const style = document.createElement('style');
+            style.id = 'vyasa-tasks-reactflow-overrides';
+            style.textContent = `
+                .react-flow__edge-textwrapper,
+                .react-flow__edge-text,
+                .react-flow__edge-textbg {
+                    pointer-events: none;
+                }
+            `;
+            document.head.appendChild(style);
         }
         for (const src of [
             'https://unpkg.com/react@18/umd/react.production.min.js',
@@ -757,6 +771,7 @@ async function renderTasksGraphs(rootElement = document) {
             const flowWrapperRef = React.useRef(null);
             const [expanded, setExpanded] = React.useState(() => new Set(initialExpandedSet));
             const [selectedNodeId, setSelectedNodeId] = React.useState(null);
+            const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
@@ -899,7 +914,7 @@ async function renderTasksGraphs(rootElement = document) {
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: 1, stroke: 'currentColor' },
             }), []);
-            const applyHighlight = React.useCallback((nodeId) => {
+            const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null) => {
                 const baseNodes = graphBaseRef.current.nodes || [];
                 const baseEdges = graphBaseRef.current.edges || [];
                 if (!nodeId || !baseNodes.some((node) => node.id === nodeId)) {
@@ -907,25 +922,28 @@ async function renderTasksGraphs(rootElement = document) {
                     setEdges(baseEdges);
                     return;
                 }
-                const highlightedNodeIds = new Set([nodeId]);
                 const highlightedEdgeIds = new Set();
+                const directEndpointIds = new Set([nodeId]);
+                const isFocusedNeighbor = hoveredNodeId && hoveredNodeId !== nodeId;
                 for (const edge of baseEdges) {
                     if (edge.source === nodeId || edge.target === nodeId) {
                         highlightedEdgeIds.add(edge.id);
-                        highlightedNodeIds.add(edge.source);
-                        highlightedNodeIds.add(edge.target);
-                    }
-                }
-                const directEndpointIds = new Set([nodeId]);
-                for (const edge of baseEdges) {
-                    if (edge.source === nodeId || edge.target === nodeId) {
                         directEndpointIds.add(edge.source);
                         directEndpointIds.add(edge.target);
                     }
                 }
+                const focusedEdgeIds = new Set();
+                if (isFocusedNeighbor && directEndpointIds.has(hoveredNodeId)) {
+                    for (const edge of baseEdges) {
+                        const linksSelectedAndHovered =
+                            (edge.source === nodeId && edge.target === hoveredNodeId) ||
+                            (edge.source === hoveredNodeId && edge.target === nodeId);
+                        if (linksSelectedAndHovered) focusedEdgeIds.add(edge.id);
+                    }
+                }
                 setNodes(baseNodes.map((node) => {
                     const mode = directEndpointIds.has(node.id)
-                        ? (node.id === nodeId ? 'selected' : 'neighbor')
+                        ? (node.id === nodeId ? 'selected' : (node.id === hoveredNodeId ? 'neighbor-focus' : 'neighbor'))
                         : 'dim';
                     return {
                         ...node,
@@ -936,33 +954,49 @@ async function renderTasksGraphs(rootElement = document) {
                                 ? node.style.background
                                 : TASKS_NODE_BG_ACTIVE,
                             opacity: mode === 'dim' ? 0.22 : 1,
+                            boxShadow: mode === 'neighbor-focus'
+                                ? '0 0 0 2px color-mix(in srgb, var(--vyasa-primary) 60%, transparent)'
+                                : 'none',
                         },
                     };
                 }));
-                setEdges(baseEdges.map((edge) => {
-                    const mode = highlightedEdgeIds.has(edge.id) ? 'selected' : 'dim';
+                const nextEdges = baseEdges.map((edge) => {
+                    const mode = focusedEdgeIds.has(edge.id)
+                        ? 'focused'
+                        : (highlightedEdgeIds.has(edge.id) ? 'selected' : 'dim');
                     const highlighted = mode !== 'dim';
                     return {
                         ...edge,
                         data: { ...edge.data, highlightMode: mode },
+                        labelZIndex: mode === 'focused' ? TASKS_EDGE_LABEL_FOCUS_Z : TASKS_EDGE_LABEL_Z,
                         labelStyle: {
                             ...(edge.labelStyle || {}),
-                            fill: highlighted ? 'currentColor' : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)',
-                            opacity: highlighted ? 1 : 0.18,
+                            fill: mode === 'focused'
+                                ? TASKS_EDGE_FOCUS_COLOR
+                                : (highlighted ? 'currentColor' : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)'),
+                            opacity: mode === 'focused' ? 1 : (highlighted ? 1 : 0.18),
+                            fontWeight: mode === 'focused' ? 800 : 600,
                         },
                         labelBgStyle: {
                             ...(edge.labelBgStyle || {}),
-                            fill: 'var(--vyasa-paper)',
-                            fillOpacity: highlighted ? 0.88 : 0.08,
+                            fill: mode === 'focused'
+                                ? 'color-mix(in srgb, var(--vyasa-paper) 80%, #f59e0b 20%)'
+                                : 'var(--vyasa-paper)',
+                            fillOpacity: mode === 'focused' ? 0.96 : (highlighted ? 0.88 : 0.08),
                         },
                         style: {
                             ...edge.style,
-                            stroke: highlighted ? 'var(--vyasa-primary)' : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)',
-                            opacity: highlighted ? 0.95 : 0.08,
-                            strokeWidth: mode === 'selected' ? 3.5 : 2.5,
+                            stroke: mode === 'focused'
+                                ? TASKS_EDGE_FOCUS_COLOR
+                                : (highlighted ? 'var(--vyasa-primary)' : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)'),
+                            opacity: mode === 'focused' ? 1 : (highlighted ? 0.95 : 0.08),
+                            strokeWidth: mode === 'focused' ? 5 : (mode === 'selected' ? 3.5 : 2.5),
                         },
                     };
-                }));
+                });
+                const edgePriority = { dim: 0, selected: 1, focused: 2 };
+                nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
+                setEdges(nextEdges);
             }, []);
             React.useEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
@@ -970,8 +1004,12 @@ async function renderTasksGraphs(rootElement = document) {
                     setSelectedNodeId(null);
                     return;
                 }
-                applyHighlight(selectedNodeId);
-            }, [graphRevision, selectedNodeId, applyHighlight]);
+                if (hoveredNodeId && !baseNodeIds.has(hoveredNodeId)) {
+                    setHoveredNodeId(null);
+                    return;
+                }
+                applyHighlight(selectedNodeId, hoveredNodeId);
+            }, [graphRevision, selectedNodeId, hoveredNodeId, applyHighlight]);
             React.useEffect(() => {
                 const nextCount = expanded.size;
                 if (nextCount > prevExpandedCountRef.current) {
@@ -1044,8 +1082,9 @@ async function renderTasksGraphs(rootElement = document) {
                 const isGroup = data?.kind === 'group';
                 const isExpanded = expanded.has(id);
                 const highlightMode = data?.highlightMode || 'none';
-                const isHighlighted = highlightMode === 'selected' || highlightMode === 'neighbor';
+                const isHighlighted = highlightMode === 'selected' || highlightMode === 'neighbor' || highlightMode === 'neighbor-focus';
                 const isDimmed = highlightMode === 'dim';
+                const isInteractiveTask = !isGroup && isHighlighted;
                 const handleExpand = (e) => {
                     e.stopPropagation();
                     const next = new Set(expanded);
@@ -1076,7 +1115,7 @@ async function renderTasksGraphs(rootElement = document) {
                         fontWeight: '600',
                         fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
                         textAlign: 'center',
-                        cursor: isGroup ? 'pointer' : 'default',
+                        cursor: (isGroup || isInteractiveTask) ? 'pointer' : 'default',
                         padding: '10px 12px',
                         overflow: 'hidden',
                         opacity: isDimmed ? 0.22 : 1,
@@ -1190,12 +1229,23 @@ async function renderTasksGraphs(rootElement = document) {
                     React.createElement('span')
                 );
             };
-            const clearSelection = () => setSelectedNodeId(null);
+            const clearSelection = () => {
+                setSelectedNodeId(null);
+                setHoveredNodeId(null);
+            };
             const selectGraphNode = React.useCallback((_, node) => {
                 const isCollapsedGroup = node.data?.kind === 'group' && !expanded.has(node.id);
                 if (node.data?.kind !== 'task' && !isCollapsedGroup) return;
                 setSelectedNodeId((current) => current === node.id ? null : node.id);
+                setHoveredNodeId(null);
             }, [expanded]);
+            const focusNeighborEdge = React.useCallback((_, node) => {
+                if (!selectedNodeId || node?.id === selectedNodeId) return;
+                setHoveredNodeId(node?.id || null);
+            }, [selectedNodeId]);
+            const clearNeighborEdgeFocus = React.useCallback(() => {
+                setHoveredNodeId(null);
+            }, []);
             const ActionBridge = () => {
                 const reactFlow = rf.useReactFlow();
                 reactFlowApiRef.current = reactFlow;
@@ -1250,7 +1300,7 @@ async function renderTasksGraphs(rootElement = document) {
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { ref: flowWrapperRef, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
@@ -1259,7 +1309,7 @@ async function renderTasksGraphs(rootElement = document) {
                     )
                 )
             ) : window.React.createElement('div', { ref: flowWrapperRef, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
-                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
+                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
