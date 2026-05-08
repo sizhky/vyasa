@@ -120,7 +120,7 @@ export function buildTaskEdgeAnchors(nodes, edges) {
                 return { id: handleId, side, leftPct: edgeHandlePct(index, entries.length) };
             });
             nodeHandles[nodeId] = nodeHandles[nodeId] || { source: [], target: [] };
-            nodeHandles[nodeId][role] = handles;
+            nodeHandles[nodeId][role].push(...handles);
         }
     };
 
