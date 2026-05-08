@@ -172,6 +172,28 @@ function collectExpandedGroupsByDepth(groupTree, defaultOpenDepth) {
     return expanded;
 }
 
+function expandOneGroupDepth(groupTree, expandedSet) {
+    const expanded = new Set(expandedSet || []);
+    const roots = groupTree?.["null"] || [];
+    if (expanded.size === 0) {
+        roots.forEach((id) => expanded.add(id));
+        return expanded;
+    }
+    for (const groupId of Array.from(expanded)) {
+        for (const childId of (groupTree?.[groupId] || [])) expanded.add(childId);
+    }
+    return expanded;
+}
+
+function collapseOneGroupDepth(groupTree, expandedSet) {
+    const expanded = new Set(expandedSet || []);
+    for (const groupId of Array.from(expanded)) {
+        const hasExpandedChild = (groupTree?.[groupId] || []).some((childId) => expanded.has(childId));
+        if (!hasExpandedChild) expanded.delete(groupId);
+    }
+    return expanded;
+}
+
 function reduceTransitiveEdges(edges) {
     const nodes = new Set();
     const outgoing = new Map();
@@ -1006,7 +1028,6 @@ async function renderTasksGraphs(rootElement = document) {
                 const highlightMode = data?.highlightMode || 'none';
                 const isHighlighted = highlightMode === 'selected' || highlightMode === 'neighbor';
                 const isDimmed = highlightMode === 'dim';
-                const selectable = !isGroup;
                 const handleExpand = (e) => {
                     e.stopPropagation();
                     const next = new Set(expanded);
@@ -1015,7 +1036,6 @@ async function renderTasksGraphs(rootElement = document) {
                 };
                 if (isExpanded) {
                     return React.createElement('div', {
-                        onClick: () => { if (isGroup) setSelectedNodeId(null); },
                         style: {
                             width: '100%', height: '100%',
                             boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: '8px',
@@ -1028,7 +1048,6 @@ async function renderTasksGraphs(rootElement = document) {
                     );
                 }
                 return React.createElement('div', {
-                    onClick: () => { if (isGroup) setSelectedNodeId(null); },
                     style: {
                         width: '100%', height: '100%',
                         boxSizing: 'border-box',
@@ -1087,13 +1106,29 @@ async function renderTasksGraphs(rootElement = document) {
                             reactFlow.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true });
                             return;
                         }
+                        if (key === 'i' || key === 'o') {
+                            event.preventDefault();
+                            if (key === 'o') pendingFitActionRef.current = 'collapse';
+                            setExpanded((current) => {
+                                const next = key === 'o'
+                                    ? collapseOneGroupDepth(model.group_tree, current)
+                                    : expandOneGroupDepth(model.group_tree, current);
+                                logTasksDebug('shortcutDepth', { direction: key === 'o' ? 'collapse' : 'expand', expanded: Array.from(next) });
+                                return next;
+                            });
+                            return;
+                        }
                         if (key === 'u') {
                             event.preventDefault();
-                            if (event.shiftKey) {
-                                setExpanded(new Set());
-                            } else {
-                                setExpanded(new Set((model.groups || []).map((group) => group.id)));
-                            }
+                            setExpanded(new Set((model.groups || []).map((group) => group.id)));
+                            logTasksDebug('shortcutExpandAll', { groupCount: (model.groups || []).length });
+                            return;
+                        }
+                        if (key === 'p') {
+                            event.preventDefault();
+                            pendingFitActionRef.current = 'collapse';
+                            setExpanded(new Set());
+                            logTasksDebug('shortcutCollapseAll');
                             return;
                         }
                         if (key === 'arrowup') {
@@ -1138,6 +1173,11 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             };
             const clearSelection = () => setSelectedNodeId(null);
+            const selectGraphNode = React.useCallback((_, node) => {
+                const isCollapsedGroup = node.data?.kind === 'group' && !expanded.has(node.id);
+                if (node.data?.kind !== 'task' && !isCollapsedGroup) return;
+                setSelectedNodeId((current) => current === node.id ? null : node.id);
+            }, [expanded]);
             const ActionBridge = () => {
                 const reactFlow = rf.useReactFlow();
                 reactFlowApiRef.current = reactFlow;
@@ -1168,6 +1208,21 @@ async function renderTasksGraphs(rootElement = document) {
                             pendingFitActionRef.current = 'collapse';
                             setExpanded(new Set());
                         },
+                        expandDepth: () => {
+                            setExpanded((current) => {
+                                const next = expandOneGroupDepth(model.group_tree, current);
+                                logTasksDebug('manualExpandDepth', { expanded: Array.from(next) });
+                                return next;
+                            });
+                        },
+                        collapseDepth: () => {
+                            pendingFitActionRef.current = 'collapse';
+                            setExpanded((current) => {
+                                const next = collapseOneGroupDepth(model.group_tree, current);
+                                logTasksDebug('manualCollapseDepth', { expanded: Array.from(next) });
+                                return next;
+                            });
+                        },
                     };
                     return () => {
                         delete window.__vyasaTasksActions[widgetId];
@@ -1177,7 +1232,7 @@ async function renderTasksGraphs(rootElement = document) {
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { ref: flowWrapperRef, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: (_, node) => { if (node.data?.kind !== 'task') return; setSelectedNodeId((current) => current === node.id ? null : node.id); }, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
@@ -1186,7 +1241,7 @@ async function renderTasksGraphs(rootElement = document) {
                     )
                 )
             ) : window.React.createElement('div', { ref: flowWrapperRef, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
-                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: (_, node) => { if (node.data?.kind !== 'task') return; setSelectedNodeId((current) => current === node.id ? null : node.id); }, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
+                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
@@ -2026,11 +2081,15 @@ window.openTasksFullscreen = async function(id) {
     };
     const fitHint = makeHint('F');
     fitHint.title = 'Fit view';
-    const expandHint = makeHint('U');
-    expandHint.title = 'Expand all groups';
-    const collapseHint = makeHint('⇧+U');
-    collapseHint.title = 'Collapse all groups';
-    headerHints.append(fitHint, expandHint, collapseHint);
+    const expandHint = makeHint('I');
+    expandHint.title = 'Expand next group depth';
+    const collapseHint = makeHint('O');
+    collapseHint.title = 'Collapse deepest group depth';
+    const expandAllHint = makeHint('U');
+    expandAllHint.title = 'Unfold all groups';
+    const collapseAllHint = makeHint('P');
+    collapseAllHint.title = 'Collapse all groups';
+    headerHints.append(fitHint, expandHint, collapseHint, expandAllHint, collapseAllHint);
     headerTitle.append(headerName, headerHints);
     headerBar.appendChild(headerTitle);
 
