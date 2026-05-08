@@ -878,6 +878,13 @@ async function renderTasksGraphs(rootElement = document) {
                 const baseEdges = anchored.edges.map((edge) => ({
                     ...edge,
                     type: 'vyasaEdge',
+                    animated: false,
+                    markerEnd: {
+                        type: rf.MarkerType.ArrowClosed,
+                        width: 8,
+                        height: 8,
+                        color: 'currentColor',
+                    },
                     zIndex: TASKS_EDGE_Z,
                     labelBgPadding: [6, 3],
                     labelBgBorderRadius: 3,
@@ -1000,7 +1007,10 @@ async function renderTasksGraphs(rootElement = document) {
                                 : (highlighted ? 'var(--vyasa-primary)' : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)'),
                             opacity: mode === 'focused' ? 1 : (highlighted ? 0.95 : 0.08),
                             strokeWidth: mode === 'focused' ? 5 : (mode === 'selected' ? 3.5 : 2.5),
+                            strokeDasharray: highlighted ? (mode === 'focused' ? '10 6' : '8 6') : undefined,
+                            strokeLinecap: highlighted ? 'round' : undefined,
                         },
+                        animated: highlighted,
                     };
                 });
                 const edgePriority = { dim: 0, selected: 1, focused: 2 };
