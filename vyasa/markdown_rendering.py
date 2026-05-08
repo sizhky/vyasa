@@ -543,11 +543,30 @@ def _render_tasks_block(code):
     flow_height = html.escape(config.get("height", "calc(85vh - 57px)"))
     jitter = html.escape(str(config.get("jitter", "0")))
     jitter_y = html.escape(str(config.get("jitter_y", config.get("jitter", "0"))))
+    spacing = html.escape(str(config.get("spacing", "normal")))
+    optional_layout_attrs = []
+    if "node_spacing" in config:
+        optional_layout_attrs.append(f'data-tasks-node-spacing="{html.escape(str(config["node_spacing"]))}"')
+    if "layer_spacing" in config:
+        optional_layout_attrs.append(f'data-tasks-layer-spacing="{html.escape(str(config["layer_spacing"]))}"')
+    if "collision_gap" in config:
+        optional_layout_attrs.append(f'data-tasks-collision-gap="{html.escape(str(config["collision_gap"]))}"')
+    if "group_padding" in config:
+        optional_layout_attrs.append(f'data-tasks-group-padding="{html.escape(str(config["group_padding"]))}"')
+    if "edge_label_width" in config:
+        optional_layout_attrs.append(f'data-tasks-edge-label-width="{html.escape(str(config["edge_label_width"]))}"')
+    optional_layout_attrs_str = (" " + " ".join(optional_layout_attrs)) if optional_layout_attrs else ""
     summary = f'{len(model["groups"])} groups, {len(model["tasks"])} items, {len(model["dependency_edges"])} edges'
+    breakout = str(width).lower() in {"100%", "100vw"} or "vw" in str(width).lower()
+    container_style = (
+        f"width: {width}; min-height: {min_height}; position: relative; left: 50%; transform: translateX(-50%);"
+        if breakout else
+        f"width: {width}; min-height: {min_height};"
+    )
     return (
         f'<div class="tasks-container relative my-6 rounded-xl border border-slate-200 dark:border-slate-800" '
-        f'style="width: {width}; min-height: {min_height}; position: relative; left: 50%; transform: translateX(-50%);" '
-        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
+        f'style="{container_style}" '
+        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
         f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'
         f'<button onclick="openTasksFullscreen(\'{widget_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>'
         f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">'
