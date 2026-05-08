@@ -1,7 +1,7 @@
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 import { D2 } from 'https://esm.sh/@terrastruct/d2@0.1.33?bundle';
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { buildTaskEdgeAnchors, clampScale, nextWheelState, sizeTaskNode } from './tasks_graph_core.js';
+import { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, nextWheelState, sizeTaskNode } from './tasks_graph_core.js';
 const mermaidStates = {};
 const d2States = {};
 const tasksElk = new ELK();
@@ -628,7 +628,7 @@ async function layoutExpandedGroups(model, expandedSet, jitterConfig = {}, layou
     return layouts;
 }
 
-function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout, groupLayouts) {
+function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout, groupLayouts, layoutConfig = {}) {
     const visible = buildVisibleTasksGraph(model, expandedSet);
     logTasksDebug('visibleGraph', {
         expanded: Array.from(expandedSet),
@@ -913,7 +913,7 @@ async function renderTasksGraphs(rootElement = document) {
                     nodes: rawGraph.nodes.filter((n) => rootNodeIds.has(n.id)),
                     edges: (rawGraph.edges || []).filter((e) => rootNodeIds.has(e.source) && rootNodeIds.has(e.target))
                 };
-                const derived = deriveSquishedExpandedLayout(rootGraph, model, expandedSet, baseLayout, groupLayoutsRef.current);
+                const derived = deriveSquishedExpandedLayout(rootGraph, model, expandedSet, baseLayout, groupLayoutsRef.current, layoutConfig);
                 const derivedById = Object.fromEntries((derived.nodes || []).map((node) => [node.id, node]));
                 const depthOf = (node) => {
                     let depth = 0;
@@ -1445,9 +1445,8 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId(null);
             };
             const selectGraphNode = React.useCallback((_, node) => {
+                if (!isTasksGraphNodeSelectable(node.data?.kind)) return;
                 const sourceNodeId = node.data?.kind === 'groupTitle' ? node.data?.sourceGroupId : node.id;
-                const selectableKinds = new Set(['task', 'group', 'groupTitle']);
-                if (!selectableKinds.has(node.data?.kind)) return;
                 setSelectedNodeId((current) => current === sourceNodeId ? null : sourceNodeId);
                 setHoveredNodeId(null);
             }, []);

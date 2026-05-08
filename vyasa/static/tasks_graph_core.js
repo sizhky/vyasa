@@ -48,6 +48,10 @@ export function sizeTaskNode(label, kind = 'task') {
     };
 }
 
+export function isTasksGraphNodeSelectable(kind) {
+    return kind === 'task';
+}
+
 function edgeHandlePct(index, count) {
     if (count <= 1) return 50;
     return Math.max(18, Math.min(82, ((index + 1) / (count + 1)) * 100));
