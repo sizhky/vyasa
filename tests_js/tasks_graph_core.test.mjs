@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, nextWheelState, sizeTaskNode } = await import('../vyasa/static/tasks_graph_core.js');
+const { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea } = await import('../vyasa/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -61,4 +61,11 @@ test('only task nodes are selectable in items graph', () => {
     assert.equal(isTasksGraphNodeSelectable('task'), true);
     assert.equal(isTasksGraphNodeSelectable('group'), false);
     assert.equal(isTasksGraphNodeSelectable('groupTitle'), false);
+});
+
+test('group panels use passive hit areas in items graph', () => {
+    assert.equal(tasksGraphNodeHitArea('task'), 'selectable');
+    assert.equal(tasksGraphNodeHitArea('group', false), 'passive');
+    assert.equal(tasksGraphNodeHitArea('group', true), 'background');
+    assert.equal(tasksGraphNodeHitArea('groupTitle'), 'control');
 });

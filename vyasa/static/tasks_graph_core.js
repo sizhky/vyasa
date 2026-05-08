@@ -52,6 +52,13 @@ export function isTasksGraphNodeSelectable(kind) {
     return kind === 'task';
 }
 
+export function tasksGraphNodeHitArea(kind, isExpanded = false) {
+    if (kind === 'task') return 'selectable';
+    if (kind === 'groupTitle') return 'control';
+    if (kind === 'group' && isExpanded) return 'background';
+    return 'passive';
+}
+
 function edgeHandlePct(index, count) {
     if (count <= 1) return 50;
     return Math.max(18, Math.min(82, ((index + 1) / (count + 1)) * 100));
