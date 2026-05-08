@@ -6,7 +6,6 @@ Nested groups intentionally stress groups inside groups inside groups.
 ---
 title: Vyasa Architecture
 default_open_depth: 2
-spacing: airy
 ---
 CLI + Config Bootstrap:
   Paths + Flags:

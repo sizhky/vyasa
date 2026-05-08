@@ -1,7 +1,7 @@
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 import { D2 } from 'https://esm.sh/@terrastruct/d2@0.1.33?bundle';
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, nextWheelState, sizeTaskNode } from './tasks_graph_core.js';
+import { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea } from './tasks_graph_core.js';
 const mermaidStates = {};
 const d2States = {};
 const tasksElk = new ELK();
@@ -169,8 +169,31 @@ function ensureTasksReactFlow() {
                 .react-flow__edgelabel-renderer {
                     pointer-events: none;
                 }
+                .vyasa-tasks-flow .react-flow__edge,
+                .vyasa-tasks-flow .react-flow__edge path,
+                .vyasa-tasks-flow .react-flow__edge-interaction {
+                    pointer-events: none;
+                }
                 .vyasa-tasks-hovering-edge-labels .react-flow__edgelabel-renderer {
                     z-index: ${TASKS_EDGE_LABEL_FOCUS_Z + 200} !important;
+                }
+                .react-flow__node.vyasa-tasks-node--background,
+                .react-flow__node.vyasa-tasks-node--passive {
+                    pointer-events: none;
+                }
+                .react-flow__node.vyasa-tasks-node--passive [data-vyasa-task-control="true"] {
+                    pointer-events: auto;
+                }
+                .vyasa-tasks-flow .react-flow__pane,
+                .vyasa-tasks-flow .react-flow__node,
+                .vyasa-tasks-flow .react-flow__node.selectable,
+                .vyasa-tasks-flow .react-flow__node.draggable,
+                .vyasa-tasks-flow .react-flow__node .vyasa-task-node-body {
+                    cursor: grab !important;
+                }
+                .vyasa-tasks-flow .react-flow__node [data-vyasa-task-control="true"],
+                .vyasa-tasks-flow .react-flow__controls button {
+                    cursor: pointer !important;
                 }
                 .react-flow__edge.animated path {
                     animation: vyasa-edge-dashdraw var(--vyasa-edge-flow-duration, 0.6s) linear infinite;
@@ -892,6 +915,7 @@ async function renderTasksGraphs(rootElement = document) {
             const pendingFitActionRef = React.useRef(null);
             const reactFlowApiRef = React.useRef(null);
             const prevExpandedCountRef = React.useRef(0);
+            const hoverClearTimerRef = React.useRef(null);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
                 const viewport = reactFlow.getViewport();
                 return reactFlow.setViewport(
@@ -937,6 +961,7 @@ async function renderTasksGraphs(rootElement = document) {
                 };
                 const baseNodes = derived.nodes.map((n) => {
                     const isExpanded = n.kind === 'group' && expandedSet.has(n.id);
+                    const hitArea = tasksGraphNodeHitArea(n.kind, isExpanded);
                     const depth = depthOf(n);
                     const nodeZ = n.kind !== 'group'
                         ? TASKS_TASK_Z + depth
@@ -964,6 +989,9 @@ async function renderTasksGraphs(rootElement = document) {
                             overflow: 'hidden',
                         },
                         zIndex: nodeZ,
+                        className: `vyasa-tasks-node--${hitArea}`,
+                        draggable: false,
+                        selectable: isTasksGraphNodeSelectable(n.kind),
                     };
                     if (n.parentId) {
                         rfNode.parentId = n.parentId;
@@ -992,6 +1020,7 @@ async function renderTasksGraphs(rootElement = document) {
                             pointerEvents: 'auto',
                         },
                         zIndex: titleZ,
+                        className: `vyasa-tasks-node--${tasksGraphNodeHitArea('groupTitle')}`,
                         draggable: false,
                         selectable: false,
                     });
@@ -1272,9 +1301,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const isGroup = data?.kind === 'group';
                 const isExpanded = expanded.has(id);
                 const highlightMode = data?.highlightMode || 'none';
-                const isHighlighted = highlightMode === 'selected' || highlightMode === 'neighbor' || highlightMode === 'neighbor-focus';
                 const isDimmed = highlightMode === 'dim';
-                const isInteractiveTask = !isGroup && isHighlighted;
                 const handleExpand = (e) => {
                     e.stopPropagation();
                     const next = new Set(expanded);
@@ -1295,6 +1322,7 @@ async function renderTasksGraphs(rootElement = document) {
                     );
                 }
                 return React.createElement('div', {
+                    className: 'vyasa-task-node-body',
                     style: {
                         width: '100%', height: '100%',
                         boxSizing: 'border-box',
@@ -1305,7 +1333,6 @@ async function renderTasksGraphs(rootElement = document) {
                         fontWeight: '600',
                         fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
                         textAlign: 'center',
-                        cursor: (isGroup || isInteractiveTask) ? 'pointer' : 'default',
                         padding: '10px 12px',
                         overflow: 'hidden',
                         opacity: isDimmed ? 0.22 : 1,
@@ -1328,6 +1355,7 @@ async function renderTasksGraphs(rootElement = document) {
                     }, data?.label || id),
                     isGroup && React.createElement('button', {
                         onClick: handleExpand,
+                        'data-vyasa-task-control': 'true',
                         style: { position: 'absolute', right: '8px', top: '8px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
                     }, '+'),
                     ...renderHandles('source')
@@ -1452,10 +1480,23 @@ async function renderTasksGraphs(rootElement = document) {
             }, []);
             const focusNeighborEdge = React.useCallback((_, node) => {
                 if (!selectedNodeId || !node?.id) return;
-                setHoveredNodeId(node?.id || null);
+                if (!isTasksGraphNodeSelectable(node.data?.kind)) return;
+                if (hoverClearTimerRef.current) {
+                    window.clearTimeout(hoverClearTimerRef.current);
+                    hoverClearTimerRef.current = null;
+                }
+                setHoveredNodeId((current) => current === node.id ? current : node.id);
             }, [selectedNodeId]);
-            const clearNeighborEdgeFocus = React.useCallback(() => {
-                setHoveredNodeId(null);
+            const clearNeighborEdgeFocus = React.useCallback((_, node) => {
+                if (!isTasksGraphNodeSelectable(node?.data?.kind)) return;
+                if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
+                hoverClearTimerRef.current = window.setTimeout(() => {
+                    setHoveredNodeId(null);
+                    hoverClearTimerRef.current = null;
+                }, 90);
+            }, []);
+            React.useEffect(() => () => {
+                if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
             }, []);
             const ActionBridge = () => {
                 const reactFlow = rf.useReactFlow();
