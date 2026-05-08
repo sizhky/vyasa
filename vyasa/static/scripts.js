@@ -877,7 +877,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const anchored = buildTaskEdgeAnchors(baseNodes, derived.edges);
                 const baseEdges = anchored.edges.map((edge) => ({
                     ...edge,
-                    type: 'default',
+                    type: 'vyasaEdge',
                     zIndex: TASKS_EDGE_Z,
                     labelBgPadding: [6, 3],
                     labelBgBorderRadius: 3,
@@ -924,6 +924,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const highlightedEdgeIds = new Set();
                 const directEndpointIds = new Set([nodeId]);
+                const isFocusedPrimary = hoveredNodeId === nodeId;
                 const isFocusedNeighbor = hoveredNodeId && hoveredNodeId !== nodeId;
                 for (const edge of baseEdges) {
                     if (edge.source === nodeId || edge.target === nodeId) {
@@ -933,7 +934,11 @@ async function renderTasksGraphs(rootElement = document) {
                     }
                 }
                 const focusedEdgeIds = new Set();
-                if (isFocusedNeighbor && directEndpointIds.has(hoveredNodeId)) {
+                if (isFocusedPrimary) {
+                    for (const edge of baseEdges) {
+                        if (highlightedEdgeIds.has(edge.id)) focusedEdgeIds.add(edge.id);
+                    }
+                } else if (isFocusedNeighbor && directEndpointIds.has(hoveredNodeId)) {
                     for (const edge of baseEdges) {
                         const linksSelectedAndHovered =
                             (edge.source === nodeId && edge.target === hoveredNodeId) ||
@@ -943,7 +948,9 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 setNodes(baseNodes.map((node) => {
                     const mode = directEndpointIds.has(node.id)
-                        ? (node.id === nodeId ? 'selected' : (node.id === hoveredNodeId ? 'neighbor-focus' : 'neighbor'))
+                        ? (node.id === nodeId
+                            ? (isFocusedPrimary ? 'selected-focus' : 'selected')
+                            : (node.id === hoveredNodeId ? 'neighbor-focus' : 'neighbor'))
                         : 'dim';
                     return {
                         ...node,
@@ -954,7 +961,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 ? node.style.background
                                 : TASKS_NODE_BG_ACTIVE,
                             opacity: mode === 'dim' ? 0.22 : 1,
-                            boxShadow: mode === 'neighbor-focus'
+                            boxShadow: (mode === 'neighbor-focus' || mode === 'selected-focus')
                                 ? '0 0 0 2px color-mix(in srgb, var(--vyasa-primary) 60%, transparent)'
                                 : 'none',
                         },
@@ -968,7 +975,9 @@ async function renderTasksGraphs(rootElement = document) {
                     return {
                         ...edge,
                         data: { ...edge.data, highlightMode: mode },
-                        labelZIndex: mode === 'focused' ? TASKS_EDGE_LABEL_FOCUS_Z : TASKS_EDGE_LABEL_Z,
+                        labelZIndex: mode === 'dim'
+                            ? TASKS_EDGE_LABEL_Z
+                            : TASKS_EDGE_LABEL_FOCUS_Z,
                         labelStyle: {
                             ...(edge.labelStyle || {}),
                             fill: mode === 'focused'
@@ -1035,6 +1044,32 @@ async function renderTasksGraphs(rootElement = document) {
                     if (rafId !== null) window.cancelAnimationFrame(rafId);
                 };
             }, [graphRevision, expanded]);
+            const CustomEdge = React.memo((props) => {
+                const [path, labelX, labelY] = rf.getBezierPath(props);
+                const labelStyle = props.labelStyle || {};
+                const labelBgStyle = props.labelBgStyle || {};
+                return React.createElement(React.Fragment, null,
+                    React.createElement(rf.BaseEdge, { ...props, path }),
+                    props.label && React.createElement(rf.EdgeLabelRenderer, null,
+                        React.createElement('div', {
+                            style: {
+                                position: 'absolute',
+                                transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+                                pointerEvents: 'none',
+                                zIndex: props.labelZIndex || TASKS_EDGE_LABEL_Z,
+                                padding: `${props.labelBgPadding?.[1] || 0}px ${props.labelBgPadding?.[0] || 0}px`,
+                                borderRadius: `${props.labelBgBorderRadius || 0}px`,
+                                background: labelBgStyle.fill || 'transparent',
+                                opacity: labelBgStyle.fillOpacity ?? labelStyle.opacity ?? 1,
+                                color: labelStyle.fill || 'currentColor',
+                                fontSize: `${labelStyle.fontSize || 11}px`,
+                                fontWeight: labelStyle.fontWeight || 600,
+                                whiteSpace: 'nowrap',
+                            },
+                        }, props.label)
+                    )
+                );
+            });
             const CustomNode = React.memo(({ data, id }) => {
                 const renderHandles = (role) => (data?.handleLayout?.[role] || []).map((handle) => (
                     Handle && React.createElement(Handle, {
@@ -1147,6 +1182,7 @@ async function renderTasksGraphs(rootElement = document) {
                 rebuildLayout(expanded);
             }, [expanded, rebuildLayout]);
             const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [expanded]);
+            const edgeTypes = React.useMemo(() => ({ vyasaEdge: CustomEdge }), []);
             const FitViewHotkey = () => {
                 const reactFlow = rf.useReactFlow();
                 React.useEffect(() => {
@@ -1240,7 +1276,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId(null);
             }, [expanded]);
             const focusNeighborEdge = React.useCallback((_, node) => {
-                if (!selectedNodeId || node?.id === selectedNodeId) return;
+                if (!selectedNodeId || !node?.id) return;
                 setHoveredNodeId(node?.id || null);
             }, [selectedNodeId]);
             const clearNeighborEdgeFocus = React.useCallback(() => {
@@ -1300,7 +1336,7 @@ async function renderTasksGraphs(rootElement = document) {
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { ref: flowWrapperRef, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
@@ -1309,7 +1345,7 @@ async function renderTasksGraphs(rootElement = document) {
                     )
                 )
             ) : window.React.createElement('div', { ref: flowWrapperRef, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
-                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
+                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
