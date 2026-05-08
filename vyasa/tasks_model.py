@@ -164,6 +164,7 @@ def _parse_items_graph(body: str) -> dict:
     graph = {"groups": [], "tasks": [], "dependency_edges": []}
     stack: list[dict] = []
     used_ids: set[str] = set()
+    lines = body.splitlines()
 
     def pop_to(indent: int) -> None:
         while stack and indent <= stack[-1]["indent"]:
@@ -175,8 +176,11 @@ def _parse_items_graph(body: str) -> dict:
                 return item["id"]
         return None
 
-    for raw_line in body.splitlines():
+    index = 0
+    while index < len(lines):
+        raw_line = lines[index]
         if not raw_line.strip() or raw_line.lstrip().startswith("#"):
+            index += 1
             continue
         indent = _count_indent(raw_line)
         line = raw_line.strip()
@@ -186,6 +190,34 @@ def _parse_items_graph(body: str) -> dict:
             key = key.strip()
             if key in {"id", "title"}:
                 graph[key] = _read_string(value.strip())
+                index += 1
+                continue
+            if key == "color_by":
+                graph["color_by"] = _read_string(value.strip())
+                index += 1
+                continue
+            if key == "color_palette":
+                palette_key = _read_string(value.strip())
+                if palette_key:
+                    graph["color_by"] = palette_key
+                palette = {}
+                index += 1
+                while index < len(lines):
+                    child_raw = lines[index]
+                    if not child_raw.strip() or child_raw.lstrip().startswith("#"):
+                        index += 1
+                        continue
+                    child_indent = _count_indent(child_raw)
+                    if child_indent <= indent:
+                        break
+                    child_line = child_raw.strip()
+                    child_key_index = _find_unquoted(child_line, ":")
+                    if child_key_index < 0:
+                        raise ValueError(f"Expected color palette entry key: value, got {child_raw!r}")
+                    child_key = _read_string(child_line[:child_key_index].strip())
+                    palette[child_key] = _read_string(child_line[child_key_index + 1:].strip())
+                    index += 1
+                graph["color_palette"] = palette
                 continue
 
         edge_index = _find_unquoted(line, "->")
@@ -193,6 +225,7 @@ def _parse_items_graph(body: str) -> dict:
             source_text = line[:edge_index].strip()
             label, target_text = _read_optional_edge_label(line[edge_index + 2:])
             _add_edges(graph, source_text, target_text, label)
+            index += 1
             continue
 
         if line.startswith("- "):
@@ -203,6 +236,7 @@ def _parse_items_graph(body: str) -> dict:
             item.update(attrs)
             graph["tasks"].append(item)
             stack.append({"kind": "item", "id": item_id, "indent": indent})
+            index += 1
             continue
 
         if line.endswith(":"):
@@ -213,6 +247,7 @@ def _parse_items_graph(body: str) -> dict:
             group.update(attrs)
             graph["groups"].append(group)
             stack.append({"kind": "group", "id": group_id, "indent": indent})
+            index += 1
             continue
 
         raise ValueError(f"Unknown items line: {raw_line}")
@@ -242,6 +277,8 @@ def parse_tasks_text(text: str) -> dict:
         "task_children": dict(task_children),
         "document_order": [g["id"] for g in groups] + [t["id"] for t in tasks],
         "frozen": graph.get("frozen", {}),
+        "color_by": graph.get("color_by", ""),
+        "color_palette": graph.get("color_palette", {}),
     }
 
 

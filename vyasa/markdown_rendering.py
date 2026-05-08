@@ -400,11 +400,44 @@ def _split_fence_frontmatter(code):
     if not frontmatter_match:
         return {}, code
     config = {}
-    for line in frontmatter_match.group(1).strip().splitlines():
+    lines = frontmatter_match.group(1).splitlines()
+    index = 0
+    while index < len(lines):
+        raw_line = lines[index]
+        if not raw_line.strip():
+            index += 1
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        line = raw_line.strip()
         if ":" not in line:
+            index += 1
             continue
         key, value = line.split(":", 1)
-        config[key.strip()] = value.strip()
+        key = key.strip()
+        value = value.strip()
+        if key == "color_palette":
+            config[key] = {}
+            if value:
+                config["color_by"] = value
+            index += 1
+            while index < len(lines):
+                child_raw = lines[index]
+                if not child_raw.strip():
+                    index += 1
+                    continue
+                child_indent = len(child_raw) - len(child_raw.lstrip(" "))
+                if child_indent <= indent:
+                    break
+                child_line = child_raw.strip()
+                if ":" not in child_line:
+                    index += 1
+                    continue
+                child_key, child_value = child_line.split(":", 1)
+                config[key][child_key.strip()] = child_value.strip().strip('"').strip("'")
+                index += 1
+            continue
+        config[key] = value
+        index += 1
     return config, code[frontmatter_match.end():]
 
 
@@ -480,6 +513,12 @@ def _render_tasks_block(code):
         model = parse_tasks_text(f"```tasks\n{code}\n```")
         if config.get("title") and not model.get("title"):
             model["title"] = config["title"]
+        if config.get("id"):
+            model["graph_id"] = config["id"]
+        if config.get("color_by") and not model.get("color_by"):
+            model["color_by"] = config["color_by"]
+        if config.get("color_palette") and not model.get("color_palette"):
+            model["color_palette"] = config["color_palette"]
         graph = build_collapsed_graph(model)
     except Exception:
         model = {

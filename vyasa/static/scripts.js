@@ -66,6 +66,57 @@ function tasksNodeMetaEntries(node) {
         }));
 }
 
+function tasksNodeMetaLabel(key) {
+    return key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function tasksNodeAggregateEntries(nodeId, model) {
+    if (!nodeId || !model) return [];
+    const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
+    const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
+    const hidden = new Set([
+        'id', 'label', 'kind', 'group_id', 'parent_group_id',
+        'handleLayout', 'highlightMode', 'sourceGroupId',
+        'width', 'height', 'position', 'parentId',
+    ]);
+    const totals = new Map();
+    const visitNode = (item) => {
+        if (!item) return;
+        for (const [key, value] of Object.entries(item)) {
+            if (hidden.has(key)) continue;
+            const numeric = typeof value === 'number'
+                ? value
+                : (typeof value === 'string' && /^-?\d+$/.test(value.trim()) ? Number.parseInt(value.trim(), 10) : null);
+            if (!Number.isInteger(numeric)) continue;
+            totals.set(key, (totals.get(key) || 0) + numeric);
+        }
+    };
+    const walkGroup = (groupId) => {
+        const group = groupsById[groupId];
+        visitNode(group);
+        for (const taskId of (model.task_children?.[groupId] || [])) visitNode(tasksById[taskId]);
+        for (const childGroupId of (model.group_tree?.[groupId] || [])) walkGroup(childGroupId);
+    };
+    walkGroup(nodeId);
+    return Array.from(totals.entries()).map(([key, value]) => ({
+        key,
+        label: tasksNodeMetaLabel(key),
+        value: String(value),
+    }));
+}
+
+function resolveTasksNodeColor(node, model) {
+    if (!node) return '';
+    if (typeof node.color === 'string' && node.color.trim()) return node.color.trim();
+    const colorBy = typeof model?.color_by === 'string' ? model.color_by.trim() : '';
+    const palette = model?.color_palette && typeof model.color_palette === 'object' ? model.color_palette : {};
+    if (!colorBy) return '';
+    const value = node[colorBy];
+    if (typeof value !== 'string' || !value.trim()) return '';
+    const color = palette[value];
+    return typeof color === 'string' ? color.trim() : '';
+}
+
 window.runTasksHeaderAction = function(widgetId, action) {
     const actions = window.__vyasaTasksActions?.[widgetId];
     if (!actions || typeof actions[action] !== 'function') return;
@@ -841,7 +892,13 @@ async function renderTasksGraphs(rootElement = document) {
                     const nodeZ = n.kind !== 'group'
                         ? TASKS_TASK_Z + depth
                         : ((isExpanded ? TASKS_GROUP_BG_Z : TASKS_GROUP_Z) + depth);
-                    const background = isExpanded ? TASKS_GROUP_EXPANDED_BG : TASKS_NODE_BG;
+                    const nodeColor = resolveTasksNodeColor(n, model);
+                    const background = isExpanded
+                        ? (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 86%, ${nodeColor} 14%)` : TASKS_GROUP_EXPANDED_BG)
+                        : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 78%, ${nodeColor} 22%)` : TASKS_NODE_BG);
+                    const border = nodeColor
+                        ? `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`
+                        : TASKS_NODE_BORDER;
                     const rfNode = {
                         id: n.id,
                         type: 'vyasaTask',
@@ -852,7 +909,7 @@ async function renderTasksGraphs(rootElement = document) {
                             height: n.height,
                             zIndex: nodeZ,
                             background,
-                            border: TASKS_NODE_BORDER,
+                            border,
                             borderRadius: isExpanded ? 12 : 6,
                             boxShadow: 'none',
                             overflow: 'hidden',
@@ -975,6 +1032,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ? (isFocusedPrimary ? 'selected-focus' : 'selected')
                             : (node.id === hoveredNodeId ? 'neighbor-focus' : 'neighbor'))
                         : 'dim';
+                    const nodeColor = resolveTasksNodeColor(node.data, model);
                     return {
                         ...node,
                         data: { ...node.data, highlightMode: mode },
@@ -982,7 +1040,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ...node.style,
                             background: mode === 'dim'
                                 ? node.style.background
-                                : TASKS_NODE_BG_ACTIVE,
+                                : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 68%, ${nodeColor} 32%)` : TASKS_NODE_BG_ACTIVE),
                             opacity: mode === 'dim' ? 0.22 : 1,
                             boxShadow: (mode === 'neighbor-focus' || mode === 'selected-focus')
                                 ? '0 0 0 2px color-mix(in srgb, var(--vyasa-primary) 60%, transparent)'
@@ -1293,7 +1351,10 @@ async function renderTasksGraphs(rootElement = document) {
             };
             const SelectedNodePanel = () => {
                 const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === selectedNodeId)?.data || null;
-                const entries = tasksNodeMetaEntries(selectedNode);
+                const sourceNodeId = selectedNode?.kind === 'groupTitle' ? selectedNode.sourceGroupId : selectedNode?.id;
+                const entries = selectedNode?.kind === 'group'
+                    ? tasksNodeAggregateEntries(sourceNodeId, model)
+                    : tasksNodeMetaEntries(selectedNode);
                 if (!selectedNode || entries.length === 0) return null;
                 return React.createElement('div', {
                     style: { position: 'absolute', top: '12px', right: '12px', zIndex: 30, width: '240px', maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
@@ -1313,11 +1374,12 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId(null);
             };
             const selectGraphNode = React.useCallback((_, node) => {
-                const isCollapsedGroup = node.data?.kind === 'group' && !expanded.has(node.id);
-                if (node.data?.kind !== 'task' && !isCollapsedGroup) return;
-                setSelectedNodeId((current) => current === node.id ? null : node.id);
+                const sourceNodeId = node.data?.kind === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                const selectableKinds = new Set(['task', 'group', 'groupTitle']);
+                if (!selectableKinds.has(node.data?.kind)) return;
+                setSelectedNodeId((current) => current === sourceNodeId ? null : sourceNodeId);
                 setHoveredNodeId(null);
-            }, [expanded]);
+            }, []);
             const focusNeighborEdge = React.useCallback((_, node) => {
                 if (!selectedNodeId || !node?.id) return;
                 setHoveredNodeId(node?.id || null);
