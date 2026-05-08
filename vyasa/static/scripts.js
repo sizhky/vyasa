@@ -10,10 +10,12 @@ const TASKS_GROUP_PADDING = { top: 56, right: 28, bottom: 28, left: 28 };
 const TASKS_ROOT_SPACING = { node: 12, layer: 24 };
 const TASKS_EXPANSION_SHIFT_RATIO = 0.45;
 const TASKS_ROOT_COLLISION_GAP = 48;
-const TASKS_GROUP_Z = 100;
-const TASKS_EDGE_Z = 1000;
-const TASKS_TASK_Z = 10000;
-const TASKS_TITLE_Z = TASKS_EDGE_Z + 1;
+const TASKS_GROUP_BG_Z = 10;
+const TASKS_EDGE_Z = 100;
+const TASKS_EDGE_LABEL_Z = 120;
+const TASKS_GROUP_Z = 180;
+const TASKS_TASK_Z = 1000;
+const TASKS_TITLE_Z = 300;
 const TASKS_NODE_BG = 'color-mix(in srgb, var(--vyasa-paper) 86%, var(--vyasa-primary) 14%)';
 const TASKS_GROUP_EXPANDED_BG = 'var(--vyasa-paper)';
 const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 42%, var(--vyasa-primary) 58%)';
@@ -807,7 +809,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const depth = depthOf(n);
                     const nodeZ = n.kind !== 'group'
                         ? TASKS_TASK_Z + depth
-                        : TASKS_GROUP_Z + depth;
+                        : ((isExpanded ? TASKS_GROUP_BG_Z : TASKS_GROUP_Z) + depth);
                     const background = isExpanded ? TASKS_GROUP_EXPANDED_BG : TASKS_NODE_BG;
                     const rfNode = {
                         id: n.id,
@@ -864,6 +866,7 @@ async function renderTasksGraphs(rootElement = document) {
                     zIndex: TASKS_EDGE_Z,
                     labelBgPadding: [6, 3],
                     labelBgBorderRadius: 3,
+                    labelZIndex: TASKS_EDGE_LABEL_Z,
                     labelStyle: { fontSize: 11, fontWeight: 600, fill: 'currentColor' },
                     labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
                 }));
