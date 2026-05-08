@@ -48,20 +48,38 @@ export function sizeTaskNode(label, kind = 'task') {
     };
 }
 
-export function isTasksGraphNodeSelectable(kind) {
-    return kind === 'task';
+export function isTasksGraphNodeSelectable(kind, isExpanded = false) {
+    return kind === 'task' || (kind === 'group' && !isExpanded);
 }
 
 export function tasksGraphNodeHitArea(kind, isExpanded = false) {
     if (kind === 'task') return 'selectable';
     if (kind === 'groupTitle') return 'control';
     if (kind === 'group' && isExpanded) return 'background';
+    if (kind === 'group') return 'selectable';
     return 'passive';
 }
 
 function edgeHandlePct(index, count) {
     if (count <= 1) return 50;
     return Math.max(18, Math.min(82, ((index + 1) / (count + 1)) * 100));
+}
+
+function edgeAnchorSides(sourceRect, targetRect) {
+    const sourceCenterX = sourceRect.x + sourceRect.width / 2;
+    const sourceCenterY = sourceRect.y + sourceRect.height / 2;
+    const targetCenterX = targetRect.x + targetRect.width / 2;
+    const targetCenterY = targetRect.y + targetRect.height / 2;
+    const dx = targetCenterX - sourceCenterX;
+    const dy = targetCenterY - sourceCenterY;
+    if (Math.abs(dx) > 1 && Math.abs(dy / dx) < 1) {
+        return dx >= 0
+            ? { sourceSide: 'right', targetSide: 'left', sortAxis: 'y' }
+            : { sourceSide: 'left', targetSide: 'right', sortAxis: 'y' };
+    }
+    const sourceSide = dy >= 0 ? 'bottom' : 'top';
+    const targetSide = sourceSide === 'bottom' ? 'top' : 'bottom';
+    return { sourceSide, targetSide, sortAxis: 'x' };
 }
 
 function absoluteNodeRects(nodes) {
@@ -100,10 +118,7 @@ export function buildTaskEdgeAnchors(nodes, edges) {
         const sourceRect = rects[edge.source];
         const targetRect = rects[edge.target];
         if (!sourceRect || !targetRect) return { ...edge, _anchorIndex: index };
-        const sourceCenterY = sourceRect.y + sourceRect.height / 2;
-        const targetCenterY = targetRect.y + targetRect.height / 2;
-        const sourceSide = targetCenterY >= sourceCenterY ? 'bottom' : 'top';
-        const targetSide = sourceSide === 'bottom' ? 'top' : 'bottom';
+        const { sourceSide, targetSide, sortAxis } = edgeAnchorSides(sourceRect, targetRect);
         const anchored = {
             ...edge,
             _anchorIndex: index,
@@ -114,8 +129,10 @@ export function buildTaskEdgeAnchors(nodes, edges) {
         const incomingKey = `${edge.target}:target:${targetSide}`;
         if (!outgoingGroups.has(outgoingKey)) outgoingGroups.set(outgoingKey, []);
         if (!incomingGroups.has(incomingKey)) incomingGroups.set(incomingKey, []);
-        outgoingGroups.get(outgoingKey).push({ edge: anchored, sortX: targetRect.x + targetRect.width / 2 });
-        incomingGroups.get(incomingKey).push({ edge: anchored, sortX: sourceRect.x + sourceRect.width / 2 });
+        const targetSort = sortAxis === 'y' ? targetRect.y + targetRect.height / 2 : targetRect.x + targetRect.width / 2;
+        const sourceSort = sortAxis === 'y' ? sourceRect.y + sourceRect.height / 2 : sourceRect.x + sourceRect.width / 2;
+        outgoingGroups.get(outgoingKey).push({ edge: anchored, sortValue: targetSort });
+        incomingGroups.get(incomingKey).push({ edge: anchored, sortValue: sourceSort });
         return anchored;
     });
 
@@ -123,12 +140,12 @@ export function buildTaskEdgeAnchors(nodes, edges) {
     const assignGroup = (groups, role) => {
         for (const [key, entries] of groups.entries()) {
             const [nodeId, , side] = key.split(':');
-            entries.sort((a, b) => (a.sortX - b.sortX) || (a.edge._anchorIndex - b.edge._anchorIndex));
+            entries.sort((a, b) => (a.sortValue - b.sortValue) || (a.edge._anchorIndex - b.edge._anchorIndex));
             const handles = entries.map(({ edge }, index) => {
                 const handleId = `${role}-${side}-${index}`;
                 if (role === 'source') edge.sourceHandle = handleId;
                 else edge.targetHandle = handleId;
-                return { id: handleId, side, leftPct: edgeHandlePct(index, entries.length) };
+                return { id: handleId, side, offsetPct: edgeHandlePct(index, entries.length) };
             });
             nodeHandles[nodeId] = nodeHandles[nodeId] || { source: [], target: [] };
             nodeHandles[nodeId][role].push(...handles);
