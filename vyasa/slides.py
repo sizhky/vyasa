@@ -168,7 +168,7 @@ def split_markdown_paragraph_groups(markdown_text):
     for group in groups:
         if _contains_tabs_group(group):
             exploded.append(group)
-        elif _contains_list_group(group):
+        elif _contains_list_group(group) and not _contains_fenced_block(group):
             exploded.extend(_split_mixed_list_group(group))
         else:
             exploded.append(group)
@@ -214,6 +214,10 @@ def _split_mixed_list_group(group):
 def _contains_list_group(group):
     lines = [line.strip() for line in (group or "").splitlines() if line.strip()]
     return any(re.match(r"^([-*+]\s+|\d+\.\s+)", line) for line in lines)
+
+
+def _contains_fenced_block(group):
+    return any(re.match(r"^\s*(```+|~~~+)", line) for line in (group or "").splitlines())
 
 
 def _contains_tabs_group(group):
