@@ -870,10 +870,20 @@ async function renderTasksGraphs(rootElement = document) {
                     return {
                         ...edge,
                         data: { ...edge.data, highlightMode: mode },
+                        labelStyle: {
+                            ...(edge.labelStyle || {}),
+                            fill: highlighted ? 'currentColor' : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)',
+                            opacity: highlighted ? 1 : 0.18,
+                        },
+                        labelBgStyle: {
+                            ...(edge.labelBgStyle || {}),
+                            fill: 'var(--vyasa-paper)',
+                            fillOpacity: highlighted ? 0.88 : 0.08,
+                        },
                         style: {
                             ...edge.style,
                             stroke: highlighted ? 'var(--vyasa-primary)' : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)',
-                            opacity: highlighted ? 0.95 : 0.16,
+                            opacity: highlighted ? 0.95 : 0.08,
                             strokeWidth: mode === 'selected' ? 3.5 : 2.5,
                         },
                     };
