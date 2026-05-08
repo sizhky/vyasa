@@ -284,7 +284,27 @@ def preview_markdown(text: str, max_blocks: int = 5) -> str:
     marker = _MORE_MARKER_RE.search(text)
     if marker:
         return text[:marker.start()].rstrip()
-    blocks = [block.strip() for block in re.split(r"\n\s*\n", text) if block.strip()]
+    blocks = []
+    current = []
+    fence = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            token = stripped[:3]
+            fence = None if fence == token else token
+        if not stripped and not fence:
+            block = "\n".join(current).strip()
+            if block:
+                blocks.append(block)
+                if len(blocks) >= max_blocks:
+                    break
+            current = []
+            continue
+        current.append(line)
+    if len(blocks) < max_blocks:
+        block = "\n".join(current).strip()
+        if block:
+            blocks.append(block)
     return "\n\n".join(blocks[:max_blocks])
 
 def get_post_title(file_path: str | Path, abbreviations=None) -> str:
@@ -605,7 +625,7 @@ def _sort_vyasa_entries(entries, sort_method, folders_first):
     return sorted(entries, key=sort_key, reverse=reverse)
 
 def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
-    """List all posts in the blog root (md + pdf)."""
+    """List all posts in the blog root (md + pdf + tree)."""
     root = root.resolve()
     root_parts = len(root.parts)
     posts: list[dict] = []
@@ -619,7 +639,7 @@ def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
             continue
         if not include_hidden and any(part.startswith(".") for part in rel_parts):
             continue
-        if path.suffix.lower() not in {".md", ".pdf"}:
+        if path.suffix.lower() not in {".md", ".pdf", ".tree"}:
             continue
 
         rel = Path(*rel_parts)
@@ -627,9 +647,12 @@ def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
         if path.suffix.lower() == ".md":
             title = get_post_title(path, abbreviations=abbreviations)
             kind = "md"
-        else:
+        elif path.suffix.lower() == ".pdf":
             title = slug_to_title(rel.stem, abbreviations=abbreviations)
             kind = "pdf"
+        else:
+            title = slug_to_title(rel.stem, abbreviations=abbreviations)
+            kind = "tree"
 
         posts.append(
             {
@@ -642,7 +665,7 @@ def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
     return posts
 
 def list_vyasa_entries(root: Path, relative: str = ".", include_hidden: bool = False) -> dict:
-    """List immediate entries (folders + md/pdf files) under a relative path."""
+    """List immediate entries (folders + md/pdf/tree files) under a relative path."""
     root = root.resolve()
     target = (root / relative).resolve()
     if target != root and root not in target.parents:
@@ -658,16 +681,19 @@ def list_vyasa_entries(root: Path, relative: str = ".", include_hidden: bool = F
         if item.is_dir():
             entries.append({"type": "folder", "path": item.relative_to(root).as_posix()})
             continue
-        if item.suffix.lower() not in {".md", ".pdf"}:
+        if item.suffix.lower() not in {".md", ".pdf", ".tree"}:
             continue
         rel = item.relative_to(root)
         slug = rel.with_suffix("").as_posix()
         if item.suffix.lower() == ".md":
             title = get_post_title(item, abbreviations=abbreviations)
             kind = "md"
-        else:
+        elif item.suffix.lower() == ".pdf":
             title = slug_to_title(rel.stem, abbreviations=abbreviations)
             kind = "pdf"
+        else:
+            title = slug_to_title(rel.stem, abbreviations=abbreviations)
+            kind = "tree"
         entries.append({"type": kind, "path": slug, "title": title})
 
     return {"path": target.relative_to(root).as_posix(), "entries": entries}

@@ -1,25 +1,145 @@
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 import { D2 } from 'https://esm.sh/@terrastruct/d2@0.1.33?bundle';
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { clampScale, nextWheelState, sizeTaskNode } from './tasks_graph_core.js';
+import { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, nextWheelState, sizeTaskNode } from './tasks_graph_core.js';
 const mermaidStates = {};
 const d2States = {};
 const tasksElk = new ELK();
 let tasksReactFlowReady = null;
-const TASKS_GROUP_PADDING = { top: 56, right: 28, bottom: 28, left: 28 };
-const TASKS_ROOT_SPACING = { node: 12, layer: 24 };
+const TASKS_GROUP_PADDING = { top: 68, right: 40, bottom: 40, left: 40 };
+const TASKS_ROOT_SPACING = { node: 44, layer: 96 };
 const TASKS_EXPANSION_SHIFT_RATIO = 0.45;
-const TASKS_ROOT_COLLISION_GAP = 48;
-const TASKS_GROUP_Z = 100;
-const TASKS_EDGE_Z = 1000;
-const TASKS_TASK_Z = 10000;
-const TASKS_TITLE_Z = TASKS_EDGE_Z + 1;
+const TASKS_ROOT_COLLISION_GAP = 96;
+const TASKS_GROUP_BG_Z = 10;
+const TASKS_EDGE_Z = 100;
+const TASKS_EDGE_LABEL_Z = 120;
+const TASKS_EDGE_LABEL_FOCUS_Z = 1400;
+const TASKS_GROUP_Z = 180;
+const TASKS_TASK_Z = 1000;
+const TASKS_TITLE_Z = 300;
 const TASKS_NODE_BG = 'color-mix(in srgb, var(--vyasa-paper) 86%, var(--vyasa-primary) 14%)';
 const TASKS_GROUP_EXPANDED_BG = 'var(--vyasa-paper)';
 const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 42%, var(--vyasa-primary) 58%)';
 const TASKS_GROUP_TITLE_BG = 'color-mix(in srgb, var(--vyasa-paper) 76%, var(--vyasa-primary) 24%)';
 const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 74%, var(--vyasa-primary) 26%)';
+const TASKS_EDGE_FOCUS_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 45%, #f59e0b 55%)';
+const TASKS_SPACING_PRESETS = {
+    compact: { nodeSpacing: 24, layerSpacing: 64, collisionGap: 56, groupPadding: 28, edgeLabelWidth: 220 },
+    normal: { nodeSpacing: 44, layerSpacing: 96, collisionGap: 96, groupPadding: 40, edgeLabelWidth: 240 },
+    airy: { nodeSpacing: 72, layerSpacing: 140, collisionGap: 132, groupPadding: 56, edgeLabelWidth: 280 },
+    xl: { nodeSpacing: 96, layerSpacing: 180, collisionGap: 168, groupPadding: 72, edgeLabelWidth: 320 },
+};
+
+function readTasksNumber(value, fallback) {
+    const parsed = Number.parseFloat(value || '');
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function readTasksLayoutConfig(wrapper) {
+    const presetName = String(wrapper.dataset.tasksSpacing || 'normal').trim().toLowerCase();
+    const preset = TASKS_SPACING_PRESETS[presetName] || TASKS_SPACING_PRESETS.normal;
+    return {
+        spacing: presetName,
+        nodeSpacing: readTasksNumber(wrapper.dataset.tasksNodeSpacing, preset.nodeSpacing),
+        layerSpacing: readTasksNumber(wrapper.dataset.tasksLayerSpacing, preset.layerSpacing),
+        collisionGap: readTasksNumber(wrapper.dataset.tasksCollisionGap, preset.collisionGap),
+        groupPadding: readTasksNumber(wrapper.dataset.tasksGroupPadding, preset.groupPadding),
+        edgeLabelWidth: readTasksNumber(wrapper.dataset.tasksEdgeLabelWidth, preset.edgeLabelWidth),
+    };
+}
 window.__vyasaTasksActions = window.__vyasaTasksActions || {};
+window.__vyasaTasksDebug = window.__vyasaTasksDebug || { events: [] };
+window.__vyasaTasksDebug.enabled = window.__vyasaTasksDebug.enabled === true;
+
+function logTasksDebug(label, payload = {}) {
+    if (!window.__vyasaTasksDebug.enabled) return null;
+    const event = {
+        label,
+        at: new Date().toISOString(),
+        payload,
+    };
+    window.__vyasaTasksDebug.events.push(event);
+    if (window.__vyasaTasksDebug.events.length > 200) window.__vyasaTasksDebug.events.shift();
+    console.log(`[vyasa][tasks-debug] ${label} ${JSON.stringify(payload)}`);
+    return event;
+}
+
+function rectSummary(rect) {
+    if (!rect) return null;
+    return {
+        x: Math.round(rect.x || 0),
+        y: Math.round(rect.y || 0),
+        width: Math.round(rect.width || 0),
+        height: Math.round(rect.height || 0),
+    };
+}
+
+function tasksNodeMetaEntries(node) {
+    if (!node) return [];
+    const hidden = new Set([
+        'id', 'label', 'kind', 'group_id', 'parent_group_id',
+        'handleLayout', 'highlightMode', 'sourceGroupId',
+        'width', 'height', 'position', 'parentId',
+    ]);
+    return Object.entries(node)
+        .filter(([key, value]) => !hidden.has(key) && value !== null && value !== undefined && value !== '')
+        .map(([key, value]) => ({
+            key,
+            label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
+            value: String(value),
+        }));
+}
+
+function tasksNodeMetaLabel(key) {
+    return key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function tasksNodeAggregateEntries(nodeId, model) {
+    if (!nodeId || !model) return [];
+    const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
+    const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
+    const hidden = new Set([
+        'id', 'label', 'kind', 'group_id', 'parent_group_id',
+        'handleLayout', 'highlightMode', 'sourceGroupId',
+        'width', 'height', 'position', 'parentId',
+    ]);
+    const totals = new Map();
+    const visitNode = (item) => {
+        if (!item) return;
+        for (const [key, value] of Object.entries(item)) {
+            if (hidden.has(key)) continue;
+            const numeric = typeof value === 'number'
+                ? value
+                : (typeof value === 'string' && /^-?\d+$/.test(value.trim()) ? Number.parseInt(value.trim(), 10) : null);
+            if (!Number.isInteger(numeric)) continue;
+            totals.set(key, (totals.get(key) || 0) + numeric);
+        }
+    };
+    const walkGroup = (groupId) => {
+        const group = groupsById[groupId];
+        visitNode(group);
+        for (const taskId of (model.task_children?.[groupId] || [])) visitNode(tasksById[taskId]);
+        for (const childGroupId of (model.group_tree?.[groupId] || [])) walkGroup(childGroupId);
+    };
+    walkGroup(nodeId);
+    return Array.from(totals.entries()).map(([key, value]) => ({
+        key,
+        label: tasksNodeMetaLabel(key),
+        value: String(value),
+    }));
+}
+
+function resolveTasksNodeColor(node, model) {
+    if (!node) return '';
+    if (typeof node.color === 'string' && node.color.trim()) return node.color.trim();
+    const colorBy = typeof model?.color_by === 'string' ? model.color_by.trim() : '';
+    const palette = model?.color_palette && typeof model.color_palette === 'object' ? model.color_palette : {};
+    if (!colorBy) return '';
+    const value = node[colorBy];
+    if (typeof value !== 'string' || !value.trim()) return '';
+    const color = palette[value];
+    return typeof color === 'string' ? color.trim() : '';
+}
 
 window.runTasksHeaderAction = function(widgetId, action) {
     const actions = window.__vyasaTasksActions?.[widgetId];
@@ -36,6 +156,38 @@ function ensureTasksReactFlow() {
             link.rel = 'stylesheet';
             link.href = cssHref;
             document.head.appendChild(link);
+        }
+        if (!document.getElementById('vyasa-tasks-reactflow-overrides')) {
+            const style = document.createElement('style');
+            style.id = 'vyasa-tasks-reactflow-overrides';
+            style.textContent = `
+                .react-flow__edge-textwrapper,
+                .react-flow__edge-text,
+                .react-flow__edge-textbg {
+                    pointer-events: none;
+                }
+                .react-flow__edgelabel-renderer {
+                    pointer-events: none;
+                }
+                .vyasa-tasks-hovering-edge-labels .react-flow__edgelabel-renderer {
+                    z-index: ${TASKS_EDGE_LABEL_FOCUS_Z + 200} !important;
+                }
+                .react-flow__edge.animated path {
+                    animation: vyasa-edge-dashdraw var(--vyasa-edge-flow-duration, 0.6s) linear infinite;
+                }
+                .react-flow__edge.animated path.react-flow__edge-interaction {
+                    animation: none;
+                }
+                @keyframes vyasa-edge-dashdraw {
+                    from {
+                        stroke-dashoffset: var(--vyasa-edge-dash-cycle, 10);
+                    }
+                    to {
+                        stroke-dashoffset: 0;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
         }
         for (const src of [
             'https://unpkg.com/react@18/umd/react.production.min.js',
@@ -70,14 +222,14 @@ function buildVisibleTasksGraph(model, expanded) {
     const groupsById = Object.fromEntries((model.groups || []).map((g) => [g.id, g]));
     const tasksById = Object.fromEntries((model.tasks || []).map((t) => [t.id, t]));
     const visibleGroups = new Set(model.group_tree?.["null"] || []);
-    const visibleTasks = new Set();
+    const visibleTasks = new Set(model.task_children?.["null"] || []);
     for (const groupId of expanded) {
         (model.group_tree?.[groupId] || []).forEach((id) => visibleGroups.add(id));
         (model.task_children?.[groupId] || []).forEach((id) => visibleTasks.add(id));
     }
     const visibleNodes = [
-        ...Array.from(visibleGroups).map((id) => ({ id, label: groupsById[id]?.label || id, kind: 'group', ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
-        ...Array.from(visibleTasks).map((id) => ({ id, label: tasksById[id]?.label || id, kind: 'task', ...sizeTaskNode(tasksById[id]?.label || id, 'task') })),
+        ...Array.from(visibleGroups).map((id) => ({ ...(groupsById[id] || {}), id, label: groupsById[id]?.label || id, kind: 'group', ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
+        ...Array.from(visibleTasks).map((id) => ({ ...(tasksById[id] || {}), id, label: tasksById[id]?.label || id, kind: 'task', ...sizeTaskNode(tasksById[id]?.label || id, 'task') })),
     ];
     const parentOfGroup = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
     const parentOfTask = Object.fromEntries((model.tasks || []).map((t) => [t.id, t.group_id || null]));
@@ -98,10 +250,27 @@ function buildVisibleTasksGraph(model, expanded) {
         const key = `${src}->${dst}`;
         if (src !== dst && !seen.has(key)) {
             seen.add(key);
-            visibleEdges.push({ source: src, target: dst });
+            visibleEdges.push({ source: src, target: dst, label: edge.label || '' });
         }
     }
     return { nodes: visibleNodes, edges: visibleEdges };
+}
+
+function appendProjectedEdge(edges, seen, source, target, label = '') {
+    if (!source || !target || source === target) return;
+    const key = `${source}->${target}`;
+    const existing = seen.get(key);
+    if (existing) {
+        if (label && !existing.labels.has(label)) {
+            existing.labels.add(label);
+            existing.edge.label = Array.from(existing.labels).join(', ');
+        }
+        return;
+    }
+    const edge = { source, target };
+    if (label) edge.label = label;
+    edges.push(edge);
+    seen.set(key, { edge, labels: new Set(label ? [label] : []) });
 }
 
 function normalizeTasksGraphNodes(graph, model) {
@@ -130,6 +299,28 @@ function collectExpandedGroupsByDepth(groupTree, defaultOpenDepth) {
     return expanded;
 }
 
+function expandOneGroupDepth(groupTree, expandedSet) {
+    const expanded = new Set(expandedSet || []);
+    const roots = groupTree?.["null"] || [];
+    if (expanded.size === 0) {
+        roots.forEach((id) => expanded.add(id));
+        return expanded;
+    }
+    for (const groupId of Array.from(expanded)) {
+        for (const childId of (groupTree?.[groupId] || [])) expanded.add(childId);
+    }
+    return expanded;
+}
+
+function collapseOneGroupDepth(groupTree, expandedSet) {
+    const expanded = new Set(expandedSet || []);
+    for (const groupId of Array.from(expanded)) {
+        const hasExpandedChild = (groupTree?.[groupId] || []).some((childId) => expanded.has(childId));
+        if (!hasExpandedChild) expanded.delete(groupId);
+    }
+    return expanded;
+}
+
 function reduceTransitiveEdges(edges) {
     const nodes = new Set();
     const outgoing = new Map();
@@ -154,10 +345,25 @@ function reduceTransitiveEdges(edges) {
         }
         return false;
     };
-    return edges.filter((edge) => !canReach(edge.source, edge.target, `${edge.source}->${edge.target}`));
+    return edges.filter((edge) => edge.label || !canReach(edge.source, edge.target, `${edge.source}->${edge.target}`));
 }
 
-async function layoutTasksGraph(graph, model, expanded) {
+function stableTaskJitter(id, amplitudeX = 16, amplitudeY = 8) {
+    const text = String(id || '');
+    let hashA = 0;
+    let hashB = 0;
+    for (let i = 0; i < text.length; i += 1) {
+        const code = text.charCodeAt(i);
+        hashA = (hashA * 33 + code) % 1000003;
+        hashB = (hashB * 97 + code) % 1000033;
+    }
+    return {
+        x: ((hashA % 1000) / 999 - 0.5) * amplitudeX,
+        y: ((hashB % 1000) / 999 - 0.5) * amplitudeY,
+    };
+}
+
+async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layoutConfig = {}) {
     const nodeMap = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
     const layoutEdges = reduceTransitiveEdges(graph.edges || []);
     const parentOf = {};
@@ -180,9 +386,9 @@ async function layoutTasksGraph(graph, model, expanded) {
             node.layoutOptions = {
                 'elk.algorithm': 'layered',
                 'elk.direction': 'DOWN',
-                'elk.spacing.nodeNode': '40',
-                'elk.layered.spacing.nodeNodeBetweenLayers': '60',
-                'elk.padding': `[top=${TASKS_GROUP_PADDING.top},left=${TASKS_GROUP_PADDING.left},bottom=${TASKS_GROUP_PADDING.bottom},right=${TASKS_GROUP_PADDING.right}]`
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
+                'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`
             };
         }
         return node;
@@ -199,9 +405,9 @@ async function layoutTasksGraph(graph, model, expanded) {
             layoutOptions: {
                 'elk.algorithm': 'layered',
                 'elk.direction': 'DOWN',
-                'elk.spacing.nodeNode': '40',
-                'elk.layered.spacing.nodeNodeBetweenLayers': '60',
-                'elk.padding': `[top=${TASKS_GROUP_PADDING.top},left=${TASKS_GROUP_PADDING.left},bottom=${TASKS_GROUP_PADDING.bottom},right=${TASKS_GROUP_PADDING.right}]`
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
+                'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`
             },
             children: allChildren.map((cid) => {
                 const cn = nodeMap[cid];
@@ -237,9 +443,9 @@ async function layoutTasksGraph(graph, model, expanded) {
             node.layoutOptions = {
                 'elk.algorithm': 'layered',
                 'elk.direction': 'DOWN',
-                'elk.spacing.nodeNode': '40',
-                'elk.layered.spacing.nodeNodeBetweenLayers': '60',
-                'elk.padding': `[top=${TASKS_GROUP_PADDING.top},left=${TASKS_GROUP_PADDING.left},bottom=${TASKS_GROUP_PADDING.bottom},right=${TASKS_GROUP_PADDING.right}]`
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
+                'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`
             };
         }
         return node;
@@ -249,8 +455,8 @@ async function layoutTasksGraph(graph, model, expanded) {
     const rootLayoutOptions = {
         'elk.algorithm': 'layered',
         'elk.direction': 'DOWN',
-        'elk.spacing.nodeNode': `${TASKS_ROOT_SPACING.node}`,
-        'elk.layered.spacing.nodeNodeBetweenLayers': `${TASKS_ROOT_SPACING.layer}`,
+        'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || TASKS_ROOT_SPACING.node}`,
+        'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || TASKS_ROOT_SPACING.layer}`,
     };
     const laidOut = await tasksElk.layout({
         id: 'root',
@@ -261,8 +467,11 @@ async function layoutTasksGraph(graph, model, expanded) {
     const absPosMap = {};
     const relPosMap = {};
     const collectPos = (node, offsetX = 0, offsetY = 0) => {
-        relPosMap[node.id] = { x: node.x || 0, y: node.y || 0 };
-        absPosMap[node.id] = { x: (node.x || 0) + offsetX, y: (node.y || 0) + offsetY };
+        const jitter = stableTaskJitter(node.id, jitterConfig.x ?? 18, jitterConfig.y ?? 10);
+        const localX = (node.x || 0) + jitter.x;
+        const localY = (node.y || 0) + jitter.y;
+        relPosMap[node.id] = { x: localX, y: localY };
+        absPosMap[node.id] = { x: localX + offsetX, y: localY + offsetY };
         if (node.children) {
             node.children.forEach((c) => collectPos(c, absPosMap[node.id].x, absPosMap[node.id].y));
         }
@@ -275,8 +484,10 @@ async function layoutTasksGraph(graph, model, expanded) {
     return laidOut;
 }
 
-async function layoutBaseTasksGraph(graph, model) {
+async function layoutBaseTasksGraph(graph, model, jitterConfig = {}, layoutConfig = {}) {
     const rootGroupIds = new Set(model.group_tree?.["null"] || []);
+    const rootTaskIds = new Set(model.task_children?.["null"] || []);
+    const rootNodeIds = new Set([...rootGroupIds, ...rootTaskIds]);
     const taskToGroup = Object.fromEntries((model.tasks || []).map((t) => [t.id, t.group_id || null]));
     const groupParent = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
 
@@ -288,27 +499,33 @@ async function layoutBaseTasksGraph(graph, model) {
         return cur;
     };
 
-    const rootEdges = new Set();
+    const rootEdges = [];
+    const seenRootEdges = new Map();
     for (const edge of (model.dependency_edges || [])) {
         const srcGroup = taskToGroup[edge.source] || edge.source;
         const dstGroup = taskToGroup[edge.target] || edge.target;
         const srcRoot = getRoot(srcGroup);
         const dstRoot = getRoot(dstGroup);
-        if (srcRoot !== dstRoot && rootGroupIds.has(srcRoot) && rootGroupIds.has(dstRoot)) {
-            rootEdges.add(JSON.stringify([srcRoot, dstRoot]));
+        if (srcRoot !== dstRoot && rootNodeIds.has(srcRoot) && rootNodeIds.has(dstRoot)) {
+            appendProjectedEdge(rootEdges, seenRootEdges, srcRoot, dstRoot, edge.label || '');
         }
     }
 
     const rootGraph = {
-        nodes: graph.nodes.filter(n => rootGroupIds.has(n.id)),
-        edges: Array.from(rootEdges).map(e => {
-            const [src, dst] = JSON.parse(e);
-            return { source: src, target: dst };
-        })
+        nodes: graph.nodes.filter((n) => rootNodeIds.has(n.id)),
+        edges: rootEdges,
     };
-    console.log('rootGraph:', { nodes: rootGraph.nodes.map(n => n.id), edges: rootGraph.edges });
-    const laidOut = await layoutTasksGraph(rootGraph, model, new Set());
-    console.log('laidOut:', { width: laidOut.width, height: laidOut.height, positions: laidOut.absoluteChildPositions });
+    logTasksDebug('rootGraph', {
+        nodes: rootGraph.nodes.map(n => n.id),
+        edges: rootGraph.edges,
+        edgeCount: rootGraph.edges.length,
+    });
+    const laidOut = await layoutTasksGraph(rootGraph, model, new Set(), jitterConfig, layoutConfig);
+    logTasksDebug('baseLayout', {
+        width: Math.round(laidOut.width || 0),
+        height: Math.round(laidOut.height || 0),
+        positions: Object.fromEntries(Object.entries(laidOut.absoluteChildPositions || {}).map(([id, rect]) => [id, rectSummary(rect)])),
+    });
     const positions = {};
     for (const node of rootGraph.nodes) {
         const pos = laidOut.absoluteChildPositions?.[node.id] || { x: 0, y: 0 };
@@ -322,7 +539,7 @@ async function layoutBaseTasksGraph(graph, model) {
     return { positions, width: laidOut.width || 0, height: laidOut.height || 0 };
 }
 
-async function layoutGroupInternal(groupId, model, childSizes = {}) {
+async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig = {}, layoutConfig = {}) {
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
     const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
     const groupChildren = [
@@ -348,16 +565,13 @@ async function layoutGroupInternal(groupId, model, childSizes = {}) {
         }
         return null;
     };
-    const seenProjectedEdges = new Set();
+    const seenProjectedEdges = new Map();
     const projectedEdges = [];
     for (const edge of (model.dependency_edges || [])) {
         const source = directChildFor(edge.source);
         const target = directChildFor(edge.target);
         if (!childIds.has(source) || !childIds.has(target) || source === target) continue;
-        const key = `${source}->${target}`;
-        if (seenProjectedEdges.has(key)) continue;
-        seenProjectedEdges.add(key);
-        projectedEdges.push({ source, target });
+        appendProjectedEdge(projectedEdges, seenProjectedEdges, source, target, edge.label || '');
     }
     const reducedProjectedEdges = reduceTransitiveEdges(projectedEdges);
     const laidOut = await tasksElk.layout({
@@ -365,16 +579,22 @@ async function layoutGroupInternal(groupId, model, childSizes = {}) {
         layoutOptions: {
             'elk.algorithm': 'layered',
             'elk.direction': 'DOWN',
-            'elk.spacing.nodeNode': '40',
-            'elk.layered.spacing.nodeNodeBetweenLayers': '60',
-            'elk.padding': `[top=${TASKS_GROUP_PADDING.top},left=${TASKS_GROUP_PADDING.left},bottom=${TASKS_GROUP_PADDING.bottom},right=${TASKS_GROUP_PADDING.right}]`,
+            'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
+            'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
+            'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`,
         },
         children: groupChildren.map((child) => ({ id: child.id, width: child.width, height: child.height })),
         edges: reducedProjectedEdges.map((edge, index) => ({ id: `e${index}`, sources: [edge.source], targets: [edge.target] })),
     });
     const positions = {};
     for (const child of (laidOut.children || [])) {
-        positions[child.id] = { x: child.x || 0, y: child.y || 0, width: child.width || 0, height: child.height || 0 };
+        const jitter = stableTaskJitter(child.id, jitterConfig.x ?? 14, jitterConfig.y ?? 8);
+        positions[child.id] = {
+            x: (child.x || 0) + jitter.x,
+            y: (child.y || 0) + jitter.y,
+            width: child.width || 0,
+            height: child.height || 0,
+        };
     }
     return {
         positions,
@@ -385,7 +605,7 @@ async function layoutGroupInternal(groupId, model, childSizes = {}) {
     };
 }
 
-async function layoutExpandedGroups(model, expandedSet) {
+async function layoutExpandedGroups(model, expandedSet, jitterConfig = {}, layoutConfig = {}) {
     const expandedIds = Array.from(expandedSet);
     const groupParent = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
     const depthOf = (id) => {
@@ -403,14 +623,18 @@ async function layoutExpandedGroups(model, expandedSet) {
         for (const childId of (model.group_tree?.[groupId] || [])) {
             if (layouts[childId]) childSizes[childId] = layouts[childId].bbox;
         }
-        layouts[groupId] = await layoutGroupInternal(groupId, model, childSizes);
+        layouts[groupId] = await layoutGroupInternal(groupId, model, childSizes, jitterConfig, layoutConfig);
     }
     return layouts;
 }
 
-function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout, groupLayouts) {
+function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout, groupLayouts, layoutConfig = {}) {
     const visible = buildVisibleTasksGraph(model, expandedSet);
-    console.log('visible graph:', { nodes: visible.nodes.map(n => n.id), edges: visible.edges });
+    logTasksDebug('visibleGraph', {
+        expanded: Array.from(expandedSet),
+        nodes: visible.nodes.map(n => n.id),
+        edges: visible.edges,
+    });
     const visibleNodeMap = Object.fromEntries(visible.nodes.map((node) => [node.id, node]));
     const parentOf = {};
     for (const groupId of expandedSet) {
@@ -544,45 +768,35 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
             .map((id) => topLevelState[id])
             .filter(Boolean)
             .sort((a, b) => (a.y - b.y) || (a.x - b.x));
-        const taskToGroup = Object.fromEntries((model.tasks || []).map((task) => [task.id, task.group_id || null]));
-        const groupParent = Object.fromEntries((model.groups || []).map((group) => [group.id, group.parent_group_id || null]));
-        const topLevelIdSet = new Set(topLevelIds);
-        const rootFor = (id) => {
-            let cur = taskToGroup[id] || id;
-            while (cur && !topLevelIdSet.has(cur)) cur = groupParent[cur] || null;
-            return cur;
-        };
-        const rootDependencyEdges = [];
-        const seenRootDependencyEdges = new Set();
-        for (const edge of (model.dependency_edges || [])) {
-            const source = rootFor(edge.source);
-            const target = rootFor(edge.target);
-            const key = `${source}->${target}`;
-            if (!source || !target || source === target || seenRootDependencyEdges.has(key)) continue;
-            seenRootDependencyEdges.add(key);
-            rootDependencyEdges.push({ source, target });
-        }
+        logTasksDebug('unwarpBeforeCollisions', {
+            expandedTopLevelIds,
+            topLevelState: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
+        });
         for (let pass = 0; pass < 4; pass += 1) {
-            for (const edge of rootDependencyEdges) {
-                const source = topLevelState[edge.source];
-                const target = topLevelState[edge.target];
-                if (!source || !target) continue;
-                target.y = Math.max(target.y, source.y + source.height + TASKS_ROOT_COLLISION_GAP);
-            }
+            const collisionMoves = [];
             for (let i = 0; i < topLevelStateList.length; i += 1) {
                 const a = topLevelStateList[i];
                 for (let j = i + 1; j < topLevelStateList.length; j += 1) {
                     const b = topLevelStateList[j];
                     const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
                     const overlapY = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
-                    if (overlapX <= -TASKS_ROOT_COLLISION_GAP || overlapY <= -TASKS_ROOT_COLLISION_GAP) continue;
+                    if (overlapX <= -(layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP) || overlapY <= -(layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP)) continue;
                     if (Math.abs((a.x + a.width / 2) - (b.x + b.width / 2)) < Math.abs((a.y + a.height / 2) - (b.y + b.height / 2))) {
-                        b.y = a.y + a.height + TASKS_ROOT_COLLISION_GAP;
+                        const nextY = a.y + a.height + (layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP);
+                        if (nextY !== b.y) collisionMoves.push({ pass, axis: 'y', fromY: Math.round(b.y), toY: Math.round(nextY) });
+                        b.y = nextY;
                     } else {
-                        b.x = a.x + a.width + TASKS_ROOT_COLLISION_GAP;
+                        const nextX = a.x + a.width + (layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP);
+                        if (nextX !== b.x) collisionMoves.push({ pass, axis: 'x', fromX: Math.round(b.x), toX: Math.round(nextX) });
+                        b.x = nextX;
                     }
                 }
             }
+            logTasksDebug('unwarpPass', {
+                pass,
+                collisionMoves,
+                topLevelState: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
+            });
         }
 
         for (const node of nodes.filter((n) => !n.parentId)) {
@@ -591,21 +805,24 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
             node.position = { x: state.x, y: state.y };
         }
 
-        console.log('[unwarp] topLevelNodes:', nodes.filter(n => !n.parentId).map(n => ({
-            id: n.id,
-            x: Math.round(n.position.x),
-            y: Math.round(n.position.y)
-        })));
+        logTasksDebug('unwarpFinal', {
+            topLevelNodes: nodes.filter(n => !n.parentId).map(n => ({
+                id: n.id,
+                x: Math.round(n.position.x),
+                y: Math.round(n.position.y),
+                width: Math.round(n.width || 0),
+                height: Math.round(n.height || 0),
+            })),
+        });
     }
 
     const finalEdges = visible.edges.map((e, i) => ({
         id: `${e.source}-${e.target}-${i}`,
         source: e.source,
         target: e.target,
-        sourceHandle: 'bottom',
-        targetHandle: 'top',
+        label: e.label || undefined,
     }));
-    console.log('deriveSquishedExpandedLayout:', { visibleEdges: visible.edges, finalEdges });
+    logTasksDebug('deriveResult', { visibleEdges: visible.edges, finalEdges });
     return {
         nodes,
         edges: finalEdges,
@@ -648,6 +865,11 @@ async function renderTasksGraphs(rootElement = document) {
         if (wrapper.dataset.tasksMounted === 'true') return;
         const mount = wrapper.querySelector('.vyasa-tasks-flow');
         if (!mount || !rf) return;
+        const jitterConfig = {
+            x: Number.parseFloat(wrapper.dataset.tasksJitter || '0'),
+            y: Number.parseFloat(wrapper.dataset.tasksJitterY || wrapper.dataset.tasksJitter || '0'),
+        };
+        const layoutConfig = readTasksLayoutConfig(wrapper);
         const model = JSON.parse(wrapper.dataset.tasksPayload || '{"groups":[],"tasks":[],"group_tree":{},"task_children":{},"dependency_edges":[]}');
         const rawGraph = normalizeTasksGraphNodes(JSON.parse(wrapper.dataset.tasksGraph || '{"nodes":[],"edges":[]}'), model);
         const widgetId = wrapper.id;
@@ -663,6 +885,7 @@ async function renderTasksGraphs(rootElement = document) {
             const flowWrapperRef = React.useRef(null);
             const [expanded, setExpanded] = React.useState(() => new Set(initialExpandedSet));
             const [selectedNodeId, setSelectedNodeId] = React.useState(null);
+            const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
@@ -677,18 +900,20 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             }, []);
             const ensureBaseLayout = React.useCallback(async () => {
-                if (!baseLayoutRef.current) baseLayoutRef.current = await layoutBaseTasksGraph(rawGraph, model);
+                if (!baseLayoutRef.current) baseLayoutRef.current = await layoutBaseTasksGraph(rawGraph, model, jitterConfig, layoutConfig);
                 return baseLayoutRef.current;
             }, [model]);
             const rebuildLayout = React.useCallback(async (expandedSet) => {
                 const baseLayout = await ensureBaseLayout();
-                groupLayoutsRef.current = await layoutExpandedGroups(model, expandedSet);
+                groupLayoutsRef.current = await layoutExpandedGroups(model, expandedSet, jitterConfig, layoutConfig);
                 const rootGroupIds = new Set(model.group_tree?.["null"] || []);
+                const rootTaskIds = new Set(model.task_children?.["null"] || []);
+                const rootNodeIds = new Set([...rootGroupIds, ...rootTaskIds]);
                 const rootGraph = {
-                    nodes: rawGraph.nodes.filter(n => rootGroupIds.has(n.id)),
-                    edges: (rawGraph.edges || []).filter(e => rootGroupIds.has(e.source) && rootGroupIds.has(e.target))
+                    nodes: rawGraph.nodes.filter((n) => rootNodeIds.has(n.id)),
+                    edges: (rawGraph.edges || []).filter((e) => rootNodeIds.has(e.source) && rootNodeIds.has(e.target))
                 };
-                const derived = deriveSquishedExpandedLayout(rootGraph, model, expandedSet, baseLayout, groupLayoutsRef.current);
+                const derived = deriveSquishedExpandedLayout(rootGraph, model, expandedSet, baseLayout, groupLayoutsRef.current, layoutConfig);
                 const derivedById = Object.fromEntries((derived.nodes || []).map((node) => [node.id, node]));
                 const depthOf = (node) => {
                     let depth = 0;
@@ -715,8 +940,14 @@ async function renderTasksGraphs(rootElement = document) {
                     const depth = depthOf(n);
                     const nodeZ = n.kind !== 'group'
                         ? TASKS_TASK_Z + depth
-                        : TASKS_GROUP_Z + depth;
-                    const background = isExpanded ? TASKS_GROUP_EXPANDED_BG : TASKS_NODE_BG;
+                        : ((isExpanded ? TASKS_GROUP_BG_Z : TASKS_GROUP_Z) + depth);
+                    const nodeColor = resolveTasksNodeColor(n, model);
+                    const background = isExpanded
+                        ? (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 86%, ${nodeColor} 14%)` : TASKS_GROUP_EXPANDED_BG)
+                        : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 78%, ${nodeColor} 22%)` : TASKS_NODE_BG);
+                    const border = nodeColor
+                        ? `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`
+                        : TASKS_NODE_BORDER;
                     const rfNode = {
                         id: n.id,
                         type: 'vyasaTask',
@@ -727,7 +958,7 @@ async function renderTasksGraphs(rootElement = document) {
                             height: n.height,
                             zIndex: nodeZ,
                             background,
-                            border: TASKS_NODE_BORDER,
+                            border,
                             borderRadius: isExpanded ? 12 : 6,
                             boxShadow: 'none',
                             overflow: 'hidden',
@@ -765,13 +996,47 @@ async function renderTasksGraphs(rootElement = document) {
                         selectable: false,
                     });
                 }
-                const baseEdges = derived.edges.map((edge) => ({
+                const anchored = buildTaskEdgeAnchors(baseNodes, derived.edges);
+                const baseEdges = anchored.edges.map((edge) => ({
                     ...edge,
-                    type: 'default',
+                    type: 'vyasaEdge',
+                    animated: false,
+                    markerEnd: {
+                        type: rf.MarkerType.ArrowClosed,
+                        width: 8,
+                        height: 8,
+                        color: 'currentColor',
+                    },
                     zIndex: TASKS_EDGE_Z,
+                    labelBgPadding: [6, 3],
+                    labelBgBorderRadius: 3,
+                    labelZIndex: TASKS_EDGE_LABEL_Z,
+                    labelMaxWidth: layoutConfig.edgeLabelWidth,
+                    labelStyle: { fontSize: 11, fontWeight: 600, fill: 'currentColor' },
+                    labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
                 }));
-                graphBaseRef.current = { nodes: baseNodes, edges: baseEdges };
-                setNodes(baseNodes);
+                const anchoredNodes = baseNodes.map((node) => ({
+                    ...node,
+                    data: {
+                        ...node.data,
+                        handleLayout: anchored.nodeHandles[node.id] || { source: [], target: [] },
+                    },
+                }));
+                graphBaseRef.current = { nodes: anchoredNodes, edges: baseEdges };
+                window.__vyasaTasksDebug.latest = {
+                    widgetId,
+                    expanded: Array.from(expandedSet),
+                    nodes: anchoredNodes.map((node) => ({
+                        id: node.id,
+                        label: node.data?.label,
+                        kind: node.data?.kind,
+                        parentId: node.parentId || null,
+                        position: rectSummary({ ...node.position, width: node.style?.width, height: node.style?.height }),
+                    })),
+                    edges: baseEdges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, label: edge.label || '' })),
+                };
+                logTasksDebug('reactFlowState', window.__vyasaTasksDebug.latest);
+                setNodes(anchoredNodes);
                 setEdges(baseEdges);
                 setGraphRevision((value) => value + 1);
             }, [ensureBaseLayout, model]);
@@ -779,7 +1044,7 @@ async function renderTasksGraphs(rootElement = document) {
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: 1, stroke: 'currentColor' },
             }), []);
-            const applyHighlight = React.useCallback((nodeId) => {
+            const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null) => {
                 const baseNodes = graphBaseRef.current.nodes || [];
                 const baseEdges = graphBaseRef.current.edges || [];
                 if (!nodeId || !baseNodes.some((node) => node.id === nodeId)) {
@@ -787,26 +1052,37 @@ async function renderTasksGraphs(rootElement = document) {
                     setEdges(baseEdges);
                     return;
                 }
-                const highlightedNodeIds = new Set([nodeId]);
                 const highlightedEdgeIds = new Set();
+                const directEndpointIds = new Set([nodeId]);
+                const isFocusedPrimary = hoveredNodeId === nodeId;
+                const isFocusedNeighbor = hoveredNodeId && hoveredNodeId !== nodeId;
                 for (const edge of baseEdges) {
                     if (edge.source === nodeId || edge.target === nodeId) {
                         highlightedEdgeIds.add(edge.id);
-                        highlightedNodeIds.add(edge.source);
-                        highlightedNodeIds.add(edge.target);
-                    }
-                }
-                const directEndpointIds = new Set([nodeId]);
-                for (const edge of baseEdges) {
-                    if (edge.source === nodeId || edge.target === nodeId) {
                         directEndpointIds.add(edge.source);
                         directEndpointIds.add(edge.target);
                     }
                 }
+                const focusedEdgeIds = new Set();
+                if (isFocusedPrimary) {
+                    for (const edge of baseEdges) {
+                        if (highlightedEdgeIds.has(edge.id)) focusedEdgeIds.add(edge.id);
+                    }
+                } else if (isFocusedNeighbor && directEndpointIds.has(hoveredNodeId)) {
+                    for (const edge of baseEdges) {
+                        const linksSelectedAndHovered =
+                            (edge.source === nodeId && edge.target === hoveredNodeId) ||
+                            (edge.source === hoveredNodeId && edge.target === nodeId);
+                        if (linksSelectedAndHovered) focusedEdgeIds.add(edge.id);
+                    }
+                }
                 setNodes(baseNodes.map((node) => {
                     const mode = directEndpointIds.has(node.id)
-                        ? (node.id === nodeId ? 'selected' : 'neighbor')
+                        ? (node.id === nodeId
+                            ? (isFocusedPrimary ? 'selected-focus' : 'selected')
+                            : (node.id === hoveredNodeId ? 'neighbor-focus' : 'neighbor'))
                         : 'dim';
+                    const nodeColor = resolveTasksNodeColor(node.data, model);
                     return {
                         ...node,
                         data: { ...node.data, highlightMode: mode },
@@ -814,25 +1090,66 @@ async function renderTasksGraphs(rootElement = document) {
                             ...node.style,
                             background: mode === 'dim'
                                 ? node.style.background
-                                : TASKS_NODE_BG_ACTIVE,
+                                : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 68%, ${nodeColor} 32%)` : TASKS_NODE_BG_ACTIVE),
                             opacity: mode === 'dim' ? 0.22 : 1,
+                            boxShadow: (mode === 'neighbor-focus' || mode === 'selected-focus')
+                                ? '0 0 0 2px color-mix(in srgb, var(--vyasa-primary) 60%, transparent)'
+                                : 'none',
                         },
                     };
                 }));
-                setEdges(baseEdges.map((edge) => {
-                    const mode = highlightedEdgeIds.has(edge.id) ? 'selected' : 'dim';
+                const nextEdges = baseEdges.map((edge) => {
+                    const mode = focusedEdgeIds.has(edge.id)
+                        ? 'focused'
+                        : (highlightedEdgeIds.has(edge.id) ? 'selected' : 'dim');
                     const highlighted = mode !== 'dim';
+                    const dashArray = highlighted ? (mode === 'focused' ? '10 6' : '8 6') : undefined;
+                    const dashCycle = dashArray
+                        ? dashArray.split(/\s+/).map(Number).filter(Number.isFinite).slice(0, 2).reduce((sum, value) => sum + value, 0)
+                        : undefined;
                     return {
                         ...edge,
                         data: { ...edge.data, highlightMode: mode },
+                        labelZIndex: mode === 'dim'
+                            ? TASKS_EDGE_LABEL_Z
+                            : TASKS_EDGE_LABEL_FOCUS_Z,
+                        labelStyle: {
+                            ...(edge.labelStyle || {}),
+                            fill: mode === 'focused'
+                                ? TASKS_EDGE_FOCUS_COLOR
+                                : (highlighted ? 'currentColor' : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)'),
+                            opacity: hoveredNodeId
+                                ? (mode === 'focused' ? 1 : 0.05)
+                                : (mode === 'focused' ? 1 : (highlighted ? 1 : 0.18)),
+                            fontWeight: mode === 'focused' ? 800 : 600,
+                        },
+                        labelBgStyle: {
+                            ...(edge.labelBgStyle || {}),
+                            fill: mode === 'focused'
+                                ? 'color-mix(in srgb, var(--vyasa-paper) 80%, #f59e0b 20%)'
+                                : 'var(--vyasa-paper)',
+                            fillOpacity: hoveredNodeId
+                                ? (mode === 'focused' ? 0.96 : 0.02)
+                                : (mode === 'focused' ? 0.96 : (highlighted ? 0.88 : 0.08)),
+                        },
                         style: {
                             ...edge.style,
-                            stroke: highlighted ? 'var(--vyasa-primary)' : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)',
-                            opacity: highlighted ? 0.95 : 0.16,
-                            strokeWidth: mode === 'selected' ? 3.5 : 2.5,
+                            stroke: mode === 'focused'
+                                ? TASKS_EDGE_FOCUS_COLOR
+                                : (highlighted ? 'var(--vyasa-primary)' : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)'),
+                            opacity: mode === 'focused' ? 1 : (highlighted ? 0.95 : 0.08),
+                            strokeWidth: mode === 'focused' ? 5 : (mode === 'selected' ? 3.5 : 2.5),
+                            strokeDasharray: dashArray,
+                            '--vyasa-edge-dash-cycle': dashCycle,
+                            '--vyasa-edge-flow-duration': mode === 'focused' ? '0.72s' : '0.64s',
+                            strokeLinecap: highlighted ? 'round' : undefined,
                         },
+                        animated: highlighted,
                     };
-                }));
+                });
+                const edgePriority = { dim: 0, selected: 1, focused: 2 };
+                nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
+                setEdges(nextEdges);
             }, []);
             React.useEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
@@ -840,8 +1157,12 @@ async function renderTasksGraphs(rootElement = document) {
                     setSelectedNodeId(null);
                     return;
                 }
-                applyHighlight(selectedNodeId);
-            }, [graphRevision, selectedNodeId, applyHighlight]);
+                if (hoveredNodeId && !baseNodeIds.has(hoveredNodeId)) {
+                    setHoveredNodeId(null);
+                    return;
+                }
+                applyHighlight(selectedNodeId, hoveredNodeId);
+            }, [graphRevision, selectedNodeId, hoveredNodeId, applyHighlight]);
             React.useEffect(() => {
                 const nextCount = expanded.size;
                 if (nextCount > prevExpandedCountRef.current) {
@@ -867,7 +1188,53 @@ async function renderTasksGraphs(rootElement = document) {
                     if (rafId !== null) window.cancelAnimationFrame(rafId);
                 };
             }, [graphRevision, expanded]);
+            const CustomEdge = React.memo((props) => {
+                const [path, labelX, labelY] = rf.getBezierPath(props);
+                const fullLabel = String(props.label || '').replace(/\\n/g, '\n');
+                const labelLines = fullLabel.split(/\r?\n/);
+                const highlightMode = props.data?.highlightMode || 'none';
+                const showFullLabel = highlightMode === 'selected' || highlightMode === 'focused';
+                const displayLabel = showFullLabel
+                    ? fullLabel
+                    : (labelLines.length > 1 ? `${labelLines[0]}...` : fullLabel);
+                const labelStyle = props.labelStyle || {};
+                const labelBgStyle = props.labelBgStyle || {};
+                return React.createElement(React.Fragment, null,
+                    React.createElement(rf.BaseEdge, { ...props, path }),
+                    displayLabel && React.createElement(rf.EdgeLabelRenderer, null,
+                        React.createElement('div', {
+                            style: {
+                                position: 'absolute',
+                                transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+                                pointerEvents: 'none',
+                                zIndex: props.labelZIndex || TASKS_EDGE_LABEL_Z,
+                                padding: `${props.labelBgPadding?.[1] || 0}px ${props.labelBgPadding?.[0] || 0}px`,
+                                borderRadius: `${props.labelBgBorderRadius || 0}px`,
+                                background: labelBgStyle.fill || 'transparent',
+                                opacity: labelBgStyle.fillOpacity ?? labelStyle.opacity ?? 1,
+                                color: labelStyle.fill || 'currentColor',
+                                fontSize: `${labelStyle.fontSize || 11}px`,
+                                fontWeight: labelStyle.fontWeight || 600,
+                                whiteSpace: 'pre-line',
+                                textAlign: 'center',
+                                lineHeight: 1.35,
+                                maxWidth: `${props.labelMaxWidth || 240}px`,
+                            },
+                            title: fullLabel,
+                        }, displayLabel)
+                    )
+                );
+            });
             const CustomNode = React.memo(({ data, id }) => {
+                const renderHandles = (role) => (data?.handleLayout?.[role] || []).map((handle) => (
+                    Handle && React.createElement(Handle, {
+                        key: `${role}-${handle.id}`,
+                        id: handle.id,
+                        type: role,
+                        position: handle.side === 'top' ? (Position?.Top || 'top') : (Position?.Bottom || 'bottom'),
+                        style: { left: `${handle.leftPct}%`, opacity: 0, pointerEvents: 'none' },
+                    })
+                ));
                 if (data?.kind === 'groupTitle') {
                     const handleCollapse = (e) => {
                         e.stopPropagation();
@@ -905,9 +1272,9 @@ async function renderTasksGraphs(rootElement = document) {
                 const isGroup = data?.kind === 'group';
                 const isExpanded = expanded.has(id);
                 const highlightMode = data?.highlightMode || 'none';
-                const isHighlighted = highlightMode === 'selected' || highlightMode === 'neighbor';
+                const isHighlighted = highlightMode === 'selected' || highlightMode === 'neighbor' || highlightMode === 'neighbor-focus';
                 const isDimmed = highlightMode === 'dim';
-                const selectable = !isGroup;
+                const isInteractiveTask = !isGroup && isHighlighted;
                 const handleExpand = (e) => {
                     e.stopPropagation();
                     const next = new Set(expanded);
@@ -916,20 +1283,18 @@ async function renderTasksGraphs(rootElement = document) {
                 };
                 if (isExpanded) {
                     return React.createElement('div', {
-                        onClick: () => { if (isGroup) setSelectedNodeId(null); },
                         style: {
                             width: '100%', height: '100%',
                             boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: '8px',
                             opacity: isDimmed ? 0.22 : 1,
                         }
                     },
-                        Handle && React.createElement(Handle, { id: 'top', type: 'target', position: Position?.Top || 'top', style: { opacity: 0, pointerEvents: 'none' } }),
+                        ...renderHandles('target'),
                         React.createElement('div', { style: { flex: 1, minHeight: '48px', position: 'relative' } }),
-                        Handle && React.createElement(Handle, { id: 'bottom', type: 'source', position: Position?.Bottom || 'bottom', style: { opacity: 0, pointerEvents: 'none' } })
+                        ...renderHandles('source')
                     );
                 }
                 return React.createElement('div', {
-                    onClick: () => { if (isGroup) setSelectedNodeId(null); },
                     style: {
                         width: '100%', height: '100%',
                         boxSizing: 'border-box',
@@ -940,13 +1305,13 @@ async function renderTasksGraphs(rootElement = document) {
                         fontWeight: '600',
                         fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
                         textAlign: 'center',
-                        cursor: isGroup ? 'pointer' : 'default',
+                        cursor: (isGroup || isInteractiveTask) ? 'pointer' : 'default',
                         padding: '10px 12px',
                         overflow: 'hidden',
                         opacity: isDimmed ? 0.22 : 1,
                     }
                 },
-                    Handle && React.createElement(Handle, { id: 'top', type: 'target', position: Position?.Top || 'top', style: { opacity: 0, pointerEvents: 'none' } }),
+                    ...renderHandles('target'),
                     React.createElement('span', {
                         style: {
                             boxSizing: 'border-box',
@@ -965,13 +1330,14 @@ async function renderTasksGraphs(rootElement = document) {
                         onClick: handleExpand,
                         style: { position: 'absolute', right: '8px', top: '8px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
                     }, '+'),
-                    Handle && React.createElement(Handle, { id: 'bottom', type: 'source', position: Position?.Bottom || 'bottom', style: { opacity: 0, pointerEvents: 'none' } })
+                    ...renderHandles('source')
                 );
             });
             React.useEffect(() => {
                 rebuildLayout(expanded);
             }, [expanded, rebuildLayout]);
             const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [expanded]);
+            const edgeTypes = React.useMemo(() => ({ vyasaEdge: CustomEdge }), []);
             const FitViewHotkey = () => {
                 const reactFlow = rf.useReactFlow();
                 React.useEffect(() => {
@@ -988,13 +1354,29 @@ async function renderTasksGraphs(rootElement = document) {
                             reactFlow.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true });
                             return;
                         }
+                        if (key === 'i' || key === 'o') {
+                            event.preventDefault();
+                            if (key === 'o') pendingFitActionRef.current = 'collapse';
+                            setExpanded((current) => {
+                                const next = key === 'o'
+                                    ? collapseOneGroupDepth(model.group_tree, current)
+                                    : expandOneGroupDepth(model.group_tree, current);
+                                logTasksDebug('shortcutDepth', { direction: key === 'o' ? 'collapse' : 'expand', expanded: Array.from(next) });
+                                return next;
+                            });
+                            return;
+                        }
                         if (key === 'u') {
                             event.preventDefault();
-                            if (event.shiftKey) {
-                                setExpanded(new Set());
-                            } else {
-                                setExpanded(new Set((model.groups || []).map((group) => group.id)));
-                            }
+                            setExpanded(new Set((model.groups || []).map((group) => group.id)));
+                            logTasksDebug('shortcutExpandAll', { groupCount: (model.groups || []).length });
+                            return;
+                        }
+                        if (key === 'p') {
+                            event.preventDefault();
+                            pendingFitActionRef.current = 'collapse';
+                            setExpanded(new Set());
+                            logTasksDebug('shortcutCollapseAll');
                             return;
                         }
                         if (key === 'arrowup') {
@@ -1038,19 +1420,87 @@ async function renderTasksGraphs(rootElement = document) {
                     React.createElement('span')
                 );
             };
-            const clearSelection = () => setSelectedNodeId(null);
+            const SelectedNodePanel = () => {
+                const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === selectedNodeId)?.data || null;
+                const sourceNodeId = selectedNode?.kind === 'groupTitle' ? selectedNode.sourceGroupId : selectedNode?.id;
+                const entries = selectedNode?.kind === 'group'
+                    ? tasksNodeAggregateEntries(sourceNodeId, model)
+                    : tasksNodeMetaEntries(selectedNode);
+                if (!selectedNode || entries.length === 0) return null;
+                return React.createElement('div', {
+                    style: { position: 'absolute', top: '12px', right: '12px', zIndex: 30, width: '240px', maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
+                },
+                    React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Node Details'),
+                    React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, marginBottom: '10px' } }, selectedNode.label || selectedNode.id),
+                    React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(72px, 88px) 1fr', gap: '6px 10px', fontSize: '12px', lineHeight: 1.35 } },
+                        ...entries.map((entry) => React.createElement(React.Fragment, { key: entry.key },
+                            React.createElement('div', { style: { fontWeight: 700, opacity: 0.7 } }, entry.label),
+                            React.createElement('div', { style: { minWidth: 0, overflowWrap: 'anywhere' } }, entry.value),
+                        ))
+                    )
+                );
+            };
+            const clearSelection = () => {
+                setSelectedNodeId(null);
+                setHoveredNodeId(null);
+            };
+            const selectGraphNode = React.useCallback((_, node) => {
+                if (!isTasksGraphNodeSelectable(node.data?.kind)) return;
+                const sourceNodeId = node.data?.kind === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                setSelectedNodeId((current) => current === sourceNodeId ? null : sourceNodeId);
+                setHoveredNodeId(null);
+            }, []);
+            const focusNeighborEdge = React.useCallback((_, node) => {
+                if (!selectedNodeId || !node?.id) return;
+                setHoveredNodeId(node?.id || null);
+            }, [selectedNodeId]);
+            const clearNeighborEdgeFocus = React.useCallback(() => {
+                setHoveredNodeId(null);
+            }, []);
             const ActionBridge = () => {
                 const reactFlow = rf.useReactFlow();
                 reactFlowApiRef.current = reactFlow;
                 React.useEffect(() => {
                     window.__vyasaTasksActions[widgetId] = {
                         fit: () => reactFlow.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true }),
+                        dump: () => {
+                            logTasksDebug('manualDump', window.__vyasaTasksDebug.latest || {});
+                            return window.__vyasaTasksDebug.latest;
+                        },
+                        toggle: (nodeId) => {
+                            if (!(model.groups || []).some((group) => group.id === nodeId)) return;
+                            setExpanded((current) => {
+                                const next = new Set(current);
+                                if (next.has(nodeId)) next.delete(nodeId); else next.add(nodeId);
+                                logTasksDebug('manualToggle', { nodeId, expanded: Array.from(next) });
+                                return next;
+                            });
+                        },
+                        select: (nodeId) => {
+                            setSelectedNodeId((current) => current === nodeId ? null : nodeId);
+                            logTasksDebug('manualSelect', { nodeId });
+                        },
                         expand: () => {
                             setExpanded(new Set((model.groups || []).map((group) => group.id)));
                         },
                         collapse: () => {
                             pendingFitActionRef.current = 'collapse';
                             setExpanded(new Set());
+                        },
+                        expandDepth: () => {
+                            setExpanded((current) => {
+                                const next = expandOneGroupDepth(model.group_tree, current);
+                                logTasksDebug('manualExpandDepth', { expanded: Array.from(next) });
+                                return next;
+                            });
+                        },
+                        collapseDepth: () => {
+                            pendingFitActionRef.current = 'collapse';
+                            setExpanded((current) => {
+                                const next = collapseOneGroupDepth(model.group_tree, current);
+                                logTasksDebug('manualCollapseDepth', { expanded: Array.from(next) });
+                                return next;
+                            });
                         },
                     };
                     return () => {
@@ -1059,24 +1509,27 @@ async function renderTasksGraphs(rootElement = document) {
                 }, [reactFlow]);
                 return null;
             };
+            const flowWrapperClassName = hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '';
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
-                window.React.createElement('div', { ref: flowWrapperRef, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: (_, node) => { if (node.data?.kind !== 'task') return; setSelectedNodeId((current) => current === node.id ? null : node.id); }, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
+                window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge)
-                    )
+                    ),
+                    window.React.createElement(SelectedNodePanel)
                 )
-            ) : window.React.createElement('div', { ref: flowWrapperRef, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
-                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: (_, node) => { if (node.data?.kind !== 'task') return; setSelectedNodeId((current) => current === node.id ? null : node.id); }, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
+            ) : window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
+                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge)
-                )
+                ),
+                window.React.createElement(SelectedNodePanel)
             );
         };
         if (window.ReactDOM.createRoot) window.ReactDOM.createRoot(mount).render(window.React.createElement(TasksGraphApp)); else window.ReactDOM.render(window.React.createElement(TasksGraphApp), mount);
@@ -1889,6 +2342,14 @@ window.openTasksFullscreen = async function(id) {
     fullscreenWrapper.setAttribute('data-tasks-fullscreen', 'true');
     fullscreenWrapper.setAttribute('data-tasks-title', originalTitle);
     fullscreenWrapper.setAttribute('data-tasks-default-open-depth', wrapper.getAttribute('data-tasks-default-open-depth') || '0');
+    fullscreenWrapper.setAttribute('data-tasks-jitter', wrapper.getAttribute('data-tasks-jitter') || '0');
+    fullscreenWrapper.setAttribute('data-tasks-jitter-y', wrapper.getAttribute('data-tasks-jitter-y') || wrapper.getAttribute('data-tasks-jitter') || '0');
+    fullscreenWrapper.setAttribute('data-tasks-spacing', wrapper.getAttribute('data-tasks-spacing') || 'normal');
+    fullscreenWrapper.setAttribute('data-tasks-node-spacing', wrapper.getAttribute('data-tasks-node-spacing') || `${TASKS_ROOT_SPACING.node}`);
+    fullscreenWrapper.setAttribute('data-tasks-layer-spacing', wrapper.getAttribute('data-tasks-layer-spacing') || `${TASKS_ROOT_SPACING.layer}`);
+    fullscreenWrapper.setAttribute('data-tasks-collision-gap', wrapper.getAttribute('data-tasks-collision-gap') || `${TASKS_ROOT_COLLISION_GAP}`);
+    fullscreenWrapper.setAttribute('data-tasks-group-padding', wrapper.getAttribute('data-tasks-group-padding') || `${TASKS_GROUP_PADDING.left}`);
+    fullscreenWrapper.setAttribute('data-tasks-edge-label-width', wrapper.getAttribute('data-tasks-edge-label-width') || '240');
     fullscreenWrapper.setAttribute('data-tasks-payload', originalPayload);
     fullscreenWrapper.setAttribute('data-tasks-graph', originalGraph);
     const headerBar = document.createElement('div');
@@ -1908,11 +2369,15 @@ window.openTasksFullscreen = async function(id) {
     };
     const fitHint = makeHint('F');
     fitHint.title = 'Fit view';
-    const expandHint = makeHint('U');
-    expandHint.title = 'Expand all groups';
-    const collapseHint = makeHint('⇧+U');
-    collapseHint.title = 'Collapse all groups';
-    headerHints.append(fitHint, expandHint, collapseHint);
+    const expandHint = makeHint('I');
+    expandHint.title = 'Expand next group depth';
+    const collapseHint = makeHint('O');
+    collapseHint.title = 'Collapse deepest group depth';
+    const expandAllHint = makeHint('U');
+    expandAllHint.title = 'Unfold all groups';
+    const collapseAllHint = makeHint('P');
+    collapseAllHint.title = 'Collapse all groups';
+    headerHints.append(fitHint, expandHint, collapseHint, expandAllHint, collapseAllHint);
     headerTitle.append(headerName, headerHints);
     headerBar.appendChild(headerTitle);
 

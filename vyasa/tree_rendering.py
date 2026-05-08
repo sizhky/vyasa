@@ -104,7 +104,7 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
                 folder_link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon("folder", cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(folder_title, cls="whitespace-nowrap", title=folder_title), href=note_href, hx_get=note_href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link inline-flex items-center whitespace-nowrap", data_path=note_slug)
                 items.append(Li(_bookmarkable_tree_row(folder_link, note_slug, folder_title)))
             continue
-        if item.suffix not in {".md", ".pdf"}:
+        if item.suffix not in {".md", ".pdf", ".tree"}:
             continue
         if folder_note_file and item.resolve() == folder_note_file.resolve():
             continue
@@ -121,6 +121,8 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             label, href = title, content_url_for_slug(slug)
         elif item.suffix == ".pdf":
             icon, title, label, href = "file", slug_to_title_fn(item.stem, abbreviations=abbreviations), f"{slug_to_title_fn(item.stem, abbreviations=abbreviations)} (PDF)", content_url_for_slug(slug)
+        else:
+            icon, title, label, href = "table", slug_to_title_fn(item.stem, abbreviations=abbreviations), slug_to_title_fn(item.stem, abbreviations=abbreviations), content_url_for_slug(slug)
         link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon(icon, cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(label, cls="whitespace-nowrap", title=title), href=href, hx_get=href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link inline-flex items-center whitespace-nowrap", data_path=slug)
         items.append(Li(_bookmarkable_tree_row(link, slug, title)))
     logger.debug(f"[DEBUG] build_post_tree for {content_slug_for_path(folder, strip_suffix=False) or '.'} completed in {(time.time() - start_time) * 1000:.2f}ms")

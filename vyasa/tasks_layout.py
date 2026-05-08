@@ -51,6 +51,9 @@ def build_collapsed_graph(model: dict) -> dict:
         dst = task_to_group.get(edge["target"]) or edge["target"]
         if src != dst and (src, dst) not in seen_edges:
             seen_edges.add((src, dst))
-            edges.append({"source": src, "target": dst, "kind": "collapsed-proxy"})
+            collapsed_edge = {"source": src, "target": dst, "kind": "collapsed-proxy"}
+            if edge.get("label"):
+                collapsed_edge["label"] = edge["label"]
+            edges.append(collapsed_edge)
 
     return {"nodes": nodes, "edges": edges}

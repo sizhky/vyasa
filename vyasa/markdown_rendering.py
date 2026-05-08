@@ -400,11 +400,44 @@ def _split_fence_frontmatter(code):
     if not frontmatter_match:
         return {}, code
     config = {}
-    for line in frontmatter_match.group(1).strip().splitlines():
+    lines = frontmatter_match.group(1).splitlines()
+    index = 0
+    while index < len(lines):
+        raw_line = lines[index]
+        if not raw_line.strip():
+            index += 1
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        line = raw_line.strip()
         if ":" not in line:
+            index += 1
             continue
         key, value = line.split(":", 1)
-        config[key.strip()] = value.strip()
+        key = key.strip()
+        value = value.strip()
+        if key == "color_palette":
+            config[key] = {}
+            if value:
+                config["color_by"] = value
+            index += 1
+            while index < len(lines):
+                child_raw = lines[index]
+                if not child_raw.strip():
+                    index += 1
+                    continue
+                child_indent = len(child_raw) - len(child_raw.lstrip(" "))
+                if child_indent <= indent:
+                    break
+                child_line = child_raw.strip()
+                if ":" not in child_line:
+                    index += 1
+                    continue
+                child_key, child_value = child_line.split(":", 1)
+                config[key][child_key.strip()] = child_value.strip().strip('"').strip("'")
+                index += 1
+            continue
+        config[key] = value
+        index += 1
     return config, code[frontmatter_match.end():]
 
 
@@ -474,11 +507,18 @@ def _render_mermaid_block(code):
 
 
 def _render_tasks_block(code):
+    code = html.unescape(code)
     config, code = _split_fence_frontmatter(code)
     try:
         model = parse_tasks_text(f"```tasks\n{code}\n```")
         if config.get("title") and not model.get("title"):
             model["title"] = config["title"]
+        if config.get("id"):
+            model["graph_id"] = config["id"]
+        if config.get("color_by") and not model.get("color_by"):
+            model["color_by"] = config["color_by"]
+        if config.get("color_palette") and not model.get("color_palette"):
+            model["color_palette"] = config["color_palette"]
         graph = build_collapsed_graph(model)
     except Exception:
         model = {
@@ -501,17 +541,40 @@ def _render_tasks_block(code):
     width = html.escape(config.get("width", "85vw"))
     min_height = html.escape(config.get("min_height", "85vh"))
     flow_height = html.escape(config.get("height", "calc(85vh - 57px)"))
+    jitter = html.escape(str(config.get("jitter", "0")))
+    jitter_y = html.escape(str(config.get("jitter_y", config.get("jitter", "0"))))
+    spacing = html.escape(str(config.get("spacing", "normal")))
+    optional_layout_attrs = []
+    if "node_spacing" in config:
+        optional_layout_attrs.append(f'data-tasks-node-spacing="{html.escape(str(config["node_spacing"]))}"')
+    if "layer_spacing" in config:
+        optional_layout_attrs.append(f'data-tasks-layer-spacing="{html.escape(str(config["layer_spacing"]))}"')
+    if "collision_gap" in config:
+        optional_layout_attrs.append(f'data-tasks-collision-gap="{html.escape(str(config["collision_gap"]))}"')
+    if "group_padding" in config:
+        optional_layout_attrs.append(f'data-tasks-group-padding="{html.escape(str(config["group_padding"]))}"')
+    if "edge_label_width" in config:
+        optional_layout_attrs.append(f'data-tasks-edge-label-width="{html.escape(str(config["edge_label_width"]))}"')
+    optional_layout_attrs_str = (" " + " ".join(optional_layout_attrs)) if optional_layout_attrs else ""
     summary = f'{len(model["groups"])} groups, {len(model["tasks"])} items, {len(model["dependency_edges"])} edges'
+    breakout = str(width).lower() in {"100%", "100vw"} or "vw" in str(width).lower()
+    container_style = (
+        f"width: {width}; min-height: {min_height}; position: relative; left: 50%; transform: translateX(-50%);"
+        if breakout else
+        f"width: {width}; min-height: {min_height};"
+    )
     return (
         f'<div class="tasks-container relative my-6 rounded-xl border border-slate-200 dark:border-slate-800" '
-        f'style="width: {width}; min-height: {min_height}; position: relative; left: 50%; transform: translateX(-50%);" '
-        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
+        f'style="{container_style}" '
+        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
         f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'
         f'<button onclick="openTasksFullscreen(\'{widget_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>'
         f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">'
         f'<button type="button" title="Fit view" onclick="runTasksHeaderAction(\'{widget_id}\', \'fit\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">F</button>'
+        f'<button type="button" title="Expand next group depth" onclick="runTasksHeaderAction(\'{widget_id}\', \'expandDepth\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">I</button>'
+        f'<button type="button" title="Collapse deepest group depth" onclick="runTasksHeaderAction(\'{widget_id}\', \'collapseDepth\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">O</button>'
         f'<button type="button" title="Unfold all groups" onclick="runTasksHeaderAction(\'{widget_id}\', \'expand\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">U</button>'
-        f'<button type="button" title="Collapse all groups" onclick="runTasksHeaderAction(\'{widget_id}\', \'collapse\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">⇧+U</button>'
+        f'<button type="button" title="Collapse all groups" onclick="runTasksHeaderAction(\'{widget_id}\', \'collapse\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">P</button>'
         f'</div>'
         f'</div>'
         f'<div class="px-4 py-3 pr-14 border-b border-slate-200 dark:border-slate-800 flex items-start gap-3">'

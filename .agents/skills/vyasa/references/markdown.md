@@ -231,6 +231,8 @@ Recognized task metadata families:
 
 For dependency planning or structured relationship maps, use a fenced `tasks` block inside a normal markdown page:
 
+Size keys like `width`, `min_height`, and `height` should use full CSS lengths such as `760px`, `70vh`, or `calc(85vh - 57px)`. Do not use bare numbers like `height: 760`.
+
 ```markdown
 ```tasks
 ---
@@ -239,24 +241,16 @@ default_open_depth: -1
 width: 80vw
 height: 70vh
 ---
-id sprint-slice
-group frontend Frontend
-  item T-001 Design
-    estimate 1d
-    owner Alice
-  item T-002 Build
-    estimate 2d
-    owner Alice
-    depends T-001
-group api API
-  item T-010 Endpoint contract
-    estimate 1d
-    owner Alice
-    depends T-001
-  item T-003 Backend
-    estimate 3d
-    owner Bob
-    depends T-002 T-010
+id: sprint-slice
+Frontend:
+  - T-001 :: Design | estimate: 1d | owner: Alice
+  - T-002 :: Build | estimate: 2d | owner: Alice
+API:
+  - T-010 :: Endpoint contract | estimate: 1d | owner: Alice
+  - T-003 :: Backend | estimate: 3d | owner: Bob
+
+T-001 ->|unblocks| T-002, T-010
+T-002, T-010 -> T-003
 ```
 ```
 
@@ -266,9 +260,10 @@ Notes:
 - `default_open_depth` is an integer. `0` folds all groups, `1` opens root groups, larger values open deeper levels, and `-1` opens all groups.
 - After frontmatter, the graph body is terse line-based syntax, not YAML.
 - Do not wrap the whole graph in one top-level group. Start with multiple meaningful top-level groups, or direct items if grouping adds no value.
-- `group <id> <label>` nests by indentation. `item <id> <label>` under a group belongs to that group.
-- Use indented attrs for `estimate`, `depends`, `priority`, `points`, `owner`, `phase`.
-- `depends` takes one or more ids on the same line.
+- `Group Label:` nests by indentation. `- id :: Item Label` under a group belongs to that group.
+- Use inline attrs after `|`, such as `- T-001 :: Design | owner: Alice | estimate: 1d`.
+- Use global edge lines for dependencies: `a -> b`, `a, b -> c`, or `a ->|edge label| b`.
+- Quote complex ids, labels, attrs, or edge labels as JSON strings: `"task-id" :: "Line one\nLine two with \"quotes\" and [brackets]"`.
 - Groups render as expandable cards in a React Flow graph.
 - Press `F` to fit, `U` to unfold all groups, and `Shift+U` to collapse all groups.
 - Renderer-owned layout attrs (`graph_x`, `graph_y`, `collapsed`, `pill_x`, `pill_y`) may appear in saved source after interaction; treat as implementation detail, not authoring API.

@@ -480,7 +480,7 @@ def _live_reload_roots():
 def _is_live_reload_path(path: Path):
     if any(part in set(get_config().get_reload_excludes()) for part in path.parts):
         return False
-    return path.name == ".vyasa" or path.suffix in {".md", ".pdf", ".css", ".js"}
+    return path.name == ".vyasa" or path.suffix in {".md", ".pdf", ".tree", ".css", ".js"}
 
 
 async def _live_reload_events():
@@ -1042,7 +1042,7 @@ def _get_nav_entries(
     cached = _nav_entries_cache.get(key)
     if cached and cached[0] == mtime:
         return cached[1]
-    ordered = get_tree_entries(folder, root, show_hidden, excluded_dirs, (".md", ".pdf"))
+    ordered = get_tree_entries(folder, root, show_hidden, excluded_dirs, (".md", ".pdf", ".tree"))
     _nav_entries_cache[key] = (mtime, ordered)
     return ordered
 
