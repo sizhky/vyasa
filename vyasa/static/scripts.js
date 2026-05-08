@@ -20,6 +20,31 @@ const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 42%, 
 const TASKS_GROUP_TITLE_BG = 'color-mix(in srgb, var(--vyasa-paper) 76%, var(--vyasa-primary) 24%)';
 const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 74%, var(--vyasa-primary) 26%)';
 window.__vyasaTasksActions = window.__vyasaTasksActions || {};
+window.__vyasaTasksDebug = window.__vyasaTasksDebug || { events: [] };
+window.__vyasaTasksDebug.enabled = window.__vyasaTasksDebug.enabled === true;
+
+function logTasksDebug(label, payload = {}) {
+    if (!window.__vyasaTasksDebug.enabled) return null;
+    const event = {
+        label,
+        at: new Date().toISOString(),
+        payload,
+    };
+    window.__vyasaTasksDebug.events.push(event);
+    if (window.__vyasaTasksDebug.events.length > 200) window.__vyasaTasksDebug.events.shift();
+    console.log(`[vyasa][tasks-debug] ${label} ${JSON.stringify(payload)}`);
+    return event;
+}
+
+function rectSummary(rect) {
+    if (!rect) return null;
+    return {
+        x: Math.round(rect.x || 0),
+        y: Math.round(rect.y || 0),
+        width: Math.round(rect.width || 0),
+        height: Math.round(rect.height || 0),
+    };
+}
 
 window.runTasksHeaderAction = function(widgetId, action) {
     const actions = window.__vyasaTasksActions?.[widgetId];
@@ -339,9 +364,17 @@ async function layoutBaseTasksGraph(graph, model, jitterConfig = {}) {
         nodes: graph.nodes.filter(n => rootGroupIds.has(n.id)),
         edges: rootEdges,
     };
-    console.log('rootGraph:', { nodes: rootGraph.nodes.map(n => n.id), edges: rootGraph.edges });
+    logTasksDebug('rootGraph', {
+        nodes: rootGraph.nodes.map(n => n.id),
+        edges: rootGraph.edges,
+        edgeCount: rootGraph.edges.length,
+    });
     const laidOut = await layoutTasksGraph(rootGraph, model, new Set(), jitterConfig);
-    console.log('laidOut:', { width: laidOut.width, height: laidOut.height, positions: laidOut.absoluteChildPositions });
+    logTasksDebug('baseLayout', {
+        width: Math.round(laidOut.width || 0),
+        height: Math.round(laidOut.height || 0),
+        positions: Object.fromEntries(Object.entries(laidOut.absoluteChildPositions || {}).map(([id, rect]) => [id, rectSummary(rect)])),
+    });
     const positions = {};
     for (const node of rootGraph.nodes) {
         const pos = laidOut.absoluteChildPositions?.[node.id] || { x: 0, y: 0 };
@@ -446,7 +479,11 @@ async function layoutExpandedGroups(model, expandedSet, jitterConfig = {}) {
 
 function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout, groupLayouts) {
     const visible = buildVisibleTasksGraph(model, expandedSet);
-    console.log('visible graph:', { nodes: visible.nodes.map(n => n.id), edges: visible.edges });
+    logTasksDebug('visibleGraph', {
+        expanded: Array.from(expandedSet),
+        nodes: visible.nodes.map(n => n.id),
+        edges: visible.edges,
+    });
     const visibleNodeMap = Object.fromEntries(visible.nodes.map((node) => [node.id, node]));
     const parentOf = {};
     for (const groupId of expandedSet) {
@@ -580,31 +617,12 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
             .map((id) => topLevelState[id])
             .filter(Boolean)
             .sort((a, b) => (a.y - b.y) || (a.x - b.x));
-        const taskToGroup = Object.fromEntries((model.tasks || []).map((task) => [task.id, task.group_id || null]));
-        const groupParent = Object.fromEntries((model.groups || []).map((group) => [group.id, group.parent_group_id || null]));
-        const topLevelIdSet = new Set(topLevelIds);
-        const rootFor = (id) => {
-            let cur = taskToGroup[id] || id;
-            while (cur && !topLevelIdSet.has(cur)) cur = groupParent[cur] || null;
-            return cur;
-        };
-        const rootDependencyEdges = [];
-        const seenRootDependencyEdges = new Set();
-        for (const edge of (model.dependency_edges || [])) {
-            const source = rootFor(edge.source);
-            const target = rootFor(edge.target);
-            const key = `${source}->${target}`;
-            if (!source || !target || source === target || seenRootDependencyEdges.has(key)) continue;
-            seenRootDependencyEdges.add(key);
-            rootDependencyEdges.push({ source, target });
-        }
+        logTasksDebug('unwarpBeforeCollisions', {
+            expandedTopLevelIds,
+            topLevelState: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
+        });
         for (let pass = 0; pass < 4; pass += 1) {
-            for (const edge of rootDependencyEdges) {
-                const source = topLevelState[edge.source];
-                const target = topLevelState[edge.target];
-                if (!source || !target) continue;
-                target.y = Math.max(target.y, source.y + source.height + TASKS_ROOT_COLLISION_GAP);
-            }
+            const collisionMoves = [];
             for (let i = 0; i < topLevelStateList.length; i += 1) {
                 const a = topLevelStateList[i];
                 for (let j = i + 1; j < topLevelStateList.length; j += 1) {
@@ -613,12 +631,21 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
                     const overlapY = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
                     if (overlapX <= -TASKS_ROOT_COLLISION_GAP || overlapY <= -TASKS_ROOT_COLLISION_GAP) continue;
                     if (Math.abs((a.x + a.width / 2) - (b.x + b.width / 2)) < Math.abs((a.y + a.height / 2) - (b.y + b.height / 2))) {
-                        b.y = a.y + a.height + TASKS_ROOT_COLLISION_GAP;
+                        const nextY = a.y + a.height + TASKS_ROOT_COLLISION_GAP;
+                        if (nextY !== b.y) collisionMoves.push({ pass, axis: 'y', fromY: Math.round(b.y), toY: Math.round(nextY) });
+                        b.y = nextY;
                     } else {
-                        b.x = a.x + a.width + TASKS_ROOT_COLLISION_GAP;
+                        const nextX = a.x + a.width + TASKS_ROOT_COLLISION_GAP;
+                        if (nextX !== b.x) collisionMoves.push({ pass, axis: 'x', fromX: Math.round(b.x), toX: Math.round(nextX) });
+                        b.x = nextX;
                     }
                 }
             }
+            logTasksDebug('unwarpPass', {
+                pass,
+                collisionMoves,
+                topLevelState: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
+            });
         }
 
         for (const node of nodes.filter((n) => !n.parentId)) {
@@ -627,11 +654,15 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
             node.position = { x: state.x, y: state.y };
         }
 
-        console.log('[unwarp] topLevelNodes:', nodes.filter(n => !n.parentId).map(n => ({
-            id: n.id,
-            x: Math.round(n.position.x),
-            y: Math.round(n.position.y)
-        })));
+        logTasksDebug('unwarpFinal', {
+            topLevelNodes: nodes.filter(n => !n.parentId).map(n => ({
+                id: n.id,
+                x: Math.round(n.position.x),
+                y: Math.round(n.position.y),
+                width: Math.round(n.width || 0),
+                height: Math.round(n.height || 0),
+            })),
+        });
     }
 
     const finalEdges = visible.edges.map((e, i) => ({
@@ -642,7 +673,7 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
         sourceHandle: 'bottom',
         targetHandle: 'top',
     }));
-    console.log('deriveSquishedExpandedLayout:', { visibleEdges: visible.edges, finalEdges });
+    logTasksDebug('deriveResult', { visibleEdges: visible.edges, finalEdges });
     return {
         nodes,
         edges: finalEdges,
@@ -816,6 +847,19 @@ async function renderTasksGraphs(rootElement = document) {
                     labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
                 }));
                 graphBaseRef.current = { nodes: baseNodes, edges: baseEdges };
+                window.__vyasaTasksDebug.latest = {
+                    widgetId,
+                    expanded: Array.from(expandedSet),
+                    nodes: baseNodes.map((node) => ({
+                        id: node.id,
+                        label: node.data?.label,
+                        kind: node.data?.kind,
+                        parentId: node.parentId || null,
+                        position: rectSummary({ ...node.position, width: node.style?.width, height: node.style?.height }),
+                    })),
+                    edges: baseEdges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, label: edge.label || '' })),
+                };
+                logTasksDebug('reactFlowState', window.__vyasaTasksDebug.latest);
                 setNodes(baseNodes);
                 setEdges(baseEdges);
                 setGraphRevision((value) => value + 1);
@@ -1100,6 +1144,23 @@ async function renderTasksGraphs(rootElement = document) {
                 React.useEffect(() => {
                     window.__vyasaTasksActions[widgetId] = {
                         fit: () => reactFlow.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true }),
+                        dump: () => {
+                            logTasksDebug('manualDump', window.__vyasaTasksDebug.latest || {});
+                            return window.__vyasaTasksDebug.latest;
+                        },
+                        toggle: (nodeId) => {
+                            if (!(model.groups || []).some((group) => group.id === nodeId)) return;
+                            setExpanded((current) => {
+                                const next = new Set(current);
+                                if (next.has(nodeId)) next.delete(nodeId); else next.add(nodeId);
+                                logTasksDebug('manualToggle', { nodeId, expanded: Array.from(next) });
+                                return next;
+                            });
+                        },
+                        select: (nodeId) => {
+                            setSelectedNodeId((current) => current === nodeId ? null : nodeId);
+                            logTasksDebug('manualSelect', { nodeId });
+                        },
                         expand: () => {
                             setExpanded(new Set((model.groups || []).map((group) => group.id)));
                         },
