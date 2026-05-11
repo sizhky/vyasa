@@ -134,3 +134,15 @@ build_render ->|reuses markdown render tree render toc extraction and prev-next 
 build_shell ->|composes final static page frame from rendered content and shell model| build_assets
 build_assets ->|copies static assets\ncopies raw downloads\ngenerates favicon output and final dist tree| browser_nav
 ```
+
+Internal link demo inside items:
+
+```items
+---
+title: Item Hyperlink Demo
+default_open_depth: 1
+---
+Docs:
+  - README Jump | href: ../README#manual
+  - This Section | href: #item-hyperlink-demo
+```

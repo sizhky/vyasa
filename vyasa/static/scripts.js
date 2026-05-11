@@ -35,11 +35,18 @@ function readTasksNumber(value, fallback) {
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function readTasksDirection(value) {
+    const raw = String(value || 'TD').trim().toUpperCase();
+    if (raw === 'LR' || raw === 'RIGHT') return 'RIGHT';
+    return 'DOWN';
+}
+
 function readTasksLayoutConfig(wrapper) {
     const presetName = String(wrapper.dataset.tasksSpacing || 'normal').trim().toLowerCase();
     const preset = TASKS_SPACING_PRESETS[presetName] || TASKS_SPACING_PRESETS.normal;
     return {
         spacing: presetName,
+        elkDirection: readTasksDirection(wrapper.dataset.tasksLayoutDirection),
         nodeSpacing: readTasksNumber(wrapper.dataset.tasksNodeSpacing, preset.nodeSpacing),
         layerSpacing: readTasksNumber(wrapper.dataset.tasksLayerSpacing, preset.layerSpacing),
         collisionGap: readTasksNumber(wrapper.dataset.tasksCollisionGap, preset.collisionGap),
@@ -78,11 +85,11 @@ function tasksNodeMetaEntries(node) {
     if (!node) return [];
     const hidden = new Set([
         'id', 'label', 'kind', 'group_id', 'parent_group_id',
-        'handleLayout', 'highlightMode', 'sourceGroupId',
-        'width', 'height', 'position', 'parentId',
+        'handlelayout', 'highlightmode', 'sourcegroupid',
+        'width', 'height', 'position', 'parentId', 'color', 'href',
     ]);
     return Object.entries(node)
-        .filter(([key, value]) => !hidden.has(key) && value !== null && value !== undefined && value !== '')
+        .filter(([key, value]) => !hidden.has(String(key).toLowerCase()) && value !== null && value !== undefined && value !== '' && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))
         .map(([key, value]) => ({
             key,
             label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
@@ -129,7 +136,41 @@ function tasksNodeAggregateEntries(nodeId, model) {
     }));
 }
 
-function resolveTasksNodeColor(node, model) {
+function tasksFilterOptions(model) {
+    if (!model) return [];
+    const hidden = new Set([
+        'id', 'label', 'kind', 'group_id', 'parent_group_id',
+        'handlelayout', 'highlightmode', 'sourcegroupid',
+        'width', 'height', 'position', 'parentId', 'color', 'href',
+    ]);
+    const buckets = new Map();
+    const visit = (node) => {
+        if (!node) return;
+        for (const [key, value] of Object.entries(node)) {
+            if (hidden.has(String(key).toLowerCase()) || value === null || value === undefined || value === '') continue;
+            if (!(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) continue;
+            if (!buckets.has(key)) buckets.set(key, new Set());
+            buckets.get(key).add(String(value));
+        }
+    };
+    (model.groups || []).forEach(visit);
+    (model.tasks || []).forEach(visit);
+    return Array.from(buckets.entries())
+        .map(([key, values]) => ({
+            key,
+            label: tasksNodeMetaLabel(key),
+            values: Array.from(values).sort((a, b) => a.localeCompare(b)),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function tasksNodeMatchesFilters(node, filters) {
+    const entries = Object.entries(filters || {}).filter(([, value]) => value);
+    if (!entries.length) return true;
+    return entries.every(([key, value]) => String(node?.[key] || '') === String(value));
+}
+
+function resolveTasksNodeOwnColor(node, model) {
     if (!node) return '';
     if (typeof node.color === 'string' && node.color.trim()) return node.color.trim();
     const colorBy = typeof model?.color_by === 'string' ? model.color_by.trim() : '';
@@ -139,6 +180,22 @@ function resolveTasksNodeColor(node, model) {
     if (typeof value !== 'string' || !value.trim()) return '';
     const color = palette[value];
     return typeof color === 'string' ? color.trim() : '';
+}
+
+function resolveTasksNodeColor(node, model) {
+    const ownColor = resolveTasksNodeOwnColor(node, model);
+    if (ownColor) return ownColor;
+    if (!node || !model) return '';
+    const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
+    let parentId = node.parent_group_id || node.group_id || null;
+    while (parentId) {
+        const parent = groupsById[parentId];
+        if (!parent) return '';
+        const parentColor = resolveTasksNodeOwnColor(parent, model);
+        if (parentColor) return parentColor;
+        parentId = parent.parent_group_id || null;
+    }
+    return '';
 }
 
 window.runTasksHeaderAction = function(widgetId, action) {
@@ -194,6 +251,42 @@ function ensureTasksReactFlow() {
                 .vyasa-tasks-flow .react-flow__node [data-vyasa-task-control="true"],
                 .vyasa-tasks-flow .react-flow__controls button {
                     cursor: pointer !important;
+                }
+                .vyasa-tasks-flow .react-flow__controls {
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+                    border-radius: 10px;
+                    overflow: hidden;
+                    border: 1px solid color-mix(in srgb, var(--vyasa-primary) 20%, transparent);
+                    background: color-mix(in srgb, var(--vyasa-paper) 96%, transparent);
+                }
+                .vyasa-tasks-flow .react-flow__controls button {
+                    width: 34px;
+                    height: 34px;
+                    border: 0;
+                    border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+                    background: color-mix(in srgb, var(--vyasa-paper) 96%, transparent);
+                    color: var(--vyasa-ink);
+                }
+                .vyasa-tasks-flow .react-flow__controls button:last-child {
+                    border-bottom: 0;
+                }
+                .vyasa-tasks-flow .react-flow__controls button:hover {
+                    background: color-mix(in srgb, var(--vyasa-paper) 86%, var(--vyasa-primary) 14%);
+                }
+                .vyasa-tasks-flow .react-flow__controls button svg {
+                    fill: none;
+                    stroke: currentColor;
+                }
+                .dark .vyasa-tasks-flow .react-flow__controls,
+                .dark .vyasa-tasks-flow .react-flow__controls button {
+                    background: color-mix(in srgb, var(--vyasa-paper) 92%, #0f172a 8%);
+                    color: color-mix(in srgb, white 88%, var(--vyasa-primary) 12%);
+                }
+                .dark .vyasa-tasks-flow .react-flow__controls button {
+                    border-bottom-color: color-mix(in srgb, white 10%, transparent);
+                }
+                .dark .vyasa-tasks-flow .react-flow__controls button:hover {
+                    background: color-mix(in srgb, var(--vyasa-paper) 72%, var(--vyasa-primary) 28%);
                 }
                 .react-flow__edge.animated path {
                     animation: vyasa-edge-dashdraw var(--vyasa-edge-flow-duration, 0.6s) linear infinite;
@@ -408,7 +501,7 @@ async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layou
             node.children = children.map((c) => buildElkNode(c.id));
             node.layoutOptions = {
                 'elk.algorithm': 'layered',
-                'elk.direction': 'DOWN',
+                'elk.direction': layoutConfig.elkDirection || 'DOWN',
                 'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
                 'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
                 'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`
@@ -427,7 +520,7 @@ async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layou
             id: `sub-${gid}`,
             layoutOptions: {
                 'elk.algorithm': 'layered',
-                'elk.direction': 'DOWN',
+                'elk.direction': layoutConfig.elkDirection || 'DOWN',
                 'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
                 'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
                 'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`
@@ -465,7 +558,7 @@ async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layou
             node.children = children.map((c) => buildElkNodeAdjusted(c.id));
             node.layoutOptions = {
                 'elk.algorithm': 'layered',
-                'elk.direction': 'DOWN',
+                'elk.direction': layoutConfig.elkDirection || 'DOWN',
                 'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
                 'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
                 'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`
@@ -477,7 +570,7 @@ async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layou
     const topLevel = adjustedNodes.filter((n) => !parentOf[n.id]);
     const rootLayoutOptions = {
         'elk.algorithm': 'layered',
-        'elk.direction': 'DOWN',
+        'elk.direction': layoutConfig.elkDirection || 'DOWN',
         'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || TASKS_ROOT_SPACING.node}`,
         'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || TASKS_ROOT_SPACING.layer}`,
     };
@@ -601,7 +694,7 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
         id: `group-${groupId}`,
         layoutOptions: {
             'elk.algorithm': 'layered',
-            'elk.direction': 'DOWN',
+            'elk.direction': layoutConfig.elkDirection || 'DOWN',
             'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
             'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
             'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`,
@@ -882,6 +975,61 @@ function findTaskCardFromEvent(event) {
     return null;
 }
 
+function openTasksNodeHref(href, event = null) {
+    if (!href) return;
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (href.startsWith('#')) {
+        document.getElementById(href.slice(1))?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        window.history.pushState(null, '', href);
+        return;
+    }
+    const [pathOnly, hash = ''] = String(href).split('#', 2);
+    const isInternal = href.startsWith('/posts/') || (href.startsWith('/') && !href.startsWith('/slides/') && !href.split('/').pop().includes('.'));
+    if (isInternal && window.htmx?.ajax) {
+        const onSwap = (swapEvent) => {
+            if (swapEvent.target?.id !== 'main-content') return;
+            document.body.removeEventListener('htmx:afterSwap', onSwap);
+            if (hash) {
+                const fragment = `#${hash}`;
+                document.getElementById(hash)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== `${pathOnly}${fragment}`) {
+                    window.history.pushState(null, '', `${pathOnly}${fragment}`);
+                }
+                return;
+            }
+            if (window.location.pathname !== pathOnly) {
+                window.history.pushState(null, '', pathOnly);
+            }
+        };
+        document.body.addEventListener('htmx:afterSwap', onSwap);
+        window.htmx.ajax('GET', pathOnly, { target: '#main-content', swap: 'outerHTML show:window:top settle:0.1s' });
+        return;
+    }
+    window.location.assign(href);
+}
+
+function renderTasksInlineLinks(value) {
+    const text = String(value || '');
+    const parts = [];
+    const pattern = /\[([^\]]+)\]\(([^)\s]+(?:\s[^)]*)?)\)/g;
+    let lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+        if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+        const [, label, href] = match;
+        parts.push(window.React.createElement('a', {
+            key: `${href}-${match.index}`,
+            href,
+            onClick: (event) => openTasksNodeHref(href, event),
+            style: { textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit' },
+        }, label));
+        lastIndex = pattern.lastIndex;
+    }
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    return parts.length ? parts : text;
+}
+
 async function renderTasksGraphs(rootElement = document) {
     const rf = await ensureTasksReactFlow();
     for (const wrapper of rootElement.querySelectorAll('.tasks-container[data-tasks-widget="true"]')) {
@@ -909,6 +1057,7 @@ async function renderTasksGraphs(rootElement = document) {
             const [expanded, setExpanded] = React.useState(() => new Set(initialExpandedSet));
             const [selectedNodeId, setSelectedNodeId] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
+            const [activeFilters, setActiveFilters] = React.useState({});
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
@@ -1003,6 +1152,8 @@ async function renderTasksGraphs(rootElement = document) {
                     if (n.kind !== 'group' || !expandedSet.has(n.id)) continue;
                     const position = absolutePosition(n);
                     const titleZ = TASKS_TITLE_Z + depthOf(n);
+                    const titleLineCount = String(n.label || '').split('\n').length;
+                    const titleHeight = Math.max(34, 16 + (titleLineCount * 18));
                     baseNodes.push({
                         id: `${n.id}__title`,
                         type: 'vyasaTask',
@@ -1010,7 +1161,7 @@ async function renderTasksGraphs(rootElement = document) {
                         data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, kind: 'groupTitle' },
                         style: {
                             width: Math.max(80, n.width - 16),
-                            height: 34,
+                            height: titleHeight,
                             zIndex: titleZ,
                             background: TASKS_GROUP_TITLE_BG,
                             border: 'none',
@@ -1077,8 +1228,29 @@ async function renderTasksGraphs(rootElement = document) {
                 const baseNodes = graphBaseRef.current.nodes || [];
                 const baseEdges = graphBaseRef.current.edges || [];
                 if (!nodeId || !baseNodes.some((node) => node.id === nodeId)) {
-                    setNodes(baseNodes);
-                    setEdges(baseEdges);
+                    const hasFilters = Object.values(activeFilters).some(Boolean);
+                    if (!hasFilters) {
+                        setNodes(baseNodes);
+                        setEdges(baseEdges);
+                        return;
+                    }
+                    const matchingIds = new Set(baseNodes.filter((node) => tasksNodeMatchesFilters(node.data, activeFilters)).map((node) => node.id));
+                    setNodes(baseNodes.map((node) => ({
+                        ...node,
+                        data: { ...node.data, highlightMode: matchingIds.has(node.id) ? 'selected' : 'dim' },
+                        style: { ...node.style, opacity: matchingIds.has(node.id) ? 1 : 0.18 },
+                    })));
+                    setEdges(baseEdges.map((edge) => {
+                        const hit = matchingIds.has(edge.source) && matchingIds.has(edge.target);
+                        return {
+                            ...edge,
+                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim' },
+                            labelStyle: { ...(edge.labelStyle || {}), opacity: hit ? 1 : 0.12 },
+                            labelBgStyle: { ...(edge.labelBgStyle || {}), fillOpacity: hit ? 0.88 : 0.06 },
+                            style: { ...edge.style, opacity: hit ? 0.95 : 0.08 },
+                            animated: hit,
+                        };
+                    }));
                     return;
                 }
                 const highlightedEdgeIds = new Set();
@@ -1179,7 +1351,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgePriority = { dim: 0, selected: 1, focused: 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdges(nextEdges);
-            }, []);
+            }, [activeFilters, model]);
             React.useEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -1287,10 +1459,10 @@ async function renderTasksGraphs(rootElement = document) {
                             width: '100%', height: '100%',
                             boxSizing: 'border-box',
                             display: 'flex',
-                            alignItems: 'center',
+                            alignItems: 'flex-start',
                             justifyContent: 'space-between',
                             gap: '8px',
-                            padding: '4px 6px',
+                            padding: '8px 10px',
                             fontWeight: '600',
                             fontSize: '13px',
                         }
@@ -1299,10 +1471,13 @@ async function renderTasksGraphs(rootElement = document) {
                             style: {
                                 minWidth: 0,
                                 overflow: 'hidden',
-                                whiteSpace: 'nowrap',
-                                textOverflow: 'ellipsis',
+                                display: 'block',
+                                whiteSpace: 'pre-line',
+                                lineHeight: '1.3',
+                                overflowWrap: 'anywhere',
+                                wordBreak: 'break-word',
                             }
-                        }, data?.label || data.sourceGroupId || id),
+                        }, renderTasksInlineLinks(data?.label || data.sourceGroupId || id)),
                         React.createElement('button', {
                             onClick: handleCollapse,
                             style: { flex: '0 0 auto', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
@@ -1313,6 +1488,10 @@ async function renderTasksGraphs(rootElement = document) {
                 const isExpanded = expanded.has(id);
                 const highlightMode = data?.highlightMode || 'none';
                 const isDimmed = highlightMode === 'dim';
+                const hasHref = !!data?.href;
+                const labelNode = hasHref
+                    ? React.createElement('a', { href: data.href, onClick: (e) => openTasksNodeHref(data.href, e), style: { color: 'inherit', textDecoration: 'underline', textUnderlineOffset: '2px' } }, renderTasksInlineLinks(data?.label || id))
+                    : renderTasksInlineLinks(data?.label || id);
                 const handleExpand = (e) => {
                     e.stopPropagation();
                     const next = new Set(expanded);
@@ -1347,6 +1526,7 @@ async function renderTasksGraphs(rootElement = document) {
                         padding: '10px 12px',
                         overflow: 'hidden',
                         opacity: isDimmed ? 0.22 : 1,
+                        cursor: hasHref ? 'pointer' : undefined,
                     }
                 },
                     ...renderHandles('target'),
@@ -1358,12 +1538,12 @@ async function renderTasksGraphs(rootElement = document) {
                             maxHeight: '100%',
                             overflow: 'hidden',
                             display: 'block',
-                            whiteSpace: 'normal',
+                            whiteSpace: 'pre-line',
                             lineHeight: '1.25',
                             overflowWrap: 'anywhere',
                             wordBreak: 'break-word',
                         }
-                    }, data?.label || id),
+                    }, labelNode),
                     isGroup && React.createElement('button', {
                         onClick: handleExpand,
                         'data-vyasa-task-control': 'true',
@@ -1467,16 +1647,36 @@ async function renderTasksGraphs(rootElement = document) {
                     : tasksNodeMetaEntries(selectedNode);
                 if (!selectedNode || entries.length === 0) return null;
                 return React.createElement('div', {
-                    style: { position: 'absolute', top: '12px', right: '12px', zIndex: 30, width: '240px', maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
+                    style: { position: 'absolute', top: '148px', right: '12px', zIndex: 29, width: '240px', maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
                 },
                     React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Node Details'),
-                    React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, marginBottom: '10px' } }, selectedNode.label || selectedNode.id),
+                    React.createElement(selectedNode.href ? 'a' : 'div', selectedNode.href
+                        ? { href: selectedNode.href, onClick: (e) => openTasksNodeHref(selectedNode.href, e), style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, marginBottom: '10px', display: 'block', textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit' } }
+                        : { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, marginBottom: '10px' } }, selectedNode.label || selectedNode.id),
                     React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(72px, 88px) 1fr', gap: '6px 10px', fontSize: '12px', lineHeight: 1.35 } },
                         ...entries.map((entry) => React.createElement(React.Fragment, { key: entry.key },
                             React.createElement('div', { style: { fontWeight: 700, opacity: 0.7 } }, entry.label),
-                            React.createElement('div', { style: { minWidth: 0, overflowWrap: 'anywhere' } }, entry.value),
+                            React.createElement('div', { style: { minWidth: 0, overflowWrap: 'anywhere' } }, renderTasksInlineLinks(entry.value)),
                         ))
                     )
+                );
+            };
+            const FilterPanel = () => {
+                const options = tasksFilterOptions(model);
+                return React.createElement('div', {
+                    style: { position: 'absolute', top: '56px', right: '12px', zIndex: 30, width: '280px', maxWidth: 'calc(100% - 24px)', maxHeight: '172px', overflowY: 'auto', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
+                },
+                    React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' } },
+                        React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Filters'),
+                        React.createElement('button', { type: 'button', onClick: () => setActiveFilters({}), style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' } }, 'Unselect all')
+                    ),
+                    ...options.map((option) => React.createElement('label', { key: option.key, style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'center', marginBottom: '8px', fontSize: '12px' } },
+                        React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, option.label),
+                        React.createElement('select', { value: activeFilters[option.key] || '', onChange: (e) => setActiveFilters((current) => ({ ...current, [option.key]: e.target.value })), style: { minWidth: 0, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)', borderRadius: '8px', background: 'var(--vyasa-paper)', padding: '4px 8px' } },
+                            React.createElement('option', { value: '' }, 'Any'),
+                            ...option.values.map((value) => React.createElement('option', { key: value, value }, value))
+                        )
+                    ))
                 );
             };
             const clearSelection = () => {
@@ -1571,7 +1771,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge)
                     ),
-                    window.React.createElement(SelectedNodePanel)
+                    window.React.createElement(SelectedNodePanel),
+                    window.React.createElement(FilterPanel)
                 )
             ) : window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
                 window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
@@ -1581,7 +1782,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge)
                 ),
-                window.React.createElement(SelectedNodePanel)
+                window.React.createElement(SelectedNodePanel),
+                window.React.createElement(FilterPanel)
             );
         };
         if (window.ReactDOM.createRoot) window.ReactDOM.createRoot(mount).render(window.React.createElement(TasksGraphApp)); else window.ReactDOM.render(window.React.createElement(TasksGraphApp), mount);
@@ -2397,6 +2599,7 @@ window.openTasksFullscreen = async function(id) {
     fullscreenWrapper.setAttribute('data-tasks-jitter', wrapper.getAttribute('data-tasks-jitter') || '0');
     fullscreenWrapper.setAttribute('data-tasks-jitter-y', wrapper.getAttribute('data-tasks-jitter-y') || wrapper.getAttribute('data-tasks-jitter') || '0');
     fullscreenWrapper.setAttribute('data-tasks-spacing', wrapper.getAttribute('data-tasks-spacing') || 'normal');
+    fullscreenWrapper.setAttribute('data-tasks-layout-direction', wrapper.getAttribute('data-tasks-layout-direction') || 'TD');
     fullscreenWrapper.setAttribute('data-tasks-node-spacing', wrapper.getAttribute('data-tasks-node-spacing') || `${TASKS_ROOT_SPACING.node}`);
     fullscreenWrapper.setAttribute('data-tasks-layer-spacing', wrapper.getAttribute('data-tasks-layer-spacing') || `${TASKS_ROOT_SPACING.layer}`);
     fullscreenWrapper.setAttribute('data-tasks-collision-gap', wrapper.getAttribute('data-tasks-collision-gap') || `${TASKS_ROOT_COLLISION_GAP}`);
@@ -3234,6 +3437,11 @@ function reinitializeMermaid() {
             // Re-add the pre element with mermaid code
             const newPre = document.createElement('pre');
             newPre.className = 'mermaid';
+            newPre.style.width = '100%';
+            newPre.style.height = '100%';
+            newPre.style.display = 'flex';
+            newPre.style.alignItems = 'center';
+            newPre.style.justifyContent = 'center';
             newPre.textContent = code;
             wrapper.appendChild(newPre);
         }
@@ -5487,8 +5695,20 @@ function scheduleHighlightedCodeIncludes(root) {
     [40, 140, 320].forEach((delay) => setTimeout(() => { initCodeHighlighting(target); initHighlightedCodeIncludes(target); }, delay));
 }
 
+function ensureFragmentStylesheets(root = document) {
+    const scope = root instanceof Element || root instanceof Document ? root : document;
+    scope.querySelectorAll('link[rel="stylesheet"][href]').forEach((link) => {
+        const href = link.getAttribute('href');
+        if (!href) return;
+        if (!document.head.querySelector(`link[rel="stylesheet"][href="${CSS.escape(href)}"]`)) {
+            document.head.appendChild(link.cloneNode(true));
+        }
+    });
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    ensureFragmentStylesheets(document);
     initHeadingFolds(document);
     syncHeadingActionStates(document);
     initScrollTopButton(document);
@@ -5527,6 +5747,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     if (!event.target) {
         return;
     }
+    ensureFragmentStylesheets(event.target);
     if (isLightweightSearchSwap(event.target)) {
         bindBookmarkButtons(event.target);
         return;
