@@ -92,14 +92,34 @@ function edgeAnchorSides(sourceRect, targetRect) {
     const targetCenterY = targetRect.y + targetRect.height / 2;
     const dx = targetCenterX - sourceCenterX;
     const dy = targetCenterY - sourceCenterY;
-    if (Math.abs(dx) > 1 && Math.abs(dy / dx) < 1) {
-        return dx >= 0
-            ? { sourceSide: 'right', targetSide: 'left', sortAxis: 'y' }
-            : { sourceSide: 'left', targetSide: 'right', sortAxis: 'y' };
-    }
-    const sourceSide = dy >= 0 ? 'bottom' : 'top';
-    const targetSide = sourceSide === 'bottom' ? 'top' : 'bottom';
-    return { sourceSide, targetSide, sortAxis: 'x' };
+    const overlapY = Math.max(0, Math.min(sourceRect.y + sourceRect.height, targetRect.y + targetRect.height) - Math.max(sourceRect.y, targetRect.y));
+    const overlapX = Math.max(0, Math.min(sourceRect.x + sourceRect.width, targetRect.x + targetRect.width) - Math.max(sourceRect.x, targetRect.x));
+    const gapY = Math.max(0, Math.max(sourceRect.y, targetRect.y) - Math.min(sourceRect.y + sourceRect.height, targetRect.y + targetRect.height));
+    const gapX = Math.max(0, Math.max(sourceRect.x, targetRect.x) - Math.min(sourceRect.x + sourceRect.width, targetRect.x + targetRect.width));
+    const candidates = [
+        {
+            sourceSide: 'right', targetSide: 'left', sortAxis: 'y',
+            score: Math.abs(dx) + 1.4 * gapY + 0.35 * Math.abs(dy) + (dx < 0 ? 1e6 : 0) - 0.2 * overlapY,
+        },
+        {
+            sourceSide: 'left', targetSide: 'right', sortAxis: 'y',
+            score: Math.abs(dx) + 1.4 * gapY + 0.35 * Math.abs(dy) + (dx > 0 ? 1e6 : 0) - 0.2 * overlapY,
+        },
+        {
+            sourceSide: 'bottom', targetSide: 'top', sortAxis: 'x',
+            score: Math.abs(dy) + 1.4 * gapX + 0.35 * Math.abs(dx) + (dy < 0 ? 1e6 : 0) - 0.2 * overlapX,
+        },
+        {
+            sourceSide: 'top', targetSide: 'bottom', sortAxis: 'x',
+            score: Math.abs(dy) + 1.4 * gapX + 0.35 * Math.abs(dx) + (dy > 0 ? 1e6 : 0) - 0.2 * overlapX,
+        },
+    ];
+    candidates.sort((a, b) => a.score - b.score);
+    return {
+        sourceSide: candidates[0].sourceSide,
+        targetSide: candidates[0].targetSide,
+        sortAxis: candidates[0].sortAxis,
+    };
 }
 
 function absoluteNodeRects(nodes) {
