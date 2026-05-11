@@ -22,7 +22,8 @@ const TASKS_GROUP_EXPANDED_BG = 'var(--vyasa-paper)';
 const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 42%, var(--vyasa-primary) 58%)';
 const TASKS_GROUP_TITLE_BG = 'color-mix(in srgb, var(--vyasa-paper) 76%, var(--vyasa-primary) 24%)';
 const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 74%, var(--vyasa-primary) 26%)';
-const TASKS_EDGE_FOCUS_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 45%, #f59e0b 55%)';
+const TASKS_EDGE_FOCUS_OUT_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 55%, #f59e0b 45%)';
+const TASKS_EDGE_FOCUS_IN_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 40%, #22c55e 60%)';
 const TASKS_SPACING_PRESETS = {
     compact: { nodeSpacing: 24, layerSpacing: 64, collisionGap: 56, groupPadding: 28, edgeLabelWidth: 220 },
     normal: { nodeSpacing: 44, layerSpacing: 96, collisionGap: 96, groupPadding: 40, edgeLabelWidth: 240 },
@@ -1030,6 +1031,46 @@ function renderTasksInlineLinks(value) {
     return parts.length ? parts : text;
 }
 
+function stableEdgeHash(text) {
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+}
+
+function edgeControlPoint(x, y, position, otherX, otherY) {
+    const dx = otherX - x;
+    const dy = otherY - y;
+    const distance = Math.max(Math.abs(dx), Math.abs(dy), 40) * 0.5;
+    if (position === 'left') return { x: x - distance, y };
+    if (position === 'right') return { x: x + distance, y };
+    if (position === 'top') return { x, y: y - distance };
+    return { x, y: y + distance };
+}
+
+function cubicBezierPoint(p0, p1, p2, p3, t) {
+    const mt = 1 - t;
+    return (
+        (mt ** 3) * p0 +
+        3 * (mt ** 2) * t * p1 +
+        3 * mt * (t ** 2) * p2 +
+        (t ** 3) * p3
+    );
+}
+
+function tasksEdgeLabelPoint(props) {
+    const seed = `${props.source}->${props.target}|${props.label || ''}`;
+    const t = 0.25 + ((stableEdgeHash(seed) % 51) / 100);
+    const c1 = edgeControlPoint(props.sourceX, props.sourceY, props.sourcePosition, props.targetX, props.targetY);
+    const c2 = edgeControlPoint(props.targetX, props.targetY, props.targetPosition, props.sourceX, props.sourceY);
+    return {
+        x: cubicBezierPoint(props.sourceX, c1.x, c2.x, props.targetX, t),
+        y: cubicBezierPoint(props.sourceY, c1.y, c2.y, props.targetY, t),
+    };
+}
+
 async function renderTasksGraphs(rootElement = document) {
     const rf = await ensureTasksReactFlow();
     for (const wrapper of rootElement.querySelectorAll('.tasks-container[data-tasks-widget="true"]')) {
@@ -1264,17 +1305,17 @@ async function renderTasksGraphs(rootElement = document) {
                         directEndpointIds.add(edge.target);
                     }
                 }
-                const focusedEdgeIds = new Set();
+                const focusedEdgeModes = new Map();
                 if (isFocusedPrimary) {
                     for (const edge of baseEdges) {
-                        if (highlightedEdgeIds.has(edge.id)) focusedEdgeIds.add(edge.id);
+                        if (highlightedEdgeIds.has(edge.id)) focusedEdgeModes.set(edge.id, edge.source === nodeId ? 'focused-out' : 'focused-in');
                     }
                 } else if (isFocusedNeighbor && directEndpointIds.has(hoveredNodeId)) {
                     for (const edge of baseEdges) {
                         const linksSelectedAndHovered =
                             (edge.source === nodeId && edge.target === hoveredNodeId) ||
                             (edge.source === hoveredNodeId && edge.target === nodeId);
-                        if (linksSelectedAndHovered) focusedEdgeIds.add(edge.id);
+                        if (linksSelectedAndHovered) focusedEdgeModes.set(edge.id, edge.source === nodeId ? 'focused-out' : 'focused-in');
                     }
                 }
                 setNodes(baseNodes.map((node) => {
@@ -1300,11 +1341,12 @@ async function renderTasksGraphs(rootElement = document) {
                     };
                 }));
                 const nextEdges = baseEdges.map((edge) => {
-                    const mode = focusedEdgeIds.has(edge.id)
-                        ? 'focused'
+                    const mode = focusedEdgeModes.get(edge.id)
+                        ? focusedEdgeModes.get(edge.id)
                         : (highlightedEdgeIds.has(edge.id) ? 'selected' : 'dim');
                     const highlighted = mode !== 'dim';
-                    const dashArray = highlighted ? (mode === 'focused' ? '10 6' : '8 6') : undefined;
+                    const focusColor = mode === 'focused-in' ? TASKS_EDGE_FOCUS_IN_COLOR : TASKS_EDGE_FOCUS_OUT_COLOR;
+                    const dashArray = highlighted ? ((mode === 'focused-in' || mode === 'focused-out') ? '10 6' : '8 6') : undefined;
                     const dashCycle = dashArray
                         ? dashArray.split(/\s+/).map(Number).filter(Number.isFinite).slice(0, 2).reduce((sum, value) => sum + value, 0)
                         : undefined;
@@ -1316,39 +1358,41 @@ async function renderTasksGraphs(rootElement = document) {
                             : TASKS_EDGE_LABEL_FOCUS_Z,
                         labelStyle: {
                             ...(edge.labelStyle || {}),
-                            fill: mode === 'focused'
-                                ? TASKS_EDGE_FOCUS_COLOR
+                            fill: mode === 'focused-in' || mode === 'focused-out'
+                                ? focusColor
                                 : (highlighted ? 'currentColor' : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)'),
                             opacity: hoveredNodeId
-                                ? (mode === 'focused' ? 1 : 0.05)
-                                : (mode === 'focused' ? 1 : (highlighted ? 1 : 0.18)),
-                            fontWeight: mode === 'focused' ? 800 : 600,
+                                ? ((mode === 'focused-in' || mode === 'focused-out') ? 1 : 0.05)
+                                : ((mode === 'focused-in' || mode === 'focused-out') ? 1 : (highlighted ? 1 : 0.18)),
+                            fontWeight: (mode === 'focused-in' || mode === 'focused-out') ? 800 : 600,
                         },
                         labelBgStyle: {
                             ...(edge.labelBgStyle || {}),
-                            fill: mode === 'focused'
-                                ? 'color-mix(in srgb, var(--vyasa-paper) 80%, #f59e0b 20%)'
-                                : 'var(--vyasa-paper)',
+                            fill: mode === 'focused-in'
+                                ? 'color-mix(in srgb, var(--vyasa-paper) 78%, #22c55e 22%)'
+                                : (mode === 'focused-out'
+                                    ? 'color-mix(in srgb, var(--vyasa-paper) 80%, #f59e0b 20%)'
+                                    : 'var(--vyasa-paper)'),
                             fillOpacity: hoveredNodeId
-                                ? (mode === 'focused' ? 0.96 : 0.02)
-                                : (mode === 'focused' ? 0.96 : (highlighted ? 0.88 : 0.08)),
+                                ? ((mode === 'focused-in' || mode === 'focused-out') ? 0.96 : 0.02)
+                                : ((mode === 'focused-in' || mode === 'focused-out') ? 0.96 : (highlighted ? 0.88 : 0.08)),
                         },
                         style: {
                             ...edge.style,
-                            stroke: mode === 'focused'
-                                ? TASKS_EDGE_FOCUS_COLOR
+                            stroke: mode === 'focused-in' || mode === 'focused-out'
+                                ? focusColor
                                 : (highlighted ? 'var(--vyasa-primary)' : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)'),
-                            opacity: mode === 'focused' ? 1 : (highlighted ? 0.95 : 0.08),
-                            strokeWidth: mode === 'focused' ? 5 : (mode === 'selected' ? 3.5 : 2.5),
+                            opacity: (mode === 'focused-in' || mode === 'focused-out') ? 1 : (highlighted ? 0.95 : 0.08),
+                            strokeWidth: (mode === 'focused-in' || mode === 'focused-out') ? 5 : (mode === 'selected' ? 3.5 : 2.5),
                             strokeDasharray: dashArray,
                             '--vyasa-edge-dash-cycle': dashCycle,
-                            '--vyasa-edge-flow-duration': mode === 'focused' ? '0.72s' : '0.64s',
+                            '--vyasa-edge-flow-duration': (mode === 'focused-in' || mode === 'focused-out') ? '0.72s' : '0.64s',
                             strokeLinecap: highlighted ? 'round' : undefined,
                         },
                         animated: highlighted,
                     };
                 });
-                const edgePriority = { dim: 0, selected: 1, focused: 2 };
+                const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdges(nextEdges);
             }, [activeFilters, model]);
@@ -1391,6 +1435,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, [graphRevision, expanded]);
             const CustomEdge = React.memo((props) => {
                 const [path, labelX, labelY] = rf.getBezierPath(props);
+                const labelPoint = tasksEdgeLabelPoint(props);
                 const fullLabel = String(props.label || '').replace(/\\n/g, '\n');
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
@@ -1406,7 +1451,7 @@ async function renderTasksGraphs(rootElement = document) {
                         React.createElement('div', {
                             style: {
                                 position: 'absolute',
-                                transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+                                transform: `translate(-50%, -50%) translate(${labelPoint.x || labelX}px, ${labelPoint.y || labelY}px)`,
                                 pointerEvents: 'none',
                                 zIndex: props.labelZIndex || TASKS_EDGE_LABEL_Z,
                                 padding: `${props.labelBgPadding?.[1] || 0}px ${props.labelBgPadding?.[0] || 0}px`,
@@ -1692,11 +1737,18 @@ async function renderTasksGraphs(rootElement = document) {
             const focusNeighborEdge = React.useCallback((_, node) => {
                 if (!selectedNodeId || !node?.id) return;
                 if (!isTasksGraphNodeSelectable(node.data?.kind, expanded.has(node.id))) return;
+                const baseEdges = graphBaseRef.current.edges || [];
+                const sourceNodeId = node.data?.kind === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                const isNeighbor = baseEdges.some((edge) =>
+                    (edge.source === selectedNodeId && edge.target === sourceNodeId) ||
+                    (edge.source === sourceNodeId && edge.target === selectedNodeId)
+                );
+                if (!isNeighbor && sourceNodeId !== selectedNodeId) return;
                 if (hoverClearTimerRef.current) {
                     window.clearTimeout(hoverClearTimerRef.current);
                     hoverClearTimerRef.current = null;
                 }
-                setHoveredNodeId((current) => current === node.id ? current : node.id);
+                setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);
             }, [expanded, selectedNodeId]);
             const clearNeighborEdgeFocus = React.useCallback((_, node) => {
                 if (!isTasksGraphNodeSelectable(node?.data?.kind, expanded.has(node?.id))) return;
