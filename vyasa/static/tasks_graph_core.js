@@ -76,12 +76,12 @@ function stableHash(text) {
 
 function deterministicHandlePct(edge, role, side, index, count) {
     const basePct = role === 'target'
-        ? (18 + (edgeHandlePct(index, count) - 18) * 0.5)
-        : (50 + (edgeHandlePct(index, count) - 18) * 0.5);
+        ? (50 + (edgeHandlePct(index, count) - 18) * 0.5)
+        : (18 + (edgeHandlePct(index, count) - 18) * 0.5);
     const seed = `${edge.source}->${edge.target}|${edge.label || ''}|${role}|${side}`;
     const jitter = (stableHash(seed) % 15) - 7;
-    const min = role === 'target' ? 18 : 50;
-    const max = role === 'target' ? 50 : 82;
+    const min = role === 'target' ? 50 : 18;
+    const max = role === 'target' ? 82 : 50;
     return Math.max(min, Math.min(max, basePct + jitter));
 }
 
