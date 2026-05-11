@@ -382,6 +382,31 @@ def _rewrite_raw_html_urls(content, current_path):
     return re.sub(r'\b(src|href|poster|srcset)=(["\'])(.*?)\2', rewrite_attr, content, flags=re.IGNORECASE)
 
 
+def _resolve_items_node_href(href, current_path):
+    href = str(href or "").strip()
+    if not href:
+        return href
+    if href.startswith(("#", "/", "//")) or re.match(r"^[a-zA-Z][\w+.-]*:", href):
+        return href
+    base, frag = href.split("#", 1) if "#" in href else (href, "")
+    if not current_path:
+        return href
+    current_file = _current_content_path(current_path)
+    resolved = (current_file.parent / base).resolve() if current_file else None
+    rel = _slug_for_resolved_path(resolved, current_path, strip_suffix=not Path(base).suffix) if resolved else None
+    if not rel:
+        return href
+    mapped = content_url_for_slug(rel)
+    return f"{mapped}#{frag}" if frag else mapped
+
+
+def _normalize_items_model_hrefs(model, current_path):
+    for bucket in ("groups", "tasks"):
+        for node in model.get(bucket, []):
+            if "href" in node:
+                node["href"] = _resolve_items_node_href(node.get("href"), current_path)
+
+
 def _escape_attr(value):
     if value is None:
         return None
@@ -506,7 +531,7 @@ def _render_mermaid_block(code):
     return f"""<div class="mermaid-container relative border-4 rounded-md my-4 shadow-2xl" style="{container_style}"><div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded"><button onclick="openMermaidFullscreen('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button><button onclick="resetMermaidZoom('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button><button onclick="zoomMermaidIn('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button><button onclick="zoomMermaidOut('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button></div><div id="{diagram_id}" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: {min_height}; height: {height};" data-mermaid-code="{escaped_code}"{gantt_data_attr}{mermaid_title_attr}><pre class="mermaid" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">{code}</pre></div>{caption_html}</div>"""
 
 
-def _render_tasks_block(code):
+def _render_tasks_block(code, current_path=None):
     code = html.unescape(code)
     config, code = _split_fence_frontmatter(code)
     try:
@@ -519,6 +544,7 @@ def _render_tasks_block(code):
             model["color_by"] = config["color_by"]
         if config.get("color_palette") and not model.get("color_palette"):
             model["color_palette"] = config["color_palette"]
+        _normalize_items_model_hrefs(model, current_path)
         graph = build_collapsed_graph(model)
     except Exception:
         model = {
@@ -545,6 +571,8 @@ def _render_tasks_block(code):
     jitter_y = html.escape(str(config.get("jitter_y", config.get("jitter", "0"))))
     spacing = html.escape(str(config.get("spacing", "normal")))
     optional_layout_attrs = []
+    if "layout_direction" in config:
+        optional_layout_attrs.append(f'data-tasks-layout-direction="{html.escape(str(config["layout_direction"]))}"')
     if "node_spacing" in config:
         optional_layout_attrs.append(f'data-tasks-node-spacing="{html.escape(str(config["node_spacing"]))}"')
     if "layer_spacing" in config:
@@ -838,7 +866,7 @@ class ContentRenderer(FrankenRenderer):
         if lang == "mermaid":
             return _render_mermaid_block(code)
         if lang in {"items", "tasks"}:
-            return _render_tasks_block(code)
+            return _render_tasks_block(code, self.current_path)
         raw_code = code
         code = html.unescape(code)
         line_numbers = bool(lang) and _resolve_line_numbers(get_config().get_code_line_numbers(), attrs=attrs)

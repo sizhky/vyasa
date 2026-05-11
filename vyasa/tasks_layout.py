@@ -23,6 +23,7 @@ def build_collapsed_graph(model: dict) -> dict:
         nodes.append({
             "id": group_id,
             "label": group["label"],
+            "href": group.get("href"),
             "kind": "group",
             "collapsed": True,
             "x": 80 + (idx % 3) * 280,
@@ -38,6 +39,7 @@ def build_collapsed_graph(model: dict) -> dict:
             nodes.append({
                 "id": task["id"],
                 "label": task["label"],
+                "href": task.get("href"),
                 "kind": "task",
                 "collapsed": True,
                 "x": 80,

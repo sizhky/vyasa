@@ -1,6 +1,7 @@
 ---
 name: vyasa
 description: Use when working on the Vyasa project or when the user wants help using Vyasa itself. Invoke for `.vyasa` TOML config, content organization, markdown features, theming, Mermaid, D2, or Cytograph/`.cytree` embeds, auth and RBAC, static build behavior, or repo-aware Vyasa implementation work.
+version: "0.1.1"
 ---
 
 # Vyasa
@@ -43,16 +44,20 @@ Core rules:
 - For lightweight task callouts, prefer markdown task-list items like `- [ ] Task | owner: Jane | deadline: Tomorrow | priority: high` over custom HTML tags; supported metadata families live in `references/markdown.md`.
 - For dependency planning UIs, use fenced `tasks`/`items` blocks inside normal markdown pages instead of separate graph files.
 - `tasks`/`items` fences support optional YAML frontmatter first for renderer options like `title`, `default_open_depth`, `width`, `min_height`, and `height`.
+- `tasks`/`items` fences also support color-driven grouping: set `color_by: <attr_name>` and optionally `color_palette:` entries mapping attr values to CSS colors.
 - The graph body under that frontmatter is still terse line-based syntax, not YAML.
+- For user-facing Vyasa navigation, prefer route slugs and anchors like `/posts/guide#part` or `guide#part`; do not append `.md` unless the goal is explicitly raw markdown source.
 - Canonical body syntax: `id: <graph-id>`, `title: <graph-title>`, indented `Group Label:` lines, `- id :: Item Label` item lines, and global edge lines like `a, b ->|edge label| c`.
 - Do not wrap an entire `items` graph in one top-level group just to create a root node; it renders poorly. Start with multiple meaningful top-level groups, or with direct items when grouping is not useful.
 - Use indentation for nesting. `Group Label:` lines nested under group lines make child groups. `- id :: Item Label` lines nested under a group belong to that group.
 - Use global edge lines for DAG edges; edge labels are optional. First-class inline item attrs today: `estimate`, `priority`, `points`, `owner`, `phase`.
+- Node colors resolve in this order: per-node `color:` attr first, then nearest colored parent group, then `color_by` + `color_palette` lookup. Nested groups follow the nearest-parent rule. Example: frontmatter `color_by: owner` with `color_palette: { Alice: "#60a5fa", Bob: "#f59e0b" }`, or inline `- t1 :: Task | color: rebeccapurple`.
 - Graph layout attrs exist but are renderer-owned: `graph_x`, `graph_y`. Do not surface them in user guidance unless debugging persistence.
 - Current `items` view is a React Flow graph: draggable cards, dependency edges, collapsed group cards, expandable group regions, keyboard fit/unfold controls, and a popout button.
 - Collapsed groups behave like selectable summary nodes for neighbor inspection. Expanded group regions are background containers, not selectable cards.
 - Edge routing is automatic. Shallow center-to-center angles use left/right side handles and end in a dot cap; steeper angles use top/bottom handles and keep arrowheads.
 - `items` graph persistence is block-scoped through `/api/tasks/blocks/...`; editing a graph rewrites the fenced block source and clears legacy chain state. Do not propose separate item graph files unless the user explicitly asks for legacy compatibility work.
+- Inside `items`/`tasks`, prefer normal markdown links in author text: attr values like `owner: [Alice](team/alice)` or `spec: [API](guide#api)`, and group/item labels like `Docs [API](guide#api):`, instead of a special `href:` attr.
 - Use `+` and `-` fold markers when the callout should clearly default open or closed, and prefer nested `> > [!todo]` callouts over ad hoc indentation patterns.
 - For custom callout types, rely on `data-callout="your-type"` plus `custom.css` rather than inventing special renderer logic unless the user explicitly wants core support.
 - For long-form writing where a single thematic break is too light, use two back-to-back `---` lines to create a stronger section separator; Vyasa renders doubled rules distinctly from a single `---`.

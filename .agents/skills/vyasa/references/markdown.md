@@ -22,6 +22,8 @@ Place `index.md` or `README.md` (case-insensitive) in any folder to make it the 
 
 Append `.md` to any post URL to fetch its source: `/posts/my-note.md`
 
+For normal page navigation, do the opposite: use the Vyasa route without `.md`, such as `/posts/my-note` or `my-note#section`. The `.md` suffix is only for explicit raw-source access.
+
 ## Extended inline syntax
 
 ```markdown
@@ -132,6 +134,8 @@ Inserts a table of contents at that position based on all headings in the docume
 ```
 
 Link to it with `[link text](#my-anchor)`.
+
+Inside `items` / `tasks` author text, prefer normal markdown links in both labels and attr values, like `Docs [API](my-note#my-anchor):`, `spec: [API](my-note#my-anchor)`, or `owner: [Alice](/posts/team/alice)`. Use route-style targets for navigation, not `.md`, unless you explicitly want raw markdown.
 
 ## Math (KaTeX)
 
@@ -262,6 +266,9 @@ Notes:
 - Do not wrap the whole graph in one top-level group. Start with multiple meaningful top-level groups, or direct items if grouping adds no value.
 - `Group Label:` nests by indentation. `- id :: Item Label` under a group belongs to that group.
 - Use inline attrs after `|`, such as `- T-001 :: Design | owner: Alice | estimate: 1d`.
+- Attr values may contain normal markdown links, such as `- T-001 :: Design | spec: [API](guide#api) | owner: [Alice](team/alice)`.
+- Group and item labels may also contain normal markdown links, such as `Docs [API](guide#api):` or `- T-001 :: Design [Spec](guide#api)`.
+- Node colors resolve in this order: per-node `color:` attr first, then nearest colored parent group, then `color_by` + `color_palette` lookup.
 - Use global edge lines for dependencies: `a -> b`, `a, b -> c`, or `a ->|edge label| b`.
 - Quote complex ids, labels, attrs, or edge labels as JSON strings: `"task-id" :: "Line one\nLine two with \"quotes\" and [brackets]"`.
 - Groups render as expandable cards in a React Flow graph.

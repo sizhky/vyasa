@@ -21,8 +21,8 @@ export function nextWheelState(state, rect, point, deltaY, maxScale = 55) {
 const TASK_NODE_FONT = '600 13px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 const TASK_NODE_SPECS = {
-    group: { width: 250, minHeight: 80, padX: 24, padY: 20, reserveX: 24 },
-    task: { width: 220, minHeight: 60, padX: 24, padY: 20, reserveX: 0 },
+    group: { width: 250, minHeight: 80, padX: 32, padY: 28, reserveX: 34 },
+    task: { width: 220, minHeight: 60, padX: 28, padY: 24, reserveX: 0 },
 };
 
 function measureTextWidth(text, font = TASK_NODE_FONT) {
@@ -37,14 +37,14 @@ function measureTextWidth(text, font = TASK_NODE_FONT) {
 
 export function sizeTaskNode(label, kind = 'task') {
     const spec = TASK_NODE_SPECS[kind] || TASK_NODE_SPECS.task;
-    const maxTextWidth = Math.max(32, spec.width - spec.padX - spec.reserveX);
+    const maxTextWidth = Math.max(32, spec.width - spec.padX - spec.reserveX - 8);
     const lines = String(label || '')
         .split(/\r?\n/)
-        .reduce((count, part) => count + Math.max(1, Math.ceil(measureTextWidth(part) / maxTextWidth)), 0);
-    const textHeight = Math.max(20, lines * 16.25);
+        .reduce((count, part) => count + Math.max(1, Math.ceil((measureTextWidth(part) * 1.08) / maxTextWidth)), 0);
+    const textHeight = Math.max(20, lines * 18);
     return {
         width: spec.width,
-        height: Math.max(spec.minHeight, Math.ceil(textHeight + spec.padY + 4)),
+        height: Math.max(spec.minHeight, Math.ceil(textHeight + spec.padY + 8)),
     };
 }
 
@@ -63,6 +63,26 @@ export function tasksGraphNodeHitArea(kind, isExpanded = false) {
 function edgeHandlePct(index, count) {
     if (count <= 1) return 50;
     return Math.max(18, Math.min(82, ((index + 1) / (count + 1)) * 100));
+}
+
+function stableHash(text) {
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+}
+
+function deterministicHandlePct(edge, role, side, index, count) {
+    const basePct = role === 'target'
+        ? (18 + (edgeHandlePct(index, count) - 18) * 0.5)
+        : (50 + (edgeHandlePct(index, count) - 18) * 0.5);
+    const seed = `${edge.source}->${edge.target}|${edge.label || ''}|${role}|${side}`;
+    const jitter = (stableHash(seed) % 15) - 7;
+    const min = role === 'target' ? 18 : 50;
+    const max = role === 'target' ? 50 : 82;
+    return Math.max(min, Math.min(max, basePct + jitter));
 }
 
 function edgeAnchorSides(sourceRect, targetRect) {
@@ -145,7 +165,7 @@ export function buildTaskEdgeAnchors(nodes, edges) {
                 const handleId = `${role}-${side}-${index}`;
                 if (role === 'source') edge.sourceHandle = handleId;
                 else edge.targetHandle = handleId;
-                return { id: handleId, side, offsetPct: edgeHandlePct(index, entries.length) };
+                return { id: handleId, side, offsetPct: deterministicHandlePct(edge, role, side, index, entries.length) };
             });
             nodeHandles[nodeId] = nodeHandles[nodeId] || { source: [], target: [] };
             nodeHandles[nodeId][role].push(...handles);
