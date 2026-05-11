@@ -1,7 +1,7 @@
 ---
 name: vyasa
 description: Use when working on the Vyasa project or when the user wants help using Vyasa itself. Invoke for `.vyasa` TOML config, content organization, markdown features, theming, Mermaid, D2, or Cytograph/`.cytree` embeds, auth and RBAC, static build behavior, or repo-aware Vyasa implementation work.
-version: "0.1.1"
+version: "0.1.2"
 ---
 
 # Vyasa
@@ -23,7 +23,7 @@ Start here:
 2. Prefer existing Vyasa conventions over inventing new ones.
 3. When generating `.vyasa`, output valid TOML with only supported keys.
 4. When changing repo code, cite the concrete file that implements the behavior.
-5. For recent markdown work, check `references/markdown.md` for Obsidian-style callouts, aliases, nesting/folding, code snippet includes, inline `items` fences, and explicit heading IDs/permalinks before inventing new syntax.
+5. For recent markdown work, check `references/markdown.md` for Obsidian-style callouts, wiki links, aliases, nesting/folding, code snippet includes, inline `items` fences, and explicit heading IDs/permalinks before inventing new syntax.
 6. For Mermaid, D2, Cytograph, or `.cytree` embeds, check `references/diagrams.md` before inventing fence syntax, frontmatter keys, or source-loading behavior.
 7. For code-block color changes, check `references/theming.md` for the `--vyasa-code-*` CSS variables so users can override palettes from `custom.css`.
 8. For books/tutorials/docs sequences, prefer Vyasa's built-in sibling previous/next pager before inventing manual chapter-footer HTML; it follows the folder's `.vyasa` ordering, not raw filename sort.
@@ -41,6 +41,11 @@ Core rules:
 - Treat root `ignore = [...]` as a homepage feed filter too; ignored files should not appear as cards even when the homepage falls back to the post grid.
 - In the lazy posts tree sidebar, a folder-local `.vyasa` is also a branch-visibility marker: even if the folder has no direct markdown files and only nested subfolders, the folder should still appear so the branch can lazy-load.
 - For callouts, emit Obsidian-style callouts like `> [!note] Title` or `> [!warning]- Title`; prefer aliases already supported by Obsidian (`warn`, `error`, `faq`, `check`, `done`, `summary`, `tldr`, `cite`, etc.) rather than inventing new keywords.
+- Vyasa now supports Obsidian-style wiki links during markdown render. Supported shapes include `[[note]]`, `[[note|label]]`, `[[note#Heading]]`, `[[note#Heading#Subheading]]`, `[[#Same Note Heading]]`, alias targets, explicit heading ids, folder-note targets, and relative path forms like `[[../sibling]]`.
+- For folder-note links, prefer linking the folder route (`[[guide]]`), not `[[guide/index]]`, when the folder has a folder note; the canonical route is the folder URL.
+- For heading links, prefer real heading text or explicit ids already present in the document; do not invent synthetic anchors or `#slug` values unless the heading id is explicitly authored.
+- Current ambiguity rule: if a bare wikilink or alias matches multiple notes, Vyasa leaves the raw `[[...]]` text unresolved rather than guessing. Use a path-qualified target such as `[[area/topic]]` when duplicates exist.
+- If you need a stable demo or regression surface for wiki links, use `demo/wikilinks-lab/README.md`; it covers unique targets, duplicate basenames, aliases, folder notes, self-headings, nested heading chains, and intentional unresolved ambiguity cases.
 - For lightweight task callouts, prefer markdown task-list items like `- [ ] Task | owner: Jane | deadline: Tomorrow | priority: high` over custom HTML tags; supported metadata families live in `references/markdown.md`.
 - For dependency planning UIs, use fenced `tasks`/`items` blocks inside normal markdown pages instead of separate graph files.
 - `tasks`/`items` fences support optional YAML frontmatter first for renderer options like `title`, `default_open_depth`, `width`, `min_height`, and `height`.

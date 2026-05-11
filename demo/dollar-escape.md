@@ -1,5 +1,7 @@
 # Dollar Escape
 
+See also [[wikilinks]] and [[quick-styling-inline-css#Inline emphasis still works]].
+
 Plain math:
 
 $E = mc^2$

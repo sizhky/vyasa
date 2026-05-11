@@ -2,6 +2,8 @@
 title: Quick Styling with Markdown + Inline CSS
 ---
 
+See [[wikilinks]] for cross-page link tests and [[dollar-escape]] for a plain page jump.
+
 <div style="background: #ecfdf5; border: 1px solid #10b981; border-radius: 10px; padding: 14px; color: #065f46;">
 
 ## Migration Status Snapshot

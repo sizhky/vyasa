@@ -47,6 +47,7 @@ from .markdown_tokens import (
     Superscript,
     YoutubeEmbed,
 )
+from .wikilinks import rewrite_wikilinks
 
 _diagram_uid_counter = count(1)
 _CALLOUT_META = {
@@ -929,6 +930,7 @@ class ContentRenderer(FrankenRenderer):
 
 def from_md(content, img_dir=None, current_path=None, slide_mode=False):
     content = _rewrite_raw_html_urls(content, current_path)
+    content = rewrite_wikilinks(content, current_path=current_path)
     if img_dir is None and current_path:
         path_parts = Path(current_path).parts
         img_dir = "/posts/" + "/".join(path_parts[:-1]) if len(path_parts) > 1 else "/posts"

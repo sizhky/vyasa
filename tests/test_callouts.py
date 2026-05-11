@@ -215,3 +215,29 @@ def test_raw_html_srcset_rewrites_only_relative_candidates():
     html = to_xml(from_md('<img srcset="./a.png 1x, https://x.test/b.png 2x">', current_path="demo/headings"))
 
     assert 'srcset="/posts/demo/a.png 1x, https://x.test/b.png 2x"' in html
+
+
+def test_obsidian_wikilinks_resolve_note_and_heading(monkeypatch, tmp_path):
+    (tmp_path / "alpha.md").write_text("# Alpha\n\n## Part One\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    from vyasa.config import reload_config
+    reload_config(tmp_path / ".vyasa")
+    html = to_xml(from_md("[[alpha]] and [[alpha#Part One]]", current_path="notes/today"))
+    assert 'href="/posts/alpha"' in html
+    assert 'href="/posts/alpha#part-one"' in html
+
+
+def test_obsidian_wikilinks_resolve_alias_folder_note_and_self_heading(monkeypatch, tmp_path):
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (tmp_path / "alias-target.md").write_text("---\naliases:\n - friend name\n---\n# Alias Target\n", encoding="utf-8")
+    (docs / "index.md").write_text("# Folder Home\n\n## Entry Point\n", encoding="utf-8")
+    (tmp_path / "page.md").write_text("# Home\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    from vyasa.config import reload_config
+    reload_config(tmp_path / ".vyasa")
+    html = to_xml(from_md("[[friend name]] [[docs]] [[docs#Entry Point]] [[#Home]]", current_path="page"))
+    assert 'href="/posts/alias-target"' in html
+    assert 'href="/posts/docs"' in html
+    assert 'href="/posts/docs#entry-point"' in html
+    assert 'href="/posts/page#home"' in html
