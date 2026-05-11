@@ -161,7 +161,7 @@ def _add_edges(graph: dict, source_text: str, target_text: str, label: str) -> N
 
 
 def _parse_items_graph(body: str) -> dict:
-    graph = {"groups": [], "tasks": [], "dependency_edges": []}
+    graph = {"groups": [], "tasks": [], "dependency_edges": [], "color_palettes": {}}
     stack: list[dict] = []
     used_ids: set[str] = set()
     lines = body.splitlines()
@@ -193,8 +193,50 @@ def _parse_items_graph(body: str) -> dict:
                 index += 1
                 continue
             if key == "color_by":
-                graph["color_by"] = _read_string(value.strip())
+                if value.strip():
+                    graph["color_by"] = _read_string(value.strip())
+                    index += 1
+                    continue
+                palettes = {}
+                default_key = ""
                 index += 1
+                while index < len(lines):
+                    child_raw = lines[index]
+                    if not child_raw.strip() or child_raw.lstrip().startswith("#"):
+                        index += 1
+                        continue
+                    child_indent = _count_indent(child_raw)
+                    if child_indent <= indent:
+                        break
+                    child_line = child_raw.strip()
+                    child_key_index = _find_unquoted(child_line, ":")
+                    if child_key_index < 0:
+                        raise ValueError(f"Expected color_by entry key: value, got {child_raw!r}")
+                    palette_key = _read_string(child_line[:child_key_index].strip())
+                    palette_value = child_line[child_key_index + 1:].strip()
+                    if palette_value:
+                        raise ValueError("Nested color_by palettes must use indented value: color entries")
+                    if not default_key:
+                        default_key = palette_key
+                    palette = {}
+                    index += 1
+                    while index < len(lines):
+                        value_raw = lines[index]
+                        if not value_raw.strip() or value_raw.lstrip().startswith("#"):
+                            index += 1
+                            continue
+                        value_indent = _count_indent(value_raw)
+                        if value_indent <= child_indent:
+                            break
+                        value_line = value_raw.strip()
+                        value_key_index = _find_unquoted(value_line, ":")
+                        if value_key_index < 0:
+                            raise ValueError(f"Expected color_by palette value: color, got {value_raw!r}")
+                        palette[_read_string(value_line[:value_key_index].strip())] = _read_string(value_line[value_key_index + 1:].strip())
+                        index += 1
+                    palettes[palette_key] = palette
+                graph["color_by"] = default_key
+                graph["color_palettes"] = palettes
                 continue
             if key == "color_palette":
                 palette_key = _read_string(value.strip())
@@ -218,6 +260,7 @@ def _parse_items_graph(body: str) -> dict:
                     palette[child_key] = _read_string(child_line[child_key_index + 1:].strip())
                     index += 1
                 graph["color_palette"] = palette
+                graph["color_palettes"][graph.get("color_by") or palette_key or ""] = palette
                 continue
 
         edge_index = _find_unquoted(line, "->")
@@ -279,6 +322,7 @@ def parse_tasks_text(text: str) -> dict:
         "frozen": graph.get("frozen", {}),
         "color_by": graph.get("color_by", ""),
         "color_palette": graph.get("color_palette", {}),
+        "color_palettes": graph.get("color_palettes", {}),
     }
 
 

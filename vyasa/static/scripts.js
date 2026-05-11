@@ -165,17 +165,40 @@ function tasksFilterOptions(model) {
         .sort((a, b) => a.label.localeCompare(b.label));
 }
 
+function tasksColorOptions(model) {
+    const palettes = model?.color_palettes && typeof model.color_palettes === 'object' ? model.color_palettes : {};
+    const declaredKeys = Object.keys(palettes).filter((key) => key && typeof palettes[key] === 'object' && Object.keys(palettes[key] || {}).length > 0);
+    const options = tasksFilterOptions(model).filter((option) => option.values.length > 0);
+    return options.filter((option) => declaredKeys.includes(option.key));
+}
+
+function tasksColorPaletteFor(model, colorBy) {
+    const key = String(colorBy || '').trim();
+    if (!key) return {};
+    const palettes = model?.color_palettes && typeof model.color_palettes === 'object' ? model.color_palettes : {};
+    const configuredPalette = palettes[key];
+    if (configuredPalette && Object.keys(configuredPalette).length > 0) return configuredPalette;
+    const legacyKey = String(model?.color_by || '').trim();
+    const legacyPalette = model?.color_palette && typeof model.color_palette === 'object' ? model.color_palette : {};
+    if (key === legacyKey && Object.keys(legacyPalette).length > 0) return legacyPalette;
+    return {};
+}
+
 function tasksNodeMatchesFilters(node, filters) {
     const entries = Object.entries(filters || {}).filter(([, value]) => value);
     if (!entries.length) return true;
     return entries.every(([key, value]) => String(node?.[key] || '') === String(value));
 }
 
-function resolveTasksNodeOwnColor(node, model) {
+function resolveTasksNodeOwnColor(node, model, colorByOverride = null, paletteOverride = null) {
     if (!node) return '';
     if (typeof node.color === 'string' && node.color.trim()) return node.color.trim();
-    const colorBy = typeof model?.color_by === 'string' ? model.color_by.trim() : '';
-    const palette = model?.color_palette && typeof model.color_palette === 'object' ? model.color_palette : {};
+    const colorBy = colorByOverride !== null
+        ? String(colorByOverride || '').trim()
+        : (typeof model?.color_by === 'string' ? model.color_by.trim() : '');
+    const palette = paletteOverride && typeof paletteOverride === 'object'
+        ? paletteOverride
+        : (model?.color_palette && typeof model.color_palette === 'object' ? model.color_palette : {});
     if (!colorBy) return '';
     const value = node[colorBy];
     if (typeof value !== 'string' || !value.trim()) return '';
@@ -183,8 +206,8 @@ function resolveTasksNodeOwnColor(node, model) {
     return typeof color === 'string' ? color.trim() : '';
 }
 
-function resolveTasksNodeColor(node, model) {
-    const ownColor = resolveTasksNodeOwnColor(node, model);
+function resolveTasksNodeColor(node, model, colorByOverride = null, paletteOverride = null) {
+    const ownColor = resolveTasksNodeOwnColor(node, model, colorByOverride, paletteOverride);
     if (ownColor) return ownColor;
     if (!node || !model) return '';
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
@@ -192,7 +215,7 @@ function resolveTasksNodeColor(node, model) {
     while (parentId) {
         const parent = groupsById[parentId];
         if (!parent) return '';
-        const parentColor = resolveTasksNodeOwnColor(parent, model);
+        const parentColor = resolveTasksNodeOwnColor(parent, model, colorByOverride, paletteOverride);
         if (parentColor) return parentColor;
         parentId = parent.parent_group_id || null;
     }
@@ -1010,8 +1033,10 @@ function openTasksNodeHref(href, event = null) {
     window.location.assign(href);
 }
 
-function renderTasksInlineLinks(value) {
+function renderTasksInlineLinks(value, options = {}) {
     const text = String(value || '');
+    const interactive = options.interactive !== false;
+    const onInactiveClick = typeof options.onInactiveClick === 'function' ? options.onInactiveClick : null;
     const parts = [];
     const pattern = /\[([^\]]+)\]\(([^)\s]+(?:\s[^)]*)?)\)/g;
     let lastIndex = 0;
@@ -1019,12 +1044,18 @@ function renderTasksInlineLinks(value) {
     while ((match = pattern.exec(text)) !== null) {
         if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
         const [, label, href] = match;
-        parts.push(window.React.createElement('a', {
-            key: `${href}-${match.index}`,
-            href,
-            onClick: (event) => openTasksNodeHref(href, event),
-            style: { textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit' },
-        }, label));
+        parts.push(interactive
+            ? window.React.createElement('a', {
+                key: `${href}-${match.index}`,
+                href,
+                onClick: (event) => openTasksNodeHref(href, event),
+                style: { textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit' },
+            }, label)
+            : window.React.createElement('span', {
+                key: `${href}-${match.index}`,
+                onClick: onInactiveClick || undefined,
+                style: { textDecoration: 'none', color: 'inherit' },
+            }, label));
         lastIndex = pattern.lastIndex;
     }
     if (lastIndex < text.length) parts.push(text.slice(lastIndex));
@@ -1095,10 +1126,13 @@ async function renderTasksGraphs(rootElement = document) {
             const groupLayoutsRef = React.useRef({});
             const graphBaseRef = React.useRef({ nodes: [], edges: [] });
             const flowWrapperRef = React.useRef(null);
+            const filterPanelRef = React.useRef(null);
             const [expanded, setExpanded] = React.useState(() => new Set(initialExpandedSet));
             const [selectedNodeId, setSelectedNodeId] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [activeFilters, setActiveFilters] = React.useState({});
+            const [activeColorBy, setActiveColorBy] = React.useState(() => String(model?.color_by || '').trim());
+            const [filterPanelHeight, setFilterPanelHeight] = React.useState(172);
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
@@ -1106,6 +1140,7 @@ async function renderTasksGraphs(rootElement = document) {
             const reactFlowApiRef = React.useRef(null);
             const prevExpandedCountRef = React.useRef(0);
             const hoverClearTimerRef = React.useRef(null);
+            const activeColorPalette = React.useMemo(() => tasksColorPaletteFor(model, activeColorBy), [model, activeColorBy]);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
                 const viewport = reactFlow.getViewport();
                 return reactFlow.setViewport(
@@ -1156,7 +1191,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const nodeZ = n.kind !== 'group'
                         ? TASKS_TASK_Z + depth
                         : ((isExpanded ? TASKS_GROUP_BG_Z : TASKS_GROUP_Z) + depth);
-                    const nodeColor = resolveTasksNodeColor(n, model);
+                    const nodeColor = resolveTasksNodeColor(n, model, activeColorBy, activeColorPalette);
                     const background = isExpanded
                         ? (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 86%, ${nodeColor} 14%)` : TASKS_GROUP_EXPANDED_BG)
                         : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 78%, ${nodeColor} 22%)` : TASKS_NODE_BG);
@@ -1260,7 +1295,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setNodes(anchoredNodes);
                 setEdges(baseEdges);
                 setGraphRevision((value) => value + 1);
-            }, [ensureBaseLayout, model]);
+            }, [ensureBaseLayout, model, activeColorBy, activeColorPalette]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: 1, stroke: 'currentColor' },
@@ -1324,7 +1359,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ? (isFocusedPrimary ? 'selected-focus' : 'selected')
                             : (node.id === hoveredNodeId ? 'neighbor-focus' : 'neighbor'))
                         : 'dim';
-                    const nodeColor = resolveTasksNodeColor(node.data, model);
+                    const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette);
                     return {
                         ...node,
                         data: { ...node.data, highlightMode: mode },
@@ -1395,7 +1430,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdges(nextEdges);
-            }, [activeFilters, model]);
+            }, [activeFilters, model, activeColorBy]);
             React.useEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -1439,7 +1474,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const fullLabel = String(props.label || '').replace(/\\n/g, '\n');
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
-                const showFullLabel = highlightMode === 'selected' || highlightMode === 'focused';
+                const showFullLabel = highlightMode !== 'dim' && highlightMode !== 'none';
                 const displayLabel = showFullLabel
                     ? fullLabel
                     : (labelLines.length > 1 ? `${labelLines[0]}...` : fullLabel);
@@ -1492,6 +1527,17 @@ async function renderTasksGraphs(rootElement = document) {
                         style: handleStyle(handle),
                     })
                 ));
+                const highlightMode = data?.highlightMode || 'none';
+                const isDimmed = highlightMode === 'dim';
+                const sourceNodeId = data?.kind === 'groupTitle' ? data?.sourceGroupId : id;
+                const isActiveNode = !selectedNodeId || selectedNodeId === sourceNodeId;
+                const linksInteractive = isActiveNode;
+                const handleInactiveLinkClick = (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setSelectedNodeId(sourceNodeId);
+                    setHoveredNodeId(null);
+                };
                 if (data?.kind === 'groupTitle') {
                     const handleCollapse = (e) => {
                         e.stopPropagation();
@@ -1522,7 +1568,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 overflowWrap: 'anywhere',
                                 wordBreak: 'break-word',
                             }
-                        }, renderTasksInlineLinks(data?.label || data.sourceGroupId || id)),
+                        }, renderTasksInlineLinks(data?.label || data.sourceGroupId || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick })),
                         React.createElement('button', {
                             onClick: handleCollapse,
                             style: { flex: '0 0 auto', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
@@ -1531,12 +1577,18 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const isGroup = data?.kind === 'group';
                 const isExpanded = expanded.has(id);
-                const highlightMode = data?.highlightMode || 'none';
-                const isDimmed = highlightMode === 'dim';
-                const hasHref = !!data?.href;
+                const hasHref = Boolean(linksInteractive && data?.href);
+                const labelContent = renderTasksInlineLinks(data?.label || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick });
                 const labelNode = hasHref
-                    ? React.createElement('a', { href: data.href, onClick: (e) => openTasksNodeHref(data.href, e), style: { color: 'inherit', textDecoration: 'underline', textUnderlineOffset: '2px' } }, renderTasksInlineLinks(data?.label || id))
-                    : renderTasksInlineLinks(data?.label || id);
+                    ? React.createElement('a', {
+                        href: data.href,
+                        onClick: (e) => openTasksNodeHref(data.href, e),
+                        style: { color: 'inherit', textDecoration: 'underline', textUnderlineOffset: '2px' },
+                    }, labelContent)
+                    : React.createElement('span', {
+                        onClick: linksInteractive ? undefined : handleInactiveLinkClick,
+                        style: { color: 'inherit', textDecoration: 'none' },
+                    }, labelContent);
                 const handleExpand = (e) => {
                     e.stopPropagation();
                     const next = new Set(expanded);
@@ -1600,7 +1652,7 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 rebuildLayout(expanded);
             }, [expanded, rebuildLayout]);
-            const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [expanded]);
+            const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [expanded, selectedNodeId, hoveredNodeId]);
             const edgeTypes = React.useMemo(() => ({ vyasaEdge: CustomEdge }), []);
             const FitViewHotkey = () => {
                 const reactFlow = rf.useReactFlow();
@@ -1692,7 +1744,7 @@ async function renderTasksGraphs(rootElement = document) {
                     : tasksNodeMetaEntries(selectedNode);
                 if (!selectedNode || entries.length === 0) return null;
                 return React.createElement('div', {
-                    style: { position: 'absolute', top: '148px', right: '12px', zIndex: 29, width: '240px', maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
+                    style: { position: 'absolute', top: `${56 + filterPanelHeight + 16}px`, right: '12px', zIndex: 29, width: '240px', maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
                 },
                     React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Node Details'),
                     React.createElement(selectedNode.href ? 'a' : 'div', selectedNode.href
@@ -1708,12 +1760,23 @@ async function renderTasksGraphs(rootElement = document) {
             };
             const FilterPanel = () => {
                 const options = tasksFilterOptions(model);
+                const colorOptions = tasksColorOptions(model);
                 return React.createElement('div', {
+                    ref: filterPanelRef,
                     style: { position: 'absolute', top: '56px', right: '12px', zIndex: 30, width: '280px', maxWidth: 'calc(100% - 24px)', maxHeight: '172px', overflowY: 'auto', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
                 },
                     React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' } },
                         React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Filters'),
                         React.createElement('button', { type: 'button', onClick: () => setActiveFilters({}), style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' } }, 'Unselect all')
+                    ),
+                    React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                        React.createElement('label', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'center', fontSize: '12px' } },
+                            React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Color by'),
+                            React.createElement('select', { value: activeColorBy, onChange: (e) => setActiveColorBy(e.target.value), style: { minWidth: 0, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)', borderRadius: '8px', background: 'var(--vyasa-paper)', padding: '4px 8px' } },
+                                React.createElement('option', { value: '' }, 'None'),
+                                ...colorOptions.map((option) => React.createElement('option', { key: option.key, value: option.key }, option.label))
+                            )
+                        )
                     ),
                     ...options.map((option) => React.createElement('label', { key: option.key, style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'center', marginBottom: '8px', fontSize: '12px' } },
                         React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, option.label),
@@ -1761,6 +1824,16 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => () => {
                 if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
             }, []);
+            React.useEffect(() => {
+                const el = filterPanelRef.current;
+                if (!el) return;
+                const update = () => setFilterPanelHeight(el.getBoundingClientRect().height || 172);
+                update();
+                if (typeof ResizeObserver === 'undefined') return;
+                const observer = new ResizeObserver(update);
+                observer.observe(el);
+                return () => observer.disconnect();
+            }, [activeFilters, model]);
             const ActionBridge = () => {
                 const reactFlow = rf.useReactFlow();
                 reactFlowApiRef.current = reactFlow;

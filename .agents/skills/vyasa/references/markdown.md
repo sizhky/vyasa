@@ -268,7 +268,15 @@ Notes:
 - Use inline attrs after `|`, such as `- T-001 :: Design | owner: Alice | estimate: 1d`.
 - Attr values may contain normal markdown links, such as `- T-001 :: Design | spec: [API](guide#api) | owner: [Alice](team/alice)`.
 - Group and item labels may also contain normal markdown links, such as `Docs [API](guide#api):` or `- T-001 :: Design [Spec](guide#api)`.
-- Node colors resolve in this order: per-node `color:` attr first, then nearest colored parent group, then `color_by` + `color_palette` lookup.
+- Node colors resolve in this order: per-node `color:` attr first, then nearest colored parent group, then the active frontmatter `color_by` palette lookup.
+- Preferred color syntax is nested palettes under frontmatter `color_by:`, for example:
+  `color_by:`
+  `  status:`
+  `    On Track: "#86efac"`
+  `    At Risk: "#fcd34d"`
+  `  owner:`
+  `    Alice: "#93c5fd"`
+- Only attrs declared under frontmatter `color_by:` appear in the UI color-mode dropdown. Legacy `color_by: status` plus `color_palette:` remains supported for backward compatibility.
 - Use global edge lines for dependencies: `a -> b`, `a, b -> c`, or `a ->|edge label| b`.
 - Quote complex ids, labels, attrs, or edge labels as JSON strings: `"task-id" :: "Line one\nLine two with \"quotes\" and [brackets]"`.
 - Groups render as expandable cards in a React Flow graph.

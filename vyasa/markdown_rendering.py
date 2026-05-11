@@ -441,6 +441,50 @@ def _split_fence_frontmatter(code):
         key, value = line.split(":", 1)
         key = key.strip()
         value = value.strip()
+        if key == "color_by":
+            if value:
+                config[key] = value.strip().strip('"').strip("'")
+                index += 1
+                continue
+            config["color_by"] = {}
+            index += 1
+            while index < len(lines):
+                child_raw = lines[index]
+                if not child_raw.strip():
+                    index += 1
+                    continue
+                child_indent = len(child_raw) - len(child_raw.lstrip(" "))
+                if child_indent <= indent:
+                    break
+                child_line = child_raw.strip()
+                if ":" not in child_line:
+                    index += 1
+                    continue
+                child_key, child_value = child_line.split(":", 1)
+                child_key = child_key.strip()
+                child_value = child_value.strip()
+                if child_value:
+                    config["color_by"][child_key] = child_value.strip('"').strip("'")
+                    index += 1
+                    continue
+                config["color_by"][child_key] = {}
+                index += 1
+                while index < len(lines):
+                    value_raw = lines[index]
+                    if not value_raw.strip():
+                        index += 1
+                        continue
+                    value_indent = len(value_raw) - len(value_raw.lstrip(" "))
+                    if value_indent <= child_indent:
+                        break
+                    value_line = value_raw.strip()
+                    if ":" not in value_line:
+                        index += 1
+                        continue
+                    value_key, value_value = value_line.split(":", 1)
+                    config["color_by"][child_key][value_key.strip()] = value_value.strip().strip('"').strip("'")
+                    index += 1
+            continue
         if key == "color_palette":
             config[key] = {}
             if value:
@@ -541,10 +585,17 @@ def _render_tasks_block(code, current_path=None):
             model["title"] = config["title"]
         if config.get("id"):
             model["graph_id"] = config["id"]
-        if config.get("color_by") and not model.get("color_by"):
+        if isinstance(config.get("color_by"), str) and config.get("color_by") and not model.get("color_by"):
             model["color_by"] = config["color_by"]
+        if isinstance(config.get("color_by"), dict):
+            palettes = {k: v for k, v in config["color_by"].items() if isinstance(v, dict)}
+            if palettes:
+                model["color_palettes"] = {**model.get("color_palettes", {}), **palettes}
+                if not model.get("color_by"):
+                    model["color_by"] = next(iter(palettes.keys()), "")
         if config.get("color_palette") and not model.get("color_palette"):
             model["color_palette"] = config["color_palette"]
+            model["color_palettes"] = {**model.get("color_palettes", {}), model.get("color_by", ""): config["color_palette"]}
         _normalize_items_model_hrefs(model, current_path)
         graph = build_collapsed_graph(model)
     except Exception:
