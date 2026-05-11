@@ -8,3 +8,10 @@ def test_markdown_renderer_matches_from_md_wrapper():
     context = RenderContext(current_path="demo/page")
 
     assert to_xml(MarkdownRenderer().render(markdown, context)) == to_xml(from_md(markdown, current_path="demo/page"))
+
+
+def test_single_newlines_render_as_hard_breaks():
+    html = to_xml(from_md("a\nb\nc\nd"))
+
+    assert html.count("<br>") == 3
+    assert "<p" in html

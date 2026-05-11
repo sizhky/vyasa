@@ -679,6 +679,9 @@ class ContentRenderer(FrankenRenderer):
         self.mermaid_counter = 0
         self.iframe_counter = 0
 
+    def render_line_break(self, token):
+        return "<br />\n"
+
     def render_list_item(self, token):
         inner = self.render_inner(token)
         task_pattern = re.match(r"^\s*\[([ xX])\]\s*(.*?)$", inner, re.DOTALL)
