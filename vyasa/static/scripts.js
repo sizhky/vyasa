@@ -150,17 +150,19 @@ function tasksFilterOptions(model) {
         for (const [key, value] of Object.entries(node)) {
             if (hidden.has(String(key).toLowerCase()) || value === null || value === undefined || value === '') continue;
             if (!(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) continue;
-            if (!buckets.has(key)) buckets.set(key, new Set());
-            buckets.get(key).add(String(value));
+            if (!buckets.has(key)) buckets.set(key, { values: new Set(), kinds: new Set() });
+            buckets.get(key).values.add(String(value));
+            buckets.get(key).kinds.add(typeof value);
         }
     };
     (model.groups || []).forEach(visit);
     (model.tasks || []).forEach(visit);
     return Array.from(buckets.entries())
-        .map(([key, values]) => ({
+        .map(([key, bucket]) => ({
             key,
             label: tasksNodeMetaLabel(key),
-            values: Array.from(values).sort((a, b) => a.localeCompare(b)),
+            values: Array.from(bucket.values).sort((a, b) => a.localeCompare(b)),
+            isBoolean: bucket.kinds.size === 1 && bucket.kinds.has('boolean'),
         }))
         .sort((a, b) => a.label.localeCompare(b.label));
 }
@@ -192,18 +194,22 @@ function tasksNodeMatchesFilters(node, filters) {
 
 function resolveTasksNodeOwnColor(node, model, colorByOverride = null, paletteOverride = null) {
     if (!node) return '';
-    if (typeof node.color === 'string' && node.color.trim()) return node.color.trim();
     const colorBy = colorByOverride !== null
         ? String(colorByOverride || '').trim()
         : (typeof model?.color_by === 'string' ? model.color_by.trim() : '');
     const palette = paletteOverride && typeof paletteOverride === 'object'
         ? paletteOverride
         : (model?.color_palette && typeof model.color_palette === 'object' ? model.color_palette : {});
-    if (!colorBy) return '';
-    const value = node[colorBy];
-    if (typeof value !== 'string' || !value.trim()) return '';
-    const color = palette[value];
-    return typeof color === 'string' ? color.trim() : '';
+    if (colorBy) {
+        const value = node[colorBy];
+        if (value !== null && value !== undefined && String(value).trim()) {
+            const color = palette[String(value)];
+            if (typeof color === 'string' && color.trim()) return color.trim();
+        }
+        return '';
+    }
+    if (typeof node.color === 'string' && node.color.trim()) return node.color.trim();
+    return '';
 }
 
 function resolveTasksNodeColor(node, model, colorByOverride = null, paletteOverride = null) {
@@ -312,6 +318,10 @@ function ensureTasksReactFlow() {
                 .dark .vyasa-tasks-flow .react-flow__controls button:hover {
                     background: color-mix(in srgb, var(--vyasa-paper) 72%, var(--vyasa-primary) 28%);
                 }
+                .vyasa-tasks-filter-card {
+                    border: 1px solid color-mix(in srgb, var(--vyasa-primary) 32%, transparent) !important;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.12) !important;
+                }
                 .react-flow__edge.animated path {
                     animation: vyasa-edge-dashdraw var(--vyasa-edge-flow-duration, 0.6s) linear infinite;
                 }
@@ -419,9 +429,10 @@ function normalizeTasksGraphNodes(graph, model) {
     return {
         ...graph,
         nodes: (graph.nodes || []).map((node) => {
-            const kind = node.kind || (groupsById[node.id] ? 'group' : 'task');
-            const label = node.label || groupsById[node.id]?.label || tasksById[node.id]?.label || node.id;
-            return { ...node, kind, label, ...sizeTaskNode(label, kind) };
+            const source = groupsById[node.id] || tasksById[node.id] || {};
+            const kind = node.kind || source.kind || (groupsById[node.id] ? 'group' : 'task');
+            const label = node.label || source.label || node.id;
+            return { ...source, ...node, kind, label, ...sizeTaskNode(label, kind) };
         }),
     };
 }
@@ -1131,7 +1142,8 @@ async function renderTasksGraphs(rootElement = document) {
             const [selectedNodeId, setSelectedNodeId] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [activeFilters, setActiveFilters] = React.useState({});
-            const [activeColorBy, setActiveColorBy] = React.useState(() => String(model?.color_by || '').trim());
+            const [activeColorBy, setActiveColorBy] = React.useState(() => String(model?.default_color_by || '').trim());
+            const [filtersCollapsed, setFiltersCollapsed] = React.useState(false);
             const [filterPanelHeight, setFilterPanelHeight] = React.useState(172);
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
@@ -1744,7 +1756,7 @@ async function renderTasksGraphs(rootElement = document) {
                     : tasksNodeMetaEntries(selectedNode);
                 if (!selectedNode || entries.length === 0) return null;
                 return React.createElement('div', {
-                    style: { position: 'absolute', top: `${56 + filterPanelHeight + 16}px`, right: '12px', zIndex: 29, width: '240px', maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
+                    style: { position: 'absolute', right: '12px', bottom: '112px', zIndex: 29, width: '240px', maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
                 },
                     React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Node Details'),
                     React.createElement(selectedNode.href ? 'a' : 'div', selectedNode.href
@@ -1761,29 +1773,57 @@ async function renderTasksGraphs(rootElement = document) {
             const FilterPanel = () => {
                 const options = tasksFilterOptions(model);
                 const colorOptions = tasksColorOptions(model);
-                return React.createElement('div', {
+                const activeCount = Object.values(activeFilters || {}).filter(Boolean).length + (activeColorBy ? 1 : 0);
+                return React.createElement('details', {
                     ref: filterPanelRef,
-                    style: { position: 'absolute', top: '56px', right: '12px', zIndex: 30, width: '280px', maxWidth: 'calc(100% - 24px)', maxHeight: '172px', overflowY: 'auto', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
+                    className: 'vyasa-tasks-filter-card',
+                    open: !filtersCollapsed,
+                    onToggle: (e) => setFiltersCollapsed(!e.currentTarget.open),
+                    style: { position: 'absolute', top: '68px', right: '12px', zIndex: 30, width: '280px', maxWidth: 'calc(100% - 24px)', maxHeight: filtersCollapsed ? '44px' : 'min(70vh, calc(100% - 80px))', overflowY: filtersCollapsed ? 'hidden' : 'visible', borderRadius: '12px', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', backdropFilter: 'blur(8px)', padding: '12px' },
                 },
-                    React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' } },
-                        React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Filters'),
-                        React.createElement('button', { type: 'button', onClick: () => setActiveFilters({}), style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' } }, 'Unselect all')
+                    React.createElement('summary', {
+                        style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', cursor: 'pointer', listStyle: 'none' },
+                    },
+                        React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, textTransform: 'uppercase', letterSpacing: '0.04em' } }, activeCount ? `Filters (${activeCount})` : 'Filters'),
+                        React.createElement('span', { style: { fontSize: '14px', opacity: 0.7, lineHeight: 1 } }, filtersCollapsed ? '+' : '−')
+                    ),
+                    React.createElement('div', { style: { marginTop: '10px', marginBottom: '12px', display: 'flex', justifyContent: 'flex-end' } },
+                        React.createElement('button', { type: 'button', onClick: () => { setActiveFilters({}); setActiveColorBy(''); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' } }, 'Unselect all')
                     ),
                     React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                        React.createElement('label', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'center', fontSize: '12px' } },
+                        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
                             React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Color by'),
-                            React.createElement('select', { value: activeColorBy, onChange: (e) => setActiveColorBy(e.target.value), style: { minWidth: 0, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)', borderRadius: '8px', background: 'var(--vyasa-paper)', padding: '4px 8px' } },
-                                React.createElement('option', { value: '' }, 'None'),
-                                ...colorOptions.map((option) => React.createElement('option', { key: option.key, value: option.key }, option.label))
+                            React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px 12px' } },
+                                [
+                                    { key: '', label: 'None' },
+                                    ...colorOptions.map((option) => ({ key: option.key, label: option.label })),
+                                ].map((option) => React.createElement('label', { key: option.key || '__none__', style: { display: 'inline-flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
+                                    React.createElement('input', {
+                                        type: 'radio',
+                                        name: `${widgetId}-color-by`,
+                                        checked: activeColorBy === option.key,
+                                        onChange: () => setActiveColorBy(option.key),
+                                    }),
+                                    React.createElement('span', { style: { opacity: 0.85 } }, option.label)
+                                ))
                             )
                         )
                     ),
                     ...options.map((option) => React.createElement('label', { key: option.key, style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'center', marginBottom: '8px', fontSize: '12px' } },
                         React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, option.label),
-                        React.createElement('select', { value: activeFilters[option.key] || '', onChange: (e) => setActiveFilters((current) => ({ ...current, [option.key]: e.target.value })), style: { minWidth: 0, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)', borderRadius: '8px', background: 'var(--vyasa-paper)', padding: '4px 8px' } },
-                            React.createElement('option', { value: '' }, 'Any'),
-                            ...option.values.map((value) => React.createElement('option', { key: value, value }, value))
-                        )
+                        option.isBoolean
+                            ? React.createElement('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
+                                React.createElement('input', {
+                                    type: 'checkbox',
+                                    checked: activeFilters[option.key] === 'true',
+                                    onChange: (e) => setActiveFilters((current) => ({ ...current, [option.key]: e.target.checked ? 'true' : '' })),
+                                }),
+                                React.createElement('span', { style: { opacity: 0.8 } }, 'Only true')
+                            )
+                            : React.createElement('select', { value: activeFilters[option.key] || '', onChange: (e) => setActiveFilters((current) => ({ ...current, [option.key]: e.target.value })), style: { minWidth: 0, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)', borderRadius: '8px', background: 'var(--vyasa-paper)', padding: '4px 8px' } },
+                                React.createElement('option', { value: '' }, 'Any'),
+                                ...option.values.map((value) => React.createElement('option', { key: value, value }, value))
+                            )
                     ))
                 );
             };
@@ -1833,7 +1873,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const observer = new ResizeObserver(update);
                 observer.observe(el);
                 return () => observer.disconnect();
-            }, [activeFilters, model]);
+            }, [activeFilters, activeColorBy, filtersCollapsed, model]);
             const ActionBridge = () => {
                 const reactFlow = rf.useReactFlow();
                 reactFlowApiRef.current = reactFlow;

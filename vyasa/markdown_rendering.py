@@ -422,6 +422,9 @@ def _escape_attr(value):
 
 
 def _split_fence_frontmatter(code):
+    def clean(value):
+        return value.strip().strip('"').strip("'")
+
     frontmatter_match = re.match(r"^---\s*\n(.*?)\n---\s*\n", code, re.DOTALL)
     if not frontmatter_match:
         return {}, code
@@ -443,7 +446,7 @@ def _split_fence_frontmatter(code):
         value = value.strip()
         if key == "color_by":
             if value:
-                config[key] = value.strip().strip('"').strip("'")
+                config[key] = clean(value)
                 index += 1
                 continue
             config["color_by"] = {}
@@ -461,10 +464,10 @@ def _split_fence_frontmatter(code):
                     index += 1
                     continue
                 child_key, child_value = child_line.split(":", 1)
-                child_key = child_key.strip()
+                child_key = clean(child_key)
                 child_value = child_value.strip()
                 if child_value:
-                    config["color_by"][child_key] = child_value.strip('"').strip("'")
+                    config["color_by"][child_key] = clean(child_value)
                     index += 1
                     continue
                 config["color_by"][child_key] = {}
@@ -482,13 +485,13 @@ def _split_fence_frontmatter(code):
                         index += 1
                         continue
                     value_key, value_value = value_line.split(":", 1)
-                    config["color_by"][child_key][value_key.strip()] = value_value.strip().strip('"').strip("'")
+                    config["color_by"][child_key][clean(value_key)] = clean(value_value)
                     index += 1
             continue
         if key == "color_palette":
             config[key] = {}
             if value:
-                config["color_by"] = value
+                config["color_by"] = clean(value)
             index += 1
             while index < len(lines):
                 child_raw = lines[index]
@@ -503,10 +506,10 @@ def _split_fence_frontmatter(code):
                     index += 1
                     continue
                 child_key, child_value = child_line.split(":", 1)
-                config[key][child_key.strip()] = child_value.strip().strip('"').strip("'")
+                config[key][clean(child_key)] = clean(child_value)
                 index += 1
             continue
-        config[key] = value
+        config[key] = clean(value)
         index += 1
     return config, code[frontmatter_match.end():]
 
@@ -585,6 +588,8 @@ def _render_tasks_block(code, current_path=None):
             model["title"] = config["title"]
         if config.get("id"):
             model["graph_id"] = config["id"]
+        if "default_color_by" in config:
+            model["default_color_by"] = config["default_color_by"]
         if isinstance(config.get("color_by"), str) and config.get("color_by") and not model.get("color_by"):
             model["color_by"] = config["color_by"]
         if isinstance(config.get("color_by"), dict):

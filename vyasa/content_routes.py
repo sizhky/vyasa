@@ -12,12 +12,13 @@ from .document_pages import (
     DocumentPage,
     copy_raw_button,
     copy_raw_nodes,
+    copy_text_button,
     document_header,
     frontmatter_error_nodes,
     frontmatter_metadata_block,
     present_button,
 )
-from .helpers import content_path_for_slug, content_root_and_relative, content_url_for_slug, get_adjacent_posts, strip_more_marker
+from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, get_adjacent_posts, strip_more_marker
 from .markdown_rendering import _render_markdown_fragment
 from .tree_tables import parse_tree_table, render_tree_table_html
 from .slides import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
@@ -132,12 +133,16 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     pager = _prev_next_nav(root, relative_slug, abbreviations)
     breadcrumbs = _breadcrumbs(path, slug_to_title, abbreviations)
     error_chip, error_toast, error_script = frontmatter_error_nodes(file_path, frontmatter_error)
-    actions = (error_chip if error_chip else Div(), present_button(path), copy_raw_button("Copy Markdown", "raw-md-clipboard", "raw-md-toast"))
+    relative_file_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
+    path_button, path_toast, path_target = copy_text_button("Copy Relative Path", relative_file_path, "relative-path-clipboard", "relative-path-toast")
+    actions = (error_chip if error_chip else Div(), present_button(path), copy_raw_button("Copy Markdown", "raw-md-clipboard", "raw-md-toast"), path_button)
     post_content = Div(
         document_header(post_title, render_content, actions=actions, breadcrumbs=breadcrumbs, file_path=file_path),
         frontmatter_metadata_block(metadata) or Div(),
         error_toast if error_toast else Div(),
         error_script if error_script else Div(),
+        path_toast,
+        path_target,
         *copy_raw_nodes(raw_content),
         content,
         pager if pager else Div(),
@@ -318,8 +323,12 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
         _, raw_content = parse_frontmatter(index_file)
         page_title, render_content = resolve_markdown_title(index_file)
         index_path = str(index_file.relative_to(get_root_folder()).with_suffix(""))
+        relative_file_path = content_slug_for_path(index_file, strip_suffix=False) or index_file.name
+        path_button, path_toast, path_target = copy_text_button("Copy Relative Path", relative_file_path, "relative-path-clipboard", "relative-path-toast")
         page_content = Div(
-            document_header(page_title, render_content, actions=(present_button(index_path), copy_raw_button("Copy Markdown", "raw-md-clipboard", "raw-md-toast")), file_path=index_file),
+            document_header(page_title, render_content, actions=(present_button(index_path), copy_raw_button("Copy Markdown", "raw-md-clipboard", "raw-md-toast"), path_button), file_path=index_file),
+            path_toast,
+            path_target,
             *copy_raw_nodes(raw_content),
             from_md(render_content, current_path=index_path),
         )
