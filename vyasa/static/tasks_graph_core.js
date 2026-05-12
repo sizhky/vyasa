@@ -22,6 +22,7 @@ const TASK_NODE_FONT = '600 13px ui-sans-serif, system-ui, -apple-system, BlinkM
 
 const TASK_NODE_SPECS = {
     group: { width: 250, minHeight: 80, padX: 32, padY: 28, reserveX: 34 },
+    groupTitle: { width: 250, minHeight: 34, padX: 20, padY: 12, reserveX: 28 },
     task: { width: 220, minHeight: 60, padX: 28, padY: 24, reserveX: 0 },
 };
 
@@ -35,15 +36,16 @@ function measureTextWidth(text, font = TASK_NODE_FONT) {
     return ctx.measureText(text).width;
 }
 
-export function sizeTaskNode(label, kind = 'task') {
+export function sizeTaskNode(label, kind = 'task', widthOverride = null) {
     const spec = TASK_NODE_SPECS[kind] || TASK_NODE_SPECS.task;
-    const maxTextWidth = Math.max(32, spec.width - spec.padX - spec.reserveX - 8);
+    const width = Math.max(32, Number(widthOverride || spec.width));
+    const maxTextWidth = Math.max(32, width - spec.padX - spec.reserveX - 8);
     const lines = String(label || '')
         .split(/\r?\n/)
         .reduce((count, part) => count + Math.max(1, Math.ceil((measureTextWidth(part) * 1.08) / maxTextWidth)), 0);
     const textHeight = Math.max(20, lines * 18);
     return {
-        width: spec.width,
+        width,
         height: Math.max(spec.minHeight, Math.ceil(textHeight + spec.padY + 8)),
     };
 }
@@ -65,18 +67,8 @@ function edgeHandlePct(index, count) {
     return 18 + (index * 64) / (count - 1);
 }
 
-function deterministicHandlePct(role, side, index, count, hasPeerRoleOnSide) {
-    const localPct = edgeHandlePct(index, count);
-    if (side === 'left' || side === 'right') {
-        return localPct;
-    }
-    if (!hasPeerRoleOnSide) {
-        return localPct;
-    }
-    if (role === 'source') {
-        return 18 + ((localPct - 18) / 64) * 32;
-    }
-    return 50 + ((localPct - 18) / 64) * 32;
+function deterministicHandlePct(index, count) {
+    return edgeHandlePct(index, count);
 }
 
 function edgeAnchorSides(sourceRect, targetRect) {
@@ -188,13 +180,15 @@ export function buildTaskEdgeAnchors(nodes, edges) {
             const [nodeId, , side] = key.split(':');
             const peerGroups = role === 'source' ? incomingGroups : outgoingGroups;
             const peerRole = role === 'source' ? 'target' : 'source';
-            const hasPeerRoleOnSide = peerGroups.has(`${nodeId}:${peerRole}:${side}`);
+            const peerEntries = peerGroups.get(`${nodeId}:${peerRole}:${side}`) || [];
+            const slotCount = entries.length + peerEntries.length;
+            const slotOffset = role === 'source' ? 0 : peerEntries.length;
             entries.sort((a, b) => (a.sortValue - b.sortValue) || (a.edge._anchorIndex - b.edge._anchorIndex));
             const handles = entries.map(({ edge }, index) => {
                 const handleId = `${role}-${side}-${index}`;
                 if (role === 'source') edge.sourceHandle = handleId;
                 else edge.targetHandle = handleId;
-                return { id: handleId, side, offsetPct: deterministicHandlePct(role, side, index, entries.length, hasPeerRoleOnSide) };
+                return { id: handleId, side, offsetPct: deterministicHandlePct(slotOffset + index, slotCount) };
             });
             nodeHandles[nodeId] = nodeHandles[nodeId] || { source: [], target: [] };
             nodeHandles[nodeId][role].push(...handles);
