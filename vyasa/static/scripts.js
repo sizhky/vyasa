@@ -1400,7 +1400,13 @@ async function renderTasksGraphs(rootElement = document) {
                             data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim' },
                             labelStyle: { ...(edge.labelStyle || {}), opacity: hit ? 1 : 0.12 },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fillOpacity: hit ? 0.88 : 0.06 },
-                            style: { ...edge.style, opacity: hit ? 0.95 : 0.08 },
+                            style: {
+                                ...edge.style,
+                                opacity: hit ? 0.98 : 0.08,
+                                strokeWidth: hit ? 4.5 : 2.5,
+                                strokeLinecap: hit ? 'round' : undefined,
+                                '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s',
+                            },
                             animated: hit,
                         };
                     }));
