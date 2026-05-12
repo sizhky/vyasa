@@ -183,3 +183,63 @@ test('group panels use passive hit areas in items graph', () => {
     assert.equal(tasksGraphNodeHitArea('group', true), 'background');
     assert.equal(tasksGraphNodeHitArea('groupTitle'), 'control');
 });
+
+test('color_by palette attrs can be hidden from filters and still exist on the model', () => {
+    const model = {
+        color_palettes: { kind: { ingress: '#93c5fd', routing: '#86efac' } },
+        groups: [],
+        tasks: [
+            { id: 'a', label: 'A', kind: 'ingress' },
+            { id: 'b', label: 'B', kind: 'routing' },
+        ],
+        filter_attributes: [],
+    };
+    const declaredKeys = Object.keys(model.color_palettes).filter((key) => key && typeof model.color_palettes[key] === 'object' && Object.keys(model.color_palettes[key] || {}).length > 0);
+    const nodes = [...model.groups, ...model.tasks];
+    const options = declaredKeys
+        .filter((key) => nodes.some((node) => {
+            const value = node?.[key];
+            return value !== null && value !== undefined && String(value).trim() !== '';
+        }))
+        .map((key) => key);
+    assert.deepEqual(options, ['kind']);
+});
+
+test('color_by uses configured color_palettes for node paint lookup', () => {
+    const model = {
+        color_by: 'kind',
+        color_palettes: { kind: { ingress: '#93c5fd', routing: '#86efac' } },
+        color_palette: {},
+    };
+    const tasksColorPaletteFor = (input, colorBy) => {
+        const key = String(colorBy || '').trim();
+        if (!key) return {};
+        const palettes = input?.color_palettes && typeof input.color_palettes === 'object' ? input.color_palettes : {};
+        const configuredPalette = palettes[key];
+        if (configuredPalette && Object.keys(configuredPalette).length > 0) return configuredPalette;
+        const legacyKey = String(input?.color_by || '').trim();
+        const legacyPalette = input?.color_palette && typeof input.color_palette === 'object' ? input.color_palette : {};
+        if (key === legacyKey && Object.keys(legacyPalette).length > 0) return legacyPalette;
+        return {};
+    };
+    const resolveTasksNodeOwnColor = (node, input, colorByOverride = null, paletteOverride = null) => {
+        const colorBy = colorByOverride !== null
+            ? String(colorByOverride || '').trim()
+            : (typeof input?.color_by === 'string' ? input.color_by.trim() : '');
+        const palette = paletteOverride && typeof paletteOverride === 'object'
+            ? paletteOverride
+            : tasksColorPaletteFor(input, colorBy);
+        const value = node[colorBy];
+        return palette[String(value)] || '';
+    };
+    assert.equal(resolveTasksNodeOwnColor({ kind: 'ingress' }, model), '#93c5fd');
+});
+
+test('renderer internal __kind__ does not clobber user kind attribute', () => {
+    const source = { id: 'proxy', label: 'API Proxy', kind: 'ingress' };
+    const node = { id: 'proxy', kind: 'task' };
+    const { kind: _legacyNodeKind, ...nodeRest } = node;
+    const merged = { ...source, ...nodeRest, __kind__: (_legacyNodeKind || 'task') };
+    assert.equal(merged.kind, 'ingress');
+    assert.equal(merged.__kind__, 'task');
+});

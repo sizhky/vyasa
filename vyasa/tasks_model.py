@@ -53,6 +53,27 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                 config[key] = _read_string(value)
                 cursor += 1
                 continue
+            if key == "filter_attributes":
+                if value:
+                    config[key] = _read_string_list(value)
+                    cursor += 1
+                    continue
+                values = []
+                cursor += 1
+                while cursor < len(frontmatter_lines):
+                    child_raw = frontmatter_lines[cursor]
+                    if not child_raw.strip() or child_raw.lstrip().startswith("#"):
+                        cursor += 1
+                        continue
+                    child_indent = _count_indent(child_raw)
+                    if child_indent <= indent:
+                        break
+                    child_line = child_raw.strip()
+                    if child_line.startswith("- "):
+                        values.append(_read_string(child_line[2:].strip()))
+                    cursor += 1
+                config[key] = values
+                continue
             if key == "color_by":
                 if value:
                     config["color_by"] = _read_string(value)
@@ -207,6 +228,18 @@ def _read_attr_value(text: str):
         if lowered == "false":
             return False
     return value
+
+
+def _read_string_list(text: str) -> list[str]:
+    value = text.strip()
+    if not value:
+        return []
+    if value.startswith("[") and value.endswith("]"):
+        inner = value[1:-1].strip()
+        if not inner:
+            return []
+        return [_read_string(part) for part in _split_unquoted(inner, ",") if part.strip()]
+    return [_read_string(part) for part in value.split(",") if part.strip()]
 
 
 def _read_optional_edge_label(text: str) -> tuple[str, str]:
@@ -424,6 +457,8 @@ def parse_tasks_text(text: str) -> dict:
         graph["title"] = config["title"]
     if "default_color_by" in config and "default_color_by" not in graph:
         graph["default_color_by"] = config["default_color_by"]
+    if "filter_attributes" in config and "filter_attributes" not in graph:
+        graph["filter_attributes"] = config["filter_attributes"]
     if config.get("color_by") and not graph.get("color_by"):
         graph["color_by"] = config["color_by"]
     if config.get("color_palette") and not graph.get("color_palette"):
@@ -451,6 +486,7 @@ def parse_tasks_text(text: str) -> dict:
         "frozen": graph.get("frozen", {}),
         "color_by": graph.get("color_by", ""),
         "default_color_by": graph.get("default_color_by", ""),
+        "filter_attributes": graph.get("filter_attributes", []),
         "color_palette": graph.get("color_palette", {}),
         "color_palettes": graph.get("color_palettes", {}),
     }

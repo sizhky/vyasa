@@ -425,6 +425,17 @@ def _split_fence_frontmatter(code):
     def clean(value):
         return value.strip().strip('"').strip("'")
 
+    def parse_string_list(value):
+        stripped = value.strip()
+        if not stripped:
+            return []
+        if stripped.startswith("[") and stripped.endswith("]"):
+            inner = stripped[1:-1].strip()
+            if not inner:
+                return []
+            return [clean(part) for part in inner.split(",") if part.strip()]
+        return [clean(part) for part in stripped.split(",") if part.strip()]
+
     frontmatter_match = re.match(r"^---\s*\n(.*?)\n---\s*\n", code, re.DOTALL)
     if not frontmatter_match:
         return {}, code
@@ -444,6 +455,27 @@ def _split_fence_frontmatter(code):
         key, value = line.split(":", 1)
         key = key.strip()
         value = value.strip()
+        if key == "filter_attributes":
+            if value:
+                config[key] = parse_string_list(value)
+                index += 1
+                continue
+            values = []
+            index += 1
+            while index < len(lines):
+                child_raw = lines[index]
+                if not child_raw.strip():
+                    index += 1
+                    continue
+                child_indent = len(child_raw) - len(child_raw.lstrip(" "))
+                if child_indent <= indent:
+                    break
+                child_line = child_raw.strip()
+                if child_line.startswith("- "):
+                    values.append(clean(child_line[2:]))
+                index += 1
+            config[key] = values
+            continue
         if key == "color_by":
             if value:
                 config[key] = clean(value)
@@ -590,6 +622,8 @@ def _render_tasks_block(code, current_path=None):
             model["graph_id"] = config["id"]
         if "default_color_by" in config:
             model["default_color_by"] = config["default_color_by"]
+        if "filter_attributes" in config:
+            model["filter_attributes"] = config["filter_attributes"]
         if isinstance(config.get("color_by"), str) and config.get("color_by") and not model.get("color_by"):
             model["color_by"] = config["color_by"]
         if isinstance(config.get("color_by"), dict):
@@ -649,7 +683,7 @@ def _render_tasks_block(code, current_path=None):
         f"width: {width}; min-height: {min_height};"
     )
     return (
-        f'<div class="tasks-container relative my-6 rounded-xl border border-slate-200 dark:border-slate-800" '
+        f'<div class="tasks-container relative my-6 rounded-xl border-4 border-slate-200 dark:border-slate-800" '
         f'style="{container_style}" '
         f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
         f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'

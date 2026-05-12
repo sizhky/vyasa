@@ -17,6 +17,9 @@ const TASKS_EDGE_LABEL_FOCUS_Z = 1400;
 const TASKS_GROUP_Z = 180;
 const TASKS_TASK_Z = 1000;
 const TASKS_TITLE_Z = 300;
+const TASKS_NEIGHBOR_Z_BOOST = 260;
+const TASKS_EDGE_FOCUS_Z = 1450;
+const TASKS_SELECTED_Z_BOOST = 520;
 const TASKS_NODE_BG = 'color-mix(in srgb, var(--vyasa-paper) 86%, var(--vyasa-primary) 14%)';
 const TASKS_GROUP_BG = 'color-mix(in srgb, var(--vyasa-primary) 7%, transparent)';
 const TASKS_GROUP_EXPANDED_BG = 'color-mix(in srgb, var(--vyasa-primary) 7%, transparent)';
@@ -26,6 +29,8 @@ const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 74%, var(--v
 const TASKS_GROUP_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-primary) 10%, transparent)';
 const TASKS_EDGE_FOCUS_OUT_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 55%, #f59e0b 45%)';
 const TASKS_EDGE_FOCUS_IN_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 40%, #22c55e 60%)';
+const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
+const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
 const TASKS_SPACING_PRESETS = {
     compact: { nodeSpacing: 24, layerSpacing: 64, collisionGap: 56, groupPadding: 28, edgeLabelWidth: 220 },
     normal: { nodeSpacing: 44, layerSpacing: 96, collisionGap: 96, groupPadding: 40, edgeLabelWidth: 240 },
@@ -58,6 +63,7 @@ function readTasksLayoutConfig(wrapper) {
     };
 }
 window.__vyasaTasksActions = window.__vyasaTasksActions || {};
+window.__vyasaTasksConfig = window.__vyasaTasksConfig || {};
 window.__vyasaTasksDebug = window.__vyasaTasksDebug || { events: [] };
 window.__vyasaTasksDebug.enabled = window.__vyasaTasksDebug.enabled === true || new URLSearchParams(window.location.search).has('tasks_debug');
 if (!Array.isArray(window.__vyasaTasksDebug.watch) || window.__vyasaTasksDebug.watch.length === 0) {
@@ -129,10 +135,22 @@ function rectSummary(rect) {
     };
 }
 
+function shouldAutoFitTasksOnExpand() {
+    if (typeof window === 'undefined') return TASKS_AUTO_FIT_ON_EXPAND_DEFAULT;
+    const override = window.__vyasaTasksConfig?.autoFitOnExpand;
+    return typeof override === 'boolean' ? override : TASKS_AUTO_FIT_ON_EXPAND_DEFAULT;
+}
+
+function shouldAutoFitTasksOnFilter() {
+    if (typeof window === 'undefined') return TASKS_AUTO_FIT_ON_FILTER_DEFAULT;
+    const override = window.__vyasaTasksConfig?.autoFitOnFilter;
+    return typeof override === 'boolean' ? override : TASKS_AUTO_FIT_ON_FILTER_DEFAULT;
+}
+
 function tasksNodeMetaEntries(node) {
     if (!node) return [];
     const hidden = new Set([
-        'id', 'label', 'kind', 'group_id', 'parent_group_id',
+        'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
         'handlelayout', 'highlightmode', 'sourcegroupid',
         'width', 'height', 'position', 'parentId', 'color', 'href',
     ]);
@@ -154,7 +172,7 @@ function tasksNodeAggregateEntries(nodeId, model) {
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
     const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
     const hidden = new Set([
-        'id', 'label', 'kind', 'group_id', 'parent_group_id',
+        'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
         'handleLayout', 'highlightMode', 'sourceGroupId',
         'width', 'height', 'position', 'parentId',
     ]);
@@ -186,8 +204,12 @@ function tasksNodeAggregateEntries(nodeId, model) {
 
 function tasksFilterOptions(model) {
     if (!model) return [];
+    const allowedFilterAttributes = Array.isArray(model.filter_attributes)
+        ? model.filter_attributes.map((key) => String(key || '').trim()).filter(Boolean)
+        : [];
+    const allowedKeys = allowedFilterAttributes.length ? new Set(allowedFilterAttributes) : null;
     const hidden = new Set([
-        'id', 'label', 'kind', 'group_id', 'parent_group_id',
+        'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
         'handlelayout', 'highlightmode', 'sourcegroupid',
         'width', 'height', 'position', 'parentId', 'color', 'href',
     ]);
@@ -196,6 +218,7 @@ function tasksFilterOptions(model) {
         if (!node) return;
         for (const [key, value] of Object.entries(node)) {
             if (hidden.has(String(key).toLowerCase()) || value === null || value === undefined || value === '') continue;
+            if (allowedKeys && !allowedKeys.has(String(key))) continue;
             if (!(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) continue;
             if (!buckets.has(key)) buckets.set(key, { values: new Set(), kinds: new Set() });
             buckets.get(key).values.add(String(value));
@@ -217,8 +240,17 @@ function tasksFilterOptions(model) {
 function tasksColorOptions(model) {
     const palettes = model?.color_palettes && typeof model.color_palettes === 'object' ? model.color_palettes : {};
     const declaredKeys = Object.keys(palettes).filter((key) => key && typeof palettes[key] === 'object' && Object.keys(palettes[key] || {}).length > 0);
-    const options = tasksFilterOptions(model).filter((option) => option.values.length > 0);
-    return options.filter((option) => declaredKeys.includes(option.key));
+    const nodes = [...(model?.groups || []), ...(model?.tasks || [])];
+    return declaredKeys
+        .filter((key) => nodes.some((node) => {
+            const value = node?.[key];
+            return value !== null && value !== undefined && String(value).trim() !== '';
+        }))
+        .map((key) => ({
+            key,
+            label: tasksNodeMetaLabel(key),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 function tasksColorPaletteFor(model, colorBy) {
@@ -255,7 +287,7 @@ function resolveTasksNodeOwnColor(node, model, colorByOverride = null, paletteOv
         : (typeof model?.color_by === 'string' ? model.color_by.trim() : '');
     const palette = paletteOverride && typeof paletteOverride === 'object'
         ? paletteOverride
-        : (model?.color_palette && typeof model.color_palette === 'object' ? model.color_palette : {});
+        : tasksColorPaletteFor(model, colorBy);
     if (colorBy) {
         const value = node[colorBy];
         if (value !== null && value !== undefined && String(value).trim()) {
@@ -434,8 +466,8 @@ function buildVisibleTasksGraph(model, expanded) {
         (model.task_children?.[groupId] || []).forEach((id) => visibleTasks.add(id));
     }
     const visibleNodes = [
-        ...Array.from(visibleGroups).map((id) => ({ ...(groupsById[id] || {}), id, label: groupsById[id]?.label || id, kind: 'group', ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
-        ...Array.from(visibleTasks).map((id) => ({ ...(tasksById[id] || {}), id, label: tasksById[id]?.label || id, kind: 'task', ...sizeTaskNode(tasksById[id]?.label || id, 'task') })),
+        ...Array.from(visibleGroups).map((id) => ({ ...(groupsById[id] || {}), id, label: groupsById[id]?.label || id, __kind__: 'group', ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
+        ...Array.from(visibleTasks).map((id) => ({ ...(tasksById[id] || {}), id, label: tasksById[id]?.label || id, __kind__: 'task', ...sizeTaskNode(tasksById[id]?.label || id, 'task') })),
     ];
     const parentOfGroup = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
     const parentOfTask = Object.fromEntries((model.tasks || []).map((t) => [t.id, t.group_id || null]));
@@ -466,6 +498,25 @@ function buildVisibleTasksGraph(model, expanded) {
     return { nodes: visibleNodes, edges: visibleEdges };
 }
 
+function effectiveExpandedGroups(model, expandedSet) {
+    const groupParent = Object.fromEntries((model.groups || []).map((group) => [group.id, group.parent_group_id || null]));
+    const expanded = expandedSet instanceof Set ? expandedSet : new Set(expandedSet || []);
+    const effective = new Set();
+    for (const groupId of expanded) {
+        let parentId = groupParent[groupId];
+        let blocked = false;
+        while (parentId) {
+            if (!expanded.has(parentId)) {
+                blocked = true;
+                break;
+            }
+            parentId = groupParent[parentId] || null;
+        }
+        if (!blocked) effective.add(groupId);
+    }
+    return effective;
+}
+
 function appendProjectedEdge(edges, seen, source, target, label = '') {
     if (!source || !target || source === target) return;
     const key = `${source}->${target}`;
@@ -490,9 +541,10 @@ function normalizeTasksGraphNodes(graph, model) {
         ...graph,
         nodes: (graph.nodes || []).map((node) => {
             const source = groupsById[node.id] || tasksById[node.id] || {};
-            const kind = node.kind || source.kind || (groupsById[node.id] ? 'group' : 'task');
+            const { kind: _legacyNodeKind, ...nodeRest } = node;
+            const kind = node.__kind__ || _legacyNodeKind || (groupsById[node.id] ? 'group' : 'task');
             const label = node.label || source.label || node.id;
-            return { ...source, ...node, kind, label, ...sizeTaskNode(label, kind) };
+            return { ...source, ...nodeRest, __kind__: kind, label, ...sizeTaskNode(label, kind) };
         }),
     };
 }
@@ -581,7 +633,7 @@ async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layou
     const expandedGroupSizes = {};
 
     for (const n of graph.nodes) {
-        if (n.kind === 'group' && expanded.has(n.id)) {
+        if (n.__kind__ === 'group' && expanded.has(n.id)) {
             const childGroups = (model.group_tree?.[n.id] || []).filter((cg) => graph.nodes.some((gn) => gn.id === cg));
             const childTasks = (model.task_children?.[n.id] || []).filter((ct) => graph.nodes.some((tn) => tn.id === ct));
             [...childGroups, ...childTasks].forEach((cid) => { parentOf[cid] = n.id; });
@@ -606,7 +658,7 @@ async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layou
     };
 
     for (const gid of expanded) {
-        if (!graph.nodes.some((n) => n.id === gid && n.kind === 'group')) continue;
+        if (!graph.nodes.some((n) => n.id === gid && n.__kind__ === 'group')) continue;
         const childGroups = (model.group_tree?.[gid] || []).filter((cg) => graph.nodes.some((gn) => gn.id === cg));
         const childTasks = (model.task_children?.[gid] || []).filter((ct) => graph.nodes.some((tn) => tn.id === ct));
         const allChildren = [...childGroups, ...childTasks];
@@ -754,8 +806,8 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
     const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
     const groupChildren = [
-        ...(model.group_tree?.[groupId] || []).map((id) => ({ id, kind: 'group', label: groupsById[id]?.label || id, ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
-        ...(model.task_children?.[groupId] || []).map((id) => ({ id, kind: 'task', label: tasksById[id]?.label || id, ...sizeTaskNode(tasksById[id]?.label || id, 'task') })),
+        ...(model.group_tree?.[groupId] || []).map((id) => ({ id, __kind__: 'group', label: groupsById[id]?.label || id, ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
+        ...(model.task_children?.[groupId] || []).map((id) => ({ id, __kind__: 'task', label: tasksById[id]?.label || id, ...sizeTaskNode(tasksById[id]?.label || id, 'task') })),
     ].map((child) => childSizes[child.id] ? { ...child, ...childSizes[child.id] } : child);
     if (groupChildren.length === 0) {
         return {
@@ -1054,9 +1106,9 @@ function paintTasksScene(scene, mount, graph, laidOut) {
     }).join('');
     const cards = graph.nodes.map((n) => {
         const p = positions[n.id] || n;
-        const bg = n.kind === 'group' ? 'color-mix(in srgb, currentColor 6%, transparent)' : 'color-mix(in srgb, currentColor 10%, transparent)';
-        const exp = n.kind === 'group' ? '<div data-node-expander="true" style="position:absolute;right:10px;top:8px;font-size:18px;opacity:.55">+</div>' : '';
-        return `<div class="vyasa-task-card" data-node-id="${n.id}" data-node-kind="${n.kind}" style="position:absolute;left:${p.x}px;top:${p.y}px;width:${n.width}px;height:${n.height}px;border:1px solid color-mix(in srgb, currentColor 35%, transparent);border-radius:14px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;text-align:center;padding:8px;cursor:${n.kind === 'group' ? 'pointer' : 'default'}"><span>${n.label}</span>${exp}</div>`;
+        const bg = n.__kind__ === 'group' ? 'color-mix(in srgb, currentColor 6%, transparent)' : 'color-mix(in srgb, currentColor 10%, transparent)';
+        const exp = n.__kind__ === 'group' ? '<div data-node-expander="true" style="position:absolute;right:10px;top:8px;font-size:18px;opacity:.55">+</div>' : '';
+        return `<div class="vyasa-task-card" data-node-id="${n.id}" data-node-kind="${n.__kind__}" style="position:absolute;left:${p.x}px;top:${p.y}px;width:${n.width}px;height:${n.height}px;border:1px solid color-mix(in srgb, currentColor 35%, transparent);border-radius:14px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;text-align:center;padding:8px;cursor:${n.__kind__ === 'group' ? 'pointer' : 'default'}"><span>${n.label}</span>${exp}</div>`;
     }).join('');
     scene.style.width = `${Math.max(laidOut.width || 1200, mount.clientWidth)}px`;
     scene.style.height = `${Math.max(laidOut.height || 420, mount.clientHeight)}px`;
@@ -1228,8 +1280,9 @@ async function renderTasksGraphs(rootElement = document) {
                 return baseLayoutRef.current;
             }, [model]);
             const rebuildLayout = React.useCallback(async (expandedSet) => {
+                const effectiveExpandedSet = effectiveExpandedGroups(model, expandedSet);
                 const baseLayout = await ensureBaseLayout();
-                groupLayoutsRef.current = await layoutExpandedGroups(model, expandedSet, jitterConfig, layoutConfig);
+                groupLayoutsRef.current = await layoutExpandedGroups(model, effectiveExpandedSet, jitterConfig, layoutConfig);
                 const rootGroupIds = new Set(model.group_tree?.["null"] || []);
                 const rootTaskIds = new Set(model.task_children?.["null"] || []);
                 const rootNodeIds = new Set([...rootGroupIds, ...rootTaskIds]);
@@ -1237,7 +1290,7 @@ async function renderTasksGraphs(rootElement = document) {
                     nodes: rawGraph.nodes.filter((n) => rootNodeIds.has(n.id)),
                     edges: (rawGraph.edges || []).filter((e) => rootNodeIds.has(e.source) && rootNodeIds.has(e.target))
                 };
-                const derived = deriveSquishedExpandedLayout(rootGraph, model, expandedSet, baseLayout, groupLayoutsRef.current, layoutConfig);
+                const derived = deriveSquishedExpandedLayout(rootGraph, model, effectiveExpandedSet, baseLayout, groupLayoutsRef.current, layoutConfig);
                 const derivedById = Object.fromEntries((derived.nodes || []).map((node) => [node.id, node]));
                 const depthOf = (node) => {
                     let depth = 0;
@@ -1260,14 +1313,14 @@ async function renderTasksGraphs(rootElement = document) {
                     return { x, y };
                 };
                 const baseNodes = derived.nodes.map((n) => {
-                    const isExpanded = n.kind === 'group' && expandedSet.has(n.id);
-                    const hitArea = tasksGraphNodeHitArea(n.kind, isExpanded);
+                    const isExpanded = n.__kind__ === 'group' && effectiveExpandedSet.has(n.id);
+                    const hitArea = tasksGraphNodeHitArea(n.__kind__, isExpanded);
                     const depth = depthOf(n);
-                    const nodeZ = n.kind !== 'group'
+                    const nodeZ = n.__kind__ !== 'group'
                         ? TASKS_TASK_Z + depth
                         : ((isExpanded ? TASKS_GROUP_BG_Z : TASKS_GROUP_Z) + depth);
                     const nodeColor = resolveTasksNodeColor(n, model, activeColorBy, activeColorPalette);
-                    const background = n.kind === 'group'
+                    const background = n.__kind__ === 'group'
                         ? (nodeColor
                             ? `color-mix(in srgb, ${nodeColor} 7%, transparent)`
                             : (isExpanded ? TASKS_GROUP_EXPANDED_BG : TASKS_GROUP_BG))
@@ -1293,7 +1346,7 @@ async function renderTasksGraphs(rootElement = document) {
                         zIndex: nodeZ,
                         className: `vyasa-tasks-node--${hitArea}`,
                         draggable: false,
-                        selectable: isTasksGraphNodeSelectable(n.kind, isExpanded),
+                        selectable: isTasksGraphNodeSelectable(n.__kind__, isExpanded),
                     };
                     if (n.parentId) {
                         rfNode.parentId = n.parentId;
@@ -1302,7 +1355,7 @@ async function renderTasksGraphs(rootElement = document) {
                     return rfNode;
                 });
                 for (const n of derived.nodes) {
-                    if (n.kind !== 'group' || !expandedSet.has(n.id)) continue;
+                    if (n.__kind__ !== 'group' || !effectiveExpandedSet.has(n.id)) continue;
                     const position = absolutePosition(n);
                     const titleZ = TASKS_TITLE_Z + depthOf(n);
                     const titleWidth = Math.max(80, n.width - 16);
@@ -1311,7 +1364,7 @@ async function renderTasksGraphs(rootElement = document) {
                         id: `${n.id}__title`,
                         type: 'vyasaTask',
                         position: { x: position.x + 8, y: position.y + 8 },
-                        data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, kind: 'groupTitle' },
+                        data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, __kind__: 'groupTitle' },
                         style: {
                             width: titleWidth,
                             height: titleHeight,
@@ -1359,10 +1412,11 @@ async function renderTasksGraphs(rootElement = document) {
                 window.__vyasaTasksDebug.latest = {
                     widgetId,
                     expanded: Array.from(expandedSet),
+                    effectiveExpanded: Array.from(effectiveExpandedSet),
                     nodes: anchoredNodes.map((node) => ({
                         id: node.id,
                         label: node.data?.label,
-                        kind: node.data?.kind,
+                        kind: node.data?.__kind__,
                         parentId: node.parentId || null,
                         position: rectSummary({ ...node.position, width: node.style?.width, height: node.style?.height }),
                     })),
@@ -1443,14 +1497,21 @@ async function renderTasksGraphs(rootElement = document) {
                             : (node.id === hoveredNodeId ? 'neighbor-focus' : 'neighbor'))
                         : 'dim';
                     const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette);
+                    const baseZIndex = Number.isFinite(Number(node.zIndex))
+                        ? Number(node.zIndex)
+                        : Number(node.style?.zIndex || 0);
+                    const zIndex = mode === 'selected' || mode === 'selected-focus' || mode === 'neighbor-focus'
+                        ? baseZIndex + TASKS_SELECTED_Z_BOOST
+                        : (mode === 'neighbor' ? baseZIndex + TASKS_NEIGHBOR_Z_BOOST : baseZIndex);
                     return {
                         ...node,
                         data: { ...node.data, highlightMode: mode },
                         style: {
                             ...node.style,
+                            zIndex,
                             background: mode === 'dim'
                                 ? node.style.background
-                                : (node.data?.kind === 'group'
+                                : (node.data?.__kind__ === 'group'
                                     ? (nodeColor
                                         ? `color-mix(in srgb, ${nodeColor} 10%, transparent)`
                                         : TASKS_GROUP_BG_ACTIVE)
@@ -1460,6 +1521,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 ? '0 0 0 2px color-mix(in srgb, var(--vyasa-primary) 60%, transparent)'
                                 : 'none',
                         },
+                        zIndex,
                     };
                 }));
                 const nextEdges = baseEdges.map((edge) => {
@@ -1475,6 +1537,7 @@ async function renderTasksGraphs(rootElement = document) {
                     return {
                         ...edge,
                         data: { ...edge.data, highlightMode: mode },
+                        zIndex: mode === 'focused-in' || mode === 'focused-out' ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
                         labelZIndex: mode === 'dim'
                             ? TASKS_EDGE_LABEL_Z
                             : TASKS_EDGE_LABEL_FOCUS_Z,
@@ -1531,6 +1594,11 @@ async function renderTasksGraphs(rootElement = document) {
                 applyHighlight(selectedNodeId, hoveredNodeId);
             }, [graphRevision, selectedNodeId, hoveredNodeId, applyHighlight]);
             React.useEffect(() => {
+                if (!shouldAutoFitTasksOnExpand()) {
+                    pendingFitActionRef.current = null;
+                    prevExpandedCountRef.current = expanded.size;
+                    return;
+                }
                 const nextCount = expanded.size;
                 if (nextCount > prevExpandedCountRef.current) {
                     pendingFitActionRef.current = 'expand';
@@ -1538,6 +1606,7 @@ async function renderTasksGraphs(rootElement = document) {
                 prevExpandedCountRef.current = nextCount;
             }, [expanded]);
             React.useEffect(() => {
+                if (!shouldAutoFitTasksOnExpand()) return;
                 if (!pendingFitActionRef.current) return;
                 let rafId = null;
                 let framesLeft = 25;
@@ -1555,6 +1624,23 @@ async function renderTasksGraphs(rootElement = document) {
                     if (rafId !== null) window.cancelAnimationFrame(rafId);
                 };
             }, [graphRevision, expanded]);
+            React.useEffect(() => {
+                if (!shouldAutoFitTasksOnFilter()) return;
+                const entries = Object.entries(activeFilters || {}).filter(([, value]) => Array.isArray(value) ? value.length > 0 : Boolean(value));
+                if (!entries.length) return;
+                const reactFlow = reactFlowApiRef.current;
+                const matchedNodes = (graphBaseRef.current.nodes || []).filter((node) => {
+                    if (!node?.id || node.data?.__kind__ === 'groupTitle') return false;
+                    return tasksNodeMatchesFilters(node.data, activeFilters);
+                });
+                if (!reactFlow || matchedNodes.length === 0) return;
+                let rafId = window.requestAnimationFrame(() => {
+                    reactFlow.fitView({ nodes: matchedNodes, duration: 220, padding: 0.28, includeHiddenNodes: true });
+                });
+                return () => {
+                    if (rafId !== null) window.cancelAnimationFrame(rafId);
+                };
+            }, [graphRevision, activeFilters]);
             const CustomEdge = React.memo((props) => {
                 const [path, labelX, labelY] = rf.getBezierPath(props);
                 const labelPoint = tasksEdgeLabelPoint(props);
@@ -1616,7 +1702,7 @@ async function renderTasksGraphs(rootElement = document) {
                 ));
                 const highlightMode = data?.highlightMode || 'none';
                 const isDimmed = highlightMode === 'dim';
-                const sourceNodeId = data?.kind === 'groupTitle' ? data?.sourceGroupId : id;
+                const sourceNodeId = data?.__kind__ === 'groupTitle' ? data?.sourceGroupId : id;
                 const isActiveNode = !selectedNodeId || selectedNodeId === sourceNodeId;
                 const linksInteractive = isActiveNode;
                 const handleInactiveLinkClick = (event) => {
@@ -1625,7 +1711,7 @@ async function renderTasksGraphs(rootElement = document) {
                     setSelectedNodeId(sourceNodeId);
                     setHoveredNodeId(null);
                 };
-                if (data?.kind === 'groupTitle') {
+                if (data?.__kind__ === 'groupTitle') {
                     const handleCollapse = (e) => {
                         e.stopPropagation();
                         const next = new Set(expanded);
@@ -1663,7 +1749,7 @@ async function renderTasksGraphs(rootElement = document) {
                         }, '−')
                     );
                 }
-                const isGroup = data?.kind === 'group';
+                const isGroup = data?.__kind__ === 'group';
                 const isExpanded = expanded.has(id);
                 const hasHref = Boolean(linksInteractive && data?.href);
                 const labelContent = renderTasksInlineLinks(data?.label || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick });
@@ -1827,8 +1913,8 @@ async function renderTasksGraphs(rootElement = document) {
             };
             const SelectedNodePanel = () => {
                 const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === selectedNodeId)?.data || null;
-                const sourceNodeId = selectedNode?.kind === 'groupTitle' ? selectedNode.sourceGroupId : selectedNode?.id;
-                const entries = selectedNode?.kind === 'group'
+                const sourceNodeId = selectedNode?.__kind__ === 'groupTitle' ? selectedNode.sourceGroupId : selectedNode?.id;
+                const entries = selectedNode?.__kind__ === 'group'
                     ? tasksNodeAggregateEntries(sourceNodeId, model)
                     : tasksNodeMetaEntries(selectedNode);
                 if (!selectedNode || entries.length === 0) return null;
@@ -1857,7 +1943,7 @@ async function renderTasksGraphs(rootElement = document) {
                     className: 'vyasa-tasks-filter-card',
                     open: !filtersCollapsed,
                     onToggle: (e) => setFiltersCollapsed(!e.currentTarget.open),
-                    style: { position: 'absolute', top: '68px', right: '12px', zIndex: 30, width: '280px', maxWidth: 'calc(100% - 24px)', maxHeight: filtersCollapsed ? '44px' : 'min(70vh, calc(100% - 80px))', overflowY: filtersCollapsed ? 'hidden' : 'visible', borderRadius: '12px', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', backdropFilter: 'blur(8px)', padding: '12px' },
+                    style: { position: 'absolute', top: '68px', right: '12px', zIndex: 30, width: '280px', maxWidth: 'calc(100% - 24px)', maxHeight: filtersCollapsed ? '44px' : 'min(70vh, calc(100% - 80px))', overflow: 'hidden', borderRadius: '12px', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', backdropFilter: 'blur(8px)', padding: '12px' },
                 },
                     React.createElement('summary', {
                         style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', cursor: 'pointer', listStyle: 'none' },
@@ -1935,16 +2021,16 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId(null);
             };
             const selectGraphNode = React.useCallback((_, node) => {
-                if (!isTasksGraphNodeSelectable(node.data?.kind, expanded.has(node.id))) return;
-                const sourceNodeId = node.data?.kind === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                if (!isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id))) return;
+                const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
                 setSelectedNodeId((current) => current === sourceNodeId ? null : sourceNodeId);
                 setHoveredNodeId(null);
             }, [expanded]);
             const focusNeighborEdge = React.useCallback((_, node) => {
                 if (!selectedNodeId || !node?.id) return;
-                if (!isTasksGraphNodeSelectable(node.data?.kind, expanded.has(node.id))) return;
+                if (!isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id))) return;
                 const baseEdges = graphBaseRef.current.edges || [];
-                const sourceNodeId = node.data?.kind === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
                 const isNeighbor = baseEdges.some((edge) =>
                     (edge.source === selectedNodeId && edge.target === sourceNodeId) ||
                     (edge.source === sourceNodeId && edge.target === selectedNodeId)
@@ -1957,7 +2043,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);
             }, [expanded, selectedNodeId]);
             const clearNeighborEdgeFocus = React.useCallback((_, node) => {
-                if (!isTasksGraphNodeSelectable(node?.data?.kind, expanded.has(node?.id))) return;
+                if (!isTasksGraphNodeSelectable(node?.data?.__kind__, expanded.has(node?.id))) return;
                 if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
                 hoverClearTimerRef.current = window.setTimeout(() => {
                     setHoveredNodeId(null);
@@ -2867,7 +2953,7 @@ window.openTasksFullscreen = async function(id) {
 
     const fullscreenWrapper = document.createElement('div');
     fullscreenWrapper.id = `${id}-fullscreen`;
-    fullscreenWrapper.className = 'tasks-container relative w-full h-full rounded-xl border border-slate-200 dark:border-slate-800';
+    fullscreenWrapper.className = 'tasks-container relative w-full h-full rounded-xl border-4 border-slate-200 dark:border-slate-800';
     fullscreenWrapper.setAttribute('data-tasks-widget', 'true');
     fullscreenWrapper.setAttribute('data-tasks-fullscreen', 'true');
     fullscreenWrapper.setAttribute('data-tasks-title', originalTitle);
