@@ -18,10 +18,12 @@ const TASKS_GROUP_Z = 180;
 const TASKS_TASK_Z = 1000;
 const TASKS_TITLE_Z = 300;
 const TASKS_NODE_BG = 'color-mix(in srgb, var(--vyasa-paper) 86%, var(--vyasa-primary) 14%)';
-const TASKS_GROUP_EXPANDED_BG = 'var(--vyasa-paper)';
+const TASKS_GROUP_BG = 'color-mix(in srgb, var(--vyasa-primary) 7%, transparent)';
+const TASKS_GROUP_EXPANDED_BG = 'color-mix(in srgb, var(--vyasa-primary) 7%, transparent)';
 const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 42%, var(--vyasa-primary) 58%)';
 const TASKS_GROUP_TITLE_BG = 'color-mix(in srgb, var(--vyasa-paper) 76%, var(--vyasa-primary) 24%)';
 const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 74%, var(--vyasa-primary) 26%)';
+const TASKS_GROUP_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-primary) 10%, transparent)';
 const TASKS_EDGE_FOCUS_OUT_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 55%, #f59e0b 45%)';
 const TASKS_EDGE_FOCUS_IN_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 40%, #22c55e 60%)';
 const TASKS_SPACING_PRESETS = {
@@ -57,7 +59,36 @@ function readTasksLayoutConfig(wrapper) {
 }
 window.__vyasaTasksActions = window.__vyasaTasksActions || {};
 window.__vyasaTasksDebug = window.__vyasaTasksDebug || { events: [] };
-window.__vyasaTasksDebug.enabled = window.__vyasaTasksDebug.enabled === true;
+window.__vyasaTasksDebug.enabled = window.__vyasaTasksDebug.enabled === true || new URLSearchParams(window.location.search).has('tasks_debug');
+if (!Array.isArray(window.__vyasaTasksDebug.watch) || window.__vyasaTasksDebug.watch.length === 0) {
+    const rawWatch = new URLSearchParams(window.location.search).getAll('tasks_watch');
+    window.__vyasaTasksDebug.watch = rawWatch
+        .flatMap((value) => String(value || '').split(','))
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((value) => {
+            const [source, target] = value.split('->').map((part) => part.trim());
+            return source && target ? { source, target } : null;
+        })
+        .filter(Boolean);
+}
+
+function renderTasksDebugOverlay() {
+    if (!window.__vyasaTasksDebug.enabled || typeof document === 'undefined') return;
+    let panel = document.getElementById('vyasa-tasks-debug-log');
+    if (!panel) {
+        panel = document.createElement('pre');
+        panel.id = 'vyasa-tasks-debug-log';
+        panel.style.cssText = 'position:fixed;left:16px;bottom:16px;z-index:4000;max-width:min(48rem,calc(100vw - 32px));max-height:40vh;overflow:auto;margin:0;padding:10px 12px;border-radius:10px;background:rgba(15,23,42,.94);color:#dbeafe;font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;box-shadow:0 12px 32px rgba(0,0,0,.35)';
+        document.body.appendChild(panel);
+    }
+    const recent = (window.__vyasaTasksDebug.events || []).slice(-14).map((event) => {
+        const payload = JSON.stringify(event.payload);
+        return `${event.label} ${payload.length > 220 ? `${payload.slice(0, 220)}...` : payload}`;
+    });
+    const watches = (window.__vyasaTasksDebug.watch || []).map((item) => `${item.source}->${item.target}`);
+    panel.textContent = `${watches.length ? `watch ${watches.join(', ')}\n` : ''}${recent.join('\n')}`;
+}
 
 function logTasksDebug(label, payload = {}) {
     if (!window.__vyasaTasksDebug.enabled) return null;
@@ -69,7 +100,23 @@ function logTasksDebug(label, payload = {}) {
     window.__vyasaTasksDebug.events.push(event);
     if (window.__vyasaTasksDebug.events.length > 200) window.__vyasaTasksDebug.events.shift();
     console.log(`[vyasa][tasks-debug] ${label} ${JSON.stringify(payload)}`);
+    renderTasksDebugOverlay();
     return event;
+}
+
+function shouldTraceTasksEdge(edge) {
+    if (!window.__vyasaTasksDebug.enabled) return false;
+    const watch = Array.isArray(window.__vyasaTasksDebug.watch) ? window.__vyasaTasksDebug.watch : [];
+    if (!watch.length) return false;
+    return watch.some((item) => item && item.source === edge.source && item.target === edge.target);
+}
+
+function traceTasksEdge(stage, edge, payload = {}) {
+    if (!shouldTraceTasksEdge(edge)) return null;
+    return logTasksDebug(`edgeTrace:${stage}`, {
+        raw: { source: edge.source, target: edge.target, label: edge.label || '' },
+        ...payload,
+    });
 }
 
 function rectSummary(rect) {
@@ -195,7 +242,10 @@ function tasksColorPaletteEntries(model, colorBy) {
 function tasksNodeMatchesFilters(node, filters) {
     const entries = Object.entries(filters || {}).filter(([, value]) => value);
     if (!entries.length) return true;
-    return entries.every(([key, value]) => String(node?.[key] || '') === String(value));
+    return entries.every(([key, value]) => {
+        if (Array.isArray(value)) return !value.length || value.includes(String(node?.[key] || ''));
+        return String(node?.[key] || '') === String(value);
+    });
 }
 
 function resolveTasksNodeOwnColor(node, model, colorByOverride = null, paletteOverride = null) {
@@ -403,6 +453,10 @@ function buildVisibleTasksGraph(model, expanded) {
     for (const edge of (model.dependency_edges || [])) {
         const src = nearestVisible(edge.source);
         const dst = nearestVisible(edge.target);
+        traceTasksEdge('visibleGraph', edge, {
+            mapped: { source: src, target: dst },
+            expanded: Array.from(expanded),
+        });
         const key = `${src}->${dst}`;
         if (src !== dst && !seen.has(key)) {
             seen.add(key);
@@ -717,7 +771,6 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
         let cur = taskToGroup[id] || id;
         while (cur) {
             if (childIds.has(cur)) return cur;
-            if (cur === groupId) return id;
             cur = groupParent[cur] || null;
         }
         return null;
@@ -727,6 +780,10 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
     for (const edge of (model.dependency_edges || [])) {
         const source = directChildFor(edge.source);
         const target = directChildFor(edge.target);
+        traceTasksEdge(`group:${groupId}`, edge, {
+            mapped: { source, target },
+            childIds: Array.from(childIds),
+        });
         if (!childIds.has(source) || !childIds.has(target) || source === target) continue;
         appendProjectedEdge(projectedEdges, seenProjectedEdges, source, target, edge.label || '');
     }
@@ -1210,8 +1267,10 @@ async function renderTasksGraphs(rootElement = document) {
                         ? TASKS_TASK_Z + depth
                         : ((isExpanded ? TASKS_GROUP_BG_Z : TASKS_GROUP_Z) + depth);
                     const nodeColor = resolveTasksNodeColor(n, model, activeColorBy, activeColorPalette);
-                    const background = isExpanded
-                        ? (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 86%, ${nodeColor} 14%)` : TASKS_GROUP_EXPANDED_BG)
+                    const background = n.kind === 'group'
+                        ? (nodeColor
+                            ? `color-mix(in srgb, ${nodeColor} 7%, transparent)`
+                            : (isExpanded ? TASKS_GROUP_EXPANDED_BG : TASKS_GROUP_BG))
                         : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 78%, ${nodeColor} 22%)` : TASKS_NODE_BG);
                     const border = nodeColor
                         ? `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`
@@ -1246,15 +1305,15 @@ async function renderTasksGraphs(rootElement = document) {
                     if (n.kind !== 'group' || !expandedSet.has(n.id)) continue;
                     const position = absolutePosition(n);
                     const titleZ = TASKS_TITLE_Z + depthOf(n);
-                    const titleLineCount = String(n.label || '').split('\n').length;
-                    const titleHeight = Math.max(34, 16 + (titleLineCount * 18));
+                    const titleWidth = Math.max(80, n.width - 16);
+                    const titleHeight = sizeTaskNode(n.label || n.id, 'groupTitle', titleWidth).height;
                     baseNodes.push({
                         id: `${n.id}__title`,
                         type: 'vyasaTask',
                         position: { x: position.x + 8, y: position.y + 8 },
                         data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, kind: 'groupTitle' },
                         style: {
-                            width: Math.max(80, n.width - 16),
+                            width: titleWidth,
                             height: titleHeight,
                             zIndex: titleZ,
                             background: TASKS_GROUP_TITLE_BG,
@@ -1322,7 +1381,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const baseNodes = graphBaseRef.current.nodes || [];
                 const baseEdges = graphBaseRef.current.edges || [];
                 if (!nodeId || !baseNodes.some((node) => node.id === nodeId)) {
-                    const hasFilters = Object.values(activeFilters).some(Boolean);
+                    const hasFilters = Object.values(activeFilters).some((value) => Array.isArray(value) ? value.length > 0 : Boolean(value));
                     if (!hasFilters) {
                         setNodes(baseNodes);
                         setEdges(baseEdges);
@@ -1385,7 +1444,11 @@ async function renderTasksGraphs(rootElement = document) {
                             ...node.style,
                             background: mode === 'dim'
                                 ? node.style.background
-                                : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 68%, ${nodeColor} 32%)` : TASKS_NODE_BG_ACTIVE),
+                                : (node.data?.kind === 'group'
+                                    ? (nodeColor
+                                        ? `color-mix(in srgb, ${nodeColor} 10%, transparent)`
+                                        : TASKS_GROUP_BG_ACTIVE)
+                                    : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 68%, ${nodeColor} 32%)` : TASKS_NODE_BG_ACTIVE)),
                             opacity: mode === 'dim' ? 0.22 : 1,
                             boxShadow: (mode === 'neighbor-focus' || mode === 'selected-focus')
                                 ? '0 0 0 2px color-mix(in srgb, var(--vyasa-primary) 60%, transparent)'
@@ -1561,6 +1624,7 @@ async function renderTasksGraphs(rootElement = document) {
                         e.stopPropagation();
                         const next = new Set(expanded);
                         next.delete(data.sourceGroupId);
+                        logTasksDebug('nodeCollapse', { nodeId: data.sourceGroupId, expanded: Array.from(next) });
                         setExpanded(next);
                     };
                     return React.createElement('div', {
@@ -1611,6 +1675,7 @@ async function renderTasksGraphs(rootElement = document) {
                     e.stopPropagation();
                     const next = new Set(expanded);
                     if (isExpanded) next.delete(id); else next.add(id);
+                    logTasksDebug(isExpanded ? 'nodeCollapse' : 'nodeExpand', { nodeId: id, expanded: Array.from(next) });
                     setExpanded(next);
                 };
                 if (isExpanded) {
@@ -1780,7 +1845,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const options = tasksFilterOptions(model);
                 const colorOptions = tasksColorOptions(model);
                 const activePaletteEntries = tasksColorPaletteEntries(model, activeColorBy);
-                const activeCount = Object.values(activeFilters || {}).filter(Boolean).length + (activeColorBy ? 1 : 0);
+                const activeCount = Object.values(activeFilters || {}).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : (value ? 1 : 0)), 0) + (activeColorBy ? 1 : 0);
                 return React.createElement('details', {
                     ref: filterPanelRef,
                     className: 'vyasa-tasks-filter-card',
@@ -1837,9 +1902,24 @@ async function renderTasksGraphs(rootElement = document) {
                                 }),
                                 React.createElement('span', { style: { opacity: 0.8 } }, 'Only true')
                             )
-                            : React.createElement('select', { value: activeFilters[option.key] || '', onChange: (e) => setActiveFilters((current) => ({ ...current, [option.key]: e.target.value })), style: { minWidth: 0, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)', borderRadius: '8px', background: 'var(--vyasa-paper)', padding: '4px 8px' } },
-                                React.createElement('option', { value: '' }, 'Any'),
-                                ...option.values.map((value) => React.createElement('option', { key: value, value }, value))
+                            : React.createElement('div', { style: { display: 'grid', gap: '4px', maxHeight: '120px', overflowY: 'auto', padding: '6px 8px', border: '1px solid color-mix(in srgb, currentColor 12%, transparent)', borderRadius: '8px', background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)' } },
+                                ...option.values.map((value) => {
+                                    const selected = Array.isArray(activeFilters[option.key]) && activeFilters[option.key].includes(value);
+                                    return React.createElement('label', { key: value, style: { display: 'inline-flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
+                                        React.createElement('input', {
+                                            type: 'checkbox',
+                                            checked: selected,
+                                            onChange: (e) => setActiveFilters((current) => {
+                                                const nextValues = Array.isArray(current[option.key]) ? current[option.key].slice() : [];
+                                                const next = e.target.checked
+                                                    ? [...nextValues, value]
+                                                    : nextValues.filter((entry) => entry !== value);
+                                                return { ...current, [option.key]: next };
+                                            }),
+                                        }),
+                                        React.createElement('span', { style: { opacity: 0.8 } }, value)
+                                    );
+                                })
                             )
                     ))
                 );
@@ -1900,6 +1980,14 @@ async function renderTasksGraphs(rootElement = document) {
                         dump: () => {
                             logTasksDebug('manualDump', window.__vyasaTasksDebug.latest || {});
                             return window.__vyasaTasksDebug.latest;
+                        },
+                        watchEdge: (source, target) => {
+                            window.__vyasaTasksDebug.watch = [{ source, target }];
+                            logTasksDebug('manualWatchEdge', { source, target });
+                        },
+                        clearWatch: () => {
+                            window.__vyasaTasksDebug.watch = [];
+                            logTasksDebug('manualClearWatch');
                         },
                         toggle: (nodeId) => {
                             if (!(model.groups || []).some((group) => group.id === nodeId)) return;

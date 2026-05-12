@@ -6,6 +6,7 @@ def build_collapsed_graph(model: dict) -> dict:
     task_children = model["task_children"]
     nodes = []
     task_to_group = {task["id"]: task.get("group_id") for task in model["tasks"]}
+    group_parent = {group["id"]: group.get("parent_group_id") for group in model["groups"]}
     edges = []
     seen_edges = set()
 
@@ -48,9 +49,17 @@ def build_collapsed_graph(model: dict) -> dict:
                 "height": 60,
             })
 
+    def collapsed_owner(task_id: str) -> str:
+        cur = task_to_group.get(task_id)
+        owner = None
+        while cur is not None:
+            owner = cur
+            cur = group_parent.get(cur)
+        return owner or task_id
+
     for edge in model["dependency_edges"]:
-        src = task_to_group.get(edge["source"]) or edge["source"]
-        dst = task_to_group.get(edge["target"]) or edge["target"]
+        src = collapsed_owner(edge["source"])
+        dst = collapsed_owner(edge["target"])
         if src != dst and (src, dst) not in seen_edges:
             seen_edges.add((src, dst))
             collapsed_edge = {"source": src, "target": dst, "kind": "collapsed-proxy"}

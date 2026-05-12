@@ -24,6 +24,13 @@ test('sizeTaskNode grows height for long labels', () => {
     assert.ok(longNode.height > shortNode.height);
 });
 
+test('sizeTaskNode grows group title height for wrapped text at runtime width', () => {
+    const shortTitle = sizeTaskNode('Short title', 'groupTitle', 234);
+    const longTitle = sizeTaskNode('Ground Truth Streams (Phase 2 input to A_17)', 'groupTitle', 234);
+    assert.equal(shortTitle.width, 234);
+    assert.ok(longTitle.height > shortTitle.height);
+});
+
 test('buildTaskEdgeAnchors flips top/bottom by relative node position', () => {
     const nodes = [
         { id: 'top', position: { x: 0, y: 0 }, width: 220, height: 60 },
@@ -95,7 +102,29 @@ test('buildTaskEdgeAnchors splits top side into symmetric halves when roles mix'
     ]);
     assert.deepEqual(
         nodeHandles.hub.source.map((handle) => Math.round(handle.offsetPct)),
-        [18, 50],
+        [18, 39],
+    );
+    assert.deepEqual(
+        nodeHandles.hub.target.map((handle) => Math.round(handle.offsetPct)),
+        [61, 82],
+    );
+});
+
+test('buildTaskEdgeAnchors spaces mixed top-side roles by total side traffic', () => {
+    const nodes = [
+        { id: 'hub', position: { x: 0, y: 200 }, width: 220, height: 60 },
+        { id: 'out', position: { x: 0, y: 0 }, width: 220, height: 60 },
+        { id: 'inA', position: { x: -180, y: -220 }, width: 220, height: 60 },
+        { id: 'inB', position: { x: 180, y: -220 }, width: 220, height: 60 },
+    ];
+    const { nodeHandles } = buildTaskEdgeAnchors(nodes, [
+        { id: 'one', source: 'hub', target: 'out' },
+        { id: 'two', source: 'inA', target: 'hub' },
+        { id: 'three', source: 'inB', target: 'hub' },
+    ]);
+    assert.deepEqual(
+        nodeHandles.hub.source.map((handle) => Math.round(handle.offsetPct)),
+        [18],
     );
     assert.deepEqual(
         nodeHandles.hub.target.map((handle) => Math.round(handle.offsetPct)),
