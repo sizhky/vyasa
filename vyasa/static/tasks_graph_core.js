@@ -62,27 +62,21 @@ export function tasksGraphNodeHitArea(kind, isExpanded = false) {
 
 function edgeHandlePct(index, count) {
     if (count <= 1) return 50;
-    return Math.max(18, Math.min(82, ((index + 1) / (count + 1)) * 100));
+    return 18 + (index * 64) / (count - 1);
 }
 
-function stableHash(text) {
-    let hash = 2166136261;
-    for (let index = 0; index < text.length; index += 1) {
-        hash ^= text.charCodeAt(index);
-        hash = Math.imul(hash, 16777619);
+function deterministicHandlePct(role, side, index, count, hasPeerRoleOnSide) {
+    const localPct = edgeHandlePct(index, count);
+    if (side === 'left' || side === 'right') {
+        return localPct;
     }
-    return hash >>> 0;
-}
-
-function deterministicHandlePct(edge, role, side, index, count) {
-    const basePct = role === 'target'
-        ? (50 + (edgeHandlePct(index, count) - 18) * 0.5)
-        : (18 + (edgeHandlePct(index, count) - 18) * 0.5);
-    const seed = `${edge.source}->${edge.target}|${edge.label || ''}|${role}|${side}`;
-    const jitter = (stableHash(seed) % 15) - 7;
-    const min = role === 'target' ? 50 : 18;
-    const max = role === 'target' ? 82 : 50;
-    return Math.max(min, Math.min(max, basePct + jitter));
+    if (!hasPeerRoleOnSide) {
+        return localPct;
+    }
+    if (role === 'source') {
+        return 18 + ((localPct - 18) / 64) * 32;
+    }
+    return 50 + ((localPct - 18) / 64) * 32;
 }
 
 function edgeAnchorSides(sourceRect, targetRect) {
@@ -96,6 +90,18 @@ function edgeAnchorSides(sourceRect, targetRect) {
     const overlapX = Math.max(0, Math.min(sourceRect.x + sourceRect.width, targetRect.x + targetRect.width) - Math.max(sourceRect.x, targetRect.x));
     const gapY = Math.max(0, Math.max(sourceRect.y, targetRect.y) - Math.min(sourceRect.y + sourceRect.height, targetRect.y + targetRect.height));
     const gapX = Math.max(0, Math.max(sourceRect.x, targetRect.x) - Math.min(sourceRect.x + sourceRect.width, targetRect.x + targetRect.width));
+    const horizontalSide = dx >= 0
+        ? { sourceSide: 'right', targetSide: 'left', sortAxis: 'y' }
+        : { sourceSide: 'left', targetSide: 'right', sortAxis: 'y' };
+    const significantRowOverlap = overlapY >= Math.min(sourceRect.height, targetRect.height) * 0.35;
+    if (significantRowOverlap && Math.abs(dx) >= Math.abs(dy) * 1.1) {
+        return horizontalSide;
+    }
+    const substantialHorizontalGap = gapX >= Math.min(sourceRect.width, targetRect.width) * 0.35;
+    const strongHorizontalOffset = substantialHorizontalGap && Math.abs(dx) >= Math.abs(dy) * 0.7;
+    if (strongHorizontalOffset) {
+        return horizontalSide;
+    }
     const candidates = [
         {
             sourceSide: 'right', targetSide: 'left', sortAxis: 'y',
@@ -180,12 +186,15 @@ export function buildTaskEdgeAnchors(nodes, edges) {
     const assignGroup = (groups, role) => {
         for (const [key, entries] of groups.entries()) {
             const [nodeId, , side] = key.split(':');
+            const peerGroups = role === 'source' ? incomingGroups : outgoingGroups;
+            const peerRole = role === 'source' ? 'target' : 'source';
+            const hasPeerRoleOnSide = peerGroups.has(`${nodeId}:${peerRole}:${side}`);
             entries.sort((a, b) => (a.sortValue - b.sortValue) || (a.edge._anchorIndex - b.edge._anchorIndex));
             const handles = entries.map(({ edge }, index) => {
                 const handleId = `${role}-${side}-${index}`;
                 if (role === 'source') edge.sourceHandle = handleId;
                 else edge.targetHandle = handleId;
-                return { id: handleId, side, offsetPct: deterministicHandlePct(edge, role, side, index, entries.length) };
+                return { id: handleId, side, offsetPct: deterministicHandlePct(role, side, index, entries.length, hasPeerRoleOnSide) };
             });
             nodeHandles[nodeId] = nodeHandles[nodeId] || { source: [], target: [] };
             nodeHandles[nodeId][role].push(...handles);

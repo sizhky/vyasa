@@ -26,6 +26,111 @@ def _strip_fence_frontmatter(body: str) -> str:
     return body
 
 
+def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
+    lines = body.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}, body
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() != "---":
+            continue
+        config: dict = {}
+        frontmatter_lines = lines[1:index]
+        cursor = 0
+        while cursor < len(frontmatter_lines):
+            raw_line = frontmatter_lines[cursor]
+            if not raw_line.strip() or raw_line.lstrip().startswith("#"):
+                cursor += 1
+                continue
+            indent = _count_indent(raw_line)
+            line = raw_line.strip()
+            key_index = _find_unquoted(line, ":")
+            if key_index < 0:
+                cursor += 1
+                continue
+            key = line[:key_index].strip()
+            value = line[key_index + 1:].strip()
+            if key in {"id", "title", "default_color_by"}:
+                config[key] = _read_string(value)
+                cursor += 1
+                continue
+            if key == "color_by":
+                if value:
+                    config["color_by"] = _read_string(value)
+                    cursor += 1
+                    continue
+                palettes = {}
+                default_key = ""
+                cursor += 1
+                while cursor < len(frontmatter_lines):
+                    child_raw = frontmatter_lines[cursor]
+                    if not child_raw.strip() or child_raw.lstrip().startswith("#"):
+                        cursor += 1
+                        continue
+                    child_indent = _count_indent(child_raw)
+                    if child_indent <= indent:
+                        break
+                    child_line = child_raw.strip()
+                    child_key_index = _find_unquoted(child_line, ":")
+                    if child_key_index < 0:
+                        cursor += 1
+                        continue
+                    palette_key = _read_string(child_line[:child_key_index].strip())
+                    palette_value = child_line[child_key_index + 1:].strip()
+                    if palette_value:
+                        cursor += 1
+                        continue
+                    if not default_key:
+                        default_key = palette_key
+                    palette = {}
+                    cursor += 1
+                    while cursor < len(frontmatter_lines):
+                        value_raw = frontmatter_lines[cursor]
+                        if not value_raw.strip() or value_raw.lstrip().startswith("#"):
+                            cursor += 1
+                            continue
+                        value_indent = _count_indent(value_raw)
+                        if value_indent <= child_indent:
+                            break
+                        value_line = value_raw.strip()
+                        value_key_index = _find_unquoted(value_line, ":")
+                        if value_key_index < 0:
+                            cursor += 1
+                            continue
+                        palette[_read_string(value_line[:value_key_index].strip())] = _read_string(value_line[value_key_index + 1:].strip())
+                        cursor += 1
+                    palettes[palette_key] = palette
+                config["color_by"] = default_key
+                config["color_palettes"] = palettes
+                continue
+            if key == "color_palette":
+                palette_key = _read_string(value) if value else ""
+                if palette_key:
+                    config["color_by"] = palette_key
+                palette = {}
+                cursor += 1
+                while cursor < len(frontmatter_lines):
+                    child_raw = frontmatter_lines[cursor]
+                    if not child_raw.strip() or child_raw.lstrip().startswith("#"):
+                        cursor += 1
+                        continue
+                    child_indent = _count_indent(child_raw)
+                    if child_indent <= indent:
+                        break
+                    child_line = child_raw.strip()
+                    child_key_index = _find_unquoted(child_line, ":")
+                    if child_key_index < 0:
+                        cursor += 1
+                        continue
+                    palette[_read_string(child_line[:child_key_index].strip())] = _read_string(child_line[child_key_index + 1:].strip())
+                    cursor += 1
+                config["color_palette"] = palette
+                config["color_palettes"] = {palette_key: palette} if palette_key else {}
+                continue
+            cursor += 1
+        return config, "\n".join(lines[index + 1:])
+    return {}, body
+
+
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
     return slug or "item"
@@ -93,6 +198,17 @@ def _read_string(text: str) -> str:
     return text
 
 
+def _read_attr_value(text: str):
+    value = _read_string(text)
+    if isinstance(value, str):
+        lowered = value.lower()
+        if lowered == "true":
+            return True
+        if lowered == "false":
+            return False
+    return value
+
+
 def _read_optional_edge_label(text: str) -> tuple[str, str]:
     text = text.strip()
     if not text.startswith("|"):
@@ -118,9 +234,10 @@ def _split_attrs(text: str) -> tuple[str, dict]:
             continue
         key_index = _find_unquoted(part, ":")
         if key_index < 0:
-            raise ValueError(f"Expected attr key: value, got {part!r}")
+            attrs[part.strip().replace("-", "_")] = True
+            continue
         key = part[:key_index].strip().replace("-", "_")
-        attrs[key] = _read_string(part[key_index + 1:].strip())
+        attrs[key] = _read_attr_value(part[key_index + 1:].strip())
     return head, attrs
 
 
@@ -188,7 +305,7 @@ def _parse_items_graph(body: str) -> dict:
         if indent == 0 and _find_unquoted(line, ":") > 0 and _find_unquoted(line, "->") < 0:
             key, value = line.split(":", 1)
             key = key.strip()
-            if key in {"id", "title"}:
+            if key in {"id", "title", "default_color_by"}:
                 graph[key] = _read_string(value.strip())
                 index += 1
                 continue
@@ -299,8 +416,20 @@ def _parse_items_graph(body: str) -> dict:
 
 
 def parse_tasks_text(text: str) -> dict:
-    body = _strip_fence_frontmatter(_extract_tasks_body(text).strip())
+    config, body = _read_fence_frontmatter(_extract_tasks_body(text).strip())
     graph = _parse_items_graph(body)
+    if config.get("id") and not graph.get("id"):
+        graph["id"] = config["id"]
+    if config.get("title") and not graph.get("title"):
+        graph["title"] = config["title"]
+    if "default_color_by" in config and "default_color_by" not in graph:
+        graph["default_color_by"] = config["default_color_by"]
+    if config.get("color_by") and not graph.get("color_by"):
+        graph["color_by"] = config["color_by"]
+    if config.get("color_palette") and not graph.get("color_palette"):
+        graph["color_palette"] = config["color_palette"]
+    if config.get("color_palettes"):
+        graph["color_palettes"] = {**config["color_palettes"], **graph.get("color_palettes", {})}
     groups = graph.get("groups", [])
     tasks = graph.get("tasks", [])
     edges = graph.get("dependency_edges", [])
@@ -321,6 +450,7 @@ def parse_tasks_text(text: str) -> dict:
         "document_order": [g["id"] for g in groups] + [t["id"] for t in tasks],
         "frozen": graph.get("frozen", {}),
         "color_by": graph.get("color_by", ""),
+        "default_color_by": graph.get("default_color_by", ""),
         "color_palette": graph.get("color_palette", {}),
         "color_palettes": graph.get("color_palettes", {}),
     }

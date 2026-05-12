@@ -53,7 +53,53 @@ test('buildTaskEdgeAnchors spreads same-side handles across edge width', () => {
     ]);
     assert.deepEqual(
         nodeHandles.src.source.map((handle) => Math.round(handle.offsetPct)),
-        [25, 50, 75],
+        [18, 50, 82],
+    );
+});
+
+test('buildTaskEdgeAnchors uses full width when one role owns a side', () => {
+    const nodes = [
+        { id: 'hub', position: { x: 0, y: 0 }, width: 220, height: 60 },
+        { id: 'a', position: { x: -240, y: 220 }, width: 220, height: 60 },
+        { id: 'b', position: { x: 0, y: 220 }, width: 220, height: 60 },
+        { id: 'c', position: { x: 240, y: 220 }, width: 220, height: 60 },
+    ];
+    const { nodeHandles } = buildTaskEdgeAnchors(nodes, [
+        { id: 'one', source: 'hub', target: 'a' },
+        { id: 'two', source: 'hub', target: 'b' },
+        { id: 'three', source: 'hub', target: 'c' },
+    ]);
+    assert.deepEqual(
+        nodeHandles.hub.source.map((handle) => Math.round(handle.offsetPct)),
+        [18, 50, 82],
+    );
+    assert.deepEqual(
+        nodeHandles.a.target.map((handle) => Math.round(handle.offsetPct)),
+        [50],
+    );
+});
+
+test('buildTaskEdgeAnchors splits top side into symmetric halves when roles mix', () => {
+    const nodes = [
+        { id: 'hub', position: { x: 0, y: 200 }, width: 220, height: 60 },
+        { id: 'outA', position: { x: -220, y: 0 }, width: 220, height: 60 },
+        { id: 'outB', position: { x: 220, y: 0 }, width: 220, height: 60 },
+        { id: 'inA', position: { x: -120, y: -220 }, width: 220, height: 60 },
+        { id: 'inB', position: { x: 120, y: -220 }, width: 220, height: 60 },
+    ];
+    const { nodeHandles } = buildTaskEdgeAnchors(nodes, [
+        { id: 'one', source: 'hub', target: 'outA' },
+        { id: 'two', source: 'hub', target: 'outB' },
+        { id: 'three', source: 'inA', target: 'hub' },
+        { id: 'four', source: 'inB', target: 'hub' },
+    ]);
+    assert.deepEqual(
+        nodeHandles.hub.source.map((handle) => Math.round(handle.offsetPct)),
+        [18, 50],
+    );
+    assert.deepEqual(
+        nodeHandles.hub.target.map((handle) => Math.round(handle.offsetPct)),
+        [50, 82],
     );
 });
 
@@ -81,6 +127,18 @@ test('buildTaskEdgeAnchors uses left/right handles for shallow diagonal nodes', 
     ]);
     assert.equal(edges[0].sourceHandle, 'source-right-0');
     assert.equal(edges[0].targetHandle, 'target-left-0');
+});
+
+test('buildTaskEdgeAnchors uses left/right handles for strong lower-right diagonal nodes', () => {
+    const nodes = [
+        { id: 'target', position: { x: 0, y: 0 }, width: 220, height: 80 },
+        { id: 'source', position: { x: 300, y: 240 }, width: 220, height: 80 },
+    ];
+    const { edges } = buildTaskEdgeAnchors(nodes, [
+        { id: 'diag', source: 'source', target: 'target' },
+    ]);
+    assert.equal(edges[0].sourceHandle, 'source-left-0');
+    assert.equal(edges[0].targetHandle, 'target-right-0');
 });
 
 test('task and collapsed group nodes are selectable in items graph', () => {

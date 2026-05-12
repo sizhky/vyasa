@@ -65,6 +65,21 @@ def copy_raw_button(label: str, target_id: str, toast_id: str):
     )
 
 
+def copy_text_button(label: str, text: str, target_id: str, toast_id: str):
+    return (
+        Button(
+            UkIcon("file-edit", cls="w-4 h-4"),
+            Span(label, cls="text-sm font-medium"),
+            type="button",
+            title=f"Copy {label.lower()}",
+            onclick=COPY_RAW_JS % (target_id, toast_id),
+            cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+        ),
+        Div(f"Copied {label.lower()}!", id=toast_id, cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"),
+        Textarea(text, id=target_id, cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"),
+    )
+
+
 def present_button(slug: str):
     return A(
         UkIcon("monitor", cls="w-4 h-4"),
