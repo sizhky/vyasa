@@ -186,6 +186,12 @@ function tasksColorPaletteFor(model, colorBy) {
     return {};
 }
 
+function tasksColorPaletteEntries(model, colorBy) {
+    return Object.entries(tasksColorPaletteFor(model, colorBy))
+        .filter(([, color]) => typeof color === 'string' && color.trim())
+        .sort(([a], [b]) => String(a).localeCompare(String(b)));
+}
+
 function tasksNodeMatchesFilters(node, filters) {
     const entries = Object.entries(filters || {}).filter(([, value]) => value);
     if (!entries.length) return true;
@@ -1773,6 +1779,7 @@ async function renderTasksGraphs(rootElement = document) {
             const FilterPanel = () => {
                 const options = tasksFilterOptions(model);
                 const colorOptions = tasksColorOptions(model);
+                const activePaletteEntries = tasksColorPaletteEntries(model, activeColorBy);
                 const activeCount = Object.values(activeFilters || {}).filter(Boolean).length + (activeColorBy ? 1 : 0);
                 return React.createElement('details', {
                     ref: filterPanelRef,
@@ -1805,7 +1812,17 @@ async function renderTasksGraphs(rootElement = document) {
                                         onChange: () => setActiveColorBy(option.key),
                                     }),
                                     React.createElement('span', { style: { opacity: 0.85 } }, option.label)
-                                ))
+                                )),
+                                activePaletteEntries.length > 2
+                                    ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
+                                        React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '11px', lineHeight: 1.3, opacity: 0.8 } },
+                                            ...activePaletteEntries.map(([value, color]) => React.createElement('div', { key: `${activeColorBy}-${value}-label`, style: { display: 'grid', gridTemplateColumns: '12px 1fr', alignItems: 'center', gap: '6px' } },
+                                                React.createElement('span', { style: { width: '12px', height: '12px', borderRadius: '999px', background: color, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)' } }),
+                                                React.createElement('span', null, value)
+                                            ))
+                                        )
+                                    )
+                                    : null
                             )
                         )
                     ),
