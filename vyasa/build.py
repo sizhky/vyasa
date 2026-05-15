@@ -472,7 +472,7 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
     return items
 
 
-def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, toc_items=None, current_path=None):
+def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, toc_items=None, current_path=None, updated_label=None):
     """Generate complete static page layout"""
     model = PageShellModel(
         title=page_title,
@@ -482,6 +482,7 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
         favicon_href=favicon_href,
         toc_items=toc_items,
         current_path=current_path,
+        updated_label=updated_label,
     )
     return StaticShellRenderer(generate_static_html).render(model)
 
@@ -589,7 +590,8 @@ def build_static_site(input_dir=None, output_dir=None):
             nav_tree=nav_tree,
             favicon_href=favicon_href,
             toc_items=toc_items,
-            current_path=str(relative_path.with_suffix(''))
+            current_path=str(relative_path.with_suffix('')),
+            updated_label=format_last_modified_label(doc_file),
         )
         
         # Determine output path

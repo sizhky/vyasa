@@ -18,3 +18,17 @@ def test_static_layout_uses_shared_shell_hooks():
     assert "vyasa-main-shell" in html
     assert "vyasa-posts-sidebar" in html
     assert "Powered by Vyasa" in html
+
+
+def test_static_layout_shows_updated_label_in_navbar():
+    html = static_layout(
+        "<h1>Page</h1>",
+        "BLOG",
+        "Page - BLOG",
+        [Li("Entry")],
+        "/static/icon.svg",
+        current_path="page",
+        updated_label="Updated 5 min ago",
+    )
+
+    assert "Updated 5 min ago" in html

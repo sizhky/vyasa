@@ -271,6 +271,34 @@ function tasksColorPaletteEntries(model, colorBy) {
         .sort(([a], [b]) => String(a).localeCompare(String(b)));
 }
 
+function tasksEdgeColorPaletteFor(model, colorBy) {
+    const key = String(colorBy || '').trim();
+    if (!key) return {};
+    const palettes = model?.edge_color_palettes && typeof model.edge_color_palettes === 'object' ? model.edge_color_palettes : {};
+    const configuredPalette = palettes[key];
+    if (configuredPalette && Object.keys(configuredPalette).length > 0) return configuredPalette;
+    const legacyKey = String(model?.edge_color_by || '').trim();
+    const legacyPalette = model?.edge_color_palette && typeof model.edge_color_palette === 'object' ? model.edge_color_palette : {};
+    if (key === legacyKey && Object.keys(legacyPalette).length > 0) return legacyPalette;
+    return {};
+}
+
+function resolveTasksEdgeColor(edge, model, colorByOverride = null, paletteOverride = null) {
+    if (!edge) return '';
+    if (typeof edge.color === 'string' && edge.color.trim()) return edge.color.trim();
+    const colorBy = colorByOverride !== null
+        ? String(colorByOverride || '').trim()
+        : (typeof model?.edge_color_by === 'string' ? model.edge_color_by.trim() : '');
+    if (!colorBy) return '';
+    const palette = paletteOverride && typeof paletteOverride === 'object'
+        ? paletteOverride
+        : tasksEdgeColorPaletteFor(model, colorBy);
+    const value = edge[colorBy];
+    if (value === null || value === undefined || String(value).trim() === '') return '';
+    const color = palette[String(value)];
+    return typeof color === 'string' && color.trim() ? color.trim() : '';
+}
+
 function tasksNodeMatchesFilters(node, filters) {
     const entries = Object.entries(filters || {}).filter(([, value]) => value);
     if (!entries.length) return true;
@@ -492,7 +520,7 @@ function buildVisibleTasksGraph(model, expanded) {
         const key = `${src}->${dst}`;
         if (src !== dst && !seen.has(key)) {
             seen.add(key);
-            visibleEdges.push({ source: src, target: dst, label: edge.label || '' });
+            visibleEdges.push({ ...edge, source: src, target: dst, label: edge.label || '' });
         }
     }
     return { nodes: visibleNodes, edges: visibleEdges };
@@ -517,7 +545,7 @@ function effectiveExpandedGroups(model, expandedSet) {
     return effective;
 }
 
-function appendProjectedEdge(edges, seen, source, target, label = '') {
+function appendProjectedEdge(edges, seen, source, target, label = '', attrs = {}) {
     if (!source || !target || source === target) return;
     const key = `${source}->${target}`;
     const existing = seen.get(key);
@@ -526,9 +554,14 @@ function appendProjectedEdge(edges, seen, source, target, label = '') {
             existing.labels.add(label);
             existing.edge.label = Array.from(existing.labels).join(', ');
         }
+        for (const [attrKey, attrValue] of Object.entries(attrs || {})) {
+            if (existing.edge[attrKey] === undefined && attrValue !== undefined && attrValue !== '') {
+                existing.edge[attrKey] = attrValue;
+            }
+        }
         return;
     }
-    const edge = { source, target };
+    const edge = { ...attrs, source, target };
     if (label) edge.label = label;
     edges.push(edge);
     seen.set(key, { edge, labels: new Set(label ? [label] : []) });
@@ -770,7 +803,7 @@ async function layoutBaseTasksGraph(graph, model, jitterConfig = {}, layoutConfi
         const srcRoot = getRoot(srcGroup);
         const dstRoot = getRoot(dstGroup);
         if (srcRoot !== dstRoot && rootNodeIds.has(srcRoot) && rootNodeIds.has(dstRoot)) {
-            appendProjectedEdge(rootEdges, seenRootEdges, srcRoot, dstRoot, edge.label || '');
+            appendProjectedEdge(rootEdges, seenRootEdges, srcRoot, dstRoot, edge.label || '', edge);
         }
     }
 
@@ -837,7 +870,7 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
             childIds: Array.from(childIds),
         });
         if (!childIds.has(source) || !childIds.has(target) || source === target) continue;
-        appendProjectedEdge(projectedEdges, seenProjectedEdges, source, target, edge.label || '');
+        appendProjectedEdge(projectedEdges, seenProjectedEdges, source, target, edge.label || '', edge);
     }
     const reducedProjectedEdges = reduceTransitiveEdges(projectedEdges);
     const laidOut = await tasksElk.layout({
@@ -1083,6 +1116,7 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
     }
 
     const finalEdges = visible.edges.map((e, i) => ({
+        ...e,
         id: `${e.source}-${e.target}-${i}`,
         source: e.source,
         target: e.target,
@@ -1383,24 +1417,30 @@ async function renderTasksGraphs(rootElement = document) {
                     });
                 }
                 const anchored = buildTaskEdgeAnchors(baseNodes, derived.edges);
-                const baseEdges = anchored.edges.map((edge) => ({
-                    ...edge,
-                    type: 'vyasaEdge',
-                    animated: false,
-                    markerEnd: {
-                        type: rf.MarkerType.ArrowClosed,
-                        width: 8,
-                        height: 8,
-                        color: 'currentColor',
-                    },
-                    zIndex: TASKS_EDGE_Z,
-                    labelBgPadding: [6, 3],
-                    labelBgBorderRadius: 3,
-                    labelZIndex: TASKS_EDGE_LABEL_Z,
-                    labelMaxWidth: layoutConfig.edgeLabelWidth,
-                    labelStyle: { fontSize: 11, fontWeight: 600, fill: 'currentColor' },
-                    labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
-                }));
+                const edgeColorPalette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
+                const baseEdges = anchored.edges.map((edge) => {
+                    const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
+                    return {
+                        ...edge,
+                        type: 'vyasaEdge',
+                        animated: false,
+                        data: { ...(edge.data || {}), edgeColor },
+                        markerEnd: {
+                            type: rf.MarkerType.ArrowClosed,
+                            width: 8,
+                            height: 8,
+                            color: edgeColor || 'currentColor',
+                        },
+                        zIndex: TASKS_EDGE_Z,
+                        labelBgPadding: [6, 3],
+                        labelBgBorderRadius: 3,
+                        labelZIndex: TASKS_EDGE_LABEL_Z,
+                        labelMaxWidth: layoutConfig.edgeLabelWidth,
+                        labelStyle: { fontSize: 11, fontWeight: 600, fill: edgeColor || 'currentColor' },
+                        labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
+                        style: { strokeWidth: 2.5, opacity: 1, stroke: edgeColor || 'currentColor' },
+                    };
+                });
                 const anchoredNodes = baseNodes.map((node) => ({
                     ...node,
                     data: {
@@ -1449,13 +1489,15 @@ async function renderTasksGraphs(rootElement = document) {
                     })));
                     setEdges(baseEdges.map((edge) => {
                         const hit = matchingIds.has(edge.source) && matchingIds.has(edge.target);
+                        const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
                         return {
                             ...edge,
                             data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim' },
-                            labelStyle: { ...(edge.labelStyle || {}), opacity: hit ? 1 : 0.12 },
+                            labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: hit ? 1 : 0.12 },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fillOpacity: hit ? 0.88 : 0.06 },
                             style: {
                                 ...edge.style,
+                                stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)',
                                 opacity: hit ? 0.98 : 0.08,
                                 strokeWidth: hit ? 4.5 : 2.5,
                                 strokeLinecap: hit ? 'round' : undefined,
@@ -1530,6 +1572,7 @@ async function renderTasksGraphs(rootElement = document) {
                         : (highlightedEdgeIds.has(edge.id) ? 'selected' : 'dim');
                     const highlighted = mode !== 'dim';
                     const focusColor = mode === 'focused-in' ? TASKS_EDGE_FOCUS_IN_COLOR : TASKS_EDGE_FOCUS_OUT_COLOR;
+                    const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
                     const dashArray = highlighted ? ((mode === 'focused-in' || mode === 'focused-out') ? '10 6' : '8 6') : undefined;
                     const dashCycle = dashArray
                         ? dashArray.split(/\s+/).map(Number).filter(Number.isFinite).slice(0, 2).reduce((sum, value) => sum + value, 0)
@@ -1545,7 +1588,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ...(edge.labelStyle || {}),
                             fill: mode === 'focused-in' || mode === 'focused-out'
                                 ? focusColor
-                                : (highlighted ? 'currentColor' : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)'),
+                                : (highlighted ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)'),
                             opacity: hoveredNodeId
                                 ? ((mode === 'focused-in' || mode === 'focused-out') ? 1 : 0.05)
                                 : ((mode === 'focused-in' || mode === 'focused-out') ? 1 : (highlighted ? 1 : 0.18)),
@@ -1566,7 +1609,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ...edge.style,
                             stroke: mode === 'focused-in' || mode === 'focused-out'
                                 ? focusColor
-                                : (highlighted ? 'var(--vyasa-primary)' : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)'),
+                                : (highlighted ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)'),
                             opacity: (mode === 'focused-in' || mode === 'focused-out') ? 1 : (highlighted ? 0.95 : 0.08),
                             strokeWidth: (mode === 'focused-in' || mode === 'focused-out') ? 5 : (mode === 'selected' ? 3.5 : 2.5),
                             strokeDasharray: dashArray,
@@ -1859,8 +1902,19 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'u') {
                             event.preventDefault();
-                            setExpanded(new Set((model.groups || []).map((group) => group.id)));
-                            logTasksDebug('shortcutExpandAll', { groupCount: (model.groups || []).length });
+                            const allGroupIds = (model.groups || []).map((group) => group.id);
+                            pendingFitActionRef.current = 'expand';
+                            setExpanded((current) => {
+                                const next = new Set(allGroupIds);
+                                const unchanged = current.size === next.size && allGroupIds.every((groupId) => current.has(groupId));
+                                if (unchanged) {
+                                    window.requestAnimationFrame(() => {
+                                        reactFlow.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true });
+                                    });
+                                }
+                                return next;
+                            });
+                            logTasksDebug('shortcutExpandAll', { groupCount: allGroupIds.length });
                             return;
                         }
                         if (key === 'p') {
@@ -2021,7 +2075,10 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId(null);
             };
             const selectGraphNode = React.useCallback((_, node) => {
-                if (!isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id))) return;
+                if (!isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id))) {
+                    clearSelection();
+                    return;
+                }
                 const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
                 setSelectedNodeId((current) => current === sourceNodeId ? null : sourceNodeId);
                 setHoveredNodeId(null);

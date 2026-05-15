@@ -541,6 +541,27 @@ def _split_fence_frontmatter(code):
                 config[key][clean(child_key)] = clean(child_value)
                 index += 1
             continue
+        if key == "edge_color_palette":
+            config[key] = {}
+            if value:
+                config["edge_color_by"] = clean(value)
+            index += 1
+            while index < len(lines):
+                child_raw = lines[index]
+                if not child_raw.strip():
+                    index += 1
+                    continue
+                child_indent = len(child_raw) - len(child_raw.lstrip(" "))
+                if child_indent <= indent:
+                    break
+                child_line = child_raw.strip()
+                if ":" not in child_line:
+                    index += 1
+                    continue
+                child_key, child_value = child_line.split(":", 1)
+                config[key][clean(child_key)] = clean(child_value)
+                index += 1
+            continue
         config[key] = clean(value)
         index += 1
     return config, code[frontmatter_match.end():]
@@ -635,6 +656,11 @@ def _render_tasks_block(code, current_path=None):
         if config.get("color_palette") and not model.get("color_palette"):
             model["color_palette"] = config["color_palette"]
             model["color_palettes"] = {**model.get("color_palettes", {}), model.get("color_by", ""): config["color_palette"]}
+        if config.get("edge_color_by") and not model.get("edge_color_by"):
+            model["edge_color_by"] = config["edge_color_by"]
+        if config.get("edge_color_palette") and not model.get("edge_color_palette"):
+            model["edge_color_palette"] = config["edge_color_palette"]
+            model["edge_color_palettes"] = {**model.get("edge_color_palettes", {}), model.get("edge_color_by", ""): config["edge_color_palette"]}
         _normalize_items_model_hrefs(model, current_path)
         graph = build_collapsed_graph(model)
     except Exception:
@@ -648,6 +674,9 @@ def _render_tasks_block(code, current_path=None):
             "task_children": {},
             "document_order": [],
             "frozen": {},
+            "edge_color_by": "",
+            "edge_color_palette": {},
+            "edge_color_palettes": {},
         }
         graph = {"nodes": [], "edges": []}
     widget_id = f"tasks-{abs(hash(code)) & 0xFFFFFF}-{next(_diagram_uid_counter)}"

@@ -49,7 +49,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                 continue
             key = line[:key_index].strip()
             value = line[key_index + 1:].strip()
-            if key in {"id", "title", "default_color_by"}:
+            if key in {"id", "title", "default_color_by", "edge_color_by"}:
                 config[key] = _read_string(value)
                 cursor += 1
                 continue
@@ -146,6 +146,30 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                     cursor += 1
                 config["color_palette"] = palette
                 config["color_palettes"] = {palette_key: palette} if palette_key else {}
+                continue
+            if key == "edge_color_palette":
+                palette_key = _read_string(value) if value else ""
+                if palette_key:
+                    config["edge_color_by"] = palette_key
+                palette = {}
+                cursor += 1
+                while cursor < len(frontmatter_lines):
+                    child_raw = frontmatter_lines[cursor]
+                    if not child_raw.strip() or child_raw.lstrip().startswith("#"):
+                        cursor += 1
+                        continue
+                    child_indent = _count_indent(child_raw)
+                    if child_indent <= indent:
+                        break
+                    child_line = child_raw.strip()
+                    child_key_index = _find_unquoted(child_line, ":")
+                    if child_key_index < 0:
+                        cursor += 1
+                        continue
+                    palette[_read_string(child_line[:child_key_index].strip())] = _read_string(child_line[child_key_index + 1:].strip())
+                    cursor += 1
+                config["edge_color_palette"] = palette
+                config["edge_color_palettes"] = {palette_key: palette} if palette_key else {}
                 continue
             cursor += 1
         return config, "\n".join(lines[index + 1:])
@@ -299,7 +323,7 @@ def _parse_edge_refs(text: str) -> list[str]:
     return [_read_string(part) for part in _split_unquoted(text, ",") if part.strip()]
 
 
-def _add_edges(graph: dict, source_text: str, target_text: str, label: str) -> None:
+def _add_edges(graph: dict, source_text: str, target_text: str, label: str, attrs: dict | None = None) -> None:
     sources = _parse_edge_refs(source_text)
     targets = _parse_edge_refs(target_text)
     for source in sources:
@@ -307,11 +331,13 @@ def _add_edges(graph: dict, source_text: str, target_text: str, label: str) -> N
             edge = {"source": source, "target": target}
             if label:
                 edge["label"] = label
+            if attrs:
+                edge.update(attrs)
             graph["dependency_edges"].append(edge)
 
 
 def _parse_items_graph(body: str) -> dict:
-    graph = {"groups": [], "tasks": [], "dependency_edges": [], "color_palettes": {}}
+    graph = {"groups": [], "tasks": [], "dependency_edges": [], "color_palettes": {}, "edge_color_palettes": {}}
     stack: list[dict] = []
     used_ids: set[str] = set()
     lines = body.splitlines()
@@ -338,7 +364,7 @@ def _parse_items_graph(body: str) -> dict:
         if indent == 0 and _find_unquoted(line, ":") > 0 and _find_unquoted(line, "->") < 0:
             key, value = line.split(":", 1)
             key = key.strip()
-            if key in {"id", "title", "default_color_by"}:
+            if key in {"id", "title", "default_color_by", "edge_color_by"}:
                 graph[key] = _read_string(value.strip())
                 index += 1
                 continue
@@ -412,12 +438,37 @@ def _parse_items_graph(body: str) -> dict:
                 graph["color_palette"] = palette
                 graph["color_palettes"][graph.get("color_by") or palette_key or ""] = palette
                 continue
+            if key == "edge_color_palette":
+                palette_key = _read_string(value.strip())
+                if palette_key:
+                    graph["edge_color_by"] = palette_key
+                palette = {}
+                index += 1
+                while index < len(lines):
+                    child_raw = lines[index]
+                    if not child_raw.strip() or child_raw.lstrip().startswith("#"):
+                        index += 1
+                        continue
+                    child_indent = _count_indent(child_raw)
+                    if child_indent <= indent:
+                        break
+                    child_line = child_raw.strip()
+                    child_key_index = _find_unquoted(child_line, ":")
+                    if child_key_index < 0:
+                        raise ValueError(f"Expected edge color palette entry key: value, got {child_raw!r}")
+                    child_key = _read_string(child_line[:child_key_index].strip())
+                    palette[child_key] = _read_string(child_line[child_key_index + 1:].strip())
+                    index += 1
+                graph["edge_color_palette"] = palette
+                graph["edge_color_palettes"][graph.get("edge_color_by") or palette_key or ""] = palette
+                continue
 
         edge_index = _find_unquoted(line, "->")
         if edge_index >= 0:
             source_text = line[:edge_index].strip()
             label, target_text = _read_optional_edge_label(line[edge_index + 2:])
-            _add_edges(graph, source_text, target_text, label)
+            target_refs, edge_attrs = _split_attrs(target_text)
+            _add_edges(graph, source_text, target_refs, label, edge_attrs)
             index += 1
             continue
 
@@ -465,6 +516,12 @@ def parse_tasks_text(text: str) -> dict:
         graph["color_palette"] = config["color_palette"]
     if config.get("color_palettes"):
         graph["color_palettes"] = {**config["color_palettes"], **graph.get("color_palettes", {})}
+    if config.get("edge_color_by") and not graph.get("edge_color_by"):
+        graph["edge_color_by"] = config["edge_color_by"]
+    if config.get("edge_color_palette") and not graph.get("edge_color_palette"):
+        graph["edge_color_palette"] = config["edge_color_palette"]
+    if config.get("edge_color_palettes"):
+        graph["edge_color_palettes"] = {**config["edge_color_palettes"], **graph.get("edge_color_palettes", {})}
     groups = graph.get("groups", [])
     tasks = graph.get("tasks", [])
     edges = graph.get("dependency_edges", [])
@@ -489,6 +546,9 @@ def parse_tasks_text(text: str) -> dict:
         "filter_attributes": graph.get("filter_attributes", []),
         "color_palette": graph.get("color_palette", {}),
         "color_palettes": graph.get("color_palettes", {}),
+        "edge_color_by": graph.get("edge_color_by", ""),
+        "edge_color_palette": graph.get("edge_color_palette", {}),
+        "edge_color_palettes": graph.get("edge_color_palettes", {}),
     }
 
 

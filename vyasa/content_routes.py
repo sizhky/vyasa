@@ -117,12 +117,12 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
             post_title = f"{slug_to_title(PathCls(path).name, abbreviations=abbreviations)} (PDF)"
             pdf_src = content_url_for_slug(path, suffix=".pdf")
             pdf_content = Div(_breadcrumbs(path, slug_to_title, abbreviations), Div(H1(post_title, cls=PAGE_TITLE_CLS), Button("Focus PDF", cls="pdf-focus-toggle inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors", type="button", data_pdf_focus_toggle="true", data_pdf_focus_label="Focus PDF", data_pdf_exit_label="Exit focus", aria_pressed="false"), cls="flex items-center justify-between gap-4 flex-wrap mb-6"), NotStr(f'<object data="{pdf_src}" type="application/pdf" class="pdf-viewer w-full h-[calc(100vh-14rem)] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><p class="p-4 text-sm text-slate-600 dark:text-slate-300">PDF preview not available. <a href="{pdf_src}" class="text-blue-600 hover:underline">Download PDF</a>.</p></object>'))
-            return DocumentPage(post_title, path, pdf_content, show_toc=False).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
+            return DocumentPage(post_title, path, pdf_content, file_path=str(document.path), show_toc=False).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
         if document.kind == "tree":
             tree_data = parse_tree_table(document.path)
             post_title = tree_data["sheet"] or slug_to_title(PathCls(path).name, abbreviations=abbreviations)
             tree_content = Div(_breadcrumbs(path, slug_to_title, abbreviations), NotStr(render_tree_table_html(document.path)))
-            return DocumentPage(post_title, path, tree_content, show_toc=False).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
+            return DocumentPage(post_title, path, tree_content, file_path=str(document.path), show_toc=False).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
         return not_found(htmx, auth=request.scope.get("auth"))
     metadata, raw_content = parse_frontmatter(file_path)
     frontmatter_error = metadata.get("__frontmatter_error__")
@@ -148,7 +148,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         pager if pager else Div(),
     )
     layout_start = time.time()
-    result = DocumentPage(post_title, path, post_content, toc_source=raw_content).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
+    result = DocumentPage(post_title, path, post_content, file_path=str(file_path), toc_source=raw_content).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
     logger.debug(f"[DEBUG] Layout generation took {(time.time() - layout_start) * 1000:.2f}ms")
     logger.debug(f"[DEBUG] ########## REQUEST COMPLETE: {(time.time() - request_start) * 1000:.2f}ms TOTAL ##########\n")
     return result
