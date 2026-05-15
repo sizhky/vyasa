@@ -25,6 +25,7 @@ class DocumentPage:
     title: str
     current_path: str
     body: Any
+    file_path: str | None = None
     toc_source: str | None = None
     show_sidebar: bool = True
     show_toc: bool = True
@@ -43,6 +44,7 @@ class DocumentPage:
             auth=auth,
             full_width=self.full_width,
             no_scroll=self.no_scroll,
+            current_updated_label=format_last_modified_label(self.file_path) if self.file_path else None,
         )
 
 

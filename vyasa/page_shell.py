@@ -15,6 +15,7 @@ class PageShellModel:
     favicon_href: str
     toc_items: list[Any] | None = None
     current_path: str | None = None
+    updated_label: str | None = None
 
 
 class ShellRenderer(Protocol):
@@ -33,7 +34,7 @@ class StaticShellRenderer:
         return f'''
     <div id="page-container" class="flex flex-col min-h-screen">
         <div class="vyasa-navbar-shell w-full sticky top-0 z-50">
-            {self._navbar(model.blog_title)}
+            {self._navbar(model.blog_title, model.updated_label)}
         </div>
         <div id="content-with-sidebars" class="vyasa-content-grid w-full max-w-7xl mx-auto px-4 flex gap-6 flex-1">
             {self._posts_sidebar(model.nav_tree)}
@@ -55,14 +56,18 @@ class StaticShellRenderer:
     </button>
     '''
 
-    def _navbar(self, blog_title: str) -> str:
+    def _navbar(self, blog_title: str, updated_label: str | None = None) -> str:
+        updated_html = f'<span class="text-xs text-slate-300 whitespace-nowrap">{updated_label}</span>' if updated_label else ""
         return f'''
     <div class="vyasa-navbar-card bg-slate-900 text-white px-4 py-3 dark:bg-slate-800">
         <div class="flex items-center justify-between md:hidden">
             <button id="mobile-posts-toggle" title="Toggle file tree" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaTogglePostsPanel && window.__vyasaTogglePostsPanel()">
                 <span uk-icon="menu" class="w-5 h-5"></span>
             </button>
-            <a href="/index.html" class="flex-1 px-4 text-center truncate">{blog_title}</a>
+            <div class="flex-1 px-4 flex flex-col items-center">
+                <a href="/index.html" class="text-center truncate">{blog_title}</a>
+                {updated_html}
+            </div>
             <div class="flex items-center gap-1">
                 <button id="mobile-toc-toggle" title="Toggle table of contents" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()">
                     <span uk-icon="list" class="w-5 h-5"></span>
@@ -71,7 +76,10 @@ class StaticShellRenderer:
             </div>
         </div>
         <div class="hidden md:flex items-center justify-between">
-            <a href="/index.html">{blog_title}</a>
+            <div class="flex items-center gap-3">
+                <a href="/index.html">{blog_title}</a>
+                {updated_html}
+            </div>
             {self._theme_toggle()}
         </div>
     </div>

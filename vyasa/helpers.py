@@ -327,6 +327,20 @@ def format_last_modified_label(file_path: str | Path) -> str | None:
         modified_at = datetime.fromtimestamp(Path(file_path).stat().st_mtime)
     except OSError:
         return None
+    now = datetime.now(modified_at.tzinfo)
+    delta = now - modified_at
+    seconds = max(int(delta.total_seconds()), 0)
+    if seconds < 60:
+        return "Updated just now"
+    if seconds < 3600:
+        minutes = seconds // 60
+        return f"Updated {minutes} min ago"
+    if seconds < 86400:
+        hours = seconds // 3600
+        return f"Updated {hours} hour{'s' if hours != 1 else ''} ago"
+    if seconds < 604800:
+        days = seconds // 86400
+        return f"Updated {days} day{'s' if days != 1 else ''} ago"
     return f"Updated {modified_at.strftime('%b %d, %Y')}"
 
 def get_adjacent_posts(root: Path, current_path: str | Path, abbreviations=None):

@@ -804,9 +804,9 @@ def theme_toggle():
 
 
 def navbar(
-    show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False
+    show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None
 ):
-    return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode)
+    return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label)
 
 
 def _posts_sidebar_fingerprint():
@@ -987,6 +987,7 @@ def layout(
     show_footer=True,
     no_scroll=False,
     slide_mode=False,
+    current_updated_label=None,
 ):
     return render_layout(
         *content,
@@ -1003,6 +1004,7 @@ def layout(
         show_footer=show_footer,
         no_scroll=no_scroll,
         slide_mode=slide_mode,
+        current_updated_label=current_updated_label,
         logger=logger,
         resolve_layout_config=_resolve_layout_config,
         width_class_and_style=_width_class_and_style,
