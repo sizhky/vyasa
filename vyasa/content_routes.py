@@ -19,9 +19,9 @@ from .document_pages import (
     present_button,
 )
 from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, get_adjacent_posts, strip_more_marker
-from .markdown_rendering import _render_markdown_fragment
+from .extensions_builtin.markdown.renderer import _render_markdown_fragment
 from .tree_tables import parse_tree_table, render_tree_table_html
-from .slides import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
+from .extensions_builtin.slides.deck import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
 
 FALLBACK_HOME_SLUG = "__home__"
 
@@ -231,7 +231,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             ),
             overview_panel,
             Script(f"window.__vyasaZen={json.dumps(nav_state)};"),
-            Script(src="/static/present.js", type="module"),
+            Script(src="/static/extensions/slides/present.js", type="module"),
             cls="vyasa-zen-content w-full mx-auto space-y-8",
             style=f"--vyasa-zen-slide-max-width: {slide_width};" if slide_width else None,
         )
@@ -295,7 +295,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             slide_body,
             overview_panel,
             Script(f"window.__vyasaZen={json.dumps(nav_state)};"),
-            Script(src="/static/present.js", type="module"),
+            Script(src="/static/extensions/slides/present.js", type="module"),
             cls="vyasa-zen-content w-full mx-auto space-y-8",
             style=f"--vyasa-zen-slide-max-width: {slide_width};" if slide_width else None,
         )

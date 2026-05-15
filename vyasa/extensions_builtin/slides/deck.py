@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from .helpers import _strip_leading_frontmatter_block, content_url_for_slug, resolve_heading_anchor
+from ...helpers import _strip_leading_frontmatter_block, content_url_for_slug, resolve_heading_anchor
 
 
 @dataclass(frozen=True)
@@ -396,7 +396,8 @@ def slide_slug(index):
 
 def present_href_for_anchor(markdown_text, doc_path, target_anchor):
     deck = ZenSlideDeck(markdown_text)
-    for index, anchor in enumerate(deck.anchors, start=2):
+    anchors = deck.anchors[1:] if len(deck.anchors) > 1 and deck.anchors[0] else deck.anchors
+    for index, anchor in enumerate(anchors, start=2):
         if anchor == target_anchor:
             return content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index)}")
     return content_url_for_slug(doc_path, prefix="/slides", suffix="/slide-2")

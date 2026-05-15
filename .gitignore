@@ -4,7 +4,10 @@
 .gemini/
 agents/
 .github/
-docs/
+docs/*
+!docs/refactor/
+docs/refactor/*
+!docs/refactor/extensions.md
 tests/
 .vyasa*
 .omx

@@ -1,4 +1,5 @@
 from fasthtml.common import Button, Div, Span
+from monsterui.all import UkIcon
 
 
 def bookmark_toggle_button(path, title):

@@ -9,13 +9,14 @@ from pathlib import Path
 from typing import Protocol
 
 import mistletoe as mst
-from fasthtml.common import Div, Link, NotStr, Span, to_xml
+from fasthtml.common import Div, Link, NotStr, Script, Span, to_xml
 from loguru import logger
 from monsterui.all import UkIcon, apply_classes
 
-from .assets import asset_url
-from .config import get_config
-from .helpers import (
+from ...assets import asset_url
+from ...config import get_config
+from ...extensions import bind_asset_collector, get_extension_runtime, refresh_extension_runtime
+from ...helpers import (
     _plain_text_from_html,
     content_path_for_slug,
     content_url_for_slug,
@@ -24,19 +25,16 @@ from .helpers import (
     content_slug_for_path,
     resolve_heading_anchor,
 )
-from .slides import present_href_for_anchor
-from .markdown_pipeline import (
+from ...markdown_fence import get_root_folder as _shared_get_root_folder
+from ..slides.deck import present_href_for_anchor
+from .pipeline import (
     extract_footnotes,
     preprocess_callouts,
     preprocess_code_includes,
     preserve_newlines as preserve_md_newlines,
     preprocess_super_sub,
 )
-from .markdown_tabs import postprocess_tabs as postprocess_md_tabs
-from .markdown_tabs import preprocess_tabs as preprocess_md_tabs
-from .tasks_layout import build_collapsed_graph
-from .tasks_model import parse_tasks_text
-from .markdown_tokens import (
+from .tokens import (
     DownloadEmbed,
     FootnoteRef,
     Highlight,
@@ -47,7 +45,6 @@ from .markdown_tokens import (
     Superscript,
     YoutubeEmbed,
 )
-from .wikilinks import rewrite_wikilinks
 
 _diagram_uid_counter = count(1)
 _CALLOUT_META = {
@@ -64,6 +61,7 @@ class RenderContext:
     img_dir: str | None = None
     slide_mode: bool = False
     content_tree: object | None = None
+    asset_collector: object | None = None
 
 
 class MarkdownFeature(Protocol):
@@ -119,6 +117,26 @@ _TODO_META_ALIASES = {
     "team": "project",
     "stream": "project",
 }
+
+
+def get_root_folder():
+    return _shared_get_root_folder()
+
+
+def _current_content_path(current_path):
+    parts = Path(str(current_path).strip("/")).parts
+    aliases = {alias for alias, _ in get_content_mounts() if alias}
+    if parts and parts[0] in aliases:
+        return content_path_for_slug(current_path)
+    return (get_root_folder().resolve() / current_path).resolve()
+
+
+def _current_content_root_and_relative(current_path):
+    parts = Path(str(current_path).strip("/")).parts
+    aliases = {alias for alias, _ in get_content_mounts() if alias}
+    if parts and parts[0] in aliases:
+        return content_root_and_relative(current_path)
+    return get_root_folder(), Path(current_path)
 
 
 def _todo_accent(text):
@@ -312,23 +330,6 @@ def _asset_url(path):
     return asset_url(path)
 
 
-def get_root_folder():
-    return get_config().get_root_folder()
-
-def _current_content_path(current_path):
-    parts = Path(str(current_path).strip("/")).parts
-    aliases = {alias for alias, _ in get_content_mounts() if alias}
-    if parts and parts[0] in aliases:
-        return content_path_for_slug(current_path)
-    return (get_root_folder().resolve() / current_path).resolve()
-
-def _current_content_root_and_relative(current_path):
-    parts = Path(str(current_path).strip("/")).parts
-    aliases = {alias for alias, _ in get_content_mounts() if alias}
-    if parts and parts[0] in aliases:
-        return content_root_and_relative(current_path)
-    return get_root_folder(), Path(current_path)
-
 def _slug_for_resolved_path(resolved, current_path, strip_suffix=True):
     parts = Path(str(current_path).strip("/")).parts
     aliases = {alias for alias, _ in get_content_mounts() if alias}
@@ -383,360 +384,6 @@ def _rewrite_raw_html_urls(content, current_path):
     return re.sub(r'\b(src|href|poster|srcset)=(["\'])(.*?)\2', rewrite_attr, content, flags=re.IGNORECASE)
 
 
-def _resolve_items_node_href(href, current_path):
-    href = str(href or "").strip()
-    if not href:
-        return href
-    if href.startswith(("#", "/", "//")) or re.match(r"^[a-zA-Z][\w+.-]*:", href):
-        return href
-    base, frag = href.split("#", 1) if "#" in href else (href, "")
-    if not current_path:
-        return href
-    current_file = _current_content_path(current_path)
-    resolved = (current_file.parent / base).resolve() if current_file else None
-    rel = _slug_for_resolved_path(resolved, current_path, strip_suffix=not Path(base).suffix) if resolved else None
-    if not rel:
-        return href
-    mapped = content_url_for_slug(rel)
-    return f"{mapped}#{frag}" if frag else mapped
-
-
-def _normalize_items_model_hrefs(model, current_path):
-    for bucket in ("groups", "tasks"):
-        for node in model.get(bucket, []):
-            if "href" in node:
-                node["href"] = _resolve_items_node_href(node.get("href"), current_path)
-
-
-def _escape_attr(value):
-    if value is None:
-        return None
-    return (
-        str(value)
-        .replace("&", "&amp;")
-        .replace('"', "&quot;")
-        .replace("'", "&#39;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
-
-
-def _split_fence_frontmatter(code):
-    def clean(value):
-        return value.strip().strip('"').strip("'")
-
-    def parse_string_list(value):
-        stripped = value.strip()
-        if not stripped:
-            return []
-        if stripped.startswith("[") and stripped.endswith("]"):
-            inner = stripped[1:-1].strip()
-            if not inner:
-                return []
-            return [clean(part) for part in inner.split(",") if part.strip()]
-        return [clean(part) for part in stripped.split(",") if part.strip()]
-
-    frontmatter_match = re.match(r"^---\s*\n(.*?)\n---\s*\n", code, re.DOTALL)
-    if not frontmatter_match:
-        return {}, code
-    config = {}
-    lines = frontmatter_match.group(1).splitlines()
-    index = 0
-    while index < len(lines):
-        raw_line = lines[index]
-        if not raw_line.strip():
-            index += 1
-            continue
-        indent = len(raw_line) - len(raw_line.lstrip(" "))
-        line = raw_line.strip()
-        if ":" not in line:
-            index += 1
-            continue
-        key, value = line.split(":", 1)
-        key = key.strip()
-        value = value.strip()
-        if key == "filter_attributes":
-            if value:
-                config[key] = parse_string_list(value)
-                index += 1
-                continue
-            values = []
-            index += 1
-            while index < len(lines):
-                child_raw = lines[index]
-                if not child_raw.strip():
-                    index += 1
-                    continue
-                child_indent = len(child_raw) - len(child_raw.lstrip(" "))
-                if child_indent <= indent:
-                    break
-                child_line = child_raw.strip()
-                if child_line.startswith("- "):
-                    values.append(clean(child_line[2:]))
-                index += 1
-            config[key] = values
-            continue
-        if key == "color_by":
-            if value:
-                config[key] = clean(value)
-                index += 1
-                continue
-            config["color_by"] = {}
-            index += 1
-            while index < len(lines):
-                child_raw = lines[index]
-                if not child_raw.strip():
-                    index += 1
-                    continue
-                child_indent = len(child_raw) - len(child_raw.lstrip(" "))
-                if child_indent <= indent:
-                    break
-                child_line = child_raw.strip()
-                if ":" not in child_line:
-                    index += 1
-                    continue
-                child_key, child_value = child_line.split(":", 1)
-                child_key = clean(child_key)
-                child_value = child_value.strip()
-                if child_value:
-                    config["color_by"][child_key] = clean(child_value)
-                    index += 1
-                    continue
-                config["color_by"][child_key] = {}
-                index += 1
-                while index < len(lines):
-                    value_raw = lines[index]
-                    if not value_raw.strip():
-                        index += 1
-                        continue
-                    value_indent = len(value_raw) - len(value_raw.lstrip(" "))
-                    if value_indent <= child_indent:
-                        break
-                    value_line = value_raw.strip()
-                    if ":" not in value_line:
-                        index += 1
-                        continue
-                    value_key, value_value = value_line.split(":", 1)
-                    config["color_by"][child_key][clean(value_key)] = clean(value_value)
-                    index += 1
-            continue
-        if key == "color_palette":
-            config[key] = {}
-            if value:
-                config["color_by"] = clean(value)
-            index += 1
-            while index < len(lines):
-                child_raw = lines[index]
-                if not child_raw.strip():
-                    index += 1
-                    continue
-                child_indent = len(child_raw) - len(child_raw.lstrip(" "))
-                if child_indent <= indent:
-                    break
-                child_line = child_raw.strip()
-                if ":" not in child_line:
-                    index += 1
-                    continue
-                child_key, child_value = child_line.split(":", 1)
-                config[key][clean(child_key)] = clean(child_value)
-                index += 1
-            continue
-        if key == "edge_color_palette":
-            config[key] = {}
-            if value:
-                config["edge_color_by"] = clean(value)
-            index += 1
-            while index < len(lines):
-                child_raw = lines[index]
-                if not child_raw.strip():
-                    index += 1
-                    continue
-                child_indent = len(child_raw) - len(child_raw.lstrip(" "))
-                if child_indent <= indent:
-                    break
-                child_line = child_raw.strip()
-                if ":" not in child_line:
-                    index += 1
-                    continue
-                child_key, child_value = child_line.split(":", 1)
-                config[key][clean(child_key)] = clean(child_value)
-                index += 1
-            continue
-        config[key] = clean(value)
-        index += 1
-    return config, code[frontmatter_match.end():]
-
-
-def _render_d2_block(code):
-    frontmatter_pattern = r"^---\s*\n(.*?)\n---\s*\n"
-    frontmatter_match = re.match(frontmatter_pattern, code, re.DOTALL)
-    height, width, min_height = "auto", "65vw", "320px"
-    d2_layout, d2_theme_id, d2_dark_theme_id = "elk", None, None
-    d2_sketch = d2_pad = d2_scale = d2_target = d2_animate_interval = d2_animate = d2_fullscreen_title = None
-    if frontmatter_match:
-        frontmatter_content = frontmatter_match.group(1)
-        code = code[frontmatter_match.end():]
-        try:
-            config = dict(line.split(":", 1) for line in frontmatter_content.strip().split("\n") if ":" in line)
-            config = {k.strip(): v.strip() for k, v in config.items()}
-            height = config.get("height", height)
-            min_height = height if "height" in config else min_height
-            width = config.get("width", width)
-            d2_layout = config.get("layout", d2_layout)
-            d2_theme_id = config.get("theme_id")
-            d2_dark_theme_id = config.get("dark_theme_id")
-            d2_sketch = config.get("sketch")
-            d2_pad = config.get("pad")
-            d2_scale = config.get("scale")
-            d2_target = config.get("target")
-            d2_animate_interval = config.get("animate_interval", config.get("animate-interval"))
-            d2_animate = config.get("animate")
-            d2_fullscreen_title = config.get("title", config.get("fullscreen_title"))
-        except Exception as e:
-            print(f"Error parsing d2 frontmatter: {e}")
-    diagram_id = f"d2-{abs(hash(code)) & 0xFFFFFF}-{next(_diagram_uid_counter)}"
-    container_style = f"width: {width}; position: relative; left: 50%; transform: translateX(-50%);" if "vw" in str(width).lower() else f"width: {width};"
-    escaped_code = code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&#39;")
-    pairs = [("layout", d2_layout), ("theme-id", d2_theme_id), ("dark-theme-id", d2_dark_theme_id), ("sketch", d2_sketch), ("pad", d2_pad), ("scale", d2_scale), ("target", d2_target), ("animate-interval", d2_animate_interval), ("animate", d2_animate), ("fullscreen-title", d2_fullscreen_title)]
-    d2_attr_str = "".join(f' data-d2-{k}="{_escape_attr(v)}"' for k, v in pairs if v is not None)
-    caption_html = f'<div class="text-xs text-slate-500 dark:text-slate-400 text-center px-3 pb-2">{html.escape(str(d2_fullscreen_title))}</div>' if d2_fullscreen_title else ""
-    return f"""<div class="d2-container relative border-4 rounded-md my-4 shadow-2xl" style="{container_style}"><div class="d2-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded"><button onclick="openD2Fullscreen('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button><button onclick="resetD2Zoom('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button><button onclick="zoomD2In('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button><button onclick="zoomD2Out('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button></div><div id="{diagram_id}" class="d2-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: {min_height}; height: {height};" data-d2-code="{escaped_code}"{d2_attr_str}><pre class="d2" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">{code}</pre></div>{caption_html}</div>"""
-
-
-def _render_mermaid_block(code):
-    frontmatter_pattern = r"^---\s*\n(.*?)\n---\s*\n"
-    frontmatter_match = re.match(frontmatter_pattern, code, re.DOTALL)
-    height, width, min_height, gantt_width, mermaid_title = "auto", "65vw", "400px", None, None
-    if frontmatter_match:
-        frontmatter_content = frontmatter_match.group(1)
-        code = code[frontmatter_match.end():]
-        try:
-            config = dict(line.split(":", 1) for line in frontmatter_content.strip().split("\n") if ":" in line)
-            config = {k.strip(): v.strip() for k, v in config.items()}
-            height = config.get("height", height)
-            min_height = height if "height" in config else min_height
-            width = config.get("width", width)
-            mermaid_title = config.get("title")
-            if "aspect_ratio" in config:
-                aspect_value = config["aspect_ratio"].strip()
-                ratio = (lambda p: float(p[0]) / float(p[1]))(aspect_value.split(":")) if ":" in aspect_value else float(aspect_value)
-                gantt_width = int(1200 * ratio)
-        except Exception as e:
-            print(f"Error parsing mermaid frontmatter: {e}")
-    diagram_id = f"mermaid-{abs(hash(code)) & 0xFFFFFF}-{next(_diagram_uid_counter)}"
-    container_style = f"width: {width}; position: relative; left: 50%; transform: translateX(-50%);" if "vw" in str(width).lower() else f"width: {width};"
-    escaped_code = code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&#39;")
-    gantt_data_attr = f' data-gantt-width="{gantt_width}"' if gantt_width else ""
-    mermaid_title_attr = f' data-mermaid-title="{html.escape(str(mermaid_title))}"' if mermaid_title else ""
-    caption_html = f'<div class="text-xs text-slate-500 dark:text-slate-400 text-center px-3 pb-2">{html.escape(str(mermaid_title))}</div>' if mermaid_title else ""
-    return f"""<div class="mermaid-container relative border-4 rounded-md my-4 shadow-2xl" style="{container_style}"><div class="mermaid-controls absolute top-2 right-2 z-10 flex gap-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded"><button onclick="openMermaidFullscreen('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button><button onclick="resetMermaidZoom('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Reset zoom">Reset</button><button onclick="zoomMermaidIn('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom in">+</button><button onclick="zoomMermaidOut('{diagram_id}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Zoom out">−</button></div><div id="{diagram_id}" class="mermaid-wrapper p-4 overflow-hidden flex justify-center items-center" style="min-height: {min_height}; height: {height};" data-mermaid-code="{escaped_code}"{gantt_data_attr}{mermaid_title_attr}><pre class="mermaid" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">{code}</pre></div>{caption_html}</div>"""
-
-
-def _render_tasks_block(code, current_path=None):
-    code = html.unescape(code)
-    config, code = _split_fence_frontmatter(code)
-    try:
-        model = parse_tasks_text(f"```tasks\n{code}\n```")
-        if config.get("title") and not model.get("title"):
-            model["title"] = config["title"]
-        if config.get("id"):
-            model["graph_id"] = config["id"]
-        if "default_color_by" in config:
-            model["default_color_by"] = config["default_color_by"]
-        if "filter_attributes" in config:
-            model["filter_attributes"] = config["filter_attributes"]
-        if isinstance(config.get("color_by"), str) and config.get("color_by") and not model.get("color_by"):
-            model["color_by"] = config["color_by"]
-        if isinstance(config.get("color_by"), dict):
-            palettes = {k: v for k, v in config["color_by"].items() if isinstance(v, dict)}
-            if palettes:
-                model["color_palettes"] = {**model.get("color_palettes", {}), **palettes}
-                if not model.get("color_by"):
-                    model["color_by"] = next(iter(palettes.keys()), "")
-        if config.get("color_palette") and not model.get("color_palette"):
-            model["color_palette"] = config["color_palette"]
-            model["color_palettes"] = {**model.get("color_palettes", {}), model.get("color_by", ""): config["color_palette"]}
-        if config.get("edge_color_by") and not model.get("edge_color_by"):
-            model["edge_color_by"] = config["edge_color_by"]
-        if config.get("edge_color_palette") and not model.get("edge_color_palette"):
-            model["edge_color_palette"] = config["edge_color_palette"]
-            model["edge_color_palettes"] = {**model.get("edge_color_palettes", {}), model.get("edge_color_by", ""): config["edge_color_palette"]}
-        _normalize_items_model_hrefs(model, current_path)
-        graph = build_collapsed_graph(model)
-    except Exception:
-        model = {
-            "graph_id": f"tasks-{next(_diagram_uid_counter)}",
-            "title": "",
-            "groups": [],
-            "tasks": [],
-            "dependency_edges": [],
-            "group_tree": {},
-            "task_children": {},
-            "document_order": [],
-            "frozen": {},
-            "edge_color_by": "",
-            "edge_color_palette": {},
-            "edge_color_palettes": {},
-        }
-        graph = {"nodes": [], "edges": []}
-    widget_id = f"tasks-{abs(hash(code)) & 0xFFFFFF}-{next(_diagram_uid_counter)}"
-    payload = html.escape(json.dumps(model))
-    graph_payload = html.escape(json.dumps(graph))
-    title = html.escape(config.get("title") or model.get("title") or "Items")
-    default_open_depth = int(config.get("default_open_depth", "0"))
-    width = html.escape(config.get("width", "85vw"))
-    min_height = html.escape(config.get("min_height", "85vh"))
-    flow_height = html.escape(config.get("height", "calc(85vh - 57px)"))
-    jitter = html.escape(str(config.get("jitter", "0")))
-    jitter_y = html.escape(str(config.get("jitter_y", config.get("jitter", "0"))))
-    spacing = html.escape(str(config.get("spacing", "normal")))
-    optional_layout_attrs = []
-    if "layout_direction" in config:
-        optional_layout_attrs.append(f'data-tasks-layout-direction="{html.escape(str(config["layout_direction"]))}"')
-    if "node_spacing" in config:
-        optional_layout_attrs.append(f'data-tasks-node-spacing="{html.escape(str(config["node_spacing"]))}"')
-    if "layer_spacing" in config:
-        optional_layout_attrs.append(f'data-tasks-layer-spacing="{html.escape(str(config["layer_spacing"]))}"')
-    if "collision_gap" in config:
-        optional_layout_attrs.append(f'data-tasks-collision-gap="{html.escape(str(config["collision_gap"]))}"')
-    if "group_padding" in config:
-        optional_layout_attrs.append(f'data-tasks-group-padding="{html.escape(str(config["group_padding"]))}"')
-    if "edge_label_width" in config:
-        optional_layout_attrs.append(f'data-tasks-edge-label-width="{html.escape(str(config["edge_label_width"]))}"')
-    optional_layout_attrs_str = (" " + " ".join(optional_layout_attrs)) if optional_layout_attrs else ""
-    summary = f'{len(model["groups"])} groups, {len(model["tasks"])} items, {len(model["dependency_edges"])} edges'
-    breakout = str(width).lower() in {"100%", "100vw"} or "vw" in str(width).lower()
-    container_style = (
-        f"width: {width}; min-height: {min_height}; position: relative; left: 50%; transform: translateX(-50%);"
-        if breakout else
-        f"width: {width}; min-height: {min_height};"
-    )
-    return (
-        f'<div class="tasks-container relative my-6 rounded-xl border-4 border-slate-200 dark:border-slate-800" '
-        f'style="{container_style}" '
-        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
-        f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'
-        f'<button onclick="openTasksFullscreen(\'{widget_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>'
-        f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">'
-        f'<button type="button" title="Fit view" onclick="runTasksHeaderAction(\'{widget_id}\', \'fit\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">F</button>'
-        f'<button type="button" title="Expand next group depth" onclick="runTasksHeaderAction(\'{widget_id}\', \'expandDepth\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">I</button>'
-        f'<button type="button" title="Collapse deepest group depth" onclick="runTasksHeaderAction(\'{widget_id}\', \'collapseDepth\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">O</button>'
-        f'<button type="button" title="Unfold all groups" onclick="runTasksHeaderAction(\'{widget_id}\', \'expand\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">U</button>'
-        f'<button type="button" title="Collapse all groups" onclick="runTasksHeaderAction(\'{widget_id}\', \'collapse\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">P</button>'
-        f'</div>'
-        f'</div>'
-        f'<div class="px-4 py-3 pr-14 border-b border-slate-200 dark:border-slate-800 flex items-start gap-3">'
-        f'<div class="min-w-0 flex-1">'
-        f'<div class="text-sm font-semibold">{title}</div>'
-        f'<div class="text-xs text-slate-500 dark:text-slate-400">{html.escape(summary)}</div>'
-        f'</div>'
-        f'</div>'
-        f'<div class="vyasa-tasks-flow" style="height:{flow_height};min-height:420px;overflow:hidden;cursor:grab">'
-        '<div class="vyasa-tasks-scene" style="position:relative;width:100%;height:100%;transform-origin:center center"></div></div>'
-        f'</div>'
-    )
-
-
 class ContentRenderer(FrankenRenderer):
     def __init__(self, *extras, img_dir=None, footnotes=None, current_path=None, slide_mode=False, **kwargs):
         super().__init__(*extras, img_dir=img_dir, **kwargs)
@@ -748,7 +395,7 @@ class ContentRenderer(FrankenRenderer):
         self.iframe_counter = 0
 
     def render_line_break(self, token):
-        return "<br />\n"
+        return "\n"
 
     def render_list_item(self, token):
         inner = self.render_inner(token)
@@ -984,12 +631,16 @@ class ContentRenderer(FrankenRenderer):
     def render_block_code(self, token):
         lang, attrs = _parse_fence_attrs(getattr(token, "language", ""))
         code = self.render_raw_text(token)
-        if lang == "d2":
-            return _render_d2_block(code)
-        if lang == "mermaid":
-            return _render_mermaid_block(code)
-        if lang in {"items", "tasks"}:
-            return _render_tasks_block(code, self.current_path)
+        runtime = get_extension_runtime()
+        if runtime:
+            context = RenderContext(
+                current_path=self.current_path,
+                img_dir=self.img_dir,
+                slide_mode=self.slide_mode,
+            )
+            handler = runtime.markdown_fences.get(lang)
+            if handler:
+                return handler(code, context, attrs)
         raw_code = code
         code = html.unescape(code)
         line_numbers = bool(lang) and _resolve_line_numbers(get_config().get_code_line_numbers(), attrs=attrs)
@@ -1051,8 +702,17 @@ class ContentRenderer(FrankenRenderer):
 
 
 def from_md(content, img_dir=None, current_path=None, slide_mode=False):
+    runtime = get_extension_runtime()
+    if runtime is None:
+        runtime = refresh_extension_runtime(get_config().get_extensions_config())
+    asset_collector = runtime.new_asset_collector() if runtime else None
+    context = RenderContext(
+        current_path=current_path,
+        img_dir=img_dir,
+        slide_mode=slide_mode,
+        asset_collector=asset_collector,
+    )
     content = _rewrite_raw_html_urls(content, current_path)
-    content = rewrite_wikilinks(content, current_path=current_path)
     if img_dir is None and current_path:
         path_parts = Path(current_path).parts
         img_dir = "/posts/" + "/".join(path_parts[:-1]) if len(path_parts) > 1 else "/posts"
@@ -1079,7 +739,10 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
         root_folder=include_root,
     )
     content, callout_data_store = preprocess_callouts(content)
-    content, tab_data_store = preprocess_md_tabs(content)
+    extension_state = {}
+    if runtime:
+        for preprocessor in runtime.markdown_preprocessors:
+            content = preprocessor(content, context, extension_state)
     content = preserve_md_newlines(content)
     mods = {
         "pre": "my-4", "p": "text-base leading-relaxed mb-6", "li": "text-base leading-relaxed",
@@ -1088,13 +751,13 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
         "h3": "vyasa-doc-heading vyasa-doc-h3 text-xl font-semibold mb-3 mt-5", "h4": "vyasa-doc-heading vyasa-doc-h4 text-lg font-semibold mb-2 mt-4",
         "table": "uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle my-6",
     }
-    with ContentRenderer(
-        YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough, Highlight,
-        FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes,
-        current_path=current_path, slide_mode=slide_mode,
-    ) as renderer:
-        html_out = renderer.render(mst.Document(content))
-    if tab_data_store:
+    with bind_asset_collector(asset_collector):
+        with ContentRenderer(
+            YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough, Highlight,
+            FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes,
+            current_path=current_path, slide_mode=slide_mode,
+        ) as renderer:
+            html_out = renderer.render(mst.Document(content))
         def _render_tab_content(tab_content):
             with ContentRenderer(
                 YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough, Highlight,
@@ -1102,45 +765,57 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
                 current_path=current_path,
             ) as renderer:
                 return renderer.render(mst.Document(tab_content))
-        html_out = postprocess_md_tabs(html_out, tab_data_store, _render_tab_content)
-    if callout_data_store:
-        def _render_callout_body(callout_body):
-            return _render_markdown_fragment(callout_body, img_dir=img_dir, current_path=current_path)
-        for callout_id, callout in callout_data_store.items():
-            rendered = _render_callout(callout["kind"], callout["body"], _render_callout_body, title=callout.get("title"), fold=callout.get("fold"))
-            placeholder = f'<div class="vyasa-callout-placeholder" data-callout-id="{callout_id}"></div>'
-            html_out = html_out.replace(placeholder, rendered)
-    if code_include_store:
-        for include_id, include in code_include_store.items():
-            if include["file_path"].exists():
-                text = include["file_path"].read_text(encoding="utf-8")
-                line_spec = _parse_line_spec(include["spec"])
-                start, end = line_spec if line_spec else (1, len(text.splitlines()))
-                lines = text.splitlines()
-                snippet = "\n".join(lines[start - 1:end])
-                lang = _infer_code_language(include["path_text"])
-                hl = _parse_highlight_spec(include["spec"])
-                title = content_slug_for_path(include["file_path"], strip_suffix=False) or include["path_text"]
-                line_numbers = _resolve_line_numbers(get_config().get_code_line_numbers(), spec=include["spec"])
-                rendered = _render_code_include(
-                    snippet,
-                    lang=lang,
-                    start=start,
-                    highlight_spec=hl,
-                    title=title,
-                    line_numbers=line_numbers,
-                )
-            else:
-                rendered = _render_callout(
-                    "warning",
-                    f'Code include not found: `{include["path_text"]}`',
-                    lambda body: mst.markdown(body, partial(ContentRenderer, img_dir=img_dir, current_path=current_path)).strip(),
-                )
-            placeholder = f'<div class="vyasa-code-include-placeholder" data-include-id="{include_id}"></div>'
-            html_out = html_out.replace(placeholder, rendered)
-    if slide_mode:
-        html_out = re.sub(r"<details(?![^>]*\bopen\b)([^>]*)>", r"<details open\1>", html_out)
-    html_out = _render_todo_html(html_out)
-    html_out = _render_double_rules(html_out)
-    html_out = _wrap_tables(html_out, get_config().get_table_col_max_width())
-    return Div(Link(rel="stylesheet", href=_asset_url("/static/sidenote.css")), NotStr(apply_classes(html_out, class_map_mods=mods)), cls="w-full")
+        if runtime:
+            for postprocessor in runtime.markdown_postprocessors:
+                html_out = postprocessor(html_out, context, extension_state, _render_tab_content)
+        if callout_data_store:
+            def _render_callout_body(callout_body):
+                return _render_markdown_fragment(callout_body, img_dir=img_dir, current_path=current_path)
+            for callout_id, callout in callout_data_store.items():
+                rendered = _render_callout(callout["kind"], callout["body"], _render_callout_body, title=callout.get("title"), fold=callout.get("fold"))
+                placeholder = f'<div class="vyasa-callout-placeholder" data-callout-id="{callout_id}"></div>'
+                html_out = html_out.replace(placeholder, rendered)
+        if code_include_store:
+            for include_id, include in code_include_store.items():
+                if include["file_path"].exists():
+                    text = include["file_path"].read_text(encoding="utf-8")
+                    line_spec = _parse_line_spec(include["spec"])
+                    start, end = line_spec if line_spec else (1, len(text.splitlines()))
+                    lines = text.splitlines()
+                    snippet = "\n".join(lines[start - 1:end])
+                    lang = _infer_code_language(include["path_text"])
+                    hl = _parse_highlight_spec(include["spec"])
+                    title = content_slug_for_path(include["file_path"], strip_suffix=False) or include["path_text"]
+                    line_numbers = _resolve_line_numbers(get_config().get_code_line_numbers(), spec=include["spec"])
+                    rendered = _render_code_include(
+                        snippet,
+                        lang=lang,
+                        start=start,
+                        highlight_spec=hl,
+                        title=title,
+                        line_numbers=line_numbers,
+                    )
+                else:
+                    rendered = _render_callout(
+                        "warning",
+                        f'Code include not found: `{include["path_text"]}`',
+                        lambda body: mst.markdown(body, partial(ContentRenderer, img_dir=img_dir, current_path=current_path)).strip(),
+                    )
+                placeholder = f'<div class="vyasa-code-include-placeholder" data-include-id="{include_id}"></div>'
+                html_out = html_out.replace(placeholder, rendered)
+        if slide_mode:
+            html_out = re.sub(r"<details(?![^>]*\bopen\b)([^>]*)>", r"<details open\1>", html_out)
+        html_out = _render_todo_html(html_out)
+        html_out = _render_double_rules(html_out)
+        html_out = _wrap_tables(html_out, get_config().get_table_col_max_width())
+    bundle_nodes = [Link(rel="stylesheet", href=_asset_url("/static/sidenote.css"))]
+    if asset_collector:
+        for bundle_name in asset_collector.requested:
+            bundle = runtime.bundles.get(bundle_name) if runtime else None
+            if not bundle:
+                continue
+            for css_href in bundle.css:
+                bundle_nodes.append(Link(rel="stylesheet", href=_asset_url(css_href)))
+            for js_src in bundle.js:
+                bundle_nodes.append(Script(src=_asset_url(js_src), type="module"))
+    return Div(*bundle_nodes, NotStr(apply_classes(html_out, class_map_mods=mods)), cls="w-full")

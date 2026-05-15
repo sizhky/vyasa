@@ -4,7 +4,7 @@ from fasthtml.common import to_xml
 
 from vyasa.helpers import content_url_for_slug
 from vyasa.search_views import render_posts_search_results
-from vyasa.slides import ZenSlideDeck, present_href_for_anchor
+from vyasa.extensions_builtin.slides.deck import ZenSlideDeck, present_href_for_anchor
 
 
 def test_content_url_for_slug_escapes_reserved_path_chars():

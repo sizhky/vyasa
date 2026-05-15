@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-from .helpers import (
+from ...helpers import (
     content_path_for_slug,
     content_slug_for_path,
     content_url_for_slug,

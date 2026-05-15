@@ -6,9 +6,9 @@ from typing import Callable, Protocol
 
 from starlette.responses import Response
 
-from .bookmark_store import bookmark_owner_from_auth
-from .helpers import _effective_abbreviations, content_path_for_slug, content_url_for_slug, parse_frontmatter, slug_to_title
-from .runtime_context import RuntimeAccess
+from .store import bookmark_owner_from_auth
+from ...helpers import _effective_abbreviations, content_path_for_slug, content_url_for_slug, parse_frontmatter, slug_to_title
+from ...runtime_context import RuntimeAccess
 
 
 class BookmarkStoreAdapter(Protocol):
@@ -34,7 +34,7 @@ class CallableBookmarkStore:
 
 
 def _resolve_bookmark_items(owner: str, roles, *, store: BookmarkStoreAdapter, root, rbac_rules):
-    from .auth.policy import is_allowed
+    from ...auth.policy import is_allowed
 
     items = []
     for row in store.list(owner):

@@ -16,10 +16,11 @@ from .helpers import (
     get_adjacent_posts, get_post_title, parse_frontmatter, resolve_markdown_title, slug_to_title,
     text_to_anchor,
 )
-from .markdown_rendering import from_md
+from .extensions_builtin.markdown.renderer import from_md
 from .sidebar_helpers import build_toc_items, extract_toc
 from .tree_tables import TREE_SUFFIXES, parse_tree_table, render_tree_table_html
 from .config import get_config, reload_config
+from .extensions import refresh_extension_runtime
 from .assets import asset_url
 from .favicon import favicon_href as resolve_favicon_href, write_generated_favicon
 from .page_shell import PageShellModel, StaticShellRenderer
@@ -503,6 +504,7 @@ def build_static_site(input_dir=None, output_dir=None):
         reload_config()
     
     config = get_config()
+    refresh_extension_runtime(config.get_extensions_config())
     root_folder = config.get_root_folder()
     blog_title = config.get_blog_title()
     show_hidden = config.get_show_hidden()

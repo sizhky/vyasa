@@ -1,0 +1,14 @@
+.vyasa-bookmark-row { width: max-content; max-width: none; }
+.vyasa-bookmark-toggle { opacity: 0; pointer-events: none; }
+.vyasa-bookmark-row:hover .vyasa-bookmark-toggle,
+.vyasa-bookmark-toggle[data-bookmarked="true"] {
+    opacity: 1;
+    pointer-events: auto;
+}
+.vyasa-bookmark-toggle[data-bookmarked="true"] {
+    color: inherit !important;
+}
+.vyasa-bookmark-delete { opacity: 1; pointer-events: auto; }
+.vyasa-bookmarks-empty { display: block; }
+.vyasa-bookmarks-block.has-items .vyasa-bookmarks-empty { display: none; }
+.vyasa-bookmarks-list { max-width: 100%; }

@@ -37,7 +37,6 @@ from .nav_views import navbar_view
 from loguru import logger
 from .assets import asset_url
 from .admin_views import rbac_admin_content
-from .annotations_api import CallableAnnotationStore, register_annotations_routes
 from .auth.context import get_auth_from_request, get_roles_from_auth, get_roles_from_request
 from .auth.admin_helpers import apply_impersonation_action, parse_rbac_form
 from .auth.flow_helpers import (
@@ -59,11 +58,9 @@ from .content_routes import (
     render_slide_deck,
 )
 from .content_tree import ContentTree
-from .bookmarks_api import CallableBookmarkStore, register_bookmarks_routes
+from .extensions import get_extension_runtime, refresh_extension_runtime
 from .auth.oauth_bootstrap import build_google_oauth
-from .annotations_store import delete_annotation, list_annotations, upsert_annotation
-from .bookmark_store import delete_bookmark, list_bookmarks, upsert_bookmark
-from .bookmark_views import bookmarks_block
+from .extensions_builtin.bookmarks.views import bookmarks_block
 from .page_views import not_found_content
 from .rbac_config import normalize_rbac_cfg, render_rbac_toml, write_rbac_to_vyasa
 from .rbac_store import load_rbac_cfg, write_rbac_cfg
@@ -81,7 +78,7 @@ from .sidebar_helpers import (
     get_custom_css_links as get_sidebar_custom_css_links,
     sidebar_section,
 )
-from .markdown_rendering import from_md
+from .extensions_builtin.markdown.renderer import from_md
 from .tree_service import get_tree_entries
 from .tree_rendering import (
     build_post_tree_render,
@@ -125,7 +122,7 @@ def iter_blog_home_files(roots=None, roles=None):
             yield path, slug
 
 
-def render_blog_home(htmx, request: Request):
+def _default_render_blog_home(htmx, request: Request):
     roots = get_content_mounts()
     root = roots[0][1] if roots else get_root_folder()
     roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
@@ -133,6 +130,14 @@ def render_blog_home(htmx, request: Request):
     feed = render_blog_home_feed(entries, root, 0)
     shell = Div(H1(f"Welcome to {get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="mt-2 text-slate-500"), feed, cls="space-y-6")
     return layout(shell, htmx=htmx, title=f"Home - {get_blog_title()}", show_sidebar=True, current_path="__home__", auth=request.scope.get("auth"))
+
+
+def render_blog_home(htmx, request: Request):
+    runtime = get_extension_runtime()
+    provider = runtime.home_renderer if runtime else None
+    if provider and provider is not _default_render_blog_home:
+        return provider(htmx, request)
+    return _default_render_blog_home(htmx, request)
 
 
 def _render_blog_preview_card(path, slug, root):
@@ -313,16 +318,13 @@ hdrs = (
 
 # Session/cookie-based authentication using Beforeware (conditionally enabled)
 _config = get_config()
+_extension_runtime = refresh_extension_runtime(_config.get_extensions_config())
 _auth_creds = _config.get_auth()
 _google_oauth_cfg = _config.get_google_oauth()
 _auth_required = _config.get_auth_required()
 
 
 _rbac_store_cache = {"db": None, "tbl": None}
-_annotations_store_cache = {"db": None, "tbl": None}
-_bookmark_store_cache = {"db": None, "tbl": None}
-
-
 def _normalize_rbac_cfg(cfg):
     return normalize_rbac_cfg(cfg, _config._coerce_list)
 
@@ -340,36 +342,6 @@ def _rbac_db_write(cfg):
         write_rbac_cfg(get_config().get_root_folder(), _rbac_store_cache, cfg, _normalize_rbac_cfg)
     except Exception as exc:
         logger.warning(f"RBAC DB unavailable: {exc}")
-
-
-def _annotations_db_list(path: str):
-    return list_annotations(get_config().get_root_folder(), _annotations_store_cache, path)
-
-
-def _annotations_db_upsert(row):
-    upsert_annotation(get_config().get_root_folder(), _annotations_store_cache, row)
-
-
-def _annotations_db_delete(annotation_id: str):
-    return delete_annotation(get_config().get_root_folder(), _annotations_store_cache, annotation_id)
-
-
-def _bookmarks_db_list(owner: str):
-    return list_bookmarks(get_config().get_root_folder(), _bookmark_store_cache, owner)
-
-
-def _bookmarks_db_upsert(owner: str, path: str):
-    upsert_bookmark(
-        get_config().get_root_folder(),
-        _bookmark_store_cache,
-        owner,
-        path,
-        datetime.utcnow().isoformat(),
-    )
-
-
-def _bookmarks_db_delete(owner: str, path: str):
-    return delete_bookmark(get_config().get_root_folder(), _bookmark_store_cache, owner, path)
 
 
 def _load_rbac_cfg_from_store():
@@ -451,6 +423,16 @@ async def favicon_svg_icon():
     return Response(favicon_svg(get_root_folder()), media_type="image/svg+xml")
 
 
+@app.route("/static/extensions/{extension_id}/{asset_path:path}")
+async def extension_static_asset(extension_id: str, asset_path: str):
+    from .assets import extension_asset_path
+
+    path = extension_asset_path(extension_id, asset_path)
+    if path.exists() and path.is_file():
+        return FileResponse(path)
+    return Response(status_code=404)
+
+
 def _mount_package_static(app_instance):
     mount_package_static(app_instance, Path(__file__).parent)
 
@@ -463,6 +445,19 @@ _runtime = RuntimeContext(
     google_oauth_cfg=lambda: _google_oauth_cfg,
     logger=logger,
 )
+
+
+def _register_extension_routes():
+    runtime = get_extension_runtime()
+    if not runtime:
+        return
+    for entry in runtime.route_handlers:
+        handler = entry.get("handler")
+        if callable(handler):
+            handler(rt, _runtime)
+
+
+_register_extension_routes()
 
 
 from starlette.requests import Request
@@ -570,46 +565,6 @@ async def logout(request: Request):
     return RedirectResponse("/login", status_code=303)
 
 
-@rt("/admin/impersonate", methods=["GET", "POST"])
-async def admin_impersonate(htmx, request: Request):
-    return await handle_admin_impersonate(
-        htmx,
-        request,
-        get_auth_from_request=get_auth_from_request,
-        rbac_rules=_rbac_rules,
-        rbac_cfg=_rbac_cfg,
-        google_oauth_cfg=_google_oauth_cfg,
-        coerce_list=_config._coerce_list,
-        apply_impersonation_action=apply_impersonation_action,
-        resolve_roles=resolve_roles,
-        layout=layout,
-        impersonate_content=impersonate_content,
-    )
-
-
-@rt("/admin/rbac", methods=["GET", "POST"])
-async def admin_rbac(htmx, request: Request):
-    return await handle_admin_rbac(
-        htmx,
-        request,
-        get_auth_from_request=get_auth_from_request,
-        rbac_rules=_rbac_rules,
-        rbac_cfg=_rbac_cfg,
-        google_oauth_cfg=_google_oauth_cfg,
-        coerce_list=_config._coerce_list,
-        parse_rbac_form=parse_rbac_form,
-        parse_roles_text=parse_roles_text,
-        rbac_db_write=_rbac_db_write,
-        write_rbac_to_vyasa=_write_rbac_to_vyasa,
-        set_rbac_cfg=_set_rbac_cfg,
-        cached_build_post_tree=_cached_build_post_tree,
-        cached_posts_sidebar_html=_cached_posts_sidebar_html,
-        render_rbac_toml=_render_rbac_toml,
-        rbac_admin_content=rbac_admin_content,
-        layout=layout,
-    )
-
-
 # Progressive sidebar loading: lazy posts sidebar endpoint
 @rt("/_sidebar/posts")
 def posts_sidebar_lazy(request: Request = None, current_path: str = ""):
@@ -641,106 +596,6 @@ def posts_sidebar_branch(path: str = "", request: Request = None):
     return "".join(to_xml(item) for item in items)
 
 
-# Route to serve raw markdown for LLM-friendly access
-@rt("/posts/{path:path}.md")
-def serve_post_markdown(path: str):
-    from starlette.responses import FileResponse
-
-    file_path = content_path_for_slug(path, ".md")
-    if file_path and file_path.exists():
-        return FileResponse(file_path, media_type="text/markdown; charset=utf-8")
-    return Response(status_code=404)
-
-
-@rt("/search/gather")
-def gather_search_results(htmx, q: str = "", request: Request = None):
-    return gather_search_page(
-        htmx,
-        q=q,
-        request=request,
-        find_search_matches=_find_search_matches,
-        get_roles_from_request=get_roles_from_request,
-        rbac_rules=_rbac_rules,
-        rbac_cfg=_rbac_cfg,
-        google_oauth_cfg=_google_oauth_cfg,
-        coerce_list=_config._coerce_list,
-        get_root_folder=get_root_folder,
-        is_allowed=is_allowed,
-        gather_search_content=gather_search_content,
-        layout=layout,
-    )
-
-
-@rt("/search/preview")
-def search_preview_results(htmx, q: str = "", request: Request = None):
-    return render_search_preview_page(htmx, request, q=q)
-
-
-@rt("/search/preview/s/{query_token}")
-def search_preview_results_path(query_token: str = "", htmx=None, request: Request = None):
-    token = (query_token or "").strip()
-    if not token:
-        return render_search_preview_page(htmx, request, q="")
-    padding = "=" * (-len(token) % 4)
-    try:
-        query = base64.urlsafe_b64decode(f"{token}{padding}".encode("ascii")).decode("utf-8")
-    except Exception:
-        return Response(status_code=404)
-    return render_search_preview_page(htmx, request, q=query)
-
-
-# Route to serve static files (images, SVGs, etc.) from blog posts
-@rt("/posts/{path:path}.{ext:static}")
-def serve_post_static(path: str, ext: str):
-    from starlette.responses import FileResponse
-
-    file_path = content_path_for_slug(path, f".{ext}")
-    if file_path and file_path.exists():
-        return FileResponse(file_path)
-    return Response(status_code=404)
-
-
-# Serve JSON attachments from blog posts (not included in fasthtml static exts)
-@rt("/posts/{path:path}.json")
-def serve_post_json(path: str):
-    from starlette.responses import FileResponse
-
-    file_path = content_path_for_slug(path, ".json")
-    if file_path and file_path.exists():
-        return FileResponse(
-            file_path,
-            headers={"Content-Disposition": f'attachment; filename="{file_path.name}"'},
-        )
-    return Response(status_code=404)
-
-
-register_annotations_routes(
-    rt,
-    _runtime,
-    CallableAnnotationStore(_annotations_db_list, _annotations_db_upsert, _annotations_db_delete),
-)
-register_bookmarks_routes(
-    rt,
-    _runtime,
-    CallableBookmarkStore(_bookmarks_db_list, _bookmarks_db_upsert, _bookmarks_db_delete),
-    root_folder=get_root_folder,
-)
-# Generic download route for any file under the blog root
-@rt("/download/{path:path}")
-def download_file(path: str):
-    from starlette.responses import FileResponse
-
-    file_path = content_path_for_slug(path)
-    if not file_path:
-        return Response(status_code=403)
-    if file_path.exists() and file_path.is_file():
-        return FileResponse(
-            file_path,
-            headers={"Content-Disposition": f'attachment; filename="{file_path.name}"'},
-        )
-    return Response(status_code=404)
-
-
 def theme_toggle():
     theme_script = """on load set franken to (localStorage's __FRANKEN__ or '{}') as Object
                 if franken's mode is 'dark' then add .dark to <html/> end
@@ -760,7 +615,8 @@ def theme_toggle():
     if not cfg.get_theme_debug():
         return button
     active = cfg.get_theme_preset() or ""
-    presets = {name: cfg.load_theme_preset(name) for name in cfg.list_theme_presets()}
+    presets = cfg.get_theme_extension_payloads()
+    preset_meta = cfg.get_theme_extension_meta()
     menu_items = "".join(
         f'<button type="button" data-theme-name="{name}" '
         f'onclick="window.vyasaApplyThemePreset && window.vyasaApplyThemePreset(this.dataset.themeName, this)" '
@@ -769,6 +625,7 @@ def theme_toggle():
     )
     return Div(
         Script(f"window.__VYASA_THEME_PRESETS__ = {json.dumps(presets)};"),
+        Script(f"window.__VYASA_THEME_EXTENSION_META__ = {json.dumps(preset_meta)};"),
         NotStr(
             f"""
             <div class="flex items-center gap-2" data-theme-switcher>
@@ -972,7 +829,7 @@ def is_active_toc_item(anchor):
     return False
 
 
-def layout(
+def _default_layout(
     *content,
     htmx,
     title=None,
@@ -1005,6 +862,7 @@ def layout(
         no_scroll=no_scroll,
         slide_mode=slide_mode,
         current_updated_label=current_updated_label,
+        extra_head_nodes=(),
         logger=logger,
         resolve_layout_config=_resolve_layout_config,
         width_class_and_style=_width_class_and_style,
@@ -1027,6 +885,62 @@ def layout(
         posts_sidebar_fingerprint=_posts_sidebar_fingerprint,
         get_posts=get_posts,
         navbar=navbar,
+    )
+
+
+def layout(
+    *content,
+    htmx,
+    title=None,
+    show_sidebar=False,
+    toc_content=None,
+    current_path=None,
+    show_toc=True,
+    auth=None,
+    htmx_nav=True,
+    nav_posts_menu=False,
+    full_width=False,
+    show_footer=True,
+    no_scroll=False,
+    slide_mode=False,
+    current_updated_label=None,
+):
+    runtime = get_extension_runtime()
+    provider = runtime.layout_renderer if runtime else None
+    if provider and provider is not _default_layout:
+        return provider(
+            *content,
+            htmx=htmx,
+            title=title,
+            show_sidebar=show_sidebar,
+            toc_content=toc_content,
+            current_path=current_path,
+            show_toc=show_toc,
+            auth=auth,
+            htmx_nav=htmx_nav,
+            nav_posts_menu=nav_posts_menu,
+            full_width=full_width,
+            show_footer=show_footer,
+            no_scroll=no_scroll,
+            slide_mode=slide_mode,
+            current_updated_label=current_updated_label,
+        )
+    return _default_layout(
+        *content,
+        htmx=htmx,
+        title=title,
+        show_sidebar=show_sidebar,
+        toc_content=toc_content,
+        current_path=current_path,
+        show_toc=show_toc,
+        auth=auth,
+        htmx_nav=htmx_nav,
+        nav_posts_menu=nav_posts_menu,
+        full_width=full_width,
+        show_footer=show_footer,
+        no_scroll=no_scroll,
+        slide_mode=slide_mode,
+        current_updated_label=current_updated_label,
     )
 
 
@@ -1094,7 +1008,7 @@ def get_posts(roles=None, current_path=""):
     )
 
 
-def not_found(htmx=None, auth=None):
+def _default_not_found(htmx=None, auth=None):
     """Custom 404 error page"""
     blog_title = get_blog_title()
     content = not_found_content()
@@ -1109,6 +1023,14 @@ def not_found(htmx=None, auth=None):
         auth=auth,
     )
     return result
+
+
+def not_found(htmx=None, auth=None):
+    runtime = get_extension_runtime()
+    provider = runtime.error_renderer if runtime else None
+    if provider and provider is not _default_not_found:
+        return provider(htmx=htmx, auth=auth)
+    return _default_not_found(htmx=htmx, auth=auth)
 
 
 @rt("/posts/{path:path}")
@@ -1133,6 +1055,10 @@ def post_detail(path: str, htmx, request: Request):
 
 @rt("/slides/{path:path}")
 def slide_deck(path: str, htmx, request: Request):
+    runtime = get_extension_runtime()
+    provider = runtime.slide_renderer if runtime else None
+    if provider and provider is not render_slide_deck:
+        return provider(path, htmx, request)
     return render_slide_deck(
         path,
         htmx,
@@ -1180,6 +1106,10 @@ def index(htmx, request: Request):
 
 @rt("/_home/feed")
 def home_feed(offset: int = 0, htmx=None, request: Request = None):
+    runtime = get_extension_runtime()
+    provider = runtime.home_feed_renderer if runtime else None
+    if provider and provider is not home_feed:
+        return provider(offset=offset, htmx=htmx, request=request)
     roots = get_content_mounts()
     root = roots[0][1] if roots else get_root_folder()
     roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) if request else None

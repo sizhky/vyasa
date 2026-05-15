@@ -7,8 +7,8 @@ from typing import Callable, Protocol
 
 from starlette.responses import Response
 
-from .annotations_store import AnnotationRow
-from .runtime_context import RuntimeAccess
+from .store import AnnotationRow
+from ...runtime_context import RuntimeAccess
 
 
 class AnnotationStoreAdapter(Protocol):

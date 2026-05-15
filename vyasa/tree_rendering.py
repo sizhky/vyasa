@@ -3,7 +3,7 @@ from urllib.parse import quote
 
 from fasthtml.common import A, Details, Li, Span, Summary, Ul
 from monsterui.all import UkIcon
-from .bookmark_views import bookmark_toggle_button
+from .extensions_builtin.bookmarks.views import bookmark_toggle_button
 from .helpers import content_slug_for_path, content_url_for_slug
 
 
