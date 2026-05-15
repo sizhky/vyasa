@@ -472,6 +472,17 @@ def _parse_items_graph(body: str) -> dict:
             index += 1
             continue
 
+        if line.startswith("- ") and line.endswith(":"):
+            pop_to(indent)
+            explicit_id, label, attrs = _parse_node_def(line[2:-1].strip())
+            group_id = _dedupe_id(explicit_id or _slugify(label), used_ids)
+            group = {"id": group_id, "label": label, "parent_group_id": current_group_id()}
+            group.update(attrs)
+            graph["groups"].append(group)
+            stack.append({"kind": "group", "id": group_id, "indent": indent})
+            index += 1
+            continue
+
         if line.startswith("- "):
             pop_to(indent)
             explicit_id, label, attrs = _parse_node_def(line[2:].strip())
