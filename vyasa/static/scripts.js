@@ -1290,6 +1290,7 @@ async function renderTasksGraphs(rootElement = document) {
             const [expanded, setExpanded] = React.useState(() => new Set(initialExpandedSet));
             const [selectedNodeId, setSelectedNodeId] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
+            const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
             const [activeFilters, setActiveFilters] = React.useState({});
             const [activeColorBy, setActiveColorBy] = React.useState(() => String(model?.default_color_by || '').trim());
             const [filtersCollapsed, setFiltersCollapsed] = React.useState(false);
@@ -2076,6 +2077,49 @@ async function renderTasksGraphs(rootElement = document) {
                 setSelectedNodeId(null);
                 setHoveredNodeId(null);
             };
+            const clearGroupHoverTooltip = React.useCallback(() => {
+                setGroupHoverTooltip(null);
+            }, []);
+            const updateGroupHoverTooltip = React.useCallback((event) => {
+                const target = event.target instanceof Element ? event.target : null;
+                const overNode = target?.closest?.('.react-flow__node');
+                if (overNode && !overNode.classList.contains('vyasa-tasks-node--background')) {
+                    clearGroupHoverTooltip();
+                    return;
+                }
+                const reactFlow = reactFlowApiRef.current;
+                const wrapper = flowWrapperRef.current;
+                if (!reactFlow || !wrapper) return;
+                const point = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+                const baseNodes = graphBaseRef.current.nodes || [];
+                const byId = Object.fromEntries(baseNodes.map((node) => [node.id, node]));
+                const absoluteRect = (node) => {
+                    let x = node.position?.x || 0;
+                    let y = node.position?.y || 0;
+                    let parent = node.parentId ? byId[node.parentId] : null;
+                    while (parent) {
+                        x += parent.position?.x || 0;
+                        y += parent.position?.y || 0;
+                        parent = parent.parentId ? byId[parent.parentId] : null;
+                    }
+                    return { x, y, width: node.style?.width || node.width || 0, height: node.style?.height || node.height || 0 };
+                };
+                const hit = baseNodes
+                    .filter((node) => node.data?.__kind__ === 'group' && expanded.has(node.id))
+                    .map((node) => ({ node, rect: absoluteRect(node), z: Number(node.zIndex || node.style?.zIndex || 0) }))
+                    .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
+                    .sort((a, b) => b.z - a.z)[0];
+                if (!hit) {
+                    clearGroupHoverTooltip();
+                    return;
+                }
+                const bounds = wrapper.getBoundingClientRect();
+                setGroupHoverTooltip({
+                    label: hit.node.data?.label || hit.node.id,
+                    x: event.clientX - bounds.left + 12,
+                    y: event.clientY - bounds.top + 18,
+                });
+            }, [expanded, clearGroupHoverTooltip]);
             const selectGraphNode = React.useCallback((_, node) => {
                 if (!isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id))) {
                     clearSelection();
@@ -2103,6 +2147,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, [expanded, selectedNodeId]);
             const clearNeighborEdgeFocus = React.useCallback((_, node) => {
                 if (!isTasksGraphNodeSelectable(node?.data?.__kind__, expanded.has(node?.id))) return;
+                clearGroupHoverTooltip();
                 if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
                 hoverClearTimerRef.current = window.setTimeout(() => {
                     setHoveredNodeId(null);
@@ -2183,8 +2228,26 @@ async function renderTasksGraphs(rootElement = document) {
                 return null;
             };
             const flowWrapperClassName = hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '';
+            const GroupHoverTooltip = () => groupHoverTooltip && window.React.createElement('div', {
+                style: {
+                    position: 'absolute',
+                    left: groupHoverTooltip.x,
+                    top: groupHoverTooltip.y,
+                    zIndex: 2400,
+                    pointerEvents: 'none',
+                    padding: '4px 7px',
+                    borderRadius: '6px',
+                    background: 'color-mix(in srgb, var(--vyasa-paper) 92%, var(--vyasa-primary) 8%)',
+                    border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
+                    fontSize: '12px',
+                    fontWeight: 650,
+                    lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
+                }
+            }, groupHoverTooltip.label);
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
-                window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
+                window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none', position: 'relative' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }), onPointerMove: updateGroupHoverTooltip, onPointerLeave: clearGroupHoverTooltip },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
@@ -2193,9 +2256,10 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(ActionBridge)
                     ),
                     window.React.createElement(SelectedNodePanel),
-                    window.React.createElement(FilterPanel)
+                    window.React.createElement(FilterPanel),
+                    window.React.createElement(GroupHoverTooltip)
                 )
-            ) : window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }) },
+            ) : window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none', position: 'relative' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }), onPointerMove: updateGroupHoverTooltip, onPointerLeave: clearGroupHoverTooltip },
                 window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background),
                     window.React.createElement(rf.Controls),
@@ -2204,7 +2268,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(ActionBridge)
                 ),
                 window.React.createElement(SelectedNodePanel),
-                window.React.createElement(FilterPanel)
+                window.React.createElement(FilterPanel),
+                window.React.createElement(GroupHoverTooltip)
             );
         };
         if (window.ReactDOM.createRoot) window.ReactDOM.createRoot(mount).render(window.React.createElement(TasksGraphApp)); else window.ReactDOM.render(window.React.createElement(TasksGraphApp), mount);
