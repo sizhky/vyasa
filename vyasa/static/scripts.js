@@ -11,8 +11,8 @@ const TASKS_ROOT_SPACING = { node: 44, layer: 96 };
 const TASKS_EXPANSION_SHIFT_RATIO = 0.45;
 const TASKS_ROOT_COLLISION_GAP = 96;
 const TASKS_GROUP_BG_Z = 10;
-const TASKS_EDGE_Z = 100;
-const TASKS_EDGE_LABEL_Z = 120;
+const TASKS_EDGE_Z = 5;
+const TASKS_EDGE_LABEL_Z = 6;
 const TASKS_EDGE_LABEL_FOCUS_Z = 1400;
 const TASKS_GROUP_Z = 180;
 const TASKS_TASK_Z = 1000;
@@ -21,7 +21,7 @@ const TASKS_NEIGHBOR_Z_BOOST = 260;
 const TASKS_EDGE_FOCUS_Z = 1450;
 const TASKS_SELECTED_Z_BOOST = 520;
 const TASKS_NODE_BG = 'color-mix(in srgb, var(--vyasa-paper) 86%, var(--vyasa-primary) 14%)';
-const TASKS_GROUP_BG = 'color-mix(in srgb, var(--vyasa-primary) 7%, transparent)';
+const TASKS_GROUP_BG = 'color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-primary) 12%)';
 const TASKS_GROUP_EXPANDED_BG = 'color-mix(in srgb, var(--vyasa-primary) 7%, transparent)';
 const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 42%, var(--vyasa-primary) 58%)';
 const TASKS_GROUP_TITLE_BG = 'color-mix(in srgb, var(--vyasa-paper) 76%, var(--vyasa-primary) 24%)';
@@ -1356,7 +1356,9 @@ async function renderTasksGraphs(rootElement = document) {
                     const nodeColor = resolveTasksNodeColor(n, model, activeColorBy, activeColorPalette);
                     const background = n.__kind__ === 'group'
                         ? (nodeColor
-                            ? `color-mix(in srgb, ${nodeColor} 7%, transparent)`
+                            ? (isExpanded
+                                ? `color-mix(in srgb, ${nodeColor} 7%, transparent)`
+                                : `color-mix(in srgb, var(--vyasa-paper) 86%, ${nodeColor} 14%)`)
                             : (isExpanded ? TASKS_GROUP_EXPANDED_BG : TASKS_GROUP_BG))
                         : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 78%, ${nodeColor} 22%)` : TASKS_NODE_BG);
                     const border = nodeColor
