@@ -101,6 +101,9 @@ class ExtensionRuntime:
     startup_hooks: list[Callable] = field(default_factory=list)
     shutdown_hooks: list[Callable] = field(default_factory=list)
     storage_namespaces: dict[str, Path | None] = field(default_factory=dict)
+    sidebar_section_providers: list[Callable] = field(default_factory=list)
+    sidebar_row_decorators: list[Callable] = field(default_factory=list)
+    search_result_row_decorators: list[Callable] = field(default_factory=list)
 
     def new_asset_collector(self) -> AssetCollector:
         return AssetCollector(self.bundles)
@@ -266,6 +269,20 @@ class _StorageRegistrar:
         self.runtime.storage_namespaces[name] = root
 
 
+class _NavigationRegistrar:
+    def __init__(self, runtime: ExtensionRuntime):
+        self.runtime = runtime
+
+    def sidebar_section(self, provider: Callable) -> None:
+        self.runtime.sidebar_section_providers.append(provider)
+
+    def sidebar_row_decorator(self, provider: Callable) -> None:
+        self.runtime.sidebar_row_decorators.append(provider)
+
+    def search_result_row_decorator(self, provider: Callable) -> None:
+        self.runtime.search_result_row_decorators.append(provider)
+
+
 class VyasaExtensionApp:
     def __init__(self, runtime: ExtensionRuntime, extension: VyasaExtension):
         self.runtime = runtime
@@ -279,6 +296,7 @@ class VyasaExtensionApp:
         self.config = _ConfigRegistrar(runtime)
         self.lifecycle = _LifecycleRegistrar(runtime)
         self.storage = _StorageRegistrar(runtime, guard)
+        self.navigation = _NavigationRegistrar(runtime)
 
 
 _ACTIVE_RUNTIME: ExtensionRuntime | None = None
@@ -337,7 +355,7 @@ def default_preset_selection() -> dict[ExtensionCategory, tuple[str, ...]]:
         "home": ("blog_home",),
         "errors": ("default_errors",),
         "render": ("wikilinks", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks"),
-        "route": ("slides", "annotations", "bookmarks", "rbac_admin", "filesystem_routes"),
+        "route": ("slides", "auth_routes", "sidebar_routes", "annotations", "bookmarks", "rbac_admin", "filesystem_routes"),
         "content_source": ("filesystem",),
     }
 

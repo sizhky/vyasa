@@ -196,7 +196,6 @@ def _toc_items(toc_content, build_sidebar_toc_items, extract_sidebar_toc, strip_
 
 
 def _render_htmx_layout(content, title, show_sidebar, toc_content, current_path, show_toc, slide_mode, extra_head_nodes, logger, t_section, layout_start_time, main_spacing_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar):
-    slide_assets = [Link(rel="stylesheet", href="/static/extensions/slides/present.css")] if slide_mode else []
     if show_sidebar:
         toc_sidebar = None
         t_toc = t_section
@@ -210,7 +209,7 @@ def _render_htmx_layout(content, title, show_sidebar, toc_content, current_path,
         custom_css_links = get_sidebar_custom_css_links(get_root_folder(), current_path, section_class)
         logger.debug(f"[LAYOUT] Custom CSS resolved in {(time.time() - t_toc)*1000:.2f}ms")
         main_content_container = Main(*content, cls=f"vyasa-main-shell {'vyasa-zen-present' if slide_mode else ''} flex-1 min-w-0 {main_spacing_cls} space-y-8 {section_class}".strip(), id="main-content", hx_boost="true", hx_target="#main-content", hx_swap="outerHTML show:window:top settle:0.1s", **_annotation_attrs(current_path, None, get_config, slide_mode=slide_mode))
-        result = [Title(title), *theme_font_links, *slide_assets, *extra_head_nodes, Div(*custom_css_links, id="scoped-css-container", hx_swap_oob="true") if custom_css_links else Div(id="scoped-css-container", hx_swap_oob="true")]
+        result = [Title(title), *theme_font_links, *extra_head_nodes, Div(*custom_css_links, id="scoped-css-container", hx_swap_oob="true") if custom_css_links else Div(id="scoped-css-container", hx_swap_oob="true")]
         if show_toc:
             result.append(mobile_toc_panel)
         if toc_sidebar:
@@ -221,13 +220,12 @@ def _render_htmx_layout(content, title, show_sidebar, toc_content, current_path,
         return tuple(result)
     custom_css_links = get_sidebar_custom_css_links(get_root_folder(), current_path, section_class) if current_path else []
     main_content_container = Main(*content, cls=f"vyasa-main-shell {'vyasa-zen-present' if slide_mode else ''} layout-container w-full mx-auto px-6 py-8 space-y-8 {section_class}".strip(), id="main-content", hx_boost="true", hx_target="#main-content", hx_swap="outerHTML show:window:top settle:0.1s", **_annotation_attrs(current_path, None, get_config, slide_mode=slide_mode))
-    result = [Title(title), *theme_font_links, *slide_assets, *extra_head_nodes, Div(*custom_css_links, id="scoped-css-container", hx_swap_oob="true") if custom_css_links else Div(id="scoped-css-container", hx_swap_oob="true"), main_content_container]
+    result = [Title(title), *theme_font_links, *extra_head_nodes, Div(*custom_css_links, id="scoped-css-container", hx_swap_oob="true") if custom_css_links else Div(id="scoped-css-container", hx_swap_oob="true"), main_content_container]
     logger.debug(f"[LAYOUT] TOTAL layout() time {(time.time() - layout_start_time)*1000:.2f}ms")
     return tuple(result)
 
 
 def _render_full_layout(content, title, show_sidebar, toc_content, current_path, show_toc, auth, htmx_nav, nav_posts_menu, show_footer, no_scroll, slide_mode, current_updated_label, extra_head_nodes, logger, t_section, layout_start_time, layout_fluid_class, layout_max_class, layout_max_style, page_style, main_spacing_cls, page_container_cls, navbar_margin_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar, style_attr, footer_node):
-    slide_assets = [Link(rel="stylesheet", href="/static/extensions/slides/present.css")] if slide_mode else []
     code_copy_template = NotStr('<template id="vyasa-code-copy-tpl"><button type="button" class="code-copy-button absolute top-2 right-2 inline-flex items-center justify-center rounded border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500 transition-colors" aria-label="Copy code"><span class="w-4 h-4" aria-hidden="true">⧉</span><span class="sr-only">Copy code</span></button></template>')
     if show_sidebar:
         toc_sidebar = None
@@ -247,6 +245,6 @@ def _render_full_layout(content, title, show_sidebar, toc_content, current_path,
     else:
         custom_css_links = get_sidebar_custom_css_links(get_root_folder(), current_path, section_class) if current_path else []
         body_content = Div(id="page-container", cls=f"flex flex-col min-h-screen {'vyasa-zen-present' if slide_mode else ''}".strip(), **style_attr(page_style))(code_copy_template, Div(navbar(htmx_nav=htmx_nav, updated_label=current_updated_label), cls="vyasa-navbar-shell w-full sticky top-0 z-[1300]", id="site-navbar"), Main(*content, cls=f"vyasa-main-shell {'vyasa-zen-present' if slide_mode else ''} layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-6 py-8 space-y-8 {section_class}".strip(), id="main-content", hx_boost="true", hx_target="#main-content", hx_swap="outerHTML show:window:top settle:0.1s", **_annotation_attrs(current_path, auth, get_config, slide_mode=slide_mode), **style_attr(layout_max_style)), footer_node("w-full mt-auto", {}) if show_footer else None)
-    result = [Title(title), *theme_font_links, *slide_assets, *extra_head_nodes, Div(*custom_css_links, id="scoped-css-container") if custom_css_links else Div(id="scoped-css-container"), body_content]
+    result = [Title(title), *theme_font_links, *extra_head_nodes, Div(*custom_css_links, id="scoped-css-container") if custom_css_links else Div(id="scoped-css-container"), body_content]
     logger.debug(f"[LAYOUT] FULL PAGE assembled in {(time.time() - layout_start_time)*1000:.2f}ms")
     return tuple(result)

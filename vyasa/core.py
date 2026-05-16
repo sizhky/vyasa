@@ -35,7 +35,7 @@ from .layout_helpers import (
 from .layout_page import render_layout
 from .nav_views import navbar_view
 from loguru import logger
-from .assets import asset_url
+from .assets import asset_url, bundle_asset_nodes, route_bundle_names
 from .admin_views import rbac_admin_content
 from .auth.context import get_auth_from_request, get_roles_from_auth, get_roles_from_request
 from .auth.admin_helpers import apply_impersonation_action, parse_rbac_form
@@ -55,12 +55,10 @@ from .content_routes import (
     find_index_file as find_index_file_helper,
     render_index,
     render_post_detail,
-    render_slide_deck,
 )
 from .content_tree import ContentTree
 from .extensions import get_extension_runtime, refresh_extension_runtime
 from .auth.oauth_bootstrap import build_google_oauth
-from .extensions_builtin.bookmarks.views import bookmarks_block
 from .page_views import not_found_content
 from .rbac_config import normalize_rbac_cfg, render_rbac_toml, write_rbac_to_vyasa
 from .rbac_store import load_rbac_cfg, write_rbac_cfg
@@ -68,7 +66,6 @@ from .runtime_context import RuntimeContext
 from .search_pages import gather_search_content
 from .search_http import gather_search_page
 from .search_views import (
-    posts_search_block as build_posts_search_block,
     render_posts_search_results,
 )
 from .sidebar_helpers import (
@@ -514,88 +511,6 @@ def ensure_app_initialized():
 ensure_app_initialized()
 
 
-@rt("/login", methods=["GET", "POST"])
-async def login(request: Request):
-    return await handle_login(
-        request,
-        get_config=get_config,
-        logger=logger,
-        local_auth_enabled=_local_auth_enabled,
-        resolve_roles=resolve_roles,
-        rbac_cfg=_rbac_cfg,
-        google_oauth_cfg=_google_oauth_cfg,
-        coerce_list=_config._coerce_list,
-        login_content=login_content,
-        google_oauth_enabled=_google_oauth_enabled,
-    )
-
-
-@rt("/login/google")
-async def login_google(request: Request):
-    if not _google_oauth_enabled:
-        return Response(status_code=404)
-    return await start_google_login(request, _google_oauth)
-
-
-@rt("/auth/google/callback")
-async def google_auth_callback(request: Request):
-    if not _google_oauth_enabled:
-        return Response(status_code=404)
-    try:
-        userinfo = await fetch_google_userinfo(request, _google_oauth, logger)
-    except Exception as exc:
-        logger.warning(f"Google OAuth failed: {exc}")
-        return RedirectResponse(
-            "/login?error=Google+authentication+failed", status_code=303
-        )
-    email = userinfo.get("email") if isinstance(userinfo, dict) else None
-    if not google_account_allowed(email, _google_oauth_cfg):
-        return RedirectResponse("/login?error=Google+account+not+allowed", status_code=303)
-    auth = build_google_auth_payload(userinfo)
-    auth["roles"] = resolve_roles(auth, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    request.session["auth"] = auth
-    next_url = request.session.pop("next", "/")
-    return RedirectResponse(next_url, status_code=303)
-
-
-@rt("/logout")
-async def logout(request: Request):
-    request.session.pop("auth", None)
-    request.session.pop("next", None)
-    return RedirectResponse("/login", status_code=303)
-
-
-# Progressive sidebar loading: lazy posts sidebar endpoint
-@rt("/_sidebar/posts")
-def posts_sidebar_lazy(request: Request = None, current_path: str = ""):
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    html = _cached_posts_sidebar_html(
-        _posts_sidebar_fingerprint(),
-        tuple(roles or []),
-        get_config().get_show_hidden(),
-        current_path or "",
-    )
-    return Aside(
-        NotStr(html),
-        cls="hidden xl:block w-[var(--vyasa-sidebar-width,26rem)] shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]",
-        id="posts-sidebar",
-    )
-
-
-@rt("/_sidebar/posts/branch")
-def posts_sidebar_branch(path: str = "", request: Request = None):
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    folder = content_path_for_slug(path)
-    if not folder or not folder.is_dir():
-        logger.debug("Sidebar branch invalid path={}", path)
-        return Response(status_code=404)
-    items = build_post_tree(folder, roles=roles, max_depth=0)
-    logger.debug(
-        "Sidebar branch path={} resolved={} items={}", path, folder, len(items)
-    )
-    return "".join(to_xml(item) for item in items)
-
-
 def theme_toggle():
     theme_script = """on load set franken to (localStorage's __FRANKEN__ or '{}') as Object
                 if franken's mode is 'dark' then add .dark to <html/> end
@@ -710,6 +625,27 @@ def _filter_search_matches_by_roles(matches, roles):
     return filtered
 
 
+def _sidebar_section_nodes():
+    runtime = get_extension_runtime()
+    providers = runtime.sidebar_section_providers if runtime else []
+    context = {
+        "sidebar_section": sidebar_section,
+        "render_search_results": _render_posts_search_results,
+        "kbd": Kbd,
+    }
+    return [provider(context) for provider in providers]
+
+
+def _sidebar_row_decorators():
+    runtime = get_extension_runtime()
+    return tuple(runtime.sidebar_row_decorators) if runtime else ()
+
+
+def _search_result_row_decorators():
+    runtime = get_extension_runtime()
+    return tuple(runtime.search_result_row_decorators) if runtime else ()
+
+
 def _render_posts_search_results(query, roles=None):
     trimmed = (query or "").strip()
     matches, regex_error = _find_search_matches(trimmed)
@@ -719,17 +655,14 @@ def _render_posts_search_results(query, roles=None):
         for item in matches
         if (slug := content_slug_for_path(item))
     ]
-    return render_posts_search_results(trimmed, rendered_matches, regex_error)
-
-
-def _posts_search_block():
-    return build_posts_search_block(_render_posts_search_results(""))
+    return render_posts_search_results(trimmed, rendered_matches, regex_error, row_decorators=_search_result_row_decorators())
 
 
 @lru_cache(maxsize=16)
 def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden, current_path=""):
     sidebars_open = get_config().get_sidebars_open()
     posts_items = get_posts(list(roles_key) if roles_key else [], current_path=current_path)
+    extra_sections = _sidebar_section_nodes()
     sidebar = build_collapsible_sidebar(
         "menu",
         "Library",
@@ -738,19 +671,7 @@ def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden, current_path
         data_sidebar="posts",
         shortcut_key="Z",
         extra_content=[
-            sidebar_section(
-                "Filter",
-                _posts_search_block(),
-                is_open=True,
-                data_section="filter",
-                body_cls="pt-1",
-                title_suffix=Kbd(
-                    "⌘K",
-                    cls="kbd-key ml-2 px-2.5 py-1 text-sm font-mono font-semibold normal-case tracking-normal leading-none",
-                    style="font-size: 0.875rem; line-height: 1; letter-spacing: 0;",
-                ),
-            ),
-            sidebar_section("Bookmarks", bookmarks_block(), is_open=True, data_section="bookmarks", body_cls="pt-1"),
+            *extra_sections,
             sidebar_section(
                 "Posts",
                 Div(
@@ -817,12 +738,6 @@ elif hasattr(app, "on_event"):
     app.on_event("startup")(_preload_posts_cache)
 
 
-@rt("/_sidebar/posts/search")
-def posts_sidebar_search(q: str = "", request: Request = None):
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    return _render_posts_search_results(q, roles=roles)
-
-
 def is_active_toc_item(anchor):
     """Check if a TOC item is currently active based on URL hash"""
     # This will be enhanced client-side with JavaScript
@@ -846,6 +761,14 @@ def _default_layout(
     slide_mode=False,
     current_updated_label=None,
 ):
+    extra_head_nodes = bundle_asset_nodes(
+        route_bundle_names(
+            show_sidebar=show_sidebar,
+            current_path=current_path,
+            slide_mode=slide_mode,
+            annotations_enabled=get_config().get_annotations_enabled(),
+        )
+    )
     return render_layout(
         *content,
         htmx=htmx,
@@ -862,7 +785,7 @@ def _default_layout(
         no_scroll=no_scroll,
         slide_mode=slide_mode,
         current_updated_label=current_updated_label,
-        extra_head_nodes=(),
+        extra_head_nodes=extra_head_nodes,
         logger=logger,
         resolve_layout_config=_resolve_layout_config,
         width_class_and_style=_width_class_and_style,
@@ -979,7 +902,7 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
         effective_abbreviations=_effective_abbreviations, should_exclude_dir_fn=should_exclude_dir,
         slug_to_title_fn=slug_to_title, find_folder_note_file_fn=find_folder_note_file,
         is_allowed_fn=is_allowed, parse_frontmatter_fn=parse_frontmatter,
-        rbac_rules=_rbac_rules, logger=logger,
+        rbac_rules=_rbac_rules, logger=logger, row_decorators=_sidebar_row_decorators(),
     )
 
 
@@ -1050,33 +973,6 @@ def post_detail(path: str, htmx, request: Request):
         resolve_markdown_title=resolve_markdown_title,
         from_md=from_md,
         logger=logger,
-    )
-
-
-@rt("/slides/{path:path}")
-def slide_deck(path: str, htmx, request: Request):
-    runtime = get_extension_runtime()
-    provider = runtime.slide_renderer if runtime else None
-    if provider and provider is not render_slide_deck:
-        return provider(path, htmx, request)
-    return render_slide_deck(
-        path,
-        htmx,
-        request,
-        get_root_folder=get_root_folder,
-        not_found=not_found,
-        get_roles_from_auth=get_roles_from_auth,
-        rbac_rules=_rbac_rules,
-        rbac_cfg=_rbac_cfg,
-        google_oauth_cfg=_google_oauth_cfg,
-        coerce_list=_config._coerce_list,
-        is_allowed=is_allowed,
-        parse_frontmatter=parse_frontmatter,
-        resolve_markdown_title=resolve_markdown_title,
-        slug_to_title=slug_to_title,
-        effective_abbreviations=_effective_abbreviations,
-        from_md=from_md,
-        layout=layout,
     )
 
 

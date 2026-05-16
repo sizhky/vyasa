@@ -32,3 +32,9 @@ def test_disabled_render_extensions_fall_back_to_plain_code():
         assert 'language-tasks' in html
     finally:
         refresh_extension_runtime({})
+
+
+def test_rendered_heading_emits_doc_heading_class():
+    html = to_xml(from_md("## Cave\n\ntext"))
+
+    assert 'class="vyasa-doc-heading' in html

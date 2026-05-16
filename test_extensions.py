@@ -20,7 +20,7 @@ def test_extensions_default_preset_when_section_omitted(tmp_path, monkeypatch):
     assert plan.preset == "default"
     assert plan.selected_by_category["layout"] == ("default_layout",)
     assert plan.selected_by_category["render"] == ("wikilinks", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks")
-    assert plan.selected_by_category["route"] == ("slides", "annotations", "bookmarks", "rbac_admin", "filesystem_routes")
+    assert plan.selected_by_category["route"] == ("slides", "auth_routes", "sidebar_routes", "annotations", "bookmarks", "rbac_admin", "filesystem_routes")
     assert plan.enabled_ids[-1] == "filesystem"
 
 

@@ -231,7 +231,6 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             ),
             overview_panel,
             Script(f"window.__vyasaZen={json.dumps(nav_state)};"),
-            Script(src="/static/extensions/slides/present.js", type="module"),
             cls="vyasa-zen-content w-full mx-auto space-y-8",
             style=f"--vyasa-zen-slide-max-width: {slide_width};" if slide_width else None,
         )
@@ -295,7 +294,6 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             slide_body,
             overview_panel,
             Script(f"window.__vyasaZen={json.dumps(nav_state)};"),
-            Script(src="/static/extensions/slides/present.js", type="module"),
             cls="vyasa-zen-content w-full mx-auto space-y-8",
             style=f"--vyasa-zen-slide-max-width: {slide_width};" if slide_width else None,
         )

@@ -1,1 +1,7 @@
-from ..extensions_builtin.themes.dice import *  # noqa: F401,F403
+from .base import ThemeExtension
+
+THEME = ThemeExtension(
+    id="dice",
+    choices=("vyasa-sunlit",),
+    randomizable=True,
+)

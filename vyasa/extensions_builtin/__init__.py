@@ -1,5 +1,6 @@
 def load_builtin_extensions():
     from . import annotations
+    from . import auth_routes
     from . import blog_home
     from . import bookmarks
     from . import cryptograph
@@ -14,6 +15,7 @@ def load_builtin_extensions():
     from . import mermaid
     from . import rbac_admin
     from . import slides
+    from . import sidebar_routes
     from . import tabs
     from . import tasks
     from . import wikilinks
@@ -32,6 +34,8 @@ def load_builtin_extensions():
         cryptograph.EXTENSION,
         tasks.EXTENSION,
         slides.EXTENSION,
+        auth_routes.EXTENSION,
+        sidebar_routes.EXTENSION,
         annotations.EXTENSION,
         bookmarks.EXTENSION,
         rbac_admin.EXTENSION,

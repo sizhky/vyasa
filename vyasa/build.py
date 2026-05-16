@@ -21,14 +21,14 @@ from .sidebar_helpers import build_toc_items, extract_toc
 from .tree_tables import TREE_SUFFIXES, parse_tree_table, render_tree_table_html
 from .config import get_config, reload_config
 from .extensions import refresh_extension_runtime
-from .assets import asset_url
+from .assets import asset_url, bundle_asset_html, iter_extension_static_dirs, route_bundle_names
 from .favicon import favicon_href as resolve_favicon_href, write_generated_favicon
 from .page_shell import PageShellModel, StaticShellRenderer
 from .tree_service import get_tree_entries
 
 _asset_url = asset_url
 
-def generate_static_html(title, body_content, blog_title, favicon_href):
+def generate_static_html(title, body_content, blog_title, favicon_href, extra_head_html=""):
     """Generate complete static HTML page"""
     
     # Static CSS (inline critical styles)
@@ -394,15 +394,10 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
     <link rel="stylesheet" href="{_asset_url('/static/sidenote.css')}">
     
     {static_css}
+    {extra_head_html}
 </head>
 <body>
     {body_content}
-    
-    <!-- Mermaid diagrams -->
-    <script type="module">
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({{ startOnLoad: true, theme: 'default' }});
-    </script>
     <script src="{_asset_url('/static/scripts.js')}" type="module"></script>
     
     {static_js}
@@ -473,12 +468,13 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
     return items
 
 
-def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, toc_items=None, current_path=None, updated_label=None):
+def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, toc_items=None, current_path=None, updated_label=None, extra_head_html=""):
     """Generate complete static page layout"""
     model = PageShellModel(
         title=page_title,
         blog_title=blog_title,
         main_html=content_html,
+        extra_head_html=extra_head_html,
         nav_tree=nav_tree,
         favicon_href=favicon_href,
         toc_items=toc_items,
@@ -585,6 +581,13 @@ def build_static_site(input_dir=None, output_dir=None):
             content_html += f'<div class="vyasa-prev-next">{prev_html}{next_html}</div>'
 
         # Generate full page
+        extra_head_html = bundle_asset_html(
+            route_bundle_names(
+                show_sidebar=True,
+                current_path=str(relative_path.with_suffix("")),
+                annotations_enabled=config.get_annotations_enabled(),
+            )
+        )
         full_html = static_layout(
             content_html=content_html,
             blog_title=blog_title,
@@ -594,6 +597,7 @@ def build_static_site(input_dir=None, output_dir=None):
             toc_items=toc_items,
             current_path=str(relative_path.with_suffix('')),
             updated_label=format_last_modified_label(doc_file),
+            extra_head_html=extra_head_html,
         )
         
         # Determine output path
@@ -622,6 +626,8 @@ def build_static_site(input_dir=None, output_dir=None):
         static_dst = output_dir / 'static'
         static_dst.mkdir(parents=True, exist_ok=True)
         write_generated_favicon(root_folder, static_dst / "icon.svg")
+    for extension_id, static_dir in iter_extension_static_dirs():
+        shutil.copytree(static_dir, output_dir / "static" / "extensions" / extension_id, dirs_exist_ok=True)
     
     # Generate index.html if it doesn't exist
     index_path = output_dir / 'index.html'
@@ -647,7 +653,8 @@ def build_static_site(input_dir=None, output_dir=None):
             page_title=f"Home - {blog_title}",
             nav_tree=nav_tree,
             favicon_href=favicon_href,
-            toc_items=None
+            toc_items=None,
+            extra_head_html=bundle_asset_html(route_bundle_names(show_sidebar=True)),
         )
         
         index_path.write_text(full_html, encoding='utf-8')

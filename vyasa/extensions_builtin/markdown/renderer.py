@@ -592,7 +592,11 @@ class ContentRenderer(FrankenRenderer):
             f'{to_xml(UkIcon("check"))}<span>URL copied</span></span>'
             '</a>'
         )
-        return f'<h{level} id="{anchor}"><span class="vyasa-heading-text">{html.escape(heading_text)}</span>{fold_children}{present_here}{permalink}</h{level}>'
+        return (
+            f'<h{level} id="{anchor}" class="vyasa-doc-heading">'
+            f'<span class="vyasa-heading-text">{html.escape(heading_text)}</span>'
+            f"{fold_children}{present_here}{permalink}</h{level}>"
+        )
 
     def render_superscript(self, token):
         return f"<sup>{token.content}</sup>"

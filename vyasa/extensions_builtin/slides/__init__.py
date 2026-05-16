@@ -10,7 +10,7 @@ class SlidesExtension(VyasaExtensionBase):
                 js=("/static/extensions/slides/present.js",),
             )
         )
-        app.routes.add("/slides")
+        app.routes.add("/slides", _register_slides_route)
         app.layout.mode("slide", _slide_renderer)
 
 
@@ -36,6 +36,12 @@ def _slide_renderer(path: str, htmx, request):
         from_md=core.from_md,
         layout=core.layout,
     )
+
+
+def _register_slides_route(rt, runtime):
+    @rt("/slides/{path:path}")
+    def slide_deck(path: str, htmx, request):
+        return _slide_renderer(path, htmx, request)
 
 
 EXTENSION = SlidesExtension(

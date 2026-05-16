@@ -4,7 +4,7 @@ from .render import render_mermaid_block
 
 class MermaidExtension(VyasaExtensionBase):
     def register(self, app) -> None:
-        app.assets.bundle(AssetBundle("mermaid.runtime", js=("/static/extensions/mermaid/mermaid.js",)))
+        app.assets.bundle(AssetBundle("mermaid.runtime", css=("/static/extensions/mermaid/mermaid.css",), js=("/static/extensions/mermaid/mermaid.js",)))
         app.markdown.fence(
             "mermaid",
             lambda code, context, attrs: (

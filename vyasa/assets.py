@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from fasthtml.common import Link, Script, to_xml
+
 
 def _static_file_for_url(path: str) -> Path | None:
     rel = path.lstrip("/")
@@ -35,3 +37,52 @@ def asset_url(path: str) -> str:
 
 def extension_asset_path(extension_id: str, asset_name: str) -> Path:
     return Path(__file__).resolve().parent / "extensions_builtin" / extension_id / "static" / asset_name
+
+
+def route_bundle_names(*, show_sidebar: bool = False, current_path: str | None = None, slide_mode: bool = False, annotations_enabled: bool = False) -> tuple[str, ...]:
+    names: list[str] = []
+    if show_sidebar and not slide_mode:
+        names.extend(("default_search.runtime", "bookmarks.runtime"))
+    if annotations_enabled and current_path and not slide_mode:
+        names.append("annotations.runtime")
+    if slide_mode:
+        names.append("slides.runtime")
+    return tuple(dict.fromkeys(names))
+
+
+def bundle_asset_nodes(bundle_names: tuple[str, ...] | list[str], runtime=None) -> tuple[object, ...]:
+    if runtime is None:
+        from .extensions import get_extension_runtime
+
+        runtime = get_extension_runtime()
+    if runtime is None:
+        return ()
+    nodes: list[object] = []
+    seen: set[str] = set()
+    for bundle_name in bundle_names:
+        bundle = runtime.bundles.get(bundle_name)
+        if not bundle:
+            continue
+        for href in bundle.css:
+            if href not in seen:
+                seen.add(href)
+                nodes.append(Link(rel="stylesheet", href=asset_url(href)))
+        for src in bundle.js:
+            if src not in seen:
+                seen.add(src)
+                nodes.append(Script(src=asset_url(src), type="module"))
+    return tuple(nodes)
+
+
+def bundle_asset_html(bundle_names: tuple[str, ...] | list[str], runtime=None) -> str:
+    return "".join(to_xml(node) for node in bundle_asset_nodes(bundle_names, runtime=runtime))
+
+
+def iter_extension_static_dirs() -> list[tuple[str, Path]]:
+    root = Path(__file__).resolve().parent / "extensions_builtin"
+    result: list[tuple[str, Path]] = []
+    for entry in sorted(root.iterdir()):
+        static_dir = entry / "static"
+        if entry.is_dir() and static_dir.is_dir():
+            result.append((entry.name, static_dir))
+    return result

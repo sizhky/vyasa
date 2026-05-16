@@ -13,7 +13,7 @@ import hashlib
 from pathlib import Path
 from typing import Optional
 from .helpers import slug_to_title
-from .extensions_builtin.themes import (
+from .theme_extensions import (
     resolve_theme_extension,
     theme_extension_meta,
     theme_extension_payloads,

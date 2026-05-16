@@ -11,6 +11,7 @@ class PageShellModel:
     title: str
     blog_title: str
     main_html: str
+    extra_head_html: str
     nav_tree: list[Any]
     favicon_href: str
     toc_items: list[Any] | None = None
@@ -28,7 +29,13 @@ class StaticShellRenderer:
 
     def render(self, model: PageShellModel) -> str:
         body = self._body(model)
-        return self.html_document_renderer(model.title, body, model.blog_title, model.favicon_href)
+        return self.html_document_renderer(
+            model.title,
+            body,
+            model.blog_title,
+            model.favicon_href,
+            model.extra_head_html,
+        )
 
     def _body(self, model: PageShellModel) -> str:
         return f'''

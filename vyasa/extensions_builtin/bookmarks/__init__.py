@@ -1,12 +1,18 @@
+from fasthtml.common import Span
+
 from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 from .api import CallableBookmarkStore, register_bookmarks_routes
 from .store import delete_bookmark, list_bookmarks, upsert_bookmark
+from .views import bookmark_toggle_button, bookmarks_block
 
 
 class BookmarksExtension(VyasaExtensionBase):
     def register(self, app) -> None:
         app.storage.namespace("bookmarks")
         app.routes.add("/api/bookmarks", _register_bookmarks_routes)
+        app.navigation.sidebar_section(_bookmarks_sidebar_section)
+        app.navigation.sidebar_row_decorator(_bookmark_row_decorator)
+        app.navigation.search_result_row_decorator(_bookmark_row_decorator)
         app.assets.bundle(
             AssetBundle(
                 "bookmarks.runtime",
@@ -43,6 +49,23 @@ def _register_bookmarks_routes(rt, runtime):
         runtime,
         CallableBookmarkStore(_db_list, _db_upsert, _db_delete),
         root_folder=get_config().get_root_folder,
+    )
+
+
+def _bookmark_row_decorator(node, *, slug=None, title="", context="tree"):
+    if not slug:
+        return node
+    classes = "vyasa-bookmark-row flex items-center gap-1 min-w-0" if context == "search" else "vyasa-bookmark-row inline-flex items-center gap-1 w-max"
+    return Span(node, bookmark_toggle_button(slug, title), cls=classes)
+
+
+def _bookmarks_sidebar_section(context):
+    return context["sidebar_section"](
+        "Bookmarks",
+        bookmarks_block(),
+        is_open=True,
+        data_section="bookmarks",
+        body_cls="pt-1",
     )
 
 
