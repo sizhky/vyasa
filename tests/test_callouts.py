@@ -47,6 +47,20 @@ def test_code_include_renders_selected_lines_and_highlight_metadata(tmp_path):
     assert 'data-code-highlight-lines="9-11,22"' in html
 
 
+def test_markdown_include_renders_anchored_section(tmp_path):
+    src = tmp_path / "content" / "notes"
+    src.mkdir(parents=True)
+    (src / "overview.md").write_text("# Top\n\n## System Context\n\nAlpha\n\n### Child\n\nBeta\n\n## Next\n\nGamma\n", encoding="utf-8")
+    md = "{* ../notes/overview.md#system-context *}"
+
+    with patch("vyasa.markdown_rendering.get_root_folder", return_value=tmp_path / "content"):
+        html = to_xml(from_md(md, current_path="guide/page.md"))
+
+    assert '>System Context<' in html
+    assert 'Alpha' in html and 'Beta' in html
+    assert 'Gamma' not in html
+
+
 def test_vyasa_roots_mount_as_top_level_folders(monkeypatch, tmp_path):
     root = tmp_path / "site"
     extra = tmp_path / "notes"
