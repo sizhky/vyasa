@@ -16,6 +16,7 @@ from monsterui.all import UkIcon, apply_classes
 from .assets import asset_url
 from .config import get_config
 from .helpers import (
+    _strip_leading_frontmatter_block,
     _plain_text_from_html,
     content_path_for_slug,
     content_url_for_slug,
@@ -173,6 +174,24 @@ def _parse_line_spec(spec):
 def _parse_highlight_spec(spec):
     match = re.search(r"hl\[([^\]]+)\]", spec)
     return match.group(1).replace(":", "-").replace(" ", "") if match else ""
+
+
+def _extract_markdown_section(text, anchor):
+    text = _strip_leading_frontmatter_block(text)
+    headings = list(re.finditer(r"^(#{1,6})\s+(.+)$", text, flags=re.MULTILINE))
+    counts = {}
+    for idx, match in enumerate(headings):
+        _, current = resolve_heading_anchor(match.group(2).strip(), counts)
+        if current != anchor:
+            continue
+        end = len(text)
+        level = len(match.group(1))
+        for later in headings[idx + 1:]:
+            if len(later.group(1)) <= level:
+                end = later.start()
+                break
+        return text[match.start():end].strip()
+    return None
 
 
 def _parse_fence_attrs(info_string):
@@ -1114,22 +1133,22 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
         for include_id, include in code_include_store.items():
             if include["file_path"].exists():
                 text = include["file_path"].read_text(encoding="utf-8")
-                line_spec = _parse_line_spec(include["spec"])
-                start, end = line_spec if line_spec else (1, len(text.splitlines()))
-                lines = text.splitlines()
-                snippet = "\n".join(lines[start - 1:end])
-                lang = _infer_code_language(include["path_text"])
-                hl = _parse_highlight_spec(include["spec"])
-                title = content_slug_for_path(include["file_path"], strip_suffix=False) or include["path_text"]
-                line_numbers = _resolve_line_numbers(get_config().get_code_line_numbers(), spec=include["spec"])
-                rendered = _render_code_include(
-                    snippet,
-                    lang=lang,
-                    start=start,
-                    highlight_spec=hl,
-                    title=title,
-                    line_numbers=line_numbers,
-                )
+                if include.get("anchor") and include["file_path"].suffix.lower() == ".md":
+                    snippet = _extract_markdown_section(text, include["anchor"])
+                    rendered = _render_markdown_fragment(
+                        snippet or f'Code include not found: `{include["path_text"]}#{include["anchor"]}`',
+                        current_path=content_slug_for_path(include["file_path"], strip_suffix=False),
+                    ) if snippet else _render_callout("warning", f'Code include not found: `{include["path_text"]}#{include["anchor"]}`', lambda body: mst.markdown(body, partial(ContentRenderer, img_dir=img_dir, current_path=current_path)).strip())
+                else:
+                    line_spec = _parse_line_spec(include["spec"])
+                    start, end = line_spec if line_spec else (1, len(text.splitlines()))
+                    lines = text.splitlines()
+                    snippet = "\n".join(lines[start - 1:end])
+                    lang = _infer_code_language(include["path_text"])
+                    hl = _parse_highlight_spec(include["spec"])
+                    title = content_slug_for_path(include["file_path"], strip_suffix=False) or include["path_text"]
+                    line_numbers = _resolve_line_numbers(get_config().get_code_line_numbers(), spec=include["spec"])
+                    rendered = _render_code_include(snippet, lang=lang, start=start, highlight_spec=hl, title=title, line_numbers=line_numbers)
             else:
                 rendered = _render_callout(
                     "warning",
