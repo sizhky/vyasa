@@ -119,10 +119,16 @@ def preprocess_code_includes(content, current_path=None, root_folder=None):
 
     def replace(match):
         spec = match.group(1).strip()
-        path_text = spec.split()[0]
+        token = spec.split()[0]
+        path_text, _, anchor = token.partition("#")
         file_path = (base_dir / path_text).resolve() if base_dir else Path(path_text).resolve()
         include_id = _placeholder_id(match.group(0))
-        include_store[include_id] = {"spec": spec, "path_text": path_text, "file_path": file_path}
+        include_store[include_id] = {
+            "spec": spec,
+            "path_text": path_text,
+            "file_path": file_path,
+            "anchor": anchor or None,
+        }
         return f'<div class="vyasa-code-include-placeholder" data-include-id="{include_id}"></div>'
 
     content = pattern.sub(replace, content)
