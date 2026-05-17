@@ -322,6 +322,73 @@ def estimate_read_time_minutes(text: str, words_per_minute: int = 200) -> int:
     return max(1, (len(words) + words_per_minute - 1) // words_per_minute)
 
 
+def _parse_include_line_spec(spec: str) -> tuple[int, int] | None:
+    match = re.search(r"ln\[(\d+):(\d+)\]", spec or "")
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def _extract_markdown_section_text(text: str, target_anchor: str) -> str | None:
+    body = _strip_leading_frontmatter_block(text)
+    heading_re = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
+    headings = list(heading_re.finditer(body))
+    counts: dict[str, int] = {}
+    for index, match in enumerate(headings):
+        level = len(match.group(1))
+        heading_text, anchor = resolve_heading_anchor(match.group(2).strip(), counts)
+        if anchor != target_anchor:
+            continue
+        end = len(body)
+        for later in headings[index + 1:]:
+            if len(later.group(1)) <= level:
+                end = later.start()
+                break
+        section = body[match.start():end].strip()
+        return section if section.startswith("#") else f'{"#" * level} {heading_text}\n\n{section}'
+    return None
+
+
+def expand_markdown_includes_for_reading(text: str, *, current_path: str | None, root_folder: str | Path, _seen: set[Path] | None = None) -> str:
+    from .extensions_builtin.markdown.pipeline import preprocess_code_includes
+
+    seen = _seen or set()
+    include_root = Path(root_folder)
+    include_current_path = current_path
+    if current_path:
+        mounted_root, relative = content_root_and_relative(current_path)
+        if mounted_root is not None:
+            include_root = mounted_root
+            include_current_path = relative.as_posix() if relative.as_posix() != "." else None
+    content, include_store = preprocess_code_includes(text or "", current_path=include_current_path, root_folder=include_root)
+    for include_id, include in include_store.items():
+        replacement = ""
+        file_path = include["file_path"]
+        if file_path.exists() and file_path.suffix.lower() == ".md":
+            resolved = file_path.resolve()
+            if resolved not in seen:
+                nested_seen = set(seen)
+                nested_seen.add(resolved)
+                file_text = file_path.read_text(encoding="utf-8")
+                if include.get("section"):
+                    replacement = _extract_markdown_section_text(file_text, include["section"]) or ""
+                else:
+                    line_spec = _parse_include_line_spec(include["spec"])
+                    if line_spec:
+                        start, end = line_spec
+                        lines = file_text.splitlines()
+                        replacement = "\n".join(lines[start - 1:end])
+                    else:
+                        replacement = file_text
+                replacement = expand_markdown_includes_for_reading(
+                    replacement,
+                    current_path=content_slug_for_path(file_path),
+                    root_folder=root_folder,
+                    _seen=nested_seen,
+                )
+        placeholder = f'<div class="vyasa-code-include-placeholder" data-include-id="{include_id}"></div>'
+        content = content.replace(placeholder, replacement)
+    return content
+
+
 def format_last_modified_label(file_path: str | Path) -> str | None:
     try:
         modified_at = datetime.fromtimestamp(Path(file_path).stat().st_mtime)

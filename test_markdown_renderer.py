@@ -1,7 +1,11 @@
+from pathlib import Path
+
 from vyasa.extensions import refresh_extension_runtime
 from fasthtml.common import to_xml
 
+from vyasa.config import reload_config
 from vyasa.extensions_builtin.markdown.renderer import MarkdownRenderer, RenderContext, from_md
+from vyasa.helpers import expand_markdown_includes_for_reading
 
 
 def test_markdown_renderer_matches_from_md_wrapper():
@@ -38,3 +42,82 @@ def test_rendered_heading_emits_doc_heading_class():
     html = to_xml(from_md("## Cave\n\ntext"))
 
     assert 'class="vyasa-doc-heading' in html
+
+
+def test_markdown_include_renders_native_markdown_lines(tmp_path, monkeypatch):
+    root = tmp_path / "site"
+    root.mkdir()
+    (root / "doc.md").write_text("# Title\n\n- one\n- two\n", encoding="utf-8")
+    monkeypatch.setenv("VYASA_ROOT", str(root))
+    reload_config()
+
+    try:
+        html = to_xml(from_md("{ ./doc.md ln[1:4] }", current_path="page"))
+        assert "<li" in html
+        assert "language-markdown" not in html
+    finally:
+        reload_config()
+
+
+def test_markdown_include_renders_named_section(tmp_path, monkeypatch):
+    root = tmp_path / "site"
+    root.mkdir()
+    (root / "doc.md").write_text("# Top\n\n## Keep Me\n\nhello\n\n## Skip Me\n\nbye\n", encoding="utf-8")
+    monkeypatch.setenv("VYASA_ROOT", str(root))
+    reload_config()
+
+    try:
+        html = to_xml(from_md("{ ./doc.md#keep-me }", current_path="page"))
+        assert "Keep Me" in html
+        assert "hello" in html
+        assert "Skip Me" not in html
+    finally:
+        reload_config()
+
+
+def test_markdown_include_section_renders_mermaid_and_bubbles_assets(tmp_path, monkeypatch):
+    root = tmp_path / "site"
+    root.mkdir()
+    (root / "doc.md").write_text(
+        "# Top\n\n## Diagram\n\n```mermaid\nflowchart TD\n  A --> B\n```\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("VYASA_ROOT", str(root))
+    reload_config()
+
+    try:
+        html = to_xml(from_md("{ ./doc.md#diagram }", current_path="page"))
+        assert 'class="mermaid-container' in html
+        assert "/static/extensions/mermaid/mermaid.js" in html
+        assert "--&amp;gt;" not in html
+    finally:
+        reload_config()
+
+
+def test_markdown_fragment_include_does_not_leak_root_wrapper(tmp_path, monkeypatch):
+    root = tmp_path / "site"
+    root.mkdir()
+    (root / "doc.md").write_text("## Part\n\npara\n", encoding="utf-8")
+    monkeypatch.setenv("VYASA_ROOT", str(root))
+    reload_config()
+
+    try:
+        html = to_xml(from_md("> [!note] Title\n> body\n\n{ ./doc.md#part }", current_path="page"))
+        assert html.count('<div class="w-full">') == 1
+    finally:
+        reload_config()
+
+
+def test_expand_markdown_includes_for_reading_counts_md_sections(tmp_path, monkeypatch):
+    root = tmp_path / "site"
+    root.mkdir()
+    (root / "doc.md").write_text("# Top\n\n## Part\n\nalpha beta gamma\n", encoding="utf-8")
+    monkeypatch.setenv("VYASA_ROOT", str(root))
+    reload_config()
+
+    try:
+        expanded = expand_markdown_includes_for_reading("{ ./doc.md#part }", current_path="page", root_folder=root)
+        assert "alpha beta gamma" in expanded
+        assert "{ ./doc.md#part }" not in expanded
+    finally:
+        reload_config()

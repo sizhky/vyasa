@@ -1,6 +1,7 @@
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 import { clampScale, nextWheelState } from '/static/extensions/tasks/tasks_graph_core.js';
 
+const GANTT_WIDTH = 1200;
 const mermaidStates = {};
 const mermaidDebugEnabled = () => (
     window.VYASA_DEBUG_MERMAID === true ||
@@ -139,6 +140,13 @@ function bindPanZoomGestures(wrapper, state, { getTarget, applyState, maxScale =
     };
 
     wrapper.addEventListener('pointerup', stopPointer);
+    wrapper.addEventListener('pointercancel', stopPointer);
+    wrapper.addEventListener('pointerleave', (e) => {
+        if (state.isPanning || pointers.has(e.pointerId)) {
+            stopPointer(e);
+        }
+    });
+}
 
 function initMermaidInteraction() {
     const wrappers = Array.from(document.querySelectorAll('.mermaid-wrapper'));
@@ -197,16 +205,18 @@ function initMermaidInteraction() {
         }
         const hasStableViewBox = viewBox.length === 4 && viewBox[2] > 1 && viewBox[3] > 1;
         const hasStableBBox = !!bbox && bbox.width > 1 && bbox.height > 1;
+        const isRevealWrapper = !!wrapper.closest('.reveal, .vyasa-reveal-unit');
         const isLayoutUnstable = (
-            wrapperRect.height < 120 ||
+            (isRevealWrapper && wrapperRect.height < 120) ||
             svgRect.height < 30 ||
             (!hasStableViewBox && !hasStableBBox) ||
             (svgRect.width < 30 && !hasStableViewBox && !hasStableBBox)
         );
         if (isLayoutUnstable) {
             if (mermaidDebugEnabled()) {
-                mermaidDebugLog('skip initMermaidInteraction: reveal layout not stable', {
+                mermaidDebugLog('skip initMermaidInteraction: layout not stable', {
                     id: wrapper.id,
+                    isRevealWrapper,
                     wrapperWidth: wrapperRect.width,
                     wrapperHeight: wrapperRect.height,
                     svgWidth: svgRect.width,
@@ -501,226 +511,6 @@ function getCurrentTheme() {
     return document.documentElement.classList.contains('dark') ? 'dark' : 'default';
 }
 
-const GOOGLE_FONT_QUERIES = {
-    'Alegreya': 'family=Alegreya:wght@400;500;600;700',
-    Arimo: 'family=Arimo:wght@400;500;600;700',
-    Archivo: 'family=Archivo:wght@400;500;600;700',
-    Asap: 'family=Asap:wght@400;500;600;700',
-    Assistant: 'family=Assistant:wght@400;500;600;700;800',
-    'Azeret Mono': 'family=Azeret+Mono:wght@400;500;600;700',
-    'Be Vietnam Pro': 'family=Be+Vietnam+Pro:wght@400;500;600;700',
-    Besley: 'family=Besley:wght@400;500;600;700',
-    Bitter: 'family=Bitter:wght@400;500;600;700',
-    'Bricolage Grotesque': 'family=Bricolage+Grotesque:wght@400;500;600;700',
-    Cabin: 'family=Cabin:wght@400;500;600;700',
-    Cardo: 'family=Cardo:wght@400;700',
-    Chivo: 'family=Chivo:wght@400;500;600;700',
-    'Crimson Pro': 'family=Crimson+Pro:wght@400;500;600;700',
-    'Cutive Mono': 'family=Cutive+Mono',
-    'DM Sans': 'family=DM+Sans:wght@400;500;700',
-    Domine: 'family=Domine:wght@400;500;600;700',
-    'EB Garamond': 'family=EB+Garamond:wght@400;500;600;700',
-    'Fauna One': 'family=Fauna+One',
-    Figtree: 'family=Figtree:wght@400;500;600;700;800',
-    'Fira Code': 'family=Fira+Code:wght@400;500;600;700',
-    'Hanken Grotesk': 'family=Hanken+Grotesk:wght@400;500;600;700;800',
-    'Hepta Slab': 'family=Hepta+Slab:wght@400;500;600;700',
-    'IBM Plex Mono': 'family=IBM+Plex+Mono:wght@400;500;600;700',
-    Inconsolata: 'family=Inconsolata:wght@400;500;600;700',
-    Inter: 'family=Inter:wght@400;500;600;700;800',
-    'Instrument Serif': 'family=Instrument+Serif:ital@0;1',
-    'JetBrains Mono': 'family=JetBrains+Mono:wght@400;500;600;700;800',
-    Karla: 'family=Karla:wght@400;500;600;700;800',
-    Lexend: 'family=Lexend:wght@400;500;600;700;800',
-    'Libre Baskerville': 'family=Libre+Baskerville:wght@400;700',
-    'Libre Franklin': 'family=Libre+Franklin:wght@400;500;600;700;800',
-    Manrope: 'family=Manrope:wght@400;500;700;800',
-    Merriweather: 'family=Merriweather:wght@400;700',
-    'Merriweather Sans': 'family=Merriweather+Sans:wght@400;500;600;700;800',
-    Montserrat: 'family=Montserrat:wght@400;500;600;700;800',
-    Mulish: 'family=Mulish:wght@400;500;600;700;800',
-    Newsreader: 'family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600',
-    'Noto Serif': 'family=Noto+Serif:wght@400;500;600;700',
-    'Nunito Sans': 'family=Nunito+Sans:wght@400;500;600;700;800',
-    Onest: 'family=Onest:wght@400;500;600;700;800',
-    'Plus Jakarta Sans': 'family=Plus+Jakarta+Sans:wght@400;500;600;700;800',
-    'PT Serif': 'family=PT+Serif:wght@400;700',
-    'Public Sans': 'family=Public+Sans:wght@400;500;600;700;800',
-    Raleway: 'family=Raleway:wght@400;500;600;700;800',
-    'Reddit Mono': 'family=Reddit+Mono:wght@400;500;600;700',
-    'Red Hat Display': 'family=Red+Hat+Display:wght@400;500;600;700;800',
-    'Red Hat Text': 'family=Red+Hat+Text:wght@400;500;600;700',
-    Recursive: 'family=Recursive:wght@400;500;600;700',
-    'Roboto Slab': 'family=Roboto+Slab:wght@400;500;600;700',
-    'Schibsted Grotesk': 'family=Schibsted+Grotesk:wght@400;500;600;700;800',
-    'Share Tech Mono': 'family=Share+Tech+Mono',
-    'Source Sans 3': 'family=Source+Sans+3:wght@400;500;600;700;800',
-    'Source Code Pro': 'family=Source+Code+Pro:wght@400;500;600;700',
-    'Source Serif 4': 'family=Source+Serif+4:wght@400;500;600;700',
-    'Space Mono': 'family=Space+Mono:wght@400;700',
-    'Space Grotesk': 'family=Space+Grotesk:wght@400;500;700',
-    'Sometype Mono': 'family=Sometype+Mono:wght@400;500;600;700',
-    Spectral: 'family=Spectral:wght@400;500;600;700',
-    Sora: 'family=Sora:wght@400;500;600;700;800',
-    'Ubuntu Mono': 'family=Ubuntu+Mono:wght@400;700',
-    Urbanist: 'family=Urbanist:wght@400;500;600;700;800',
-    VT323: 'family=VT323',
-    'Work Sans': 'family=Work+Sans:wght@400;500;600;700;800',
-};
-
-function ensureThemeFonts(theme) {
-    const stacks = [theme.theme_body_font, theme.theme_heading_font, theme.theme_ui_font, theme.theme_mono_font].filter(Boolean);
-    const queries = new Set();
-    stacks.forEach((stack) => {
-        stack.split(',').map((part) => part.trim().replace(/^['"]|['"]$/g, '')).forEach((name) => {
-            if (GOOGLE_FONT_QUERIES[name]) queries.add(GOOGLE_FONT_QUERIES[name]);
-        });
-    });
-    if (!queries.size) return;
-    let link = document.getElementById('vyasa-runtime-fonts');
-    if (!link) {
-        link = document.createElement('link');
-        link.id = 'vyasa-runtime-fonts';
-        link.rel = 'stylesheet';
-        document.head.appendChild(link);
-    }
-    link.href = `https://fonts.googleapis.com/css2?${Array.from(queries).join('&')}&display=swap`;
-}
-
-function getHljsThemeHref(themeName) {
-    return `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${themeName}.min.css`;
-}
-
-function syncCodeThemeLinks(theme) {
-    const lightLink = document.getElementById('hljs-light');
-    const darkLink = document.getElementById('hljs-dark');
-    if (!lightLink || !darkLink) return;
-    const lightTheme = theme?.code_theme_light || lightLink.dataset.defaultTheme;
-    const darkTheme = theme?.code_theme_dark || darkLink.dataset.defaultTheme;
-    if (lightTheme) lightLink.href = getHljsThemeHref(lightTheme);
-    if (darkTheme) darkLink.href = getHljsThemeHref(darkTheme);
-    const dark = document.documentElement.classList.contains('dark');
-    lightLink.disabled = dark;
-    darkLink.disabled = !dark;
-}
-
-function applyThemePreset(theme) {
-    if (!theme) return;
-    const root = document.documentElement;
-    const page = document.getElementById('page-container');
-    const targets = [root, page].filter(Boolean);
-    const runtimeThemeVars = new Set();
-    Object.values(window.__VYASA_THEME_PRESETS__ || {}).forEach((preset) => {
-        Object.keys(preset || {}).forEach((key) => {
-            if (!key.startsWith('theme_') || key === 'theme_preset') return;
-            const cssName = key === 'theme_body_font' ? '--vyasa-font-body'
-                : key === 'theme_heading_font' ? '--vyasa-font-heading'
-                : key === 'theme_ui_font' ? '--vyasa-font-ui'
-                : key === 'theme_mono_font' ? '--vyasa-font-mono'
-                : `--vyasa-${key.slice(6).replace(/_/g, '-')}`;
-            runtimeThemeVars.add(cssName);
-        });
-    });
-    targets.forEach((el) => {
-        runtimeThemeVars.forEach((cssName) => el.style.removeProperty(cssName));
-    });
-    Object.entries(theme).forEach(([key, value]) => {
-        if (!key.startsWith('theme_') || !value || key === 'theme_preset') return;
-        const cssName = key === 'theme_body_font' ? '--vyasa-font-body'
-            : key === 'theme_heading_font' ? '--vyasa-font-heading'
-            : key === 'theme_ui_font' ? '--vyasa-font-ui'
-            : key === 'theme_mono_font' ? '--vyasa-font-mono'
-            : `--vyasa-${key.slice(6).replace(/_/g, '-')}`;
-        targets.forEach((el) => el.style.setProperty(cssName, String(value)));
-    });
-    if (theme.theme_primary) targets.forEach((el) => el.style.setProperty('--vyasa-primary-dim', `color-mix(in srgb, ${theme.theme_primary} 82%, black)`));
-    ensureThemeFonts(theme);
-    syncCodeThemeLinks(theme);
-}
-
-function getVisibleThemeControl(id) {
-    const nodes = Array.from(document.querySelectorAll(`#${id}`));
-    return nodes.find((node) => {
-        const rect = node.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-    }) || nodes[nodes.length - 1] || null;
-}
-
-function getThemeSwitcher(source) {
-    return source?.closest?.('[data-theme-switcher]') || document.querySelector('[data-theme-switcher]');
-}
-
-function syncThemePresetSelect(next, source) {
-    const scope = getThemeSwitcher(source);
-    const label = scope?.querySelector('#theme-preset-active-label') || getVisibleThemeControl('theme-preset-active-label');
-    if (label) label.textContent = next || 'Theme';
-    const menu = scope?.querySelector('#theme-preset-menu') || getVisibleThemeControl('theme-preset-menu');
-    (menu ? Array.from(menu.querySelectorAll('.theme-preset-option')) : []).forEach((option) => {
-        const active = option.dataset.themeName === next;
-        option.classList.toggle('is-active', active);
-    });
-}
-
-function syncThemePresetDebug(root = document) {
-    const presets = window.__VYASA_THEME_PRESETS__ || {};
-    const meta = window.__VYASA_THEME_EXTENSION_META__ || {};
-    const stored = JSON.parse(localStorage.getItem('__FRANKEN__') || '{"mode":"light"}');
-    const label = root.querySelector ? root.querySelector('#theme-preset-active-label') : getVisibleThemeControl('theme-preset-active-label');
-    const active = stored.preset || (label ? label.textContent.trim() : '') || '';
-    const resolved = stored.resolvedPreset || active;
-    if (active && presets[resolved]) {
-        syncThemePresetSelect(active);
-        applyThemePreset(presets[resolved]);
-    } else if (active && meta[active] && meta[active].randomizable) {
-        window.vyasaApplyThemePreset(active);
-    }
-}
-
-window.vyasaToggleThemePresetMenu = function vyasaToggleThemePresetMenu(source) {
-    const menu = getThemeSwitcher(source)?.querySelector('#theme-preset-menu') || getVisibleThemeControl('theme-preset-menu');
-    if (!menu) return;
-    menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-};
-
-window.vyasaApplyThemePreset = function vyasaApplyThemePreset(next, source) {
-    const presets = window.__VYASA_THEME_PRESETS__ || {};
-    const meta = window.__VYASA_THEME_EXTENSION_META__ || {};
-    const franken = JSON.parse(localStorage.getItem('__FRANKEN__') || '{"mode":"light"}');
-    let resolved = next;
-    if (next && meta[next] && meta[next].randomizable) {
-        const choices = Array.isArray(meta[next].choices) ? meta[next].choices.filter((name) => presets[name]) : [];
-        if (choices.length) {
-            const currentResolved = franken.resolvedPreset || '';
-            const pool = choices.length > 1 ? choices.filter((name) => name !== currentResolved) : choices;
-            resolved = pool[Math.floor(Math.random() * pool.length)] || choices[0];
-        }
-    }
-    if (next && presets[resolved]) {
-        syncThemePresetSelect(next, source);
-        applyThemePreset(presets[resolved]);
-        franken.preset = next;
-        franken.resolvedPreset = resolved;
-    } else {
-        delete franken.preset;
-        delete franken.resolvedPreset;
-        window.location.reload();
-        return;
-    }
-    localStorage.setItem('__FRANKEN__', JSON.stringify(franken));
-};
-
-window.vyasaApplyRandomThemePreset = function vyasaApplyRandomThemePreset(source) {
-    const presets = Object.keys(window.__VYASA_THEME_PRESETS__ || {});
-    const meta = window.__VYASA_THEME_EXTENSION_META__ || {};
-    if (!presets.length) return;
-    const label = getThemeSwitcher(source)?.querySelector('#theme-preset-active-label') || getVisibleThemeControl('theme-preset-active-label');
-    const current = label ? label.textContent.trim() : '';
-    const selectable = presets.filter((name) => name !== (meta[name]?.resolvedOnly ? name : ''));
-    const pool = selectable.length > 1 ? selectable.filter((name) => name !== current) : selectable;
-    const next = pool[Math.floor(Math.random() * pool.length)];
-    window.vyasaApplyThemePreset(next, source);
-};
-
 function getDynamicGanttWidth() {
     // Check if any mermaid wrapper has custom gantt width
     const wrappers = document.querySelectorAll('.mermaid-wrapper[data-gantt-width]');
@@ -847,7 +637,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     window.__vyasaRenderD2?.();
-    renderTasksGraphs(document);
 });
 
 function initRevealDiagramRefresh() {

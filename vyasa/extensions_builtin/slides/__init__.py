@@ -15,9 +15,9 @@ class SlidesExtension(VyasaExtensionBase):
 
 
 def _slide_renderer(path: str, htmx, request):
-    from ... import core
+    from ... import content_routes, core
 
-    return core.render_slide_deck(
+    return content_routes.render_slide_deck(
         path,
         htmx,
         request,

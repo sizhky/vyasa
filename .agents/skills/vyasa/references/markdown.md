@@ -24,6 +24,22 @@ Append `.md` to any post URL to fetch its source: `/posts/my-note.md`
 
 For normal page navigation, do the opposite: use the Vyasa route without `.md`, such as `/posts/my-note` or `my-note#section`. The `.md` suffix is only for explicit raw-source access.
 
+## Markdown includes
+
+Vyasa code-include syntax can now treat markdown files as markdown instead of as code blocks.
+
+```markdown
+{ ./guide.md ln[1:40] }
+{ ./guide.md#api }
+{* ./guide.md#api *}
+```
+
+- When the included file ends in `.md`, the included content renders as native markdown.
+- `ln[start:end]` on a `.md` include renders just that line slice as markdown.
+- `#section` on a `.md` include renders the whole heading section matching that anchor, up to the next heading of the same or higher level.
+- Both plain-brace and starred include forms work; the starred form remains backward-compatible.
+- For normal links in prose, still prefer route-style links like `guide#api` rather than `.md`, unless you explicitly want raw source.
+
 ## Extended inline syntax
 
 ```markdown

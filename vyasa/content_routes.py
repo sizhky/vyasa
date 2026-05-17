@@ -4,8 +4,10 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from fasthtml.common import A, Button, Div, H1, Kbd, NotStr, Response, Script, Span, to_xml
+from fasthtml.common import A, Button, Div, H1, Kbd, Link, NotStr, Response, Script, Span, to_xml
 from monsterui.all import UkIcon
+from .assets import asset_url
+from .config import get_config
 from .content_tree import ContentTree
 from .document_pages import (
     PAGE_TITLE_CLS,
@@ -14,16 +16,36 @@ from .document_pages import (
     copy_raw_nodes,
     copy_text_button,
     document_header,
+    fold_all_button,
     frontmatter_error_nodes,
     frontmatter_metadata_block,
     present_button,
 )
-from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, get_adjacent_posts, strip_more_marker
+from .extensions import get_extension_runtime, refresh_extension_runtime
+from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, expand_markdown_includes_for_reading, get_adjacent_posts, strip_more_marker
 from .extensions_builtin.markdown.renderer import _render_markdown_fragment
 from .tree_tables import parse_tree_table, render_tree_table_html
 from .extensions_builtin.slides.deck import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
 
 FALLBACK_HOME_SLUG = "__home__"
+
+
+def _bundle_nodes_for_collector(asset_collector):
+    runtime = get_extension_runtime()
+    if runtime is None:
+        runtime = refresh_extension_runtime(get_config().get_extensions_config())
+    if not asset_collector or not runtime:
+        return []
+    nodes = []
+    for bundle_name in asset_collector.requested:
+        bundle = runtime.bundles.get(bundle_name)
+        if not bundle:
+            continue
+        for css_href in bundle.css:
+            nodes.append(Link(rel="stylesheet", href=asset_url(css_href)))
+        for js_src in bundle.js:
+            nodes.append(Script(src=asset_url(js_src), type="module"))
+    return nodes
 
 
 def _resolve_slide_width(metadata):
@@ -127,6 +149,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     metadata, raw_content = parse_frontmatter(file_path)
     frontmatter_error = metadata.get("__frontmatter_error__")
     post_title, render_content = resolve_markdown_title(file_path, abbreviations=abbreviations)
+    read_source = expand_markdown_includes_for_reading(render_content, current_path=path, root_folder=root)
     md_start = time.time()
     content = from_md(strip_more_marker(render_content), current_path=path)
     logger.debug(f"[DEBUG] Markdown rendering took {(time.time() - md_start) * 1000:.2f}ms")
@@ -135,9 +158,9 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     error_chip, error_toast, error_script = frontmatter_error_nodes(file_path, frontmatter_error)
     relative_file_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
     path_button, path_toast, path_target = copy_text_button("Copy Relative Path", relative_file_path, "relative-path-clipboard", "relative-path-toast")
-    actions = (error_chip if error_chip else Div(), present_button(path), copy_raw_button("Copy Markdown", "raw-md-clipboard", "raw-md-toast"), path_button)
+    actions = (error_chip if error_chip else Div(), fold_all_button(), present_button(path), copy_raw_button("Copy Markdown", "raw-md-clipboard", "raw-md-toast"), path_button)
     post_content = Div(
-        document_header(post_title, render_content, actions=actions, breadcrumbs=breadcrumbs, file_path=file_path),
+        document_header(post_title, read_source, actions=actions, breadcrumbs=breadcrumbs, file_path=file_path),
         frontmatter_metadata_block(metadata) or Div(),
         error_toast if error_toast else Div(),
         error_script if error_script else Div(),
@@ -236,14 +259,24 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         )
     else:
         slide_markdown = deck.body(slide_num - 1)
+        runtime = get_extension_runtime()
+        if runtime is None:
+            runtime = refresh_extension_runtime(get_config().get_extensions_config())
+        asset_collector = runtime.new_asset_collector() if runtime else None
         reveal_units = build_slide_reveal_units(
             slide_markdown,
-            render_fragment=_render_markdown_fragment,
+            render_fragment=lambda body, current_path=None, slide_mode=False: _render_markdown_fragment(
+                body,
+                current_path=current_path,
+                slide_mode=slide_mode,
+                asset_collector=asset_collector,
+            ),
             current_path=doc_path,
             config=reveal_config,
         ) if reveal_config.enabled else []
         if reveal_units:
             slide_body = Div(
+                *_bundle_nodes_for_collector(asset_collector),
                 *[
                     Div(
                         NotStr(unit["html"]),
@@ -324,7 +357,7 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
         relative_file_path = content_slug_for_path(index_file, strip_suffix=False) or index_file.name
         path_button, path_toast, path_target = copy_text_button("Copy Relative Path", relative_file_path, "relative-path-clipboard", "relative-path-toast")
         page_content = Div(
-            document_header(page_title, render_content, actions=(present_button(index_path), copy_raw_button("Copy Markdown", "raw-md-clipboard", "raw-md-toast"), path_button), file_path=index_file),
+            document_header(page_title, render_content, actions=(fold_all_button(), present_button(index_path), copy_raw_button("Copy Markdown", "raw-md-clipboard", "raw-md-toast"), path_button), file_path=index_file),
             path_toast,
             path_target,
             *copy_raw_nodes(raw_content),
@@ -337,7 +370,7 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
     raw_content = _fallback_home_markdown(blog_title)
     fallback_title = f"Welcome to {blog_title}!"
     fallback_body = Div(
-        document_header(fallback_title, raw_content, actions=(present_button(FALLBACK_HOME_SLUG), copy_raw_button("Copy Markdown", "raw-md-clipboard", "raw-md-toast"))),
+        document_header(fallback_title, raw_content, actions=(fold_all_button(), present_button(FALLBACK_HOME_SLUG), copy_raw_button("Copy Markdown", "raw-md-clipboard", "raw-md-toast"))),
         *copy_raw_nodes(raw_content),
         from_md(raw_content, current_path=FALLBACK_HOME_SLUG),
         cls="w-full",

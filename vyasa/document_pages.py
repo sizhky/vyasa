@@ -82,6 +82,17 @@ def copy_text_button(label: str, text: str, target_id: str, toast_id: str):
     )
 
 
+def fold_all_button():
+    return Button(
+        UkIcon("chevron-down", cls="w-4 h-4"),
+        Span("Fold all", cls="text-sm font-medium"),
+        type="button",
+        hidden=True,
+        data_vyasa_fold_all="open",
+        cls="vyasa-fold-all-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+    )
+
+
 def present_button(slug: str):
     return A(
         UkIcon("monitor", cls="w-4 h-4"),

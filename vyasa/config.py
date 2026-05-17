@@ -55,15 +55,18 @@ class VyasaConfig:
         """
         self._config = {}
         self._loaded_config_path: Optional[Path] = None
+        self._explicit_config_path = config_path is not None
         self._load_config(config_path)
     
     def _load_config(self, config_path: Optional[Path] = None):
         """Load configuration from .vyasa file if it exists."""
         # Try to find .vyasa file
         config_file = None
+        self._loaded_config_path = config_path if config_path is not None else None
         
-        if config_path and config_path.exists():
-            config_file = config_path
+        if config_path is not None:
+            if config_path.exists():
+                config_file = config_path
         else:
             # Search in VYASA_ROOT first (if set)
             root = os.getenv('VYASA_ROOT')
@@ -119,8 +122,21 @@ class VyasaConfig:
     
     def get_root_folder(self) -> Path:
         """Get the blog root folder path."""
-        root = self.get('root', 'VYASA_ROOT', '.')
-        return Path(root).resolve()
+        root = self._config.get('root', None)
+        env_root = os.getenv('VYASA_ROOT')
+        if root in (None, ""):
+            if self._explicit_config_path:
+                return (self._loaded_config_path.parent if self._loaded_config_path else Path.cwd()).resolve()
+            if env_root:
+                return Path(env_root).expanduser().resolve()
+            if self._loaded_config_path is not None:
+                return self._loaded_config_path.parent.resolve()
+            return Path.cwd().resolve()
+        path = Path(str(root)).expanduser()
+        if not path.is_absolute():
+            base = self._loaded_config_path.parent if self._loaded_config_path else Path.cwd()
+            path = base / path
+        return path.resolve()
 
     def get_vyasa_roots(self) -> list[Path]:
         """Get extra folders to expose as top-level content roots."""

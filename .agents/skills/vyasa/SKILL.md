@@ -60,7 +60,7 @@ Core rules:
 - `tasks`/`items` fences support optional YAML frontmatter first for renderer options like `title`, `default_open_depth`, `width`, `min_height`, and `height`.
 - `tasks`/`items` fences also support color-driven grouping. Preferred syntax is `color_by:` with nested attr palettes like `color_by: { status: { "On Track": "#86efac" } }`; the first declared key becomes the default color mode. Legacy `color_by: status` + `color_palette:` remains supported.
 - The graph body under that frontmatter is still terse line-based syntax, not YAML.
-- For user-facing Vyasa navigation, prefer route slugs and anchors like `/posts/guide#part` or `guide#part`; do not append `.md` unless the goal is explicitly raw markdown source.
+- For user-facing Vyasa navigation, prefer route slugs and anchors like `/posts/guide#part` or `guide#part`; do not append `.md` unless the goal is explicitly raw markdown source. Exception: inside Vyasa code-include syntax, `.md` is valid source input and now has markdown-aware behavior, such as `{ ./guide.md ln[1:80] }` rendering native markdown and `{ ./guide.md#part }` rendering the whole named section.
 - Canonical body syntax: `id: <graph-id>`, `title: <graph-title>`, indented `Group Label:` lines, `- id :: Item Label` item lines, and global edge lines like `a, b ->|edge label| c`.
 - Do not wrap an entire `items` graph in one top-level group just to create a root node; it renders poorly. Start with multiple meaningful top-level groups, or with direct items when grouping is not useful.
 - Use indentation for nesting. `Group Label:` lines nested under group lines make child groups. `- id :: Item Label` lines nested under a group belong to that group.

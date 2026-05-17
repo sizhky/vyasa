@@ -15,9 +15,10 @@ from monsterui.all import UkIcon, apply_classes
 
 from ...assets import asset_url
 from ...config import get_config
-from ...extensions import bind_asset_collector, get_extension_runtime, refresh_extension_runtime
+from ...extensions import bind_asset_collector, current_asset_collector, get_extension_runtime, refresh_extension_runtime
 from ...helpers import (
     _plain_text_from_html,
+    _strip_leading_frontmatter_block,
     content_path_for_slug,
     content_url_for_slug,
     get_content_mounts,
@@ -168,9 +169,19 @@ def _render_callout(kind, body, render_body, title=None, fold=None):
     return f'<div class="vyasa-callout vyasa-callout-{theme_kind} my-6 rounded-xl border px-5 py-4" data-callout="{html.escape(kind)}">{head}{body_html}</div>'
 
 
-def _render_markdown_fragment(body, img_dir=None, current_path=None, slide_mode=False):
-    rendered = to_xml(from_md(body, img_dir=img_dir, current_path=current_path, slide_mode=slide_mode))
-    rendered = re.sub(r'^<div class="w-full">\s*<link[^>]+>\s*', "", rendered)
+def _render_markdown_fragment(body, img_dir=None, current_path=None, slide_mode=False, asset_collector=None):
+    rendered = to_xml(
+        from_md(
+            body,
+            img_dir=img_dir,
+            current_path=current_path,
+            slide_mode=slide_mode,
+            asset_collector=asset_collector,
+            emit_bundle_nodes=False,
+        )
+    )
+    rendered = re.sub(r'^<div class="w-full">\s*', "", rendered)
+    rendered = re.sub(r'^(?:<link[^>]+>\s*)+', "", rendered)
     return re.sub(r"\s*</div>\s*$", "", rendered)
 
 
@@ -186,6 +197,26 @@ def _infer_code_language(path):
 def _parse_line_spec(spec):
     match = re.search(r"ln\[(\d+):(\d+)\]", spec)
     return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def _extract_markdown_section(text, target_anchor):
+    body = _strip_leading_frontmatter_block(text)
+    heading_re = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
+    headings = list(heading_re.finditer(body))
+    counts = {}
+    for index, match in enumerate(headings):
+        level = len(match.group(1))
+        heading_text, anchor = resolve_heading_anchor(match.group(2).strip(), counts)
+        if anchor != target_anchor:
+            continue
+        end = len(body)
+        for later in headings[index + 1:]:
+            if len(later.group(1)) <= level:
+                end = later.start()
+                break
+        section = body[match.start():end].strip()
+        return section if section.startswith("#") else f'{"#" * level} {heading_text}\n\n{section}'
+    return None
 
 
 def _parse_highlight_spec(spec):
@@ -206,6 +237,10 @@ def _parse_fence_attrs(info_string):
         else:
             attrs[part] = True
     return lang, attrs
+
+
+def _normalized_fence_code(token):
+    return html.unescape(token.content)
 
 
 def _resolve_line_numbers(default_enabled, attrs=None, spec=""):
@@ -634,7 +669,7 @@ class ContentRenderer(FrankenRenderer):
 
     def render_block_code(self, token):
         lang, attrs = _parse_fence_attrs(getattr(token, "language", ""))
-        code = self.render_raw_text(token)
+        code = _normalized_fence_code(token)
         runtime = get_extension_runtime()
         if runtime:
             context = RenderContext(
@@ -645,8 +680,6 @@ class ContentRenderer(FrankenRenderer):
             handler = runtime.markdown_fences.get(lang)
             if handler:
                 return handler(code, context, attrs)
-        raw_code = code
-        code = html.unescape(code)
         line_numbers = bool(lang) and _resolve_line_numbers(get_config().get_code_line_numbers(), attrs=attrs)
         highlight_spec = str(attrs.get("hl", "")).replace(":", "-").replace(" ", "")
         return _emit_code_shell(
@@ -705,11 +738,12 @@ class ContentRenderer(FrankenRenderer):
         return f'<a href="{href}"{hx}{ext}{download_attr}{boost_attr} class="{link_class}"{title}>{inner}</a>'
 
 
-def from_md(content, img_dir=None, current_path=None, slide_mode=False):
+def from_md(content, img_dir=None, current_path=None, slide_mode=False, asset_collector=None, emit_bundle_nodes=True):
     runtime = get_extension_runtime()
     if runtime is None:
         runtime = refresh_extension_runtime(get_config().get_extensions_config())
-    asset_collector = runtime.new_asset_collector() if runtime else None
+    inherited_asset_collector = current_asset_collector()
+    asset_collector = asset_collector or inherited_asset_collector or (runtime.new_asset_collector() if runtime else None)
     context = RenderContext(
         current_path=current_path,
         img_dir=img_dir,
@@ -783,22 +817,40 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
             for include_id, include in code_include_store.items():
                 if include["file_path"].exists():
                     text = include["file_path"].read_text(encoding="utf-8")
-                    line_spec = _parse_line_spec(include["spec"])
-                    start, end = line_spec if line_spec else (1, len(text.splitlines()))
-                    lines = text.splitlines()
-                    snippet = "\n".join(lines[start - 1:end])
-                    lang = _infer_code_language(include["path_text"])
-                    hl = _parse_highlight_spec(include["spec"])
-                    title = content_slug_for_path(include["file_path"], strip_suffix=False) or include["path_text"]
-                    line_numbers = _resolve_line_numbers(get_config().get_code_line_numbers(), spec=include["spec"])
-                    rendered = _render_code_include(
-                        snippet,
-                        lang=lang,
-                        start=start,
-                        highlight_spec=hl,
-                        title=title,
-                        line_numbers=line_numbers,
-                    )
+                    lang = _infer_code_language(include.get("path_only") or include["path_text"])
+                    if lang == "markdown":
+                        include_current_path = content_slug_for_path(include["file_path"])
+                        snippet = None
+                        if include.get("section"):
+                            snippet = _extract_markdown_section(text, include["section"])
+                        if snippet is None:
+                            line_spec = _parse_line_spec(include["spec"])
+                            start, end = line_spec if line_spec else (1, len(text.splitlines()))
+                            lines = text.splitlines()
+                            snippet = "\n".join(lines[start - 1:end])
+                        rendered = _render_markdown_fragment(
+                            snippet,
+                            img_dir=img_dir,
+                            current_path=include_current_path or current_path,
+                            slide_mode=slide_mode,
+                            asset_collector=asset_collector,
+                        )
+                    else:
+                        line_spec = _parse_line_spec(include["spec"])
+                        start, end = line_spec if line_spec else (1, len(text.splitlines()))
+                        lines = text.splitlines()
+                        snippet = "\n".join(lines[start - 1:end])
+                        hl = _parse_highlight_spec(include["spec"])
+                        title = content_slug_for_path(include["file_path"], strip_suffix=False) or include["path_text"]
+                        line_numbers = _resolve_line_numbers(get_config().get_code_line_numbers(), spec=include["spec"])
+                        rendered = _render_code_include(
+                            snippet,
+                            lang=lang,
+                            start=start,
+                            highlight_spec=hl,
+                            title=title,
+                            line_numbers=line_numbers,
+                        )
                 else:
                     rendered = _render_callout(
                         "warning",
@@ -812,8 +864,8 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False):
         html_out = _render_todo_html(html_out)
         html_out = _render_double_rules(html_out)
         html_out = _wrap_tables(html_out, get_config().get_table_col_max_width())
-    bundle_nodes = [Link(rel="stylesheet", href=_asset_url("/static/sidenote.css"))]
-    if asset_collector:
+    bundle_nodes = [Link(rel="stylesheet", href=_asset_url("/static/sidenote.css"))] if emit_bundle_nodes else []
+    if emit_bundle_nodes and asset_collector:
         for bundle_name in asset_collector.requested:
             bundle = runtime.bundles.get(bundle_name) if runtime else None
             if not bundle:

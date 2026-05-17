@@ -113,16 +113,23 @@ def preprocess_code_includes(content, current_path=None, root_folder=None):
         return f"@@VYASA_CODE_BLOCK_{len(protected)-1}@@"
 
     include_store = {}
-    pattern = re.compile(r"^[ \t]*\{\*\s+(.+?)\s+\*\}[ \t]*$", re.MULTILINE)
+    pattern = re.compile(r"^[ \t]*(?:\{\*\s+(.+?)\s+\*\}|\{\s+(.+?)\s+\})[ \t]*$", re.MULTILINE)
     base_dir = (Path(root_folder) / Path(current_path).parent) if current_path and root_folder else None
     content = re.sub(r"(```+|~~~+)[\s\S]*?\1", protect, content, flags=re.MULTILINE)
 
     def replace(match):
-        spec = match.group(1).strip()
+        spec = (match.group(1) or match.group(2) or "").strip()
         path_text = spec.split()[0]
-        file_path = (base_dir / path_text).resolve() if base_dir else Path(path_text).resolve()
+        path_only, _, section = path_text.partition("#")
+        file_path = (base_dir / path_only).resolve() if base_dir else Path(path_only).resolve()
         include_id = _placeholder_id(match.group(0))
-        include_store[include_id] = {"spec": spec, "path_text": path_text, "file_path": file_path}
+        include_store[include_id] = {
+            "spec": spec,
+            "path_text": path_text,
+            "path_only": path_only,
+            "file_path": file_path,
+            "section": section,
+        }
         return f'<div class="vyasa-code-include-placeholder" data-include-id="{include_id}"></div>'
 
     content = pattern.sub(replace, content)

@@ -83,6 +83,437 @@ function switchTab(tabsId, index) {
 }
 window.switchTab = switchTab;
 
+function initSearchPlaceholderCycle(rootElement = document) {
+    const inputs = rootElement.querySelectorAll('input[data-placeholder-cycle]');
+    inputs.forEach((input) => {
+        if (input.dataset.placeholderCycleBound === 'true') {
+            return;
+        }
+        input.dataset.placeholderCycleBound = 'true';
+        const primary = input.dataset.placeholderPrimary || input.getAttribute('placeholder') || '';
+        const alt = input.dataset.placeholderAlt || '';
+        if (!alt) {
+            return;
+        }
+        let showAlt = false;
+        setInterval(() => {
+            if (input.value) {
+                return;
+            }
+            showAlt = !showAlt;
+            input.setAttribute('placeholder', showAlt ? alt : primary);
+        }, 10000);
+    });
+}
+
+function initCodeBlockCopyButtons(rootElement = document) {
+    const template = document.getElementById('vyasa-code-copy-tpl');
+    if (!template) {
+        return;
+    }
+    rootElement.querySelectorAll('.code-block').forEach((block) => {
+        if (block.querySelector('.code-copy-button')) {
+            return;
+        }
+        const button = template.content.firstElementChild.cloneNode(true);
+        block.insertBefore(button, block.firstChild);
+    });
+}
+
+function initCodeHighlighting(rootElement = document) {
+    if (!window.hljs) {
+        return;
+    }
+    rootElement.querySelectorAll('pre > code').forEach((code) => {
+        if (code.dataset.hljsBound === 'true') {
+            return;
+        }
+        if (code.closest('.mermaid-wrapper,.d2-wrapper')) {
+            return;
+        }
+        window.hljs.highlightElement(code);
+        code.dataset.hljsBound = 'true';
+    });
+}
+
+function copyText(text, done) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopyText(text, done));
+        return;
+    }
+    fallbackCopyText(text, done);
+}
+
+function fallbackCopyText(text, done) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'absolute';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    done();
+}
+
+function initHeadingPermalinkCopy(root = document) {
+    root.querySelectorAll('.vyasa-heading-permalink').forEach((link) => {
+        if (link.dataset.copyBound === 'true') return;
+        link.dataset.copyBound = 'true';
+        link.addEventListener('click', (event) => {
+            const url = new URL(link.getAttribute('href') || '', window.location.href).toString();
+            event.preventDefault();
+            history.replaceState(null, '', url);
+            copyText(url, () => {
+                link.classList.add('is-copied');
+                clearTimeout(link._copiedTimer);
+                link._copiedTimer = setTimeout(() => link.classList.remove('is-copied'), 1400);
+            });
+        });
+    });
+}
+
+function syncPostsSearchControls(block) {
+    if (!block) return;
+    const input = block.querySelector('.posts-search-block input[type="search"][name="q"]');
+    const preview = block.querySelector('.posts-search-preview-button');
+    const clear = block.querySelector('.posts-search-clear-button');
+    if (!input) return;
+    const hasValue = !!input.value.trim();
+    const previewBase = preview?.dataset.searchPreviewBase || '/search/preview';
+    const previewHref = hasValue ? `${previewBase}/s/${encodeSearchPreviewTerm(input.value.trim())}` : previewBase;
+    if (preview) {
+        preview.setAttribute('href', previewHref);
+        preview.setAttribute('aria-hidden', hasValue ? 'false' : 'true');
+        preview.setAttribute('tabindex', hasValue ? '0' : '-1');
+        preview.style.opacity = hasValue ? '1' : '0';
+        preview.style.pointerEvents = hasValue ? 'auto' : 'none';
+    }
+    if (clear) {
+        clear.style.opacity = hasValue ? '1' : '0';
+        clear.style.pointerEvents = hasValue ? 'auto' : 'none';
+    }
+}
+
+function encodeSearchPreviewTerm(value) {
+    const bytes = new TextEncoder().encode(value);
+    let binary = '';
+    bytes.forEach((byte) => {
+        binary += String.fromCharCode(byte);
+    });
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function decodeSearchPreviewTerm(token) {
+    if (!token) return '';
+    try {
+        const normalized = token.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+        const binary = atob(padded);
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        return new TextDecoder().decode(bytes);
+    } catch (err) {
+        return '';
+    }
+}
+
+function extractSearchResultsHtml(html) {
+    const template = document.createElement('template');
+    template.innerHTML = html || '';
+    return template.content.querySelector('.posts-search-results-list')?.outerHTML || html || '';
+}
+
+function getPostsSearchTermFromLocation() {
+    const path = window.location.pathname || '';
+    const previewPrefix = '/search/preview/s/';
+    if (!path.startsWith(previewPrefix)) {
+        return '';
+    }
+    return decodeSearchPreviewTerm(path.slice(previewPrefix.length));
+}
+
+function openPostsSearchPreview(block) {
+    if (!block) return;
+    const input = block.querySelector('input[type="search"][name="q"]');
+    const preview = block.querySelector('.posts-search-preview-button');
+    const trimmed = input?.value.trim();
+    if (!trimmed || !preview) {
+        return;
+    }
+    const previewBase = preview.dataset.searchPreviewBase || '/search/preview';
+    const previewHref = `${previewBase}/s/${encodeSearchPreviewTerm(trimmed)}`;
+    preview.setAttribute('href', previewHref);
+    if (window.htmx && typeof window.htmx.ajax === 'function') {
+        window.htmx.ajax('GET', previewHref, {
+            target: '#main-content',
+            swap: 'outerHTML show:window:top settle:0.1s'
+        }).then(() => {
+            const currentUrl = `${window.location.pathname}${window.location.search}`;
+            if (currentUrl !== previewHref) {
+                window.history.pushState(null, '', previewHref);
+            }
+        });
+        return;
+    }
+    window.location.href = previewHref;
+}
+
+function initPostsSearchPersistence(rootElement = document) {
+    const input = rootElement.querySelector('.posts-search-block input[type="search"][name="q"]');
+    const results = rootElement.querySelector('.posts-search-results');
+    const block = input?.closest('.posts-search-block');
+    if (!input || !results) {
+        return;
+    }
+    if (input.dataset.searchPersistenceBound === 'true') {
+        return;
+    }
+    input.dataset.searchPersistenceBound = 'true';
+    const termKey = 'vyasa:postsSearchTerm';
+    const resultsKey = 'vyasa:postsSearchResults';
+    const enhanceGatherLink = () => {
+        const gatherLink = results.querySelector('a[href^="/search/gather"]');
+        if (!gatherLink) {
+            return;
+        }
+        const href = gatherLink.getAttribute('href');
+        if (!href) {
+            return;
+        }
+        gatherLink.setAttribute('hx_get', href);
+        gatherLink.setAttribute('hx_target', '#main-content');
+        gatherLink.setAttribute('hx_push_url', 'true');
+        gatherLink.setAttribute('hx_swap', 'outerHTML show:window:top settle:0.1s');
+    };
+    let storedTerm = '';
+    let storedResults = null;
+    const urlTerm = getPostsSearchTermFromLocation();
+    try {
+        storedTerm = localStorage.getItem(termKey) || '';
+        storedResults = localStorage.getItem(resultsKey);
+    } catch (err) {
+        storedTerm = '';
+        storedResults = null;
+    }
+    if (urlTerm) {
+        input.value = urlTerm;
+    } else if (storedTerm && !input.value) {
+        input.value = storedTerm;
+    }
+    if (storedResults && input.value) {
+        try {
+            const payload = JSON.parse(storedResults);
+            if (payload && payload.term === input.value && payload.html) {
+                results.innerHTML = payload.html;
+                enhanceGatherLink();
+            }
+        } catch (err) {}
+    }
+    syncPostsSearchControls(block);
+    const persistTerm = () => {
+        try {
+            if (input.value) {
+                localStorage.setItem(termKey, input.value);
+            } else {
+                localStorage.removeItem(termKey);
+                localStorage.removeItem(resultsKey);
+            }
+        } catch (err) {}
+    };
+    input.addEventListener('input', persistTerm);
+    input.addEventListener('input', () => syncPostsSearchControls(block));
+    input.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') {
+            return;
+        }
+        const trimmed = input.value.trim();
+        if (!trimmed) {
+            return;
+        }
+        const preview = block?.querySelector('.posts-search-preview-button');
+        if (!preview) {
+            return;
+        }
+        event.preventDefault();
+        openPostsSearchPreview(block);
+    });
+    const fetchResults = (query) => {
+        return fetch(`/_sidebar/posts/search?q=${query}`, { headers: { 'HX-Request': 'true' } })
+            .then((response) => response.text())
+            .then((html) => {
+                results.innerHTML = extractSearchResultsHtml(html);
+                enhanceGatherLink();
+                try {
+                    localStorage.setItem(resultsKey, JSON.stringify({
+                        term: input.value,
+                        html: results.innerHTML
+                    }));
+                } catch (err) {}
+            })
+            .catch(() => {});
+    };
+    document.body.addEventListener('htmx:afterSwap', (event) => {
+        if (event.target !== results) {
+            return;
+        }
+        enhanceGatherLink();
+        try {
+            localStorage.setItem(resultsKey, JSON.stringify({
+                term: input.value,
+                html: results.innerHTML
+            }));
+        } catch (err) {}
+    });
+    if (input.value) {
+        const query = encodeURIComponent(input.value);
+        if (window.htmx && typeof window.htmx.ajax === 'function') {
+            window.htmx.ajax('GET', `/_sidebar/posts/search?q=${query}`, { target: results, swap: 'innerHTML' });
+        } else {
+            fetchResults(query);
+        }
+    }
+}
+
+function initSearchClearButtons(rootElement = document) {
+    const blocks = rootElement.querySelectorAll('.posts-search-block');
+    blocks.forEach((block) => {
+        const input = block.querySelector('input[type="search"][name="q"]');
+        const button = block.querySelector('.posts-search-clear-button');
+        const preview = block.querySelector('.posts-search-preview-button');
+        if (!input || !button) {
+            return;
+        }
+        if (button.dataset.clearBound === 'true') {
+            return;
+        }
+        button.dataset.clearBound = 'true';
+        syncPostsSearchControls(block);
+        input.addEventListener('input', () => syncPostsSearchControls(block));
+        button.addEventListener('click', () => {
+            input.value = '';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            syncPostsSearchControls(block);
+            const results = block.querySelector('.posts-search-results');
+            if (results) {
+                results.innerHTML = '';
+            }
+            try {
+                localStorage.removeItem('vyasa:postsSearchTerm');
+                localStorage.removeItem('vyasa:postsSearchResults');
+            } catch (err) {}
+        });
+        if (preview) {
+            preview.addEventListener('click', (event) => {
+                if (!input.value.trim()) {
+                    event.preventDefault();
+                    return;
+                }
+                event.preventDefault();
+                openPostsSearchPreview(block);
+            });
+        }
+    });
+}
+
+function initCommandPalette() {
+    if (document.getElementById('vyasa-command-palette')) return;
+    const palette = document.createElement('div');
+    palette.id = 'vyasa-command-palette';
+    palette.className = 'fixed inset-0 z-[9999] hidden bg-slate-950/45 backdrop-blur-sm';
+    palette.innerHTML = `
+        <div class="mx-auto mt-[12vh] w-[min(42rem,calc(100vw-2rem))] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-2xl">
+            <div class="border-b border-slate-200 dark:border-slate-800 p-3">
+                <input type="search" name="q" autocomplete="off" placeholder="Search file names..." class="vyasa-command-palette-input w-full bg-transparent px-2 py-2 text-base text-slate-800 dark:text-slate-100 outline-none" />
+            </div>
+            <div class="vyasa-command-palette-results max-h-[55vh] overflow-y-auto p-3"></div>
+        </div>`;
+    document.body.appendChild(palette);
+    const input = palette.querySelector('input');
+    const results = palette.querySelector('.vyasa-command-palette-results');
+    let timer = null;
+    let activeIndex = -1;
+    const resultLinks = () => Array.from(results.querySelectorAll('a.post-search-link'));
+    const setActive = (index) => {
+        const links = resultLinks();
+        links.forEach((link) => link.classList.remove('is-active'));
+        if (!links.length) {
+            activeIndex = -1;
+            return;
+        }
+        activeIndex = (index + links.length) % links.length;
+        links[activeIndex].classList.add('is-active');
+        links[activeIndex].scrollIntoView({ block: 'nearest' });
+    };
+    const close = () => palette.classList.add('hidden');
+    const open = () => {
+        palette.classList.remove('hidden');
+        input.focus();
+        input.select();
+        if (!results.innerHTML.trim()) results.innerHTML = '<div class="text-xs text-slate-500">Type to search file names.</div>';
+    };
+    const runSearch = () => {
+        const query = encodeURIComponent(input.value.trim());
+        fetch(`/_sidebar/posts/search?q=${query}`, { headers: { 'HX-Request': 'true' } }).then((response) => response.text()).then((html) => {
+            results.innerHTML = extractSearchResultsHtml(html);
+            setActive(0);
+            window.__vyasaInitBookmarksButtons?.(results);
+        }).catch(() => {});
+    };
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(runSearch, 180);
+    });
+    const openLink = (link) => {
+        const href = link?.getAttribute('href');
+        if (!href) return;
+        close();
+        document.body.classList.remove('pdf-focus');
+        if (window.htmx && typeof window.htmx.ajax === 'function') {
+            window.htmx.ajax('GET', href, {
+                target: '#main-content',
+                swap: 'outerHTML show:window:top settle:0.1s',
+                pushURL: true
+            });
+            if (window.location.pathname !== href) {
+                window.history.pushState(null, '', href);
+            }
+            return;
+        }
+        window.location.assign(href);
+    };
+    input.addEventListener('keydown', (event) => {
+        const links = resultLinks();
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setActive(activeIndex + 1);
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setActive(activeIndex - 1);
+        } else if (event.key === 'Enter' && links[activeIndex]) {
+            event.preventDefault();
+            openLink(links[activeIndex]);
+        }
+    });
+    palette.addEventListener('click', (event) => {
+        const link = event.target.closest('a');
+        if (link) {
+            event.preventDefault();
+            openLink(link);
+            return;
+        }
+        if (event.target === palette) close();
+    });
+    document.addEventListener('keydown', (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+            event.preventDefault();
+            open();
+        } else if (event.key === 'Escape' && !palette.classList.contains('hidden')) {
+            close();
+        }
+    }, true);
+}
+
 function initTabPanelHeights(rootElement = document) {
     const containers = rootElement.querySelectorAll('.tabs-container');
     containers.forEach((container) => {
@@ -540,7 +971,12 @@ function initHeadingFolds(root = document) {
         container.dataset.headingFoldsInit = '1';
     });
     const actions = main.querySelector('[data-vyasa-page-actions]');
-    if (createdFold && actions && !main.querySelector('[data-vyasa-fold-all]')) {
+    const existingControl = actions?.querySelector?.('[data-vyasa-fold-all]');
+    if (createdFold && existingControl) {
+        existingControl.hidden = false;
+        existingControl.dataset.vyasaFoldAll = 'open';
+        existingControl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 10 3 3 3-3"/></svg><span>Fold all</span>';
+    } else if (createdFold && actions && !main.querySelector('[data-vyasa-fold-all]')) {
         const control = document.createElement('button');
         control.type = 'button';
         control.className = 'vyasa-fold-all-button';
@@ -548,6 +984,8 @@ function initHeadingFolds(root = document) {
         control.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 10 3 3 3-3"/></svg><span>Fold all</span>';
         const copyButton = Array.from(actions.querySelectorAll('button')).find((button) => button.textContent?.includes('Copy Markdown'));
         actions.insertBefore(control, copyButton);
+    } else if (existingControl) {
+        existingControl.hidden = true;
     }
     main.dataset.headingFoldsInit = '1';
 }
@@ -885,10 +1323,6 @@ function initMobileMenus() {
     }
 }
 
-        }
-    }, true);
-}
-
 // Keyboard shortcuts for toggling sidebars
 function initKeyboardShortcuts() {
     // Prewarm the selectors to avoid lazy compilation delays
@@ -1083,6 +1517,7 @@ function initJsonFocusToggle() {
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
 }
 
+function replaceEscapedDollarPlaceholders(root) {
     const placeholder = '@@VYASA_DOLLAR@@';
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     const nodes = [];
@@ -1167,6 +1602,226 @@ function ensureFragmentStylesheets(root = document) {
             document.head.appendChild(link.cloneNode(true));
         }
     });
+}
+
+const GOOGLE_FONT_QUERIES = {
+    'Alegreya': 'family=Alegreya:wght@400;500;600;700',
+    Arimo: 'family=Arimo:wght@400;500;600;700',
+    Archivo: 'family=Archivo:wght@400;500;600;700',
+    Asap: 'family=Asap:wght@400;500;600;700',
+    Assistant: 'family=Assistant:wght@400;500;600;700;800',
+    'Azeret Mono': 'family=Azeret+Mono:wght@400;500;600;700',
+    'Be Vietnam Pro': 'family=Be+Vietnam+Pro:wght@400;500;600;700',
+    Besley: 'family=Besley:wght@400;500;600;700',
+    Bitter: 'family=Bitter:wght@400;500;600;700',
+    'Bricolage Grotesque': 'family=Bricolage+Grotesque:wght@400;500;600;700',
+    Cabin: 'family=Cabin:wght@400;500;600;700',
+    Cardo: 'family=Cardo:wght@400;700',
+    Chivo: 'family=Chivo:wght@400;500;600;700',
+    'Crimson Pro': 'family=Crimson+Pro:wght@400;500;600;700',
+    'Cutive Mono': 'family=Cutive+Mono',
+    'DM Sans': 'family=DM+Sans:wght@400;500;700',
+    Domine: 'family=Domine:wght@400;500;600;700',
+    'EB Garamond': 'family=EB+Garamond:wght@400;500;600;700',
+    'Fauna One': 'family=Fauna+One',
+    Figtree: 'family=Figtree:wght@400;500;600;700;800',
+    'Fira Code': 'family=Fira+Code:wght@400;500;600;700',
+    'Hanken Grotesk': 'family=Hanken+Grotesk:wght@400;500;600;700;800',
+    'Hepta Slab': 'family=Hepta+Slab:wght@400;500;600;700',
+    'IBM Plex Mono': 'family=IBM+Plex+Mono:wght@400;500;600;700',
+    Inconsolata: 'family=Inconsolata:wght@400;500;600;700',
+    Inter: 'family=Inter:wght@400;500;600;700;800',
+    'Instrument Serif': 'family=Instrument+Serif:ital@0;1',
+    'JetBrains Mono': 'family=JetBrains+Mono:wght@400;500;600;700;800',
+    Karla: 'family=Karla:wght@400;500;600;700;800',
+    Lexend: 'family=Lexend:wght@400;500;600;700;800',
+    'Libre Baskerville': 'family=Libre+Baskerville:wght@400;700',
+    'Libre Franklin': 'family=Libre+Franklin:wght@400;500;600;700;800',
+    Manrope: 'family=Manrope:wght@400;500;700;800',
+    Merriweather: 'family=Merriweather:wght@400;700',
+    'Merriweather Sans': 'family=Merriweather+Sans:wght@400;500;600;700;800',
+    Montserrat: 'family=Montserrat:wght@400;500;600;700;800',
+    Mulish: 'family=Mulish:wght@400;500;600;700;800',
+    Newsreader: 'family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600',
+    'Noto Serif': 'family=Noto+Serif:wght@400;500;600;700',
+    'Nunito Sans': 'family=Nunito+Sans:wght@400;500;600;700;800',
+    Onest: 'family=Onest:wght@400;500;600;700;800',
+    'Plus Jakarta Sans': 'family=Plus+Jakarta+Sans:wght@400;500;600;700;800',
+    'PT Serif': 'family=PT+Serif:wght@400;700',
+    'Public Sans': 'family=Public+Sans:wght@400;500;600;700;800',
+    Raleway: 'family=Raleway:wght@400;500;600;700;800',
+    'Reddit Mono': 'family=Reddit+Mono:wght@400;500;600;700',
+    'Red Hat Display': 'family=Red+Hat+Display:wght@400;500;600;700;800',
+    'Red Hat Text': 'family=Red+Hat+Text:wght@400;500;600;700',
+    Recursive: 'family=Recursive:wght@400;500;600;700',
+    'Roboto Slab': 'family=Roboto+Slab:wght@400;500;600;700',
+    'Schibsted Grotesk': 'family=Schibsted+Grotesk:wght@400;500;600;700;800',
+    'Share Tech Mono': 'family=Share+Tech+Mono',
+    'Source Sans 3': 'family=Source+Sans+3:wght@400;500;600;700;800',
+    'Source Code Pro': 'family=Source+Code+Pro:wght@400;500;600;700',
+    'Source Serif 4': 'family=Source+Serif+4:wght@400;500;600;700',
+    'Space Mono': 'family=Space+Mono:wght@400;700',
+    'Space Grotesk': 'family=Space+Grotesk:wght@400;500;700',
+    'Sometype Mono': 'family=Sometype+Mono:wght@400;500;600;700',
+    Spectral: 'family=Spectral:wght@400;500;600;700',
+    Sora: 'family=Sora:wght@400;500;600;700;800',
+    'Ubuntu Mono': 'family=Ubuntu+Mono:wght@400;700',
+    Urbanist: 'family=Urbanist:wght@400;500;600;700;800',
+    VT323: 'family=VT323',
+    'Work Sans': 'family=Work+Sans:wght@400;500;600;700;800',
+};
+
+function ensureThemeFonts(theme) {
+    const stacks = [theme.theme_body_font, theme.theme_heading_font, theme.theme_ui_font, theme.theme_mono_font].filter(Boolean);
+    const queries = new Set();
+    stacks.forEach((stack) => {
+        stack.split(',').map((part) => part.trim().replace(/^['"]|['"]$/g, '')).forEach((name) => {
+            if (GOOGLE_FONT_QUERIES[name]) queries.add(GOOGLE_FONT_QUERIES[name]);
+        });
+    });
+    if (!queries.size) return;
+    let link = document.getElementById('vyasa-runtime-fonts');
+    if (!link) {
+        link = document.createElement('link');
+        link.id = 'vyasa-runtime-fonts';
+        link.rel = 'stylesheet';
+        document.head.appendChild(link);
+    }
+    link.href = `https://fonts.googleapis.com/css2?${Array.from(queries).join('&')}&display=swap`;
+}
+
+function getHljsThemeHref(themeName) {
+    return `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${themeName}.min.css`;
+}
+
+function syncCodeThemeLinks(theme) {
+    const lightLink = document.getElementById('hljs-light');
+    const darkLink = document.getElementById('hljs-dark');
+    if (!lightLink || !darkLink) return;
+    const lightTheme = theme?.code_theme_light || lightLink.dataset.defaultTheme;
+    const darkTheme = theme?.code_theme_dark || darkLink.dataset.defaultTheme;
+    if (lightTheme) lightLink.href = getHljsThemeHref(lightTheme);
+    if (darkTheme) darkLink.href = getHljsThemeHref(darkTheme);
+    const dark = document.documentElement.classList.contains('dark');
+    lightLink.disabled = dark;
+    darkLink.disabled = !dark;
+}
+
+function applyThemePreset(theme) {
+    if (!theme) return;
+    const root = document.documentElement;
+    const page = document.getElementById('page-container');
+    const targets = [root, page].filter(Boolean);
+    const runtimeThemeVars = new Set();
+    Object.values(window.__VYASA_THEME_PRESETS__ || {}).forEach((preset) => {
+        Object.keys(preset || {}).forEach((key) => {
+            if (!key.startsWith('theme_') || key === 'theme_preset') return;
+            const cssName = key === 'theme_body_font' ? '--vyasa-font-body'
+                : key === 'theme_heading_font' ? '--vyasa-font-heading'
+                : key === 'theme_ui_font' ? '--vyasa-font-ui'
+                : key === 'theme_mono_font' ? '--vyasa-font-mono'
+                : `--vyasa-${key.slice(6).replace(/_/g, '-')}`;
+            runtimeThemeVars.add(cssName);
+        });
+    });
+    targets.forEach((el) => {
+        runtimeThemeVars.forEach((cssName) => el.style.removeProperty(cssName));
+    });
+    Object.entries(theme).forEach(([key, value]) => {
+        if (!key.startsWith('theme_') || !value || key === 'theme_preset') return;
+        const cssName = key === 'theme_body_font' ? '--vyasa-font-body'
+            : key === 'theme_heading_font' ? '--vyasa-font-heading'
+            : key === 'theme_ui_font' ? '--vyasa-font-ui'
+            : key === 'theme_mono_font' ? '--vyasa-font-mono'
+            : `--vyasa-${key.slice(6).replace(/_/g, '-')}`;
+        targets.forEach((el) => el.style.setProperty(cssName, String(value)));
+    });
+    if (theme.theme_primary) targets.forEach((el) => el.style.setProperty('--vyasa-primary-dim', `color-mix(in srgb, ${theme.theme_primary} 82%, black)`));
+    ensureThemeFonts(theme);
+    syncCodeThemeLinks(theme);
+}
+
+function getVisibleThemeControl(id) {
+    const nodes = Array.from(document.querySelectorAll(`#${id}`));
+    return nodes.find((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+    }) || nodes[nodes.length - 1] || null;
+}
+
+function getThemeSwitcher(source) {
+    return source?.closest?.('[data-theme-switcher]') || document.querySelector('[data-theme-switcher]');
+}
+
+function syncThemePresetSelect(next, source) {
+    const scope = getThemeSwitcher(source);
+    const label = scope?.querySelector('#theme-preset-active-label') || getVisibleThemeControl('theme-preset-active-label');
+    if (label) label.textContent = next || 'Theme';
+    const menu = scope?.querySelector('#theme-preset-menu') || getVisibleThemeControl('theme-preset-menu');
+    (menu ? Array.from(menu.querySelectorAll('.theme-preset-option')) : []).forEach((option) => {
+        const active = option.dataset.themeName === next;
+        option.classList.toggle('is-active', active);
+    });
+}
+
+window.vyasaToggleThemePresetMenu = function vyasaToggleThemePresetMenu(source) {
+    const menu = getThemeSwitcher(source)?.querySelector('#theme-preset-menu') || getVisibleThemeControl('theme-preset-menu');
+    if (!menu) return;
+    menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+};
+
+window.vyasaApplyThemePreset = function vyasaApplyThemePreset(next, source) {
+    const presets = window.__VYASA_THEME_PRESETS__ || {};
+    const meta = window.__VYASA_THEME_EXTENSION_META__ || {};
+    const franken = JSON.parse(localStorage.getItem('__FRANKEN__') || '{"mode":"light"}');
+    let resolved = next;
+    if (next && meta[next] && meta[next].randomizable) {
+        const choices = Array.isArray(meta[next].choices) ? meta[next].choices.filter((name) => presets[name]) : [];
+        if (choices.length) {
+            const currentResolved = franken.resolvedPreset || '';
+            const pool = choices.length > 1 ? choices.filter((name) => name !== currentResolved) : choices;
+            resolved = pool[Math.floor(Math.random() * pool.length)] || choices[0];
+        }
+    }
+    if (next && presets[resolved]) {
+        syncThemePresetSelect(next, source);
+        applyThemePreset(presets[resolved]);
+        franken.preset = next;
+        franken.resolvedPreset = resolved;
+    } else {
+        delete franken.preset;
+        delete franken.resolvedPreset;
+        window.location.reload();
+        return;
+    }
+    localStorage.setItem('__FRANKEN__', JSON.stringify(franken));
+};
+
+window.vyasaApplyRandomThemePreset = function vyasaApplyRandomThemePreset(source) {
+    const presets = Object.keys(window.__VYASA_THEME_PRESETS__ || {});
+    const meta = window.__VYASA_THEME_EXTENSION_META__ || {};
+    if (!presets.length) return;
+    const label = getThemeSwitcher(source)?.querySelector('#theme-preset-active-label') || getVisibleThemeControl('theme-preset-active-label');
+    const current = label ? label.textContent.trim() : '';
+    const selectable = presets.filter((name) => name !== (meta[name]?.resolvedOnly ? name : ''));
+    const pool = selectable.length > 1 ? selectable.filter((name) => name !== current) : selectable;
+    const next = pool[Math.floor(Math.random() * pool.length)];
+    window.vyasaApplyThemePreset(next, source);
+};
+
+function syncThemePresetDebug(root = document) {
+    const presets = window.__VYASA_THEME_PRESETS__ || {};
+    const meta = window.__VYASA_THEME_EXTENSION_META__ || {};
+    const stored = JSON.parse(localStorage.getItem('__FRANKEN__') || '{"mode":"light"}');
+    const label = root.querySelector ? root.querySelector('#theme-preset-active-label') : document.querySelector('#theme-preset-active-label');
+    const active = stored.preset || (label ? label.textContent.trim() : '') || '';
+    const resolved = stored.resolvedPreset || active;
+    if (active && presets[resolved]) {
+        if (typeof syncThemePresetSelect === 'function') syncThemePresetSelect(active);
+        if (typeof applyThemePreset === 'function') applyThemePreset(presets[resolved]);
+    } else if (active && meta[active] && meta[active].randomizable && typeof window.vyasaApplyThemePreset === 'function') {
+        window.vyasaApplyThemePreset(active);
+    }
 }
 
 // Initialize on page load

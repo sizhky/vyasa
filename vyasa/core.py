@@ -208,6 +208,18 @@ def render_search_preview_page(htmx, request: Request, q: str = ""):
     )
     return layout(shell, htmx=htmx, title=f"Search previews - {query} - {get_blog_title()}", show_sidebar=True, current_path="search-previews", auth=auth)
 
+
+def search_preview_results_path(query_token: str = "", htmx=None, request: Request = None):
+    token = (query_token or "").strip()
+    if not token:
+        return render_search_preview_page(htmx, request, q="")
+    padding = "=" * (-len(token) % 4)
+    try:
+        query = base64.urlsafe_b64decode(f"{token}{padding}".encode("ascii")).decode("utf-8")
+    except Exception:
+        return Response(status_code=404)
+    return render_search_preview_page(htmx, request, q=query)
+
 def _sort_blog_home_entries(entries, root):
     sort = get_config().get_home_sort()
     items = list(entries)
