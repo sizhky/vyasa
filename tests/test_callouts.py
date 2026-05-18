@@ -53,7 +53,7 @@ def test_markdown_include_renders_anchored_section(tmp_path):
     (src / "overview.md").write_text("# Top\n\n## System Context\n\nAlpha\n\n### Child\n\nBeta\n\n## Next\n\nGamma\n", encoding="utf-8")
     md = "{* ../notes/overview.md#system-context *}"
 
-    with patch("vyasa.markdown_rendering.get_root_folder", return_value=tmp_path / "content"):
+    with patch("vyasa.extensions_builtin.markdown.renderer.get_root_folder", return_value=tmp_path / "content"):
         html = to_xml(from_md(md, current_path="guide/page.md"))
 
     assert '>System Context<' in html

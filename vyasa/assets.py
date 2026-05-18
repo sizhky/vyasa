@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fasthtml.common import Link, Script, to_xml
+from .runtime_context import traced
 
 
 def _static_file_for_url(path: str) -> Path | None:
@@ -39,10 +40,20 @@ def extension_asset_path(extension_id: str, asset_name: str) -> Path:
     return Path(__file__).resolve().parent / "extensions_builtin" / extension_id / "static" / asset_name
 
 
+@traced("assets")
 def route_bundle_names(*, show_sidebar: bool = False, current_path: str | None = None, slide_mode: bool = False, annotations_enabled: bool = False) -> tuple[str, ...]:
     names: list[str] = []
     if show_sidebar and not slide_mode:
         names.extend(("default_search.runtime", "bookmarks.runtime"))
+        try:
+            from .extensions import get_extension_runtime
+
+            runtime = get_extension_runtime()
+            if runtime:
+                for extension_id in runtime.plan.enabled_ids:
+                    names.extend(runtime.catalog[extension_id].asset_bundles)
+        except Exception:
+            pass
     if annotations_enabled and current_path and not slide_mode:
         names.append("annotations.runtime")
     if slide_mode:

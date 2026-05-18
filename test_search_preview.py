@@ -41,6 +41,7 @@ def test_search_preview_page_renders_blog_style_cards(monkeypatch, tmp_path):
 
     assert "Search previews: hello" in html
     assert "This is the preview body." in html
+    assert "1-min read" in html
     assert "brochure.pdf" not in html
 
 

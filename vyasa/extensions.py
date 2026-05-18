@@ -3,6 +3,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+import importlib
+import sys
 from pathlib import Path
 from typing import Callable, Literal, Protocol
 
@@ -83,6 +85,14 @@ class AssetCollector:
             self.requested.append(bundle_name)
 
 
+@dataclass(frozen=True)
+class NavigationAction:
+    id: str
+    label: str
+    attrs: dict[str, object] = field(default_factory=dict)
+    icon_text: str | None = None
+
+
 @dataclass
 class ExtensionRuntime:
     plan: ExtensionPlan
@@ -104,6 +114,10 @@ class ExtensionRuntime:
     sidebar_section_providers: list[Callable] = field(default_factory=list)
     sidebar_row_decorators: list[Callable] = field(default_factory=list)
     search_result_row_decorators: list[Callable] = field(default_factory=list)
+    sidebar_row_actions: list[Callable] = field(default_factory=list)
+    search_result_row_actions: list[Callable] = field(default_factory=list)
+    content_root_resolvers: list[Callable] = field(default_factory=list)
+    trace_handlers: list[Callable] = field(default_factory=list)
 
     def new_asset_collector(self) -> AssetCollector:
         return AssetCollector(self.bundles)
@@ -282,6 +296,28 @@ class _NavigationRegistrar:
     def search_result_row_decorator(self, provider: Callable) -> None:
         self.runtime.search_result_row_decorators.append(provider)
 
+    def sidebar_row_action(self, provider: Callable) -> None:
+        self.runtime.sidebar_row_actions.append(provider)
+
+    def search_result_row_action(self, provider: Callable) -> None:
+        self.runtime.search_result_row_actions.append(provider)
+
+
+class _ContentSourceRegistrar:
+    def __init__(self, runtime: ExtensionRuntime):
+        self.runtime = runtime
+
+    def root_resolver(self, provider: Callable) -> None:
+        self.runtime.content_root_resolvers.append(provider)
+
+
+class _TraceRegistrar:
+    def __init__(self, runtime: ExtensionRuntime):
+        self.runtime = runtime
+
+    def handler(self, provider: Callable) -> None:
+        self.runtime.trace_handlers.append(provider)
+
 
 class VyasaExtensionApp:
     def __init__(self, runtime: ExtensionRuntime, extension: VyasaExtension):
@@ -297,6 +333,8 @@ class VyasaExtensionApp:
         self.lifecycle = _LifecycleRegistrar(runtime)
         self.storage = _StorageRegistrar(runtime, guard)
         self.navigation = _NavigationRegistrar(runtime)
+        self.content_source = _ContentSourceRegistrar(runtime)
+        self.trace = _TraceRegistrar(runtime)
 
 
 _ACTIVE_RUNTIME: ExtensionRuntime | None = None
@@ -317,7 +355,10 @@ def set_extension_runtime(runtime: ExtensionRuntime | None) -> ExtensionRuntime 
 
 
 def refresh_extension_runtime(config: dict | None) -> ExtensionRuntime:
-    runtime = build_extension_runtime(config)
+    from .runtime_context import trace_span
+
+    with trace_span("extension_plan"):
+        runtime = build_extension_runtime(config)
     set_extension_runtime(runtime)
     return runtime
 
@@ -345,6 +386,48 @@ def builtin_extension_catalog() -> dict[str, ExtensionMeta]:
     from .extensions_builtin import load_builtin_extensions
 
     return {extension.meta.id: extension.meta for extension in load_builtin_extensions()}
+
+
+def load_configured_extensions(config: dict | None = None) -> tuple[VyasaExtension, ...]:
+    from .extensions_builtin import load_builtin_extensions
+
+    section = config if isinstance(config, dict) else {}
+    return (*load_builtin_extensions(), *_load_external_extensions(section))
+
+
+def _load_external_extensions(section: dict) -> tuple[VyasaExtension, ...]:
+    loaded: list[VyasaExtension] = []
+    for spec in _coerce_external_specs(section.get("external")):
+        module_name = str(spec.get("module") or "").strip()
+        path_text = str(spec.get("path") or "").strip()
+        if path_text:
+            path = Path(path_text).expanduser().resolve()
+            if path.is_dir():
+                if str(path) not in sys.path:
+                    sys.path.insert(0, str(path))
+            elif path.is_file():
+                if str(path.parent) not in sys.path:
+                    sys.path.insert(0, str(path.parent))
+        if not module_name:
+            raise ExtensionConfigError("External extension requires a module name")
+        module = importlib.import_module(module_name)
+        if hasattr(module, "load_extensions"):
+            loaded.extend(module.load_extensions())
+        elif hasattr(module, "EXTENSION"):
+            loaded.append(module.EXTENSION)
+        else:
+            raise ExtensionConfigError(f"External extension module {module_name} has no EXTENSION")
+    return tuple(loaded)
+
+
+def _coerce_external_specs(value: object) -> list[dict]:
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        return [value]
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    raise ExtensionConfigError("extensions.external must be a table or array of tables")
 
 
 def default_preset_selection() -> dict[ExtensionCategory, tuple[str, ...]]:
@@ -402,17 +485,16 @@ def build_extension_runtime(
     *,
     catalog: dict[str, ExtensionMeta] | None = None,
 ) -> ExtensionRuntime:
-    catalog = catalog or builtin_extension_catalog()
+    configured_extensions = load_configured_extensions(config)
+    catalog = catalog or {extension.meta.id: extension.meta for extension in configured_extensions}
     plan = resolve_extension_plan(config, catalog=catalog)
     runtime = ExtensionRuntime(plan=plan, catalog=catalog)
-    _configure_builtin_extensions(runtime)
+    _configure_extensions(runtime, configured_extensions)
     return runtime
 
 
-def _configure_builtin_extensions(runtime: ExtensionRuntime) -> None:
-    from .extensions_builtin import load_builtin_extensions
-
-    for extension in load_builtin_extensions():
+def _configure_extensions(runtime: ExtensionRuntime, extensions: tuple[VyasaExtension, ...]) -> None:
+    for extension in extensions:
         if runtime.enabled(extension.meta.id):
             extension.register(VyasaExtensionApp(runtime, extension))
 
@@ -437,6 +519,10 @@ def _apply_overrides(selected: dict[ExtensionCategory, list[str]], section: dict
         if key not in section:
             continue
         selected[category] = _coerce_list(section.get(key))
+    for category, key in PLURAL_CATEGORIES.items():
+        add_key = f"{key}_add"
+        if add_key in section:
+            selected[category].extend(_coerce_list(section.get(add_key)))
 
 
 def _coerce_list(value: object) -> list[str]:

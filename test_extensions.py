@@ -122,3 +122,45 @@ def test_route_extensions_register_declared_routes_and_storage():
     assert "/api/bookmarks" in prefixes
     assert "annotations" in runtime.storage_namespaces
     assert "bookmarks" in runtime.storage_namespaces
+
+
+def test_bookmarks_register_row_action_intent_not_html_decorator():
+    runtime = build_extension_runtime({})
+
+    assert len(runtime.sidebar_row_actions) == 1
+    action = runtime.sidebar_row_actions[0](slug="guide", title="Guide", context="tree")
+
+    assert action.id == "bookmarks.toggle"
+    assert action.attrs["data_bookmark_path"] == "guide"
+    assert runtime.sidebar_row_decorators == []
+
+
+def test_external_extension_can_be_added_without_replacing_default_routes(tmp_path):
+    package = tmp_path / "sample_ext"
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        "from vyasa.extensions import ExtensionMeta, VyasaExtensionBase\n"
+        "class Sample(VyasaExtensionBase):\n"
+        "    def register(self, app): app.routes.add('/sample', lambda rt, runtime: None)\n"
+        "EXTENSION = Sample(ExtensionMeta('sample_route', 'route', "
+        "('cap:route:sample_route',), route_prefixes=('/sample',)))\n"
+    )
+
+    runtime = build_extension_runtime({
+        "external": [{"path": str(tmp_path), "module": "sample_ext"}],
+        "routes_add": ["sample_route"],
+    })
+
+    prefixes = {entry["prefix"] for entry in runtime.route_handlers}
+    assert "sample_route" in runtime.plan.enabled_ids
+    assert "filesystem_routes" in runtime.plan.enabled_ids
+    assert "/sample" in prefixes
+
+
+def test_external_extension_rejects_missing_module_name():
+    try:
+        build_extension_runtime({"external": {"path": "/tmp"}})
+    except ExtensionConfigError as exc:
+        assert "requires a module name" in str(exc)
+    else:
+        raise AssertionError("expected missing module validation failure")

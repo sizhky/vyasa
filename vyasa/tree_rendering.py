@@ -4,6 +4,12 @@ from urllib.parse import quote
 from fasthtml.common import A, Details, Li, Span, Summary, Ul
 from monsterui.all import UkIcon
 from .helpers import content_slug_for_path, content_url_for_slug
+from .runtime_context import traced
+
+
+TREE_ROW_CLASSES = "vyasa-tree-row inline-flex w-max items-center py-1 px-2 rounded transition-colors whitespace-nowrap"
+FOLDER_ROW_CLASSES = f"{TREE_ROW_CLASSES} font-medium cursor-pointer select-none list-none"
+FILE_ROW_CLASSES = f"{TREE_ROW_CLASSES} post-link"
 
 
 def _folder_summary(title_node, branch_href=None):
@@ -14,7 +20,7 @@ def _folder_summary(title_node, branch_href=None):
         Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
         Span(UkIcon("folder", cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
         title_node,
-        cls="vyasa-tree-row inline-flex w-max items-center font-medium cursor-pointer py-1 px-2 select-none list-none rounded transition-colors whitespace-nowrap",
+        cls=FOLDER_ROW_CLASSES,
         **kwargs,
     )
 
@@ -43,6 +49,7 @@ def folder_has_visible_descendant(folder, roles, depth, *, root, show_hidden, ex
     return False
 
 
+@traced("tree")
 def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), *, root, show_hidden, excluded_dirs, get_nav_entries, effective_abbreviations, should_exclude_dir_fn, slug_to_title_fn, find_folder_note_file_fn, is_allowed_fn, parse_frontmatter_fn, rbac_rules, logger, suppress_note_file=False, row_decorators=()):
     items, start_time = [], time.time()
     try:
@@ -95,11 +102,13 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             note_link = A(href=note_href, hx_get=note_href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link folder-note-link whitespace-nowrap", title=f"Open {folder_title}", onclick="event.stopPropagation();", data_path=note_slug)(folder_title) if note_allowed else None
             if not sub_items and not note_allowed:
                 continue
-            title_node = _decorate_row(note_link, note_slug, folder_title, row_decorators) if note_allowed else Span(folder_title, cls="whitespace-nowrap", title=folder_title)
+            title_base = note_link if note_allowed else Span(folder_title, cls="whitespace-nowrap", title=folder_title)
+            title_slug = note_slug if note_allowed else rel_folder
+            title_node = _decorate_row(title_base, title_slug, folder_title, row_decorators)
             if sub_items:
                 items.append(Li(Details(_folder_summary(title_node), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true", open=should_expand), cls="my-1"))
             elif note_slug:
-                folder_link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon("folder", cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(folder_title, cls="whitespace-nowrap", title=folder_title), href=note_href, hx_get=note_href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link inline-flex items-center whitespace-nowrap", data_path=note_slug)
+                folder_link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon("folder", cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(folder_title, cls="whitespace-nowrap", title=folder_title), href=note_href, hx_get=note_href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls=FILE_ROW_CLASSES, data_path=note_slug)
                 items.append(Li(_decorate_row(folder_link, note_slug, folder_title, row_decorators)))
             continue
         if item.suffix not in {".md", ".pdf", ".tree"}:
@@ -121,7 +130,7 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             icon, title, label, href = "file", slug_to_title_fn(item.stem, abbreviations=abbreviations), f"{slug_to_title_fn(item.stem, abbreviations=abbreviations)} (PDF)", content_url_for_slug(slug)
         else:
             icon, title, label, href = "table", slug_to_title_fn(item.stem, abbreviations=abbreviations), slug_to_title_fn(item.stem, abbreviations=abbreviations), content_url_for_slug(slug)
-        link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon(icon, cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(label, cls="whitespace-nowrap", title=title), href=href, hx_get=href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link inline-flex items-center whitespace-nowrap", data_path=slug)
+        link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon(icon, cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(label, cls="whitespace-nowrap", title=title), href=href, hx_get=href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls=FILE_ROW_CLASSES, data_path=slug)
         items.append(Li(_decorate_row(link, slug, title, row_decorators)))
     logger.debug(f"[DEBUG] build_post_tree for {content_slug_for_path(folder, strip_suffix=False) or '.'} completed in {(time.time() - start_time) * 1000:.2f}ms")
     return items

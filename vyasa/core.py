@@ -22,6 +22,8 @@ from .helpers import (
     content_path_for_slug,
     content_slug_for_path,
     content_url_for_slug,
+    estimate_read_time_minutes,
+    expand_markdown_includes_for_reading,
     get_content_mounts,
     iter_visible_files,
     preview_markdown,
@@ -139,10 +141,17 @@ def render_blog_home(htmx, request: Request):
 
 def _render_blog_preview_card(path, slug, root):
     title, render_content = resolve_markdown_title(path, abbreviations=_effective_abbreviations(root))
+    read_source = expand_markdown_includes_for_reading(render_content, current_path=slug, root_folder=root)
+    read_time = estimate_read_time_minutes(read_source)
     preview = from_md(preview_markdown(render_content), current_path=slug)
     href = content_url_for_slug(slug)
     return Div(
-        A(title, href=href, cls="vyasa-blog-card-title absolute top-6 block text-right text-xl font-bold leading-tight hover:underline line-clamp-3 overflow-hidden"),
+        A(
+            Span(title, cls="block line-clamp-3 overflow-hidden"),
+            Span(f"{read_time}-min read", cls="block mt-1 text-xs font-normal text-slate-500 dark:text-slate-400"),
+            href=href,
+            cls="vyasa-blog-card-title absolute top-6 block text-right text-xl font-bold leading-tight hover:underline",
+        ),
         Div(
             Div(preview, cls="prose prose-slate dark:prose-invert max-w-none"),
             A("continue reading...", href=href, cls="inline-flex mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200 hover:underline"),
@@ -469,6 +478,25 @@ def _register_extension_routes():
 _register_extension_routes()
 
 
+def _register_extension_lifecycle_hooks():
+    runtime = get_extension_runtime()
+    if not runtime:
+        return
+    if hasattr(app, "add_event_handler"):
+        for hook in runtime.startup_hooks:
+            app.add_event_handler("startup", hook)
+        for hook in runtime.shutdown_hooks:
+            app.add_event_handler("shutdown", hook)
+    elif hasattr(app, "on_event"):
+        for hook in runtime.startup_hooks:
+            app.on_event("startup")(hook)
+        for hook in runtime.shutdown_hooks:
+            app.on_event("shutdown")(hook)
+
+
+_register_extension_lifecycle_hooks()
+
+
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, FileResponse, Response, StreamingResponse
 
@@ -650,12 +678,41 @@ def _sidebar_section_nodes():
 
 def _sidebar_row_decorators():
     runtime = get_extension_runtime()
-    return tuple(runtime.sidebar_row_decorators) if runtime else ()
+    if not runtime:
+        return ()
+    return (*runtime.sidebar_row_decorators, _row_action_decorator(runtime.sidebar_row_actions))
 
 
 def _search_result_row_decorators():
     runtime = get_extension_runtime()
-    return tuple(runtime.search_result_row_decorators) if runtime else ()
+    if not runtime:
+        return ()
+    return (*runtime.search_result_row_decorators, _row_action_decorator(runtime.search_result_row_actions))
+
+
+def _row_action_decorator(providers):
+    def decorate(node, *, slug=None, title="", context="tree"):
+        actions = [action for provider in providers if (action := provider(slug=slug, title=title, context=context))]
+        if not actions:
+            return node
+        bookmark_row = any(action.attrs.get("data_bookmark_toggle") == "true" for action in actions)
+        row_base = "flex items-center gap-1 min-w-0" if context == "search" else "inline-flex items-center gap-1 w-max"
+        row_cls = f"vyasa-action-row {'vyasa-bookmark-row ' if bookmark_row else ''}{row_base}"
+        buttons = [
+            Button(
+                Span(action.icon_text or "", cls=("vyasa-bookmark-glyph " if action.attrs.get("data_bookmark_toggle") == "true" else "") + "flex h-4 w-4 items-center justify-center text-sm", aria_hidden="true"),
+                type="button",
+                title=action.label,
+                aria_label=action.label,
+                data_action_id=action.id,
+                cls=("vyasa-bookmark-toggle " if action.attrs.get("data_bookmark_toggle") == "true" else "") + "vyasa-row-action shrink-0 rounded p-1.5 text-slate-400 hover:text-amber-500 transition-colors",
+                **action.attrs,
+            )
+            for action in actions
+        ]
+        return Span(node, *buttons, cls=row_cls)
+
+    return decorate
 
 
 def _render_posts_search_results(query, roles=None):

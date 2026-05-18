@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import quote
 import frontmatter
 from loguru import logger
+from .runtime_context import traced
 
 _DEFAULT_ABBREVIATIONS = [
     "acl", "adb", "admin", "aes", "ai", "aop", "api", "apis", "arn", "aws",
@@ -94,9 +95,24 @@ def get_content_mounts() -> list[tuple[str, Path]]:
         mounts.append((alias, root.resolve()))
     return mounts
 
+@traced("content_resolve")
 def content_root_and_relative(slug: str | Path) -> tuple[Path | None, Path]:
     parts = Path(str(slug).strip("/")).parts
     mounts = get_content_mounts()
+    if parts and "@" in parts[0]:
+        alias, ref = parts[0].split("@", 1)
+        for mount_alias, _ in mounts:
+            if mount_alias == alias:
+                try:
+                    from .extensions import get_extension_runtime
+
+                    runtime = get_extension_runtime()
+                    for resolver in runtime.content_root_resolvers if runtime else []:
+                        root = resolver(alias, ref)
+                        if root:
+                            return root, Path(*parts[1:]) if len(parts) > 1 else Path()
+                except Exception:
+                    return None, Path(*parts[1:]) if len(parts) > 1 else Path()
     for alias, root in mounts:
         if parts and parts[0] == alias:
             return root, Path(*parts[1:]) if len(parts) > 1 else Path()

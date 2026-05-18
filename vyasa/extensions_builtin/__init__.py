@@ -6,6 +6,7 @@ def load_builtin_extensions():
     from . import cryptograph
     from . import cytograph
     from . import d2
+    from . import debug_perf
     from . import default_errors
     from . import default_layout
     from . import default_search
@@ -30,6 +31,7 @@ def load_builtin_extensions():
         tabs.EXTENSION,
         mermaid.EXTENSION,
         d2.EXTENSION,
+        debug_perf.EXTENSION,
         cytograph.EXTENSION,
         cryptograph.EXTENSION,
         tasks.EXTENSION,

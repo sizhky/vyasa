@@ -5,6 +5,7 @@ from fasthtml.common import Link
 
 from fasthtml.common import A, Aside, Button, Div, Footer, Main, NotStr, P, Span, Title
 from monsterui.all import UkIcon
+from .runtime_context import traced
 
 _GOOGLE_FONT_QUERIES = {
     "Alegreya": "family=Alegreya:wght@400;500;600;700",
@@ -121,6 +122,7 @@ def _annotation_attrs(current_path, auth, get_config, slide_mode=False):
     }
 
 
+@traced("layout")
 def render_layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True, auth=None, htmx_nav=True, nav_posts_menu=False, full_width=False, show_footer=True, no_scroll=False, slide_mode=False, current_updated_label=None, extra_head_nodes=(), logger, resolve_layout_config, width_class_and_style, style_attr, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar):
     layout_start_time = time.time()
     logger.debug("[LAYOUT] layout() start")
@@ -191,6 +193,7 @@ def render_layout(*content, htmx, title=None, show_sidebar=False, toc_content=No
     return _render_full_layout(content, title, show_sidebar, toc_content, current_path, show_toc, auth, htmx_nav, nav_posts_menu, show_footer, no_scroll, slide_mode, current_updated_label, extra_head_nodes, logger, t_section, layout_start_time, layout_fluid_class, layout_max_class, layout_max_style, page_style, main_spacing_cls, page_container_cls, navbar_margin_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar, style_attr, _footer_node)
 
 
+@traced("toc")
 def _toc_items(toc_content, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor):
     return build_sidebar_toc_items(extract_sidebar_toc(toc_content, strip_inline_markdown, text_to_anchor, unique_anchor)) if toc_content else []
 

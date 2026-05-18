@@ -27,6 +27,7 @@ from ...helpers import (
     resolve_heading_anchor,
 )
 from ...markdown_fence import get_root_folder as _shared_get_root_folder
+from ...runtime_context import traced
 from ..slides.deck import present_href_for_anchor
 from .pipeline import (
     extract_footnotes,
@@ -178,6 +179,7 @@ def _render_markdown_fragment(body, img_dir=None, current_path=None, slide_mode=
             slide_mode=slide_mode,
             asset_collector=asset_collector,
             emit_bundle_nodes=False,
+            apply_class_mods=False,
         )
     )
     rendered = re.sub(r'^<div class="w-full">\s*', "", rendered)
@@ -738,7 +740,8 @@ class ContentRenderer(FrankenRenderer):
         return f'<a href="{href}"{hx}{ext}{download_attr}{boost_attr} class="{link_class}"{title}>{inner}</a>'
 
 
-def from_md(content, img_dir=None, current_path=None, slide_mode=False, asset_collector=None, emit_bundle_nodes=True):
+@traced("markdown")
+def from_md(content, img_dir=None, current_path=None, slide_mode=False, asset_collector=None, emit_bundle_nodes=True, apply_class_mods=True):
     runtime = get_extension_runtime()
     if runtime is None:
         runtime = refresh_extension_runtime(get_config().get_extensions_config())
@@ -874,4 +877,5 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False, asset_co
                 bundle_nodes.append(Link(rel="stylesheet", href=_asset_url(css_href)))
             for js_src in bundle.js:
                 bundle_nodes.append(Script(src=_asset_url(js_src), type="module"))
-    return Div(*bundle_nodes, NotStr(apply_classes(html_out, class_map_mods=mods)), cls="w-full")
+    rendered_html = apply_classes(html_out, class_map_mods=mods) if apply_class_mods else html_out
+    return Div(*bundle_nodes, NotStr(rendered_html), cls="w-full")

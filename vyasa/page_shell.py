@@ -64,7 +64,6 @@ class StaticShellRenderer:
     '''
 
     def _navbar(self, blog_title: str, updated_label: str | None = None) -> str:
-        updated_html = f'<span class="text-xs text-slate-300 whitespace-nowrap">{updated_label}</span>' if updated_label else ""
         return f'''
     <div class="vyasa-navbar-card bg-slate-900 text-white px-4 py-3 dark:bg-slate-800">
         <div class="flex items-center justify-between md:hidden">
@@ -73,7 +72,6 @@ class StaticShellRenderer:
             </button>
             <div class="flex-1 px-4 flex flex-col items-center">
                 <a href="/index.html" class="text-center truncate">{blog_title}</a>
-                {updated_html}
             </div>
             <div class="flex items-center gap-1">
                 <button id="mobile-toc-toggle" title="Toggle table of contents" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()">
@@ -85,7 +83,6 @@ class StaticShellRenderer:
         <div class="hidden md:flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <a href="/index.html">{blog_title}</a>
-                {updated_html}
             </div>
             {self._theme_toggle()}
         </div>
