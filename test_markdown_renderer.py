@@ -49,6 +49,14 @@ def test_items_vw_width_does_not_add_implicit_outer_min_height():
     assert "height:70vh;min-height:420px" in html
 
 
+def test_items_direction_alias_sets_layout_direction():
+    refresh_extension_runtime({})
+
+    html = to_xml(from_md("```items\n---\ntitle: LR\ndirection: lr\n---\nGroup:\n  - a :: A\n```"))
+
+    assert 'data-tasks-layout-direction="lr"' in html
+
+
 def test_rendered_heading_emits_doc_heading_class():
     html = to_xml(from_md("## Cave\n\ntext"))
 

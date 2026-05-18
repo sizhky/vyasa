@@ -71,6 +71,8 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     jitter = html.escape(str(config.get("jitter") or 0))
     jitter_y = html.escape(str(config.get("jitter_y") or config.get("jitter") or 0))
     spacing = html.escape(str(config.get("spacing") or "normal"))
+    if "direction" in config and "layout_direction" not in config:
+        config["layout_direction"] = config["direction"]
     optional_layout_attrs = []
     for key, data_name in (
         ("layout_direction", "data-tasks-layout-direction"),

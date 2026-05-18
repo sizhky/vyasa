@@ -870,6 +870,7 @@ async function layoutBaseTasksGraph(graph, model, jitterConfig = {}, layoutConfi
 async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig = {}, layoutConfig = {}) {
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
     const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
+    const groupDirection = readTasksDirection(groupsById[groupId]?.layout_direction || groupsById[groupId]?.direction || layoutConfig.elkDirection);
     const groupChildren = [
         ...(model.group_tree?.[groupId] || []).map((id) => ({ id, __kind__: 'group', label: groupsById[id]?.label || id, ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
         ...(model.task_children?.[groupId] || []).map((id) => ({ id, __kind__: 'task', label: tasksById[id]?.label || id, ...sizeTaskNode(tasksById[id]?.label || id, 'task') })),
@@ -909,7 +910,7 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
         id: `group-${groupId}`,
         layoutOptions: {
             'elk.algorithm': 'layered',
-            'elk.direction': layoutConfig.elkDirection || 'DOWN',
+            'elk.direction': groupDirection,
             'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
             'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
             'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`,
