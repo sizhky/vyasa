@@ -13,6 +13,15 @@ def _static_file_for_url(path: str) -> Path | None:
             return None
         extension_id = parts[2]
         asset_rel = Path(*parts[3:])
+        try:
+            from .extensions import get_extension_runtime
+
+            runtime = get_extension_runtime()
+            static_dir = runtime.extension_static_dirs.get(extension_id) if runtime else None
+            if static_dir:
+                return static_dir / asset_rel
+        except Exception:
+            pass
         return package_root / "extensions_builtin" / extension_id / "static" / asset_rel
     if rel.startswith("static/"):
         return package_root / "static" / rel.replace("static/", "", 1)
@@ -37,6 +46,15 @@ def asset_url(path: str) -> str:
 
 
 def extension_asset_path(extension_id: str, asset_name: str) -> Path:
+    try:
+        from .extensions import get_extension_runtime
+
+        runtime = get_extension_runtime()
+        static_dir = runtime.extension_static_dirs.get(extension_id) if runtime else None
+        if static_dir:
+            return static_dir / asset_name
+    except Exception:
+        pass
     return Path(__file__).resolve().parent / "extensions_builtin" / extension_id / "static" / asset_name
 
 
@@ -85,6 +103,12 @@ def bundle_asset_nodes(bundle_names: tuple[str, ...] | list[str], runtime=None) 
     return tuple(nodes)
 
 
+def bundle_asset_nodes_for_collector(asset_collector, runtime=None) -> tuple[object, ...]:
+    if not asset_collector:
+        return ()
+    return bundle_asset_nodes(tuple(asset_collector.requested), runtime=runtime)
+
+
 def bundle_asset_html(bundle_names: tuple[str, ...] | list[str], runtime=None) -> str:
     return "".join(to_xml(node) for node in bundle_asset_nodes(bundle_names, runtime=runtime))
 
@@ -96,4 +120,12 @@ def iter_extension_static_dirs() -> list[tuple[str, Path]]:
         static_dir = entry / "static"
         if entry.is_dir() and static_dir.is_dir():
             result.append((entry.name, static_dir))
+    try:
+        from .extensions import get_extension_runtime
+
+        runtime = get_extension_runtime()
+        if runtime:
+            result.extend(sorted(runtime.extension_static_dirs.items()))
+    except Exception:
+        pass
     return result

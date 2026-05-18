@@ -7,6 +7,7 @@ import importlib
 import sys
 from pathlib import Path
 from typing import Callable, Literal, Protocol
+from .runtime_context import traced
 
 ExtensionCategory = Literal[
     "layout",
@@ -73,6 +74,7 @@ class AssetBundle:
     name: str
     css: tuple[str, ...] = ()
     js: tuple[str, ...] = ()
+    static_dir: Path | None = None
 
 
 @dataclass
@@ -91,6 +93,28 @@ class NavigationAction:
     label: str
     attrs: dict[str, object] = field(default_factory=dict)
     icon_text: str | None = None
+    row_attrs: dict[str, object] = field(default_factory=dict)
+    state_text: str | None = None
+    state_attrs: dict[str, object] = field(default_factory=dict)
+
+
+@dataclass
+class ActionRegistry:
+    providers: list[Callable] = field(default_factory=list)
+
+    def actions_for(self, *, slug=None, title: str = "", context: str = "tree") -> list[NavigationAction]:
+        return [
+            action
+            for provider in self.providers
+            if (action := provider(slug=slug, title=title, context=context))
+        ]
+
+
+@dataclass(frozen=True)
+class ContentRootRequest:
+    root_id: str
+    ref: str
+    relative_path: Path = field(default_factory=Path)
 
 
 @dataclass
@@ -101,11 +125,13 @@ class ExtensionRuntime:
     markdown_postprocessors: list[Callable] = field(default_factory=list)
     markdown_fences: dict[str, Callable] = field(default_factory=dict)
     bundles: dict[str, AssetBundle] = field(default_factory=dict)
+    extension_static_dirs: dict[str, Path] = field(default_factory=dict)
     layout_renderer: Callable | None = None
     home_renderer: Callable | None = None
     home_feed_renderer: Callable | None = None
     error_renderer: Callable | None = None
     slide_renderer: Callable | None = None
+    context: object | None = None
     route_handlers: list[dict] = field(default_factory=list)
     config_defaults: dict[str, object] = field(default_factory=dict)
     startup_hooks: list[Callable] = field(default_factory=list)
@@ -122,8 +148,16 @@ class ExtensionRuntime:
     def new_asset_collector(self) -> AssetCollector:
         return AssetCollector(self.bundles)
 
-    def register_bundle(self, bundle: AssetBundle) -> None:
+    def sidebar_action_registry(self) -> ActionRegistry:
+        return ActionRegistry(self.sidebar_row_actions)
+
+    def search_result_action_registry(self) -> ActionRegistry:
+        return ActionRegistry(self.search_result_row_actions)
+
+    def register_bundle(self, extension_id: str, bundle: AssetBundle) -> None:
         self.bundles[bundle.name] = bundle
+        if bundle.static_dir is not None:
+            self.extension_static_dirs[extension_id] = bundle.static_dir
 
     def enabled(self, extension_id: str) -> bool:
         return extension_id in self.plan.enabled_ids
@@ -199,13 +233,14 @@ class _MarkdownRegistrar:
 
 
 class _AssetRegistrar:
-    def __init__(self, runtime: ExtensionRuntime, guard: _RegistrationGuard):
+    def __init__(self, runtime: ExtensionRuntime, meta: ExtensionMeta, guard: _RegistrationGuard):
         self.runtime = runtime
+        self.meta = meta
         self.guard = guard
 
     def bundle(self, bundle: AssetBundle) -> None:
         self.guard.require_bundle(bundle.name)
-        self.runtime.register_bundle(bundle)
+        self.runtime.register_bundle(self.meta.id, bundle)
 
 
 class _LayoutRegistrar:
@@ -322,11 +357,12 @@ class _TraceRegistrar:
 class VyasaExtensionApp:
     def __init__(self, runtime: ExtensionRuntime, extension: VyasaExtension):
         self.runtime = runtime
+        self.context = runtime.context
         self.extension = extension
         self.meta = extension.meta
         guard = _RegistrationGuard(runtime, self.meta)
         self.markdown = _MarkdownRegistrar(runtime, self.meta, guard)
-        self.assets = _AssetRegistrar(runtime, guard)
+        self.assets = _AssetRegistrar(runtime, self.meta, guard)
         self.layout = _LayoutRegistrar(runtime, guard)
         self.routes = _RouteRegistrar(runtime, guard)
         self.config = _ConfigRegistrar(runtime)
@@ -352,6 +388,12 @@ def set_extension_runtime(runtime: ExtensionRuntime | None) -> ExtensionRuntime 
     global _ACTIVE_RUNTIME
     _ACTIVE_RUNTIME = runtime
     return runtime
+
+
+def set_runtime_context(context: object | None) -> None:
+    runtime = get_extension_runtime()
+    if runtime is not None:
+        runtime.context = context
 
 
 def refresh_extension_runtime(config: dict | None) -> ExtensionRuntime:
@@ -480,6 +522,7 @@ def resolve_extension_plan(
     )
 
 
+@traced("extension_plan")
 def build_extension_runtime(
     config: dict | None,
     *,

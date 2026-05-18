@@ -104,13 +104,15 @@ def content_root_and_relative(slug: str | Path) -> tuple[Path | None, Path]:
         for mount_alias, _ in mounts:
             if mount_alias == alias:
                 try:
-                    from .extensions import get_extension_runtime
+                    from .extensions import ContentRootRequest, get_extension_runtime
 
                     runtime = get_extension_runtime()
+                    relative = Path(*parts[1:]) if len(parts) > 1 else Path()
+                    request = ContentRootRequest(alias, ref, relative)
                     for resolver in runtime.content_root_resolvers if runtime else []:
-                        root = resolver(alias, ref)
+                        root = resolver(request)
                         if root:
-                            return root, Path(*parts[1:]) if len(parts) > 1 else Path()
+                            return root, relative
                 except Exception:
                     return None, Path(*parts[1:]) if len(parts) > 1 else Path()
     for alias, root in mounts:

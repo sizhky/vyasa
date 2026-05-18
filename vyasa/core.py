@@ -34,7 +34,8 @@ from .layout_helpers import (
     _width_class_and_style,
     _style_attr,
 )
-from .layout_page import render_layout
+from .layout_page import render_page_frame
+from .page_frame import PageFrame, PageFrameDeps
 from .nav_views import navbar_view
 from loguru import logger
 from .assets import asset_url, bundle_asset_nodes, route_bundle_names
@@ -59,12 +60,12 @@ from .content_routes import (
     render_post_detail,
 )
 from .content_tree import ContentTree
-from .extensions import get_extension_runtime, refresh_extension_runtime
+from .extensions import get_extension_runtime, refresh_extension_runtime, set_runtime_context
 from .auth.oauth_bootstrap import build_google_oauth
 from .page_views import not_found_content
 from .rbac_config import normalize_rbac_cfg, render_rbac_toml, write_rbac_to_vyasa
 from .rbac_store import load_rbac_cfg, write_rbac_cfg
-from .runtime_context import RuntimeContext
+from .runtime_context import RuntimeContext, traced
 from .search_pages import gather_search_content
 from .search_http import gather_search_page
 from .search_views import (
@@ -463,6 +464,7 @@ _runtime = RuntimeContext(
     google_oauth_cfg=lambda: _google_oauth_cfg,
     logger=logger,
 )
+set_runtime_context(_runtime)
 
 
 def _register_extension_routes():
@@ -680,24 +682,36 @@ def _sidebar_row_decorators():
     runtime = get_extension_runtime()
     if not runtime:
         return ()
-    return (*runtime.sidebar_row_decorators, _row_action_decorator(runtime.sidebar_row_actions))
+    return (*runtime.sidebar_row_decorators, _row_action_decorator(runtime.sidebar_action_registry()))
 
 
 def _search_result_row_decorators():
     runtime = get_extension_runtime()
     if not runtime:
         return ()
-    return (*runtime.search_result_row_decorators, _row_action_decorator(runtime.search_result_row_actions))
+    return (*runtime.search_result_row_decorators, _row_action_decorator(runtime.search_result_action_registry()))
 
 
-def _row_action_decorator(providers):
+def _row_action_decorator(registry):
     def decorate(node, *, slug=None, title="", context="tree"):
-        actions = [action for provider in providers if (action := provider(slug=slug, title=title, context=context))]
+        actions = registry.actions_for(slug=slug, title=title, context=context)
         if not actions:
             return node
         bookmark_row = any(action.attrs.get("data_bookmark_toggle") == "true" for action in actions)
         row_base = "flex items-center gap-1 min-w-0" if context == "search" else "inline-flex items-center gap-1 w-max"
         row_cls = f"vyasa-action-row {'vyasa-bookmark-row ' if bookmark_row else ''}{row_base}"
+        row_attrs = {}
+        for action in actions:
+            row_attrs.update(action.row_attrs)
+        state_nodes = [
+            Span(
+                action.state_text or "",
+                cls="vyasa-row-action-state ml-1 text-[0.68rem] opacity-70",
+                **action.state_attrs,
+            )
+            for action in actions
+            if action.state_text is not None or action.state_attrs
+        ]
         buttons = [
             Button(
                 Span(action.icon_text or "", cls=("vyasa-bookmark-glyph " if action.attrs.get("data_bookmark_toggle") == "true" else "") + "flex h-4 w-4 items-center justify-center text-sm", aria_hidden="true"),
@@ -710,7 +724,7 @@ def _row_action_decorator(providers):
             )
             for action in actions
         ]
-        return Span(node, *buttons, cls=row_cls)
+        return Span(node, *state_nodes, *buttons, cls=row_cls, **row_attrs)
 
     return decorate
 
@@ -727,6 +741,7 @@ def _render_posts_search_results(query, roles=None):
     return render_posts_search_results(trimmed, rendered_matches, regex_error, row_decorators=_search_result_row_decorators())
 
 
+@traced("sidebar")
 @lru_cache(maxsize=16)
 def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden, current_path=""):
     sidebars_open = get_config().get_sidebars_open()
@@ -813,48 +828,8 @@ def is_active_toc_item(anchor):
     return False
 
 
-def _default_layout(
-    *content,
-    htmx,
-    title=None,
-    show_sidebar=False,
-    toc_content=None,
-    current_path=None,
-    show_toc=True,
-    auth=None,
-    htmx_nav=True,
-    nav_posts_menu=False,
-    full_width=False,
-    show_footer=True,
-    no_scroll=False,
-    slide_mode=False,
-    current_updated_label=None,
-):
-    extra_head_nodes = bundle_asset_nodes(
-        route_bundle_names(
-            show_sidebar=show_sidebar,
-            current_path=current_path,
-            slide_mode=slide_mode,
-            annotations_enabled=get_config().get_annotations_enabled(),
-        )
-    )
-    return render_layout(
-        *content,
-        htmx=htmx,
-        title=title,
-        show_sidebar=show_sidebar,
-        toc_content=toc_content,
-        current_path=current_path,
-        show_toc=show_toc,
-        auth=auth,
-        htmx_nav=htmx_nav,
-        nav_posts_menu=nav_posts_menu,
-        full_width=full_width,
-        show_footer=show_footer,
-        no_scroll=no_scroll,
-        slide_mode=slide_mode,
-        current_updated_label=current_updated_label,
-        extra_head_nodes=extra_head_nodes,
+def _default_page_frame_deps():
+    return PageFrameDeps(
         logger=logger,
         resolve_layout_config=_resolve_layout_config,
         width_class_and_style=_width_class_and_style,
@@ -880,6 +855,57 @@ def _default_layout(
     )
 
 
+def default_page_frame(
+    *content,
+    title=None,
+    show_sidebar=False,
+    toc_content=None,
+    current_path=None,
+    show_toc=True,
+    auth=None,
+    htmx_nav=True,
+    nav_posts_menu=False,
+    full_width=False,
+    show_footer=True,
+    no_scroll=False,
+    slide_mode=False,
+    current_updated_label=None,
+):
+    extra_head_nodes = bundle_asset_nodes(
+        route_bundle_names(
+            show_sidebar=show_sidebar,
+            current_path=current_path,
+            slide_mode=slide_mode,
+            annotations_enabled=get_config().get_annotations_enabled(),
+        )
+    )
+    return PageFrame(
+        tuple(content),
+        title=title,
+        show_sidebar=show_sidebar,
+        toc_content=toc_content,
+        current_path=current_path,
+        show_toc=show_toc,
+        auth=auth,
+        htmx_nav=htmx_nav,
+        nav_posts_menu=nav_posts_menu,
+        full_width=full_width,
+        show_footer=show_footer,
+        no_scroll=no_scroll,
+        slide_mode=slide_mode,
+        current_updated_label=current_updated_label,
+        extra_head_nodes=extra_head_nodes,
+    )
+
+
+def _default_layout(*content, htmx, **kwargs):
+    return render_page_frame(
+        default_page_frame(*content, **kwargs),
+        htmx=htmx,
+        deps=_default_page_frame_deps(),
+    )
+
+
 def layout(
     *content,
     htmx,
@@ -899,7 +925,7 @@ def layout(
 ):
     runtime = get_extension_runtime()
     provider = runtime.layout_renderer if runtime else None
-    if provider and provider is not _default_layout:
+    if provider:
         return provider(
             *content,
             htmx=htmx,

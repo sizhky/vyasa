@@ -107,6 +107,41 @@ function logTasksDebug(label, payload = {}) {
     return event;
 }
 
+function tasksPrefsKey(model) {
+    const graphId = String(model?.graph_id || '').trim();
+    return graphId ? `vyasa:tasks:prefs:${graphId}` : '';
+}
+
+function readTasksPrefs(model) {
+    const key = tasksPrefsKey(model);
+    if (!key || typeof window === 'undefined') return {};
+    try {
+        const storage = window.localStorage;
+        if (!storage) return {};
+        const parsed = JSON.parse(storage.getItem(key) || '{}');
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+        return {};
+    }
+}
+
+function writeTasksPrefs(model, prefs) {
+    const key = tasksPrefsKey(model);
+    if (!key || typeof window === 'undefined') return;
+    try {
+        const storage = window.localStorage;
+        if (!storage) return;
+        storage.setItem(key, JSON.stringify({
+            version: 1,
+            filters: prefs?.filters && typeof prefs.filters === 'object' ? prefs.filters : {},
+            colorBy: String(prefs?.colorBy || ''),
+            filtersCollapsed: Boolean(prefs?.filtersCollapsed),
+        }));
+    } catch {
+        // localStorage may be unavailable in private or restricted contexts.
+    }
+}
+
 function shouldTraceTasksEdge(edge) {
     if (!window.__vyasaTasksDebug.enabled) return false;
     const watch = Array.isArray(window.__vyasaTasksDebug.watch) ? window.__vyasaTasksDebug.watch : [];
@@ -1279,6 +1314,8 @@ async function renderTasksGraphs(rootElement = document) {
             const React = window.React;
             const Handle = rf.Handle;
             const Position = rf.Position;
+            const initialPrefsRef = React.useRef(null);
+            if (initialPrefsRef.current === null) initialPrefsRef.current = readTasksPrefs(model);
             const baseLayoutRef = React.useRef(null);
             const groupLayoutsRef = React.useRef({});
             const graphBaseRef = React.useRef({ nodes: [], edges: [] });
@@ -1288,9 +1325,17 @@ async function renderTasksGraphs(rootElement = document) {
             const [selectedNodeId, setSelectedNodeId] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
-            const [activeFilters, setActiveFilters] = React.useState({});
-            const [activeColorBy, setActiveColorBy] = React.useState(() => String(model?.default_color_by || '').trim());
-            const [filtersCollapsed, setFiltersCollapsed] = React.useState(false);
+            const [activeFilters, setActiveFilters] = React.useState(() => (
+                initialPrefsRef.current?.filters && typeof initialPrefsRef.current.filters === 'object'
+                    ? initialPrefsRef.current.filters
+                    : {}
+            ));
+            const [activeColorBy, setActiveColorBy] = React.useState(() => (
+                typeof initialPrefsRef.current?.colorBy === 'string'
+                    ? initialPrefsRef.current.colorBy
+                    : String(model?.default_color_by || '').trim()
+            ));
+            const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => Boolean(initialPrefsRef.current?.filtersCollapsed));
             const [filterPanelHeight, setFilterPanelHeight] = React.useState(172);
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
@@ -1300,6 +1345,25 @@ async function renderTasksGraphs(rootElement = document) {
             const prevExpandedCountRef = React.useRef(0);
             const hoverClearTimerRef = React.useRef(null);
             const activeColorPalette = React.useMemo(() => tasksColorPaletteFor(model, activeColorBy), [model, activeColorBy]);
+            React.useEffect(() => {
+                const validFilterKeys = new Set(tasksFilterOptions(model).map((option) => option.key));
+                const validColorKeys = new Set(tasksColorOptions(model).map((option) => option.key));
+                setActiveFilters((current) => Object.fromEntries(
+                    Object.entries(current || {}).filter(([key, value]) => {
+                        if (!validFilterKeys.has(key)) return false;
+                        if (Array.isArray(value)) return value.length > 0;
+                        return Boolean(value);
+                    })
+                ));
+                setActiveColorBy((current) => (current && !validColorKeys.has(current) ? '' : current));
+            }, [model]);
+            React.useEffect(() => {
+                writeTasksPrefs(model, {
+                    filters: activeFilters,
+                    colorBy: activeColorBy,
+                    filtersCollapsed,
+                });
+            }, [model, activeFilters, activeColorBy, filtersCollapsed]);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
                 const viewport = reactFlow.getViewport();
                 return reactFlow.setViewport(

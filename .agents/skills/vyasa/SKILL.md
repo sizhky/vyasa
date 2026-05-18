@@ -16,6 +16,7 @@ Use this skill for real Vyasa behavior and for building new Vyasa extensions. Al
 | Style with CSS or theming | `references/theming.md` |
 | Create Mermaid, D2, Cytograph, or `.cytree` diagrams | `references/diagrams.md` |
 | Build or deploy a static site | `references/static-build.md` |
+| Work on debug/performance tracing or the `debug_perf` extension | `references/debug-perf.md` |
 | Add or modify a Vyasa extension | inspect `vyasa/extensions.py`, `vyasa/assets.py`, `vyasa/build.py`, and `vyasa/extensions_builtin/*` examples |
 
 Start here:

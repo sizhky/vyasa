@@ -4,6 +4,7 @@ from urllib.parse import quote
 from fasthtml.common import A, Details, Li, Span, Summary, Ul
 from monsterui.all import UkIcon
 from .helpers import content_slug_for_path, content_url_for_slug
+from .nav_views import NavigationRow, navigation_row_view
 from .runtime_context import traced
 
 
@@ -73,17 +74,12 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
                 note_slug = content_slug_for_path(note_file) if note_file else None
                 note_allowed = bool(note_slug and is_allowed_fn(f"/posts/{note_slug}", roles or [], rbac_rules))
                 note_href = content_url_for_slug(note_slug) if note_slug else ""
-                note_link = A(
-                    href=note_href,
-                    hx_get=note_href,
-                    hx_target="#main-content",
-                    hx_push_url="true",
-                    hx_swap="outerHTML show:window:top settle:0.1s",
+                note_link = navigation_row_view(
+                    NavigationRow(slug=note_slug, title=f"Open {folder_title}", label=folder_title, href=note_href, icon="folder", kind="folder", folder_note=True),
                     cls="post-link folder-note-link whitespace-nowrap",
-                    title=f"Open {folder_title}",
                     onclick="event.stopPropagation();",
-                    data_path=note_slug,
-                )(folder_title) if note_allowed else Span(folder_title, cls="whitespace-nowrap", title=folder_title)
+                    show_icon=False,
+                ) if note_allowed else Span(folder_title, cls="whitespace-nowrap", title=folder_title)
                 title_node = _decorate_row(note_link, note_slug, folder_title, row_decorators) if note_allowed else note_link
                 if should_expand:
                     sub_items = build_post_tree_render(item, roles=roles, max_depth=0 if not child_active else None, active_parts=child_active, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, effective_abbreviations=effective_abbreviations, should_exclude_dir_fn=should_exclude_dir_fn, slug_to_title_fn=slug_to_title_fn, find_folder_note_file_fn=find_folder_note_file_fn, is_allowed_fn=is_allowed_fn, parse_frontmatter_fn=parse_frontmatter_fn, rbac_rules=rbac_rules, logger=logger, suppress_note_file=True, row_decorators=row_decorators)
@@ -99,7 +95,12 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             note_slug = content_slug_for_path(note_file) if note_file else None
             note_allowed = bool(note_slug and is_allowed_fn(f"/posts/{note_slug}", roles or [], rbac_rules))
             note_href = content_url_for_slug(note_slug) if note_slug else ""
-            note_link = A(href=note_href, hx_get=note_href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls="post-link folder-note-link whitespace-nowrap", title=f"Open {folder_title}", onclick="event.stopPropagation();", data_path=note_slug)(folder_title) if note_allowed else None
+            note_link = navigation_row_view(
+                NavigationRow(slug=note_slug, title=f"Open {folder_title}", label=folder_title, href=note_href, icon="folder", kind="folder", folder_note=True),
+                cls="post-link folder-note-link whitespace-nowrap",
+                onclick="event.stopPropagation();",
+                show_icon=False,
+            ) if note_allowed else None
             if not sub_items and not note_allowed:
                 continue
             title_base = note_link if note_allowed else Span(folder_title, cls="whitespace-nowrap", title=folder_title)
@@ -108,7 +109,10 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             if sub_items:
                 items.append(Li(Details(_folder_summary(title_node), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true", open=should_expand), cls="my-1"))
             elif note_slug:
-                folder_link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon("folder", cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(folder_title, cls="whitespace-nowrap", title=folder_title), href=note_href, hx_get=note_href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls=FILE_ROW_CLASSES, data_path=note_slug)
+                folder_link = navigation_row_view(
+                    NavigationRow(slug=note_slug, title=folder_title, label=folder_title, href=note_href, icon="folder", kind="folder", folder_note=True),
+                    cls=FILE_ROW_CLASSES,
+                )
                 items.append(Li(_decorate_row(folder_link, note_slug, folder_title, row_decorators)))
             continue
         if item.suffix not in {".md", ".pdf", ".tree"}:
@@ -130,7 +134,8 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             icon, title, label, href = "file", slug_to_title_fn(item.stem, abbreviations=abbreviations), f"{slug_to_title_fn(item.stem, abbreviations=abbreviations)} (PDF)", content_url_for_slug(slug)
         else:
             icon, title, label, href = "table", slug_to_title_fn(item.stem, abbreviations=abbreviations), slug_to_title_fn(item.stem, abbreviations=abbreviations), content_url_for_slug(slug)
-        link = A(Span(cls="w-4 mr-2 shrink-0"), Span(UkIcon(icon, cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"), Span(label, cls="whitespace-nowrap", title=title), href=href, hx_get=href, hx_target="#main-content", hx_push_url="true", hx_swap="outerHTML show:window:top settle:0.1s", cls=FILE_ROW_CLASSES, data_path=slug)
+        row = NavigationRow(slug=slug, title=title, label=label, href=href, icon=icon, kind=item.suffix.lstrip("."))
+        link = navigation_row_view(row, cls=FILE_ROW_CLASSES)
         items.append(Li(_decorate_row(link, slug, title, row_decorators)))
     logger.debug(f"[DEBUG] build_post_tree for {content_slug_for_path(folder, strip_suffix=False) or '.'} completed in {(time.time() - start_time) * 1000:.2f}ms")
     return items

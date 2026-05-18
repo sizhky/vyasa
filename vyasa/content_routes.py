@@ -4,9 +4,9 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from fasthtml.common import A, Button, Div, H1, Kbd, Link, NotStr, Response, Script, Span, to_xml
+from fasthtml.common import A, Button, Div, H1, Kbd, NotStr, Response, Span, to_xml
 from monsterui.all import UkIcon
-from .assets import asset_url
+from .assets import asset_url, bundle_asset_nodes_for_collector
 from .config import get_config
 from .content_tree import ContentTree
 from .document_pages import (
@@ -23,29 +23,12 @@ from .document_pages import (
 )
 from .extensions import get_extension_runtime, refresh_extension_runtime
 from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, expand_markdown_includes_for_reading, get_adjacent_posts, strip_more_marker
+from .runtime_context import traced
 from .extensions_builtin.markdown.renderer import _render_markdown_fragment
 from .tree_tables import parse_tree_table, render_tree_table_html
 from .extensions_builtin.slides.deck import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
 
 FALLBACK_HOME_SLUG = "__home__"
-
-
-def _bundle_nodes_for_collector(asset_collector):
-    runtime = get_extension_runtime()
-    if runtime is None:
-        runtime = refresh_extension_runtime(get_config().get_extensions_config())
-    if not asset_collector or not runtime:
-        return []
-    nodes = []
-    for bundle_name in asset_collector.requested:
-        bundle = runtime.bundles.get(bundle_name)
-        if not bundle:
-            continue
-        for css_href in bundle.css:
-            nodes.append(Link(rel="stylesheet", href=asset_url(css_href)))
-        for js_src in bundle.js:
-            nodes.append(Script(src=asset_url(js_src), type="module"))
-    return nodes
 
 
 def _resolve_slide_width(metadata):
@@ -116,6 +99,7 @@ def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, inc
     return Div(*items, cls="vyasa-breadcrumbs mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400")
 
 
+@traced("total")
 def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbreviations, find_folder_note_file, slug_to_title, layout, get_blog_title, not_found, parse_frontmatter, resolve_markdown_title, from_md, logger, PathCls=Path):
     request_start = time.time()
     logger.info(f"\n[DEBUG] ########## REQUEST START: /posts/{path} ##########")

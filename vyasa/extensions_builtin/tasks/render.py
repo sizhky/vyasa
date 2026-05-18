@@ -12,7 +12,7 @@ from .model import parse_tasks_text
 _diagram_uid_counter = count(1)
 
 
-def render_tasks_block(code: str, current_path: str | None = None) -> str:
+def render_tasks_block(code: str, current_path: str | None = None, fence_name: str = "tasks") -> str:
     code = html.unescape(code)
     config, code = split_fence_frontmatter(code)
     try:
@@ -65,7 +65,8 @@ def render_tasks_block(code: str, current_path: str | None = None) -> str:
     title = html.escape(config.get("title") or model.get("title") or "Items")
     default_open_depth = html.escape(str(config.get("default_open_depth") or 0))
     width = config.get("width") or "65vw"
-    min_height = config.get("min_height") or ("85vh" if "vw" in str(width).lower() or str(width).lower() == "100%" else "420px")
+    implicit_breakout_height = fence_name == "tasks" and ("vw" in str(width).lower() or str(width).lower() == "100%")
+    min_height = config.get("min_height") or ("85vh" if implicit_breakout_height else "420px")
     flow_height = html.escape(str(config.get("height") or "70vh"))
     jitter = html.escape(str(config.get("jitter") or 0))
     jitter_y = html.escape(str(config.get("jitter_y") or config.get("jitter") or 0))
@@ -84,10 +85,12 @@ def render_tasks_block(code: str, current_path: str | None = None) -> str:
     optional_layout_attrs_str = (" " + " ".join(optional_layout_attrs)) if optional_layout_attrs else ""
     summary = f'{len(model["groups"])} groups, {len(model["tasks"])} items, {len(model["dependency_edges"])} edges'
     breakout = str(width).lower() in {"100%", "100vw"} or "vw" in str(width).lower()
-    container_style = (
-        f"width: {width}; min-height: {min_height}; position: relative; left: 50%; transform: translateX(-50%);"
-        if breakout else f"width: {width}; min-height: {min_height};"
-    )
+    container_style_parts = [f"width: {width};"]
+    if min_height:
+        container_style_parts.append(f"min-height: {min_height};")
+    if breakout:
+        container_style_parts.append("position: relative; left: 50%; transform: translateX(-50%);")
+    container_style = " ".join(container_style_parts)
     return (
         f'<div class="tasks-container relative my-6 rounded-xl border-4 border-slate-200 dark:border-slate-800" '
         f'style="{container_style}" '

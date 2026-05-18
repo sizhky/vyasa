@@ -38,6 +38,17 @@ def test_disabled_render_extensions_fall_back_to_plain_code():
         refresh_extension_runtime({})
 
 
+def test_items_vw_width_does_not_add_implicit_outer_min_height():
+    refresh_extension_runtime({})
+
+    html = to_xml(from_md("```items\n---\ntitle: Wide\nwidth: 92vw\n---\nGroup:\n  - a :: A\n```"))
+
+    assert 'class="tasks-container' in html
+    assert "width: 92vw;" in html
+    assert "min-height: 85vh" not in html
+    assert "height:70vh;min-height:420px" in html
+
+
 def test_rendered_heading_emits_doc_heading_class():
     html = to_xml(from_md("## Cave\n\ntext"))
 

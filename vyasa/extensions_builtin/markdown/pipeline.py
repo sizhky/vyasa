@@ -1,5 +1,6 @@
 import hashlib
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 
 _CALLOUT_ALIASES = {
@@ -11,6 +12,22 @@ _CALLOUT_ALIASES = {
     "missing": "failure", "danger": "danger", "error": "danger", "bug": "bug",
     "example": "example", "quote": "quote", "cite": "quote", "note": "note",
 }
+
+
+@dataclass
+class RenderPipeline:
+    preprocessors: list = field(default_factory=list)
+    postprocessors: list = field(default_factory=list)
+
+    def preprocess(self, content, context, state):
+        for processor in self.preprocessors:
+            content = processor(content, context, state)
+        return preserve_newlines(content)
+
+    def postprocess(self, html_out, context, state, render_tab_content):
+        for processor in self.postprocessors:
+            html_out = processor(html_out, context, state, render_tab_content)
+        return html_out
 
 
 def _placeholder_id(text):

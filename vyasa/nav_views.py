@@ -2,6 +2,36 @@ from fasthtml.common import *
 from monsterui.all import *
 
 
+class NavigationRow:
+    def __init__(self, *, slug, title, label, href, icon, kind="file", folder_note=False):
+        self.slug = slug
+        self.title = title
+        self.label = label
+        self.href = href
+        self.icon = icon
+        self.kind = kind
+        self.folder_note = folder_note
+
+
+def navigation_row_view(row, *, cls, onclick=None, show_icon=True):
+    attrs = {
+        "href": row.href,
+        "hx_get": row.href,
+        "hx_target": "#main-content",
+        "hx_push_url": "true",
+        "hx_swap": "outerHTML show:window:top settle:0.1s",
+        "cls": cls,
+        "data_path": row.slug,
+    }
+    if onclick:
+        attrs["onclick"] = onclick
+    icon_nodes = (
+        Span(cls="w-4 mr-2 shrink-0"),
+        Span(UkIcon(row.icon, cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+    ) if show_icon else ()
+    return A(*icon_nodes, Span(row.label, cls="whitespace-nowrap", title=row.title), **attrs)
+
+
 def navbar_view(blog_title, theme_toggle_node, show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None):
     home_link_attrs = {"hx_get": "/", "hx_target": "#main-content", "hx_push_url": "true", "hx_swap": "outerHTML show:window:top settle:0.1s"} if htmx_nav else {}
     left_items = [A(blog_title, href="/", **home_link_attrs)]

@@ -13,7 +13,7 @@ from fasthtml.common import Div, Link, NotStr, Script, Span, to_xml
 from loguru import logger
 from monsterui.all import UkIcon, apply_classes
 
-from ...assets import asset_url
+from ...assets import asset_url, bundle_asset_nodes_for_collector
 from ...config import get_config
 from ...extensions import bind_asset_collector, current_asset_collector, get_extension_runtime, refresh_extension_runtime
 from ...helpers import (
@@ -33,8 +33,8 @@ from .pipeline import (
     extract_footnotes,
     preprocess_callouts,
     preprocess_code_includes,
-    preserve_newlines as preserve_md_newlines,
     preprocess_super_sub,
+    RenderPipeline,
 )
 from .tokens import (
     DownloadEmbed,
@@ -781,10 +781,11 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False, asset_co
     )
     content, callout_data_store = preprocess_callouts(content)
     extension_state = {}
-    if runtime:
-        for preprocessor in runtime.markdown_preprocessors:
-            content = preprocessor(content, context, extension_state)
-    content = preserve_md_newlines(content)
+    pipeline = RenderPipeline(
+        list(runtime.markdown_preprocessors) if runtime else [],
+        list(runtime.markdown_postprocessors) if runtime else [],
+    )
+    content = pipeline.preprocess(content, context, extension_state)
     mods = {
         "pre": "my-4", "p": "text-base leading-relaxed mb-6", "li": "text-base leading-relaxed",
         "ul": "uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base", "ol": "uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base",
@@ -806,9 +807,7 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False, asset_co
                 current_path=current_path,
             ) as renderer:
                 return renderer.render(mst.Document(tab_content))
-        if runtime:
-            for postprocessor in runtime.markdown_postprocessors:
-                html_out = postprocessor(html_out, context, extension_state, _render_tab_content)
+        html_out = pipeline.postprocess(html_out, context, extension_state, _render_tab_content)
         if callout_data_store:
             def _render_callout_body(callout_body):
                 return _render_markdown_fragment(callout_body, img_dir=img_dir, current_path=current_path)
@@ -869,13 +868,6 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False, asset_co
         html_out = _wrap_tables(html_out, get_config().get_table_col_max_width())
     bundle_nodes = [Link(rel="stylesheet", href=_asset_url("/static/sidenote.css"))] if emit_bundle_nodes else []
     if emit_bundle_nodes and asset_collector:
-        for bundle_name in asset_collector.requested:
-            bundle = runtime.bundles.get(bundle_name) if runtime else None
-            if not bundle:
-                continue
-            for css_href in bundle.css:
-                bundle_nodes.append(Link(rel="stylesheet", href=_asset_url(css_href)))
-            for js_src in bundle.js:
-                bundle_nodes.append(Script(src=_asset_url(js_src), type="module"))
+        bundle_nodes.extend(bundle_asset_nodes_for_collector(asset_collector, runtime=runtime))
     rendered_html = apply_classes(html_out, class_map_mods=mods) if apply_class_mods else html_out
     return Div(*bundle_nodes, NotStr(rendered_html), cls="w-full")

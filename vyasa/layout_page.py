@@ -5,6 +5,7 @@ from fasthtml.common import Link
 
 from fasthtml.common import A, Aside, Button, Div, Footer, Main, NotStr, P, Span, Title
 from monsterui.all import UkIcon
+from .page_frame import PageFrame, PageFrameDeps
 from .runtime_context import traced
 
 _GOOGLE_FONT_QUERIES = {
@@ -123,7 +124,33 @@ def _annotation_attrs(current_path, auth, get_config, slide_mode=False):
 
 
 @traced("layout")
-def render_layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True, auth=None, htmx_nav=True, nav_posts_menu=False, full_width=False, show_footer=True, no_scroll=False, slide_mode=False, current_updated_label=None, extra_head_nodes=(), logger, resolve_layout_config, width_class_and_style, style_attr, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar):
+def render_page_frame(frame: PageFrame, *, htmx, deps: PageFrameDeps):
+    logger = deps.logger
+    resolve_layout_config = deps.resolve_layout_config
+    width_class_and_style = deps.width_class_and_style
+    style_attr = deps.style_attr
+    get_sidebar_custom_css_links = deps.get_sidebar_custom_css_links
+    get_root_folder = deps.get_root_folder
+    build_sidebar_toc_items = deps.build_sidebar_toc_items
+    extract_sidebar_toc = deps.extract_sidebar_toc
+    strip_inline_markdown = deps.strip_inline_markdown
+    text_to_anchor = deps.text_to_anchor
+    unique_anchor = deps.unique_anchor
+    get_config = deps.get_config
+    build_collapsible_sidebar = deps.build_collapsible_sidebar
+    get_roles_from_auth = deps.get_roles_from_auth
+    rbac_rules = deps.rbac_rules
+    rbac_cfg = deps.rbac_cfg
+    google_oauth_cfg = deps.google_oauth_cfg
+    coerce_list = deps.coerce_list
+    cached_posts_sidebar_html = deps.cached_posts_sidebar_html
+    posts_sidebar_fingerprint = deps.posts_sidebar_fingerprint
+    get_posts = deps.get_posts
+    navbar = deps.navbar
+    current_path = frame.current_path
+    auth = frame.auth
+    no_scroll = frame.no_scroll
+    slide_mode = frame.slide_mode
     layout_start_time = time.time()
     logger.debug("[LAYOUT] layout() start")
     section_class = _section_class(current_path)
@@ -151,7 +178,7 @@ def render_layout(*content, htmx, title=None, show_sidebar=False, toc_content=No
     )
     page_style = "; ".join(part for part in (layout_max_style, f"--vyasa-sidebar-width: {sidebar_width};", theme_style, font_style, token_style) if part)
     layout_fluid_class = "layout-fluid" if layout_max_style else ""
-    if full_width:
+    if frame.full_width:
         layout_max_class = layout_max_style = layout_fluid_class = ""
     main_spacing_cls = "px-0 py-0" if no_scroll else "px-6 pt-4 pb-8"
     page_container_cls = "flex flex-col h-screen overflow-hidden" if no_scroll else "flex flex-col min-h-screen"
@@ -188,9 +215,15 @@ def render_layout(*content, htmx, title=None, show_sidebar=False, toc_content=No
         return Footer(Div(footer_inner, cls="vyasa-footer-card bg-slate-900 text-white p-4 dark:bg-slate-800"), cls=f"{outer_cls} vyasa-footer-shell".strip(), id="site-footer", **outer_style)
 
     if htmx and getattr(htmx, "request", None):
-        return _render_htmx_layout(content, title, show_sidebar, toc_content, current_path, show_toc, slide_mode, extra_head_nodes, logger, t_section, layout_start_time, main_spacing_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar)
+        return _render_htmx_layout(frame.content, frame.title, frame.show_sidebar, frame.toc_content, frame.current_path, frame.show_toc, frame.slide_mode, frame.extra_head_nodes, logger, t_section, layout_start_time, main_spacing_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar)
 
-    return _render_full_layout(content, title, show_sidebar, toc_content, current_path, show_toc, auth, htmx_nav, nav_posts_menu, show_footer, no_scroll, slide_mode, current_updated_label, extra_head_nodes, logger, t_section, layout_start_time, layout_fluid_class, layout_max_class, layout_max_style, page_style, main_spacing_cls, page_container_cls, navbar_margin_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar, style_attr, _footer_node)
+    return _render_full_layout(frame.content, frame.title, frame.show_sidebar, frame.toc_content, frame.current_path, frame.show_toc, frame.auth, frame.htmx_nav, frame.nav_posts_menu, frame.show_footer, frame.no_scroll, frame.slide_mode, frame.current_updated_label, frame.extra_head_nodes, logger, t_section, layout_start_time, layout_fluid_class, layout_max_class, layout_max_style, page_style, main_spacing_cls, page_container_cls, navbar_margin_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar, style_attr, _footer_node)
+
+
+def render_layout(*content, htmx, title=None, show_sidebar=False, toc_content=None, current_path=None, show_toc=True, auth=None, htmx_nav=True, nav_posts_menu=False, full_width=False, show_footer=True, no_scroll=False, slide_mode=False, current_updated_label=None, extra_head_nodes=(), logger, resolve_layout_config, width_class_and_style, style_attr, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar):
+    frame = PageFrame(tuple(content), title=title, show_sidebar=show_sidebar, toc_content=toc_content, current_path=current_path, show_toc=show_toc, auth=auth, htmx_nav=htmx_nav, nav_posts_menu=nav_posts_menu, full_width=full_width, show_footer=show_footer, no_scroll=no_scroll, slide_mode=slide_mode, current_updated_label=current_updated_label, extra_head_nodes=tuple(extra_head_nodes))
+    deps = PageFrameDeps(logger, resolve_layout_config, width_class_and_style, style_attr, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar)
+    return render_page_frame(frame, htmx=htmx, deps=deps)
 
 
 @traced("toc")
