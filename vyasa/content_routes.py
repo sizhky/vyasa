@@ -11,15 +11,12 @@ from .config import get_config
 from .content_tree import ContentTree
 from .document_pages import (
     PAGE_TITLE_CLS,
+    DocumentActionContext,
     DocumentPage,
-    copy_raw_button,
-    copy_raw_nodes,
-    copy_text_button,
     document_header,
-    fold_all_button,
     frontmatter_error_nodes,
     frontmatter_metadata_block,
-    present_button,
+    resolve_document_actions,
 )
 from .extensions import get_extension_runtime, refresh_extension_runtime
 from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, expand_markdown_includes_for_reading, get_adjacent_posts, strip_more_marker
@@ -141,16 +138,22 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     breadcrumbs = _breadcrumbs(path, slug_to_title, abbreviations)
     error_chip, error_toast, error_script = frontmatter_error_nodes(file_path, frontmatter_error)
     relative_file_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
-    path_button, path_toast, path_target = copy_text_button("Copy Relative Path", relative_file_path, "relative-path-clipboard", "relative-path-toast")
-    actions = (error_chip if error_chip else Div(), fold_all_button(), present_button(path), copy_raw_button("Copy Markdown", "raw-md-clipboard", "raw-md-toast"), path_button)
+    document_actions, action_aux_nodes = resolve_document_actions(
+        DocumentActionContext(
+            title=post_title,
+            current_path=path,
+            raw_content=raw_content,
+            file_path=str(file_path),
+            relative_file_path=relative_file_path,
+        )
+    )
+    actions = ((error_chip,) if error_chip else ()) + document_actions
     post_content = Div(
         document_header(post_title, read_source, actions=actions, breadcrumbs=breadcrumbs, file_path=file_path),
         frontmatter_metadata_block(metadata) or Div(),
         error_toast if error_toast else Div(),
         error_script if error_script else Div(),
-        path_toast,
-        path_target,
-        *copy_raw_nodes(raw_content),
+        *action_aux_nodes,
         content,
         pager if pager else Div(),
     )
@@ -339,12 +342,18 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
         page_title, render_content = resolve_markdown_title(index_file)
         index_path = str(index_file.relative_to(get_root_folder()).with_suffix(""))
         relative_file_path = content_slug_for_path(index_file, strip_suffix=False) or index_file.name
-        path_button, path_toast, path_target = copy_text_button("Copy Relative Path", relative_file_path, "relative-path-clipboard", "relative-path-toast")
+        document_actions, action_aux_nodes = resolve_document_actions(
+            DocumentActionContext(
+                title=page_title,
+                current_path=index_path,
+                raw_content=raw_content,
+                file_path=str(index_file),
+                relative_file_path=relative_file_path,
+            )
+        )
         page_content = Div(
-            document_header(page_title, render_content, actions=(fold_all_button(), present_button(index_path), copy_raw_button("Copy Markdown", "raw-md-clipboard", "raw-md-toast"), path_button), file_path=index_file),
-            path_toast,
-            path_target,
-            *copy_raw_nodes(raw_content),
+            document_header(page_title, render_content, actions=document_actions, file_path=index_file),
+            *action_aux_nodes,
             from_md(render_content, current_path=index_path),
         )
         result = DocumentPage(page_title, index_path, page_content, toc_source=raw_content).render(layout, htmx=htmx, blog_title=blog_title, auth=request.scope.get("auth"))
@@ -353,9 +362,16 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
         return result
     raw_content = _fallback_home_markdown(blog_title)
     fallback_title = f"Welcome to {blog_title}!"
+    document_actions, action_aux_nodes = resolve_document_actions(
+        DocumentActionContext(
+            title=fallback_title,
+            current_path=FALLBACK_HOME_SLUG,
+            raw_content=raw_content,
+        )
+    )
     fallback_body = Div(
-        document_header(fallback_title, raw_content, actions=(fold_all_button(), present_button(FALLBACK_HOME_SLUG), copy_raw_button("Copy Markdown", "raw-md-clipboard", "raw-md-toast"))),
-        *copy_raw_nodes(raw_content),
+        document_header(fallback_title, raw_content, actions=document_actions),
+        *action_aux_nodes,
         from_md(raw_content, current_path=FALLBACK_HOME_SLUG),
         cls="w-full",
     )

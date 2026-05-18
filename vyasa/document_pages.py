@@ -48,6 +48,39 @@ class DocumentPage:
         )
 
 
+@dataclass(frozen=True)
+class DocumentActionContext:
+    title: str
+    current_path: str
+    raw_content: str = ""
+    file_path: str | None = None
+    relative_file_path: str | None = None
+
+
+@dataclass(frozen=True)
+class DocumentActionItem:
+    id: str
+    node: Any
+    aux_nodes: tuple[Any, ...] = ()
+    order: int = 0
+
+
+def resolve_document_actions(context: DocumentActionContext) -> tuple[tuple[Any, ...], tuple[Any, ...]]:
+    from .extensions import get_extension_runtime
+
+    runtime = get_extension_runtime()
+    providers = runtime.document_action_providers if runtime else []
+    items = [
+        item
+        for provider in providers
+        if (item := provider(context))
+    ]
+    ordered = sorted(items, key=lambda item: (item.order, item.id))
+    actions = tuple(item.node for item in ordered)
+    aux_nodes = tuple(node for item in ordered for node in item.aux_nodes)
+    return actions, aux_nodes
+
+
 def meta_line(source_text: str, file_path=None):
     items = [Span(f"{estimate_read_time_minutes(source_text)}-min read")]
     label = format_last_modified_label(file_path) if file_path else None

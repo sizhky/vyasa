@@ -142,8 +142,12 @@ class ExtensionRuntime:
     search_result_row_decorators: list[Callable] = field(default_factory=list)
     sidebar_row_actions: list[Callable] = field(default_factory=list)
     search_result_row_actions: list[Callable] = field(default_factory=list)
+    document_action_providers: list[Callable] = field(default_factory=list)
     content_root_resolvers: list[Callable] = field(default_factory=list)
     trace_handlers: list[Callable] = field(default_factory=list)
+    toc_panel_providers: list[Callable] = field(default_factory=list)
+    scoped_css_providers: list[Callable] = field(default_factory=list)
+    favicon_href_provider: Callable | None = None
 
     def new_asset_collector(self) -> AssetCollector:
         return AssetCollector(self.bundles)
@@ -272,6 +276,18 @@ class _LayoutRegistrar:
             raise ExtensionConfigError(f"Unknown layout mode: {name}")
         setattr(self.runtime, attr, provider)
 
+    def toc(self, provider: Callable) -> None:
+        self.guard.require_capability("cap:layout:toc")
+        self.runtime.toc_panel_providers.append(provider)
+
+    def scoped_css(self, provider: Callable) -> None:
+        self.guard.require_capability("cap:layout:scoped_css")
+        self.runtime.scoped_css_providers.append(provider)
+
+    def favicon(self, provider: Callable) -> None:
+        self.guard.require_capability("cap:asset:favicon")
+        self.runtime.favicon_href_provider = provider
+
 
 class _RouteRegistrar:
     def __init__(self, runtime: ExtensionRuntime, guard: _RegistrationGuard):
@@ -338,6 +354,14 @@ class _NavigationRegistrar:
         self.runtime.search_result_row_actions.append(provider)
 
 
+class _DocumentRegistrar:
+    def __init__(self, runtime: ExtensionRuntime):
+        self.runtime = runtime
+
+    def action(self, provider: Callable) -> None:
+        self.runtime.document_action_providers.append(provider)
+
+
 class _ContentSourceRegistrar:
     def __init__(self, runtime: ExtensionRuntime):
         self.runtime = runtime
@@ -369,6 +393,7 @@ class VyasaExtensionApp:
         self.lifecycle = _LifecycleRegistrar(runtime)
         self.storage = _StorageRegistrar(runtime, guard)
         self.navigation = _NavigationRegistrar(runtime)
+        self.documents = _DocumentRegistrar(runtime)
         self.content_source = _ContentSourceRegistrar(runtime)
         self.trace = _TraceRegistrar(runtime)
 
@@ -479,7 +504,7 @@ def default_preset_selection() -> dict[ExtensionCategory, tuple[str, ...]]:
         "search": ("default_search",),
         "home": ("blog_home",),
         "errors": ("default_errors",),
-        "render": ("wikilinks", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks"),
+        "render": ("wikilinks", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon"),
         "route": ("slides", "auth_routes", "sidebar_routes", "annotations", "bookmarks", "rbac_admin", "filesystem_routes"),
         "content_source": ("filesystem",),
     }

@@ -20,7 +20,7 @@ from .extensions_builtin.markdown.renderer import from_md
 from .sidebar_helpers import build_toc_items, extract_toc
 from .tree_tables import TREE_SUFFIXES, parse_tree_table, render_tree_table_html
 from .config import get_config, reload_config
-from .extensions import refresh_extension_runtime
+from .extensions import get_extension_runtime, refresh_extension_runtime
 from .assets import asset_url, bundle_asset_html, iter_extension_static_dirs, route_bundle_names
 from .favicon import favicon_href as resolve_favicon_href, write_generated_favicon
 from .page_shell import PageShellModel, StaticShellRenderer
@@ -377,9 +377,8 @@ def generate_static_html(title, body_content, blog_title, favicon_href, extra_he
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
     
-    <!-- Syntax Highlighting -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <meta name="vyasa-code-theme-light" content="{get_config().get_code_theme_light()}">
+    <meta name="vyasa-code-theme-dark" content="{get_config().get_code_theme_dark()}">
     
     <!-- Math Rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -470,6 +469,29 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
 
 def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, toc_items=None, current_path=None, updated_label=None, extra_head_html=""):
     """Generate complete static page layout"""
+    runtime = get_extension_runtime()
+    toc_sidebar_html = ""
+    if runtime and runtime.toc_panel_providers:
+        toc_context = {
+            "mode": "static",
+            "toc_items": toc_items or [],
+            "current_path": current_path,
+        }
+        for provider in runtime.toc_panel_providers:
+            if provided := provider(toc_context):
+                toc_sidebar_html = provided
+                break
+    if runtime and runtime.scoped_css_providers:
+        css_context = {
+            "mode": "static",
+            "root_folder": get_config().get_root_folder(),
+            "current_path": current_path,
+            "section_class": f"section-{current_path.replace('/', '-').lower()}" if current_path else "",
+        }
+        css_html = "".join(to_xml(node) for provider in runtime.scoped_css_providers for node in (provider(css_context) or ()))
+        extra_head_html = f"{extra_head_html}{css_html}"
+    if runtime and runtime.favicon_href_provider:
+        favicon_href = runtime.favicon_href_provider(get_config().get_root_folder())
     model = PageShellModel(
         title=page_title,
         blog_title=blog_title,
@@ -478,6 +500,7 @@ def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, 
         nav_tree=nav_tree,
         favicon_href=favicon_href,
         toc_items=toc_items,
+        toc_sidebar_html=toc_sidebar_html,
         current_path=current_path,
         updated_label=updated_label,
     )

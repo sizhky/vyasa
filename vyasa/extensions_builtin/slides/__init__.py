@@ -1,3 +1,4 @@
+from ...document_pages import DocumentActionItem, present_button
 from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 
 
@@ -12,6 +13,7 @@ class SlidesExtension(VyasaExtensionBase):
         )
         app.routes.add("/slides", _register_slides_route)
         app.layout.mode("slide", _slide_renderer)
+        app.documents.action(_present_document_action)
 
 
 def _slide_renderer(path: str, htmx, request):
@@ -42,6 +44,16 @@ def _register_slides_route(rt, runtime):
     @rt("/slides/{path:path}")
     def slide_deck(path: str, htmx, request):
         return _slide_renderer(path, htmx, request)
+
+
+def _present_document_action(context):
+    if not context.current_path:
+        return None
+    return DocumentActionItem(
+        id="slides.present",
+        node=present_button(context.current_path),
+        order=20,
+    )
 
 
 EXTENSION = SlidesExtension(

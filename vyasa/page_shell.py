@@ -15,6 +15,7 @@ class PageShellModel:
     nav_tree: list[Any]
     favicon_href: str
     toc_items: list[Any] | None = None
+    toc_sidebar_html: str = ""
     current_path: str | None = None
     updated_label: str | None = None
 
@@ -48,7 +49,7 @@ class StaticShellRenderer:
             <main id="main-content" class="vyasa-main-shell flex-1 min-w-0 px-6 py-8 space-y-8">
                 {model.main_html}
             </main>
-            {self._toc_sidebar(model.toc_items)}
+            {self._toc_sidebar(model)}
         </div>
         {self._footer()}
     </div>
@@ -107,23 +108,8 @@ class StaticShellRenderer:
     '''
 
     @staticmethod
-    def _toc_sidebar(toc_items: list[Any] | None) -> str:
-        if not toc_items:
-            return ""
-        toc_list_html = to_xml(Ul(*toc_items, cls="mt-2 list-none"))
-        return f'''
-        <aside id="toc-sidebar" class="vyasa-sidebar vyasa-toc-sidebar hidden md:block w-64 shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]">
-            <details open class="vyasa-sidebar-card vyasa-sidebar-card-table-of-contents">
-                <summary class="vyasa-sidebar-toggle vyasa-sidebar-toggle-table-of-contents flex items-center font-semibold cursor-pointer py-2 px-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg select-none list-none bg-white dark:bg-slate-950 z-10">
-                    <span uk-icon="list" class="w-5 h-5 mr-2"></span>
-                    Table of Contents
-                </summary>
-                <div class="vyasa-sidebar-body vyasa-sidebar-body-table-of-contents mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-y-auto max-h-[calc(100vh-16rem)]">
-                    {toc_list_html}
-                </div>
-            </details>
-        </aside>
-        '''
+    def _toc_sidebar(model: PageShellModel) -> str:
+        return model.toc_sidebar_html or ""
 
     @staticmethod
     def _footer() -> str:

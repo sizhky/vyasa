@@ -7,16 +7,21 @@ def load_builtin_extensions():
     from . import cytograph
     from . import d2
     from . import debug_perf
+    from . import default_favicon
     from . import default_errors
     from . import default_layout
     from . import default_search
     from . import default_theme
+    from . import document_actions
     from . import filesystem
     from . import filesystem_routes
+    from . import code_tools
     from . import mermaid
     from . import rbac_admin
+    from . import scoped_custom_css
     from . import slides
     from . import sidebar_routes
+    from . import table_of_contents
     from . import tabs
     from . import tasks
     from . import wikilinks
@@ -35,6 +40,11 @@ def load_builtin_extensions():
         cytograph.EXTENSION,
         cryptograph.EXTENSION,
         tasks.EXTENSION,
+        document_actions.EXTENSION,
+        table_of_contents.EXTENSION,
+        scoped_custom_css.EXTENSION,
+        code_tools.EXTENSION,
+        default_favicon.EXTENSION,
         slides.EXTENSION,
         auth_routes.EXTENSION,
         sidebar_routes.EXTENSION,

@@ -252,6 +252,10 @@ def _blog_home_is_ignored(path, root):
 
 
 def get_favicon_href():
+    runtime = get_extension_runtime()
+    provider = runtime.favicon_href_provider if runtime else None
+    if provider:
+        return provider(get_root_folder())
     return favicon_href(get_root_folder())
 
 
@@ -282,9 +286,8 @@ hdrs = (
         """
     ),
     *Theme.slate.headers(highlightjs=False),
-    Link(rel="stylesheet", href=_hljs_theme_href(get_config().get_code_theme_light()), id="hljs-light", data_default_theme=get_config().get_code_theme_light()),
-    Link(rel="stylesheet", href=_hljs_theme_href(get_config().get_code_theme_dark()), id="hljs-dark", data_default_theme=get_config().get_code_theme_dark()),
-    Script(src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"),
+    Meta(name="vyasa-code-theme-light", content=get_config().get_code_theme_light()),
+    Meta(name="vyasa-code-theme-dark", content=get_config().get_code_theme_dark()),
     Link(rel="icon", href=get_favicon_href()),
     Script(src="https://unpkg.com/hyperscript.org@0.9.12"),
     Script(src=_asset_url("/static/scripts.js"), type="module"),

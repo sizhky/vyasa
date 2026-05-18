@@ -14,6 +14,7 @@ from loguru import logger
 from monsterui.all import UkIcon, apply_classes
 
 from ...assets import asset_url, bundle_asset_nodes_for_collector
+from ...extensions import request_asset_bundle
 from ...config import get_config
 from ...extensions import bind_asset_collector, current_asset_collector, get_extension_runtime, refresh_extension_runtime
 from ...helpers import (
@@ -267,6 +268,7 @@ def _resolve_line_numbers(default_enabled, attrs=None, spec=""):
 
 
 def _emit_code_shell(snippet, lang="", *, start=1, highlight_spec="", title="", line_numbers=False, wrap=False):
+    request_asset_bundle("code_tools.runtime")
     attrs = [f'data-code-source-start="{start}"']
     if highlight_spec:
         attrs.append(f'data-code-highlight-lines="{html.escape(highlight_spec)}"')

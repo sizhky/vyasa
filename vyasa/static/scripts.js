@@ -1,63 +1,3 @@
-function handleCodeCopyClick(event) {
-    const button = event.target.closest('.code-copy-button, .hljs-copy-button');
-    if (!button) {
-        return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    const container = button.closest('.code-block') || button.closest('pre') || button.parentElement;
-    const codeEl = (container && container.querySelector('pre > code')) ||
-        (container && container.querySelector('code')) ||
-        button.closest('pre');
-    if (!codeEl) {
-        return;
-    }
-    const text = codeEl.innerText || codeEl.textContent || '';
-    const showToast = () => {
-        let toast = document.getElementById('code-copy-toast');
-        if (!toast) {
-            toast = document.createElement('div');
-            toast.id = 'code-copy-toast';
-            toast.className = 'fixed top-6 right-6 z-[10000] text-xs bg-slate-900 text-white px-3 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300';
-            toast.textContent = 'Copied';
-            document.body.appendChild(toast);
-        }
-        toast.classList.remove('opacity-0');
-        toast.classList.add('opacity-100');
-        setTimeout(() => {
-            toast.classList.remove('opacity-100');
-            toast.classList.add('opacity-0');
-        }, 1400);
-    };
-    if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(text).then(showToast).catch(() => {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.setAttribute('readonly', '');
-            textarea.style.position = 'absolute';
-            textarea.style.left = '-9999px';
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-            showToast();
-        });
-    } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'absolute';
-        textarea.style.left = '-9999px';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-        showToast();
-    }
-}
-
-document.addEventListener('click', handleCodeCopyClick, true);
-
 function switchTab(tabsId, index) {
     const container = document.querySelector(`.tabs-container[data-tabs-id="${tabsId}"]`);
     if (!container) return;
@@ -103,36 +43,6 @@ function initSearchPlaceholderCycle(rootElement = document) {
             showAlt = !showAlt;
             input.setAttribute('placeholder', showAlt ? alt : primary);
         }, 10000);
-    });
-}
-
-function initCodeBlockCopyButtons(rootElement = document) {
-    const template = document.getElementById('vyasa-code-copy-tpl');
-    if (!template) {
-        return;
-    }
-    rootElement.querySelectorAll('.code-block').forEach((block) => {
-        if (block.querySelector('.code-copy-button')) {
-            return;
-        }
-        const button = template.content.firstElementChild.cloneNode(true);
-        block.insertBefore(button, block.firstChild);
-    });
-}
-
-function initCodeHighlighting(rootElement = document) {
-    if (!window.hljs) {
-        return;
-    }
-    rootElement.querySelectorAll('pre > code').forEach((code) => {
-        if (code.dataset.hljsBound === 'true') {
-            return;
-        }
-        if (code.closest('.mermaid-wrapper,.d2-wrapper')) {
-            return;
-        }
-        window.hljs.highlightElement(code);
-        code.dataset.hljsBound = 'true';
     });
 }
 
@@ -1224,7 +1134,7 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
     initFolderHoverExpand(event.target || document);
     syncPostsHoverToggleButtons(event.target || document);
     window.__vyasaInitSearchPlaceholderCycle?.(event.target || document);
-    initCodeBlockCopyButtons(event.target || document);
+    window.__vyasaInitCodeTools?.(event.target || document);
 });
 
 // Mobile menu toggle functionality
@@ -1543,56 +1453,6 @@ function renderMathSafely(root) {
     while ((node = walker.nextNode())) if (node.nodeValue && node.nodeValue.includes(marker)) node.nodeValue = node.nodeValue.split(marker).join('$');
 }
 
-function initHighlightedCodeIncludes(root) {
-    (root || document).querySelectorAll('code[data-code-highlight-lines], code[data-code-line-numbers="true"]').forEach((code) => {
-        if (code.querySelector('.vyasa-code-line')) return;
-        const start = Number(code.dataset.codeSourceStart || '1');
-        const languageClass = Array.from(code.classList).find((cls) => cls.startsWith('language-'));
-        const language = languageClass ? languageClass.replace(/^language-/, '') : '';
-        const ranges = String(code.dataset.codeHighlightLines || '').split(',').map((part) => part.trim()).filter(Boolean);
-        const highlighted = new Set();
-        ranges.forEach((part) => {
-            const [a, b] = part.split('-').map((value) => Number(value));
-            for (let n = a; n <= (b || a); n += 1) highlighted.add(n);
-        });
-        const lines = code.textContent.split('\n');
-        if (lines.length > 1 && lines[lines.length - 1] === '') {
-            lines.pop();
-        }
-        code.innerHTML = lines.map((line, index) => {
-            const lineNo = start + index;
-            const isHighlighted = highlighted.has(lineNo);
-            const isStart = isHighlighted && !highlighted.has(lineNo - 1);
-            const isEnd = isHighlighted && !highlighted.has(lineNo + 1);
-            const cls = [
-                'vyasa-code-line',
-                isHighlighted ? 'vyasa-code-line-highlight' : '',
-                isStart ? 'vyasa-code-line-highlight-start' : '',
-                isEnd ? 'vyasa-code-line-highlight-end' : '',
-            ].filter(Boolean).join(' ');
-            let htmlLine = line ? line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '&nbsp;';
-            if (line && window.hljs) {
-                try {
-                    htmlLine = language && window.hljs.getLanguage(language)
-                        ? window.hljs.highlight(line, { language, ignoreIllegals: true }).value
-                        : window.hljs.highlightAuto(line).value;
-                } catch (_) {}
-            }
-            return `<span class="${cls}" data-source-line="${lineNo}">${htmlLine}</span>`;
-        }).join('\n');
-        code.classList.add('vyasa-code-lines');
-        code.dataset.hljsBound = 'true';
-    });
-}
-
-function scheduleHighlightedCodeIncludes(root) {
-    const target = root || document;
-    initCodeHighlighting(target);
-    initHighlightedCodeIncludes(target);
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { initCodeHighlighting(target); initHighlightedCodeIncludes(target); });
-    [40, 140, 320].forEach((delay) => setTimeout(() => { initCodeHighlighting(target); initHighlightedCodeIncludes(target); }, delay));
-}
-
 function ensureFragmentStylesheets(root = document) {
     const scope = root instanceof Element || root instanceof Document ? root : document;
     scope.querySelectorAll('link[rel="stylesheet"][href]').forEach((link) => {
@@ -1690,23 +1550,6 @@ function ensureThemeFonts(theme) {
     link.href = `https://fonts.googleapis.com/css2?${Array.from(queries).join('&')}&display=swap`;
 }
 
-function getHljsThemeHref(themeName) {
-    return `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${themeName}.min.css`;
-}
-
-function syncCodeThemeLinks(theme) {
-    const lightLink = document.getElementById('hljs-light');
-    const darkLink = document.getElementById('hljs-dark');
-    if (!lightLink || !darkLink) return;
-    const lightTheme = theme?.code_theme_light || lightLink.dataset.defaultTheme;
-    const darkTheme = theme?.code_theme_dark || darkLink.dataset.defaultTheme;
-    if (lightTheme) lightLink.href = getHljsThemeHref(lightTheme);
-    if (darkTheme) darkLink.href = getHljsThemeHref(darkTheme);
-    const dark = document.documentElement.classList.contains('dark');
-    lightLink.disabled = dark;
-    darkLink.disabled = !dark;
-}
-
 function applyThemePreset(theme) {
     if (!theme) return;
     const root = document.documentElement;
@@ -1738,7 +1581,7 @@ function applyThemePreset(theme) {
     });
     if (theme.theme_primary) targets.forEach((el) => el.style.setProperty('--vyasa-primary-dim', `color-mix(in srgb, ${theme.theme_primary} 82%, black)`));
     ensureThemeFonts(theme);
-    syncCodeThemeLinks(theme);
+    window.__vyasaSyncCodeThemeLinks?.(theme);
 }
 
 function getVisibleThemeControl(id) {
@@ -1847,9 +1690,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initJsonFocusToggle();
     window.__vyasaInitSearchPlaceholderCycle?.(document);
     window.__vyasaInitPostsSearchPersistence?.(document);
-    initCodeBlockCopyButtons(document);
     initHeadingPermalinkCopy(document);
-    scheduleHighlightedCodeIncludes(document);
+    window.__vyasaInitCodeTools?.(document);
     window.__vyasaInitSearchClearButtons?.(document);
     ensurePdfFocusState();
     initTabPanelHeights(document);
@@ -1882,9 +1724,8 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     window.__vyasaInitPostsSearchPersistence?.(event.target);
     initFolderHoverExpand(event.target || document);
     syncPostsHoverToggleButtons(event.target || document);
-    initCodeBlockCopyButtons(event.target);
     initHeadingPermalinkCopy(event.target);
-    scheduleHighlightedCodeIncludes(event.target);
+    window.__vyasaInitCodeTools?.(event.target);
     window.__vyasaInitSearchClearButtons?.(event.target);
     ensurePdfFocusState();
     initTabPanelHeights(event.target || document);
@@ -1900,7 +1741,7 @@ window.addEventListener('load', () => {
     scheduleHashAlignment();
     initFolderHoverExpand(document);
     syncPostsHoverToggleButtons(document);
-    scheduleHighlightedCodeIncludes(document);
+    window.__vyasaInitCodeTools?.(document);
 });
 
 window.addEventListener('pageshow', () => {

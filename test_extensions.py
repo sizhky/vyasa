@@ -20,6 +20,7 @@ from vyasa.extensions_builtin.debug_perf import finish_trace, start_trace
 from vyasa.runtime_context import trace_span
 from vyasa.assets import bundle_asset_nodes_for_collector, extension_asset_path
 from vyasa.extensions_builtin.markdown.pipeline import RenderPipeline
+from vyasa.extensions_builtin.markdown.renderer import from_md
 
 
 def test_extensions_default_preset_when_section_omitted(tmp_path, monkeypatch):
@@ -32,7 +33,7 @@ def test_extensions_default_preset_when_section_omitted(tmp_path, monkeypatch):
 
     assert plan.preset == "default"
     assert plan.selected_by_category["layout"] == ("default_layout",)
-    assert plan.selected_by_category["render"] == ("wikilinks", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks")
+    assert plan.selected_by_category["render"] == ("wikilinks", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
     assert plan.selected_by_category["route"] == ("slides", "auth_routes", "sidebar_routes", "annotations", "bookmarks", "rbac_admin", "filesystem_routes")
     assert plan.enabled_ids[-1] == "filesystem"
 
@@ -176,6 +177,28 @@ def test_bookmarks_register_row_action_intent_not_html_decorator():
     assert action.id == "bookmarks.toggle"
     assert action.attrs["data_bookmark_path"] == "guide"
     assert runtime.sidebar_row_decorators == []
+
+
+def test_default_builtin_extensions_register_document_layout_providers():
+    runtime = build_extension_runtime({})
+
+    assert len(runtime.document_action_providers) >= 4
+    assert len(runtime.toc_panel_providers) == 1
+    assert len(runtime.scoped_css_providers) == 1
+    assert runtime.favicon_href_provider is not None
+
+
+def test_code_tools_bundle_is_requested_only_when_code_renders():
+    runtime = build_extension_runtime({})
+    previous = get_extension_runtime()
+    set_extension_runtime(runtime)
+    collector = runtime.new_asset_collector()
+    try:
+        from_md("```python\nprint('hi')\n```", current_path="guide", asset_collector=collector, emit_bundle_nodes=False)
+    finally:
+        set_extension_runtime(previous)
+
+    assert "code_tools.runtime" in collector.requested
 
 
 def test_action_registry_collects_visible_actions():
