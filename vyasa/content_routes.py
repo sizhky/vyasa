@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from fasthtml.common import A, Button, Div, H1, Kbd, NotStr, Response, Span, to_xml
+from fasthtml.common import A, Button, Div, H1, Kbd, NotStr, Response, Script, Span, to_xml
 from monsterui.all import UkIcon
 from .assets import asset_url, bundle_asset_nodes_for_collector
 from .config import get_config
@@ -263,7 +263,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         ) if reveal_config.enabled else []
         if reveal_units:
             slide_body = Div(
-                *_bundle_nodes_for_collector(asset_collector),
+                *bundle_asset_nodes_for_collector(asset_collector, runtime=runtime),
                 *[
                     Div(
                         NotStr(unit["html"]),

@@ -149,6 +149,9 @@ if (!window.__vyasaZenBound) {
             window.vyasaRefreshDiagramInteractions(unit);
           }
           refreshRevealedTables(unit);
+          if (typeof window.__vyasaRenderTasksGraphs === 'function') {
+            window.__vyasaRenderTasksGraphs(unit);
+          }
           if (keepVisible) {
             keepUnitInView(unit);
           }

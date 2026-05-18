@@ -1373,9 +1373,10 @@ function tasksEdgeLabelPoint(props) {
 async function renderTasksGraphs(rootElement = document) {
     const rf = await ensureTasksReactFlow();
     for (const wrapper of rootElement.querySelectorAll('.tasks-container[data-tasks-widget="true"]')) {
-        if (wrapper.dataset.tasksMounted === 'true') return;
+        if (wrapper.dataset.tasksMounted === 'true') continue;
         const mount = wrapper.querySelector('.vyasa-tasks-flow');
-        if (!mount || !rf) return;
+        if (!mount || !rf) continue;
+        if (wrapper.offsetParent === null || mount.clientWidth <= 0 || mount.clientHeight <= 0) continue;
         const jitterConfig = {
             x: Number.parseFloat(wrapper.dataset.tasksJitter || '0'),
             y: Number.parseFloat(wrapper.dataset.tasksJitterY || wrapper.dataset.tasksJitter || '0'),

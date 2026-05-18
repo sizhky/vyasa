@@ -246,6 +246,31 @@ def _normalized_fence_code(token):
     return html.unescape(token.content)
 
 
+def _protect_display_math(md):
+    math_blocks = []
+    code_blocks = []
+
+    def stash_code(match):
+        code_blocks.append(match.group(0))
+        return f"__VYASA_CODEBLOCK_{len(code_blocks) - 1}__"
+
+    def stash_math(match):
+        math_blocks.append(match.group(0))
+        return f"VYASADISPLAYMATH{len(math_blocks) - 1}TOKEN"
+
+    md = re.sub(r"(```+|~~~+)[\s\S]*?\1", stash_code, md)
+    md = re.sub(r"\$\$[\s\S]*?\$\$", stash_math, md)
+    for i, block in enumerate(code_blocks):
+        md = md.replace(f"__VYASA_CODEBLOCK_{i}__", block)
+    return md, math_blocks
+
+
+def _restore_display_math(html_out, math_blocks):
+    for i, block in enumerate(math_blocks):
+        html_out = html_out.replace(f"VYASADISPLAYMATH{i}TOKEN", html.escape(block))
+    return html_out
+
+
 def _resolve_line_numbers(default_enabled, attrs=None, spec=""):
     attrs = attrs or {}
     false_flags = {"nln", "noln", "no-ln", "no_line_numbers", "no-line-numbers"}
@@ -788,6 +813,7 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False, asset_co
         list(runtime.markdown_postprocessors) if runtime else [],
     )
     content = pipeline.preprocess(content, context, extension_state)
+    content, display_math_blocks = _protect_display_math(content)
     mods = {
         "pre": "my-4", "p": "text-base leading-relaxed mb-6", "li": "text-base leading-relaxed",
         "ul": "uk-list uk-list-bullet space-y-2 mb-6 ml-6 text-base", "ol": "uk-list uk-list-decimal space-y-2 mb-6 ml-6 text-base",
@@ -810,6 +836,7 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False, asset_co
             ) as renderer:
                 return renderer.render(mst.Document(tab_content))
         html_out = pipeline.postprocess(html_out, context, extension_state, _render_tab_content)
+        html_out = _restore_display_math(html_out, display_math_blocks)
         if callout_data_store:
             def _render_callout_body(callout_body):
                 return _render_markdown_fragment(callout_body, img_dir=img_dir, current_path=current_path)

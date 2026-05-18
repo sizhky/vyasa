@@ -183,7 +183,7 @@ def _is_heading_only_group(group):
 def _is_list_group(group):
     lines = [line.strip() for line in (group or "").splitlines() if line.strip()]
     return bool(lines) and all(
-        re.match(r"^([-*+]\s+|\d+\.\s+)", line) for line in lines
+        re.match(r"^\s*([-*+]\s+|\d+\.\s+)", line) for line in lines
     )
 
 
@@ -192,7 +192,7 @@ def _split_mixed_list_group(group):
     prelude = []
     current_item = []
     for line in (group or "").splitlines():
-        if re.match(r"^\s*([-*+]\s+|\d+\.\s+)", line):
+        if re.match(r"^([-*+]\s+|\d+\.\s+)", line):
             if current_item:
                 parts.append("\n".join(current_item).strip())
             elif prelude:
