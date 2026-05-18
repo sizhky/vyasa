@@ -116,6 +116,11 @@ function initHighlightedCodeIncludes(rootElement = document) {
         });
         const lines = code.textContent.split('\n');
         if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+        if (code.dataset.codeLineNumbers === 'true') {
+            const lastLine = start + Math.max(lines.length - 1, 0);
+            const digits = Math.max(String(start).length, String(lastLine).length, 2);
+            code.style.setProperty('--vyasa-code-line-number-width', `${digits}ch`);
+        }
         code.innerHTML = lines.map((line, index) => {
             const lineNo = start + index;
             const isHighlighted = highlighted.has(lineNo);

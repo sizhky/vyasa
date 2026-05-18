@@ -745,8 +745,11 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .code-block pre code, pre code.hljs { display: block; width: 100%; box-sizing: border-box; font-size: 0.95rem; line-height: 1.2; }
 .code-block pre.vyasa-code-wrap code, .code-block pre.vyasa-code-wrap code.hljs { white-space: pre-wrap; overflow-wrap: anywhere; }
 .code-block code.vyasa-code-lines { counter-reset: vyasa-code-line; }
-.code-block code[data-code-line-numbers="true"] .vyasa-code-line { padding-left: 2.85rem; position: relative; }
-.code-block code[data-code-line-numbers="true"] .vyasa-code-line::before { content: attr(data-source-line); position: absolute; left: 0.2rem; width: 1.75rem; text-align: right; color: color-mix(in srgb, var(--vyasa-code-fg) 48%, transparent); }
+.code-block code[data-code-line-numbers="true"] {
+    --vyasa-code-line-number-width: 3ch;
+}
+.code-block code[data-code-line-numbers="true"] .vyasa-code-line { padding-left: calc(var(--vyasa-code-line-number-width) + 1.9rem); position: relative; }
+.code-block code[data-code-line-numbers="true"] .vyasa-code-line::before { content: attr(data-source-line); position: absolute; left: 1rem; width: var(--vyasa-code-line-number-width); text-align: right; font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--vyasa-code-fg) 48%, transparent); }
 .code-block code[data-code-line-numbers="true"] .vyasa-code-line-highlight::before { color: color-mix(in srgb, var(--vyasa-code-highlight-accent) 48%, var(--vyasa-code-fg) 52%); }
 .code-block [class*="copy"], .code-copy-button { font-family: 'Inter', sans-serif; }
 .vyasa-prev-next { display:flex; justify-content:space-between; gap:1rem; margin-top:3.5rem; padding-top:0.5rem; border-top:none; }

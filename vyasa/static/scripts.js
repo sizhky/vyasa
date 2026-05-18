@@ -1107,13 +1107,23 @@ document.addEventListener('click', (event) => {
     });
 });
 
+async function renderMermaidAfterSwap(scope) {
+    if (!scope?.querySelector?.('.mermaid-wrapper')) {
+        return;
+    }
+    if (typeof window.__vyasaRenderMermaidInScope !== 'function') {
+        await import('/static/extensions/mermaid/mermaid.js');
+    }
+    window.__vyasaRenderMermaidInScope?.(scope);
+}
+
 document.body.addEventListener('htmx:afterSwap', function(event) {
     if (isLightweightSearchSwap(event.target)) {
         window.__vyasaInitBookmarksButtons?.(event.target);
         return;
     }
     const swapScope = event.target || document;
-    window.__vyasaRenderMermaidInScope?.(swapScope);
+    renderMermaidAfterSwap(swapScope).catch(() => {});
     window.__vyasaRenderD2?.(swapScope);
     window.__vyasaRenderTasksGraphs?.(swapScope);
     initHeadingFolds(swapScope);
