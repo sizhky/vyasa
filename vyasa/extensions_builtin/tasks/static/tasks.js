@@ -867,6 +867,36 @@ async function layoutBaseTasksGraph(graph, model, jitterConfig = {}, layoutConfi
     return { positions, width: laidOut.width || 0, height: laidOut.height || 0 };
 }
 
+function buildProjectedRootTasksGraph(rawGraph, model) {
+    const rootGroupIds = new Set(model.group_tree?.["null"] || []);
+    const rootTaskIds = new Set(model.task_children?.["null"] || []);
+    const rootNodeIds = new Set([...rootGroupIds, ...rootTaskIds]);
+    const taskToGroup = Object.fromEntries((model.tasks || []).map((task) => [task.id, task.group_id || null]));
+    const groupParent = Object.fromEntries((model.groups || []).map((group) => [group.id, group.parent_group_id || null]));
+    const getRoot = (id) => {
+        let cur = taskToGroup[id] || id;
+        while (groupParent[cur]) cur = groupParent[cur];
+        return cur;
+    };
+    const edges = [];
+    const seen = new Map();
+    for (const edge of (model.dependency_edges || [])) {
+        const source = getRoot(edge.source);
+        const target = getRoot(edge.target);
+        if (source !== target && rootNodeIds.has(source) && rootNodeIds.has(target)) {
+            appendProjectedEdge(edges, seen, source, target, edge.label || '', edge);
+        }
+    }
+    return {
+        nodes: rawGraph.nodes.filter((node) => rootNodeIds.has(node.id)),
+        edges,
+    };
+}
+
+function hasExplicitGroupDirection(model) {
+    return (model.groups || []).some((group) => group && (group.direction || group.layout_direction));
+}
+
 async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig = {}, layoutConfig = {}) {
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
     const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
@@ -1131,6 +1161,51 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
             });
         }
 
+        if (baseGraph.enforceRootRank) {
+            const rankGap = Math.min(layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP, 40);
+            const rankAxis = (layoutConfig.elkDirection || 'DOWN') === 'RIGHT' ? 'x' : 'y';
+            for (let pass = 0; pass < topLevelIds.length; pass += 1) {
+                let moved = false;
+                for (const edge of baseGraph.edges || []) {
+                    const source = topLevelState[edge.source];
+                    const target = topLevelState[edge.target];
+                    if (!source || !target) continue;
+                    const minTarget = rankAxis === 'x'
+                        ? source.x + source.width + rankGap
+                        : source.y + source.height + rankGap;
+                    if (rankAxis === 'x' && target.x < minTarget) {
+                        target.x = minTarget;
+                        moved = true;
+                    } else if (rankAxis === 'y' && target.y < minTarget) {
+                        target.y = minTarget;
+                        moved = true;
+                    }
+                }
+                if (!moved) break;
+            }
+            const orderedTopLevelIds = topLevelIds
+                .filter((id) => topLevelState[id])
+                .sort((a, b) => {
+                    const left = topLevelState[a];
+                    const right = topLevelState[b];
+                    return rankAxis === 'x' ? ((left.x - right.x) || (left.y - right.y)) : ((left.y - right.y) || (left.x - right.x));
+                });
+            for (const id of orderedTopLevelIds) {
+                const incoming = (baseGraph.edges || [])
+                    .filter((edge) => edge.target === id)
+                    .map((edge) => topLevelState[edge.source])
+                    .filter(Boolean);
+                if (!incoming.length) continue;
+                const minPosition = Math.max(...incoming.map((source) => (
+                    rankAxis === 'x'
+                        ? source.x + source.width + rankGap
+                        : source.y + source.height + rankGap
+                )));
+                if (rankAxis === 'x' && topLevelState[id].x > minPosition) topLevelState[id].x = minPosition;
+                if (rankAxis === 'y' && topLevelState[id].y > minPosition) topLevelState[id].y = minPosition;
+            }
+        }
+
         for (const node of nodes.filter((n) => !n.parentId)) {
             const state = topLevelState[node.id];
             if (!state) continue;
@@ -1383,10 +1458,13 @@ async function renderTasksGraphs(rootElement = document) {
                 const rootGroupIds = new Set(model.group_tree?.["null"] || []);
                 const rootTaskIds = new Set(model.task_children?.["null"] || []);
                 const rootNodeIds = new Set([...rootGroupIds, ...rootTaskIds]);
-                const rootGraph = {
-                    nodes: rawGraph.nodes.filter((n) => rootNodeIds.has(n.id)),
-                    edges: (rawGraph.edges || []).filter((e) => rootNodeIds.has(e.source) && rootNodeIds.has(e.target))
-                };
+                const rootGraph = hasExplicitGroupDirection(model)
+                    ? { ...buildProjectedRootTasksGraph(rawGraph, model), enforceRootRank: true }
+                    : {
+                        nodes: rawGraph.nodes.filter((node) => rootNodeIds.has(node.id)),
+                        edges: (rawGraph.edges || []).filter((edge) => rootNodeIds.has(edge.source) && rootNodeIds.has(edge.target)),
+                        enforceRootRank: false,
+                    };
                 const derived = deriveSquishedExpandedLayout(rootGraph, model, effectiveExpandedSet, baseLayout, groupLayoutsRef.current, layoutConfig);
                 const derivedById = Object.fromEntries((derived.nodes || []).map((node) => [node.id, node]));
                 const depthOf = (node) => {
