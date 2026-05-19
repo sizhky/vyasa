@@ -58,6 +58,7 @@ item-a, item-b ->|edge label| item-c
 - The graph body is terse line syntax, not YAML.
 - `id:` and `title:` are graph-level metadata.
 - `Group Label:` creates a group.
+- Group attrs go before the trailing `:`. Example: `Milestone | direction: lr:`.
 - Indentation creates nested groups.
 - `- id :: Item Label` creates an item inside the nearest group.
 - Direct items are valid when grouping adds no value.
@@ -78,6 +79,7 @@ item-a, item-b ->|edge label| item-c
 - Use global edge lines for dependencies.
 - Valid shapes: `a -> b`, `a, b -> c`, `a -> b, c`, and `a ->|label| b`.
 - Edge labels are optional.
+- When `edge_color_by` is active and an edge has no explicit `|label|`, the renderer falls back to the edge attr for that color key, such as `| relation: depends_on` showing `depends_on`.
 - Keep edge lines outside groups unless existing parser behavior proves indentation is supported.
 - Edge routing is renderer-owned; do not surface handle placement as author syntax.
 

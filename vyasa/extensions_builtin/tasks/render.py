@@ -6,7 +6,7 @@ from itertools import count
 
 from ...markdown_fence import normalize_items_model_hrefs, split_fence_frontmatter
 from .layout import build_collapsed_graph
-from .model import parse_tasks_text
+from .model import apply_edge_label_fallbacks, parse_tasks_text
 
 
 _diagram_uid_counter = count(1)
@@ -41,6 +41,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         if config.get("edge_color_palette") and not model.get("edge_color_palette"):
             model["edge_color_palette"] = config["edge_color_palette"]
             model["edge_color_palettes"] = {**model.get("edge_color_palettes", {}), model.get("edge_color_by", ""): config["edge_color_palette"]}
+        apply_edge_label_fallbacks(model)
         normalize_items_model_hrefs(model, current_path)
         graph = build_collapsed_graph(model)
     except Exception:

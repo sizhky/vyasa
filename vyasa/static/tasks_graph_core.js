@@ -62,6 +62,48 @@ export function tasksGraphNodeHitArea(kind, isExpanded = false) {
     return 'passive';
 }
 
+export function layoutDisconnectedTaskNodes(nodes, direction = 'DOWN', options = {}) {
+    const orderedNodes = Array.isArray(nodes) ? nodes : [];
+    const gap = Math.max(0, Number(options.gap) || 0);
+    const padX = Math.max(0, Number(options.padX) || 0);
+    const padTop = Math.max(0, Number(options.padTop) || 0);
+    const padBottom = Math.max(0, Number(options.padBottom) || 0);
+    const isRight = String(direction || 'DOWN').toUpperCase() === 'RIGHT';
+    const positions = {};
+    let cursorX = padX;
+    let cursorY = padTop;
+    let maxWidth = 0;
+    let maxHeight = 0;
+
+    for (const node of orderedNodes) {
+        const width = Math.max(0, Number(node?.width) || 0);
+        const height = Math.max(0, Number(node?.height) || 0);
+        positions[node.id] = { x: cursorX, y: cursorY, width, height };
+        if (isRight) {
+            cursorX += width + gap;
+            maxWidth = cursorX - gap;
+            maxHeight = Math.max(maxHeight, padTop + height);
+        } else {
+            cursorY += height + gap;
+            maxWidth = Math.max(maxWidth, padX + width);
+            maxHeight = cursorY - gap;
+        }
+    }
+
+    if (orderedNodes.length === 0) {
+        maxWidth = padX;
+        maxHeight = padTop;
+    }
+
+    return {
+        positions,
+        bbox: {
+            width: maxWidth + padX,
+            height: maxHeight + padBottom,
+        },
+    };
+}
+
 function edgeHandlePct(index, count) {
     if (count <= 1) return 50;
     return 18 + (index * 64) / (count - 1);

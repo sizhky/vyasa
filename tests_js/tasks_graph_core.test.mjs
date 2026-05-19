@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea } = await import('../vyasa/static/tasks_graph_core.js');
+const { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, layoutDisconnectedTaskNodes, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea } = await import('../vyasa/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -242,4 +242,33 @@ test('renderer internal __kind__ does not clobber user kind attribute', () => {
     const merged = { ...source, ...nodeRest, __kind__: (_legacyNodeKind || 'task') };
     assert.equal(merged.kind, 'ingress');
     assert.equal(merged.__kind__, 'task');
+});
+
+test('disconnected group children honor rightward layout direction', () => {
+    const out = layoutDisconnectedTaskNodes([
+        { id: 'a', width: 100, height: 40 },
+        { id: 'b', width: 120, height: 50 },
+        { id: 'c', width: 80, height: 30 },
+    ], 'RIGHT', { gap: 20, padX: 40, padTop: 68, padBottom: 40 });
+    assert.equal(out.positions.a.x, 40);
+    assert.equal(out.positions.b.x, 160);
+    assert.equal(out.positions.c.x, 300);
+    assert.equal(out.positions.a.y, 68);
+    assert.equal(out.positions.b.y, 68);
+    assert.equal(out.positions.c.y, 68);
+    assert.equal(out.bbox.width, 420);
+    assert.equal(out.bbox.height, 158);
+});
+
+test('disconnected group children honor downward layout direction', () => {
+    const out = layoutDisconnectedTaskNodes([
+        { id: 'a', width: 100, height: 40 },
+        { id: 'b', width: 120, height: 50 },
+    ], 'DOWN', { gap: 30, padX: 40, padTop: 68, padBottom: 40 });
+    assert.equal(out.positions.a.x, 40);
+    assert.equal(out.positions.b.x, 40);
+    assert.equal(out.positions.a.y, 68);
+    assert.equal(out.positions.b.y, 138);
+    assert.equal(out.bbox.width, 200);
+    assert.equal(out.bbox.height, 228);
 });

@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea } from '/static/extensions/tasks/tasks_graph_core.js';
+import { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, layoutDisconnectedTaskNodes, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea } from '/static/extensions/tasks/tasks_graph_core.js';
 
 const tasksElk = new ELK();
 let tasksReactFlowReady = null;
@@ -1051,6 +1051,32 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
         appendProjectedEdge(projectedEdges, seenProjectedEdges, source, target, edge.label || '', edge);
     }
     const reducedProjectedEdges = reduceTransitiveEdges(projectedEdges);
+    if (reducedProjectedEdges.length === 0) {
+        const disconnectedLayout = layoutDisconnectedTaskNodes(groupChildren, groupDirection, {
+            gap: groupDirection === 'RIGHT' ? (layoutConfig.nodeSpacing || 72) : (layoutConfig.layerSpacing || 112),
+            padX: layoutConfig.groupPadding || 40,
+            padTop: (layoutConfig.groupPadding || 40) + 28,
+            padBottom: layoutConfig.groupPadding || 40,
+        });
+        const positions = {};
+        for (const child of groupChildren) {
+            const base = disconnectedLayout.positions[child.id];
+            const jitter = stableTaskJitter(child.id, jitterConfig.x ?? 14, jitterConfig.y ?? 8);
+            positions[child.id] = {
+                x: (base?.x || 0) + jitter.x,
+                y: (base?.y || 0) + jitter.y,
+                width: child.width || 0,
+                height: child.height || 0,
+            };
+        }
+        return {
+            positions,
+            bbox: {
+                width: Math.max(disconnectedLayout.bbox.width || 0, 250),
+                height: Math.max(disconnectedLayout.bbox.height || 0, 80),
+            },
+        };
+    }
     const laidOut = await tasksElk.layout({
         id: `group-${groupId}`,
         layoutOptions: {

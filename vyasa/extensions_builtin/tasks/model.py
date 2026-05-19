@@ -566,6 +566,19 @@ def _apply_dag_ranks(graph: dict) -> None:
     graph["color_palettes"] = {"rank": _rank_palette(max_rank + 1), **graph.get("color_palettes", {})}
 
 
+def apply_edge_label_fallbacks(graph: dict) -> None:
+    edge_color_key = str(graph.get("edge_color_by") or "").strip()
+    if not edge_color_key:
+        return
+    for edge in graph.get("dependency_edges", []):
+        if edge.get("label"):
+            continue
+        edge_value = edge.get(edge_color_key)
+        if edge_value is None or str(edge_value).strip() == "":
+            continue
+        edge["label"] = str(edge_value)
+
+
 def parse_tasks_text(text: str) -> dict:
     config, body = _read_fence_frontmatter(_extract_tasks_body(text).strip())
     graph = _parse_items_graph(body)
@@ -589,6 +602,7 @@ def parse_tasks_text(text: str) -> dict:
         graph["edge_color_palette"] = config["edge_color_palette"]
     if config.get("edge_color_palettes"):
         graph["edge_color_palettes"] = {**config["edge_color_palettes"], **graph.get("edge_color_palettes", {})}
+    apply_edge_label_fallbacks(graph)
     _apply_dag_ranks(graph)
     groups = graph.get("groups", [])
     tasks = graph.get("tasks", [])

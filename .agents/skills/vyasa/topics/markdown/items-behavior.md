@@ -13,3 +13,6 @@ Node colors resolve in order:
 3. Active `color_by` palette lookup
 
 Graph layout attrs `graph_x` and `graph_y` are renderer-owned; avoid user guidance unless debugging persistence.
+
+Group-local layout direction is supported with `direction: lr` or `layout_direction: lr` on the group line.
+For disconnected child nodes inside that group, the renderer now still honors the group direction instead of collapsing back to a vertical pile.
