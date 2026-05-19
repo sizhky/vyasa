@@ -199,6 +199,10 @@ function tasksNodeMetaLabel(key) {
     return key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
 }
 
+function tasksColorModeLabel(key) {
+    return key === 'rank' ? 'Flow position' : tasksNodeMetaLabel(key);
+}
+
 function tasksNodeAggregateEntries(nodeId, model) {
     if (!nodeId || !model) return [];
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
@@ -280,7 +284,7 @@ function tasksColorOptions(model) {
         }))
         .map((key) => ({
             key,
-            label: tasksNodeMetaLabel(key),
+            label: tasksColorModeLabel(key),
         }))
         .sort((a, b) => a.label.localeCompare(b.label));
 }
@@ -2134,7 +2138,7 @@ async function renderTasksGraphs(rootElement = document) {
             const FilterPanel = () => {
                 const options = tasksFilterOptions(model);
                 const colorOptions = tasksColorOptions(model);
-                const activePaletteEntries = tasksColorPaletteEntries(model, activeColorBy);
+                const activePaletteEntries = activeColorBy === 'rank' ? [] : tasksColorPaletteEntries(model, activeColorBy);
                 const activeCount = Object.values(activeFilters || {}).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : (value ? 1 : 0)), 0) + (activeColorBy ? 1 : 0);
                 return React.createElement('details', {
                     ref: filterPanelRef,

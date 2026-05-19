@@ -510,6 +510,62 @@ def _parse_items_graph(body: str) -> dict:
     return graph
 
 
+def _rank_palette(size: int) -> dict[str, str]:
+    if size <= 1:
+        return {"0": "#22c55e"}
+    stops = ["#22c55e", "#84cc16", "#facc15", "#f97316", "#dc2626"]
+    palette: dict[str, str] = {}
+    for rank in range(size):
+        stop_index = round((rank / (size - 1)) * (len(stops) - 1))
+        palette[str(rank)] = stops[stop_index]
+    return palette
+
+
+def _apply_dag_ranks(graph: dict) -> None:
+    nodes = {item["id"]: item for item in [*graph.get("groups", []), *graph.get("tasks", [])]}
+    children_by_group = defaultdict(list)
+    for group in graph.get("groups", []):
+        children_by_group[group.get("parent_group_id")].append(group["id"])
+    for task in graph.get("tasks", []):
+        children_by_group[task.get("group_id")].append(task["id"])
+
+    outgoing = defaultdict(list)
+    indegree = {node_id: 0 for node_id in nodes}
+    for edge in graph.get("dependency_edges", []):
+        source = edge.get("source")
+        target = edge.get("target")
+        if source not in nodes or target not in nodes:
+            continue
+        outgoing[source].append(target)
+        indegree[target] += 1
+
+    rank = {node_id: 0 for node_id in nodes}
+    queue = [node_id for node_id, degree in indegree.items() if degree == 0]
+    while queue:
+        source = queue.pop(0)
+        for target in outgoing[source]:
+            rank[target] = max(rank[target], rank[source] + 1)
+            indegree[target] -= 1
+            if indegree[target] == 0:
+                queue.append(target)
+
+    def apply_group_rank(group_id: str) -> int:
+        child_ranks = [rank.get(child_id, 0) for child_id in children_by_group.get(group_id, [])]
+        for child_id in children_by_group.get(group_id, []):
+            if child_id in nodes and "parent_group_id" in nodes[child_id]:
+                child_ranks.append(apply_group_rank(child_id))
+        if child_ranks:
+            rank[group_id] = max(rank.get(group_id, 0), max(child_ranks))
+        return rank.get(group_id, 0)
+
+    for group in graph.get("groups", []):
+        apply_group_rank(group["id"])
+    for node_id, node in nodes.items():
+        node.setdefault("rank", str(rank.get(node_id, 0)))
+    max_rank = max(rank.values(), default=0)
+    graph["color_palettes"] = {"rank": _rank_palette(max_rank + 1), **graph.get("color_palettes", {})}
+
+
 def parse_tasks_text(text: str) -> dict:
     config, body = _read_fence_frontmatter(_extract_tasks_body(text).strip())
     graph = _parse_items_graph(body)
@@ -533,6 +589,7 @@ def parse_tasks_text(text: str) -> dict:
         graph["edge_color_palette"] = config["edge_color_palette"]
     if config.get("edge_color_palettes"):
         graph["edge_color_palettes"] = {**config["edge_color_palettes"], **graph.get("edge_color_palettes", {})}
+    _apply_dag_ranks(graph)
     groups = graph.get("groups", [])
     tasks = graph.get("tasks", [])
     edges = graph.get("dependency_edges", [])
