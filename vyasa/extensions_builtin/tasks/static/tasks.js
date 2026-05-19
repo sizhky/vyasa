@@ -28,6 +28,9 @@ const TASKS_EDGE_FOCUS_OUT_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 55%,
 const TASKS_EDGE_FOCUS_IN_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 40%, #22c55e 60%)';
 const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
 const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
+const TASKS_FILTER_PANEL_TOP = 76;
+const TASKS_FILTER_PANEL_RIGHT = 12;
+const TASKS_FILTER_PANEL_WIDTH = 320;
 const TASKS_SPACING_PRESETS = {
     compact: { nodeSpacing: 24, layerSpacing: 64, collisionGap: 56, groupPadding: 28, edgeLabelWidth: 220 },
     normal: { nodeSpacing: 44, layerSpacing: 96, collisionGap: 96, groupPadding: 40, edgeLabelWidth: 240 },
@@ -59,6 +62,14 @@ function readTasksLayoutConfig(wrapper) {
         edgeLabelWidth: readTasksNumber(wrapper.dataset.tasksEdgeLabelWidth, preset.edgeLabelWidth),
     };
 }
+
+function tasksFilterPanelMaxHeight(wrapper) {
+    if (!wrapper) return 'min(72vh, calc(100% - 88px))';
+    const bounds = wrapper.getBoundingClientRect();
+    const available = Math.max(220, Math.floor(bounds.height - TASKS_FILTER_PANEL_TOP - 16));
+    return `${available}px`;
+}
+
 window.__vyasaTasksActions = window.__vyasaTasksActions || {};
 window.__vyasaTasksConfig = window.__vyasaTasksConfig || {};
 window.__vyasaTasksDebug = window.__vyasaTasksDebug || { events: [] };
@@ -1417,7 +1428,7 @@ async function renderTasksGraphs(rootElement = document) {
                     : String(model?.default_color_by || '').trim()
             ));
             const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => Boolean(initialPrefsRef.current?.filtersCollapsed));
-            const [filterPanelHeight, setFilterPanelHeight] = React.useState(172);
+            const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('min(72vh, calc(100% - 88px))');
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
@@ -2140,82 +2151,120 @@ async function renderTasksGraphs(rootElement = document) {
                 const colorOptions = tasksColorOptions(model);
                 const activePaletteEntries = activeColorBy === 'rank' ? [] : tasksColorPaletteEntries(model, activeColorBy);
                 const activeCount = Object.values(activeFilters || {}).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : (value ? 1 : 0)), 0) + (activeColorBy ? 1 : 0);
+                const panelMaxHeight = filtersCollapsed ? '44px' : filterPanelMaxHeight;
                 return React.createElement('details', {
                     ref: filterPanelRef,
                     className: 'vyasa-tasks-filter-card',
                     open: !filtersCollapsed,
                     onToggle: (e) => setFiltersCollapsed(!e.currentTarget.open),
-                    style: { position: 'absolute', top: '68px', right: '12px', zIndex: 30, width: '280px', maxWidth: 'calc(100% - 24px)', maxHeight: filtersCollapsed ? '44px' : 'min(70vh, calc(100% - 80px))', overflow: 'hidden', borderRadius: '12px', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', backdropFilter: 'blur(8px)', padding: '12px' },
+                    style: {
+                        position: 'absolute',
+                        top: `${TASKS_FILTER_PANEL_TOP}px`,
+                        right: `${TASKS_FILTER_PANEL_RIGHT}px`,
+                        zIndex: 30,
+                        width: `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`,
+                        maxWidth: 'calc(100% - 24px)',
+                        maxHeight: panelMaxHeight,
+                        overflowX: 'hidden',
+                        overflowY: filtersCollapsed ? 'hidden' : 'auto',
+                        borderRadius: '12px',
+                        background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
+                        backdropFilter: 'blur(8px)',
+                        padding: '12px',
+                        boxSizing: 'border-box',
+                    },
                 },
                     React.createElement('summary', {
-                        style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', cursor: 'pointer', listStyle: 'none' },
+                        style: {
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            cursor: 'pointer',
+                            listStyle: 'none',
+                            position: 'sticky',
+                            top: '-12px',
+                            margin: '-12px -12px 0',
+                            padding: '12px',
+                            background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
+                            backdropFilter: 'blur(8px)',
+                            zIndex: 1,
+                        },
                     },
                         React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, textTransform: 'uppercase', letterSpacing: '0.04em' } }, activeCount ? `Filters (${activeCount})` : 'Filters'),
                         React.createElement('span', { style: { fontSize: '14px', opacity: 0.7, lineHeight: 1 } }, filtersCollapsed ? '+' : '−')
                     ),
-                    React.createElement('div', { style: { marginTop: '10px', marginBottom: '12px', display: 'flex', justifyContent: 'flex-end' } },
-                        React.createElement('button', { type: 'button', onClick: () => { setActiveFilters({}); setActiveColorBy(''); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' } }, 'Unselect all')
-                    ),
-                    React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
-                            React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Color by'),
-                            React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px 12px' } },
-                                [
-                                    { key: '', label: 'None' },
-                                    ...colorOptions.map((option) => ({ key: option.key, label: option.label })),
-                                ].map((option) => React.createElement('label', { key: option.key || '__none__', style: { display: 'inline-flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
-                                    React.createElement('input', {
-                                        type: 'radio',
-                                        name: `${widgetId}-color-by`,
-                                        checked: activeColorBy === option.key,
-                                        onChange: () => setActiveColorBy(option.key),
-                                    }),
-                                    React.createElement('span', { style: { opacity: 0.85 } }, option.label)
-                                )),
-                                activePaletteEntries.length > 2
-                                    ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
-                                        React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '11px', lineHeight: 1.3, opacity: 0.8 } },
-                                            ...activePaletteEntries.map(([value, color]) => React.createElement('div', { key: `${activeColorBy}-${value}-label`, style: { display: 'grid', gridTemplateColumns: '12px 1fr', alignItems: 'center', gap: '6px' } },
-                                                React.createElement('span', { style: { width: '12px', height: '12px', borderRadius: '999px', background: color, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)' } }),
-                                                React.createElement('span', null, value)
-                                            ))
-                                        )
-                                    )
-                                    : null
-                            )
-                        )
-                    ),
-                    ...options.map((option) => React.createElement('label', { key: option.key, style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'center', marginBottom: '8px', fontSize: '12px' } },
-                        React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, option.label),
-                        option.isBoolean
-                            ? React.createElement('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
-                                React.createElement('input', {
-                                    type: 'checkbox',
-                                    checked: activeFilters[option.key] === 'true',
-                                    onChange: (e) => setActiveFilters((current) => ({ ...current, [option.key]: e.target.checked ? 'true' : '' })),
-                                }),
-                                React.createElement('span', { style: { opacity: 0.8 } }, 'Only true')
-                            )
-                            : React.createElement('div', { style: { display: 'grid', gap: '4px', maxHeight: '120px', overflowY: 'auto', padding: '6px 8px', border: '1px solid color-mix(in srgb, currentColor 12%, transparent)', borderRadius: '8px', background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)' } },
-                                ...option.values.map((value) => {
-                                    const selected = Array.isArray(activeFilters[option.key]) && activeFilters[option.key].includes(value);
-                                    return React.createElement('label', { key: value, style: { display: 'inline-flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
+                    React.createElement('div', {
+                        style: {
+                            marginTop: filtersCollapsed ? 0 : '12px',
+                            paddingRight: filtersCollapsed ? 0 : '2px',
+                            paddingBottom: filtersCollapsed ? 0 : '2px',
+                        },
+                    },
+                        React.createElement('div', { style: { marginBottom: '12px', display: 'flex', justifyContent: 'flex-end' } },
+                            React.createElement('button', { type: 'button', onClick: () => { setActiveFilters({}); setActiveColorBy(''); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' } }, 'Unselect all')
+                        ),
+                        React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
+                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Color by'),
+                                React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px 12px' } },
+                                    [
+                                        { key: '', label: 'None' },
+                                        ...colorOptions.map((option) => ({ key: option.key, label: option.label })),
+                                    ].map((option) => React.createElement('label', { key: option.key || '__none__', style: { display: 'inline-flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
                                         React.createElement('input', {
-                                            type: 'checkbox',
-                                            checked: selected,
-                                            onChange: (e) => setActiveFilters((current) => {
-                                                const nextValues = Array.isArray(current[option.key]) ? current[option.key].slice() : [];
-                                                const next = e.target.checked
-                                                    ? [...nextValues, value]
-                                                    : nextValues.filter((entry) => entry !== value);
-                                                return { ...current, [option.key]: next };
-                                            }),
+                                            type: 'radio',
+                                            name: `${widgetId}-color-by`,
+                                            checked: activeColorBy === option.key,
+                                            onChange: () => setActiveColorBy(option.key),
                                         }),
-                                        React.createElement('span', { style: { opacity: 0.8 } }, value)
-                                    );
-                                })
+                                        React.createElement('span', { style: { opacity: 0.85 } }, option.label)
+                                    )),
+                                    activePaletteEntries.length > 2
+                                        ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
+                                            React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '11px', lineHeight: 1.3, opacity: 0.8 } },
+                                                ...activePaletteEntries.map(([value, color]) => React.createElement('div', { key: `${activeColorBy}-${value}-label`, style: { display: 'grid', gridTemplateColumns: '12px 1fr', alignItems: 'center', gap: '6px' } },
+                                                    React.createElement('span', { style: { width: '12px', height: '12px', borderRadius: '999px', background: color, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)' } }),
+                                                    React.createElement('span', null, value)
+                                                ))
+                                            )
+                                        )
+                                        : null
+                                )
                             )
-                    ))
+                        ),
+                        ...options.map((option) => React.createElement('label', { key: option.key, style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'center', marginBottom: '8px', fontSize: '12px' } },
+                            React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, option.label),
+                            option.isBoolean
+                                ? React.createElement('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
+                                    React.createElement('input', {
+                                        type: 'checkbox',
+                                        checked: activeFilters[option.key] === 'true',
+                                        onChange: (e) => setActiveFilters((current) => ({ ...current, [option.key]: e.target.checked ? 'true' : '' })),
+                                    }),
+                                    React.createElement('span', { style: { opacity: 0.8 } }, 'Only true')
+                                )
+                                : React.createElement('div', { style: { display: 'grid', gap: '4px', maxHeight: '120px', overflowY: 'auto', padding: '6px 8px', border: '1px solid color-mix(in srgb, currentColor 12%, transparent)', borderRadius: '8px', background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)' } },
+                                    ...option.values.map((value) => {
+                                        const selected = Array.isArray(activeFilters[option.key]) && activeFilters[option.key].includes(value);
+                                        return React.createElement('label', { key: value, style: { display: 'inline-flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
+                                            React.createElement('input', {
+                                                type: 'checkbox',
+                                                checked: selected,
+                                                onChange: (e) => setActiveFilters((current) => {
+                                                    const nextValues = Array.isArray(current[option.key]) ? current[option.key].slice() : [];
+                                                    const next = e.target.checked
+                                                        ? [...nextValues, value]
+                                                        : nextValues.filter((entry) => entry !== value);
+                                                    return { ...current, [option.key]: next };
+                                                }),
+                                            }),
+                                            React.createElement('span', { style: { opacity: 0.8 } }, value)
+                                        );
+                                    })
+                                )
+                        ))
+                    )
                 );
             };
             const clearSelection = () => {
@@ -2305,11 +2354,14 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 const el = filterPanelRef.current;
                 if (!el) return;
-                const update = () => setFilterPanelHeight(el.getBoundingClientRect().height || 172);
+                const update = () => {
+                    setFilterPanelMaxHeight(tasksFilterPanelMaxHeight(flowWrapperRef.current));
+                };
                 update();
                 if (typeof ResizeObserver === 'undefined') return;
                 const observer = new ResizeObserver(update);
                 observer.observe(el);
+                if (flowWrapperRef.current) observer.observe(flowWrapperRef.current);
                 return () => observer.disconnect();
             }, [activeFilters, activeColorBy, filtersCollapsed, model]);
             const ActionBridge = () => {
