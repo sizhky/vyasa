@@ -1,0 +1,7 @@
+interface:
+  display_name: "Vyasa"
+  short_description: "Small routed drawers for Vyasa work"
+  default_prompt: "Use $vyasa to work on Vyasa with narrow routed context."
+
+policy:
+  allow_implicit_invocation: true
