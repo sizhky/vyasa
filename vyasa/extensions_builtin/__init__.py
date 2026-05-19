@@ -1,5 +1,6 @@
 def load_builtin_extensions():
     from . import annotations
+    from . import auth_rbac
     from . import auth_routes
     from . import blog_home
     from . import bookmarks
@@ -46,11 +47,12 @@ def load_builtin_extensions():
         code_tools.EXTENSION,
         default_favicon.EXTENSION,
         slides.EXTENSION,
-        auth_routes.EXTENSION,
+        auth_rbac.EXTENSION,
         sidebar_routes.EXTENSION,
         annotations.EXTENSION,
         bookmarks.EXTENSION,
         rbac_admin.EXTENSION,
+        auth_routes.EXTENSION,
         filesystem_routes.EXTENSION,
         filesystem.EXTENSION,
     )

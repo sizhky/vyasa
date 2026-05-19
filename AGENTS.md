@@ -15,3 +15,4 @@ Treat code smells as first-class work, not cosmetic trivia. When a request expos
 When you notice nearby smells while doing the requested work, name them plainly and ask before fixing them unless they are required to complete the current fix. If the smell is required for the requested behavior, say that and fix it as part of the task. If it is adjacent cleanup, ask permission first with a short note like: `Found smell: <specific issue>. Fix it too?`
 
 Do not test anything by opening browser unless I ask you to do so. Any test you run should be testable in milliseconds only - like python -m or javascript's mjs etc..
+Do not start work if commit is dirty. Make the user aware. Don't make any commits.

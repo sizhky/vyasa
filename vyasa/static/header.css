@@ -961,6 +961,16 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
     right: calc(100% + 1rem);
     width: clamp(14rem, calc((100vw - 100% - var(--vyasa-sidebar-width, 22rem) - 8rem) * 0.95), 30rem);
 }
+.vyasa-blog-card {
+    padding: 1.25rem;
+    border: 1px solid var(--vyasa-outline-ghost);
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--vyasa-paper) 82%, white 18%);
+    box-shadow: 0 10px 28px -28px color-mix(in srgb, var(--vyasa-ink) 35%, transparent);
+}
+.dark .vyasa-blog-card {
+    background: color-mix(in srgb, var(--vyasa-paper-low) 86%, black 14%);
+}
 @media (max-width: 1279px) {
     .vyasa-blog-card-title {
         position: static !important;

@@ -106,30 +106,22 @@ def get_file_created_ts(path: Path) -> float:
 
 
 def iter_blog_home_files(roots=None, roles=None):
-    for _, root in roots or get_content_mounts():
-        for path in iter_visible_files(root, (".md",), include_hidden=False):
-            if path.name.startswith("."):
-                continue
-            if _blog_home_is_ignored(path, root):
-                continue
-            if path.parent == root and path.stem.lower() in {"index", "readme"}:
-                continue
-            slug = content_slug_for_path(path)
-            if not slug:
-                continue
-            if roles is not None and not is_allowed(f"/posts/{slug}", roles, _rbac_rules):
-                continue
-            yield path, slug
+    from .extensions_builtin.blog_home import iter_home_files
+
+    yield from iter_home_files(
+        roots,
+        roles,
+        is_allowed_fn=is_allowed,
+        rbac_rules=_rbac_rules,
+        iter_files=iter_visible_files,
+        slug_for_path=content_slug_for_path,
+    )
 
 
 def _default_render_blog_home(htmx, request: Request):
-    roots = get_content_mounts()
-    root = roots[0][1] if roots else get_root_folder()
-    roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    entries = _sort_blog_home_entries(iter_blog_home_files(roots, roles), root)
-    feed = render_blog_home_feed(entries, root, 0)
-    shell = Div(H1(f"Welcome to {get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="mt-2 text-slate-500"), feed, cls="space-y-6")
-    return layout(shell, htmx=htmx, title=f"Home - {get_blog_title()}", show_sidebar=True, current_path="__home__", auth=request.scope.get("auth"))
+    from .extensions_builtin.blog_home import _home_provider
+
+    return _home_provider(htmx, request)
 
 
 def render_blog_home(htmx, request: Request):
@@ -141,43 +133,15 @@ def render_blog_home(htmx, request: Request):
 
 
 def _render_blog_preview_card(path, slug, root):
-    title, render_content = resolve_markdown_title(path, abbreviations=_effective_abbreviations(root))
-    read_source = expand_markdown_includes_for_reading(render_content, current_path=slug, root_folder=root)
-    read_time = estimate_read_time_minutes(read_source)
-    preview = from_md(preview_markdown(render_content), current_path=slug)
-    href = content_url_for_slug(slug)
-    return Div(
-        A(
-            Span(title, cls="block line-clamp-3 overflow-hidden"),
-            Span(f"{read_time}-min read", cls="block mt-1 text-xs font-normal text-slate-500 dark:text-slate-400"),
-            href=href,
-            cls="vyasa-blog-card-title absolute top-6 block text-right text-xl font-bold leading-tight hover:underline",
-        ),
-        Div(
-            Div(preview, cls="prose prose-slate dark:prose-invert max-w-none"),
-            A("continue reading...", href=href, cls="inline-flex mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200 hover:underline"),
-            cls="vyasa-task-card rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white/75 dark:bg-slate-900/45 p-5 shadow-sm min-w-0 w-full",
-        ),
-        cls="relative flex w-full items-start",
-    )
+    from .extensions_builtin.blog_home import render_card
+
+    return render_card(path, slug, root, resolve_title=resolve_markdown_title, abbreviations=_effective_abbreviations)
 
 
 def render_blog_home_feed(entries, root, offset=0, batch_size=4, wrap=True):
-    cards = []
-    chunk = entries[offset:offset + batch_size]
-    for path, slug in chunk:
-        cards.append(_render_blog_preview_card(path, slug, root))
-    sentinel = Div(
-        id="blog-feed-sentinel",
-        cls="h-8",
-        hx_get=f"/_home/feed?offset={offset + batch_size}",
-        hx_trigger="revealed once",
-        hx_target="this",
-        hx_swap="outerHTML",
-    ) if offset + batch_size < len(entries) else ""
-    if wrap:
-        return Div(*cards, sentinel, id="blog-feed", cls="space-y-4")
-    return tuple([*cards, sentinel] if sentinel else cards)
+    from .extensions_builtin.blog_home import render_feed
+
+    return render_feed(entries, root, offset, batch_size, wrap)
 
 
 def render_search_preview_feed(entries, root):
@@ -235,24 +199,14 @@ def search_preview_results_path(query_token: str = "", htmx=None, request: Reque
     return render_search_preview_page(htmx, request, q=query)
 
 def _sort_blog_home_entries(entries, root):
-    sort = get_config().get_home_sort()
-    items = list(entries)
-    if sort == "name_asc":
-        return sorted(items, key=lambda item: item[1].lower())
-    if sort == "name_desc":
-        return sorted(items, key=lambda item: item[1].lower(), reverse=True)
-    return sorted(items, key=lambda item: get_file_created_ts(item[0]), reverse=True)
+    from .extensions_builtin.blog_home import sort_entries
+
+    return sort_entries(entries, root, get_sort=get_config().get_home_sort, created_ts=get_file_created_ts)
 
 def _blog_home_is_ignored(path, root):
-    relative = path.relative_to(root)
-    ignore_names = set()
-    ancestor = root
-    ignore_names.update(str(item).strip() for item in (get_vyasa_config(root).get("ignore") or []) if str(item).strip())
-    for part in relative.parts[:-1]:
-        ancestor = ancestor / part
-        ignore_names.update(str(item).strip() for item in (get_vyasa_config(ancestor).get("ignore") or []) if str(item).strip())
-    candidates = set(relative.parts) | set(relative.with_suffix("").parts) | {path.name, path.stem}
-    return bool(ignore_names.intersection(candidates))
+    from .extensions_builtin.blog_home import is_ignored
+
+    return is_ignored(path, root)
 
 
 def get_favicon_href():

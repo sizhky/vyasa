@@ -527,7 +527,7 @@ def default_preset_selection() -> dict[ExtensionCategory, tuple[str, ...]]:
         "home": ("blog_home",),
         "errors": ("default_errors",),
         "render": ("wikilinks", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon"),
-        "route": ("slides", "auth_routes", "sidebar_routes", "annotations", "bookmarks", "rbac_admin", "filesystem_routes"),
+        "route": ("slides", "auth_rbac", "sidebar_routes", "annotations", "bookmarks", "filesystem_routes"),
         "content_source": ("filesystem",),
     }
 
