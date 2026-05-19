@@ -70,6 +70,7 @@ def test_build_post_tree_static_hides_tree_without_extension(tmp_path):
             "preset": "default",
             "render": [
                 "wikilinks",
+                "link_preview",
                 "tabs",
                 "mermaid",
                 "d2",

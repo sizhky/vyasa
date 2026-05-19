@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from fasthtml.common import to_xml
+
 from vyasa.config import reload_config
 from vyasa.extensions import (
     CORE_CAPABILITIES,
@@ -26,6 +28,7 @@ from vyasa.extensions_builtin.default_search import (
     find_default_search_matches,
     find_default_search_preview_matches,
 )
+from vyasa.extensions_builtin.link_preview.routes import _current_path_from_request, render_link_preview_html
 from vyasa.helpers import get_content_mounts
 from vyasa import core
 
@@ -40,7 +43,7 @@ def test_extensions_default_preset_when_section_omitted(tmp_path, monkeypatch):
 
     assert plan.preset == "default"
     assert plan.selected_by_category["layout"] == ("default_layout",)
-    assert plan.selected_by_category["render"] == ("wikilinks", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
+    assert plan.selected_by_category["render"] == ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
     assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "annotations", "bookmarks", "filesystem_routes")
     assert plan.enabled_ids[-1] == "filesystem"
 
@@ -208,6 +211,64 @@ def test_code_tools_bundle_is_requested_only_when_code_renders():
     assert "code_tools.runtime" in collector.requested
 
 
+def test_internal_links_request_preview_bundle_and_keep_current_path():
+    runtime = build_extension_runtime({})
+    previous = get_extension_runtime()
+    set_extension_runtime(runtime)
+    collector = runtime.new_asset_collector()
+    try:
+        html = from_md("[Keep me](#keep-me)", current_path="docs/page", asset_collector=collector, emit_bundle_nodes=False)
+    finally:
+        set_extension_runtime(previous)
+
+    rendered = to_xml(html)
+    assert 'data-vyasa-link-preview="true"' in rendered
+    assert 'data-vyasa-link-preview-current-path="docs/page"' in rendered
+    assert "link_preview.runtime" in collector.requested
+
+
+def test_link_preview_renders_one_section(tmp_path, monkeypatch):
+    root = tmp_path / "site"
+    root.mkdir()
+    (root / "doc.md").write_text("# Top\n\n## Keep Me\n\nalpha\n\n## Skip Me\n\nbeta\n", encoding="utf-8")
+    monkeypatch.setenv("VYASA_ROOT", str(root))
+    reload_config()
+
+    try:
+        html = render_link_preview_html(href="#keep-me", current_path="doc")
+        assert html is not None
+        assert "Keep Me" in html
+        assert "alpha" in html
+        assert "Skip Me" not in html
+        assert "beta" not in html
+    finally:
+        reload_config()
+
+
+def test_link_preview_resolves_folder_note_routes(tmp_path, monkeypatch):
+    root = tmp_path / "site"
+    docs = root / "docs"
+    docs.mkdir(parents=True)
+    (docs / "index.md").write_text("# Docs\n\n## Entry Point\n\ninside\n", encoding="utf-8")
+    monkeypatch.setenv("VYASA_ROOT", str(root))
+    reload_config()
+
+    try:
+        html = render_link_preview_html(href="/posts/docs#entry-point", current_path="page")
+        assert html is not None
+        assert "Entry Point" in html
+        assert "inside" in html
+    finally:
+        reload_config()
+
+
+def test_link_preview_can_derive_current_path_from_referer():
+    class Request:
+        headers = {"referer": "http://localhost:8000/posts/demo/wikilinks-lab#entry-point"}
+
+    assert _current_path_from_request(Request()) == "demo/wikilinks-lab"
+
+
 def test_action_registry_collects_visible_actions():
     registry = ActionRegistry([
         lambda **kwargs: None,
@@ -265,6 +326,7 @@ def test_disabled_pdf_viewer_removes_pdf_from_default_search(monkeypatch):
             "preset": "default",
             "render": [
                 "wikilinks",
+                "link_preview",
                 "tabs",
                 "mermaid",
                 "d2",

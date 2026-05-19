@@ -78,6 +78,7 @@ def test_content_tree_hides_pdf_and_tree_when_extensions_disabled(tmp_path):
             "preset": "default",
             "render": [
                 "wikilinks",
+                "link_preview",
                 "tabs",
                 "mermaid",
                 "d2",

@@ -17,6 +17,7 @@ def load_builtin_extensions():
     from . import filesystem
     from . import filesystem_routes
     from . import code_tools
+    from . import link_preview
     from . import mermaid
     from . import rbac_admin
     from . import scoped_custom_css
@@ -49,6 +50,7 @@ def load_builtin_extensions():
         table_of_contents.EXTENSION,
         scoped_custom_css.EXTENSION,
         code_tools.EXTENSION,
+        link_preview.EXTENSION,
         default_favicon.EXTENSION,
         slides.EXTENSION,
         auth_rbac.EXTENSION,

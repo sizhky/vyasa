@@ -7,6 +7,7 @@ from functools import partial
 from itertools import count
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import urlsplit
 
 import mistletoe as mst
 from fasthtml.common import Div, Link, NotStr, Script, Span, to_xml
@@ -731,21 +732,33 @@ class ContentRenderer(FrankenRenderer):
         if "?download=true" in href.lower():
             href = re.sub(r"\?download=true", "", href, flags=re.IGNORECASE)
             download_flag = True
+        current_path_attr = f' data-vyasa-link-preview-current-path="{html.escape(self.current_path or "", quote=True)}"' if self.current_path else ""
+        preview_attrs = ""
         if is_hash:
+            if not download_flag:
+                request_asset_bundle("link_preview.runtime")
+                preview_attrs = f' data-vyasa-link-preview="true"{current_path_attr}'
             link_class = "underline underline-offset-2 font-medium transition-colors"
-            return f'<a href="{href}" class="{link_class}"{title}>{inner}</a>'
+            return f'<a href="{href}"{preview_attrs} class="{link_class}"{title}>{inner}</a>'
         if is_relative:
             original_href = href
-            if href.endswith(".md"):
-                href = href[:-3]
+            parsed = urlsplit(href)
+            relative_path = parsed.path or ""
+            relative_suffix = ""
+            if parsed.query:
+                relative_suffix += f"?{parsed.query}"
+            if parsed.fragment:
+                relative_suffix += f"#{parsed.fragment}"
+            if relative_path.endswith(".md"):
+                relative_path = relative_path[:-3]
             if self.current_path:
                 current_file = _current_content_path(self.current_path)
                 current_dir = current_file.parent if current_file else None
-                resolved = (current_dir / href).resolve() if current_dir else None
+                resolved = (current_dir / relative_path).resolve() if current_dir else None
                 logger.debug(f"DEBUG: original_href={original_href}, current_path={self.current_path}, current_dir={current_dir}, resolved={resolved}")
-                rel = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=not Path(href).suffix) if resolved else None
+                rel = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=not Path(relative_path).suffix) if resolved else None
                 if rel:
-                    href = content_url_for_slug(rel)
+                    href = content_url_for_slug(rel) + relative_suffix
                     is_absolute_internal = True
                 else:
                     is_external = True
@@ -763,8 +776,11 @@ class ContentRenderer(FrankenRenderer):
             download_target = href[len("/posts/"):] if href.startswith("/posts/") else href.lstrip("/") if href.startswith("/") else href
             href = content_url_for_slug(download_target, prefix="/download")
             hx = ""
+        if is_internal and not download_flag:
+            request_asset_bundle("link_preview.runtime")
+            preview_attrs = f' data-vyasa-link-preview="true"{current_path_attr}'
         link_class = "underline underline-offset-2 font-medium transition-colors"
-        return f'<a href="{href}"{hx}{ext}{download_attr}{boost_attr} class="{link_class}"{title}>{inner}</a>'
+        return f'<a href="{href}"{hx}{ext}{download_attr}{boost_attr}{preview_attrs} class="{link_class}"{title}>{inner}</a>'
 
 
 @traced("markdown")
