@@ -11,14 +11,14 @@ from monsterui.all import *
 from .helpers import (
     _effective_abbreviations, _effective_ignore_list,
     _effective_include_list, _should_include_folder, _strip_inline_markdown,
-    _unique_anchor, content_url_for_slug, estimate_read_time_minutes, expand_markdown_includes_for_reading, find_folder_note_file,
+    _unique_anchor, content_url_for_slug, document_icon_for_path, document_title_for_path, enabled_document_suffixes, estimate_read_time_minutes, expand_markdown_includes_for_reading, find_folder_note_file,
     format_last_modified_label,
     get_adjacent_posts, get_post_title, parse_frontmatter, resolve_markdown_title, slug_to_title,
     text_to_anchor,
 )
 from .extensions_builtin.markdown.renderer import from_md
 from .sidebar_helpers import build_toc_items, extract_toc
-from .tree_tables import TREE_SUFFIXES, parse_tree_table, render_tree_table_html
+from .tree_tables import parse_tree_table, render_tree_table_html
 from .config import get_config, reload_config
 from .extensions import get_extension_runtime, refresh_extension_runtime
 from .assets import asset_url, bundle_asset_html, iter_extension_static_dirs, requested_page_bundles
@@ -410,7 +410,7 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
     """Build post tree with static .html links instead of HTMX"""
     items = []
     try:
-        entries = get_tree_entries(folder, root_folder, show_hidden, set(), TREE_SUFFIXES)
+        entries = get_tree_entries(folder, root_folder, show_hidden, set(), enabled_document_suffixes())
         abbreviations = _effective_abbreviations(root_folder, folder)
     except (OSError, PermissionError): 
         return items
@@ -450,12 +450,12 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
                     title_text,
                     href=content_url_for_slug(note_slug, suffix=".html"),
                     cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
-        elif item.suffix in {'.md', '.tree'}:
+        elif item.suffix in enabled_document_suffixes() and item.suffix != ".pdf":
             slug = str(item.relative_to(root_folder).with_suffix(''))
             if item.suffix == ".md":
                 title, icon = get_post_title(item, abbreviations=abbreviations), "file-text"
             else:
-                title, icon = slug_to_title(item.stem, abbreviations=abbreviations), "table"
+                title, icon = document_title_for_path(item, abbreviations=abbreviations), document_icon_for_path(item)
             
             # Use .html extension for static links
             items.append(Li(A(
@@ -554,7 +554,7 @@ def build_static_site(input_dir=None, output_dir=None):
     ignore_list = _effective_ignore_list(root_folder)
     include_list = _effective_include_list(root_folder)
     doc_files = []
-    for suffix in (".md", ".tree"):
+    for suffix in tuple(s for s in enabled_document_suffixes() if s != ".pdf"):
         for doc_file in root_folder.rglob(f"*{suffix}"):
             try:
                 relative_path = doc_file.relative_to(root_folder)

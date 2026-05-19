@@ -1,7 +1,7 @@
 from ..extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 from ..file_search import search_file_records
 from ..config import get_config
-from ..helpers import get_content_mounts
+from ..helpers import get_content_mounts, enabled_document_suffixes
 from .default_search_routes import register_default_search_routes
 from ..search_views import posts_search_block
 
@@ -34,7 +34,11 @@ __all__ = ["EXTENSION", "META"]
 
 
 def find_default_search_matches(query, limit=40):
-    return _find_search_candidates(query, limit, suffixes=(".md", ".pdf"))
+    return _find_search_candidates(
+        query,
+        limit,
+        suffixes=tuple(suffix for suffix in enabled_document_suffixes() if suffix in {".md", ".pdf"}),
+    )
 
 
 def find_default_search_preview_matches(query, limit=200):

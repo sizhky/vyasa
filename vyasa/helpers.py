@@ -180,6 +180,46 @@ def content_url_for_slug(slug: str | Path, prefix: str = "/posts", suffix: str =
     url = f"{prefix.rstrip('/')}/{encoded}{suffix}" if encoded else prefix.rstrip("/") or "/"
     return f"{url}#{quote(fragment, safe='-._~')}" if fragment else url
 
+def _extension_enabled(extension_id: str) -> bool:
+    try:
+        from .extensions import get_extension_runtime
+
+        runtime = get_extension_runtime()
+        return runtime is None or runtime.enabled(extension_id)
+    except Exception:
+        return True
+
+def enabled_document_types() -> tuple[dict[str, str], ...]:
+    types = [{"suffix": ".md", "kind": "markdown", "icon": "file-text"}]
+    if _extension_enabled("pdf_viewer"):
+        types.append({"suffix": ".pdf", "kind": "pdf", "icon": "file"})
+    if _extension_enabled("tree_table"):
+        types.append({"suffix": ".tree", "kind": "tree", "icon": "table"})
+    return tuple(types)
+
+def enabled_document_suffixes() -> tuple[str, ...]:
+    return tuple(item["suffix"] for item in enabled_document_types())
+
+def document_kind_for_suffix(suffix: str) -> str | None:
+    lowered = str(suffix).lower()
+    for item in enabled_document_types():
+        if item["suffix"] == lowered:
+            return item["kind"]
+    return None
+
+def document_icon_for_path(path: Path) -> str:
+    for item in enabled_document_types():
+        if path.suffix.lower() == item["suffix"]:
+            return item["icon"]
+    return "file-text"
+
+def document_title_for_path(path: Path, abbreviations=None) -> str:
+    kind = document_kind_for_suffix(path.suffix)
+    if kind == "markdown":
+        return get_post_title(path, abbreviations=abbreviations)
+    title = slug_to_title(path.stem, abbreviations=abbreviations)
+    return f"{title} (PDF)" if kind == "pdf" else title
+
 def _strip_inline_markdown(text: str) -> str:
     cleaned = text or ""
     cleaned = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', cleaned)
@@ -773,20 +813,13 @@ def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
             continue
         if not include_hidden and any(part.startswith(".") for part in rel_parts):
             continue
-        if path.suffix.lower() not in {".md", ".pdf", ".tree"}:
+        if path.suffix.lower() not in enabled_document_suffixes():
             continue
 
         rel = Path(*rel_parts)
         slug = rel.with_suffix("").as_posix()
-        if path.suffix.lower() == ".md":
-            title = get_post_title(path, abbreviations=abbreviations)
-            kind = "md"
-        elif path.suffix.lower() == ".pdf":
-            title = slug_to_title(rel.stem, abbreviations=abbreviations)
-            kind = "pdf"
-        else:
-            title = slug_to_title(rel.stem, abbreviations=abbreviations)
-            kind = "tree"
+        title = document_title_for_path(path, abbreviations=abbreviations)
+        kind = "md" if path.suffix.lower() == ".md" else document_kind_for_suffix(path.suffix)
 
         posts.append(
             {
@@ -815,19 +848,12 @@ def list_vyasa_entries(root: Path, relative: str = ".", include_hidden: bool = F
         if item.is_dir():
             entries.append({"type": "folder", "path": item.relative_to(root).as_posix()})
             continue
-        if item.suffix.lower() not in {".md", ".pdf", ".tree"}:
+        if item.suffix.lower() not in enabled_document_suffixes():
             continue
         rel = item.relative_to(root)
         slug = rel.with_suffix("").as_posix()
-        if item.suffix.lower() == ".md":
-            title = get_post_title(item, abbreviations=abbreviations)
-            kind = "md"
-        elif item.suffix.lower() == ".pdf":
-            title = slug_to_title(rel.stem, abbreviations=abbreviations)
-            kind = "pdf"
-        else:
-            title = slug_to_title(rel.stem, abbreviations=abbreviations)
-            kind = "tree"
+        title = document_title_for_path(item, abbreviations=abbreviations)
+        kind = "md" if item.suffix.lower() == ".md" else document_kind_for_suffix(item.suffix)
         entries.append({"type": kind, "path": slug, "title": title})
 
     return {"path": target.relative_to(root).as_posix(), "entries": entries}

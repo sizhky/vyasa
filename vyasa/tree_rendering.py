@@ -3,7 +3,7 @@ from urllib.parse import quote
 
 from fasthtml.common import A, Details, Li, Span, Summary, Ul
 from monsterui.all import UkIcon
-from .helpers import content_slug_for_path, content_url_for_slug
+from .helpers import content_slug_for_path, content_url_for_slug, document_icon_for_path, document_title_for_path, enabled_document_suffixes
 from .nav_views import FOLDER_ROW_CLASSES, FILE_ROW_CLASSES, NavigationRow, navigation_row_view
 from .runtime_context import traced
 
@@ -110,7 +110,7 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
                 )
                 items.append(Li(_decorate_row(folder_link, note_slug, folder_title, row_decorators)))
             continue
-        if item.suffix not in {".md", ".pdf", ".tree"}:
+        if item.suffix not in enabled_document_suffixes():
             continue
         if folder_note_file and item.resolve() == folder_note_file.resolve():
             continue
@@ -123,12 +123,14 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
         if item.suffix == ".md":
             metadata, _ = parse_frontmatter_fn(item)
             icon = "monitor" if metadata.get("slides", False) else "file-text"
-            title = metadata.get("title", slug_to_title_fn(item.stem, abbreviations=abbreviations))
+            title = metadata.get("title", document_title_for_path(item, abbreviations=abbreviations))
             label, href = title, content_url_for_slug(slug)
         elif item.suffix == ".pdf":
-            icon, title, label, href = "file", slug_to_title_fn(item.stem, abbreviations=abbreviations), f"{slug_to_title_fn(item.stem, abbreviations=abbreviations)} (PDF)", content_url_for_slug(slug)
+            title = document_title_for_path(item, abbreviations=abbreviations)
+            icon, label, href = document_icon_for_path(item), title, content_url_for_slug(slug)
         else:
-            icon, title, label, href = "table", slug_to_title_fn(item.stem, abbreviations=abbreviations), slug_to_title_fn(item.stem, abbreviations=abbreviations), content_url_for_slug(slug)
+            title = document_title_for_path(item, abbreviations=abbreviations)
+            icon, label, href = document_icon_for_path(item), title, content_url_for_slug(slug)
         row = NavigationRow(slug=slug, title=title, label=label, href=href, icon=icon, kind=item.suffix.lstrip("."))
         link = navigation_row_view(row, cls=FILE_ROW_CLASSES)
         items.append(Li(_decorate_row(link, slug, title, row_decorators)))

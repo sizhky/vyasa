@@ -25,6 +25,8 @@ def load_builtin_extensions():
     from . import table_of_contents
     from . import tabs
     from . import tasks
+    from . import pdf_viewer
+    from . import tree_table
     from . import wikilinks
 
     return (
@@ -41,6 +43,8 @@ def load_builtin_extensions():
         cytograph.EXTENSION,
         cryptograph.EXTENSION,
         tasks.EXTENSION,
+        pdf_viewer.EXTENSION,
+        tree_table.EXTENSION,
         document_actions.EXTENSION,
         table_of_contents.EXTENSION,
         scoped_custom_css.EXTENSION,

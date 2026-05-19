@@ -40,7 +40,7 @@ def test_extensions_default_preset_when_section_omitted(tmp_path, monkeypatch):
 
     assert plan.preset == "default"
     assert plan.selected_by_category["layout"] == ("default_layout",)
-    assert plan.selected_by_category["render"] == ("wikilinks", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
+    assert plan.selected_by_category["render"] == ("wikilinks", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
     assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "annotations", "bookmarks", "filesystem_routes")
     assert plan.enabled_ids[-1] == "filesystem"
 
@@ -256,6 +256,41 @@ def test_collector_asset_nodes_emit_each_bundle_once():
 
     assert html.count("tasks.js") == 1
     assert html.count("tasks.css") == 1
+
+
+def test_disabled_pdf_viewer_removes_pdf_from_default_search(monkeypatch):
+    seen = {}
+    runtime = build_extension_runtime(
+        {
+            "preset": "default",
+            "render": [
+                "wikilinks",
+                "tabs",
+                "mermaid",
+                "d2",
+                "cytograph",
+                "cryptograph",
+                "tasks",
+                "tree_table",
+                "document_actions",
+                "table_of_contents",
+                "scoped_custom_css",
+                "code_tools",
+                "default_favicon",
+            ],
+        }
+    )
+    previous = get_extension_runtime()
+    set_extension_runtime(runtime)
+    monkeypatch.setattr(
+        "vyasa.extensions_builtin.default_search.search_file_records",
+        lambda query, mounts, suffixes, show_hidden, limit: seen.setdefault("suffixes", suffixes),
+    )
+    try:
+        assert find_default_search_matches("guide", limit=10) == (".md",)
+    finally:
+        set_extension_runtime(previous)
+    assert seen["suffixes"] == (".md",)
 
 
 def test_render_pipeline_owns_processor_ordering():
