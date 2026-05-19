@@ -64,6 +64,9 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     graph_payload = html.escape(json.dumps(graph))
     title = html.escape(config.get("title") or model.get("title") or "Items")
     default_open_depth = html.escape(str(config.get("default_open_depth") or 0))
+    gantt_enabled = str(config.get("gantt") or "").strip().lower() in {"1", "true", "yes", "on"}
+    default_view = str(config.get("default_view") or config.get("view") or "graph").strip().lower()
+    default_view = "gantt" if gantt_enabled and default_view == "gantt" else "graph"
     width = config.get("width") or "65vw"
     implicit_breakout_height = fence_name == "tasks" and ("vw" in str(width).lower() or str(width).lower() == "100%")
     min_height = config.get("min_height") or ("85vh" if implicit_breakout_height else "420px")
@@ -96,7 +99,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     return (
         f'<div class="tasks-container relative my-6 rounded-xl border-4 border-slate-200 dark:border-slate-800" '
         f'style="{container_style}" '
-        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
+        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-gantt="{str(gantt_enabled).lower()}" data-tasks-default-view="{html.escape(default_view)}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
         f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'
         f'<button onclick="openTasksFullscreen(\'{widget_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>'
         f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">'

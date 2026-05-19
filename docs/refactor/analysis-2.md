@@ -14,6 +14,8 @@ color_by:
     Ready: "#facc15"
     Blocked: "#ef4444"
     Done: "#2cd013"
+gantt: true
+default_view: gantt
 ---
 id: vyasa-extension-refactor
 title: Make extension authoring boring
