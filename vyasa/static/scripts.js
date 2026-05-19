@@ -926,6 +926,33 @@ function initScrollTopButton(root = document) {
     sync();
 }
 
+function initSidebarResizers(root = document) {
+    const page = document.getElementById('page-container') || document.documentElement;
+    const saved = JSON.parse(localStorage.getItem('vyasa:sidebarWidths') || '{}');
+    const clamp = (v) => Math.max(224, Math.min(720, Math.round(v)));
+    const bind = (selector, kind, sign) => {
+        const sidebar = root.querySelector?.(selector) || document.querySelector(selector);
+        if (!sidebar || sidebar.dataset.resizerBound === 'true') return;
+        if (saved[kind]) page.style.setProperty(`--vyasa-${kind}-sidebar-width`, `${clamp(saved[kind])}px`);
+        const handle = document.createElement('button');
+        handle.type = 'button'; handle.className = 'vyasa-sidebar-resizer'; handle.ariaLabel = `Resize ${kind} sidebar`;
+        sidebar.appendChild(handle); sidebar.dataset.resizerBound = 'true';
+        handle.addEventListener('pointerdown', (event) => {
+            event.preventDefault(); handle.setPointerCapture(event.pointerId); sidebar.classList.add('vyasa-sidebar-resizing');
+            const startX = event.clientX, startW = sidebar.getBoundingClientRect().width;
+            const move = (e) => {
+                const width = clamp(startW + sign * (e.clientX - startX));
+                page.style.setProperty(`--vyasa-${kind}-sidebar-width`, `${width}px`);
+                localStorage.setItem('vyasa:sidebarWidths', JSON.stringify({ ...JSON.parse(localStorage.getItem('vyasa:sidebarWidths') || '{}'), [kind]: width }));
+            };
+            const up = () => { sidebar.classList.remove('vyasa-sidebar-resizing'); window.removeEventListener('pointermove', move); };
+            window.addEventListener('pointermove', move); window.addEventListener('pointerup', up, { once: true });
+        });
+    };
+    bind('#posts-sidebar', 'posts', 1);
+    bind('#toc-sidebar', 'toc', -1);
+}
+
 function initMobileScrollProgress(root = document) {
     const page = root.getElementById?.('page-container') || document.getElementById('page-container');
     if (!page) return;
@@ -1684,6 +1711,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initHeadingFolds(document);
     syncHeadingActionStates(document);
     initScrollTopButton(document);
+    initSidebarResizers(document);
     initMobileScrollProgress(document);
     syncThemePresetDebug(document);
     replaceEscapedDollarPlaceholders(document.body);
@@ -1726,6 +1754,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initHeadingFolds(event.target);
     syncHeadingActionStates(document);
     initScrollTopButton(document);
+    initSidebarResizers(event.target || document);
     initMobileScrollProgress(document);
     syncThemePresetDebug(document);
     replaceEscapedDollarPlaceholders(event.target);

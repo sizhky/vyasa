@@ -212,6 +212,27 @@ summary {
 #main-content .sidenote {
     font-family: var(--vyasa-font-body);
 }
+.vyasa-content-grid { overflow: visible; }
+.vyasa-posts-sidebar {
+    width: var(--vyasa-posts-sidebar-width, var(--vyasa-sidebar-width, 22rem));
+    margin-right: min(0px, calc(var(--vyasa-sidebar-width, 22rem) - var(--vyasa-posts-sidebar-width, var(--vyasa-sidebar-width, 22rem))));
+}
+.vyasa-toc-sidebar {
+    width: var(--vyasa-toc-sidebar-width, var(--vyasa-sidebar-width, 22rem));
+    margin-left: min(0px, calc(var(--vyasa-sidebar-width, 22rem) - var(--vyasa-toc-sidebar-width, var(--vyasa-sidebar-width, 22rem))));
+}
+.vyasa-sidebar-resizer {
+    position: absolute; top: 0; bottom: 0; width: 12px; z-index: 20; cursor: col-resize; touch-action: none;
+}
+.vyasa-posts-sidebar .vyasa-sidebar-resizer { right: -6px; }
+.vyasa-toc-sidebar .vyasa-sidebar-resizer { left: -6px; }
+.vyasa-sidebar-resizer::after {
+    content: ""; position: absolute; top: 1rem; bottom: 1rem; left: 5px; width: 2px; border-radius: 999px;
+    background: color-mix(in srgb, var(--vyasa-ink) 22%, transparent); opacity: 0; transition: opacity 160ms ease;
+}
+.vyasa-sidebar:hover .vyasa-sidebar-resizer::after,
+.vyasa-sidebar-resizer:focus-visible::after,
+.vyasa-sidebar-resizing .vyasa-sidebar-resizer::after { opacity: 1; }
 #main-content a,
 #main-content a:visited {
     color: var(--vyasa-link) !important;

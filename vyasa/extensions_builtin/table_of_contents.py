@@ -31,7 +31,7 @@ def _toc_panels(context):
         )
     build_collapsible_sidebar = context["build_collapsible_sidebar"]
     sidebars_open = context["sidebars_open"]
-    desktop_cls = "vyasa-sidebar vyasa-toc-sidebar hidden xl:block w-[var(--vyasa-sidebar-width,22rem)] shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]"
+    desktop_cls = "vyasa-sidebar vyasa-toc-sidebar hidden xl:block w-[var(--vyasa-toc-sidebar-width,var(--vyasa-sidebar-width,22rem))] shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]"
     if context.get("desktop_margin_top"):
         desktop_cls += " mt-4"
     desktop_attrs = {"id": "toc-sidebar"}

@@ -31,7 +31,7 @@ def _register_sidebar_routes(rt, runtime) -> None:
         )
         return Aside(
             NotStr(html),
-            cls="hidden xl:block w-[var(--vyasa-sidebar-width,26rem)] shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]",
+            cls="vyasa-sidebar vyasa-posts-sidebar hidden xl:block w-[var(--vyasa-posts-sidebar-width,var(--vyasa-sidebar-width,26rem))] shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]",
             id="posts-sidebar",
         )
 

@@ -177,7 +177,8 @@ def render_page_frame(frame: PageFrame, *, htmx, deps: PageFrameDeps):
     token_style = "; ".join(
         f"--vyasa-{name}: {value}" for name, value in theme_tokens.items() if value
     )
-    page_style = "; ".join(part for part in (layout_max_style, f"--vyasa-sidebar-width: {sidebar_width};", theme_style, font_style, token_style) if part)
+    sidebar_style = f"--vyasa-sidebar-width: {sidebar_width}; --vyasa-posts-sidebar-width: var(--vyasa-sidebar-width); --vyasa-toc-sidebar-width: var(--vyasa-sidebar-width);"
+    page_style = "; ".join(part for part in (layout_max_style, sidebar_style, theme_style, font_style, token_style) if part)
     layout_fluid_class = "layout-fluid" if layout_max_style else ""
     if frame.full_width:
         layout_max_class = layout_max_style = layout_fluid_class = ""
@@ -272,7 +273,7 @@ def _collect_toc_panels(*, toc_content, show_toc, current_path, build_sidebar_to
                 desktop, mobile = panels
                 return desktop, mobile, toc_items
     sidebars_open = context["sidebars_open"]
-    desktop_cls = "vyasa-sidebar vyasa-toc-sidebar hidden xl:block w-[var(--vyasa-sidebar-width,22rem)] shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]"
+    desktop_cls = "vyasa-sidebar vyasa-toc-sidebar hidden xl:block w-[var(--vyasa-toc-sidebar-width,var(--vyasa-sidebar-width,22rem))] shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]"
     if desktop_margin_top:
         desktop_cls += " mt-4"
     desktop_attrs = {"id": "toc-sidebar"}
@@ -361,7 +362,7 @@ def _render_full_layout(content, title, show_sidebar, toc_content, current_path,
         roles_key = tuple(get_roles_from_auth(auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list) or [])
         mobile_posts_panel = Div(Div(Button(UkIcon("x", cls="w-5 h-5"), id="close-mobile-posts", cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto", type="button"), cls="vyasa-mobile-panel-header flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"), Div(NotStr(cached_posts_sidebar_html(posts_sidebar_fingerprint(), roles_key, get_config().get_show_hidden(), current_path or "")), cls="vyasa-mobile-panel-body p-4 overflow-y-auto"), id="mobile-posts-panel", cls="vyasa-mobile-panel fixed inset-0 bg-white dark:bg-slate-950 z-[9999] xl:hidden transform -translate-x-full transition-transform duration-300", aria_hidden="true")
         nav_posts_items = get_posts(list(roles_key) if roles_key else [], current_path=current_path or "") if nav_posts_menu else None
-        content_with_sidebars = Div(cls=f"vyasa-content-grid layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 flex gap-6 flex-1 {'min-h-0' if no_scroll else ''}".strip(), id="content-with-sidebars", **style_attr(layout_max_style))((Aside(Div(UkIcon("loader", cls="w-5 h-5 animate-spin"), Span("Loading posts…", cls="ml-2 text-sm"), cls="flex items-center justify-center h-32 text-slate-400"), cls="vyasa-sidebar vyasa-posts-sidebar hidden xl:block w-[var(--vyasa-sidebar-width,22rem)] shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]", id="posts-sidebar", hx_get=f"/_sidebar/posts?current_path={quote(current_path or '', safe='')}", hx_trigger="load", hx_swap="outerHTML") if not nav_posts_menu else None), main_content_container, toc_sidebar if toc_sidebar else None)
+        content_with_sidebars = Div(cls=f"vyasa-content-grid layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 flex gap-6 flex-1 {'min-h-0' if no_scroll else ''}".strip(), id="content-with-sidebars", **style_attr(layout_max_style))((Aside(Div(UkIcon("loader", cls="w-5 h-5 animate-spin"), Span("Loading posts…", cls="ml-2 text-sm"), cls="flex items-center justify-center h-32 text-slate-400"), cls="vyasa-sidebar vyasa-posts-sidebar hidden xl:block w-[var(--vyasa-posts-sidebar-width,var(--vyasa-sidebar-width,22rem))] shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]", id="posts-sidebar", hx_get=f"/_sidebar/posts?current_path={quote(current_path or '', safe='')}", hx_trigger="load", hx_swap="outerHTML") if not nav_posts_menu else None), main_content_container, toc_sidebar if toc_sidebar else None)
         body_content = Div(id="page-container", cls=page_container_cls, data_posts_hover_expand="1", **style_attr(page_style))(code_copy_template, Div(navbar(show_mobile_menus=True, htmx_nav=htmx_nav, posts_menu_items=nav_posts_items, compact_mode=nav_posts_menu, updated_label=current_updated_label), cls=f"vyasa-navbar-shell w-full sticky top-0 z-[1300] {navbar_margin_cls}".strip(), id="site-navbar"), mobile_posts_panel, mobile_toc_panel if mobile_toc_panel else None, content_with_sidebars, footer_node("w-full mt-auto".strip(), {}) if show_footer else None)
     else:
         custom_css_links = _collect_scoped_css_links(current_path, section_class, get_root_folder, get_sidebar_custom_css_links) if current_path else []
