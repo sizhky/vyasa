@@ -68,8 +68,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     default_view = str(config.get("default_view") or config.get("view") or "graph").strip().lower()
     default_view = "gantt" if gantt_enabled and default_view == "gantt" else "graph"
     width = config.get("width") or "65vw"
-    implicit_breakout_height = fence_name == "tasks" and ("vw" in str(width).lower() or str(width).lower() == "100%")
-    min_height = config.get("min_height") or ("85vh" if implicit_breakout_height else "420px")
+    min_height = config.get("min_height") or ("420px" if fence_name != "tasks" else "")
     flow_height = html.escape(str(config.get("height") or "70vh"))
     jitter = html.escape(str(config.get("jitter") or 0))
     jitter_y = html.escape(str(config.get("jitter_y") or config.get("jitter") or 0))
@@ -111,6 +110,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         f'</div>'
         f'</div>'
         f'<div class="px-4 py-3 pr-14 border-b border-slate-200 dark:border-slate-800 flex items-start gap-3">'
+        f'<button type="button" title="Toggle filters" aria-label="Toggle task filters" onclick="runTasksHeaderAction(\'{widget_id}\', \'toggleFilters\')" class="relative z-40 mt-0.5 rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-2 py-1 font-mono text-xs leading-none text-slate-700 dark:text-slate-300">☰</button>'
         f'<div class="min-w-0 flex-1">'
         f'<div class="text-sm font-semibold">{title}</div>'
         f'<div class="text-xs text-slate-500 dark:text-slate-400">{html.escape(summary)}</div>'

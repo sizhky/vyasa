@@ -28,8 +28,6 @@ const TASKS_EDGE_FOCUS_OUT_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 55%,
 const TASKS_EDGE_FOCUS_IN_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 40%, #22c55e 60%)';
 const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
 const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
-const TASKS_FILTER_PANEL_TOP = 76;
-const TASKS_FILTER_PANEL_RIGHT = 12;
 const TASKS_FILTER_PANEL_WIDTH = 320;
 const TASKS_GANTT_UNIT_WIDTH = 340;
 const TASKS_GANTT_ROW_GAP = 56;
@@ -69,9 +67,9 @@ function readTasksLayoutConfig(wrapper) {
 }
 
 function tasksFilterPanelMaxHeight(wrapper) {
-    if (!wrapper) return 'min(72vh, calc(100% - 88px))';
+    if (!wrapper) return '100%';
     const bounds = wrapper.getBoundingClientRect();
-    const available = Math.max(220, Math.floor(bounds.height - TASKS_FILTER_PANEL_TOP - 16));
+    const available = Math.max(220, Math.floor(bounds.height));
     return `${available}px`;
 }
 
@@ -200,7 +198,7 @@ function tasksNodeMetaEntries(node) {
     const hidden = new Set([
         'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
         'handlelayout', 'highlightmode', 'sourcegroupid',
-        'width', 'height', 'position', 'parentId', 'color', 'href',
+        'width', 'height', 'position', 'parentId', 'color', 'href', 'rank',
     ]);
     return Object.entries(node)
         .filter(([key, value]) => !hidden.has(String(key).toLowerCase()) && value !== null && value !== undefined && value !== '' && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))
@@ -263,7 +261,7 @@ function tasksFilterOptions(model) {
     const hidden = new Set([
         'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
         'handlelayout', 'highlightmode', 'sourcegroupid',
-        'width', 'height', 'position', 'parentId', 'color', 'href',
+        'width', 'height', 'position', 'parentId', 'color', 'href', 'rank',
     ]);
     const buckets = new Map();
     const visit = (node) => {
@@ -487,8 +485,11 @@ function ensureTasksReactFlow() {
                     background: color-mix(in srgb, var(--vyasa-paper) 72%, var(--vyasa-primary) 28%);
                 }
                 .vyasa-tasks-filter-card {
-                    border: 1px solid color-mix(in srgb, var(--vyasa-primary) 32%, transparent) !important;
+                    border: 4px solid rgb(226 232 240) !important;
                     box-shadow: 0 10px 30px rgba(0,0,0,0.12) !important;
+                }
+                .dark .vyasa-tasks-filter-card {
+                    border-color: rgb(30 41 59) !important;
                 }
                 .react-flow__edge.animated path {
                     animation: vyasa-edge-dashdraw var(--vyasa-edge-flow-duration, 0.6s) linear infinite;
@@ -1528,9 +1529,9 @@ async function renderTasksGraphs(rootElement = document) {
                     ? initialPrefsRef.current.colorBy
                     : String(model?.default_color_by || '').trim()
             ));
-            const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => Boolean(initialPrefsRef.current?.filtersCollapsed));
+            const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => initialPrefsRef.current?.filtersCollapsed !== false);
             const [viewMode, setViewMode] = React.useState(defaultViewMode);
-            const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('min(72vh, calc(100% - 88px))');
+            const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
@@ -2340,7 +2341,7 @@ async function renderTasksGraphs(rootElement = document) {
                     : tasksNodeMetaEntries(selectedNode);
                 if (!selectedNode || entries.length === 0) return null;
                 return React.createElement('div', {
-                    style: { position: 'absolute', right: '12px', bottom: '112px', zIndex: 29, width: '240px', maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
+                    style: { position: 'absolute', right: '12px', top: '12px', zIndex: 29, width: '240px', maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
                 },
                     React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Node Details'),
                     React.createElement(selectedNode.href ? 'a' : 'div', selectedNode.href
@@ -2359,37 +2360,40 @@ async function renderTasksGraphs(rootElement = document) {
                 const colorOptions = tasksColorOptions(model);
                 const activePaletteEntries = activeColorBy === 'rank' ? [] : tasksColorPaletteEntries(model, activeColorBy);
                 const activeCount = Object.values(activeFilters || {}).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : (value ? 1 : 0)), 0) + (activeColorBy ? 1 : 0);
-                const panelMaxHeight = filtersCollapsed ? '44px' : filterPanelMaxHeight;
-                return React.createElement('details', {
+                const isOpen = !filtersCollapsed;
+                return React.createElement('aside', {
                     ref: filterPanelRef,
                     className: 'vyasa-tasks-filter-card',
-                    open: !filtersCollapsed,
-                    onToggle: (e) => setFiltersCollapsed(!e.currentTarget.open),
+                    'aria-hidden': !isOpen,
                     style: {
                         position: 'absolute',
-                        top: `${TASKS_FILTER_PANEL_TOP}px`,
-                        right: `${TASKS_FILTER_PANEL_RIGHT}px`,
+                        top: 0,
+                        bottom: 0,
+                        left: 0,
                         zIndex: 30,
                         width: `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`,
                         maxWidth: 'calc(100% - 24px)',
-                        maxHeight: panelMaxHeight,
+                        maxHeight: filterPanelMaxHeight,
                         overflowX: 'hidden',
-                        overflowY: filtersCollapsed ? 'hidden' : 'auto',
-                        borderRadius: '12px',
+                        overflowY: 'auto',
+                        borderRadius: '0 8px 8px 8px',
                         background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
                         backdropFilter: 'blur(8px)',
                         padding: '12px',
                         boxSizing: 'border-box',
+                        transform: isOpen ? 'translateX(0)' : 'translateX(calc(-100% - 16px))',
+                        opacity: isOpen ? 1 : 0,
+                        visibility: isOpen ? 'visible' : 'hidden',
+                        transition: 'transform 180ms ease',
+                        pointerEvents: isOpen ? 'auto' : 'none',
                     },
                 },
-                    React.createElement('summary', {
+                    React.createElement('div', {
                         style: {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             gap: '8px',
-                            cursor: 'pointer',
-                            listStyle: 'none',
                             position: 'sticky',
                             top: '-12px',
                             margin: '-12px -12px 0',
@@ -2400,13 +2404,13 @@ async function renderTasksGraphs(rootElement = document) {
                         },
                     },
                         React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, textTransform: 'uppercase', letterSpacing: '0.04em' } }, activeCount ? `Filters (${activeCount})` : 'Filters'),
-                        React.createElement('span', { style: { fontSize: '14px', opacity: 0.7, lineHeight: 1 } }, filtersCollapsed ? '+' : '−')
+                        React.createElement('button', { type: 'button', onClick: () => setFiltersCollapsed(true), style: { border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', fontSize: '14px', lineHeight: 1, color: 'inherit', opacity: 0.7 } }, '×')
                     ),
                     React.createElement('div', {
                         style: {
-                            marginTop: filtersCollapsed ? 0 : '12px',
-                            paddingRight: filtersCollapsed ? 0 : '2px',
-                            paddingBottom: filtersCollapsed ? 0 : '2px',
+                            marginTop: '12px',
+                            paddingRight: '2px',
+                            paddingBottom: '2px',
                         },
                     },
                         React.createElement('div', { style: { marginBottom: '12px', display: 'flex', justifyContent: 'flex-end' } },
@@ -2625,6 +2629,9 @@ async function renderTasksGraphs(rootElement = document) {
                                 return next;
                             });
                         },
+                        toggleFilters: () => setFiltersCollapsed((current) => !current),
+                        openFilters: () => setFiltersCollapsed(false),
+                        closeFilters: () => setFiltersCollapsed(true),
                     };
                     return () => {
                         delete window.__vyasaTasksActions[widgetId];
@@ -2685,6 +2692,7 @@ async function renderTasksGraphs(rootElement = document) {
                     whiteSpace: 'nowrap',
                 }
             }, groupHoverTooltip.label);
+            const filterPanelElement = window.React.createElement(FilterPanel);
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none', position: 'relative' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }), onPointerMove: updateGroupHoverTooltip, onPointerLeave: clearGroupHoverTooltip },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: clearSelection, onPaneContextMenu: clearSelection },
@@ -2696,7 +2704,7 @@ async function renderTasksGraphs(rootElement = document) {
                     ),
                     window.React.createElement(SelectedNodePanel),
                     window.React.createElement(ViewModeToggle),
-                    window.React.createElement(FilterPanel),
+                    filterPanelElement,
                     window.React.createElement(GroupHoverTooltip)
                 )
             ) : window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none', position: 'relative' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }), onPointerMove: updateGroupHoverTooltip, onPointerLeave: clearGroupHoverTooltip },
@@ -2709,7 +2717,7 @@ async function renderTasksGraphs(rootElement = document) {
                 ),
                 window.React.createElement(SelectedNodePanel),
                 window.React.createElement(ViewModeToggle),
-                window.React.createElement(FilterPanel),
+                filterPanelElement,
                 window.React.createElement(GroupHoverTooltip)
             );
         };
