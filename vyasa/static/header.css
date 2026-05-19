@@ -728,7 +728,8 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
     vertical-align: middle;
 }
 
-.vyasa-fold-all-icon { width: 1rem; height: 1rem; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.vyasa-page-action-icon,
+.vyasa-fold-all-icon { width: 1rem; height: 1rem; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
 .vyasa-scroll-top-button { position: fixed; bottom: 1.25rem; width: 3.15rem; height: 3.15rem; display: inline-flex; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--vyasa-primary) 38%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--vyasa-paper) 82%, var(--vyasa-primary) 18%); color: var(--vyasa-primary); box-shadow: 0 18px 34px -20px rgba(15, 23, 42, 0.42); backdrop-filter: blur(10px); opacity: 0; pointer-events: none; transform: translateY(0.4rem) scale(0.96); transition: opacity 160ms ease, transform 160ms ease, background 160ms ease; z-index: 30; }
 .vyasa-scroll-top-button.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
 .vyasa-scroll-top-button:hover { background: color-mix(in srgb, var(--vyasa-paper) 70%, var(--vyasa-primary) 30%); }

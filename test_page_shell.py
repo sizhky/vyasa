@@ -4,6 +4,7 @@ from fasthtml.common import Li
 from fasthtml.common import to_xml
 
 from vyasa.build import static_layout
+from vyasa.document_pages import fold_all_button, present_button
 from vyasa.core import _row_action_decorator
 from vyasa.extensions import ActionRegistry, NavigationAction
 from vyasa.nav_views import FILE_ROW_CLASSES, NavigationRow, TREE_ACTION_BUTTON_CLASSES, navigation_row_view
@@ -67,3 +68,10 @@ def test_bookmark_js_uses_tree_row_shell_contract():
 
     assert "vyasa-tree-row-shell post-link vyasa-bookmark-link" in script
     assert "py-1 px-2" not in script
+
+
+def test_document_action_buttons_render_inline_icons():
+    html = to_xml(fold_all_button()) + to_xml(present_button("guide/page"))
+
+    assert "vyasa-page-action-icon" in html
+    assert "<uk-icon" not in html
