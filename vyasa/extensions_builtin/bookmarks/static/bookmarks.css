@@ -1,6 +1,8 @@
 .vyasa-bookmark-row { width: max-content; max-width: none; }
 .vyasa-bookmark-toggle { opacity: 0; pointer-events: none; }
 .vyasa-bookmark-row:hover .vyasa-bookmark-toggle,
+.vyasa-tree-row:hover .vyasa-bookmark-toggle,
+.vyasa-tree-row.is-active .vyasa-bookmark-toggle,
 .vyasa-bookmark-toggle[data-bookmarked="true"] {
     opacity: 1;
     pointer-events: auto;

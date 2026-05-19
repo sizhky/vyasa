@@ -2,6 +2,17 @@ from fasthtml.common import *
 from monsterui.all import *
 
 
+TREE_ROW_CLASSES = "vyasa-tree-row vyasa-tree-row-shell whitespace-nowrap"
+FOLDER_ROW_CLASSES = f"{TREE_ROW_CLASSES} font-medium cursor-pointer select-none list-none"
+FILE_ROW_CLASSES = f"{TREE_ROW_CLASSES} post-link"
+TREE_ACTION_BUTTON_CLASSES = "vyasa-sidebar-tree-action vyasa-row-action shrink-0 text-slate-400 transition-colors"
+TREE_ACTION_ROW_BASE_CLASSES = {
+    "search": "flex items-center gap-1 min-w-0",
+    "tree-inline": "inline-flex items-center gap-1 w-max",
+    "tree": f"{TREE_ROW_CLASSES} inline-flex items-center gap-1 w-max",
+}
+
+
 class NavigationRow:
     def __init__(self, *, slug, title, label, href, icon, kind="file", folder_note=False):
         self.slug = slug
@@ -14,13 +25,14 @@ class NavigationRow:
 
 
 def navigation_row_view(row, *, cls, onclick=None, show_icon=True):
+    link_cls = f"vyasa-tree-link inline-flex items-center min-w-0 whitespace-nowrap {cls}".strip()
     attrs = {
         "href": row.href,
         "hx_get": row.href,
         "hx_target": "#main-content",
         "hx_push_url": "true",
         "hx_swap": "outerHTML show:window:top settle:0.1s",
-        "cls": cls,
+        "cls": link_cls,
         "data_path": row.slug,
     }
     if onclick:

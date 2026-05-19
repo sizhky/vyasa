@@ -29,6 +29,14 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-primary-text: var(--vyasa-selection-fg);
     --vyasa-button-radius: 0.375rem;
     --vyasa-rect-radius: var(--vyasa-button-radius);
+    --vyasa-tree-row-px: 0.42rem;
+    --vyasa-tree-row-py: 0.16rem;
+    --vyasa-tree-row-gap: 0.02rem;
+    --vyasa-tree-row-icon-gap: 0.24rem;
+    --vyasa-tree-row-action-gap: 0rem;
+    --vyasa-tree-row-action-pad: 0.12rem;
+    --vyasa-tree-row-state-gap: 0.1rem;
+    --vyasa-tree-item-gap: 0rem;
     --vyasa-link: color-mix(in srgb, var(--vyasa-primary) 68%, var(--vyasa-ink) 32%);
     --vyasa-link-hover: color-mix(in srgb, var(--vyasa-primary-dim) 58%, var(--vyasa-ink) 42%);
     --vyasa-emphasis-control-text: var(--vyasa-primary-text);
@@ -967,12 +975,66 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
     border-radius: var(--vyasa-rect-radius);
     color: var(--vyasa-ink);
 }
-.vyasa-sidebar-body .vyasa-tree-row {
+.vyasa-tree-link {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    line-height: 1.25;
+    white-space: nowrap;
+    gap: 0;
+}
+.vyasa-sidebar-body .vyasa-tree-row-shell {
     display: inline-flex;
     align-items: center;
     width: max-content;
-    padding: 0.25rem 0.5rem;
+    gap: var(--vyasa-tree-row-gap);
+    padding: var(--vyasa-tree-row-py) var(--vyasa-tree-row-px);
     line-height: 1.25;
+}
+.vyasa-sidebar-body .vyasa-tree-row-shell > .w-4.mr-2,
+.vyasa-sidebar-body .vyasa-tree-link > .w-4.mr-2 {
+    margin-right: var(--vyasa-tree-row-icon-gap) !important;
+}
+.vyasa-sidebar-body .vyasa-action-row {
+    gap: var(--vyasa-tree-row-action-gap) !important;
+}
+.vyasa-sidebar-body .vyasa-tree-row + .vyasa-tree-row,
+.vyasa-sidebar-body .vyasa-bookmarks-list > :not([hidden]) ~ :not([hidden]),
+.vyasa-sidebar-body .sidebar-scroll-container > :not([hidden]) ~ :not([hidden]),
+.vyasa-sidebar-body ul > :not([hidden]) ~ :not([hidden]) {
+    margin-top: var(--vyasa-tree-item-gap) !important;
+}
+.vyasa-sidebar-body li.my-1 {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+.vyasa-sidebar-tree-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: var(--vyasa-tree-row-action-pad) !important;
+    border-radius: var(--vyasa-rect-radius) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    line-height: 1 !important;
+    color: var(--vyasa-ink-soft) !important;
+}
+.vyasa-sidebar-tree-action:hover,
+.vyasa-sidebar-tree-action:focus-visible {
+    color: var(--vyasa-primary) !important;
+    background: color-mix(in srgb, var(--vyasa-primary) 12%, transparent) !important;
+    outline: none !important;
+}
+.vyasa-sidebar-tree-action[data-git-ref-picker="true"] {
+    gap: 0.22rem;
+}
+.vyasa-sidebar-tree-action[data-git-ref-picker="true"] .vyasa-row-action-state {
+    margin-left: 0 !important;
+}
+.vyasa-sidebar-body .vyasa-row-action-state {
+    margin-left: var(--vyasa-tree-row-state-gap) !important;
 }
 .vyasa-tree-branch > details > .vyasa-tree-summary .vyasa-tree-label::before {
     content: "";

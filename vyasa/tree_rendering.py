@@ -4,13 +4,8 @@ from urllib.parse import quote
 from fasthtml.common import A, Details, Li, Span, Summary, Ul
 from monsterui.all import UkIcon
 from .helpers import content_slug_for_path, content_url_for_slug
-from .nav_views import NavigationRow, navigation_row_view
+from .nav_views import FOLDER_ROW_CLASSES, FILE_ROW_CLASSES, NavigationRow, navigation_row_view
 from .runtime_context import traced
-
-
-TREE_ROW_CLASSES = "vyasa-tree-row inline-flex w-max items-center py-1 px-2 rounded transition-colors whitespace-nowrap"
-FOLDER_ROW_CLASSES = f"{TREE_ROW_CLASSES} font-medium cursor-pointer select-none list-none"
-FILE_ROW_CLASSES = f"{TREE_ROW_CLASSES} post-link"
 
 
 def _folder_summary(title_node, branch_href=None):
@@ -26,10 +21,10 @@ def _folder_summary(title_node, branch_href=None):
     )
 
 
-def _decorate_row(node, slug=None, title="", decorators=()):
+def _decorate_row(node, slug=None, title="", decorators=(), context="tree"):
     decorated = node
     for decorator in decorators or ():
-        decorated = decorator(decorated, slug=slug, title=title, context="tree")
+        decorated = decorator(decorated, slug=slug, title=title, context=context)
     return decorated
 
 
@@ -79,8 +74,8 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
                     cls="post-link folder-note-link whitespace-nowrap",
                     onclick="event.stopPropagation();",
                     show_icon=False,
-                ) if note_allowed else Span(folder_title, cls="whitespace-nowrap", title=folder_title)
-                title_node = _decorate_row(note_link, note_slug, folder_title, row_decorators) if note_allowed else note_link
+                ) if note_allowed else Span(folder_title, cls="vyasa-tree-link whitespace-nowrap", title=folder_title)
+                title_node = _decorate_row(note_link, note_slug, folder_title, row_decorators, context="tree-inline") if note_allowed else note_link
                 if should_expand:
                     sub_items = build_post_tree_render(item, roles=roles, max_depth=0 if not child_active else None, active_parts=child_active, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, effective_abbreviations=effective_abbreviations, should_exclude_dir_fn=should_exclude_dir_fn, slug_to_title_fn=slug_to_title_fn, find_folder_note_file_fn=find_folder_note_file_fn, is_allowed_fn=is_allowed_fn, parse_frontmatter_fn=parse_frontmatter_fn, rbac_rules=rbac_rules, logger=logger, suppress_note_file=True, row_decorators=row_decorators)
                     items.append(Li(Details(_folder_summary(title_node), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true", open=True), cls="my-1"))
@@ -103,9 +98,9 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             ) if note_allowed else None
             if not sub_items and not note_allowed:
                 continue
-            title_base = note_link if note_allowed else Span(folder_title, cls="whitespace-nowrap", title=folder_title)
+            title_base = note_link if note_allowed else Span(folder_title, cls="vyasa-tree-link whitespace-nowrap", title=folder_title)
             title_slug = note_slug if note_allowed else rel_folder
-            title_node = _decorate_row(title_base, title_slug, folder_title, row_decorators)
+            title_node = _decorate_row(title_base, title_slug, folder_title, row_decorators, context="tree-inline")
             if sub_items:
                 items.append(Li(Details(_folder_summary(title_node), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true", open=should_expand), cls="my-1"))
             elif note_slug:

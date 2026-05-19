@@ -36,7 +36,7 @@ from .layout_helpers import (
 )
 from .layout_page import render_page_frame
 from .page_frame import PageFrame, PageFrameDeps
-from .nav_views import navbar_view
+from .nav_views import TREE_ACTION_BUTTON_CLASSES, TREE_ACTION_ROW_BASE_CLASSES, navbar_view
 from loguru import logger
 from .assets import asset_url, bundle_asset_nodes, route_bundle_names
 from .admin_views import rbac_admin_content
@@ -701,11 +701,15 @@ def _row_action_decorator(registry):
         if not actions:
             return node
         bookmark_row = any(action.attrs.get("data_bookmark_toggle") == "true" for action in actions)
-        row_base = "flex items-center gap-1 min-w-0" if context == "search" else "inline-flex items-center gap-1 w-max"
+        row_base = TREE_ACTION_ROW_BASE_CLASSES.get(context, TREE_ACTION_ROW_BASE_CLASSES["tree"])
         row_cls = f"vyasa-action-row {'vyasa-bookmark-row ' if bookmark_row else ''}{row_base}"
         row_attrs = {}
         for action in actions:
             row_attrs.update(action.row_attrs)
+        if context in {"tree", "tree-inline"} and getattr(node, "attrs", None):
+            cls = node.attrs.get("class", "")
+            cls = " ".join(part for part in cls.split() if part not in {"vyasa-tree-row", "vyasa-tree-row-shell"})
+            node.attrs["class"] = cls
         state_nodes = [
             Span(
                 action.state_text or "",
@@ -713,21 +717,28 @@ def _row_action_decorator(registry):
                 **action.state_attrs,
             )
             for action in actions
-            if action.state_text is not None or action.state_attrs
+            if (action.state_text is not None or action.state_attrs) and action.attrs.get("data_inline_state_button") != "true"
         ]
         buttons = [
             Button(
                 Span(action.icon_text or "", cls=("vyasa-bookmark-glyph " if action.attrs.get("data_bookmark_toggle") == "true" else "") + "flex h-4 w-4 items-center justify-center text-sm", aria_hidden="true"),
+                *((
+                    Span(
+                        action.state_text or "",
+                        cls="vyasa-row-action-state text-[0.68rem] opacity-70",
+                        **action.state_attrs,
+                    ),
+                ) if action.attrs.get("data_inline_state_button") == "true" else ()),
                 type="button",
                 title=action.label,
                 aria_label=action.label,
                 data_action_id=action.id,
-                cls=("vyasa-bookmark-toggle " if action.attrs.get("data_bookmark_toggle") == "true" else "") + "vyasa-row-action shrink-0 rounded p-1.5 text-slate-400 hover:text-amber-500 transition-colors",
+                cls=("vyasa-bookmark-toggle " if action.attrs.get("data_bookmark_toggle") == "true" else "") + TREE_ACTION_BUTTON_CLASSES,
                 **action.attrs,
             )
             for action in actions
         ]
-        return Span(node, *state_nodes, *buttons, cls=row_cls, **row_attrs)
+        return Span(node, *buttons, *state_nodes, cls=row_cls, **row_attrs)
 
     return decorate
 

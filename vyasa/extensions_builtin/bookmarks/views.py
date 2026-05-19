@@ -1,6 +1,8 @@
 from fasthtml.common import Button, Div, Span
 from monsterui.all import UkIcon
 
+from ...nav_views import TREE_ACTION_BUTTON_CLASSES
+
 
 def bookmark_toggle_button(path, title):
     return Button(
@@ -11,7 +13,7 @@ def bookmark_toggle_button(path, title):
         data_bookmark_toggle="true",
         data_bookmark_path=str(path or "").strip("/"),
         data_bookmark_title=title,
-        cls="vyasa-bookmark-toggle shrink-0 rounded p-1.5 text-slate-400 hover:text-amber-500 transition-colors",
+        cls=f"vyasa-bookmark-toggle {TREE_ACTION_BUTTON_CLASSES}",
     )
 
 
@@ -24,7 +26,7 @@ def bookmark_delete_button(path, title):
         data_bookmark_delete="true",
         data_bookmark_path=str(path or "").strip("/"),
         data_bookmark_title=title,
-        cls="vyasa-bookmark-delete shrink-0 rounded p-1.5 text-slate-400 hover:text-rose-500 transition-colors",
+        cls=f"vyasa-bookmark-delete {TREE_ACTION_BUTTON_CLASSES}",
     )
 
 

@@ -809,7 +809,8 @@ function updateActivePostLink(explicitPath = null) {
     document.querySelectorAll('.post-link').forEach(link => {
         const linkPath = normalizeSidebarPath(link.getAttribute('data-path') || '');
         if (linkPath === currentPath) {
-            link.closest('.vyasa-tree-row')?.classList.add('is-active');
+            const row = link.closest('summary.vyasa-tree-row') || link.closest('.vyasa-tree-row');
+            row?.classList.add('is-active');
         }
     });
 }

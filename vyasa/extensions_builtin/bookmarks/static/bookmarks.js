@@ -82,11 +82,11 @@ function renderBookmarksBlock(rootElement = document) {
         const list = block.querySelector('.vyasa-bookmarks-list');
         if (!list) return;
         list.innerHTML = vyasaBookmarks.items.map((item) => `
-            <div class="vyasa-bookmark-row inline-flex items-center gap-1 w-max">
-                <a href="${item.href}" hx-get="${item.href}" hx-target="#main-content" hx-push-url="true" hx-swap="outerHTML show:window:top settle:0.1s" class="vyasa-tree-row vyasa-bookmark-link inline-flex items-center py-1 px-2 rounded transition-colors whitespace-nowrap" data-path="${item.path}" data-bookmark-link="true">
+            <div class="vyasa-bookmark-row vyasa-action-row inline-flex items-center gap-1 w-max">
+                <a href="${item.href}" hx-get="${item.href}" hx-target="#main-content" hx-push-url="true" hx-swap="outerHTML show:window:top settle:0.1s" class="vyasa-tree-link vyasa-tree-row vyasa-tree-row-shell post-link vyasa-bookmark-link whitespace-nowrap" data-path="${item.path}" data-bookmark-link="true">
                     <span class="whitespace-nowrap" title="${item.path}">${item.path}</span>
                 </a>
-                <button type="button" class="vyasa-bookmark-delete shrink-0 rounded p-1.5 text-slate-400 hover:text-rose-500 transition-colors leading-none" data-bookmark-delete="true" data-bookmark-path="${item.path}" data-bookmark-title="${item.title}" aria-label="Remove bookmark for ${item.title}" title="Remove bookmark for ${item.title}">
+                <button type="button" class="vyasa-sidebar-tree-action vyasa-row-action vyasa-bookmark-delete" data-bookmark-delete="true" data-bookmark-path="${item.path}" data-bookmark-title="${item.title}" aria-label="Remove bookmark for ${item.title}" title="Remove bookmark for ${item.title}">
                     <span class="flex items-center justify-center" aria-hidden="true"><svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span>
                 </button>
             </div>`).join('');
