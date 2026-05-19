@@ -1,6 +1,8 @@
 # Extension Refactor Task Graph
 Date: 2026-05-18
 
+Priority override: finish the cleanup gate in `docs/refactor/analysis-3.md` before more feature extraction. Cleanliness comes first: `EXT-033` through `EXT-037` block `EXT-021`, `EXT-022`, `EXT-023`, `EXT-031`, and `EXT-032`.
+
 ```items
 ---
 title: Vyasa Extension Refactor
@@ -35,6 +37,13 @@ Phase 3 - Layout And Navigation | acceptance: extensions register UI intent; cor
   - actions :: Add ActionRegistry | task_id: EXT-010 | status: Done | affected: vyasa/extensions.py, vyasa/document_pages.py, vyasa/tree_rendering.py | tests: action rendering tests | acceptance: extensions register icon, label, placement, visibility; core renders style
   - js-split :: Split global JS into owned bundles | task_id: EXT-011 | status: Todo | affected: vyasa/static/scripts.js, vyasa/extensions_builtin/*/static/* | tests: browser smoke + asset tests | acceptance: feature JS lives with owning extension and stable hooks remain
   - css-hooks :: Harden CSS hook contract | task_id: EXT-012 | status: Todo | affected: vyasa/static/header.css, vyasa/layout_page.py, vyasa/sidebar_helpers.py | tests: shell class snapshot tests | acceptance: extensions use stable classes, not positional selectors
+
+Cleanliness Gate - Highest Priority | acceptance: no feature leaves Python, CSS, JS, asset, shell, or static-build behavior dangling outside its extension:
+  - asset-ownership :: Move feature assets to owning bundles | task_id: EXT-033 | status: Todo | affected: vyasa/static/header.css, vyasa/static/scripts.js, vyasa/assets.py, vyasa/extensions_builtin/*/static/* | tests: runtime/static asset snapshot tests | acceptance: disabled extensions emit no feature CSS/JS/templates
+  - core-dependency-cut :: Stop builtin extensions importing core | task_id: EXT-034 | status: Todo | affected: vyasa/extensions_builtin/*, vyasa/runtime_context.py, vyasa/core.py | tests: import boundary guard | acceptance: extension modules consume runtime deps/services, not core globals
+  - document-type-ownership :: Move suffix behavior to document type extensions | task_id: EXT-035 | status: Todo | affected: vyasa/content_routes.py, vyasa/helpers.py, vyasa/tree_rendering.py, vyasa/search_pages.py, vyasa/build.py | tests: disabled pdf/tree type tests | acceptance: pdf/tree/raw behavior disappears when owner extension is disabled
+  - shell-feature-hooks :: Register feature shell hooks through providers | task_id: EXT-036 | status: Todo | affected: vyasa/layout_page.py, vyasa/nav_views.py, vyasa/extensions.py | tests: minimal shell hook snapshot | acceptance: minimal shell has no annotation/admin/toc/code-copy hooks
+  - static-runtime-parity :: Make static build use runtime extension surfaces | task_id: EXT-037 | status: Todo | affected: vyasa/build.py, vyasa/assets.py, vyasa/extensions.py | tests: runtime/static parity smoke | acceptance: runtime and static HTML request the same bundles and hooks
 
 Phase 4 - Default Builtins | acceptance: default preset is made of real builtins, not wrappers back into core:
   - shell-ext :: Make document_shell default builtin | task_id: EXT-013 | status: Done | affected: vyasa/extensions_builtin/default_layout.py, vyasa/layout_page.py | tests: default/minimal preset tests | acceptance: default layout stops calling core._default_layout
@@ -83,6 +92,7 @@ assets -> custom-css-ext, code-tools-ext, favicon-ext
 git-port -> git-action
 shell-ext, actions-ext, search-ext, home-ext, content-ext, roots-ext, auth-ext, toc-ext, pdf-ext, tree-table-ext, raw-files-ext, custom-css-ext, code-tools-ext, favicon-ext -> preset-tests, integration-tests
 perf-compare -> js-split, css-hooks
+asset-ownership, core-dependency-cut, document-type-ownership, shell-feature-hooks, static-runtime-parity -> pdf-ext, tree-table-ext, raw-files-ext, integration-tests, perf-compare
 ```
 
 ## Classification Snapshot
