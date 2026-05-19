@@ -69,7 +69,7 @@ def _safe_child(base: Path, relative: str | Path) -> Path | None:
         return None
     return target
 
-def get_content_mounts() -> list[tuple[str, Path]]:
+def _config_content_mounts() -> list[tuple[str, Path]]:
     """Return primary and configured content roots as URL slug mounts."""
     from .config import get_config
 
@@ -95,9 +95,44 @@ def get_content_mounts() -> list[tuple[str, Path]]:
         mounts.append((alias, root.resolve()))
     return mounts
 
+
+def get_content_mounts() -> list[tuple[str, Path]]:
+    try:
+        from .extensions import get_extension_runtime
+
+        runtime = get_extension_runtime()
+        if runtime:
+            for provider in runtime.content_mount_providers:
+                mounts = provider()
+                if mounts is not None:
+                    return [(str(alias), Path(root).resolve()) for alias, root in mounts]
+    except Exception:
+        pass
+    return _config_content_mounts()
+
 @traced("content_resolve")
 def content_root_and_relative(slug: str | Path) -> tuple[Path | None, Path]:
     parts = Path(str(slug).strip("/")).parts
+    try:
+        from .extensions import ContentRootRequest, get_extension_runtime
+
+        runtime = get_extension_runtime()
+        if runtime:
+            candidates = []
+            if parts and "@" in parts[0]:
+                alias, ref = parts[0].split("@", 1)
+                candidates.append(ContentRootRequest(alias, ref, Path(*parts[1:]) if len(parts) > 1 else Path()))
+            if parts:
+                candidates.append(ContentRootRequest(parts[0], "", Path(*parts[1:]) if len(parts) > 1 else Path()))
+            candidates.append(ContentRootRequest("", "", Path(*parts) if parts else Path()))
+            for request in candidates:
+                for resolver in runtime.content_root_resolvers:
+                    root = resolver(request)
+                    if root:
+                        return root, request.relative_path
+    except Exception:
+        pass
+
     mounts = get_content_mounts()
     if parts and "@" in parts[0]:
         alias, ref = parts[0].split("@", 1)

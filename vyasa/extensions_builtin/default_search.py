@@ -1,4 +1,7 @@
 from ..extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
+from ..file_search import search_file_records
+from ..config import get_config
+from ..helpers import get_content_mounts
 from .default_search_routes import register_default_search_routes
 from ..search_views import posts_search_block
 
@@ -11,6 +14,8 @@ class DefaultSearchExtension(VyasaExtensionBase):
         app.routes.add("/search/preview/s", register_default_search_routes)
         app.routes.add("/_sidebar/posts/search", register_default_search_routes)
         app.navigation.sidebar_section(_search_sidebar_section)
+        app.search.match_finder(find_default_search_matches)
+        app.search.preview_match_finder(find_default_search_preview_matches)
 
 
 EXTENSION = DefaultSearchExtension(
@@ -25,6 +30,24 @@ EXTENSION = DefaultSearchExtension(
 META = EXTENSION.meta
 
 __all__ = ["EXTENSION", "META"]
+
+
+def find_default_search_matches(query, limit=40):
+    return _find_search_candidates(query, limit, suffixes=(".md", ".pdf"))
+
+
+def find_default_search_preview_matches(query, limit=200):
+    return _find_search_candidates(query, limit, suffixes=(".md",))
+
+
+def _find_search_candidates(query, limit, *, suffixes):
+    return search_file_records(
+        query,
+        get_content_mounts(),
+        suffixes,
+        get_config().get_show_hidden(),
+        limit,
+    )
 
 
 def _search_sidebar_section(context):

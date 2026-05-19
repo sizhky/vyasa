@@ -143,11 +143,15 @@ class ExtensionRuntime:
     sidebar_row_actions: list[Callable] = field(default_factory=list)
     search_result_row_actions: list[Callable] = field(default_factory=list)
     document_action_providers: list[Callable] = field(default_factory=list)
+    content_mount_providers: list[Callable] = field(default_factory=list)
     content_root_resolvers: list[Callable] = field(default_factory=list)
     trace_handlers: list[Callable] = field(default_factory=list)
     toc_panel_providers: list[Callable] = field(default_factory=list)
     scoped_css_providers: list[Callable] = field(default_factory=list)
     favicon_href_provider: Callable | None = None
+    search_match_finder: Callable | None = None
+    search_preview_match_finder: Callable | None = None
+    search_preview_page_renderer: Callable | None = None
 
     def new_asset_collector(self) -> AssetCollector:
         return AssetCollector(self.bundles)
@@ -366,8 +370,25 @@ class _ContentSourceRegistrar:
     def __init__(self, runtime: ExtensionRuntime):
         self.runtime = runtime
 
+    def mount_provider(self, provider: Callable) -> None:
+        self.runtime.content_mount_providers.append(provider)
+
     def root_resolver(self, provider: Callable) -> None:
         self.runtime.content_root_resolvers.append(provider)
+
+
+class _SearchRegistrar:
+    def __init__(self, runtime: ExtensionRuntime):
+        self.runtime = runtime
+
+    def match_finder(self, provider: Callable) -> None:
+        self.runtime.search_match_finder = provider
+
+    def preview_match_finder(self, provider: Callable) -> None:
+        self.runtime.search_preview_match_finder = provider
+
+    def preview_page(self, provider: Callable) -> None:
+        self.runtime.search_preview_page_renderer = provider
 
 
 class _TraceRegistrar:
@@ -395,6 +416,7 @@ class VyasaExtensionApp:
         self.navigation = _NavigationRegistrar(runtime)
         self.documents = _DocumentRegistrar(runtime)
         self.content_source = _ContentSourceRegistrar(runtime)
+        self.search = _SearchRegistrar(runtime)
         self.trace = _TraceRegistrar(runtime)
 
 

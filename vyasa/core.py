@@ -191,6 +191,10 @@ def render_search_preview_feed(entries, root):
 
 
 def render_search_preview_page(htmx, request: Request, q: str = ""):
+    runtime = get_extension_runtime()
+    provider = runtime.search_preview_page_renderer if runtime else None
+    if provider and provider is not render_search_preview_page:
+        return provider(htmx, request, q=q)
     roots = get_content_mounts()
     root = roots[0][1] if roots else get_root_folder()
     auth = request.scope.get("auth") if request else None
@@ -634,10 +638,18 @@ def _posts_sidebar_fingerprint():
 
 
 def _find_search_matches(query, limit=40):
+    runtime = get_extension_runtime()
+    provider = runtime.search_match_finder if runtime else None
+    if provider and provider is not _find_search_matches:
+        return provider(query, limit)
     return _find_search_matches_uncached(query, limit)
 
 
 def _find_search_preview_matches(query, limit=200):
+    runtime = get_extension_runtime()
+    provider = runtime.search_preview_match_finder if runtime else None
+    if provider and provider is not _find_search_preview_matches:
+        return provider(query, limit)
     return _find_search_preview_matches_uncached(query, limit)
 
 
