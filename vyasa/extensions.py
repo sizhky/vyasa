@@ -125,6 +125,7 @@ class ExtensionRuntime:
     markdown_postprocessors: list[Callable] = field(default_factory=list)
     markdown_fences: dict[str, Callable] = field(default_factory=dict)
     bundles: dict[str, AssetBundle] = field(default_factory=dict)
+    page_asset_providers: list[Callable] = field(default_factory=list)
     extension_static_dirs: dict[str, Path] = field(default_factory=dict)
     layout_renderer: Callable | None = None
     home_renderer: Callable | None = None
@@ -148,6 +149,10 @@ class ExtensionRuntime:
     trace_handlers: list[Callable] = field(default_factory=list)
     toc_panel_providers: list[Callable] = field(default_factory=list)
     scoped_css_providers: list[Callable] = field(default_factory=list)
+    shell_main_attr_providers: list[Callable] = field(default_factory=list)
+    shell_body_fragment_providers: list[Callable] = field(default_factory=list)
+    shell_footer_link_providers: list[Callable] = field(default_factory=list)
+    navbar_mobile_action_providers: list[Callable] = field(default_factory=list)
     favicon_href_provider: Callable | None = None
     search_match_finder: Callable | None = None
     search_preview_match_finder: Callable | None = None
@@ -250,6 +255,9 @@ class _AssetRegistrar:
         self.guard.require_bundle(bundle.name)
         self.runtime.register_bundle(self.meta.id, bundle)
 
+    def page(self, provider: Callable) -> None:
+        self.runtime.page_asset_providers.append(provider)
+
 
 class _LayoutRegistrar:
     _SLOT_TO_ATTR = {
@@ -291,6 +299,22 @@ class _LayoutRegistrar:
     def favicon(self, provider: Callable) -> None:
         self.guard.require_capability("cap:asset:favicon")
         self.runtime.favicon_href_provider = provider
+
+    def main_attrs(self, provider: Callable) -> None:
+        self.guard.require_capability("cap:layout:main_attrs")
+        self.runtime.shell_main_attr_providers.append(provider)
+
+    def body_fragment(self, provider: Callable) -> None:
+        self.guard.require_capability("cap:layout:body_fragment")
+        self.runtime.shell_body_fragment_providers.append(provider)
+
+    def footer_link(self, provider: Callable) -> None:
+        self.guard.require_capability("cap:layout:footer_link")
+        self.runtime.shell_footer_link_providers.append(provider)
+
+    def navbar_mobile_action(self, provider: Callable) -> None:
+        self.guard.require_capability("cap:layout:navbar_mobile_action")
+        self.runtime.navbar_mobile_action_providers.append(provider)
 
 
 class _RouteRegistrar:

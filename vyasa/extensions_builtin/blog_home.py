@@ -1,6 +1,6 @@
 from fasthtml.common import A, Div, H1, P, Span
 
-from ..extensions import ExtensionMeta, VyasaExtensionBase
+from ..extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 from ..helpers import (
     content_slug_for_path,
     content_url_for_slug,
@@ -11,29 +11,28 @@ from ..helpers import (
     iter_visible_files,
     preview_markdown,
 )
+from ..runtime_services import get_runtime_services
 from .markdown.renderer import from_md
 
 
 def _home_provider(htmx, request):
-    from .. import core
-
-    roots = core.get_content_mounts()
-    root = roots[0][1] if roots else core.get_root_folder()
-    roles = core.get_roles_from_auth(request.scope.get("auth"), core._rbac_rules, core._rbac_cfg, core._google_oauth_cfg, core._config._coerce_list)
-    entries = sort_entries(iter_home_files(roots, roles, is_allowed_fn=core.is_allowed, rbac_rules=core._rbac_rules, iter_files=core.iter_visible_files, slug_for_path=core.content_slug_for_path), root, get_sort=core.get_config().get_home_sort, created_ts=core.get_file_created_ts)
-    feed = core.render_blog_home_feed(entries, root, 0)
-    shell = Div(H1(f"Welcome to {core.get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="mt-2 text-slate-500"), feed, cls="space-y-6")
-    return core.layout(shell, htmx=htmx, title=f"Home - {core.get_blog_title()}", show_sidebar=True, current_path="__home__", auth=request.scope.get("auth"))
+    services = get_runtime_services()
+    roots = services.get_content_mounts()
+    root = roots[0][1] if roots else services.get_root_folder()
+    roles = services.get_roles_from_auth(request.scope.get("auth"), services.rbac_rules(), services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list)
+    entries = sort_entries(iter_home_files(roots, roles, is_allowed_fn=services.is_allowed, rbac_rules=services.rbac_rules(), iter_files=services.iter_visible_files, slug_for_path=services.content_slug_for_path), root, get_sort=services.get_config().get_home_sort, created_ts=services.get_file_created_ts)
+    feed = services.render_blog_home_feed(entries, root, 0)
+    shell = Div(H1(f"Welcome to {services.get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="mt-2 text-slate-500"), feed, cls="space-y-6")
+    return services.layout(shell, htmx=htmx, title=f"Home - {services.get_blog_title()}", show_sidebar=True, current_path="__home__", auth=request.scope.get("auth"))
 
 
 def _feed_provider(offset=0, htmx=None, request=None):
-    from .. import core
-
-    roots = core.get_content_mounts()
-    root = roots[0][1] if roots else core.get_root_folder()
-    roles = core.get_roles_from_auth(request.scope.get("auth"), core._rbac_rules, core._rbac_cfg, core._google_oauth_cfg, core._config._coerce_list) if request else None
-    entries = sort_entries(iter_home_files(roots, roles, is_allowed_fn=core.is_allowed, rbac_rules=core._rbac_rules, iter_files=core.iter_visible_files, slug_for_path=core.content_slug_for_path), root, get_sort=core.get_config().get_home_sort, created_ts=core.get_file_created_ts)
-    return core.render_blog_home_feed(entries, root, max(0, offset), wrap=False)
+    services = get_runtime_services()
+    roots = services.get_content_mounts()
+    root = roots[0][1] if roots else services.get_root_folder()
+    roles = services.get_roles_from_auth(request.scope.get("auth"), services.rbac_rules(), services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list) if request else None
+    entries = sort_entries(iter_home_files(roots, roles, is_allowed_fn=services.is_allowed, rbac_rules=services.rbac_rules(), iter_files=services.iter_visible_files, slug_for_path=services.content_slug_for_path), root, get_sort=services.get_config().get_home_sort, created_ts=services.get_file_created_ts)
+    return services.render_blog_home_feed(entries, root, max(0, offset), wrap=False)
 
 
 def iter_home_files(roots=None, roles=None, *, is_allowed_fn, rbac_rules, iter_files=iter_visible_files, slug_for_path=content_slug_for_path):
@@ -87,17 +86,22 @@ def render_card(path, slug, root, *, resolve_title, abbreviations):
 
 
 def render_feed(entries, root, offset=0, batch_size=4, wrap=True):
-    from .. import core
-
-    cards = [render_card(path, slug, root, resolve_title=core.resolve_markdown_title, abbreviations=core._effective_abbreviations) for path, slug in entries[offset:offset + batch_size]]
+    services = get_runtime_services()
+    cards = [render_card(path, slug, root, resolve_title=services.resolve_markdown_title, abbreviations=services.effective_abbreviations) for path, slug in entries[offset:offset + batch_size]]
     sentinel = Div(id="blog-feed-sentinel", cls="h-8", hx_get=f"/_home/feed?offset={offset + batch_size}", hx_trigger="revealed once", hx_target="this", hx_swap="outerHTML") if offset + batch_size < len(entries) else ""
     if wrap:
         return Div(*cards, sentinel, id="blog-feed", cls="space-y-4")
     return tuple([*cards, sentinel] if sentinel else cards)
 
 
+def _page_bundles(context):
+    return ("blog_home.runtime",) if context.get("current_path") == "__home__" else ()
+
+
 class BlogHomeExtension(VyasaExtensionBase):
     def register(self, app) -> None:
+        app.assets.bundle(AssetBundle("blog_home.runtime", css=("/static/extensions/blog_home/blog_home.css",)))
+        app.assets.page(_page_bundles)
         app.layout.slot("home", _home_provider)
         app.layout.slot("home_feed", _feed_provider)
 
@@ -106,7 +110,7 @@ EXTENSION = BlogHomeExtension(
     ExtensionMeta(
         "blog_home",
         "home",
-        ("slot:home", "slot:home_feed"),
+        ("slot:home", "slot:home_feed", "bundle:blog_home.runtime"),
         requires=("slot:layout",),
         scope_disable=True,
     )

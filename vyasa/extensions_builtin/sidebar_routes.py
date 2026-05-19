@@ -8,6 +8,7 @@ from ..extensions import ExtensionMeta, VyasaExtensionBase
 from ..content_tree import ContentTree
 from ..tree_rendering import _folder_summary, _decorate_row
 from ..nav_views import FILE_ROW_CLASSES, NavigationRow, navigation_row_view
+from ..runtime_services import get_runtime_services
 
 
 class SidebarRoutesExtension(VyasaExtensionBase):
@@ -18,15 +19,14 @@ class SidebarRoutesExtension(VyasaExtensionBase):
 
 
 def _register_sidebar_routes(rt, runtime) -> None:
-    from .. import core
-
     @rt("/_sidebar/posts")
     def posts_sidebar_lazy(request=None, current_path: str = ""):
-        roles = core.get_roles_from_request(request, core._rbac_rules, core._rbac_cfg, core._google_oauth_cfg, core._config._coerce_list)
-        html = core._cached_posts_sidebar_html(
-            core._posts_sidebar_fingerprint(),
+        services = get_runtime_services()
+        roles = services.get_roles_from_request(request, services.rbac_rules(), services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list)
+        html = services.cached_posts_sidebar_html(
+            services.posts_sidebar_fingerprint(),
             tuple(roles or []),
-            core.get_config().get_show_hidden(),
+            services.get_config().get_show_hidden(),
             current_path or "",
         )
         return Aside(
@@ -37,25 +37,27 @@ def _register_sidebar_routes(rt, runtime) -> None:
 
     @rt("/_sidebar/posts/branch")
     def posts_sidebar_branch(path: str = "", request=None):
-        roles = core.get_roles_from_request(request, core._rbac_rules, core._rbac_cfg, core._google_oauth_cfg, core._config._coerce_list)
-        folder = core.content_path_for_slug(path)
+        services = get_runtime_services()
+        roles = services.get_roles_from_request(request, services.rbac_rules(), services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list)
+        folder = services.content_path_for_slug(path)
         if not folder or not folder.is_dir():
-            core.logger.debug("Sidebar branch invalid path={}", path)
+            services.logger.debug("Sidebar branch invalid path={}", path)
             return Response(status_code=404)
         if "@" in str(path).split("/", 1)[0]:
-            items = _build_branch_sidebar_items(path, folder, core._sidebar_row_decorators())
+            items = _build_branch_sidebar_items(path, folder, services.sidebar_row_decorators())
         else:
-            items = core.build_post_tree(folder, roles=roles, max_depth=0)
-        core.logger.debug("Sidebar branch path={} resolved={} items={}", path, folder, len(items))
+            items = services.build_post_tree(folder, roles=roles, max_depth=0)
+        services.logger.debug("Sidebar branch path={} resolved={} items={}", path, folder, len(items))
         return "".join(to_xml(item) for item in items)
 
     @rt("/_sidebar/posts/git-root")
     def posts_sidebar_git_root(path: str = "", request=None):
-        folder = core.content_path_for_slug(path)
+        services = get_runtime_services()
+        folder = services.content_path_for_slug(path)
         if not folder or not folder.is_dir():
             return Response(status_code=404)
-        row_decorators = core._sidebar_row_decorators()
-        item = _build_git_root_row(path, folder, row_decorators, core)
+        row_decorators = services.sidebar_row_decorators()
+        item = _build_git_root_row(path, folder, row_decorators, services)
         return to_xml(item) if item else Response(status_code=404)
 
 
@@ -96,7 +98,7 @@ def _build_branch_sidebar_items(path: str, folder, row_decorators=()):
     return items
 
 
-def _build_git_root_row(path: str, folder, row_decorators, core):
+def _build_git_root_row(path: str, folder, row_decorators, services):
     branch_prefix = str(path).strip("/")
     snapshot_root = folder
     tree = ContentTree(
@@ -106,7 +108,7 @@ def _build_git_root_row(path: str, folder, row_decorators, core):
         mounts=[("", snapshot_root)],
     )
     note_file = tree.find_folder_note("")
-    title = core.slug_to_title(Path(branch_prefix.split("@", 1)[0]).name, abbreviations=core._effective_abbreviations(snapshot_root))
+    title = services.slug_to_title(Path(branch_prefix.split("@", 1)[0]).name, abbreviations=services.effective_abbreviations(snapshot_root))
     href = f"/posts/{quote(branch_prefix, safe='/')}"
     title_node = navigation_row_view(
         NavigationRow(slug=f"{branch_prefix}/{note_file.stem}" if note_file else branch_prefix, title=f"Open {title}", label=title, href=href, icon="folder", kind="folder", folder_note=True),

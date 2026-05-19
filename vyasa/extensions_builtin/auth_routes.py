@@ -1,4 +1,5 @@
 from ..extensions import ExtensionMeta, VyasaExtensionBase
+from ..runtime_services import get_runtime_services
 
 
 class AuthRoutesExtension(VyasaExtensionBase):
@@ -12,43 +13,44 @@ class AuthRoutesExtension(VyasaExtensionBase):
 def _register_auth_routes(rt, runtime) -> None:
     from starlette.responses import RedirectResponse, Response
 
-    from .. import core
-
     @rt("/login", methods=["GET", "POST"])
     async def login(request):
-        return await core.handle_login(
+        services = get_runtime_services()
+        return await services.handle_login(
             request,
-            get_config=core.get_config,
-            logger=core.logger,
-            local_auth_enabled=core._local_auth_enabled,
-            resolve_roles=core.resolve_roles,
-            rbac_cfg=core._rbac_cfg,
-            google_oauth_cfg=core._google_oauth_cfg,
-            coerce_list=core._config._coerce_list,
-            login_content=core.login_content,
-            google_oauth_enabled=core._google_oauth_enabled,
+            get_config=services.get_config,
+            logger=services.logger,
+            local_auth_enabled=services.local_auth_enabled,
+            resolve_roles=services.resolve_roles,
+            rbac_cfg=services.rbac_cfg(),
+            google_oauth_cfg=services.google_oauth_cfg(),
+            coerce_list=services.coerce_list,
+            login_content=services.login_content,
+            google_oauth_enabled=services.google_oauth_enabled,
         )
 
     @rt("/login/google")
     async def login_google(request):
-        if not core._google_oauth_enabled:
+        services = get_runtime_services()
+        if not services.google_oauth_enabled:
             return Response(status_code=404)
-        return await core.start_google_login(request, core._google_oauth)
+        return await services.start_google_login(request, services.google_oauth)
 
     @rt("/auth/google/callback")
     async def google_auth_callback(request):
-        if not core._google_oauth_enabled:
+        services = get_runtime_services()
+        if not services.google_oauth_enabled:
             return Response(status_code=404)
         try:
-            userinfo = await core.fetch_google_userinfo(request, core._google_oauth, core.logger)
+            userinfo = await services.fetch_google_userinfo(request, services.google_oauth, services.logger)
         except Exception as exc:
-            core.logger.warning(f"Google OAuth failed: {exc}")
+            services.logger.warning(f"Google OAuth failed: {exc}")
             return RedirectResponse("/login?error=Google+authentication+failed", status_code=303)
         email = userinfo.get("email") if isinstance(userinfo, dict) else None
-        if not core.google_account_allowed(email, core._google_oauth_cfg):
+        if not services.google_account_allowed(email, services.google_oauth_cfg()):
             return RedirectResponse("/login?error=Google+account+not+allowed", status_code=303)
-        auth = core.build_google_auth_payload(userinfo)
-        auth["roles"] = core.resolve_roles(auth, core._rbac_cfg, core._google_oauth_cfg, core._config._coerce_list)
+        auth = services.build_google_auth_payload(userinfo)
+        auth["roles"] = services.resolve_roles(auth, services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list)
         request.session["auth"] = auth
         return RedirectResponse(request.session.pop("next", "/"), status_code=303)
 

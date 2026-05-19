@@ -19,6 +19,7 @@ class BookmarksExtension(VyasaExtensionBase):
                 js=("/static/extensions/bookmarks/bookmarks.js",),
             )
         )
+        app.assets.page(_page_bundles)
 
 
 def _register_bookmarks_routes(rt, runtime):
@@ -74,6 +75,13 @@ def _bookmarks_sidebar_section(context):
         data_section="bookmarks",
         body_cls="pt-1",
     )
+
+
+def _page_bundles(context):
+    return ("bookmarks.runtime",) if context.get("show_sidebar") and not context.get("slide_mode") else ()
+
+
+_page_bundles.page_asset_priority = 20
 
 
 EXTENSION = BookmarksExtension(

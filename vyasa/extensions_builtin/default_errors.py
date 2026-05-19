@@ -1,10 +1,9 @@
 from ..extensions import ExtensionMeta, VyasaExtensionBase
+from ..runtime_services import get_runtime_services
 
 
 def _error_provider(htmx=None, auth=None):
-    from .. import core
-
-    return core._default_not_found(htmx=htmx, auth=auth)
+    return get_runtime_services().default_not_found(htmx=htmx, auth=auth)
 
 
 class DefaultErrorsExtension(VyasaExtensionBase):

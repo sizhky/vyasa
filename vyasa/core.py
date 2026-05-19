@@ -38,7 +38,7 @@ from .layout_page import render_page_frame
 from .page_frame import PageFrame, PageFrameDeps
 from .nav_views import TREE_ACTION_BUTTON_CLASSES, TREE_ACTION_ROW_BASE_CLASSES, navbar_view
 from loguru import logger
-from .assets import asset_url, bundle_asset_nodes, route_bundle_names
+from .assets import asset_url, bundle_asset_nodes, requested_page_bundles, route_bundle_names
 from .admin_views import rbac_admin_content
 from .auth.context import get_auth_from_request, get_roles_from_auth, get_roles_from_request
 from .auth.admin_helpers import apply_impersonation_action, parse_rbac_form
@@ -66,6 +66,7 @@ from .page_views import not_found_content
 from .rbac_config import normalize_rbac_cfg, render_rbac_toml, write_rbac_to_vyasa
 from .rbac_store import load_rbac_cfg, write_rbac_cfg
 from .runtime_context import RuntimeContext, traced
+from .runtime_services import set_runtime_services
 from .search_pages import gather_search_content
 from .search_http import gather_search_page
 from .search_views import (
@@ -579,9 +580,9 @@ def theme_toggle():
 
 
 def navbar(
-    show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None
+    show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None, mobile_extra_controls=()
 ):
-    return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label)
+    return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label, mobile_extra_controls)
 
 
 def _posts_sidebar_fingerprint():
@@ -852,7 +853,7 @@ def default_page_frame(
     current_updated_label=None,
 ):
     extra_head_nodes = bundle_asset_nodes(
-        route_bundle_names(
+        requested_page_bundles(
             show_sidebar=show_sidebar,
             current_path=current_path,
             slide_mode=slide_mode,
@@ -1029,6 +1030,71 @@ def not_found(htmx=None, auth=None):
     if provider and provider is not _default_not_found:
         return provider(htmx=htmx, auth=auth)
     return _default_not_found(htmx=htmx, auth=auth)
+
+
+set_runtime_services({
+    "config": _config,
+    "logger": logger,
+    "get_config": lambda: get_config(),
+    "get_root_folder": lambda: get_root_folder(),
+    "get_blog_title": lambda: get_blog_title(),
+    "get_content_mounts": lambda: get_content_mounts(),
+    "get_file_created_ts": lambda path: get_file_created_ts(path),
+    "layout": lambda *args, **kwargs: layout(*args, **kwargs),
+    "default_page_frame": lambda *args, **kwargs: default_page_frame(*args, **kwargs),
+    "default_page_frame_deps": lambda: _default_page_frame_deps(),
+    "not_found": lambda *args, **kwargs: not_found(*args, **kwargs),
+    "default_not_found": lambda *args, **kwargs: _default_not_found(*args, **kwargs),
+    "get_roles_from_auth": lambda *args, **kwargs: get_roles_from_auth(*args, **kwargs),
+    "get_roles_from_request": lambda *args, **kwargs: get_roles_from_request(*args, **kwargs),
+    "get_auth_from_request": lambda *args, **kwargs: get_auth_from_request(*args, **kwargs),
+    "resolve_roles": resolve_roles,
+    "is_allowed": lambda *args, **kwargs: is_allowed(*args, **kwargs),
+    "parse_frontmatter": lambda *args, **kwargs: parse_frontmatter(*args, **kwargs),
+    "resolve_markdown_title": lambda *args, **kwargs: resolve_markdown_title(*args, **kwargs),
+    "slug_to_title": lambda *args, **kwargs: slug_to_title(*args, **kwargs),
+    "effective_abbreviations": _effective_abbreviations,
+    "from_md": lambda *args, **kwargs: from_md(*args, **kwargs),
+    "render_blog_home_feed": lambda *args, **kwargs: render_blog_home_feed(*args, **kwargs),
+    "render_search_preview_page": lambda *args, **kwargs: render_search_preview_page(*args, **kwargs),
+    "render_posts_search_results": lambda *args, **kwargs: _render_posts_search_results(*args, **kwargs),
+    "find_search_matches": lambda *args, **kwargs: _find_search_matches(*args, **kwargs),
+    "gather_search_page": gather_search_page,
+    "gather_search_content": gather_search_content,
+    "content_path_for_slug": lambda *args, **kwargs: content_path_for_slug(*args, **kwargs),
+    "content_slug_for_path": lambda *args, **kwargs: content_slug_for_path(*args, **kwargs),
+    "content_url_for_slug": lambda *args, **kwargs: content_url_for_slug(*args, **kwargs),
+    "iter_visible_files": lambda *args, **kwargs: iter_visible_files(*args, **kwargs),
+    "cached_posts_sidebar_html": lambda *args, **kwargs: _cached_posts_sidebar_html(*args, **kwargs),
+    "posts_sidebar_fingerprint": lambda: _posts_sidebar_fingerprint(),
+    "cached_build_post_tree": lambda *args, **kwargs: _cached_build_post_tree(*args, **kwargs),
+    "build_post_tree": lambda *args, **kwargs: build_post_tree(*args, **kwargs),
+    "sidebar_row_decorators": lambda: _sidebar_row_decorators(),
+    "local_auth_enabled": _local_auth_enabled,
+    "google_oauth_enabled": _google_oauth_enabled,
+    "google_oauth": _google_oauth,
+    "google_oauth_cfg": lambda: _google_oauth_cfg,
+    "rbac_cfg": lambda: _rbac_cfg,
+    "rbac_rules": lambda: _rbac_rules,
+    "coerce_list": _config._coerce_list,
+    "login_content": login_content,
+    "impersonate_content": impersonate_content,
+    "handle_login": handle_login,
+    "start_google_login": start_google_login,
+    "fetch_google_userinfo": fetch_google_userinfo,
+    "google_account_allowed": google_account_allowed,
+    "build_google_auth_payload": build_google_auth_payload,
+    "handle_admin_impersonate": handle_admin_impersonate,
+    "handle_admin_rbac": handle_admin_rbac,
+    "apply_impersonation_action": apply_impersonation_action,
+    "parse_rbac_form": parse_rbac_form,
+    "parse_roles_text": parse_roles_text,
+    "rbac_db_write": _rbac_db_write,
+    "write_rbac_to_vyasa": _write_rbac_to_vyasa,
+    "set_rbac_cfg": _set_rbac_cfg,
+    "render_rbac_toml": _render_rbac_toml,
+    "rbac_admin_content": rbac_admin_content,
+})
 
 
 @rt("/posts/{path:path}")

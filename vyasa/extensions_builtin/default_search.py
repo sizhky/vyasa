@@ -9,6 +9,7 @@ from ..search_views import posts_search_block
 class DefaultSearchExtension(VyasaExtensionBase):
     def register(self, app) -> None:
         app.assets.bundle(AssetBundle("default_search.runtime", js=("/static/extensions/default_search/search.js",)))
+        app.assets.page(_page_bundles)
         app.routes.add("/search/gather", register_default_search_routes)
         app.routes.add("/search/preview", register_default_search_routes)
         app.routes.add("/search/preview/s", register_default_search_routes)
@@ -63,3 +64,10 @@ def _search_sidebar_section(context):
             style="font-size: 0.875rem; line-height: 1; letter-spacing: 0;",
         ),
     )
+
+
+def _page_bundles(context):
+    return ("default_search.runtime",) if context.get("show_sidebar") and not context.get("slide_mode") else ()
+
+
+_page_bundles.page_asset_priority = 10

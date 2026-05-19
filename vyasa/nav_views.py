@@ -44,7 +44,7 @@ def navigation_row_view(row, *, cls, onclick=None, show_icon=True):
     return A(*icon_nodes, Span(row.label, cls="whitespace-nowrap", title=row.title), **attrs)
 
 
-def navbar_view(blog_title, theme_toggle_node, show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None):
+def navbar_view(blog_title, theme_toggle_node, show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None, mobile_extra_controls=()):
     home_link_attrs = {"hx_get": "/", "hx_target": "#main-content", "hx_push_url": "true", "hx_swap": "outerHTML show:window:top settle:0.1s"} if htmx_nav else {}
     left_items = [A(blog_title, href="/", **home_link_attrs)]
     left = Div(*left_items, cls="flex items-center gap-3")
@@ -57,7 +57,7 @@ def navbar_view(blog_title, theme_toggle_node, show_mobile_menus=False, htmx_nav
         return Div(row, cls="vyasa-navbar-card overflow-visible bg-slate-900 text-white px-4 py-3 dark:bg-slate-800")
     if show_mobile_menus:
         mobile_title = Div(A(blog_title, href="/", cls="text-center truncate", **home_link_attrs), cls="flex-1 px-4 flex flex-col items-center")
-        mobile = Div(Button(UkIcon("menu", cls="w-5 h-5"), title="Toggle file tree", id="mobile-posts-toggle", cls="p-2 hover:bg-slate-800 rounded transition-colors", type="button", onclick="window.__vyasaTogglePostsPanel && window.__vyasaTogglePostsPanel()"), mobile_title, Div(Button(UkIcon("list", cls="w-5 h-5"), title="Toggle table of contents", id="mobile-toc-toggle", cls="p-2 hover:bg-slate-800 rounded transition-colors", type="button", onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()"), theme_toggle_node, cls="flex items-center gap-1"), cls="flex items-center justify-between xl:hidden")
+        mobile = Div(Button(UkIcon("menu", cls="w-5 h-5"), title="Toggle file tree", id="mobile-posts-toggle", cls="p-2 hover:bg-slate-800 rounded transition-colors", type="button", onclick="window.__vyasaTogglePostsPanel && window.__vyasaTogglePostsPanel()"), mobile_title, Div(*mobile_extra_controls, theme_toggle_node, cls="flex items-center gap-1"), cls="flex items-center justify-between xl:hidden")
         desktop = Div(left, right, cls="hidden xl:flex items-center justify-between")
         return Div(mobile, desktop, cls="vyasa-navbar-card overflow-visible bg-slate-900 text-white px-4 py-3 dark:bg-slate-800")
     return Div(left, right, cls="vyasa-navbar-card overflow-visible flex items-center justify-between bg-slate-900 text-white px-4 py-3 dark:bg-slate-800")

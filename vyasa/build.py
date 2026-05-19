@@ -21,7 +21,7 @@ from .sidebar_helpers import build_toc_items, extract_toc
 from .tree_tables import TREE_SUFFIXES, parse_tree_table, render_tree_table_html
 from .config import get_config, reload_config
 from .extensions import get_extension_runtime, refresh_extension_runtime
-from .assets import asset_url, bundle_asset_html, iter_extension_static_dirs, route_bundle_names
+from .assets import asset_url, bundle_asset_html, iter_extension_static_dirs, requested_page_bundles
 from .favicon import favicon_href as resolve_favicon_href, write_generated_favicon
 from .page_shell import PageShellModel, StaticShellRenderer
 from .tree_service import get_tree_entries
@@ -609,10 +609,11 @@ def build_static_site(input_dir=None, output_dir=None):
 
         # Generate full page
         extra_head_html = bundle_asset_html(
-            route_bundle_names(
+            requested_page_bundles(
                 show_sidebar=True,
                 current_path=str(relative_path.with_suffix("")),
                 annotations_enabled=config.get_annotations_enabled(),
+                mode="static",
             )
         )
         full_html = static_layout(
@@ -681,7 +682,7 @@ def build_static_site(input_dir=None, output_dir=None):
             nav_tree=nav_tree,
             favicon_href=favicon_href,
             toc_items=None,
-            extra_head_html=bundle_asset_html(route_bundle_names(show_sidebar=True)),
+            extra_head_html=bundle_asset_html(requested_page_bundles(show_sidebar=True, current_path="__home__", mode="static")),
         )
         
         index_path.write_text(full_html, encoding='utf-8')

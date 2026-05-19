@@ -9,6 +9,7 @@ from ..extensions import ExtensionMeta, VyasaExtensionBase
 class TableOfContentsExtension(VyasaExtensionBase):
     def register(self, app) -> None:
         app.layout.toc(_toc_panels)
+        app.layout.navbar_mobile_action(_mobile_toc_toggle)
 
 
 def _toc_panels(context):
@@ -63,11 +64,17 @@ def _toc_panels(context):
     return desktop, mobile
 
 
+def _mobile_toc_toggle(context):
+    if not context.get("show_toc", True):
+        return None
+    return Button(UkIcon("list", cls="w-5 h-5"), title="Toggle table of contents", id="mobile-toc-toggle", cls="p-2 hover:bg-slate-800 rounded transition-colors", type="button", onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()")
+
+
 EXTENSION = TableOfContentsExtension(
     ExtensionMeta(
         "table_of_contents",
         "render",
-        ("cap:layout:toc",),
+        ("cap:layout:toc", "cap:layout:navbar_mobile_action"),
         requires=("slot:layout",),
         scope_disable=True,
     )
