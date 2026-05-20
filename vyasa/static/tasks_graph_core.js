@@ -62,6 +62,23 @@ export function tasksGraphNodeHitArea(kind, isExpanded = false) {
     return 'passive';
 }
 
+export function toggleMultiValueFilter(filters, key, value, enabled) {
+    const filterKey = String(key || '').trim();
+    const filterValue = String(value || '').trim();
+    if (!filterKey || !filterValue) return { ...(filters || {}) };
+    const next = { ...(filters || {}) };
+    const currentValues = Array.isArray(next[filterKey])
+        ? next[filterKey].map((entry) => String(entry || '').trim()).filter(Boolean)
+        : [];
+    const valueSet = new Set(currentValues);
+    if (enabled) valueSet.add(filterValue);
+    else valueSet.delete(filterValue);
+    const values = Array.from(valueSet);
+    if (values.length > 0) next[filterKey] = values;
+    else delete next[filterKey];
+    return next;
+}
+
 export function layoutDisconnectedTaskNodes(nodes, direction = 'DOWN', options = {}) {
     const orderedNodes = Array.isArray(nodes) ? nodes : [];
     const gap = Math.max(0, Number(options.gap) || 0);

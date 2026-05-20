@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, layoutDisconnectedTaskNodes, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea } from '/static/extensions/tasks/tasks_graph_core.js';
+import { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, layoutDisconnectedTaskNodes, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
 
 const tasksElk = new ELK();
 let tasksReactFlowReady = null;
@@ -320,7 +320,16 @@ function tasksColorPaletteFor(model, colorBy) {
 }
 
 function tasksColorPaletteEntries(model, colorBy) {
+    const key = String(colorBy || '').trim();
+    if (!key) return [];
+    const presentValues = new Set(
+        [...(model?.groups || []), ...(model?.tasks || [])]
+            .map((node) => node?.[key])
+            .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+            .map((value) => String(value))
+    );
     return Object.entries(tasksColorPaletteFor(model, colorBy))
+        .filter(([value]) => presentValues.has(String(value)))
         .filter(([, color]) => typeof color === 'string' && color.trim())
         .sort(([a], [b]) => String(a).localeCompare(String(b)));
 }
@@ -2465,10 +2474,31 @@ async function renderTasksGraphs(rootElement = document) {
                                     activePaletteEntries.length > 2
                                         ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
                                             React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '11px', lineHeight: 1.3, opacity: 0.8 } },
-                                                ...activePaletteEntries.map(([value, color]) => React.createElement('div', { key: `${activeColorBy}-${value}-label`, style: { display: 'grid', gridTemplateColumns: '12px 1fr', alignItems: 'center', gap: '6px' } },
+                                                ...activePaletteEntries.map(([value, color]) => {
+                                                    const selected = Array.isArray(activeFilters[activeColorBy]) && activeFilters[activeColorBy].includes(value);
+                                                    return React.createElement('button', {
+                                                        key: `${activeColorBy}-${value}-label`,
+                                                        type: 'button',
+                                                        'aria-pressed': selected,
+                                                        onClick: () => toggleFilterValue(activeColorBy, value, !selected),
+                                                        style: {
+                                                            display: 'grid',
+                                                            gridTemplateColumns: '12px 1fr',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            width: '100%',
+                                                            padding: '4px 6px',
+                                                            borderRadius: '6px',
+                                                            border: selected ? `1px solid ${color}` : '1px solid transparent',
+                                                            background: selected ? `color-mix(in srgb, ${color} 16%, transparent)` : 'transparent',
+                                                            cursor: 'pointer',
+                                                            textAlign: 'left',
+                                                            color: 'inherit',
+                                                        },
+                                                    },
                                                     React.createElement('span', { style: { width: '12px', height: '12px', borderRadius: '999px', background: color, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)' } }),
-                                                    React.createElement('span', null, value)
-                                                ))
+                                                    React.createElement('span', null, value));
+                                                })
                                             )
                                         )
                                         : null
@@ -2494,11 +2524,7 @@ async function renderTasksGraphs(rootElement = document) {
                                                 type: 'checkbox',
                                                 checked: selected,
                                                 onChange: (e) => setActiveFilters((current) => {
-                                                    const nextValues = Array.isArray(current[option.key]) ? current[option.key].slice() : [];
-                                                    const next = e.target.checked
-                                                        ? [...nextValues, value]
-                                                        : nextValues.filter((entry) => entry !== value);
-                                                    return { ...current, [option.key]: next };
+                                                    return toggleMultiValueFilter(current, option.key, value, e.target.checked);
                                                 }),
                                             }),
                                             React.createElement('span', { style: { opacity: 0.8 } }, value)
@@ -2513,6 +2539,9 @@ async function renderTasksGraphs(rootElement = document) {
                 setSelectedNodeId(null);
                 setHoveredNodeId(null);
             };
+            const toggleFilterValue = React.useCallback((key, value, enabled) => {
+                setActiveFilters((current) => toggleMultiValueFilter(current, key, value, enabled));
+            }, []);
             const clearGroupHoverTooltip = React.useCallback(() => {
                 setGroupHoverTooltip(null);
             }, []);

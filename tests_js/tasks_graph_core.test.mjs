@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, layoutDisconnectedTaskNodes, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea } = await import('../vyasa/static/tasks_graph_core.js');
+const { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, layoutDisconnectedTaskNodes, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea, toggleMultiValueFilter } = await import('../vyasa/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -184,6 +184,17 @@ test('group panels use passive hit areas in items graph', () => {
     assert.equal(tasksGraphNodeHitArea('groupTitle'), 'control');
 });
 
+test('toggleMultiValueFilter supports multi-color selection and reset', () => {
+    const selected = toggleMultiValueFilter({}, 'kind', 'assumption', true);
+    assert.deepEqual(selected, { kind: ['assumption'] });
+    const multi = toggleMultiValueFilter(selected, 'kind', 'risk', true);
+    assert.deepEqual(multi, { kind: ['assumption', 'risk'] });
+    const reduced = toggleMultiValueFilter(multi, 'kind', 'assumption', false);
+    assert.deepEqual(reduced, { kind: ['risk'] });
+    const cleared = toggleMultiValueFilter(reduced, 'kind', 'risk', false);
+    assert.deepEqual(cleared, {});
+});
+
 test('color_by palette attrs can be hidden from filters and still exist on the model', () => {
     const model = {
         color_palettes: { kind: { ingress: '#93c5fd', routing: '#86efac' } },
@@ -233,6 +244,19 @@ test('color_by uses configured color_palettes for node paint lookup', () => {
         return palette[String(value)] || '';
     };
     assert.equal(resolveTasksNodeOwnColor({ kind: 'ingress' }, model), '#93c5fd');
+});
+
+test('palette legend only shows values present in graph', () => {
+    const model = {
+        groups: [{ id: 'g1', label: 'G1', kind: 'ingress' }],
+        tasks: [{ id: 't1', label: 'T1', kind: 'routing' }],
+        node_color_palettes: { kind: { ingress: '#93c5fd', routing: '#86efac', orphan: '#fca5a5' } },
+    };
+    const entries = Object.entries(model.node_color_palettes.kind)
+        .filter(([value]) => new Set([...model.groups, ...model.tasks].map((node) => String(node.kind))).has(String(value)))
+        .filter(([, color]) => typeof color === 'string' && color.trim())
+        .sort(([a], [b]) => String(a).localeCompare(String(b)));
+    assert.deepEqual(entries, [['ingress', '#93c5fd'], ['routing', '#86efac']]);
 });
 
 test('renderer internal __kind__ does not clobber user kind attribute', () => {
