@@ -288,7 +288,9 @@ function tasksFilterOptions(model) {
 }
 
 function tasksColorOptions(model) {
-    const palettes = model?.color_palettes && typeof model.color_palettes === 'object' ? model.color_palettes : {};
+    const palettes = model?.node_color_palettes && typeof model.node_color_palettes === 'object'
+        ? model.node_color_palettes
+        : {};
     const declaredKeys = Object.keys(palettes).filter((key) => key && typeof palettes[key] === 'object' && Object.keys(palettes[key] || {}).length > 0);
     const nodes = [...(model?.groups || []), ...(model?.tasks || [])];
     return declaredKeys
@@ -306,7 +308,9 @@ function tasksColorOptions(model) {
 function tasksColorPaletteFor(model, colorBy) {
     const key = String(colorBy || '').trim();
     if (!key) return {};
-    const palettes = model?.color_palettes && typeof model.color_palettes === 'object' ? model.color_palettes : {};
+    const palettes = model?.node_color_palettes && typeof model.node_color_palettes === 'object'
+        ? model.node_color_palettes
+        : {};
     const configuredPalette = palettes[key];
     if (configuredPalette && Object.keys(configuredPalette).length > 0) return configuredPalette;
     const legacyKey = String(model?.color_by || '').trim();
@@ -1551,8 +1555,8 @@ async function renderTasksGraphs(rootElement = document) {
                     : {}
             ));
             const [activeColorBy, setActiveColorBy] = React.useState(() => (
-                typeof initialPrefsRef.current?.colorBy === 'string'
-                    ? initialPrefsRef.current.colorBy
+                typeof initialPrefsRef.current?.colorBy === 'string' && initialPrefsRef.current.colorBy.trim()
+                    ? initialPrefsRef.current.colorBy.trim()
                     : String(model?.default_color_by || '').trim()
             ));
             const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => initialPrefsRef.current?.filtersCollapsed !== false);
@@ -1565,7 +1569,7 @@ async function renderTasksGraphs(rootElement = document) {
             const reactFlowApiRef = React.useRef(null);
             const prevExpandedCountRef = React.useRef(0);
             const hoverClearTimerRef = React.useRef(null);
-            const activeColorPalette = React.useMemo(() => tasksColorPaletteFor(model, activeColorBy), [model, activeColorBy]);
+        const activeColorPalette = React.useMemo(() => tasksColorPaletteFor(model, activeColorBy), [model, activeColorBy]);
             React.useEffect(() => {
                 const validFilterKeys = new Set(tasksFilterOptions(model).map((option) => option.key));
                 const validColorKeys = new Set(tasksColorOptions(model).map((option) => option.key));

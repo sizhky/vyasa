@@ -52,6 +52,33 @@ def test_items_vw_width_does_not_add_implicit_outer_min_height():
     assert "height:70vh;min-height:420px" in html
 
 
+def test_items_palette_source_loads_relative_json(tmp_path):
+    refresh_extension_runtime({})
+    (tmp_path / "shared-palettes.json").write_text(
+        json.dumps({
+            "node_color_palettes": {"status": {"Todo": "#fa7115", "Done": "#2cd013"}},
+            "edge_color_palettes": {"relation": {"depends_on": "#2563eb"}},
+        }),
+        encoding="utf-8",
+    )
+    html = to_xml(from_md(
+        """```items
+---
+title: Shared Palette
+color_palette_source: shared-palettes.json
+---
+Roadmap:
+  - one :: First | status: Todo
+root -> one | relation: depends_on
+```""",
+        current_path=str(tmp_path / "graph.md"),
+    ))
+
+    assert 'class="tasks-container' in html
+    assert "#fa7115" in html
+    assert "#2563eb" in html
+
+
 def test_items_direction_alias_sets_layout_direction():
     refresh_extension_runtime({})
 

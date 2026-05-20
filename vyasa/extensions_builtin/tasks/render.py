@@ -13,10 +13,10 @@ _diagram_uid_counter = count(1)
 
 
 def render_tasks_block(code: str, current_path: str | None = None, fence_name: str = "tasks") -> str:
-    code = html.unescape(code)
-    config, code = split_fence_frontmatter(code)
+    raw_code = html.unescape(code)
+    config, code = split_fence_frontmatter(raw_code)
     try:
-        model = parse_tasks_text(f"```tasks\n{code}\n```")
+        model = parse_tasks_text(f"```tasks\n{raw_code}\n```", current_path=current_path)
         if config.get("title") and not model.get("title"):
             model["title"] = config["title"]
         if config.get("id"):
@@ -30,12 +30,12 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         if isinstance(config.get("color_by"), dict):
             palettes = {k: v for k, v in config["color_by"].items() if isinstance(v, dict)}
             if palettes:
-                model["color_palettes"] = {**model.get("color_palettes", {}), **palettes}
+                model["node_color_palettes"] = {**model.get("node_color_palettes", {}), **palettes}
                 if not model.get("color_by"):
                     model["color_by"] = next(iter(palettes.keys()), "")
         if config.get("color_palette") and not model.get("color_palette"):
             model["color_palette"] = config["color_palette"]
-            model["color_palettes"] = {**model.get("color_palettes", {}), model.get("color_by", ""): config["color_palette"]}
+            model["node_color_palettes"] = {**model.get("node_color_palettes", {}), model.get("color_by", ""): config["color_palette"]}
         if config.get("edge_color_by") and not model.get("edge_color_by"):
             model["edge_color_by"] = config["edge_color_by"]
         if config.get("edge_color_palette") and not model.get("edge_color_palette"):
@@ -58,6 +58,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             "edge_color_by": "",
             "edge_color_palette": {},
             "edge_color_palettes": {},
+            "node_color_palettes": {},
         }
         graph = {"nodes": [], "edges": []}
     widget_id = f"tasks-{abs(hash(code)) & 0xFFFFFF}-{next(_diagram_uid_counter)}"

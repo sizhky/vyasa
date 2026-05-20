@@ -4,6 +4,8 @@ import json
 import re
 import secrets
 
+from ...markdown_fence import current_content_path, get_root_folder
+
 
 _STRING_DECODER = json.JSONDecoder()
 
@@ -49,7 +51,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                 continue
             key = line[:key_index].strip()
             value = line[key_index + 1:].strip()
-            if key in {"id", "title", "default_color_by", "edge_color_by"}:
+            if key in {"id", "title", "default_color_by", "edge_color_by", "color_palette_source", "edge_color_palette_source"}:
                 config[key] = _read_string(value)
                 cursor += 1
                 continue
@@ -121,7 +123,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                         cursor += 1
                     palettes[palette_key] = palette
                 config["color_by"] = default_key
-                config["color_palettes"] = palettes
+                config["node_color_palettes"] = palettes
                 continue
             if key == "color_palette":
                 palette_key = _read_string(value) if value else ""
@@ -145,7 +147,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                     palette[_read_string(child_line[:child_key_index].strip())] = _read_string(child_line[child_key_index + 1:].strip())
                     cursor += 1
                 config["color_palette"] = palette
-                config["color_palettes"] = {palette_key: palette} if palette_key else {}
+                config["node_color_palettes"] = {palette_key: palette} if palette_key else {}
                 continue
             if key == "edge_color_palette":
                 palette_key = _read_string(value) if value else ""
@@ -266,6 +268,86 @@ def _read_string_list(text: str) -> list[str]:
     return [_read_string(part) for part in value.split(",") if part.strip()]
 
 
+def _clean_palette_map(value) -> dict:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(key).strip(): str(palette).strip()
+        for key, palette in value.items()
+        if str(key).strip() and palette is not None and str(palette).strip()
+    }
+
+
+def _clean_palette_sources(value) -> dict[str, dict]:
+    if not isinstance(value, dict):
+        return {}
+    if not value or not all(isinstance(palette, dict) for palette in value.values()):
+        return {}
+    return {
+        str(key).strip(): _clean_palette_map(palette)
+        for key, palette in value.items()
+        if str(key).strip() and _clean_palette_map(palette)
+    }
+
+
+def _clean_combined_palette_source(value) -> tuple[dict[str, dict], dict[str, dict]]:
+    if not isinstance(value, dict):
+        return {}, {}
+    color_palettes = _clean_palette_sources(value.get("node_color_palettes") or {})
+    edge_color_palettes = _clean_palette_sources(value.get("edge_color_palettes") or {})
+    return color_palettes, edge_color_palettes
+
+
+def _resolve_tasks_source_path(current_path: str | Path | None, source: str) -> Path | None:
+    source_text = str(source or "").strip()
+    if not source_text:
+        return None
+    if re.match(r"^[a-zA-Z][\w+.-]*://", source_text):
+        return None
+    source_path = Path(source_text)
+    if source_path.is_absolute():
+        return source_path
+    if current_path:
+        current_path = Path(str(current_path))
+        if current_path.exists():
+            base = current_path.parent if current_path.is_file() else current_path
+        else:
+            resolved = current_content_path(str(current_path))
+            base = resolved.parent if resolved else get_root_folder().resolve()
+    else:
+        base = get_root_folder().resolve()
+    return (base / source_path).resolve()
+
+
+def _load_palette_source(current_path: str | Path | None, source: str, palette_key: str = "") -> tuple[dict, dict, str]:
+    resolved = _resolve_tasks_source_path(current_path, source)
+    if not resolved or not resolved.exists():
+        return {}, {}, ""
+    try:
+        payload = json.loads(resolved.read_text(encoding="utf-8"))
+    except Exception:
+        return {}, {}, ""
+    palette = _clean_palette_map(payload)
+    if not palette:
+        return {}, {}, ""
+    selected_key = str(palette_key or "").strip()
+    return palette, ({selected_key: palette} if selected_key else {}), selected_key
+
+
+def _load_combined_palette_source(current_path: str | Path | None, source: str) -> tuple[dict[str, dict], dict[str, dict]]:
+    resolved = _resolve_tasks_source_path(current_path, source)
+    if not resolved or not resolved.exists():
+        return {}, {}
+    try:
+        payload = json.loads(resolved.read_text(encoding="utf-8"))
+    except Exception:
+        return {}, {}
+    color_palettes, edge_color_palettes = _clean_combined_palette_source(payload)
+    if color_palettes or edge_color_palettes:
+        return color_palettes, edge_color_palettes
+    return {}, {}
+
+
 def _read_optional_edge_label(text: str) -> tuple[str, str]:
     text = text.strip()
     if not text.startswith("|"):
@@ -337,7 +419,7 @@ def _add_edges(graph: dict, source_text: str, target_text: str, label: str, attr
 
 
 def _parse_items_graph(body: str) -> dict:
-    graph = {"groups": [], "tasks": [], "dependency_edges": [], "color_palettes": {}, "edge_color_palettes": {}}
+    graph = {"groups": [], "tasks": [], "dependency_edges": [], "node_color_palettes": {}, "edge_color_palettes": {}}
     stack: list[dict] = []
     used_ids: set[str] = set()
     lines = body.splitlines()
@@ -364,7 +446,7 @@ def _parse_items_graph(body: str) -> dict:
         if indent == 0 and _find_unquoted(line, ":") > 0 and _find_unquoted(line, "->") < 0:
             key, value = line.split(":", 1)
             key = key.strip()
-            if key in {"id", "title", "default_color_by", "edge_color_by"}:
+            if key in {"id", "title", "default_color_by", "edge_color_by", "color_palette_source", "edge_color_palette_source"}:
                 graph[key] = _read_string(value.strip())
                 index += 1
                 continue
@@ -412,7 +494,7 @@ def _parse_items_graph(body: str) -> dict:
                         index += 1
                     palettes[palette_key] = palette
                 graph["color_by"] = default_key
-                graph["color_palettes"] = palettes
+                graph["node_color_palettes"] = palettes
                 continue
             if key == "color_palette":
                 palette_key = _read_string(value.strip())
@@ -436,7 +518,7 @@ def _parse_items_graph(body: str) -> dict:
                     palette[child_key] = _read_string(child_line[child_key_index + 1:].strip())
                     index += 1
                 graph["color_palette"] = palette
-                graph["color_palettes"][graph.get("color_by") or palette_key or ""] = palette
+                graph["node_color_palettes"][graph.get("color_by") or palette_key or ""] = palette
                 continue
             if key == "edge_color_palette":
                 palette_key = _read_string(value.strip())
@@ -563,7 +645,7 @@ def _apply_dag_ranks(graph: dict) -> None:
     for node_id, node in nodes.items():
         node.setdefault("rank", str(rank.get(node_id, 0)))
     max_rank = max(rank.values(), default=0)
-    graph["color_palettes"] = {"rank": _rank_palette(max_rank + 1), **graph.get("color_palettes", {})}
+    graph["node_color_palettes"] = {"rank": _rank_palette(max_rank + 1), **graph.get("node_color_palettes", {})}
 
 
 def apply_edge_label_fallbacks(graph: dict) -> None:
@@ -579,7 +661,21 @@ def apply_edge_label_fallbacks(graph: dict) -> None:
         edge["label"] = str(edge_value)
 
 
-def parse_tasks_text(text: str) -> dict:
+def _apply_palette_source(graph: dict, current_path: str | Path | None, source_field: str, palette_field: str, palettes_field: str, color_by_field: str) -> None:
+    source = str(graph.get(source_field) or "").strip()
+    if not source:
+        return
+    palette_key = str(graph.get(color_by_field) or "").strip()
+    palette, palettes, selected_key = _load_palette_source(current_path, source, palette_key)
+    if palettes:
+        graph[palettes_field] = {**palettes, **graph.get(palettes_field, {})}
+        if not graph.get(color_by_field) and selected_key:
+            graph[color_by_field] = selected_key
+    if palette and not graph.get(palette_field):
+        graph[palette_field] = palette
+
+
+def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
     config, body = _read_fence_frontmatter(_extract_tasks_body(text).strip())
     graph = _parse_items_graph(body)
     if config.get("id") and not graph.get("id"):
@@ -590,18 +686,38 @@ def parse_tasks_text(text: str) -> dict:
         graph["default_color_by"] = config["default_color_by"]
     if "filter_attributes" in config and "filter_attributes" not in graph:
         graph["filter_attributes"] = config["filter_attributes"]
+    if config.get("color_palette_source") and not graph.get("color_palette_source"):
+        graph["color_palette_source"] = config["color_palette_source"]
     if config.get("color_by") and not graph.get("color_by"):
         graph["color_by"] = config["color_by"]
     if config.get("color_palette") and not graph.get("color_palette"):
         graph["color_palette"] = config["color_palette"]
-    if config.get("color_palettes"):
-        graph["color_palettes"] = {**config["color_palettes"], **graph.get("color_palettes", {})}
+    if config.get("node_color_palettes"):
+        graph["node_color_palettes"] = {**config["node_color_palettes"], **graph.get("node_color_palettes", {})}
     if config.get("edge_color_by") and not graph.get("edge_color_by"):
         graph["edge_color_by"] = config["edge_color_by"]
     if config.get("edge_color_palette") and not graph.get("edge_color_palette"):
         graph["edge_color_palette"] = config["edge_color_palette"]
     if config.get("edge_color_palettes"):
         graph["edge_color_palettes"] = {**config["edge_color_palettes"], **graph.get("edge_color_palettes", {})}
+    if config.get("edge_color_palette_source") and not graph.get("edge_color_palette_source"):
+        graph["edge_color_palette_source"] = config["edge_color_palette_source"]
+    if graph.get("color_palette_source"):
+        color_palettes, edge_color_palettes = _load_combined_palette_source(current_path, graph["color_palette_source"])
+        if color_palettes:
+            graph["node_color_palettes"] = {**color_palettes, **graph.get("node_color_palettes", {})}
+            if not graph.get("color_by"):
+                graph["color_by"] = next(iter(color_palettes.keys()), "")
+            if not graph.get("color_palette") and graph.get("color_by"):
+                graph["color_palette"] = color_palettes.get(graph["color_by"], {})
+        if edge_color_palettes:
+            graph["edge_color_palettes"] = {**edge_color_palettes, **graph.get("edge_color_palettes", {})}
+            if not graph.get("edge_color_by"):
+                graph["edge_color_by"] = next(iter(edge_color_palettes.keys()), "")
+            if not graph.get("edge_color_palette") and graph.get("edge_color_by"):
+                graph["edge_color_palette"] = edge_color_palettes.get(graph["edge_color_by"], {})
+    _apply_palette_source(graph, current_path, "color_palette_source", "color_palette", "node_color_palettes", "color_by")
+    _apply_palette_source(graph, current_path, "edge_color_palette_source", "edge_color_palette", "edge_color_palettes", "edge_color_by")
     apply_edge_label_fallbacks(graph)
     _apply_dag_ranks(graph)
     groups = graph.get("groups", [])
@@ -627,13 +743,15 @@ def parse_tasks_text(text: str) -> dict:
         "default_color_by": graph.get("default_color_by", ""),
         "filter_attributes": graph.get("filter_attributes", []),
         "color_palette": graph.get("color_palette", {}),
-        "color_palettes": graph.get("color_palettes", {}),
+        "node_color_palettes": graph.get("node_color_palettes", {}),
+        "color_palette_source": graph.get("color_palette_source", ""),
         "edge_color_by": graph.get("edge_color_by", ""),
         "edge_color_palette": graph.get("edge_color_palette", {}),
         "edge_color_palettes": graph.get("edge_color_palettes", {}),
+        "edge_color_palette_source": graph.get("edge_color_palette_source", ""),
     }
 
 
 def parse_tasks_model(markdown_path: str | Path) -> dict:
     text = Path(markdown_path).read_text(encoding="utf-8")
-    return parse_tasks_text(text)
+    return parse_tasks_text(text, current_path=markdown_path)
