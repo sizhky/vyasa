@@ -85,38 +85,85 @@ export function layoutDisconnectedTaskNodes(nodes, direction = 'DOWN', options =
     const padX = Math.max(0, Number(options.padX) || 0);
     const padTop = Math.max(0, Number(options.padTop) || 0);
     const padBottom = Math.max(0, Number(options.padBottom) || 0);
-    const isRight = String(direction || 'DOWN').toUpperCase() === 'RIGHT';
+    const targetAspectRatio = Math.max(0.25, Number(options.targetAspectRatio) || 1.05);
     const positions = {};
-    let cursorX = padX;
-    let cursorY = padTop;
-    let maxWidth = 0;
-    let maxHeight = 0;
+    const sizedNodes = orderedNodes.map((node) => ({
+        id: node?.id,
+        width: Math.max(0, Number(node?.width) || 0),
+        height: Math.max(0, Number(node?.height) || 0),
+    })).filter((node) => node.id !== undefined && node.id !== null);
 
-    for (const node of orderedNodes) {
-        const width = Math.max(0, Number(node?.width) || 0);
-        const height = Math.max(0, Number(node?.height) || 0);
-        positions[node.id] = { x: cursorX, y: cursorY, width, height };
-        if (isRight) {
-            cursorX += width + gap;
-            maxWidth = cursorX - gap;
-            maxHeight = Math.max(maxHeight, padTop + height);
-        } else {
-            cursorY += height + gap;
-            maxWidth = Math.max(maxWidth, padX + width);
-            maxHeight = cursorY - gap;
+    if (sizedNodes.length === 0) {
+        return {
+            positions,
+            bbox: {
+                width: padX * 2,
+                height: padTop + padBottom,
+            },
+        };
+    }
+
+    const measureGrid = (columnCount) => {
+        const columns = Math.max(1, Math.min(sizedNodes.length, columnCount));
+        const columnWidths = Array(columns).fill(0);
+        const rowHeights = [];
+        for (let index = 0; index < sizedNodes.length; index += 1) {
+            const column = index % columns;
+            const row = Math.floor(index / columns);
+            columnWidths[column] = Math.max(columnWidths[column], sizedNodes[index].width);
+            rowHeights[row] = Math.max(rowHeights[row] || 0, sizedNodes[index].height);
         }
+        const contentWidth = columnWidths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, columns - 1);
+        const contentHeight = rowHeights.reduce((sum, height) => sum + height, 0) + gap * Math.max(0, rowHeights.length - 1);
+        const fullWidth = contentWidth + padX * 2;
+        const fullHeight = contentHeight + padTop + padBottom;
+        const aspect = fullWidth / Math.max(fullHeight, 1);
+        return {
+            columns,
+            columnWidths,
+            rowHeights,
+            contentWidth,
+            contentHeight,
+            fullWidth,
+            fullHeight,
+            score: Math.abs(Math.log(aspect / targetAspectRatio)) + columns * 0.0001,
+        };
+    };
+
+    let best = measureGrid(1);
+    for (let columns = 2; columns <= sizedNodes.length; columns += 1) {
+        const candidate = measureGrid(columns);
+        if (candidate.score < best.score) best = candidate;
     }
 
-    if (orderedNodes.length === 0) {
-        maxWidth = padX;
-        maxHeight = padTop;
+    const columnOffsets = [];
+    let cursorX = padX;
+    for (const width of best.columnWidths) {
+        columnOffsets.push(cursorX);
+        cursorX += width + gap;
     }
-
+    const rowOffsets = [];
+    let cursorY = padTop;
+    for (const height of best.rowHeights) {
+        rowOffsets.push(cursorY);
+        cursorY += height + gap;
+    }
+    for (let index = 0; index < sizedNodes.length; index += 1) {
+        const node = sizedNodes[index];
+        const column = index % best.columns;
+        const row = Math.floor(index / best.columns);
+        positions[node.id] = {
+            x: columnOffsets[column],
+            y: rowOffsets[row],
+            width: node.width,
+            height: node.height,
+        };
+    }
     return {
         positions,
         bbox: {
-            width: maxWidth + padX,
-            height: maxHeight + padBottom,
+            width: best.fullWidth,
+            height: best.fullHeight,
         },
     };
 }

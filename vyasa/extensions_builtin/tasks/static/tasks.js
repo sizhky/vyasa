@@ -1039,75 +1039,19 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
             bbox: { width: 250, height: 80 },
         };
     }
-    const childIds = new Set(groupChildren.map((child) => child.id));
-    const taskToGroup = Object.fromEntries((model.tasks || []).map((task) => [task.id, task.group_id || null]));
-    const groupParent = Object.fromEntries((model.groups || []).map((group) => [group.id, group.parent_group_id || null]));
-    const directChildFor = (id) => {
-        if (childIds.has(id)) return id;
-        let cur = taskToGroup[id] || id;
-        while (cur) {
-            if (childIds.has(cur)) return cur;
-            cur = groupParent[cur] || null;
-        }
-        return null;
-    };
-    const seenProjectedEdges = new Map();
-    const projectedEdges = [];
-    for (const edge of (model.dependency_edges || [])) {
-        const source = directChildFor(edge.source);
-        const target = directChildFor(edge.target);
-        traceTasksEdge(`group:${groupId}`, edge, {
-            mapped: { source, target },
-            childIds: Array.from(childIds),
-        });
-        if (!childIds.has(source) || !childIds.has(target) || source === target) continue;
-        appendProjectedEdge(projectedEdges, seenProjectedEdges, source, target, edge.label || '', edge);
-    }
-    const reducedProjectedEdges = reduceTransitiveEdges(projectedEdges);
-    if (reducedProjectedEdges.length === 0) {
-        const disconnectedLayout = layoutDisconnectedTaskNodes(groupChildren, groupDirection, {
-            gap: groupDirection === 'RIGHT' ? (layoutConfig.nodeSpacing || 72) : (layoutConfig.layerSpacing || 112),
-            padX: layoutConfig.groupPadding || 40,
-            padTop: (layoutConfig.groupPadding || 40) + 28,
-            padBottom: layoutConfig.groupPadding || 40,
-        });
-        const positions = {};
-        for (const child of groupChildren) {
-            const base = disconnectedLayout.positions[child.id];
-            const jitter = stableTaskJitter(child.id, jitterConfig.x ?? 14, jitterConfig.y ?? 8);
-            positions[child.id] = {
-                x: (base?.x || 0) + jitter.x,
-                y: (base?.y || 0) + jitter.y,
-                width: child.width || 0,
-                height: child.height || 0,
-            };
-        }
-        return {
-            positions,
-            bbox: {
-                width: Math.max(disconnectedLayout.bbox.width || 0, 250),
-                height: Math.max(disconnectedLayout.bbox.height || 0, 80),
-            },
-        };
-    }
-    const laidOut = await tasksElk.layout({
-        id: `group-${groupId}`,
-        layoutOptions: {
-            'elk.algorithm': 'layered',
-            'elk.direction': groupDirection,
-            'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
-            'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
-            'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`,
-        },
-        children: groupChildren.map((child) => ({ id: child.id, width: child.width, height: child.height })),
-        edges: reducedProjectedEdges.map((edge, index) => ({ id: `e${index}`, sources: [edge.source], targets: [edge.target] })),
+    const packedLayout = layoutDisconnectedTaskNodes(groupChildren, groupDirection, {
+        gap: Math.max(layoutConfig.nodeSpacing || 72, layoutConfig.layerSpacing || 112),
+        padX: layoutConfig.groupPadding || 40,
+        padTop: (layoutConfig.groupPadding || 40) + 28,
+        padBottom: layoutConfig.groupPadding || 40,
     });
     const positions = {};
-    for (const child of (laidOut.children || [])) {
+    for (const child of groupChildren) {
+        const base = packedLayout.positions[child.id];
         const jitter = stableTaskJitter(child.id, jitterConfig.x ?? 14, jitterConfig.y ?? 8);
         positions[child.id] = {
-            x: (child.x || 0) + jitter.x,
-            y: (child.y || 0) + jitter.y,
+            x: (base?.x || 0) + jitter.x,
+            y: (base?.y || 0) + jitter.y,
             width: child.width || 0,
             height: child.height || 0,
         };
@@ -1115,8 +1059,8 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
     return {
         positions,
         bbox: {
-            width: Math.max(laidOut.width || 0, 250),
-            height: Math.max(laidOut.height || 0, 80),
+            width: Math.max(packedLayout.bbox.width || 0, 250),
+            height: Math.max(packedLayout.bbox.height || 0, 80),
         },
     };
 }
