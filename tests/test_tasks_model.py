@@ -74,6 +74,24 @@ t1 ->|feeds UI| t2
     assert {"source": "t1", "target": "t2", "label": "feeds UI"} in model["dependency_edges"]
 
 
+def test_items_parser_supports_chained_edges():
+    model = parse_tasks_text("""```items
+Migrations:
+  - m-1 :: Migration 1
+  - m-2 :: Migration 2
+  - m-3 :: Migration 3
+  - m-4 :: Migration 4
+
+m-1 -> m-2 -> m-3 -> m-4
+```""")
+
+    assert model["dependency_edges"] == [
+        {"source": "m-1", "target": "m-2"},
+        {"source": "m-2", "target": "m-3"},
+        {"source": "m-3", "target": "m-4"},
+    ]
+
+
 def test_items_parser_reads_nested_groups_and_fanout_edges():
     model = parse_tasks_text(
         """```items

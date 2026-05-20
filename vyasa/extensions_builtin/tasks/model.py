@@ -418,6 +418,16 @@ def _add_edges(graph: dict, source_text: str, target_text: str, label: str, attr
             graph["dependency_edges"].append(edge)
 
 
+def _add_edge_chain(graph: dict, line: str) -> None:
+    segments = _split_unquoted(line, "->")
+    source_text = segments[0].strip()
+    for segment in segments[1:]:
+        label, target_text = _read_optional_edge_label(segment.strip())
+        target_refs, edge_attrs = _split_attrs(target_text)
+        _add_edges(graph, source_text, target_refs, label, edge_attrs)
+        source_text = target_refs
+
+
 def _parse_items_graph(body: str) -> dict:
     graph = {"groups": [], "tasks": [], "dependency_edges": [], "node_color_palettes": {}, "edge_color_palettes": {}}
     stack: list[dict] = []
@@ -547,10 +557,7 @@ def _parse_items_graph(body: str) -> dict:
 
         edge_index = _find_unquoted(line, "->")
         if edge_index >= 0:
-            source_text = line[:edge_index].strip()
-            label, target_text = _read_optional_edge_label(line[edge_index + 2:])
-            target_refs, edge_attrs = _split_attrs(target_text)
-            _add_edges(graph, source_text, target_refs, label, edge_attrs)
+            _add_edge_chain(graph, line)
             index += 1
             continue
 
