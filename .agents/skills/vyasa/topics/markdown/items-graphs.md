@@ -115,7 +115,8 @@ item-a, item-b ->|edge label| item-c
 ## Edges
 
 - Use global edge lines for dependencies.
-- Valid shapes: `a -> b`, `a, b -> c`, `a -> b, c`, and `a ->|label| b`.
+- Valid shapes: `a -> b`, `a, b -> c`, `a -> b, c`, `a ->|label| b`, and chained edges like `m-1 -> m-2 -> m-3`.
+- Chained edges expand into consecutive dependencies: `m-1 -> m-2 -> m-3 -> m-4` means `m-1 -> m-2`, `m-2 -> m-3`, and `m-3 -> m-4`.
 - Edge labels are optional.
 - When `edge_color_by` is active and an edge has no explicit `|label|`, the renderer falls back to the edge attr for that color key, such as `| relation: depends_on` showing `depends_on`.
 - Keep edge lines outside groups unless existing parser behavior proves indentation is supported.
