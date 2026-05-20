@@ -259,6 +259,36 @@ test('palette legend only shows values present in graph', () => {
     assert.deepEqual(entries, [['ingress', '#93c5fd'], ['routing', '#86efac']]);
 });
 
+test('palette legend renders for two-value color modes', () => {
+    const model = {
+        groups: [],
+        tasks: [
+            { id: 'client-user', label: 'Client user', audience: 'client' },
+            { id: 'delivery-user', label: 'Delivery user', audience: 'delivery' },
+        ],
+        node_color_palettes: {
+            audience: {
+                client: '#2563eb',
+                delivery: '#7c3aed',
+                end_customer: '#f59e0b',
+            },
+        },
+    };
+    const presentValues = new Set(
+        [...model.groups, ...model.tasks]
+            .map((node) => node.audience)
+            .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+            .map((value) => String(value))
+    );
+    const entries = Object.entries(model.node_color_palettes.audience)
+        .filter(([value]) => presentValues.has(String(value)))
+        .filter(([, color]) => typeof color === 'string' && color.trim())
+        .sort(([a], [b]) => String(a).localeCompare(String(b)));
+
+    assert.equal(entries.length > 0, true);
+    assert.deepEqual(entries, [['client', '#2563eb'], ['delivery', '#7c3aed']]);
+});
+
 test('renderer internal __kind__ does not clobber user kind attribute', () => {
     const source = { id: 'proxy', label: 'API Proxy', kind: 'ingress' };
     const node = { id: 'proxy', kind: 'task' };

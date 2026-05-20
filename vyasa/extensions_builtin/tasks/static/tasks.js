@@ -2471,7 +2471,7 @@ async function renderTasksGraphs(rootElement = document) {
                                         }),
                                         React.createElement('span', { style: { opacity: 0.85 } }, option.label)
                                     )),
-                                    activePaletteEntries.length > 2
+                                    activePaletteEntries.length > 0
                                         ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
                                             React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '11px', lineHeight: 1.3, opacity: 0.8 } },
                                                 ...activePaletteEntries.map(([value, color]) => {
