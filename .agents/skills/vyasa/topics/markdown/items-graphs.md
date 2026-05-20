@@ -10,6 +10,7 @@ Do not propose separate graph files unless the user asks for legacy compatibilit
 ---
 title: Sprint Slice
 default_open_depth: -1
+default_color_by: status
 width: 80vw
 height: 70vh
 color_by:
@@ -35,13 +36,16 @@ T-002, T-010 -> T-003
 ## Frontmatter
 
 - Frontmatter is optional YAML at the top of the fence.
-- Supported renderer keys include `title`, `default_open_depth`, `width`, `min_height`, `height`, and `color_by`.
+- Supported renderer keys include `title`, `default_open_depth`, `default_color_by`, `width`, `min_height`, `height`, `color_by`, `edge_color_palette`, and `color_palette_source`.
 - Size keys should use full CSS lengths such as `760px`, `70vh`, `80vw`, or `calc(85vh - 57px)`.
 - Do not use bare numbers like `height: 760`.
 - `default_open_depth` is an integer: `0` folds all groups, `1` opens root groups, larger values open deeper levels, `-1` opens all groups.
 - Preferred colors use nested palettes under `color_by`.
+- Use `default_color_by: <attr>` when a graph should open with that node palette active.
 - Only attrs declared under `color_by` appear in the UI color-mode dropdown.
-- Legacy `color_by: status` plus `color_palette:` remains backward-compatible.
+- Shared palette JSON uses `node_color_palettes` and `edge_color_palettes`, loaded with `color_palette_source: path/to/palettes.json`.
+- Do not use removed legacy shared keys: `palette_source` or `color_palettes`.
+- Legacy inline `color_by: status` plus `color_palette:` remains backward-compatible.
 
 ## Body Syntax
 
@@ -72,7 +76,7 @@ item-a, item-b ->|edge label| item-c
 - Good: `owner: [Alice](team/alice)` or `spec: [API](guide#api)`.
 - Do not invent a special `href:` attr.
 - Use `color: "#hex"` for a per-node color override.
-- Node colors resolve: per-node `color`, nearest colored parent group, then active `color_by` palette lookup.
+- Node colors resolve: active `color_by` palette, then per-node `color`, then nearest colored parent group only when no color mode is active.
 
 ## Edges
 

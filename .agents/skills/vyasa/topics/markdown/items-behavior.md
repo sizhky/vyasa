@@ -8,9 +8,12 @@ Expanded group regions are background containers, not selectable cards.
 
 Node colors resolve in order:
 
-1. Per-node `color:` attr
-2. Nearest colored parent group
-3. Active `color_by` palette lookup
+1. Active `color_by` palette lookup
+2. Per-node `color:` attr
+3. Nearest colored parent group, only when no color mode is active
+
+Use `default_color_by: <attr>` to boot a graph into a color mode.
+If a stored UI preference says no color mode, the renderer should still honor the authored default on first load.
 
 Graph layout attrs `graph_x` and `graph_y` are renderer-owned; avoid user guidance unless debugging persistence.
 
