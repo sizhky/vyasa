@@ -47,6 +47,38 @@ T-002, T-010 -> T-003
 - Do not use removed legacy shared keys: `palette_source` or `color_palettes`.
 - Legacy inline `color_by: status` plus `color_palette:` remains backward-compatible.
 
+## Shared Palette JSON
+
+Use this when multiple graphs should share the same colors:
+
+```json
+{
+  "node_color_palettes": {
+    "kind": {
+      "goal": "#f97316",
+      "decision": "#6366f1",
+      "milestone": "#06b6d4",
+      "requirement": "#84cc16",
+      "metric": "#8b5cf6"
+    }
+  },
+  "edge_color_palettes": {
+    "relation": {
+      "depends_on": "#2563eb",
+      "validates": "#84cc16",
+      "gates": "#dc2626"
+    }
+  }
+}
+```
+
+Then reference it from the graph frontmatter:
+
+```yaml
+default_color_by: kind
+color_palette_source: .daksh/shared-palettes.json
+```
+
 ## Body Syntax
 
 ```md
