@@ -12,4 +12,9 @@ owner: [Alice](team/alice)
 spec: [API](guide#api)
 ```
 
-Do not invent a special `href:` attr for this.
+When the whole item or group should navigate, use `href:`:
+
+```md
+- api :: API Contract | href: guide#api
+Milestone | href: roadmap#milestone:
+```

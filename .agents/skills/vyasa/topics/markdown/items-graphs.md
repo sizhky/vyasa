@@ -106,7 +106,9 @@ item-a, item-b ->|edge label| item-c
 - First-class author attrs include `estimate`, `priority`, `points`, `owner`, and `phase`.
 - Labels and attr values may contain normal markdown links.
 - Good: `owner: [Alice](team/alice)` or `spec: [API](guide#api)`.
-- Do not invent a special `href:` attr.
+- Use `href: <target>` when the whole group or item label should navigate.
+- Good: `- api :: API Contract | href: guide#api`.
+- Use normal markdown links when only part of a label or attr value should link.
 - Use `color: "#hex"` for a per-node color override.
 - Node colors resolve: active `color_by` palette, then per-node `color`, then nearest colored parent group only when no color mode is active.
 

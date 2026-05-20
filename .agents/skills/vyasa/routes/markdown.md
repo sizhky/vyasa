@@ -15,5 +15,5 @@ Read only the drawer needed:
 Rules:
 
 - Prefer existing Obsidian-compatible syntax where supported.
-- Use normal markdown links in authored labels and attrs.
+- For `items` / `tasks`, use normal markdown links in authored labels and attrs, or `href:` when the whole node should navigate.
 - Do not invent parser syntax until existing drawers prove no fit.
