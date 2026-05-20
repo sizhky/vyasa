@@ -7,6 +7,12 @@ description: Use for Vyasa project work, Vyasa site authoring, .vyasa config, ma
 
 Load the smallest relevant files. Do not read a whole topic when a narrow drawer exists.
 
+## Major Warning
+
+Internal hyperlinks should use Vyasa route notation, not raw `.md` filenames.
+Good: `[Guide](guide#install)` or `[[guide#Install]]`.
+Bad: `[Guide](guide.md#install)`.
+
 ## Start
 
 1. Read `core/triage.md`.
