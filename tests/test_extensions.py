@@ -6,6 +6,7 @@ from vyasa.config import reload_config
 from vyasa.extensions import (
     CORE_CAPABILITIES,
     ActionRegistry,
+    DocumentType,
     ExtensionConfigError,
     ExtensionMeta,
     ContentRootRequest,
@@ -89,6 +90,44 @@ def test_extension_cannot_register_undeclared_route_prefix(tmp_path):
         assert "undeclared route prefix" in str(exc)
     else:
         raise AssertionError("expected route guard validation failure")
+
+
+def test_extension_cannot_register_undeclared_document_type(tmp_path):
+    package = tmp_path / "bad_doc_ext"
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        "from vyasa.extensions import DocumentType, ExtensionMeta, VyasaExtensionBase\n"
+        "class Bad(VyasaExtensionBase):\n"
+        "    def register(self, app): app.documents.document_type(DocumentType('.bad', 'bad', 'file'))\n"
+        "EXTENSION = Bad(ExtensionMeta('bad_doc', 'render', ('cap:other',)))\n"
+    )
+
+    try:
+        build_extension_runtime({
+            "external": [{"path": str(tmp_path), "module": "bad_doc_ext"}],
+            "render_add": ["bad_doc"],
+        })
+    except ExtensionConfigError as exc:
+        assert "undeclared capability cap:document_type:bad" in str(exc)
+    else:
+        raise AssertionError("expected document type guard validation failure")
+
+
+def test_pdf_and_tree_extensions_register_document_type_renderers():
+    runtime = build_extension_runtime({})
+
+    assert runtime.document_types[".pdf"] == DocumentType(".pdf", "pdf", "file")
+    assert runtime.document_types[".tree"] == DocumentType(".tree", "tree", "table")
+    assert "pdf" in runtime.document_renderers
+    assert "tree" in runtime.document_renderers
+    assert "pdf" in runtime.static_document_renderers
+    assert "tree" in runtime.static_document_renderers
+
+
+def test_filesystem_routes_register_static_build_provider():
+    runtime = build_extension_runtime({})
+
+    assert len(runtime.static_build_providers) == 1
 
 
 def test_extensions_duplicate_slot_provider_is_rejected():

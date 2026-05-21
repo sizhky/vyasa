@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vyasa"
-version = "0.6.16"
+version = "0.6.17"
 description = "A lightweight, elegant blogging platform built with FastHTML"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -61,7 +61,13 @@ include-package-data = true
 include = ["vyasa", "vyasa.*"]
 
 [tool.setuptools.package-data]
-vyasa = ["static/*", "static/**/*", "themes/*.toml"]
+vyasa = [
+    "static/*",
+    "static/**/*",
+    "extensions_builtin/*/static/*",
+    "extensions_builtin/*/static/**/*",
+    "themes/*.toml",
+]
 
 [tool.uv]
 cache-keys = [{file = "pyproject.toml"}]

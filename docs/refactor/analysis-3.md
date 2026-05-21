@@ -22,7 +22,7 @@ Goal: remove dangling feature edges before more extension work. A feature is cle
    - Evidence: `.pdf` and `.tree` branches in `vyasa/content_routes.py`, `vyasa/helpers.py`, `vyasa/tree_rendering.py`, `vyasa/search_pages.py`, and `vyasa/build.py`.
    - Fix: document type extensions own suffix matching, render, tree labels, search previews, and static build copy/render rules.
    - Tests: disabling `pdf_viewer` or `tree_table` removes that type from routes/tree/build.
-   - Progress: suffix ownership is done for `pdf_viewer` and `tree_table`; raw/download ownership is still deferred to `EXT-023`.
+   - Progress: Done for `pdf_viewer` and `tree_table`; raw/download ownership is tracked and done in `EXT-023`.
 
 4. `EXT-036 shell-feature-hooks`
    - Problem: feature-specific shell hooks still live in layout code.

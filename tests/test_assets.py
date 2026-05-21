@@ -1,6 +1,6 @@
-from vyasa.assets import bundle_asset_nodes, route_bundle_names
+from vyasa.assets import bundle_asset_nodes, requested_page_bundles, route_bundle_names
 from vyasa.build import build_static_site
-from vyasa.extensions import AssetBundle, ExtensionPlan, ExtensionRuntime
+from vyasa.extensions import AssetBundle, ExtensionPlan, ExtensionRuntime, build_extension_runtime, get_extension_runtime, set_extension_runtime
 
 
 def test_route_bundle_names_select_route_bundles():
@@ -37,6 +37,30 @@ def test_bundle_asset_nodes_emit_css_and_js_once():
     assert rendered[0]["href"].startswith("/static/a.css")
     assert rendered[1]["src"].startswith("/static/a.js")
     assert rendered[2]["src"].startswith("/static/b.js")
+
+
+def test_runtime_and_static_request_same_page_bundles():
+    runtime = build_extension_runtime({})
+    previous = get_extension_runtime()
+    set_extension_runtime(runtime)
+    try:
+        runtime_bundles = requested_page_bundles(
+            show_sidebar=True,
+            current_path="docs/page",
+            annotations_enabled=True,
+            mode="runtime",
+        )
+        static_bundles = requested_page_bundles(
+            show_sidebar=True,
+            current_path="docs/page",
+            annotations_enabled=True,
+            mode="static",
+        )
+    finally:
+        set_extension_runtime(previous)
+
+    assert runtime_bundles == static_bundles
+    assert "annotations.runtime" in static_bundles
 
 
 def test_static_build_copies_extension_assets_and_references_requested_bundles(tmp_path):

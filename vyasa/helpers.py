@@ -180,21 +180,27 @@ def content_url_for_slug(slug: str | Path, prefix: str = "/posts", suffix: str =
     url = f"{prefix.rstrip('/')}/{encoded}{suffix}" if encoded else prefix.rstrip("/") or "/"
     return f"{url}#{quote(fragment, safe='-._~')}" if fragment else url
 
-def _extension_enabled(extension_id: str) -> bool:
-    try:
-        from .extensions import get_extension_runtime
-
-        runtime = get_extension_runtime()
-        return runtime is None or runtime.enabled(extension_id)
-    except Exception:
-        return True
-
 def enabled_document_types() -> tuple[dict[str, str], ...]:
     types = [{"suffix": ".md", "kind": "markdown", "icon": "file-text"}]
-    if _extension_enabled("pdf_viewer"):
-        types.append({"suffix": ".pdf", "kind": "pdf", "icon": "file"})
-    if _extension_enabled("tree_table"):
-        types.append({"suffix": ".tree", "kind": "tree", "icon": "table"})
+    try:
+        from .extensions import DocumentType, get_extension_runtime
+
+        runtime = get_extension_runtime()
+        extra_types = runtime.document_types.values() if runtime is not None else (
+            DocumentType(".pdf", "pdf", "file"),
+            DocumentType(".tree", "tree", "table"),
+        )
+        types.extend(
+            {"suffix": item.suffix, "kind": item.kind, "icon": item.icon}
+            for item in extra_types
+        )
+    except Exception:
+        types.extend(
+            (
+                {"suffix": ".pdf", "kind": "pdf", "icon": "file"},
+                {"suffix": ".tree", "kind": "tree", "icon": "table"},
+            )
+        )
     return tuple(types)
 
 def enabled_document_suffixes() -> tuple[str, ...]:
