@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fasthtml.common import to_xml
 
-from vyasa.build import build_post_tree_static
+from vyasa.build import build_post_tree_static, build_static_site
 from vyasa.content_tree import ContentTree
 from vyasa.extensions import build_extension_runtime, get_extension_runtime, set_extension_runtime
 from vyasa.tree_tables import parse_tree_table, render_tree_table_html
@@ -94,3 +94,35 @@ def test_build_post_tree_static_hides_tree_without_extension(tmp_path):
         set_extension_runtime(previous)
 
     assert "/posts/scope.html" not in html
+
+
+def test_static_build_uses_document_type_extensions_for_pdf_and_tree(tmp_path, monkeypatch):
+    root = tmp_path / "site"
+    output = tmp_path / "dist"
+    root.mkdir()
+    (root / "guide.md").write_text("# Guide\n", encoding="utf-8")
+    (root / "brochure.pdf").write_bytes(b"%PDF-1.4\n")
+    (root / "scope.tree").write_text("# sheet: Scope\n# hierarchy: A | B\n\nA\n    B\n", encoding="utf-8")
+    monkeypatch.setenv("VYASA_ROOT", str(root))
+
+    build_static_site(input_dir=root, output_dir=output)
+
+    assert (output / "posts" / "brochure.html").exists()
+    assert (output / "posts" / "brochure.pdf").read_bytes() == b"%PDF-1.4\n"
+    assert "PDF preview not available" in (output / "posts" / "brochure.html").read_text(encoding="utf-8")
+    assert "vyasa-tree-table" in (output / "posts" / "scope.html").read_text(encoding="utf-8")
+
+
+def test_static_build_copies_raw_and_download_files_through_filesystem_routes(tmp_path, monkeypatch):
+    root = tmp_path / "site"
+    output = tmp_path / "dist"
+    root.mkdir()
+    (root / "guide.md").write_text("# Guide\n\n[download:data.json]\n", encoding="utf-8")
+    (root / "data.json").write_text('{"ok":true}\n', encoding="utf-8")
+    monkeypatch.setenv("VYASA_ROOT", str(root))
+
+    build_static_site(input_dir=root, output_dir=output)
+
+    assert (output / "download" / "data.json").read_text(encoding="utf-8") == '{"ok":true}\n'
+    assert (output / "posts" / "guide.md").read_text(encoding="utf-8").startswith("# Guide")
+    assert (output / "posts" / "data.json").read_text(encoding="utf-8") == '{"ok":true}\n'

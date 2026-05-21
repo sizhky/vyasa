@@ -125,9 +125,6 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             icon = "monitor" if metadata.get("slides", False) else "file-text"
             title = metadata.get("title", document_title_for_path(item, abbreviations=abbreviations))
             label, href = title, content_url_for_slug(slug)
-        elif item.suffix == ".pdf":
-            title = document_title_for_path(item, abbreviations=abbreviations)
-            icon, label, href = document_icon_for_path(item), title, content_url_for_slug(slug)
         else:
             title = document_title_for_path(item, abbreviations=abbreviations)
             icon, label, href = document_icon_for_path(item), title, content_url_for_slug(slug)

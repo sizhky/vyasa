@@ -25,6 +25,7 @@ from .helpers import (
     estimate_read_time_minutes,
     expand_markdown_includes_for_reading,
     get_content_mounts,
+    document_kind_for_suffix,
     iter_visible_files,
     preview_markdown,
     should_exclude_dir,
@@ -715,7 +716,7 @@ def _render_posts_search_results(query, roles=None):
     matches, regex_error = _find_search_matches(trimmed)
     matches = _filter_search_matches_by_roles(matches, roles)
     rendered_matches = [
-        (slug, content_slug_for_path(item, strip_suffix=False) if item.suffix == ".pdf" else slug)
+        (slug, content_slug_for_path(item, strip_suffix=False) if document_kind_for_suffix(item.suffix) != "markdown" else slug)
         for item in matches
         if (slug := content_slug_for_path(item))
     ]

@@ -98,6 +98,13 @@ class NavigationAction:
     state_attrs: dict[str, object] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class DocumentType:
+    suffix: str
+    kind: str
+    icon: str
+
+
 @dataclass
 class ActionRegistry:
     providers: list[Callable] = field(default_factory=list)
@@ -134,6 +141,7 @@ class ExtensionRuntime:
     slide_renderer: Callable | None = None
     context: object | None = None
     route_handlers: list[dict] = field(default_factory=list)
+    static_build_providers: list[Callable] = field(default_factory=list)
     config_defaults: dict[str, object] = field(default_factory=dict)
     startup_hooks: list[Callable] = field(default_factory=list)
     shutdown_hooks: list[Callable] = field(default_factory=list)
@@ -157,6 +165,9 @@ class ExtensionRuntime:
     search_match_finder: Callable | None = None
     search_preview_match_finder: Callable | None = None
     search_preview_page_renderer: Callable | None = None
+    document_types: dict[str, DocumentType] = field(default_factory=dict)
+    document_renderers: dict[str, Callable] = field(default_factory=dict)
+    static_document_renderers: dict[str, Callable] = field(default_factory=dict)
 
     def new_asset_collector(self) -> AssetCollector:
         return AssetCollector(self.bundles)
@@ -332,6 +343,10 @@ class _RouteRegistrar:
             }
         )
 
+    def static_build(self, capability: str, provider: Callable) -> None:
+        self.guard.require_capability(capability)
+        self.runtime.static_build_providers.append(provider)
+
 
 class _ConfigRegistrar:
     def __init__(self, runtime: ExtensionRuntime):
@@ -383,11 +398,25 @@ class _NavigationRegistrar:
 
 
 class _DocumentRegistrar:
-    def __init__(self, runtime: ExtensionRuntime):
+    def __init__(self, runtime: ExtensionRuntime, meta: ExtensionMeta, guard: _RegistrationGuard):
         self.runtime = runtime
+        self.meta = meta
+        self.guard = guard
 
     def action(self, provider: Callable) -> None:
         self.runtime.document_action_providers.append(provider)
+
+    def document_type(self, document_type: DocumentType) -> None:
+        self.guard.require_capability(f"cap:document_type:{document_type.kind}")
+        self.runtime.document_types[document_type.suffix] = document_type
+
+    def renderer(self, kind: str, provider: Callable) -> None:
+        self.guard.require_capability(f"cap:document_type:{kind}")
+        self.runtime.document_renderers[kind] = provider
+
+    def static_renderer(self, kind: str, provider: Callable) -> None:
+        self.guard.require_capability(f"cap:document_type:{kind}")
+        self.runtime.static_document_renderers[kind] = provider
 
 
 class _ContentSourceRegistrar:
@@ -438,7 +467,7 @@ class VyasaExtensionApp:
         self.lifecycle = _LifecycleRegistrar(runtime)
         self.storage = _StorageRegistrar(runtime, guard)
         self.navigation = _NavigationRegistrar(runtime)
-        self.documents = _DocumentRegistrar(runtime)
+        self.documents = _DocumentRegistrar(runtime, self.meta, guard)
         self.content_source = _ContentSourceRegistrar(runtime)
         self.search = _SearchRegistrar(runtime)
         self.trace = _TraceRegistrar(runtime)

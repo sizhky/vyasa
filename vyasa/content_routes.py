@@ -10,7 +10,6 @@ from .assets import asset_url, bundle_asset_nodes_for_collector
 from .config import get_config
 from .content_tree import ContentTree
 from .document_pages import (
-    PAGE_TITLE_CLS,
     DocumentActionContext,
     DocumentPage,
     document_header,
@@ -22,7 +21,6 @@ from .extensions import get_extension_runtime, refresh_extension_runtime
 from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, expand_markdown_includes_for_reading, get_adjacent_posts, strip_more_marker
 from .runtime_context import traced
 from .extensions_builtin.markdown.renderer import _render_markdown_fragment
-from .tree_tables import parse_tree_table, render_tree_table_html
 from .extensions_builtin.slides.deck import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
 
 FALLBACK_HOME_SLUG = "__home__"
@@ -116,16 +114,25 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         return RedirectResponse(content_url_for_slug(document.slug), status_code=307)
     file_path = document.path if document.kind == "markdown" else None
     if document.kind != "markdown":
-        if document.kind == "pdf":
-            post_title = f"{slug_to_title(PathCls(path).name, abbreviations=abbreviations)} (PDF)"
-            pdf_src = content_url_for_slug(path, suffix=".pdf")
-            pdf_content = Div(_breadcrumbs(path, slug_to_title, abbreviations), Div(H1(post_title, cls=PAGE_TITLE_CLS), Button("Focus PDF", cls="pdf-focus-toggle inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors", type="button", data_pdf_focus_toggle="true", data_pdf_focus_label="Focus PDF", data_pdf_exit_label="Exit focus", aria_pressed="false"), cls="flex items-center justify-between gap-4 flex-wrap mb-6"), NotStr(f'<object data="{pdf_src}" type="application/pdf" class="pdf-viewer w-full h-[calc(100vh-14rem)] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><p class="p-4 text-sm text-slate-600 dark:text-slate-300">PDF preview not available. <a href="{pdf_src}" class="text-blue-600 hover:underline">Download PDF</a>.</p></object>'))
-            return DocumentPage(post_title, path, pdf_content, file_path=str(document.path), show_toc=False).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
-        if document.kind == "tree":
-            tree_data = parse_tree_table(document.path)
-            post_title = tree_data["sheet"] or slug_to_title(PathCls(path).name, abbreviations=abbreviations)
-            tree_content = Div(_breadcrumbs(path, slug_to_title, abbreviations), NotStr(render_tree_table_html(document.path)))
-            return DocumentPage(post_title, path, tree_content, file_path=str(document.path), show_toc=False).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
+        runtime = get_extension_runtime()
+        if runtime is None:
+            runtime = refresh_extension_runtime(get_config().get_extensions_config())
+        renderer = runtime.document_renderers.get(document.kind) if runtime is not None else None
+        if renderer:
+            return renderer(
+                SimpleNamespace(
+                    document=document,
+                    path=path,
+                    htmx=htmx,
+                    request=request,
+                    auth=request.scope.get("auth"),
+                    layout=layout,
+                    blog_title=get_blog_title(),
+                    breadcrumbs=_breadcrumbs(path, slug_to_title, abbreviations),
+                    slug_to_title=slug_to_title,
+                    abbreviations=abbreviations,
+                )
+            )
         return not_found(htmx, auth=request.scope.get("auth"))
     metadata, raw_content = parse_frontmatter(file_path)
     frontmatter_error = metadata.get("__frontmatter_error__")
