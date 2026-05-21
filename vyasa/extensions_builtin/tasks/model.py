@@ -660,9 +660,12 @@ def apply_edge_label_fallbacks(graph: dict) -> None:
     if not edge_color_key:
         return
     for edge in graph.get("dependency_edges", []):
+        edge_value = edge.get(edge_color_key)
+        if (edge_value is None or str(edge_value).strip() == "") and edge.get("label"):
+            edge[edge_color_key] = str(edge["label"])
+            continue
         if edge.get("label"):
             continue
-        edge_value = edge.get(edge_color_key)
         if edge_value is None or str(edge_value).strip() == "":
             continue
         edge["label"] = str(edge_value)

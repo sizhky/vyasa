@@ -272,6 +272,28 @@ db -> api | relation: writes | color: "#7c3aed"
     assert model["dependency_edges"][1]["color"] == "#7c3aed"
 
 
+def test_items_parser_uses_edge_label_as_color_relation_fallback():
+    model = parse_tasks_text(
+        """```items
+---
+edge_color_palette: relation
+  reads: "#2563eb"
+  writes: "#dc2626"
+---
+System:
+  - api :: API
+  - db :: DB
+api ->|reads| db
+db ->|visible label| api | relation: writes
+```"""
+    )
+
+    assert model["dependency_edges"][0]["label"] == "reads"
+    assert model["dependency_edges"][0]["relation"] == "reads"
+    assert model["dependency_edges"][1]["label"] == "visible label"
+    assert model["dependency_edges"][1]["relation"] == "writes"
+
+
 def test_items_parser_loads_shared_palette_from_json_file(tmp_path):
     palette_path = tmp_path / "shared-palettes.json"
     palette_path.write_text(

@@ -357,8 +357,11 @@ function resolveTasksEdgeColor(edge, model, colorByOverride = null, paletteOverr
         ? paletteOverride
         : tasksEdgeColorPaletteFor(model, colorBy);
     const value = edge[colorBy];
-    if (value === null || value === undefined || String(value).trim() === '') return '';
-    const color = palette[String(value)];
+    const paletteKey = value === null || value === undefined || String(value).trim() === ''
+        ? (typeof edge.label === 'string' ? edge.label.trim() : '')
+        : String(value);
+    if (!paletteKey) return '';
+    const color = palette[paletteKey];
     return typeof color === 'string' && color.trim() ? color.trim() : '';
 }
 
