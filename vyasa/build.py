@@ -6,19 +6,19 @@ into a standalone static website with HTML, CSS, and JavaScript files.
 
 from pathlib import Path
 import shutil
+from types import SimpleNamespace
 from fasthtml.common import *
 from monsterui.all import *
 from .helpers import (
     _effective_abbreviations, _effective_ignore_list,
     _effective_include_list, _should_include_folder, _strip_inline_markdown,
-    _unique_anchor, content_url_for_slug, document_icon_for_path, document_title_for_path, enabled_document_suffixes, estimate_read_time_minutes, expand_markdown_includes_for_reading, find_folder_note_file,
+    _unique_anchor, content_url_for_slug, document_icon_for_path, document_title_for_path, enabled_document_suffixes, enabled_document_types, estimate_read_time_minutes, expand_markdown_includes_for_reading, find_folder_note_file,
     format_last_modified_label,
     get_adjacent_posts, get_post_title, parse_frontmatter, resolve_markdown_title, slug_to_title,
     text_to_anchor,
 )
 from .extensions_builtin.markdown.renderer import from_md
 from .sidebar_helpers import build_toc_items, extract_toc
-from .tree_tables import parse_tree_table, render_tree_table_html
 from .config import get_config, reload_config
 from .extensions import get_extension_runtime, refresh_extension_runtime
 from .assets import asset_url, bundle_asset_html, iter_extension_static_dirs, requested_page_bundles
@@ -554,7 +554,10 @@ def build_static_site(input_dir=None, output_dir=None):
     ignore_list = _effective_ignore_list(root_folder)
     include_list = _effective_include_list(root_folder)
     doc_files = []
-    for suffix in tuple(s for s in enabled_document_suffixes() if s != ".pdf"):
+    runtime = get_extension_runtime()
+    if runtime is None:
+        runtime = refresh_extension_runtime(config.get_extensions_config())
+    for suffix in enabled_document_suffixes():
         for doc_file in root_folder.rglob(f"*{suffix}"):
             try:
                 relative_path = doc_file.relative_to(root_folder)
@@ -583,10 +586,24 @@ def build_static_site(input_dir=None, output_dir=None):
             toc_items = build_toc_items(toc_headings)
             content_html = to_xml(content_div)
         else:
-            post_title = parse_tree_table(doc_file)["sheet"] or slug_to_title(doc_file.stem, abbreviations=abbreviations)
-            raw_content = doc_file.read_text(encoding="utf-8")
-            toc_items = None
-            content_html = render_tree_table_html(doc_file, include_heading=False)
+            kind = next((item["kind"] for item in enabled_document_types() if item["suffix"] == doc_file.suffix), None)
+            renderer = runtime.static_document_renderers.get(kind) if runtime is not None and kind else None
+            if renderer is None:
+                continue
+            rendered = renderer(
+                SimpleNamespace(
+                    doc_file=doc_file,
+                    relative_path=relative_path,
+                    root_folder=root_folder,
+                    output_dir=output_dir,
+                    abbreviations=abbreviations,
+                    slug_to_title=slug_to_title,
+                )
+            )
+            post_title = rendered.title
+            raw_content = rendered.raw_content
+            toc_items = rendered.toc_items
+            content_html = rendered.content_html
         prev_item, next_item = get_adjacent_posts(root_folder, relative_path, abbreviations=abbreviations)
         read_source = expand_markdown_includes_for_reading(
             render_content if doc_file.suffix == ".md" else raw_content,
@@ -639,6 +656,18 @@ def build_static_site(input_dir=None, output_dir=None):
         # Create directory and write file
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(full_html, encoding='utf-8')
+
+    for provider in runtime.static_build_providers if runtime is not None else ():
+        provider(
+            SimpleNamespace(
+                root_folder=root_folder,
+                output_dir=output_dir,
+                show_hidden=show_hidden,
+                include_list=include_list,
+                ignore_list=ignore_list,
+                should_include_folder=_should_include_folder,
+            )
+        )
     
     # Copy static assets
     static_src = Path(__file__).parent / 'static'

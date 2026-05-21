@@ -1,3 +1,6 @@
+from pathlib import Path
+import shutil
+
 from ..extensions import ExtensionMeta, VyasaExtensionBase
 from ..runtime_services import get_runtime_services
 
@@ -7,6 +10,7 @@ class FilesystemRoutesExtension(VyasaExtensionBase):
         app.routes.add("/posts/raw-markdown", _register_filesystem_routes)
         app.routes.add("/posts/static-attachment", _register_filesystem_routes)
         app.routes.add("/download", _register_filesystem_routes)
+        app.routes.static_build("cap:static_copy:filesystem_routes", copy_static_filesystem_routes)
 
 
 def _register_filesystem_routes(rt, runtime) -> None:
@@ -53,11 +57,36 @@ def _register_filesystem_routes(rt, runtime) -> None:
         return Response(status_code=404)
 
 
+def copy_static_filesystem_routes(context) -> None:
+    root = Path(context.root_folder).resolve()
+    root_parts = len(root.parts)
+    for source in sorted(root.rglob("*")):
+        if not source.is_file():
+            continue
+        rel_parts = source.parts[root_parts:]
+        if not rel_parts:
+            continue
+        if not context.show_hidden and any(part.startswith(".") for part in rel_parts):
+            continue
+        if any(not context.should_include_folder(part, context.include_list, context.ignore_list) for part in rel_parts[:-1]):
+            continue
+        rel = Path(*rel_parts)
+        _copy_static_source(source, context.output_dir / "download" / rel, overwrite=True)
+        _copy_static_source(source, context.output_dir / "posts" / rel, overwrite=False)
+
+
+def _copy_static_source(source: Path, destination: Path, *, overwrite: bool) -> None:
+    if destination.exists() and not overwrite:
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+
+
 EXTENSION = FilesystemRoutesExtension(
     ExtensionMeta(
         "filesystem_routes",
         "route",
-        ("cap:route:filesystem_routes",),
+        ("cap:route:filesystem_routes", "cap:static_copy:filesystem_routes"),
         route_prefixes=("/posts/raw-markdown", "/posts/static-attachment", "/download"),
         scope_disable=True,
     )

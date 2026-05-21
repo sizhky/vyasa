@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from .helpers import _effective_ignore_list, _effective_include_list, _should_include_folder, iter_visible_files
+from .helpers import _effective_ignore_list, _effective_include_list, _should_include_folder, document_kind_for_suffix, iter_visible_files
 from .search_service import normalize_search_text, parse_search_query
 
 
@@ -65,7 +65,7 @@ def get_file_search_index(roots, suffixes, show_hidden=False):
             slug = _slug_for_path(item, root, alias)
             if not slug:
                 continue
-            display = _slug_for_path(item, root, alias, strip_suffix=False) if item.suffix == ".pdf" else slug
+            display = _slug_for_path(item, root, alias, strip_suffix=False) if document_kind_for_suffix(item.suffix) != "markdown" else slug
             records.append(FileSearchRecord(item, slug, display, item.name, _normalize_file_search_text(display), _normalize_file_search_text(item.name)))
     _CACHE[key] = tuple(records)
     return _CACHE[key]
