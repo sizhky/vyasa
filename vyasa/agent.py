@@ -1,3 +1,10 @@
+"""Legacy standalone agent experiment.
+
+This module is not wired into the main Vyasa runtime. It also depends on
+surfaces outside the current extension contract, so any future integration
+should happen as an explicit optional extension rather than hidden core logic.
+"""
+
 # fasthtml solveit
 from dataclasses import dataclass
 from pathlib import Path

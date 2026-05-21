@@ -6,6 +6,7 @@ import threading
 import webbrowser
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 from .config import get_config, reload_config
+from .extensions import refresh_extension_runtime
 from .logging import configure_logging
 
 _core_app = None
@@ -147,6 +148,7 @@ def cli():
     
     # Initialize config after CLI/env overrides are in place.
     config = reload_config()
+    refresh_extension_runtime(config.get_extensions_config())
     
     # Get host and port from arguments, config, or use defaults
     host = args.host or config.get_host()
@@ -161,16 +163,20 @@ def cli():
     if args.show_hidden:
         os.environ['VYASA_SHOW_HIDDEN'] = 'true'
         config = reload_config()
+        refresh_extension_runtime(config.get_extensions_config())
     if args.browser_reload:
         os.environ['VYASA_BROWSER_RELOAD'] = 'true'
         config = reload_config()
+        refresh_extension_runtime(config.get_extensions_config())
     theme_debug_enabled = args.theme_debug or str(os.environ.get('VYASA_THEME_DEBUG', '')).strip().lower() in {'true', '1', 'yes', 'on'}
     if theme_debug_enabled:
         os.environ['VYASA_THEME_DEBUG'] = 'true'
         config = reload_config()
+        refresh_extension_runtime(config.get_extensions_config())
     if args.log_file:
         os.environ['VYASA_LOG_FILE'] = 'true'
         config = reload_config()
+        refresh_extension_runtime(config.get_extensions_config())
 
     print(f"Starting Vyasa server...")
     print(f"Blog root: {config.get_root_folder()}")

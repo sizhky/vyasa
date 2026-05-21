@@ -11,6 +11,9 @@ from .helpers import (
     _should_include_folder,
     content_slug_for_path,
     content_url_for_slug,
+    document_kind_for_suffix,
+    document_title_for_path,
+    enabled_document_suffixes,
     find_folder_note_file,
     get_content_mounts,
     get_post_title,
@@ -69,7 +72,7 @@ class ContentTree:
         root: Path,
         show_hidden: bool = False,
         excluded_dirs: set[str] | None = None,
-        allowed_suffixes: tuple[str, ...] = (".md", ".pdf", ".tree"),
+        allowed_suffixes: tuple[str, ...] | None = None,
         visibility: VisibilityPolicy | None = None,
         mounts: list[tuple[str, Path]] | None = None,
         ignore_primary_root: bool = False,
@@ -77,7 +80,7 @@ class ContentTree:
         self.root = Path(root).resolve()
         self.show_hidden = show_hidden
         self.excluded_dirs = excluded_dirs or set()
-        self.allowed_suffixes = allowed_suffixes
+        self.allowed_suffixes = allowed_suffixes or enabled_document_suffixes()
         self.visibility = visibility or AllowAllVisibility()
         self.mounts = mounts
         self.ignore_primary_root = ignore_primary_root
@@ -87,7 +90,7 @@ class ContentTree:
         cls,
         *,
         visibility: VisibilityPolicy | None = None,
-        allowed_suffixes: tuple[str, ...] = (".md", ".pdf", ".tree"),
+        allowed_suffixes: tuple[str, ...] | None = None,
     ) -> "ContentTree":
         from .config import get_config
 
@@ -124,9 +127,12 @@ class ContentTree:
                 if note_slug:
                     return ResolvedDocument(note_slug, note, "markdown", content_url_for_slug(note_slug), folder_note=note)
             return ResolvedDocument(clean_slug, folder_path, "folder", content_url_for_slug(clean_slug))
-        for suffix, kind in ((".md", "markdown"), (".pdf", "pdf"), (".tree", "tree")):
+        for suffix in self.allowed_suffixes:
             path = self._path_for_slug(clean_slug, suffix)
             if path and path.exists():
+                kind = document_kind_for_suffix(suffix)
+                if not kind:
+                    continue
                 return ResolvedDocument(clean_slug, path, kind, content_url_for_slug(clean_slug, prefix="/posts"))
         return None
 
@@ -208,20 +214,15 @@ class ContentTree:
             has_note = bool(find_folder_note_file(path))
             return ContentEntry(slug, path, "folder", title, route, True, has_note)
         slug = self._slug_for_path(path) or path.with_suffix("").name
-        kind = {".md": "markdown", ".pdf": "pdf", ".tree": "tree"}[path.suffix]
+        kind = document_kind_for_suffix(path.suffix)
+        if not kind:
+            raise ValueError(f"unsupported document suffix: {path.suffix}")
         route = content_url_for_slug(slug, prefix="/posts")
         visible = self.visibility.can_read(route, roles)
         return ContentEntry(slug, path, kind, self._title_for_file(path, kind), route, visible, False)
 
     def _title_for_file(self, path: Path, kind: ContentKind) -> str:
-        abbreviations = _effective_abbreviations(self.root, path.parent)
-        if kind == "markdown":
-            return get_post_title(path, abbreviations=abbreviations)
-        if kind == "pdf":
-            return f"{slug_to_title(path.stem, abbreviations=abbreviations)} (PDF)"
-        if kind == "tree":
-            return slug_to_title(path.stem, abbreviations=abbreviations)
-        return slug_to_title(path.name, abbreviations=abbreviations)
+        return document_title_for_path(path, abbreviations=_effective_abbreviations(self.root, path.parent))
 
     def _append_mount_entries(self, entries: list[Path]) -> None:
         reserved = {item.name for item in entries} | {item.stem for item in entries if item.is_file()}

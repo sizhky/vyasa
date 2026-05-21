@@ -22,6 +22,8 @@ from .helpers import (
     content_path_for_slug,
     content_slug_for_path,
     content_url_for_slug,
+    estimate_read_time_minutes,
+    expand_markdown_includes_for_reading,
     get_content_mounts,
     iter_visible_files,
     preview_markdown,
@@ -32,12 +34,12 @@ from .layout_helpers import (
     _width_class_and_style,
     _style_attr,
 )
-from .layout_page import render_layout
-from .nav_views import navbar_view
+from .layout_page import render_page_frame
+from .page_frame import PageFrame, PageFrameDeps
+from .nav_views import TREE_ACTION_BUTTON_CLASSES, TREE_ACTION_ROW_BASE_CLASSES, navbar_view
 from loguru import logger
-from .assets import asset_url
+from .assets import asset_url, bundle_asset_nodes, requested_page_bundles, route_bundle_names
 from .admin_views import rbac_admin_content
-from .annotations_api import CallableAnnotationStore, register_annotations_routes
 from .auth.context import get_auth_from_request, get_roles_from_auth, get_roles_from_request
 from .auth.admin_helpers import apply_impersonation_action, parse_rbac_form
 from .auth.flow_helpers import (
@@ -56,22 +58,18 @@ from .content_routes import (
     find_index_file as find_index_file_helper,
     render_index,
     render_post_detail,
-    render_slide_deck,
 )
 from .content_tree import ContentTree
-from .bookmarks_api import CallableBookmarkStore, register_bookmarks_routes
+from .extensions import get_extension_runtime, refresh_extension_runtime, set_runtime_context
 from .auth.oauth_bootstrap import build_google_oauth
-from .annotations_store import delete_annotation, list_annotations, upsert_annotation
-from .bookmark_store import delete_bookmark, list_bookmarks, upsert_bookmark
-from .bookmark_views import bookmarks_block
 from .page_views import not_found_content
 from .rbac_config import normalize_rbac_cfg, render_rbac_toml, write_rbac_to_vyasa
 from .rbac_store import load_rbac_cfg, write_rbac_cfg
-from .runtime_context import RuntimeContext
+from .runtime_context import RuntimeContext, traced
+from .runtime_services import set_runtime_services
 from .search_pages import gather_search_content
 from .search_http import gather_search_page
 from .search_views import (
-    posts_search_block as build_posts_search_block,
     render_posts_search_results,
 )
 from .sidebar_helpers import (
@@ -81,7 +79,7 @@ from .sidebar_helpers import (
     get_custom_css_links as get_sidebar_custom_css_links,
     sidebar_section,
 )
-from .markdown_rendering import from_md
+from .extensions_builtin.markdown.renderer import from_md
 from .tree_service import get_tree_entries
 from .tree_rendering import (
     build_post_tree_render,
@@ -109,63 +107,42 @@ def get_file_created_ts(path: Path) -> float:
 
 
 def iter_blog_home_files(roots=None, roles=None):
-    for _, root in roots or get_content_mounts():
-        for path in iter_visible_files(root, (".md",), include_hidden=False):
-            if path.name.startswith("."):
-                continue
-            if _blog_home_is_ignored(path, root):
-                continue
-            if path.parent == root and path.stem.lower() in {"index", "readme"}:
-                continue
-            slug = content_slug_for_path(path)
-            if not slug:
-                continue
-            if roles is not None and not is_allowed(f"/posts/{slug}", roles, _rbac_rules):
-                continue
-            yield path, slug
+    from .extensions_builtin.blog_home import iter_home_files
 
-
-def render_blog_home(htmx, request: Request):
-    roots = get_content_mounts()
-    root = roots[0][1] if roots else get_root_folder()
-    roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    entries = _sort_blog_home_entries(iter_blog_home_files(roots, roles), root)
-    feed = render_blog_home_feed(entries, root, 0)
-    shell = Div(H1(f"Welcome to {get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="mt-2 text-slate-500"), feed, cls="space-y-6")
-    return layout(shell, htmx=htmx, title=f"Home - {get_blog_title()}", show_sidebar=True, current_path="__home__", auth=request.scope.get("auth"))
-
-
-def _render_blog_preview_card(path, slug, root):
-    title, render_content = resolve_markdown_title(path, abbreviations=_effective_abbreviations(root))
-    preview = from_md(preview_markdown(render_content), current_path=slug)
-    href = content_url_for_slug(slug)
-    return Div(
-        A(title, href=href, cls="vyasa-blog-card-title absolute top-6 block text-right text-xl font-bold leading-tight hover:underline line-clamp-3 overflow-hidden"),
-        Div(
-            Div(preview, cls="prose prose-slate dark:prose-invert max-w-none"),
-            A("continue reading...", href=href, cls="inline-flex mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200 hover:underline"),
-            cls="vyasa-task-card rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white/75 dark:bg-slate-900/45 p-5 shadow-sm min-w-0 w-full",
-        ),
-        cls="relative flex w-full items-start",
+    yield from iter_home_files(
+        roots,
+        roles,
+        is_allowed_fn=is_allowed,
+        rbac_rules=_rbac_rules,
+        iter_files=iter_visible_files,
+        slug_for_path=content_slug_for_path,
     )
 
 
+def _default_render_blog_home(htmx, request: Request):
+    from .extensions_builtin.blog_home import _home_provider
+
+    return _home_provider(htmx, request)
+
+
+def render_blog_home(htmx, request: Request):
+    runtime = get_extension_runtime()
+    provider = runtime.home_renderer if runtime else None
+    if provider and provider is not _default_render_blog_home:
+        return provider(htmx, request)
+    return _default_render_blog_home(htmx, request)
+
+
+def _render_blog_preview_card(path, slug, root):
+    from .extensions_builtin.blog_home import render_card
+
+    return render_card(path, slug, root, resolve_title=resolve_markdown_title, abbreviations=_effective_abbreviations)
+
+
 def render_blog_home_feed(entries, root, offset=0, batch_size=4, wrap=True):
-    cards = []
-    chunk = entries[offset:offset + batch_size]
-    for path, slug in chunk:
-        cards.append(_render_blog_preview_card(path, slug, root))
-    sentinel = Div(
-        id="blog-feed-sentinel",
-        cls="h-8",
-        hx_get=f"/_home/feed?offset={offset + batch_size}",
-        hx_trigger="revealed once",
-        hx_target="this",
-        hx_swap="outerHTML",
-    ) if offset + batch_size < len(entries) else ""
-    if wrap:
-        return Div(*cards, sentinel, id="blog-feed", cls="space-y-4")
-    return tuple([*cards, sentinel] if sentinel else cards)
+    from .extensions_builtin.blog_home import render_feed
+
+    return render_feed(entries, root, offset, batch_size, wrap)
 
 
 def render_search_preview_feed(entries, root):
@@ -179,6 +156,10 @@ def render_search_preview_feed(entries, root):
 
 
 def render_search_preview_page(htmx, request: Request, q: str = ""):
+    runtime = get_extension_runtime()
+    provider = runtime.search_preview_page_renderer if runtime else None
+    if provider and provider is not render_search_preview_page:
+        return provider(htmx, request, q=q)
     roots = get_content_mounts()
     root = roots[0][1] if roots else get_root_folder()
     auth = request.scope.get("auth") if request else None
@@ -206,28 +187,34 @@ def render_search_preview_page(htmx, request: Request, q: str = ""):
     )
     return layout(shell, htmx=htmx, title=f"Search previews - {query} - {get_blog_title()}", show_sidebar=True, current_path="search-previews", auth=auth)
 
+
+def search_preview_results_path(query_token: str = "", htmx=None, request: Request = None):
+    token = (query_token or "").strip()
+    if not token:
+        return render_search_preview_page(htmx, request, q="")
+    padding = "=" * (-len(token) % 4)
+    try:
+        query = base64.urlsafe_b64decode(f"{token}{padding}".encode("ascii")).decode("utf-8")
+    except Exception:
+        return Response(status_code=404)
+    return render_search_preview_page(htmx, request, q=query)
+
 def _sort_blog_home_entries(entries, root):
-    sort = get_config().get_home_sort()
-    items = list(entries)
-    if sort == "name_asc":
-        return sorted(items, key=lambda item: item[1].lower())
-    if sort == "name_desc":
-        return sorted(items, key=lambda item: item[1].lower(), reverse=True)
-    return sorted(items, key=lambda item: get_file_created_ts(item[0]), reverse=True)
+    from .extensions_builtin.blog_home import sort_entries
+
+    return sort_entries(entries, root, get_sort=get_config().get_home_sort, created_ts=get_file_created_ts)
 
 def _blog_home_is_ignored(path, root):
-    relative = path.relative_to(root)
-    ignore_names = set()
-    ancestor = root
-    ignore_names.update(str(item).strip() for item in (get_vyasa_config(root).get("ignore") or []) if str(item).strip())
-    for part in relative.parts[:-1]:
-        ancestor = ancestor / part
-        ignore_names.update(str(item).strip() for item in (get_vyasa_config(ancestor).get("ignore") or []) if str(item).strip())
-    candidates = set(relative.parts) | set(relative.with_suffix("").parts) | {path.name, path.stem}
-    return bool(ignore_names.intersection(candidates))
+    from .extensions_builtin.blog_home import is_ignored
+
+    return is_ignored(path, root)
 
 
 def get_favicon_href():
+    runtime = get_extension_runtime()
+    provider = runtime.favicon_href_provider if runtime else None
+    if provider:
+        return provider(get_root_folder())
     return favicon_href(get_root_folder())
 
 
@@ -258,9 +245,8 @@ hdrs = (
         """
     ),
     *Theme.slate.headers(highlightjs=False),
-    Link(rel="stylesheet", href=_hljs_theme_href(get_config().get_code_theme_light()), id="hljs-light", data_default_theme=get_config().get_code_theme_light()),
-    Link(rel="stylesheet", href=_hljs_theme_href(get_config().get_code_theme_dark()), id="hljs-dark", data_default_theme=get_config().get_code_theme_dark()),
-    Script(src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"),
+    Meta(name="vyasa-code-theme-light", content=get_config().get_code_theme_light()),
+    Meta(name="vyasa-code-theme-dark", content=get_config().get_code_theme_dark()),
     Link(rel="icon", href=get_favicon_href()),
     Script(src="https://unpkg.com/hyperscript.org@0.9.12"),
     Script(src=_asset_url("/static/scripts.js"), type="module"),
@@ -313,16 +299,13 @@ hdrs = (
 
 # Session/cookie-based authentication using Beforeware (conditionally enabled)
 _config = get_config()
+_extension_runtime = refresh_extension_runtime(_config.get_extensions_config())
 _auth_creds = _config.get_auth()
 _google_oauth_cfg = _config.get_google_oauth()
 _auth_required = _config.get_auth_required()
 
 
 _rbac_store_cache = {"db": None, "tbl": None}
-_annotations_store_cache = {"db": None, "tbl": None}
-_bookmark_store_cache = {"db": None, "tbl": None}
-
-
 def _normalize_rbac_cfg(cfg):
     return normalize_rbac_cfg(cfg, _config._coerce_list)
 
@@ -340,36 +323,6 @@ def _rbac_db_write(cfg):
         write_rbac_cfg(get_config().get_root_folder(), _rbac_store_cache, cfg, _normalize_rbac_cfg)
     except Exception as exc:
         logger.warning(f"RBAC DB unavailable: {exc}")
-
-
-def _annotations_db_list(path: str):
-    return list_annotations(get_config().get_root_folder(), _annotations_store_cache, path)
-
-
-def _annotations_db_upsert(row):
-    upsert_annotation(get_config().get_root_folder(), _annotations_store_cache, row)
-
-
-def _annotations_db_delete(annotation_id: str):
-    return delete_annotation(get_config().get_root_folder(), _annotations_store_cache, annotation_id)
-
-
-def _bookmarks_db_list(owner: str):
-    return list_bookmarks(get_config().get_root_folder(), _bookmark_store_cache, owner)
-
-
-def _bookmarks_db_upsert(owner: str, path: str):
-    upsert_bookmark(
-        get_config().get_root_folder(),
-        _bookmark_store_cache,
-        owner,
-        path,
-        datetime.utcnow().isoformat(),
-    )
-
-
-def _bookmarks_db_delete(owner: str, path: str):
-    return delete_bookmark(get_config().get_root_folder(), _bookmark_store_cache, owner, path)
 
 
 def _load_rbac_cfg_from_store():
@@ -451,6 +404,16 @@ async def favicon_svg_icon():
     return Response(favicon_svg(get_root_folder()), media_type="image/svg+xml")
 
 
+@app.route("/static/extensions/{extension_id}/{asset_path:path}")
+async def extension_static_asset(extension_id: str, asset_path: str):
+    from .assets import extension_asset_path
+
+    path = extension_asset_path(extension_id, asset_path)
+    if path.exists() and path.is_file():
+        return FileResponse(path)
+    return Response(status_code=404)
+
+
 def _mount_package_static(app_instance):
     mount_package_static(app_instance, Path(__file__).parent)
 
@@ -463,6 +426,39 @@ _runtime = RuntimeContext(
     google_oauth_cfg=lambda: _google_oauth_cfg,
     logger=logger,
 )
+set_runtime_context(_runtime)
+
+
+def _register_extension_routes():
+    runtime = get_extension_runtime()
+    if not runtime:
+        return
+    for entry in runtime.route_handlers:
+        handler = entry.get("handler")
+        if callable(handler):
+            handler(rt, _runtime)
+
+
+_register_extension_routes()
+
+
+def _register_extension_lifecycle_hooks():
+    runtime = get_extension_runtime()
+    if not runtime:
+        return
+    if hasattr(app, "add_event_handler"):
+        for hook in runtime.startup_hooks:
+            app.add_event_handler("startup", hook)
+        for hook in runtime.shutdown_hooks:
+            app.add_event_handler("shutdown", hook)
+    elif hasattr(app, "on_event"):
+        for hook in runtime.startup_hooks:
+            app.on_event("startup")(hook)
+        for hook in runtime.shutdown_hooks:
+            app.on_event("shutdown")(hook)
+
+
+_register_extension_lifecycle_hooks()
 
 
 from starlette.requests import Request
@@ -519,228 +515,6 @@ def ensure_app_initialized():
 ensure_app_initialized()
 
 
-@rt("/login", methods=["GET", "POST"])
-async def login(request: Request):
-    return await handle_login(
-        request,
-        get_config=get_config,
-        logger=logger,
-        local_auth_enabled=_local_auth_enabled,
-        resolve_roles=resolve_roles,
-        rbac_cfg=_rbac_cfg,
-        google_oauth_cfg=_google_oauth_cfg,
-        coerce_list=_config._coerce_list,
-        login_content=login_content,
-        google_oauth_enabled=_google_oauth_enabled,
-    )
-
-
-@rt("/login/google")
-async def login_google(request: Request):
-    if not _google_oauth_enabled:
-        return Response(status_code=404)
-    return await start_google_login(request, _google_oauth)
-
-
-@rt("/auth/google/callback")
-async def google_auth_callback(request: Request):
-    if not _google_oauth_enabled:
-        return Response(status_code=404)
-    try:
-        userinfo = await fetch_google_userinfo(request, _google_oauth, logger)
-    except Exception as exc:
-        logger.warning(f"Google OAuth failed: {exc}")
-        return RedirectResponse(
-            "/login?error=Google+authentication+failed", status_code=303
-        )
-    email = userinfo.get("email") if isinstance(userinfo, dict) else None
-    if not google_account_allowed(email, _google_oauth_cfg):
-        return RedirectResponse("/login?error=Google+account+not+allowed", status_code=303)
-    auth = build_google_auth_payload(userinfo)
-    auth["roles"] = resolve_roles(auth, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    request.session["auth"] = auth
-    next_url = request.session.pop("next", "/")
-    return RedirectResponse(next_url, status_code=303)
-
-
-@rt("/logout")
-async def logout(request: Request):
-    request.session.pop("auth", None)
-    request.session.pop("next", None)
-    return RedirectResponse("/login", status_code=303)
-
-
-@rt("/admin/impersonate", methods=["GET", "POST"])
-async def admin_impersonate(htmx, request: Request):
-    return await handle_admin_impersonate(
-        htmx,
-        request,
-        get_auth_from_request=get_auth_from_request,
-        rbac_rules=_rbac_rules,
-        rbac_cfg=_rbac_cfg,
-        google_oauth_cfg=_google_oauth_cfg,
-        coerce_list=_config._coerce_list,
-        apply_impersonation_action=apply_impersonation_action,
-        resolve_roles=resolve_roles,
-        layout=layout,
-        impersonate_content=impersonate_content,
-    )
-
-
-@rt("/admin/rbac", methods=["GET", "POST"])
-async def admin_rbac(htmx, request: Request):
-    return await handle_admin_rbac(
-        htmx,
-        request,
-        get_auth_from_request=get_auth_from_request,
-        rbac_rules=_rbac_rules,
-        rbac_cfg=_rbac_cfg,
-        google_oauth_cfg=_google_oauth_cfg,
-        coerce_list=_config._coerce_list,
-        parse_rbac_form=parse_rbac_form,
-        parse_roles_text=parse_roles_text,
-        rbac_db_write=_rbac_db_write,
-        write_rbac_to_vyasa=_write_rbac_to_vyasa,
-        set_rbac_cfg=_set_rbac_cfg,
-        cached_build_post_tree=_cached_build_post_tree,
-        cached_posts_sidebar_html=_cached_posts_sidebar_html,
-        render_rbac_toml=_render_rbac_toml,
-        rbac_admin_content=rbac_admin_content,
-        layout=layout,
-    )
-
-
-# Progressive sidebar loading: lazy posts sidebar endpoint
-@rt("/_sidebar/posts")
-def posts_sidebar_lazy(request: Request = None, current_path: str = ""):
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    html = _cached_posts_sidebar_html(
-        _posts_sidebar_fingerprint(),
-        tuple(roles or []),
-        get_config().get_show_hidden(),
-        current_path or "",
-    )
-    return Aside(
-        NotStr(html),
-        cls="hidden xl:block w-[var(--vyasa-sidebar-width,26rem)] shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]",
-        id="posts-sidebar",
-    )
-
-
-@rt("/_sidebar/posts/branch")
-def posts_sidebar_branch(path: str = "", request: Request = None):
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    folder = content_path_for_slug(path)
-    if not folder or not folder.is_dir():
-        logger.debug("Sidebar branch invalid path={}", path)
-        return Response(status_code=404)
-    items = build_post_tree(folder, roles=roles, max_depth=0)
-    logger.debug(
-        "Sidebar branch path={} resolved={} items={}", path, folder, len(items)
-    )
-    return "".join(to_xml(item) for item in items)
-
-
-# Route to serve raw markdown for LLM-friendly access
-@rt("/posts/{path:path}.md")
-def serve_post_markdown(path: str):
-    from starlette.responses import FileResponse
-
-    file_path = content_path_for_slug(path, ".md")
-    if file_path and file_path.exists():
-        return FileResponse(file_path, media_type="text/markdown; charset=utf-8")
-    return Response(status_code=404)
-
-
-@rt("/search/gather")
-def gather_search_results(htmx, q: str = "", request: Request = None):
-    return gather_search_page(
-        htmx,
-        q=q,
-        request=request,
-        find_search_matches=_find_search_matches,
-        get_roles_from_request=get_roles_from_request,
-        rbac_rules=_rbac_rules,
-        rbac_cfg=_rbac_cfg,
-        google_oauth_cfg=_google_oauth_cfg,
-        coerce_list=_config._coerce_list,
-        get_root_folder=get_root_folder,
-        is_allowed=is_allowed,
-        gather_search_content=gather_search_content,
-        layout=layout,
-    )
-
-
-@rt("/search/preview")
-def search_preview_results(htmx, q: str = "", request: Request = None):
-    return render_search_preview_page(htmx, request, q=q)
-
-
-@rt("/search/preview/s/{query_token}")
-def search_preview_results_path(query_token: str = "", htmx=None, request: Request = None):
-    token = (query_token or "").strip()
-    if not token:
-        return render_search_preview_page(htmx, request, q="")
-    padding = "=" * (-len(token) % 4)
-    try:
-        query = base64.urlsafe_b64decode(f"{token}{padding}".encode("ascii")).decode("utf-8")
-    except Exception:
-        return Response(status_code=404)
-    return render_search_preview_page(htmx, request, q=query)
-
-
-# Route to serve static files (images, SVGs, etc.) from blog posts
-@rt("/posts/{path:path}.{ext:static}")
-def serve_post_static(path: str, ext: str):
-    from starlette.responses import FileResponse
-
-    file_path = content_path_for_slug(path, f".{ext}")
-    if file_path and file_path.exists():
-        return FileResponse(file_path)
-    return Response(status_code=404)
-
-
-# Serve JSON attachments from blog posts (not included in fasthtml static exts)
-@rt("/posts/{path:path}.json")
-def serve_post_json(path: str):
-    from starlette.responses import FileResponse
-
-    file_path = content_path_for_slug(path, ".json")
-    if file_path and file_path.exists():
-        return FileResponse(
-            file_path,
-            headers={"Content-Disposition": f'attachment; filename="{file_path.name}"'},
-        )
-    return Response(status_code=404)
-
-
-register_annotations_routes(
-    rt,
-    _runtime,
-    CallableAnnotationStore(_annotations_db_list, _annotations_db_upsert, _annotations_db_delete),
-)
-register_bookmarks_routes(
-    rt,
-    _runtime,
-    CallableBookmarkStore(_bookmarks_db_list, _bookmarks_db_upsert, _bookmarks_db_delete),
-    root_folder=get_root_folder,
-)
-# Generic download route for any file under the blog root
-@rt("/download/{path:path}")
-def download_file(path: str):
-    from starlette.responses import FileResponse
-
-    file_path = content_path_for_slug(path)
-    if not file_path:
-        return Response(status_code=403)
-    if file_path.exists() and file_path.is_file():
-        return FileResponse(
-            file_path,
-            headers={"Content-Disposition": f'attachment; filename="{file_path.name}"'},
-        )
-    return Response(status_code=404)
-
-
 def theme_toggle():
     theme_script = """on load set franken to (localStorage's __FRANKEN__ or '{}') as Object
                 if franken's mode is 'dark' then add .dark to <html/> end
@@ -760,7 +534,8 @@ def theme_toggle():
     if not cfg.get_theme_debug():
         return button
     active = cfg.get_theme_preset() or ""
-    presets = {name: cfg.load_theme_preset(name) for name in cfg.list_theme_presets()}
+    presets = cfg.get_theme_extension_payloads()
+    preset_meta = cfg.get_theme_extension_meta()
     menu_items = "".join(
         f'<button type="button" data-theme-name="{name}" '
         f'onclick="window.vyasaApplyThemePreset && window.vyasaApplyThemePreset(this.dataset.themeName, this)" '
@@ -769,6 +544,7 @@ def theme_toggle():
     )
     return Div(
         Script(f"window.__VYASA_THEME_PRESETS__ = {json.dumps(presets)};"),
+        Script(f"window.__VYASA_THEME_EXTENSION_META__ = {json.dumps(preset_meta)};"),
         NotStr(
             f"""
             <div class="flex items-center gap-2" data-theme-switcher>
@@ -804,9 +580,9 @@ def theme_toggle():
 
 
 def navbar(
-    show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None
+    show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None, mobile_extra_controls=()
 ):
-    return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label)
+    return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label, mobile_extra_controls)
 
 
 def _posts_sidebar_fingerprint():
@@ -817,10 +593,18 @@ def _posts_sidebar_fingerprint():
 
 
 def _find_search_matches(query, limit=40):
+    runtime = get_extension_runtime()
+    provider = runtime.search_match_finder if runtime else None
+    if provider and provider is not _find_search_matches:
+        return provider(query, limit)
     return _find_search_matches_uncached(query, limit)
 
 
 def _find_search_preview_matches(query, limit=200):
+    runtime = get_extension_runtime()
+    provider = runtime.search_preview_match_finder if runtime else None
+    if provider and provider is not _find_search_preview_matches:
+        return provider(query, limit)
     return _find_search_preview_matches_uncached(query, limit)
 
 
@@ -853,6 +637,79 @@ def _filter_search_matches_by_roles(matches, roles):
     return filtered
 
 
+def _sidebar_section_nodes():
+    runtime = get_extension_runtime()
+    providers = runtime.sidebar_section_providers if runtime else []
+    context = {
+        "sidebar_section": sidebar_section,
+        "render_search_results": _render_posts_search_results,
+        "kbd": Kbd,
+    }
+    return [provider(context) for provider in providers]
+
+
+def _sidebar_row_decorators():
+    runtime = get_extension_runtime()
+    if not runtime:
+        return ()
+    return (*runtime.sidebar_row_decorators, _row_action_decorator(runtime.sidebar_action_registry()))
+
+
+def _search_result_row_decorators():
+    runtime = get_extension_runtime()
+    if not runtime:
+        return ()
+    return (*runtime.search_result_row_decorators, _row_action_decorator(runtime.search_result_action_registry()))
+
+
+def _row_action_decorator(registry):
+    def decorate(node, *, slug=None, title="", context="tree"):
+        actions = registry.actions_for(slug=slug, title=title, context=context)
+        if not actions:
+            return node
+        bookmark_row = any(action.attrs.get("data_bookmark_toggle") == "true" for action in actions)
+        row_base = TREE_ACTION_ROW_BASE_CLASSES.get(context, TREE_ACTION_ROW_BASE_CLASSES["tree"])
+        row_cls = f"vyasa-action-row {'vyasa-bookmark-row ' if bookmark_row else ''}{row_base}"
+        row_attrs = {}
+        for action in actions:
+            row_attrs.update(action.row_attrs)
+        if context in {"tree", "tree-inline"} and getattr(node, "attrs", None):
+            cls = node.attrs.get("class", "")
+            cls = " ".join(part for part in cls.split() if part not in {"vyasa-tree-row", "vyasa-tree-row-shell"})
+            node.attrs["class"] = cls
+        state_nodes = [
+            Span(
+                action.state_text or "",
+                cls="vyasa-row-action-state ml-1 text-[0.68rem] opacity-70",
+                **action.state_attrs,
+            )
+            for action in actions
+            if (action.state_text is not None or action.state_attrs) and action.attrs.get("data_inline_state_button") != "true"
+        ]
+        buttons = [
+            Button(
+                Span(action.icon_text or "", cls=("vyasa-bookmark-glyph " if action.attrs.get("data_bookmark_toggle") == "true" else "") + "flex h-4 w-4 items-center justify-center text-sm", aria_hidden="true"),
+                *((
+                    Span(
+                        action.state_text or "",
+                        cls="vyasa-row-action-state text-[0.68rem] opacity-70",
+                        **action.state_attrs,
+                    ),
+                ) if action.attrs.get("data_inline_state_button") == "true" else ()),
+                type="button",
+                title=action.label,
+                aria_label=action.label,
+                data_action_id=action.id,
+                cls=("vyasa-bookmark-toggle " if action.attrs.get("data_bookmark_toggle") == "true" else "") + TREE_ACTION_BUTTON_CLASSES,
+                **action.attrs,
+            )
+            for action in actions
+        ]
+        return Span(node, *buttons, *state_nodes, cls=row_cls, **row_attrs)
+
+    return decorate
+
+
 def _render_posts_search_results(query, roles=None):
     trimmed = (query or "").strip()
     matches, regex_error = _find_search_matches(trimmed)
@@ -862,17 +719,15 @@ def _render_posts_search_results(query, roles=None):
         for item in matches
         if (slug := content_slug_for_path(item))
     ]
-    return render_posts_search_results(trimmed, rendered_matches, regex_error)
+    return render_posts_search_results(trimmed, rendered_matches, regex_error, row_decorators=_search_result_row_decorators())
 
 
-def _posts_search_block():
-    return build_posts_search_block(_render_posts_search_results(""))
-
-
+@traced("sidebar")
 @lru_cache(maxsize=16)
 def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden, current_path=""):
     sidebars_open = get_config().get_sidebars_open()
     posts_items = get_posts(list(roles_key) if roles_key else [], current_path=current_path)
+    extra_sections = _sidebar_section_nodes()
     sidebar = build_collapsible_sidebar(
         "menu",
         "Library",
@@ -881,19 +736,7 @@ def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden, current_path
         data_sidebar="posts",
         shortcut_key="Z",
         extra_content=[
-            sidebar_section(
-                "Filter",
-                _posts_search_block(),
-                is_open=True,
-                data_section="filter",
-                body_cls="pt-1",
-                title_suffix=Kbd(
-                    "⌘K",
-                    cls="kbd-key ml-2 px-2.5 py-1 text-sm font-mono font-semibold normal-case tracking-normal leading-none",
-                    style="font-size: 0.875rem; line-height: 1; letter-spacing: 0;",
-                ),
-            ),
-            sidebar_section("Bookmarks", bookmarks_block(), is_open=True, data_section="bookmarks", body_cls="pt-1"),
+            *extra_sections,
             sidebar_section(
                 "Posts",
                 Div(
@@ -960,51 +803,14 @@ elif hasattr(app, "on_event"):
     app.on_event("startup")(_preload_posts_cache)
 
 
-@rt("/_sidebar/posts/search")
-def posts_sidebar_search(q: str = "", request: Request = None):
-    roles = get_roles_from_request(request, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    return _render_posts_search_results(q, roles=roles)
-
-
 def is_active_toc_item(anchor):
     """Check if a TOC item is currently active based on URL hash"""
     # This will be enhanced client-side with JavaScript
     return False
 
 
-def layout(
-    *content,
-    htmx,
-    title=None,
-    show_sidebar=False,
-    toc_content=None,
-    current_path=None,
-    show_toc=True,
-    auth=None,
-    htmx_nav=True,
-    nav_posts_menu=False,
-    full_width=False,
-    show_footer=True,
-    no_scroll=False,
-    slide_mode=False,
-    current_updated_label=None,
-):
-    return render_layout(
-        *content,
-        htmx=htmx,
-        title=title,
-        show_sidebar=show_sidebar,
-        toc_content=toc_content,
-        current_path=current_path,
-        show_toc=show_toc,
-        auth=auth,
-        htmx_nav=htmx_nav,
-        nav_posts_menu=nav_posts_menu,
-        full_width=full_width,
-        show_footer=show_footer,
-        no_scroll=no_scroll,
-        slide_mode=slide_mode,
-        current_updated_label=current_updated_label,
+def _default_page_frame_deps():
+    return PageFrameDeps(
         logger=logger,
         resolve_layout_config=_resolve_layout_config,
         width_class_and_style=_width_class_and_style,
@@ -1027,6 +833,113 @@ def layout(
         posts_sidebar_fingerprint=_posts_sidebar_fingerprint,
         get_posts=get_posts,
         navbar=navbar,
+    )
+
+
+def default_page_frame(
+    *content,
+    title=None,
+    show_sidebar=False,
+    toc_content=None,
+    current_path=None,
+    show_toc=True,
+    auth=None,
+    htmx_nav=True,
+    nav_posts_menu=False,
+    full_width=False,
+    show_footer=True,
+    no_scroll=False,
+    slide_mode=False,
+    current_updated_label=None,
+):
+    extra_head_nodes = bundle_asset_nodes(
+        requested_page_bundles(
+            show_sidebar=show_sidebar,
+            current_path=current_path,
+            slide_mode=slide_mode,
+            annotations_enabled=get_config().get_annotations_enabled(),
+        )
+    )
+    return PageFrame(
+        tuple(content),
+        title=title,
+        show_sidebar=show_sidebar,
+        toc_content=toc_content,
+        current_path=current_path,
+        show_toc=show_toc,
+        auth=auth,
+        htmx_nav=htmx_nav,
+        nav_posts_menu=nav_posts_menu,
+        full_width=full_width,
+        show_footer=show_footer,
+        no_scroll=no_scroll,
+        slide_mode=slide_mode,
+        current_updated_label=current_updated_label,
+        extra_head_nodes=extra_head_nodes,
+    )
+
+
+def _default_layout(*content, htmx, **kwargs):
+    return render_page_frame(
+        default_page_frame(*content, **kwargs),
+        htmx=htmx,
+        deps=_default_page_frame_deps(),
+    )
+
+
+def layout(
+    *content,
+    htmx,
+    title=None,
+    show_sidebar=False,
+    toc_content=None,
+    current_path=None,
+    show_toc=True,
+    auth=None,
+    htmx_nav=True,
+    nav_posts_menu=False,
+    full_width=False,
+    show_footer=True,
+    no_scroll=False,
+    slide_mode=False,
+    current_updated_label=None,
+):
+    runtime = get_extension_runtime()
+    provider = runtime.layout_renderer if runtime else None
+    if provider:
+        return provider(
+            *content,
+            htmx=htmx,
+            title=title,
+            show_sidebar=show_sidebar,
+            toc_content=toc_content,
+            current_path=current_path,
+            show_toc=show_toc,
+            auth=auth,
+            htmx_nav=htmx_nav,
+            nav_posts_menu=nav_posts_menu,
+            full_width=full_width,
+            show_footer=show_footer,
+            no_scroll=no_scroll,
+            slide_mode=slide_mode,
+            current_updated_label=current_updated_label,
+        )
+    return _default_layout(
+        *content,
+        htmx=htmx,
+        title=title,
+        show_sidebar=show_sidebar,
+        toc_content=toc_content,
+        current_path=current_path,
+        show_toc=show_toc,
+        auth=auth,
+        htmx_nav=htmx_nav,
+        nav_posts_menu=nav_posts_menu,
+        full_width=full_width,
+        show_footer=show_footer,
+        no_scroll=no_scroll,
+        slide_mode=slide_mode,
+        current_updated_label=current_updated_label,
     )
 
 
@@ -1065,7 +978,7 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
         effective_abbreviations=_effective_abbreviations, should_exclude_dir_fn=should_exclude_dir,
         slug_to_title_fn=slug_to_title, find_folder_note_file_fn=find_folder_note_file,
         is_allowed_fn=is_allowed, parse_frontmatter_fn=parse_frontmatter,
-        rbac_rules=_rbac_rules, logger=logger,
+        rbac_rules=_rbac_rules, logger=logger, row_decorators=_sidebar_row_decorators(),
     )
 
 
@@ -1094,7 +1007,7 @@ def get_posts(roles=None, current_path=""):
     )
 
 
-def not_found(htmx=None, auth=None):
+def _default_not_found(htmx=None, auth=None):
     """Custom 404 error page"""
     blog_title = get_blog_title()
     content = not_found_content()
@@ -1109,6 +1022,79 @@ def not_found(htmx=None, auth=None):
         auth=auth,
     )
     return result
+
+
+def not_found(htmx=None, auth=None):
+    runtime = get_extension_runtime()
+    provider = runtime.error_renderer if runtime else None
+    if provider and provider is not _default_not_found:
+        return provider(htmx=htmx, auth=auth)
+    return _default_not_found(htmx=htmx, auth=auth)
+
+
+set_runtime_services({
+    "config": _config,
+    "logger": logger,
+    "get_config": lambda: get_config(),
+    "get_root_folder": lambda: get_root_folder(),
+    "get_blog_title": lambda: get_blog_title(),
+    "get_content_mounts": lambda: get_content_mounts(),
+    "get_file_created_ts": lambda path: get_file_created_ts(path),
+    "layout": lambda *args, **kwargs: layout(*args, **kwargs),
+    "default_page_frame": lambda *args, **kwargs: default_page_frame(*args, **kwargs),
+    "default_page_frame_deps": lambda: _default_page_frame_deps(),
+    "not_found": lambda *args, **kwargs: not_found(*args, **kwargs),
+    "default_not_found": lambda *args, **kwargs: _default_not_found(*args, **kwargs),
+    "get_roles_from_auth": lambda *args, **kwargs: get_roles_from_auth(*args, **kwargs),
+    "get_roles_from_request": lambda *args, **kwargs: get_roles_from_request(*args, **kwargs),
+    "get_auth_from_request": lambda *args, **kwargs: get_auth_from_request(*args, **kwargs),
+    "resolve_roles": resolve_roles,
+    "is_allowed": lambda *args, **kwargs: is_allowed(*args, **kwargs),
+    "parse_frontmatter": lambda *args, **kwargs: parse_frontmatter(*args, **kwargs),
+    "resolve_markdown_title": lambda *args, **kwargs: resolve_markdown_title(*args, **kwargs),
+    "slug_to_title": lambda *args, **kwargs: slug_to_title(*args, **kwargs),
+    "effective_abbreviations": _effective_abbreviations,
+    "from_md": lambda *args, **kwargs: from_md(*args, **kwargs),
+    "render_blog_home_feed": lambda *args, **kwargs: render_blog_home_feed(*args, **kwargs),
+    "render_search_preview_page": lambda *args, **kwargs: render_search_preview_page(*args, **kwargs),
+    "render_posts_search_results": lambda *args, **kwargs: _render_posts_search_results(*args, **kwargs),
+    "find_search_matches": lambda *args, **kwargs: _find_search_matches(*args, **kwargs),
+    "gather_search_page": gather_search_page,
+    "gather_search_content": gather_search_content,
+    "content_path_for_slug": lambda *args, **kwargs: content_path_for_slug(*args, **kwargs),
+    "content_slug_for_path": lambda *args, **kwargs: content_slug_for_path(*args, **kwargs),
+    "content_url_for_slug": lambda *args, **kwargs: content_url_for_slug(*args, **kwargs),
+    "iter_visible_files": lambda *args, **kwargs: iter_visible_files(*args, **kwargs),
+    "cached_posts_sidebar_html": lambda *args, **kwargs: _cached_posts_sidebar_html(*args, **kwargs),
+    "posts_sidebar_fingerprint": lambda: _posts_sidebar_fingerprint(),
+    "cached_build_post_tree": lambda *args, **kwargs: _cached_build_post_tree(*args, **kwargs),
+    "build_post_tree": lambda *args, **kwargs: build_post_tree(*args, **kwargs),
+    "sidebar_row_decorators": lambda: _sidebar_row_decorators(),
+    "local_auth_enabled": _local_auth_enabled,
+    "google_oauth_enabled": _google_oauth_enabled,
+    "google_oauth": _google_oauth,
+    "google_oauth_cfg": lambda: _google_oauth_cfg,
+    "rbac_cfg": lambda: _rbac_cfg,
+    "rbac_rules": lambda: _rbac_rules,
+    "coerce_list": _config._coerce_list,
+    "login_content": login_content,
+    "impersonate_content": impersonate_content,
+    "handle_login": handle_login,
+    "start_google_login": start_google_login,
+    "fetch_google_userinfo": fetch_google_userinfo,
+    "google_account_allowed": google_account_allowed,
+    "build_google_auth_payload": build_google_auth_payload,
+    "handle_admin_impersonate": handle_admin_impersonate,
+    "handle_admin_rbac": handle_admin_rbac,
+    "apply_impersonation_action": apply_impersonation_action,
+    "parse_rbac_form": parse_rbac_form,
+    "parse_roles_text": parse_roles_text,
+    "rbac_db_write": _rbac_db_write,
+    "write_rbac_to_vyasa": _write_rbac_to_vyasa,
+    "set_rbac_cfg": _set_rbac_cfg,
+    "render_rbac_toml": _render_rbac_toml,
+    "rbac_admin_content": rbac_admin_content,
+})
 
 
 @rt("/posts/{path:path}")
@@ -1128,29 +1114,6 @@ def post_detail(path: str, htmx, request: Request):
         resolve_markdown_title=resolve_markdown_title,
         from_md=from_md,
         logger=logger,
-    )
-
-
-@rt("/slides/{path:path}")
-def slide_deck(path: str, htmx, request: Request):
-    return render_slide_deck(
-        path,
-        htmx,
-        request,
-        get_root_folder=get_root_folder,
-        not_found=not_found,
-        get_roles_from_auth=get_roles_from_auth,
-        rbac_rules=_rbac_rules,
-        rbac_cfg=_rbac_cfg,
-        google_oauth_cfg=_google_oauth_cfg,
-        coerce_list=_config._coerce_list,
-        is_allowed=is_allowed,
-        parse_frontmatter=parse_frontmatter,
-        resolve_markdown_title=resolve_markdown_title,
-        slug_to_title=slug_to_title,
-        effective_abbreviations=_effective_abbreviations,
-        from_md=from_md,
-        layout=layout,
     )
 
 
@@ -1180,6 +1143,10 @@ def index(htmx, request: Request):
 
 @rt("/_home/feed")
 def home_feed(offset: int = 0, htmx=None, request: Request = None):
+    runtime = get_extension_runtime()
+    provider = runtime.home_feed_renderer if runtime else None
+    if provider and provider is not home_feed:
+        return provider(offset=offset, htmx=htmx, request=request)
     roots = get_content_mounts()
     root = roots[0][1] if roots else get_root_folder()
     roles = get_roles_from_auth(request.scope.get("auth"), _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list) if request else None

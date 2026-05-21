@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import wraps
+import time
 from typing import Any, Protocol
 
 from .auth.context import get_auth_from_request, get_roles_from_request
@@ -52,3 +55,33 @@ class RuntimeContext:
 
     def current_rbac_rules(self):
         return self._value(self.rbac_rules)
+
+
+@contextmanager
+def trace_span(name: str, **attrs):
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        duration_ms = (time.perf_counter() - start) * 1000
+        try:
+            from .extensions import get_extension_runtime
+
+            runtime = get_extension_runtime()
+            handlers = runtime.trace_handlers if runtime else ()
+        except Exception:
+            handlers = ()
+        for handler in handlers:
+            handler(name=name, duration_ms=duration_ms, attrs=attrs)
+
+
+def traced(name: str):
+    def decorate(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            with trace_span(name):
+                return fn(*args, **kwargs)
+
+        return wrapper
+
+    return decorate

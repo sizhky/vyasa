@@ -3,7 +3,7 @@ from unittest.mock import patch
 from fasthtml.common import to_xml
 
 from vyasa.config import reload_config
-from vyasa.markdown_rendering import from_md
+from vyasa.extensions_builtin.markdown.renderer import from_md
 from vyasa.sidebar_helpers import extract_toc
 from vyasa.helpers import (
     _strip_inline_markdown,
@@ -37,7 +37,7 @@ def test_code_include_renders_selected_lines_and_highlight_metadata(tmp_path):
     sample.write_text("\n".join(f"line {n}" for n in range(1, 31)), encoding="utf-8")
     md = "{* ../../docs_src/stream_json_lines/tutorial001_py310.py ln[1:24] hl[9:11,22] *}"
 
-    with patch("vyasa.markdown_rendering.get_root_folder", return_value=tmp_path / "content"):
+    with patch("vyasa.extensions_builtin.markdown.renderer.get_root_folder", return_value=tmp_path / "content"):
         html = to_xml(from_md(md, current_path="guide/chapter.md"))
 
     assert 'language-python' in html
@@ -53,7 +53,7 @@ def test_markdown_include_renders_anchored_section(tmp_path):
     (src / "overview.md").write_text("# Top\n\n## System Context\n\nAlpha\n\n### Child\n\nBeta\n\n## Next\n\nGamma\n", encoding="utf-8")
     md = "{* ../notes/overview.md#system-context *}"
 
-    with patch("vyasa.markdown_rendering.get_root_folder", return_value=tmp_path / "content"):
+    with patch("vyasa.extensions_builtin.markdown.renderer.get_root_folder", return_value=tmp_path / "content"):
         html = to_xml(from_md(md, current_path="guide/page.md"))
 
     assert '>System Context<' in html
