@@ -10,43 +10,28 @@ Priority: .vyasa file > environment variables > defaults
 
 import os
 import hashlib
-import tomllib
 from pathlib import Path
-from importlib import resources
 from typing import Optional
 from .helpers import slug_to_title
+from .theme_extensions import (
+    resolve_theme_extension,
+    theme_extension_meta,
+    theme_extension_payloads,
+    theme_registry,
+)
 
 MIN_DYNAMIC_PORT = 1024
 MAX_DYNAMIC_PORT = 65535
 
 
-def load_theme_preset(preset_name: str, base_dir: Optional[Path] = None) -> dict:
-    name = str(preset_name or "").strip()
-    if not name:
-        return {}
-    if base_dir:
-        preset_file = base_dir / ".vyasa-themes" / f"{name}.toml"
-        if preset_file.exists():
-            with open(preset_file, "rb") as f:
-                return tomllib.load(f)
-    package_file = resources.files("vyasa.themes").joinpath(f"{name}.toml")
-    if package_file.is_file():
-        with package_file.open("rb") as f:
-            return tomllib.load(f)
-    return {}
-
-
 def list_theme_presets(base_dir: Optional[Path] = None) -> list[str]:
-    names = set()
-    if base_dir:
-        theme_dir = base_dir / ".vyasa-themes"
-        if theme_dir.exists():
-            names.update(path.stem for path in theme_dir.glob("*.toml"))
-    try:
-        names.update(path.name[:-5] for path in resources.files("vyasa.themes").iterdir() if path.name.endswith(".toml"))
-    except Exception:
-        pass
-    return sorted(names)
+    return sorted(theme_registry(base_dir))
+
+
+def load_theme_preset(preset_name: str, base_dir: Optional[Path] = None) -> dict:
+    registry = theme_registry(base_dir)
+    theme, _ = resolve_theme_extension(str(preset_name or "").strip(), registry)
+    return theme
 
 
 def port_for_working_directory(path: Path) -> int:
@@ -70,15 +55,18 @@ class VyasaConfig:
         """
         self._config = {}
         self._loaded_config_path: Optional[Path] = None
+        self._explicit_config_path = config_path is not None
         self._load_config(config_path)
     
     def _load_config(self, config_path: Optional[Path] = None):
         """Load configuration from .vyasa file if it exists."""
         # Try to find .vyasa file
         config_file = None
+        self._loaded_config_path = config_path if config_path is not None else None
         
-        if config_path and config_path.exists():
-            config_file = config_path
+        if config_path is not None:
+            if config_path.exists():
+                config_file = config_path
         else:
             # Search in VYASA_ROOT first (if set)
             root = os.getenv('VYASA_ROOT')
@@ -97,6 +85,7 @@ class VyasaConfig:
         if config_file:
             try:
                 with open(config_file, 'rb') as f:
+                    import tomllib
                     self._config = tomllib.load(f)
                 preset_name = str(self._config.get("theme_preset", "")).strip()
                 if preset_name:
@@ -133,8 +122,21 @@ class VyasaConfig:
     
     def get_root_folder(self) -> Path:
         """Get the blog root folder path."""
-        root = self.get('root', 'VYASA_ROOT', '.')
-        return Path(root).resolve()
+        root = self._config.get('root', None)
+        env_root = os.getenv('VYASA_ROOT')
+        if root in (None, ""):
+            if self._explicit_config_path:
+                return (self._loaded_config_path.parent if self._loaded_config_path else Path.cwd()).resolve()
+            if env_root:
+                return Path(env_root).expanduser().resolve()
+            if self._loaded_config_path is not None:
+                return self._loaded_config_path.parent.resolve()
+            return Path.cwd().resolve()
+        path = Path(str(root)).expanduser()
+        if not path.is_absolute():
+            base = self._loaded_config_path.parent if self._loaded_config_path else Path.cwd()
+            path = base / path
+        return path.resolve()
 
     def get_vyasa_roots(self) -> list[Path]:
         """Get extra folders to expose as top-level content roots."""
@@ -221,6 +223,14 @@ class VyasaConfig:
     def load_theme_preset(self, preset_name: str) -> dict[str, str]:
         base_dir = self._loaded_config_path.parent if self._loaded_config_path else None
         return load_theme_preset(preset_name, base_dir)
+
+    def get_theme_extension_meta(self) -> dict[str, dict]:
+        base_dir = self._loaded_config_path.parent if self._loaded_config_path else None
+        return theme_extension_meta(theme_registry(base_dir))
+
+    def get_theme_extension_payloads(self) -> dict[str, dict[str, str]]:
+        base_dir = self._loaded_config_path.parent if self._loaded_config_path else None
+        return theme_extension_payloads(theme_registry(base_dir))
 
     def get_theme_tokens(self) -> dict[str, str]:
         tokens = {}
@@ -384,6 +394,15 @@ class VyasaConfig:
         value = self.get('reload_exclude', 'VYASA_RELOAD_EXCLUDE', [])
         extras = [str(v).strip() for v in self._coerce_list(value) if str(v).strip()]
         return list(dict.fromkeys(defaults + extras))
+
+    def get_extensions_config(self) -> dict:
+        value = self._config.get('extensions', {})
+        return value if isinstance(value, dict) else {}
+
+    def resolve_extensions(self):
+        from .extensions import resolve_extension_plan
+
+        return resolve_extension_plan(self.get_extensions_config())
 
 
 

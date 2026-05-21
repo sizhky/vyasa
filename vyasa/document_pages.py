@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from fasthtml.common import A, Button, Div, H1, NotStr, P, Script, Span, Strong, Textarea
-from monsterui.all import UkIcon
 
 from .helpers import content_url_for_slug, estimate_read_time_minutes, format_last_modified_label
 
@@ -18,6 +17,16 @@ COPY_RAW_JS = (
     "if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}"
     "else{document.execCommand('copy');done();}})()"
 )
+ACTION_ICONS = {
+    "clipboard": '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-page-action-icon"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3"/></svg>',
+    "file-edit": '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-page-action-icon"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m12 18 5-5 2 2-5 5h-2z"/></svg>',
+    "fold": '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-page-action-icon vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 10 3 3 3-3"/></svg>',
+    "monitor": '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-page-action-icon"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8"/><path d="M12 16v4"/></svg>',
+}
+
+
+def action_icon(name: str):
+    return NotStr(ACTION_ICONS[name])
 
 
 @dataclass(frozen=True)
@@ -48,6 +57,39 @@ class DocumentPage:
         )
 
 
+@dataclass(frozen=True)
+class DocumentActionContext:
+    title: str
+    current_path: str
+    raw_content: str = ""
+    file_path: str | None = None
+    relative_file_path: str | None = None
+
+
+@dataclass(frozen=True)
+class DocumentActionItem:
+    id: str
+    node: Any
+    aux_nodes: tuple[Any, ...] = ()
+    order: int = 0
+
+
+def resolve_document_actions(context: DocumentActionContext) -> tuple[tuple[Any, ...], tuple[Any, ...]]:
+    from .extensions import get_extension_runtime
+
+    runtime = get_extension_runtime()
+    providers = runtime.document_action_providers if runtime else []
+    items = [
+        item
+        for provider in providers
+        if (item := provider(context))
+    ]
+    ordered = sorted(items, key=lambda item: (item.order, item.id))
+    actions = tuple(item.node for item in ordered)
+    aux_nodes = tuple(node for item in ordered for node in item.aux_nodes)
+    return actions, aux_nodes
+
+
 def meta_line(source_text: str, file_path=None):
     items = [Span(f"{estimate_read_time_minutes(source_text)}-min read")]
     label = format_last_modified_label(file_path) if file_path else None
@@ -58,7 +100,7 @@ def meta_line(source_text: str, file_path=None):
 
 def copy_raw_button(label: str, target_id: str, toast_id: str):
     return Button(
-        UkIcon("clipboard", cls="w-4 h-4"),
+        action_icon("clipboard"),
         Span(label, cls="text-sm font-medium"),
         type="button",
         title=f"Copy raw {label.removeprefix('Copy ').lower()}",
@@ -70,7 +112,7 @@ def copy_raw_button(label: str, target_id: str, toast_id: str):
 def copy_text_button(label: str, text: str, target_id: str, toast_id: str):
     return (
         Button(
-            UkIcon("file-edit", cls="w-4 h-4"),
+            action_icon("file-edit"),
             Span(label, cls="text-sm font-medium"),
             type="button",
             title=f"Copy {label.lower()}",
@@ -82,9 +124,20 @@ def copy_text_button(label: str, text: str, target_id: str, toast_id: str):
     )
 
 
+def fold_all_button():
+    return Button(
+        action_icon("fold"),
+        Span("Fold all", cls="text-sm font-medium"),
+        type="button",
+        hidden=True,
+        data_vyasa_fold_all="open",
+        cls="vyasa-fold-all-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+    )
+
+
 def present_button(slug: str):
     return A(
-        UkIcon("monitor", cls="w-4 h-4"),
+        action_icon("monitor"),
         "Present",
         href=content_url_for_slug(slug, prefix="/slides", suffix="/slide-1"),
         hx_boost="false",

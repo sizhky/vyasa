@@ -1,4 +1,4 @@
-.PHONY: clean build test install dev
+.PHONY: clean build test test-all install dev
 
 clean:
 	rm -rf dist/ build/ *.egg-info
@@ -8,9 +8,10 @@ clean:
 build: clean
 	python -m build
 
-test: build
-	pip install dist/vyasa-*.whl --force-reinstall
-	vyasa demo/
+test:
+	/Users/yeshwanth/.venv/bin/python -m pytest
+
+test-all: test
 
 install:
 	pip install -e ".[dev]"

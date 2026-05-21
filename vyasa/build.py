@@ -11,23 +11,24 @@ from monsterui.all import *
 from .helpers import (
     _effective_abbreviations, _effective_ignore_list,
     _effective_include_list, _should_include_folder, _strip_inline_markdown,
-    _unique_anchor, content_url_for_slug, estimate_read_time_minutes, find_folder_note_file,
+    _unique_anchor, content_url_for_slug, document_icon_for_path, document_title_for_path, enabled_document_suffixes, estimate_read_time_minutes, expand_markdown_includes_for_reading, find_folder_note_file,
     format_last_modified_label,
     get_adjacent_posts, get_post_title, parse_frontmatter, resolve_markdown_title, slug_to_title,
     text_to_anchor,
 )
-from .markdown_rendering import from_md
+from .extensions_builtin.markdown.renderer import from_md
 from .sidebar_helpers import build_toc_items, extract_toc
-from .tree_tables import TREE_SUFFIXES, parse_tree_table, render_tree_table_html
+from .tree_tables import parse_tree_table, render_tree_table_html
 from .config import get_config, reload_config
-from .assets import asset_url
+from .extensions import get_extension_runtime, refresh_extension_runtime
+from .assets import asset_url, bundle_asset_html, iter_extension_static_dirs, requested_page_bundles
 from .favicon import favicon_href as resolve_favicon_href, write_generated_favicon
 from .page_shell import PageShellModel, StaticShellRenderer
 from .tree_service import get_tree_entries
 
 _asset_url = asset_url
 
-def generate_static_html(title, body_content, blog_title, favicon_href):
+def generate_static_html(title, body_content, blog_title, favicon_href, extra_head_html=""):
     """Generate complete static HTML page"""
     
     # Static CSS (inline critical styles)
@@ -376,9 +377,8 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
     
-    <!-- Syntax Highlighting -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <meta name="vyasa-code-theme-light" content="{get_config().get_code_theme_light()}">
+    <meta name="vyasa-code-theme-dark" content="{get_config().get_code_theme_dark()}">
     
     <!-- Math Rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -393,15 +393,10 @@ def generate_static_html(title, body_content, blog_title, favicon_href):
     <link rel="stylesheet" href="{_asset_url('/static/sidenote.css')}">
     
     {static_css}
+    {extra_head_html}
 </head>
 <body>
     {body_content}
-    
-    <!-- Mermaid diagrams -->
-    <script type="module">
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({{ startOnLoad: true, theme: 'default' }});
-    </script>
     <script src="{_asset_url('/static/scripts.js')}" type="module"></script>
     
     {static_js}
@@ -415,7 +410,7 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
     """Build post tree with static .html links instead of HTMX"""
     items = []
     try:
-        entries = get_tree_entries(folder, root_folder, show_hidden, set(), TREE_SUFFIXES)
+        entries = get_tree_entries(folder, root_folder, show_hidden, set(), enabled_document_suffixes())
         abbreviations = _effective_abbreviations(root_folder, folder)
     except (OSError, PermissionError): 
         return items
@@ -455,12 +450,12 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
                     title_text,
                     href=content_url_for_slug(note_slug, suffix=".html"),
                     cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
-        elif item.suffix in {'.md', '.tree'}:
+        elif item.suffix in enabled_document_suffixes() and item.suffix != ".pdf":
             slug = str(item.relative_to(root_folder).with_suffix(''))
             if item.suffix == ".md":
                 title, icon = get_post_title(item, abbreviations=abbreviations), "file-text"
             else:
-                title, icon = slug_to_title(item.stem, abbreviations=abbreviations), "table"
+                title, icon = document_title_for_path(item, abbreviations=abbreviations), document_icon_for_path(item)
             
             # Use .html extension for static links
             items.append(Li(A(
@@ -472,15 +467,40 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
     return items
 
 
-def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, toc_items=None, current_path=None, updated_label=None):
+def static_layout(content_html, blog_title, page_title, nav_tree, favicon_href, toc_items=None, current_path=None, updated_label=None, extra_head_html=""):
     """Generate complete static page layout"""
+    runtime = get_extension_runtime()
+    toc_sidebar_html = ""
+    if runtime and runtime.toc_panel_providers:
+        toc_context = {
+            "mode": "static",
+            "toc_items": toc_items or [],
+            "current_path": current_path,
+        }
+        for provider in runtime.toc_panel_providers:
+            if provided := provider(toc_context):
+                toc_sidebar_html = provided
+                break
+    if runtime and runtime.scoped_css_providers:
+        css_context = {
+            "mode": "static",
+            "root_folder": get_config().get_root_folder(),
+            "current_path": current_path,
+            "section_class": f"section-{current_path.replace('/', '-').lower()}" if current_path else "",
+        }
+        css_html = "".join(to_xml(node) for provider in runtime.scoped_css_providers for node in (provider(css_context) or ()))
+        extra_head_html = f"{extra_head_html}{css_html}"
+    if runtime and runtime.favicon_href_provider:
+        favicon_href = runtime.favicon_href_provider(get_config().get_root_folder())
     model = PageShellModel(
         title=page_title,
         blog_title=blog_title,
         main_html=content_html,
+        extra_head_html=extra_head_html,
         nav_tree=nav_tree,
         favicon_href=favicon_href,
         toc_items=toc_items,
+        toc_sidebar_html=toc_sidebar_html,
         current_path=current_path,
         updated_label=updated_label,
     )
@@ -503,6 +523,7 @@ def build_static_site(input_dir=None, output_dir=None):
         reload_config()
     
     config = get_config()
+    refresh_extension_runtime(config.get_extensions_config())
     root_folder = config.get_root_folder()
     blog_title = config.get_blog_title()
     show_hidden = config.get_show_hidden()
@@ -533,7 +554,7 @@ def build_static_site(input_dir=None, output_dir=None):
     ignore_list = _effective_ignore_list(root_folder)
     include_list = _effective_include_list(root_folder)
     doc_files = []
-    for suffix in (".md", ".tree"):
+    for suffix in tuple(s for s in enabled_document_suffixes() if s != ".pdf"):
         for doc_file in root_folder.rglob(f"*{suffix}"):
             try:
                 relative_path = doc_file.relative_to(root_folder)
@@ -567,7 +588,11 @@ def build_static_site(input_dir=None, output_dir=None):
             toc_items = None
             content_html = render_tree_table_html(doc_file, include_heading=False)
         prev_item, next_item = get_adjacent_posts(root_folder, relative_path, abbreviations=abbreviations)
-        read_source = raw_content
+        read_source = expand_markdown_includes_for_reading(
+            render_content if doc_file.suffix == ".md" else raw_content,
+            current_path=str(relative_path.with_suffix("")) if doc_file.suffix == ".md" else None,
+            root_folder=root_folder,
+        ) if doc_file.suffix == ".md" else raw_content
 
         read_time = estimate_read_time_minutes(read_source)
         last_modified = format_last_modified_label(doc_file)
@@ -583,6 +608,14 @@ def build_static_site(input_dir=None, output_dir=None):
             content_html += f'<div class="vyasa-prev-next">{prev_html}{next_html}</div>'
 
         # Generate full page
+        extra_head_html = bundle_asset_html(
+            requested_page_bundles(
+                show_sidebar=True,
+                current_path=str(relative_path.with_suffix("")),
+                annotations_enabled=config.get_annotations_enabled(),
+                mode="static",
+            )
+        )
         full_html = static_layout(
             content_html=content_html,
             blog_title=blog_title,
@@ -592,6 +625,7 @@ def build_static_site(input_dir=None, output_dir=None):
             toc_items=toc_items,
             current_path=str(relative_path.with_suffix('')),
             updated_label=format_last_modified_label(doc_file),
+            extra_head_html=extra_head_html,
         )
         
         # Determine output path
@@ -620,6 +654,8 @@ def build_static_site(input_dir=None, output_dir=None):
         static_dst = output_dir / 'static'
         static_dst.mkdir(parents=True, exist_ok=True)
         write_generated_favicon(root_folder, static_dst / "icon.svg")
+    for extension_id, static_dir in iter_extension_static_dirs():
+        shutil.copytree(static_dir, output_dir / "static" / "extensions" / extension_id, dirs_exist_ok=True)
     
     # Generate index.html if it doesn't exist
     index_path = output_dir / 'index.html'
@@ -645,7 +681,8 @@ def build_static_site(input_dir=None, output_dir=None):
             page_title=f"Home - {blog_title}",
             nav_tree=nav_tree,
             favicon_href=favicon_href,
-            toc_items=None
+            toc_items=None,
+            extra_head_html=bundle_asset_html(requested_page_bundles(show_sidebar=True, current_path="__home__", mode="static")),
         )
         
         index_path.write_text(full_html, encoding='utf-8')

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea } = await import('../vyasa/static/tasks_graph_core.js');
+const { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, layoutDisconnectedTaskNodes, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea, toggleMultiValueFilter } = await import('../vyasa/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -184,6 +184,17 @@ test('group panels use passive hit areas in items graph', () => {
     assert.equal(tasksGraphNodeHitArea('groupTitle'), 'control');
 });
 
+test('toggleMultiValueFilter supports multi-color selection and reset', () => {
+    const selected = toggleMultiValueFilter({}, 'kind', 'assumption', true);
+    assert.deepEqual(selected, { kind: ['assumption'] });
+    const multi = toggleMultiValueFilter(selected, 'kind', 'risk', true);
+    assert.deepEqual(multi, { kind: ['assumption', 'risk'] });
+    const reduced = toggleMultiValueFilter(multi, 'kind', 'assumption', false);
+    assert.deepEqual(reduced, { kind: ['risk'] });
+    const cleared = toggleMultiValueFilter(reduced, 'kind', 'risk', false);
+    assert.deepEqual(cleared, {});
+});
+
 test('color_by palette attrs can be hidden from filters and still exist on the model', () => {
     const model = {
         color_palettes: { kind: { ingress: '#93c5fd', routing: '#86efac' } },
@@ -235,6 +246,49 @@ test('color_by uses configured color_palettes for node paint lookup', () => {
     assert.equal(resolveTasksNodeOwnColor({ kind: 'ingress' }, model), '#93c5fd');
 });
 
+test('palette legend only shows values present in graph', () => {
+    const model = {
+        groups: [{ id: 'g1', label: 'G1', kind: 'ingress' }],
+        tasks: [{ id: 't1', label: 'T1', kind: 'routing' }],
+        node_color_palettes: { kind: { ingress: '#93c5fd', routing: '#86efac', orphan: '#fca5a5' } },
+    };
+    const entries = Object.entries(model.node_color_palettes.kind)
+        .filter(([value]) => new Set([...model.groups, ...model.tasks].map((node) => String(node.kind))).has(String(value)))
+        .filter(([, color]) => typeof color === 'string' && color.trim())
+        .sort(([a], [b]) => String(a).localeCompare(String(b)));
+    assert.deepEqual(entries, [['ingress', '#93c5fd'], ['routing', '#86efac']]);
+});
+
+test('palette legend renders for two-value color modes', () => {
+    const model = {
+        groups: [],
+        tasks: [
+            { id: 'client-user', label: 'Client user', audience: 'client' },
+            { id: 'delivery-user', label: 'Delivery user', audience: 'delivery' },
+        ],
+        node_color_palettes: {
+            audience: {
+                client: '#2563eb',
+                delivery: '#7c3aed',
+                end_customer: '#f59e0b',
+            },
+        },
+    };
+    const presentValues = new Set(
+        [...model.groups, ...model.tasks]
+            .map((node) => node.audience)
+            .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+            .map((value) => String(value))
+    );
+    const entries = Object.entries(model.node_color_palettes.audience)
+        .filter(([value]) => presentValues.has(String(value)))
+        .filter(([, color]) => typeof color === 'string' && color.trim())
+        .sort(([a], [b]) => String(a).localeCompare(String(b)));
+
+    assert.equal(entries.length > 0, true);
+    assert.deepEqual(entries, [['client', '#2563eb'], ['delivery', '#7c3aed']]);
+});
+
 test('renderer internal __kind__ does not clobber user kind attribute', () => {
     const source = { id: 'proxy', label: 'API Proxy', kind: 'ingress' };
     const node = { id: 'proxy', kind: 'task' };
@@ -242,4 +296,40 @@ test('renderer internal __kind__ does not clobber user kind attribute', () => {
     const merged = { ...source, ...nodeRest, __kind__: (_legacyNodeKind || 'task') };
     assert.equal(merged.kind, 'ingress');
     assert.equal(merged.__kind__, 'task');
+});
+
+test('disconnected group children pack into a compact grid', () => {
+    const out = layoutDisconnectedTaskNodes([
+        { id: 'a', width: 100, height: 40 },
+        { id: 'b', width: 100, height: 40 },
+        { id: 'c', width: 100, height: 40 },
+        { id: 'd', width: 100, height: 40 },
+    ], 'RIGHT', { gap: 20, padX: 40, padTop: 68, padBottom: 40 });
+    assert.equal(out.positions.a.x, 40);
+    assert.equal(out.positions.b.x, 160);
+    assert.equal(out.positions.c.x, 40);
+    assert.equal(out.positions.d.x, 160);
+    assert.equal(out.positions.a.y, 68);
+    assert.equal(out.positions.b.y, 68);
+    assert.equal(out.positions.c.y, 128);
+    assert.equal(out.positions.d.y, 128);
+    assert.equal(out.bbox.width, 300);
+    assert.equal(out.bbox.height, 208);
+});
+
+test('disconnected group children use packed layout for downward direction too', () => {
+    const down = layoutDisconnectedTaskNodes([
+        { id: 'a', width: 100, height: 40 },
+        { id: 'b', width: 100, height: 40 },
+        { id: 'c', width: 100, height: 40 },
+        { id: 'd', width: 100, height: 40 },
+    ], 'DOWN', { gap: 30, padX: 40, padTop: 68, padBottom: 40 });
+    const right = layoutDisconnectedTaskNodes([
+        { id: 'a', width: 100, height: 40 },
+        { id: 'b', width: 100, height: 40 },
+        { id: 'c', width: 100, height: 40 },
+        { id: 'd', width: 100, height: 40 },
+    ], 'RIGHT', { gap: 30, padX: 40, padTop: 68, padBottom: 40 });
+    assert.deepEqual(down.positions, right.positions);
+    assert.deepEqual(down.bbox, right.bbox);
 });
