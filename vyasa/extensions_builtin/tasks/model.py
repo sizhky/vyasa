@@ -52,7 +52,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                 continue
             key = line[:key_index].strip()
             value = line[key_index + 1:].strip()
-            if key in {"id", "title", "default_color_by", "default_projection", "edge_color_by", "color_palette_source", "edge_color_palette_source"}:
+            if key in {"id", "title", "default_color_by", "default_projection", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source"}:
                 config[key] = _read_string(value)
                 cursor += 1
                 continue
@@ -400,6 +400,28 @@ def _clean_combined_palette_source(value) -> tuple[dict[str, dict], dict[str, di
     return color_palettes, edge_color_palettes
 
 
+def _clean_edge_kinds(value) -> dict[str, dict]:
+    """Edge kinds: { kind_name: { attr: value, ... } }. Cleaned to dict[str, dict[str, str]]."""
+    if not isinstance(value, dict):
+        return {}
+    out: dict[str, dict] = {}
+    for key, attrs in value.items():
+        kind = str(key or "").strip()
+        if not kind or not isinstance(attrs, dict):
+            continue
+        cleaned = {}
+        for attr_key, attr_value in attrs.items():
+            attr_name = str(attr_key or "").strip()
+            if not attr_name:
+                continue
+            if attr_value is None:
+                continue
+            cleaned[attr_name] = str(attr_value).strip()
+        if cleaned:
+            out[kind] = cleaned
+    return out
+
+
 def _resolve_tasks_source_path(current_path: str | Path | None, source: str) -> Path | None:
     source_text = str(source or "").strip()
     if not source_text:
@@ -436,18 +458,17 @@ def _load_palette_source(current_path: str | Path | None, source: str, palette_k
     return palette, ({selected_key: palette} if selected_key else {}), selected_key
 
 
-def _load_combined_palette_source(current_path: str | Path | None, source: str) -> tuple[dict[str, dict], dict[str, dict]]:
+def _load_combined_palette_source(current_path: str | Path | None, source: str) -> tuple[dict[str, dict], dict[str, dict], dict[str, dict]]:
     resolved = _resolve_tasks_source_path(current_path, source)
     if not resolved or not resolved.exists():
-        return {}, {}
+        return {}, {}, {}
     try:
         payload = json.loads(resolved.read_text(encoding="utf-8"))
     except Exception:
-        return {}, {}
+        return {}, {}, {}
     color_palettes, edge_color_palettes = _clean_combined_palette_source(payload)
-    if color_palettes or edge_color_palettes:
-        return color_palettes, edge_color_palettes
-    return {}, {}
+    edge_kinds = _clean_edge_kinds(payload.get("edge_kinds") if isinstance(payload, dict) else None)
+    return color_palettes, edge_color_palettes, edge_kinds
 
 
 def _read_optional_edge_label(text: str) -> tuple[str, str]:
@@ -558,7 +579,7 @@ def _parse_items_graph(body: str) -> dict:
         if indent == 0 and _find_unquoted(line, ":") > 0 and _find_unquoted(line, "->") < 0:
             key, value = line.split(":", 1)
             key = key.strip()
-            if key in {"id", "title", "default_color_by", "default_projection", "edge_color_by", "color_palette_source", "edge_color_palette_source"}:
+            if key in {"id", "title", "default_color_by", "default_projection", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source"}:
                 graph[key] = _read_string(value.strip())
                 index += 1
                 continue
@@ -757,35 +778,45 @@ def _apply_dag_ranks(graph: dict) -> None:
     graph["node_color_palettes"] = {"rank": _rank_palette(max_rank + 1), **graph.get("node_color_palettes", {})}
 
 
+def apply_edge_kind_defaults(graph: dict) -> None:
+    """For each edge, look up its kind in graph['edge_kinds'] and merge default
+    attributes onto the edge. Inline edge attributes always win over kind defaults.
+    The kind name is taken from edge['label'] (the inline pipe-label).
+    """
+    edge_kinds = graph.get("edge_kinds") or {}
+    if not isinstance(edge_kinds, dict) or not edge_kinds:
+        return
+    for edge in graph.get("dependency_edges", []):
+        label = str(edge.get("label") or "").strip()
+        if not label:
+            continue
+        kind_attrs = edge_kinds.get(label)
+        if not isinstance(kind_attrs, dict):
+            continue
+        for attr, value in kind_attrs.items():
+            # Inline edge attrs (already on the edge dict) win.
+            if edge.get(attr) is None or str(edge.get(attr) or "").strip() == "":
+                edge[attr] = value
+
+
 def apply_edge_label_fallbacks(graph: dict) -> None:
+    """If edge_color_by is set, ensure each edge has a value the palette can read.
+    Precedence: existing inline attr -> label-as-palette-key -> empty.
+    """
     edge_color_key = str(graph.get("edge_color_by") or "").strip()
     if not edge_color_key:
         return
-    tasks_by_id = {task.get("id"): task for task in graph.get("tasks", []) if task.get("id")}
     palette = graph.get("edge_color_palettes", {}).get(edge_color_key, {})
     palette_keys = set(palette.keys()) if isinstance(palette, dict) else set()
     for edge in graph.get("dependency_edges", []):
-        edge_value = edge.get(edge_color_key)
-        edge_value_str = str(edge_value or "").strip()
-        label = edge.get("label")
-        # If an existing edge-attr value isn't in the palette, drop it so we can
-        # try alternative sources.
+        edge_value_str = str(edge.get(edge_color_key) or "").strip()
         if edge_value_str and palette_keys and edge_value_str not in palette_keys:
             edge_value_str = ""
-        # Try edge label if it matches the palette (e.g. relation-style labels).
+        label = edge.get("label")
         if not edge_value_str and label and str(label).strip() in palette_keys:
             edge_value_str = str(label).strip()
-        # Fall through to target node's attribute (e.g. arrive-at-X by Rail).
-        if not edge_value_str:
-            target = tasks_by_id.get(edge.get("target"))
-            target_value = str(target.get(edge_color_key) if target else "").strip()
-            if target_value:
-                edge_value_str = target_value
         if edge_value_str:
             edge[edge_color_key] = edge_value_str
-        # Preserve narrative labels untouched. If no label and no value yet,
-        # the legacy fallback used to copy attr -> label; skip that — modern
-        # palettes drive color, not label inference.
 
 
 def _apply_palette_source(graph: dict, current_path: str | Path | None, source_field: str, palette_field: str, palettes_field: str, color_by_field: str) -> None:
@@ -829,6 +860,8 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         graph["node_color_palettes"] = {**config["node_color_palettes"], **graph.get("node_color_palettes", {})}
     if config.get("edge_color_by") and not graph.get("edge_color_by"):
         graph["edge_color_by"] = config["edge_color_by"]
+    if config.get("edge_label_from") and not graph.get("edge_label_from"):
+        graph["edge_label_from"] = config["edge_label_from"]
     if config.get("edge_color_palette") and not graph.get("edge_color_palette"):
         graph["edge_color_palette"] = config["edge_color_palette"]
     if config.get("edge_color_palettes"):
@@ -836,7 +869,7 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
     if config.get("edge_color_palette_source") and not graph.get("edge_color_palette_source"):
         graph["edge_color_palette_source"] = config["edge_color_palette_source"]
     if graph.get("color_palette_source"):
-        color_palettes, edge_color_palettes = _load_combined_palette_source(current_path, graph["color_palette_source"])
+        color_palettes, edge_color_palettes, edge_kinds = _load_combined_palette_source(current_path, graph["color_palette_source"])
         if color_palettes:
             graph["node_color_palettes"] = {**color_palettes, **graph.get("node_color_palettes", {})}
             if not graph.get("color_by"):
@@ -849,8 +882,11 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
                 graph["edge_color_by"] = next(iter(edge_color_palettes.keys()), "")
             if not graph.get("edge_color_palette") and graph.get("edge_color_by"):
                 graph["edge_color_palette"] = edge_color_palettes.get(graph["edge_color_by"], {})
+        if edge_kinds:
+            graph["edge_kinds"] = {**edge_kinds, **graph.get("edge_kinds", {})}
     _apply_palette_source(graph, current_path, "color_palette_source", "color_palette", "node_color_palettes", "color_by")
     _apply_palette_source(graph, current_path, "edge_color_palette_source", "edge_color_palette", "edge_color_palettes", "edge_color_by")
+    apply_edge_kind_defaults(graph)
     apply_edge_label_fallbacks(graph)
     _apply_dag_ranks(graph)
     groups = graph.get("groups", [])
@@ -883,6 +919,8 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "edge_color_palette": graph.get("edge_color_palette", {}),
         "edge_color_palettes": graph.get("edge_color_palettes", {}),
         "edge_color_palette_source": graph.get("edge_color_palette_source", ""),
+        "edge_kinds": graph.get("edge_kinds", {}),
+        "edge_label_from": graph.get("edge_label_from", ""),
         "default_projection": graph.get("default_projection", ""),
         "view_projections": graph.get("view_projections", []),
         "projection_models": {},

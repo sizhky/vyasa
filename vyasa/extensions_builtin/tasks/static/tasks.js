@@ -520,6 +520,27 @@ function tasksEdgeColorPaletteFor(model, colorBy) {
     return {};
 }
 
+function resolveTasksEdgeLabel(edge, model, activeProjection = null) {
+    if (!edge) return '';
+    // 1. Inline pipe label (also serves as kind name) wins.
+    const rawLabel = typeof edge.label === 'string' ? edge.label.trim() : '';
+    if (rawLabel) return rawLabel;
+    // 2. Projection-requested attr.
+    const projectionAttr = activeProjection && typeof activeProjection.edge_label_from === 'string'
+        ? activeProjection.edge_label_from.trim() : '';
+    // 3. Top-level default attr.
+    const defaultAttr = typeof model?.edge_label_from === 'string' ? model.edge_label_from.trim() : '';
+    const requestedAttr = projectionAttr || defaultAttr;
+    if (requestedAttr) {
+        const value = edge[requestedAttr];
+        if (value !== null && value !== undefined && String(value).trim()) {
+            return String(value).trim();
+        }
+    }
+    // 4. Empty — user said this is fine.
+    return '';
+}
+
 function resolveTasksEdgeColor(edge, model, colorByOverride = null, paletteOverride = null) {
     if (!edge) return '';
     if (typeof edge.color === 'string' && edge.color.trim()) return edge.color.trim();
@@ -1931,6 +1952,11 @@ async function renderTasksGraphs(rootElement = document) {
             const reactFlowApiRef = React.useRef(null);
             const prevExpandedCountRef = React.useRef(0);
             const hoverClearTimerRef = React.useRef(null);
+            const activeProjection = React.useMemo(() => {
+                const projections = Array.isArray(sourceModel?.view_projections) ? sourceModel.view_projections : [];
+                const id = String(activeProjectionId || '').trim();
+                return id ? (projections.find((p) => p && p.id === id) || null) : null;
+            }, [sourceModel, activeProjectionId]);
             const activeColorPalette = React.useMemo(() => tasksColorPaletteFor(model, activeColorBy), [model, activeColorBy]);
             const activeGradientStops = React.useMemo(() => normalizeTasksGradientStops(activeColorPalette), [activeColorPalette]);
             const activeGradientDomain = React.useMemo(() => tasksGradientDomain(activeColorPalette, activeGradientStops), [activeColorPalette, activeGradientStops]);
@@ -2040,8 +2066,10 @@ async function renderTasksGraphs(rootElement = document) {
                     const anchored = buildTaskEdgeAnchors(nodesWithStyle, rawGraph.edges);
                     const baseEdges = anchored.edges.map((edge) => {
                         const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
+                        const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
                         return {
                             ...edge,
+                            label: resolvedLabel,
                             type: 'vyasaEdge',
                             data: { ...(edge.data || {}), edgeColor },
                             markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: edgeColor || 'currentColor' },
@@ -2175,8 +2203,10 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgeColorPalette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
                 const baseEdges = anchored.edges.map((edge) => {
                     const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
+                    const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
                     return {
                         ...edge,
+                        label: resolvedLabel,
                         type: 'vyasaEdge',
                         animated: false,
                         data: { ...(edge.data || {}), edgeColor },
@@ -2221,7 +2251,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setNodes(anchoredNodes);
                 setEdges(baseEdges);
                 setGraphRevision((value) => value + 1);
-            }, [ensureBaseLayout, model, activeColorBy, activeColorPalette, viewMode]);
+            }, [ensureBaseLayout, model, activeColorBy, activeColorPalette, activeProjection, viewMode]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: 1, stroke: 'currentColor' },
@@ -2314,9 +2344,11 @@ async function renderTasksGraphs(rootElement = document) {
                                         : TASKS_GROUP_BG_ACTIVE)
                                     : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 68%, ${nodeColor} 32%)` : TASKS_NODE_BG_ACTIVE)),
                             opacity: mode === 'dim' ? 0.22 : 1,
-                            boxShadow: (mode === 'neighbor-focus' || mode === 'selected-focus')
-                                ? '0 0 0 2px color-mix(in srgb, var(--vyasa-primary) 60%, transparent)'
-                                : 'none',
+                            boxShadow: (mode === 'selected' || mode === 'selected-focus')
+                                ? `0 0 0 2px color-mix(in srgb, ${nodeColor || 'var(--vyasa-primary)'} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
+                                : (mode === 'neighbor-focus'
+                                    ? `0 0 0 2px color-mix(in srgb, ${nodeColor || 'var(--vyasa-primary)'} 60%, transparent)`
+                                    : 'none'),
                         },
                         zIndex,
                     };
@@ -2780,7 +2812,7 @@ async function renderTasksGraphs(rootElement = document) {
                     : tasksNodeMetaEntries(selectedNode);
                 if (!selectedNode || entries.length === 0) return null;
                 return React.createElement('div', {
-                    style: { width: '100%', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto' },
+                    style: { width: 'max-content', maxWidth: '100%', minWidth: 'min(220px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto', minHeight: 0, flex: '0 1 auto', overflowY: 'auto', overscrollBehavior: 'contain' },
                 },
                     React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Node Details'),
                     React.createElement(selectedNode.href ? 'a' : 'div', selectedNode.href
@@ -2791,8 +2823,8 @@ async function renderTasksGraphs(rootElement = document) {
                             key: entry.key,
                             style: {
                                 display: 'grid',
-                                gridTemplateColumns: 'minmax(72px, 88px) 1fr',
-                                gap: '6px 10px',
+                                gridTemplateColumns: 'minmax(72px, max-content) minmax(80px, max-content)',
+                                gap: '6px 14px',
                                 paddingTop: index === 0 ? '0' : '8px',
                                 marginTop: index === 0 ? '0' : '8px',
                                 borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)',
@@ -3237,6 +3269,7 @@ async function renderTasksGraphs(rootElement = document) {
                         position: 'absolute',
                         right: '12px',
                         top: '12px',
+                        bottom: '12px',
                         zIndex: 34,
                         width: nodeCardWidth,
                         maxWidth: 'calc(100% - 24px)',
@@ -3244,6 +3277,7 @@ async function renderTasksGraphs(rootElement = document) {
                         flexDirection: 'column',
                         gap: '10px',
                         pointerEvents: 'none',
+                        minHeight: 0,
                     },
                 },
                     window.React.createElement(ProjectionToggle),

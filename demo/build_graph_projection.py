@@ -47,7 +47,91 @@ FIELDS = [
     "spend_band", "cost_yen", "meal_band",
     "day_band", "vibe", "weather", "sun_hour",
     "cuisine", "shop_type", "adventure_tier", "essentialness",
+    "description",
 ]
+
+
+# Per-node descriptions — what a reader should expect at each stop.
+# One sentence each, kept tight. Used both in markdown emission and hover card.
+DESCRIPTIONS = {
+    # Day 1 - Arrival + first Tokyo
+    "narita": "International gateway east of Tokyo. Long Narita Express ride into the city — start of the trip.",
+    "hilton-shinjuku": "High-floor hotel above Shinjuku skyline. Anchor base for the first Tokyo days.",
+    "ueno": "Sprawling park with museums and quiet paths. Cherry trees in season, gentle decompression on jetlag day.",
+    "asakusa": "Sensoji temple at sunrise. Go early to beat the tour buses; lantern-lit and quiet at dawn.",
+    "kappabashi": "Restaurant-supply street: handmade knives, copper pans, plastic food samples. Geek-out shopping.",
+    "tsukiji": "Outer-market food crawl: tamago skewers, uni, fresh oysters. Tsukiji moved but the snacking stayed.",
+    "ginza": "Polished evening walk under department-store glow. Window-shop and let the day settle.",
+    "daimaru-ginza": "Department store; depachika basement food hall is the real attraction. Wagashi and prepared meals.",
+    "sukiyabashi": "Jiro-style sushi counter. Booking required well in advance; a one-shot splurge night.",
+    # Day 2 - Tokyo deep
+    "meiji": "Forested shrine inside the city. Twenty-minute gravel walk to the main hall under torii gates.",
+    "harajuku": "Youth-fashion backstreets behind Takeshita-dori. Crepes, vintage, tiny boutiques.",
+    "don-quijote": "Chaotic discount mega-store; snacks, costumes, kitchen gear. Souvenir haul in one stop.",
+    "shibuya": "The famous scramble crossing. Watch from the Starbucks balcony or the Scramble Square deck.",
+    "ichiran": "Solo-booth tonkotsu ramen. Order via slip, eat in a private cubicle. Cheap, fast, satisfying.",
+    "teamlab": "Immersive digital-art installation in Toyosu. Wet feet in the koi pond; book a precise time slot.",
+    "akihabara": "Electronics + anime district under neon. Multi-floor arcades, retro game shops, maid cafes.",
+    "bic-camera": "Big-box electronics; cameras, kitchen gadgets, tax-free counter for visitors.",
+    "yakitori-omoide": "Postwar alley of tiny grill counters near Shinjuku station. Smoky, loud, perfect.",
+    # Day 3-4 - Kanto trips
+    "nikko": "Day trip north for ornate Toshogu shrine complex. Long train + bus; pack a lunch.",
+    "kegon": "Plunging waterfall reached by elevator down a cliff face. Best in autumn color.",
+    "kamakura": "Coastal old capital; the open-air Great Buddha is the headline. Easy day trip from Tokyo.",
+    "enoshima": "Tidal island connected by causeway. Caves, sea breeze, sunset over Sagami Bay.",
+    # Day 5 - Hakone reset
+    "hyatt-hakone": "Mountain ryokan-style resort. Onsen, kaiseki dinner, slow recovery from the rush.",
+    "gora": "Switchback mountain train terminus. Funicular continues up toward the volcanic valley.",
+    "owakudani": "Active sulphur vents with black eggs boiled in the springs. Sometimes closed for volcanic activity.",
+    "lake-ashi": "Pirate-themed cruise ship across a caldera lake. Fuji view on clear days.",
+    "kaiseki-hakone": "Multi-course traditional dinner inside the ryokan. Long, deliberate, beautiful.",
+    # Day 6 - Fuji
+    "fuji": "Best photo angle on Fuji from the Chureito pagoda or Lake Kawaguchi north shore.",
+    "kawaguchiko": "Lakeside loop around mirror-water Fuji reflections. Bike or bus the rim.",
+    # Day 7-8 - Alps + Hokuriku
+    "matsumoto": "Black-painted castle keep, the original. Steep ladder-stairs inside; bring socks.",
+    "kamikochi": "Alpine valley walk along the Azusa river. Open May-October; closed in winter.",
+    "takayama": "Edo-period merchant district. Sake breweries open for tasting, morning markets along the river.",
+    "hida-beef": "Counter-style wagyu grill. Hida beef is the regional rival to Kobe.",
+    "shirakawa": "Thatched-roof gassho farmhouses in a UNESCO village. Magical in snow, busy in autumn.",
+    # Day 8-9 - Hokuriku
+    "marriott-kanazawa": "Modern hotel near Kanazawa station. Bullet train arrives literally beneath it.",
+    "kenrokuen": "One of the three great gardens of Japan. Pruned pines, stone lanterns, careful sightlines.",
+    "omicho": "Covered market with kaisendon (sashimi bowls) and snow crab in season.",
+    "higashi": "Geisha district with preserved teahouses. Gold-leaf desserts and matcha sets.",
+    "kanazawa-gold": "Kanazawa makes 99% of Japan's gold leaf. Souvenir cosmetics, sweets, and leaf-applied objects.",
+    # Day 10-13 - Kyoto core
+    "kyoto-station": "Sci-fi station building with sky bridges. Underground food court is excellent for arrival meals.",
+    "ritz-kyoto": "Riverside luxury along the Kamogawa. Walking distance to Gion and Pontocho.",
+    "fushimi": "Endless vermilion torii winding up Mount Inari. Go at dawn or after 5pm to avoid crowds.",
+    "gion": "Geisha district of lantern-lit alleys. Walk slowly — don't crowd or photograph maiko.",
+    "kikunoi": "Three-star kaiseki, a peak Kyoto dining experience. Reserve months ahead.",
+    "kiyomizu": "Wooden terrace over a hillside, no nails used in construction. Great over-the-roofs view of Kyoto.",
+    "nishiki": "Kyoto's 400-year covered food street. Pickles, dashi, tofu doughnuts, small samples.",
+    "arashiyama": "Bamboo grove west of Kyoto. Get there before 8am or it's a tunnel of selfie sticks.",
+    "kinkakuji": "Gold-leaf pavilion over a reflecting pond. One viewing loop, fast in and out.",
+    "nijo": "Shogun-era castle with nightingale floors that chirp under footsteps to warn of intruders.",
+    "pontocho": "Narrow lantern-lit dining alley along the river. Kawayuka platforms in summer.",
+    # Day 14-15 - Nara + Koyasan + Osaka
+    "nara-park": "Free-roaming deer that bow for cookies. Hold tight to your map and snacks.",
+    "todaiji": "Enormous wooden hall housing the seated Great Buddha. Crawl through the pillar hole for luck.",
+    "koyasan": "Mountain-top Buddhist monastery complex. Stay in a temple for vegetarian shojin dinner and morning prayers.",
+    "dotonbori": "Neon canal of takoyaki, kushikatsu, okonomiyaki, glowing crab signs. Eat your way down.",
+    "shinsaibashi": "Long covered arcade for fashion and souvenirs. Drugstores everywhere for Japanese skincare.",
+    "hyatt-osaka": "Bay-side hotel near the Universal stop. Good for a one-night Osaka anchor.",
+    # Day 16-18 - West Japan
+    "himeji": "Japan's most spectacular castle keep, the White Heron. Climb six levels of original wooden floors.",
+    "naoshima": "Art island in the Seto Inland Sea. Yayoi Kusama yellow pumpkin on the pier.",
+    "chichu": "Tadao Ando underground museum housing Monet's Water Lilies and James Turrell rooms.",
+    "hiroshima-pp": "Peace Memorial Park around the A-bomb Dome. Heavy, essential, well-curated museum.",
+    "miyajima": "Famous floating torii in the bay. Visit at high tide and stay overnight — quiet after day-trippers leave.",
+    "okonomi": "Hiroshima-style okonomiyaki: layered with noodles, cooked on the teppan in front of you.",
+    # Day 19-20 - Return + departure
+    "tokyo-station": "Brick beaux-arts landmark; Character Street and ramen alley underneath are tourist musts.",
+    "odaiba": "Bayfront entertainment island. Giant Gundam statue, teamLab borderless used to live here.",
+    "tsutaya": "Books and cafe in a leafy Daikanyama complex. Last calm hour before the airport.",
+    "haneda": "Closer-in airport with late-night flights. Easier and faster than Narita for departure.",
+}
 
 
 def _node(id, label, kind, city, region, trip_stage, theme,
@@ -64,6 +148,7 @@ def _node(id, label, kind, city, region, trip_stage, theme,
         "day_band": day_band, "vibe": vibe, "weather": weather, "sun_hour": sun_hour,
         "cuisine": cuisine, "shop_type": shop_type,
         "adventure_tier": adventure_tier, "essentialness": essentialness,
+        "description": DESCRIPTIONS.get(id, ""),
     }
 
 
@@ -361,6 +446,12 @@ NODES = [
 # Default attrs every node hover card shows when a projection doesn't override.
 DEFAULT_HOVER_ATTRS = ["kind", "city", "day_band", "cost_yen"]
 
+# Per-projection edge_label_from: which edge attribute drives label text.
+# Fallback after the inline pipe label.
+PROJECTION_EDGE_LABEL_FROM = {
+    "threads": "transit_mode",
+}
+
 PROJECTIONS = [
     # (id, label, groups_from, caption, default_color_by_override, hover_attrs)
     # hover_attrs=None  -> inherit DEFAULT_HOVER_ATTRS
@@ -373,7 +464,7 @@ PROJECTIONS = [
      ["region", "city"],
      "The map. Six regions broken into the cities you sleep in.",
      "region",
-     ["city", "transit_mode", "kind", "day_band"]),
+     ["city", "kind", "day_band", "essentialness"]),
     ("money", "Money Map",
      "spend_band",
      "Where the budget concentrates. The Splurges are usually one-shot experiences; the Free stops are filler.",
@@ -398,7 +489,7 @@ PROJECTIONS = [
      "transit_segment",
      "The trip as a sequence of transit threads. Each cluster is one named train, bus, or ferry route — the spine of how Japan stitches together.",
      "transit_mode",
-     ["transit_segment", "transit_mode", "city", "day_band"]),
+     ["transit_segment", "city", "day_band", "kind"]),
 ]
 
 
@@ -408,7 +499,15 @@ ORDER = [n["id"] for n in NODES]
 
 
 def itinerary_chain() -> list[str]:
-    return [" -> ".join(ORDER)]
+    """One labeled hop per itinerary segment. Kind = target's transit_mode (lowercased).
+    This gives every itinerary edge a kind so edge_kinds defaults kick in."""
+    out = []
+    by_id = {n["id"]: n for n in NODES}
+    for a, b in zip(ORDER, ORDER[1:]):
+        target = by_id.get(b, {})
+        kind = str(target.get("transit_mode") or "").strip().lower() or "walk"
+        out.append(f"{a} ->|{kind}| {b}")
+    return out
 
 
 def grouped_edges(attr: str, label: str | None = None) -> list[str]:
@@ -481,22 +580,25 @@ def themed_jumps() -> list[str]:
 
 # ---- Emission --------------------------------------------------------------
 
+SKIP_NODE_FIELDS = {"transit_mode"}
+
+
 def stop_lines() -> list[str]:
-    lines = ["Stops:"]
+    lines = []
     for n in NODES:
         day_num = _day_index(n["day_band"]) + 1
         trip_hour = (_day_index(n["day_band"]) * 24) + n["sun_hour"]
-        # Emit all attrs that have values. Empty strings stay out so projections
-        # don't see "(unset)" buckets for non-applicable attrs.
         parts = [f"{n['id']} :: {n['label']}"]
         for field in FIELDS[2:]:  # skip id/label
+            if field in SKIP_NODE_FIELDS:
+                continue
             value = n.get(field)
             if value is None or value == "":
                 continue
             parts.append(f"{field}: {value}")
         parts.append(f"day_num: {day_num}")
         parts.append(f"trip_hour: {trip_hour}")
-        lines.append("  - " + " | ".join(parts))
+        lines.append("- " + " | ".join(parts))
     return lines
 
 
@@ -520,6 +622,9 @@ def build_block() -> str:
             block += f"\n    default_color_by: {color_override}"
         if hover_attrs is not None:
             block += "\n    hover_attrs: [" + ", ".join(hover_attrs) + "]"
+        edge_label_override = PROJECTION_EDGE_LABEL_FROM.get(pid)
+        if edge_label_override:
+            block += f"\n    edge_label_from: {edge_label_override}"
         proj_chunks.append(block)
     proj_lines = "\n".join(proj_chunks)
 
@@ -533,7 +638,8 @@ def build_block() -> str:
         width: 95vw
         color_palette_source: graph-projection-palettes.json
         default_color_by: day_num
-        edge_color_by: transit_mode
+        edge_color_by: kind
+        edge_label_from: narrative
         {default_hover_line}
         view_projections:
         """
@@ -550,8 +656,6 @@ def build_block() -> str:
 
     edges: list[str] = []
     edges += itinerary_chain()
-    edges += grouped_edges("city")  # same-city loops (chained)
-    edges += grouped_edges("transit_segment", label="segment")
     edges += themed_jumps()
 
     return (

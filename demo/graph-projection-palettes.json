@@ -112,10 +112,10 @@
     },
     "meal_band": {
       "None": "#cbd5e1",
-      "Snack": "#fde68a",
-      "Tea": "#fcd34d",
-      "Lunch": "#fb923c",
-      "Dinner": "#dc2626"
+      "Snack": "#d61500",
+      "Tea": "#fcb04d",
+      "Lunch": "#fbd53c",
+      "Dinner": "#003b9a"
     },
     "day_num": {
       "type": "continuous",
@@ -175,7 +175,7 @@
       "Boat": "#06b6d4",
       "Ropeway": "#a855f7"
     },
-    "relation": {
+    "kind": {
       "shinkansen": "#dc2626",
       "thunderbird": "#b45309",
       "rain pivot": "#0ea5e9",
@@ -185,7 +185,28 @@
       "art arc": "#c026d3",
       "castle line": "#92400e",
       "splurge": "#dc2626",
-      "segment": "#94a3b8"
+      "segment": "#94a3b8",
+      "walk": "#84cc16",
+      "rail": "#2563eb",
+      "bus": "#f59e0b",
+      "boat": "#06b6d4",
+      "ropeway": "#a855f7"
     }
+  },
+  "edge_kinds": {
+    "shinkansen":     { "transit_mode": "Rail", "narrative": "Shinkansen" },
+    "thunderbird":    { "transit_mode": "Rail", "narrative": "Thunderbird Express" },
+    "rain pivot":     { "transit_mode": "Walk", "narrative": "Rain pivot" },
+    "food crawl":     { "transit_mode": "Walk", "narrative": "Food crawl" },
+    "home base":      { "transit_mode": "Walk", "narrative": "Anchored to hotel" },
+    "sacred arc":     { "transit_mode": "Rail", "narrative": "Sacred arc" },
+    "art arc":        { "transit_mode": "Rail", "narrative": "Art arc" },
+    "castle line":    { "transit_mode": "Rail", "narrative": "Castle line" },
+    "splurge":        { "transit_mode": "Walk", "narrative": "Splurge chain" },
+    "walk":           { "transit_mode": "Walk", "narrative": "Walk" },
+    "rail":           { "transit_mode": "Rail", "narrative": "Rail" },
+    "bus":            { "transit_mode": "Bus",  "narrative": "Bus" },
+    "boat":           { "transit_mode": "Boat", "narrative": "Boat" },
+    "ropeway":        { "transit_mode": "Ropeway", "narrative": "Ropeway" }
   }
 }

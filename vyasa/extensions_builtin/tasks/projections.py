@@ -62,6 +62,7 @@ def normalize_projections(value) -> list[dict]:
             "groups_from": groups_from,
             "default_color_by": str(raw.get("default_color_by") or groups_from[-1]).strip(),
             "edge_focus": str(raw.get("edge_focus") or "").strip(),
+            "edge_label_from": str(raw.get("edge_label_from") or "").strip(),
             "hover_attrs": hover_attrs,
         })
     return projections
