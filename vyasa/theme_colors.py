@@ -77,7 +77,9 @@ def normalize_theme_primary(color: str) -> dict[str, str]:
     primary = f"oklch({_TARGET_L:.3f} {normalized_chroma:.3f} {hue:.1f}deg)"
     primary_dim = f"oklch({_DIM_L:.3f} {min(normalized_chroma, _MAX_C * 0.92):.3f} {hue:.1f}deg)"
     primary_luminance = _relative_luminance(_oklch_to_rgb(_TARGET_L, normalized_chroma, hue))
-    primary_text = _DARK_TEXT if _contrast_ratio(primary_luminance, 0.0) >= _contrast_ratio(primary_luminance, 1.0) else _LIGHT_TEXT
+    dark_luminance = _relative_luminance(_hex_to_rgb(_DARK_TEXT))
+    light_luminance = _relative_luminance(_hex_to_rgb(_LIGHT_TEXT))
+    primary_text = _DARK_TEXT if _contrast_ratio(primary_luminance, dark_luminance) >= _contrast_ratio(primary_luminance, light_luminance) else _LIGHT_TEXT
     return {
         "theme_primary": primary,
         "theme_primary_dim": primary_dim,
