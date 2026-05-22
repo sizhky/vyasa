@@ -26,7 +26,7 @@ const TASK_NODE_SPECS = {
     task: { width: 220, minHeight: 60, padX: 28, padY: 24, reserveX: 0 },
 };
 
-function measureTextWidth(text, font = TASK_NODE_FONT) {
+export function measureTextWidth(text, font = TASK_NODE_FONT) {
     const canvas = typeof OffscreenCanvas !== 'undefined'
         ? new OffscreenCanvas(1, 1)
         : (typeof document !== 'undefined' ? document.createElement('canvas') : null);

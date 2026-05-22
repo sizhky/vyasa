@@ -183,6 +183,15 @@ def test_tasks_edge_labels_use_react_flow_bezier_coordinates():
     assert "translate(${labelX}px, ${labelY}px)" in source
 
 
+def test_tasks_selected_panel_uses_measured_adaptive_width():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function tasksSelectedPanelWidth" in source
+    assert "measureTextWidth(node?.label || node?.id || ''" in source
+    assert "Math.min(560, Math.max(250" in source
+    assert "width: `min(${panelWidth}px, 100%)`" in source
+
+
 def test_tasks_block_serializes_labeled_edges():
     md = dedent("""\
     ```items
