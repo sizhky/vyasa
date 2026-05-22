@@ -1489,6 +1489,7 @@ async function renderTasksGraphs(rootElement = document) {
         const defaultOpenDepth = Number.parseInt(wrapper.dataset.tasksDefaultOpenDepth || '0', 10);
         const ganttEnabled = String(wrapper.dataset.tasksGantt || '').trim().toLowerCase() === 'true';
         const defaultViewMode = ganttEnabled && String(wrapper.dataset.tasksDefaultView || '').trim().toLowerCase() === 'gantt' ? 'gantt' : 'graph';
+        const defaultFiltersOpen = String(wrapper.dataset.tasksOpenFiltersDefault || '').trim().toLowerCase() === 'true';
         const initialExpandedSet = collectExpandedGroupsByDepth(model.group_tree, Number.isNaN(defaultOpenDepth) ? 0 : defaultOpenDepth);
         const TasksGraphApp = (props) => {
             const React = window.React;
@@ -1515,7 +1516,11 @@ async function renderTasksGraphs(rootElement = document) {
                     ? initialPrefsRef.current.colorBy.trim()
                     : String(model?.default_color_by || '').trim()
             ));
-            const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => initialPrefsRef.current?.filtersCollapsed !== false);
+            const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => (
+                typeof initialPrefsRef.current?.filtersCollapsed === 'boolean'
+                    ? initialPrefsRef.current.filtersCollapsed
+                    : !defaultFiltersOpen
+            ));
             const [viewMode, setViewMode] = React.useState(defaultViewMode);
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
             const [graphRevision, setGraphRevision] = React.useState(0);
@@ -2896,6 +2901,7 @@ window.openTasksFullscreen = async function(id) {
     fullscreenWrapper.setAttribute('data-tasks-default-open-depth', wrapper.getAttribute('data-tasks-default-open-depth') || '0');
     fullscreenWrapper.setAttribute('data-tasks-gantt', wrapper.getAttribute('data-tasks-gantt') || 'false');
     fullscreenWrapper.setAttribute('data-tasks-default-view', wrapper.getAttribute('data-tasks-default-view') || 'graph');
+    fullscreenWrapper.setAttribute('data-tasks-open-filters-default', wrapper.getAttribute('data-tasks-open-filters-default') || 'false');
     fullscreenWrapper.setAttribute('data-tasks-jitter', wrapper.getAttribute('data-tasks-jitter') || '0');
     fullscreenWrapper.setAttribute('data-tasks-jitter-y', wrapper.getAttribute('data-tasks-jitter-y') || wrapper.getAttribute('data-tasks-jitter') || '0');
     fullscreenWrapper.setAttribute('data-tasks-spacing', wrapper.getAttribute('data-tasks-spacing') || 'normal');
