@@ -210,6 +210,7 @@ view_projections:
   - id: city
     label: City View
     groups_from: city
+    default_color_by: city
 ---
 Places:
   - tsukiji :: Tsukiji | city: Tokyo
@@ -223,7 +224,9 @@ Places:
     payload = json.loads(html.unescape(match.group(2)))
     assert payload["default_projection"] == "city"
     assert payload["view_projections"][0]["label"] == "City View"
+    assert payload["view_projections"][0]["default_color_by"] == "city"
     assert payload["projection_models"]["city"]["model"]["groups"][0]["label"] == "Kyoto"
+    assert payload["projection_models"]["city"]["model"]["default_color_by"] == "city"
 
 
 def test_markdown_fragment_include_does_not_leak_root_wrapper(tmp_path, monkeypatch):

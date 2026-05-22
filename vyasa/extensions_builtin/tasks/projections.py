@@ -35,6 +35,7 @@ def normalize_projections(value) -> list[dict]:
             "id": projection_id,
             "label": str(raw.get("label") or groups_from.replace("_", " ").title()).strip(),
             "groups_from": groups_from,
+            "default_color_by": str(raw.get("default_color_by") or groups_from).strip(),
             "edge_focus": str(raw.get("edge_focus") or "").strip(),
         })
     return projections
@@ -79,6 +80,7 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
         **base_model,
         "graph_id": f"{base_model.get('graph_id')}-{projection['id']}",
         "title": base_model.get("title", ""),
+        "default_color_by": str(projection.get("default_color_by") or base_model.get("default_color_by") or "").strip(),
         "groups": groups,
         "tasks": tasks,
         "dependency_edges": copy.deepcopy(base_model.get("dependency_edges", [])),

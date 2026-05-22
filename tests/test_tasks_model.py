@@ -387,9 +387,11 @@ view_projections:
   - id: city
     label: City View
     groups_from: city
+    default_color_by: city
   - id: theme
     label: Theme View
     groups_from: theme
+    default_color_by: theme
 ---
 Places:
   - tsukiji :: Tsukiji | city: Tokyo | theme: Food
@@ -401,8 +403,11 @@ tsukiji -> dotonbori
 
     assert model["default_projection"] == "theme"
     assert [projection["id"] for projection in model["view_projections"]] == ["city", "theme"]
+    assert model["view_projections"][0]["default_color_by"] == "city"
     city_model = model["projection_models"]["city"]["model"]
     theme_model = model["projection_models"]["theme"]["model"]
+    assert city_model["default_color_by"] == "city"
+    assert theme_model["default_color_by"] == "theme"
     assert [group["label"] for group in city_model["groups"]] == ["Kyoto", "Osaka", "Tokyo"]
     assert [group["label"] for group in theme_model["groups"]] == ["Food", "Temples"]
     food_group_id = next(group["id"] for group in theme_model["groups"] if group["label"] == "Food")

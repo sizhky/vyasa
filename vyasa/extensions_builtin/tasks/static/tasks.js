@@ -139,18 +139,32 @@ function readTasksPrefs(model) {
     }
 }
 
+function tasksProjectionPrefsKey(projectionId) {
+    const id = String(projectionId || '').trim();
+    return id || '__base__';
+}
+
+function readTasksProjectionPrefs(prefs, projectionId) {
+    const key = tasksProjectionPrefsKey(projectionId);
+    const scoped = prefs?.projectionPrefs?.[key];
+    if (scoped && typeof scoped === 'object') return scoped;
+    return prefs && typeof prefs === 'object' ? prefs : {};
+}
+
 function writeTasksPrefs(model, prefs) {
     const key = tasksPrefsKey(model);
     if (!key || typeof window === 'undefined') return;
     try {
         const storage = window.localStorage;
         if (!storage) return;
+        const projectionId = String(prefs?.projectionId || '').trim();
+        const projectionPrefs = prefs?.projectionPrefs && typeof prefs.projectionPrefs === 'object'
+            ? prefs.projectionPrefs
+            : {};
         storage.setItem(key, JSON.stringify({
             version: 1,
-            filters: prefs?.filters && typeof prefs.filters === 'object' ? prefs.filters : {},
-            colorBy: String(prefs?.colorBy || ''),
-            projectionId: String(prefs?.projectionId || ''),
-            filtersCollapsed: Boolean(prefs?.filtersCollapsed),
+            projectionId,
+            projectionPrefs,
         }));
     } catch {
         // localStorage may be unavailable in private or restricted contexts.
@@ -1562,6 +1576,15 @@ function tasksProjectionOptions(model) {
     ];
 }
 
+function tasksProjectionDefaultColorBy(model) {
+    return String(model?.default_color_by || '').trim();
+}
+
+function tasksResolvedProjectionDefaultColorBy(model) {
+    const defaultColorBy = tasksProjectionDefaultColorBy(model);
+    return tasksColorOptions(model).some((option) => option.key === defaultColorBy) ? defaultColorBy : '';
+}
+
 function selectTasksProjectionState(sourceModel, sourceGraph, projectionId) {
     const id = String(projectionId || '').trim();
     const entry = id ? sourceModel?.projection_models?.[id] : null;
@@ -1598,6 +1621,9 @@ async function renderTasksGraphs(rootElement = document) {
             const sourcePrefsRef = React.useRef(null);
             if (sourcePrefsRef.current === null) sourcePrefsRef.current = readTasksPrefs(sourceModel);
             const projectionOptions = React.useMemo(() => tasksProjectionOptions(sourceModel), []);
+            const storedProjectionPrefsRef = React.useRef(sourcePrefsRef.current?.projectionPrefs && typeof sourcePrefsRef.current.projectionPrefs === 'object'
+                ? sourcePrefsRef.current.projectionPrefs
+                : {});
             const initialProjectionId = React.useMemo(() => {
                 const saved = String(sourcePrefsRef.current?.projectionId || '').trim();
                 if (projectionOptions.some((option) => option.id === saved)) return saved;
@@ -1627,19 +1653,23 @@ async function renderTasksGraphs(rootElement = document) {
             const [selectedNodeId, setSelectedNodeId] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
+            const projectionPrefs = React.useMemo(
+                () => readTasksProjectionPrefs({ projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId),
+                [activeProjectionId]
+            );
             const [activeFilters, setActiveFilters] = React.useState(() => (
-                sourcePrefsRef.current?.filters && typeof sourcePrefsRef.current.filters === 'object'
-                    ? sourcePrefsRef.current.filters
+                projectionPrefs?.filters && typeof projectionPrefs.filters === 'object'
+                    ? projectionPrefs.filters
                     : {}
             ));
             const [activeColorBy, setActiveColorBy] = React.useState(() => (
-                typeof sourcePrefsRef.current?.colorBy === 'string' && sourcePrefsRef.current.colorBy.trim()
-                    ? sourcePrefsRef.current.colorBy.trim()
-                    : String(model?.default_color_by || '').trim()
+                typeof projectionPrefs?.colorBy === 'string' && projectionPrefs.colorBy.trim()
+                    ? projectionPrefs.colorBy.trim()
+                    : tasksResolvedProjectionDefaultColorBy(model)
             ));
             const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => (
-                typeof sourcePrefsRef.current?.filtersCollapsed === 'boolean'
-                    ? sourcePrefsRef.current.filtersCollapsed
+                typeof projectionPrefs?.filtersCollapsed === 'boolean'
+                    ? projectionPrefs.filtersCollapsed
                     : !defaultFiltersOpen
             ));
             const [viewMode, setViewMode] = React.useState(defaultViewMode);
@@ -1662,8 +1692,19 @@ async function renderTasksGraphs(rootElement = document) {
                 pendingFitActionRef.current = 'mode';
             }, [activeProjectionId, initialExpandedSet]);
             React.useEffect(() => {
+                const nextPrefs = readTasksProjectionPrefs({ projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
+                setActiveFilters(nextPrefs?.filters && typeof nextPrefs.filters === 'object' ? nextPrefs.filters : {});
+                setActiveColorBy(
+                    typeof nextPrefs?.colorBy === 'string' && nextPrefs.colorBy.trim()
+                        ? nextPrefs.colorBy.trim()
+                        : tasksResolvedProjectionDefaultColorBy(model)
+                );
+                setFiltersCollapsed(typeof nextPrefs?.filtersCollapsed === 'boolean' ? nextPrefs.filtersCollapsed : !defaultFiltersOpen);
+            }, [activeProjectionId, model, defaultFiltersOpen]);
+            React.useEffect(() => {
                 const validFilterKeys = new Set(tasksFilterOptions(model).map((option) => option.key));
                 const validColorKeys = new Set(tasksColorOptions(model).map((option) => option.key));
+                const defaultColorBy = tasksResolvedProjectionDefaultColorBy(model);
                 setActiveFilters((current) => Object.fromEntries(
                     Object.entries(current || {}).filter(([key, value]) => {
                         if (!validFilterKeys.has(key)) return false;
@@ -1671,14 +1712,25 @@ async function renderTasksGraphs(rootElement = document) {
                         return Boolean(value);
                     })
                 ));
-                setActiveColorBy((current) => (current && !validColorKeys.has(current) ? '' : current));
+                setActiveColorBy((current) => {
+                    if (current && validColorKeys.has(current)) return current;
+                    return validColorKeys.has(defaultColorBy) ? defaultColorBy : '';
+                });
             }, [model]);
             React.useEffect(() => {
+                const projectionKey = tasksProjectionPrefsKey(activeProjectionId);
+                const nextProjectionPrefs = {
+                    ...storedProjectionPrefsRef.current,
+                    [projectionKey]: {
+                        filters: activeFilters,
+                        colorBy: activeColorBy,
+                        filtersCollapsed,
+                    },
+                };
+                storedProjectionPrefsRef.current = nextProjectionPrefs;
                 writeTasksPrefs(sourceModel, {
-                    filters: activeFilters,
-                    colorBy: activeColorBy,
                     projectionId: activeProjectionId,
-                    filtersCollapsed,
+                    projectionPrefs: nextProjectionPrefs,
                 });
             }, [sourceModel, activeFilters, activeColorBy, activeProjectionId, filtersCollapsed]);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
@@ -2562,7 +2614,7 @@ async function renderTasksGraphs(rootElement = document) {
                         },
                     },
                         React.createElement('div', { style: { marginBottom: '12px', display: 'flex', justifyContent: 'flex-end' } },
-                            React.createElement('button', { type: 'button', onClick: () => { setActiveFilters({}); setActiveColorBy(''); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' } }, 'Unselect all')
+                            React.createElement('button', { type: 'button', onClick: () => { setActiveFilters({}); setActiveColorBy(tasksResolvedProjectionDefaultColorBy(model)); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' } }, 'Reset')
                         ),
                         React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                             React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
