@@ -149,6 +149,7 @@ function writeTasksPrefs(model, prefs) {
             version: 1,
             filters: prefs?.filters && typeof prefs.filters === 'object' ? prefs.filters : {},
             colorBy: String(prefs?.colorBy || ''),
+            lensId: String(prefs?.lensId || ''),
             filtersCollapsed: Boolean(prefs?.filtersCollapsed),
         }));
     } catch {
@@ -1550,6 +1551,26 @@ function tasksEdgeLabelPoint(props) {
     };
 }
 
+function tasksLensOptions(model) {
+    const lenses = Array.isArray(model?.view_lenses) ? model.view_lenses : [];
+    if (!lenses.length) return [];
+    return [
+        { id: '', label: 'Default' },
+        ...lenses
+            .filter((lens) => lens && lens.id && model?.lens_models?.[lens.id])
+            .map((lens) => ({ id: String(lens.id), label: String(lens.label || lens.id) })),
+    ];
+}
+
+function selectTasksLensState(sourceModel, sourceGraph, lensId) {
+    const id = String(lensId || '').trim();
+    const entry = id ? sourceModel?.lens_models?.[id] : null;
+    if (!entry || !entry.model || !entry.graph) {
+        return { model: sourceModel, graph: sourceGraph, lensId: '' };
+    }
+    return { model: entry.model, graph: entry.graph, lensId: id };
+}
+
 async function renderTasksGraphs(rootElement = document) {
     const rf = await ensureTasksReactFlow();
     for (const wrapper of rootElement.querySelectorAll('.tasks-container[data-tasks-widget="true"]')) {
@@ -1562,21 +1583,41 @@ async function renderTasksGraphs(rootElement = document) {
             y: Number.parseFloat(wrapper.dataset.tasksJitterY || wrapper.dataset.tasksJitter || '0'),
         };
         const layoutConfig = readTasksLayoutConfig(wrapper);
-        const model = JSON.parse(wrapper.dataset.tasksPayload || '{"groups":[],"tasks":[],"group_tree":{},"task_children":{},"dependency_edges":[]}');
-        const rawGraph = normalizeTasksGraphNodes(JSON.parse(wrapper.dataset.tasksGraph || '{"nodes":[],"edges":[]}'), model);
+        const sourceModel = JSON.parse(wrapper.dataset.tasksPayload || '{"groups":[],"tasks":[],"group_tree":{},"task_children":{},"dependency_edges":[]}');
+        const sourceGraph = normalizeTasksGraphNodes(JSON.parse(wrapper.dataset.tasksGraph || '{"nodes":[],"edges":[]}'), sourceModel);
         const widgetId = wrapper.id;
         const defaultOpenDepth = Number.parseInt(wrapper.dataset.tasksDefaultOpenDepth || '0', 10);
         const ganttEnabled = String(wrapper.dataset.tasksGantt || '').trim().toLowerCase() === 'true';
         const defaultViewMode = ganttEnabled && String(wrapper.dataset.tasksDefaultView || '').trim().toLowerCase() === 'gantt' ? 'gantt' : 'graph';
         const defaultFiltersOpen = String(wrapper.dataset.tasksOpenFiltersDefault || '').trim().toLowerCase() === 'true';
         const nodeCardWidth = String(wrapper.dataset.tasksNodeCardWidth || '480px').trim() || '480px';
-        const initialExpandedSet = collectExpandedGroupsByDepth(model.group_tree, Number.isNaN(defaultOpenDepth) ? 0 : defaultOpenDepth);
         const TasksGraphApp = (props) => {
             const React = window.React;
             const Handle = rf.Handle;
             const Position = rf.Position;
-            const initialPrefsRef = React.useRef(null);
-            if (initialPrefsRef.current === null) initialPrefsRef.current = readTasksPrefs(model);
+            const sourcePrefsRef = React.useRef(null);
+            if (sourcePrefsRef.current === null) sourcePrefsRef.current = readTasksPrefs(sourceModel);
+            const lensOptions = React.useMemo(() => tasksLensOptions(sourceModel), []);
+            const initialLensId = React.useMemo(() => {
+                const saved = String(sourcePrefsRef.current?.lensId || '').trim();
+                if (lensOptions.some((option) => option.id === saved)) return saved;
+                const configured = String(sourceModel?.default_lens || '').trim();
+                return lensOptions.some((option) => option.id === configured) ? configured : '';
+            }, [lensOptions]);
+            const [activeLensId, setActiveLensId] = React.useState(initialLensId);
+            const lensState = React.useMemo(
+                () => selectTasksLensState(sourceModel, sourceGraph, activeLensId),
+                [activeLensId]
+            );
+            const model = lensState.model;
+            const rawGraph = React.useMemo(
+                () => normalizeTasksGraphNodes(lensState.graph || { nodes: [], edges: [] }, model),
+                [lensState, model]
+            );
+            const initialExpandedSet = React.useMemo(
+                () => collectExpandedGroupsByDepth(model.group_tree, Number.isNaN(defaultOpenDepth) ? 0 : defaultOpenDepth),
+                [model]
+            );
             const baseLayoutRef = React.useRef(null);
             const groupLayoutsRef = React.useRef({});
             const graphBaseRef = React.useRef({ nodes: [], edges: [] });
@@ -1587,18 +1628,18 @@ async function renderTasksGraphs(rootElement = document) {
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
             const [activeFilters, setActiveFilters] = React.useState(() => (
-                initialPrefsRef.current?.filters && typeof initialPrefsRef.current.filters === 'object'
-                    ? initialPrefsRef.current.filters
+                sourcePrefsRef.current?.filters && typeof sourcePrefsRef.current.filters === 'object'
+                    ? sourcePrefsRef.current.filters
                     : {}
             ));
             const [activeColorBy, setActiveColorBy] = React.useState(() => (
-                typeof initialPrefsRef.current?.colorBy === 'string' && initialPrefsRef.current.colorBy.trim()
-                    ? initialPrefsRef.current.colorBy.trim()
+                typeof sourcePrefsRef.current?.colorBy === 'string' && sourcePrefsRef.current.colorBy.trim()
+                    ? sourcePrefsRef.current.colorBy.trim()
                     : String(model?.default_color_by || '').trim()
             ));
             const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => (
-                typeof initialPrefsRef.current?.filtersCollapsed === 'boolean'
-                    ? initialPrefsRef.current.filtersCollapsed
+                typeof sourcePrefsRef.current?.filtersCollapsed === 'boolean'
+                    ? sourcePrefsRef.current.filtersCollapsed
                     : !defaultFiltersOpen
             ));
             const [viewMode, setViewMode] = React.useState(defaultViewMode);
@@ -1610,7 +1651,16 @@ async function renderTasksGraphs(rootElement = document) {
             const reactFlowApiRef = React.useRef(null);
             const prevExpandedCountRef = React.useRef(0);
             const hoverClearTimerRef = React.useRef(null);
-        const activeColorPalette = React.useMemo(() => tasksColorPaletteFor(model, activeColorBy), [model, activeColorBy]);
+            const activeColorPalette = React.useMemo(() => tasksColorPaletteFor(model, activeColorBy), [model, activeColorBy]);
+            React.useEffect(() => {
+                baseLayoutRef.current = null;
+                groupLayoutsRef.current = {};
+                graphBaseRef.current = { nodes: [], edges: [] };
+                setExpanded(new Set(initialExpandedSet));
+                setSelectedNodeId(null);
+                setHoveredNodeId(null);
+                pendingFitActionRef.current = 'mode';
+            }, [activeLensId, initialExpandedSet]);
             React.useEffect(() => {
                 const validFilterKeys = new Set(tasksFilterOptions(model).map((option) => option.key));
                 const validColorKeys = new Set(tasksColorOptions(model).map((option) => option.key));
@@ -1624,12 +1674,13 @@ async function renderTasksGraphs(rootElement = document) {
                 setActiveColorBy((current) => (current && !validColorKeys.has(current) ? '' : current));
             }, [model]);
             React.useEffect(() => {
-                writeTasksPrefs(model, {
+                writeTasksPrefs(sourceModel, {
                     filters: activeFilters,
                     colorBy: activeColorBy,
+                    lensId: activeLensId,
                     filtersCollapsed,
                 });
-            }, [model, activeFilters, activeColorBy, filtersCollapsed]);
+            }, [sourceModel, activeFilters, activeColorBy, activeLensId, filtersCollapsed]);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
                 const viewport = reactFlow.getViewport();
                 return reactFlow.setViewport(
@@ -1640,7 +1691,7 @@ async function renderTasksGraphs(rootElement = document) {
             const ensureBaseLayout = React.useCallback(async () => {
                 if (!baseLayoutRef.current) baseLayoutRef.current = await layoutBaseTasksGraph(rawGraph, model, jitterConfig, layoutConfig);
                 return baseLayoutRef.current;
-            }, [model]);
+            }, [rawGraph, model]);
             const rebuildLayout = React.useCallback(async (expandedSet, mode = viewMode) => {
                 if (mode === 'gantt') {
                     const gantt = buildGanttTasksGraph(model);
@@ -2419,7 +2470,7 @@ async function renderTasksGraphs(rootElement = document) {
                     : tasksNodeMetaEntries(selectedNode);
                 if (!selectedNode || entries.length === 0) return null;
                 return React.createElement('div', {
-                    style: { position: 'absolute', right: '12px', top: '12px', zIndex: 29, width: nodeCardWidth, maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
+                    style: { width: '100%', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto' },
                 },
                     React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Node Details'),
                     React.createElement(selectedNode.href ? 'a' : 'div', selectedNode.href
@@ -2791,6 +2842,62 @@ async function renderTasksGraphs(rootElement = document) {
                     background: viewMode === mode ? 'color-mix(in srgb, var(--vyasa-primary) 18%, transparent)' : 'transparent',
                 },
             }, mode)));
+            const LensToggle = () => lensOptions.length <= 1 ? null : window.React.createElement('div', {
+                style: {
+                    display: 'inline-flex',
+                    flexWrap: 'wrap',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    justifyContent: 'space-between',
+                    gap: '2px',
+                    padding: '3px',
+                    borderRadius: '10px',
+                    border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)',
+                    background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
+                    boxShadow: '0 10px 24px rgba(0,0,0,0.10)',
+                    pointerEvents: 'auto',
+                },
+            }, lensOptions.map((lens) => window.React.createElement('button', {
+                key: lens.id || '__default__',
+                type: 'button',
+                onClick: () => {
+                    setActiveLensId(lens.id);
+                    pendingFitActionRef.current = 'mode';
+                },
+                style: {
+                    border: 0,
+                    borderRadius: '7px',
+                    flex: '1 1 auto',
+                    minWidth: '0',
+                    padding: '6px 9px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: 'inherit',
+                    background: activeLensId === lens.id ? 'color-mix(in srgb, var(--vyasa-primary) 18%, transparent)' : 'transparent',
+                },
+            }, lens.label)));
+            const RightRail = () => {
+                const hasLensMenu = lensOptions.length > 1;
+                if (!hasLensMenu && !selectedNodeId) return null;
+                return window.React.createElement('div', {
+                    style: {
+                        position: 'absolute',
+                        right: '12px',
+                        top: '12px',
+                        zIndex: 34,
+                        width: nodeCardWidth,
+                        maxWidth: 'calc(100% - 24px)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px',
+                        pointerEvents: 'none',
+                    },
+                },
+                    window.React.createElement(LensToggle),
+                    window.React.createElement(SelectedNodePanel)
+                );
+            };
             const GroupHoverTooltip = () => groupHoverTooltip && window.React.createElement('div', {
                 style: {
                     position: 'absolute',
@@ -2819,8 +2926,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge)
                     ),
-                    window.React.createElement(SelectedNodePanel),
                     window.React.createElement(ViewModeToggle),
+                    window.React.createElement(RightRail),
                     filterPanelElement,
                     window.React.createElement(GroupHoverTooltip)
                 )
@@ -2832,8 +2939,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge)
                 ),
-                window.React.createElement(SelectedNodePanel),
                 window.React.createElement(ViewModeToggle),
+                window.React.createElement(RightRail),
                 filterPanelElement,
                 window.React.createElement(GroupHoverTooltip)
             );

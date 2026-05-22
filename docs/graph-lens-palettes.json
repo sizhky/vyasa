@@ -1,0 +1,57 @@
+{
+  "node_color_palettes": {
+    "city": {
+      "Tokyo": "#2563eb",
+      "Hakone": "#059669",
+      "Fujikawaguchiko": "#16a34a",
+      "Kyoto": "#b45309",
+      "Nara": "#65a30d",
+      "Osaka": "#dc2626",
+      "Hyogo": "#0891b2"
+    },
+    "theme": {
+      "Arrival": "#64748b",
+      "Stay": "#7c3aed",
+      "Food": "#ea580c",
+      "Art": "#c026d3",
+      "Temples": "#b45309",
+      "Pop Culture": "#db2777",
+      "Nature": "#16a34a",
+      "Transit": "#475569",
+      "Old Town": "#a16207",
+      "History": "#9333ea",
+      "Nightlife": "#0f172a",
+      "Rest": "#0891b2",
+      "Departure": "#334155"
+    },
+    "trip_stage": {
+      "Arrive": "#475569",
+      "First Days": "#2563eb",
+      "Middle": "#b45309",
+      "Day Trips": "#16a34a",
+      "Last Stretch": "#dc2626",
+      "Slow Down": "#0891b2",
+      "Leave": "#334155"
+    }
+  },
+  "edge_color_palettes": {
+    "relation": {
+      "route": "#2563eb",
+      "day-plan": "#16a34a",
+      "short-hop": "#84cc16",
+      "food-trail": "#ea580c",
+      "temple-trail": "#b45309",
+      "nature-trail": "#059669",
+      "pace-shift": "#0891b2",
+      "day-trip": "#0d9488",
+      "departure": "#475569",
+      "rest-trail": "#06b6d4",
+      "nightlife-trail": "#db2777",
+      "mood-shift": "#7c3aed",
+      "history-trail": "#9333ea",
+      "city-contrast": "#ef4444",
+      "old-town-trail": "#a16207",
+      "trip-arc": "#111827"
+    }
+  }
+}

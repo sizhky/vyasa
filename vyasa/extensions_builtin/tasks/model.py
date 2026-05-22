@@ -5,6 +5,7 @@ import re
 import secrets
 
 from ...markdown_fence import current_content_path, get_root_folder
+from .lenses import attach_lens_models, normalize_lenses
 
 
 _STRING_DECODER = json.JSONDecoder()
@@ -51,9 +52,40 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                 continue
             key = line[:key_index].strip()
             value = line[key_index + 1:].strip()
-            if key in {"id", "title", "default_color_by", "edge_color_by", "color_palette_source", "edge_color_palette_source"}:
+            if key in {"id", "title", "default_color_by", "default_lens", "edge_color_by", "color_palette_source", "edge_color_palette_source"}:
                 config[key] = _read_string(value)
                 cursor += 1
+                continue
+            if key == "view_lenses":
+                lenses = []
+                current = None
+                cursor += 1
+                while cursor < len(frontmatter_lines):
+                    child_raw = frontmatter_lines[cursor]
+                    if not child_raw.strip() or child_raw.lstrip().startswith("#"):
+                        cursor += 1
+                        continue
+                    child_indent = _count_indent(child_raw)
+                    if child_indent <= indent:
+                        break
+                    child_line = child_raw.strip()
+                    if child_line.startswith("- "):
+                        if current:
+                            lenses.append(current)
+                        current = {}
+                        child_line = child_line[2:].strip()
+                        child_key_index = _find_unquoted(child_line, ":")
+                        if child_key_index >= 0:
+                            current[child_line[:child_key_index].strip()] = _read_string(child_line[child_key_index + 1:].strip())
+                        cursor += 1
+                        continue
+                    child_key_index = _find_unquoted(child_line, ":")
+                    if current is not None and child_key_index >= 0:
+                        current[child_line[:child_key_index].strip()] = _read_string(child_line[child_key_index + 1:].strip())
+                    cursor += 1
+                if current:
+                    lenses.append(current)
+                config[key] = normalize_lenses(lenses)
                 continue
             if key == "filter_attributes":
                 if value:
@@ -456,7 +488,7 @@ def _parse_items_graph(body: str) -> dict:
         if indent == 0 and _find_unquoted(line, ":") > 0 and _find_unquoted(line, "->") < 0:
             key, value = line.split(":", 1)
             key = key.strip()
-            if key in {"id", "title", "default_color_by", "edge_color_by", "color_palette_source", "edge_color_palette_source"}:
+            if key in {"id", "title", "default_color_by", "default_lens", "edge_color_by", "color_palette_source", "edge_color_palette_source"}:
                 graph[key] = _read_string(value.strip())
                 index += 1
                 continue
@@ -694,6 +726,10 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         graph["title"] = config["title"]
     if "default_color_by" in config and "default_color_by" not in graph:
         graph["default_color_by"] = config["default_color_by"]
+    if "default_lens" in config and "default_lens" not in graph:
+        graph["default_lens"] = config["default_lens"]
+    if "view_lenses" in config and "view_lenses" not in graph:
+        graph["view_lenses"] = config["view_lenses"]
     if "filter_attributes" in config and "filter_attributes" not in graph:
         graph["filter_attributes"] = config["filter_attributes"]
     if config.get("color_palette_source") and not graph.get("color_palette_source"):
@@ -739,7 +775,7 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         group_tree[group.get("parent_group_id")].append(group["id"])
     for task in tasks:
         task_children[task.get("group_id")].append(task["id"])
-    return {
+    model = {
         "graph_id": graph.get("id") or _generated_graph_id(graph),
         "title": graph.get("title", ""),
         "groups": groups,
@@ -759,7 +795,11 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "edge_color_palette": graph.get("edge_color_palette", {}),
         "edge_color_palettes": graph.get("edge_color_palettes", {}),
         "edge_color_palette_source": graph.get("edge_color_palette_source", ""),
+        "default_lens": graph.get("default_lens", ""),
+        "view_lenses": graph.get("view_lenses", []),
+        "lens_models": {},
     }
+    return attach_lens_models(model)
 
 
 def parse_tasks_model(markdown_path: str | Path) -> dict:

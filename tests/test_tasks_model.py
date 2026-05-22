@@ -378,6 +378,38 @@ Roadmap:
     assert model["filter_attributes"] == ["owner", "status"]
 
 
+def test_items_parser_builds_lens_models_from_frontmatter():
+    model = parse_tasks_text(
+        """```items
+---
+default_lens: theme
+view_lenses:
+  - id: city
+    label: City View
+    groups_from: city
+  - id: theme
+    label: Theme View
+    groups_from: theme
+---
+Places:
+  - tsukiji :: Tsukiji | city: Tokyo | theme: Food
+  - fushimi :: Fushimi Inari | city: Kyoto | theme: Temples
+  - dotonbori :: Dotonbori | city: Osaka | theme: Food
+tsukiji -> dotonbori
+```"""
+    )
+
+    assert model["default_lens"] == "theme"
+    assert [lens["id"] for lens in model["view_lenses"]] == ["city", "theme"]
+    city_model = model["lens_models"]["city"]["model"]
+    theme_model = model["lens_models"]["theme"]["model"]
+    assert [group["label"] for group in city_model["groups"]] == ["Kyoto", "Osaka", "Tokyo"]
+    assert [group["label"] for group in theme_model["groups"]] == ["Food", "Temples"]
+    food_group_id = next(group["id"] for group in theme_model["groups"] if group["label"] == "Food")
+    assert theme_model["task_children"][food_group_id] == ["tsukiji", "dotonbori"]
+    assert {"source": "tsukiji", "target": "dotonbori"} in theme_model["dependency_edges"]
+
+
 def test_collapsed_graph_projects_nested_task_edges_to_root_groups():
     model = parse_tasks_text(
         """```items
