@@ -452,7 +452,7 @@ tsukiji -> dotonbori
     theme_model = model["projection_models"]["theme"]["model"]
     assert city_model["default_color_by"] == "city"
     assert theme_model["default_color_by"] == "theme"
-    assert [group["label"] for group in city_model["groups"]] == ["Kyoto", "Osaka", "Tokyo"]
+    assert [group["label"] for group in city_model["groups"]] == ["Tokyo", "Kyoto", "Osaka"]
     assert [group["label"] for group in theme_model["groups"]] == ["Food", "Temples"]
     food_group_id = next(group["id"] for group in theme_model["groups"] if group["label"] == "Food")
     assert theme_model["task_children"][food_group_id] == ["tsukiji", "dotonbori"]

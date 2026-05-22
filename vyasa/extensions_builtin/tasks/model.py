@@ -80,14 +80,39 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                         cursor += 1
                         continue
                     child_key_index = _find_unquoted(child_line, ":")
-                    if current is not None and child_key_index >= 0:
-                        current[child_line[:child_key_index].strip()] = _read_string(child_line[child_key_index + 1:].strip())
+                    if current is None or child_key_index < 0:
+                        cursor += 1
+                        continue
+                    sub_key = child_line[:child_key_index].strip()
+                    sub_value = child_line[child_key_index + 1:].strip()
+                    if sub_value:
+                        if sub_value.startswith("[") and sub_value.endswith("]"):
+                            current[sub_key] = _read_string_list(sub_value)
+                        else:
+                            current[sub_key] = _read_string(sub_value)
+                        cursor += 1
+                        continue
+                    sub_items: list = []
                     cursor += 1
+                    while cursor < len(frontmatter_lines):
+                        item_raw = frontmatter_lines[cursor]
+                        if not item_raw.strip() or item_raw.lstrip().startswith("#"):
+                            cursor += 1
+                            continue
+                        item_indent = _count_indent(item_raw)
+                        if item_indent <= child_indent:
+                            break
+                        item_line = item_raw.strip()
+                        if item_line.startswith("- "):
+                            sub_items.append(_read_string(item_line[2:].strip()))
+                        cursor += 1
+                    if sub_items:
+                        current[sub_key] = sub_items
                 if current:
                     projections.append(current)
                 config["view_projections"] = normalize_projections(projections)
                 continue
-            if key == "filter_attributes":
+            if key in {"filter_attributes", "hover_attrs"}:
                 if value:
                     config[key] = _read_string_list(value)
                     cursor += 1
@@ -736,16 +761,31 @@ def apply_edge_label_fallbacks(graph: dict) -> None:
     edge_color_key = str(graph.get("edge_color_by") or "").strip()
     if not edge_color_key:
         return
+    tasks_by_id = {task.get("id"): task for task in graph.get("tasks", []) if task.get("id")}
+    palette = graph.get("edge_color_palettes", {}).get(edge_color_key, {})
+    palette_keys = set(palette.keys()) if isinstance(palette, dict) else set()
     for edge in graph.get("dependency_edges", []):
         edge_value = edge.get(edge_color_key)
-        if (edge_value is None or str(edge_value).strip() == "") and edge.get("label"):
-            edge[edge_color_key] = str(edge["label"])
-            continue
-        if edge.get("label"):
-            continue
-        if edge_value is None or str(edge_value).strip() == "":
-            continue
-        edge["label"] = str(edge_value)
+        edge_value_str = str(edge_value or "").strip()
+        label = edge.get("label")
+        # If an existing edge-attr value isn't in the palette, drop it so we can
+        # try alternative sources.
+        if edge_value_str and palette_keys and edge_value_str not in palette_keys:
+            edge_value_str = ""
+        # Try edge label if it matches the palette (e.g. relation-style labels).
+        if not edge_value_str and label and str(label).strip() in palette_keys:
+            edge_value_str = str(label).strip()
+        # Fall through to target node's attribute (e.g. arrive-at-X by Rail).
+        if not edge_value_str:
+            target = tasks_by_id.get(edge.get("target"))
+            target_value = str(target.get(edge_color_key) if target else "").strip()
+            if target_value:
+                edge_value_str = target_value
+        if edge_value_str:
+            edge[edge_color_key] = edge_value_str
+        # Preserve narrative labels untouched. If no label and no value yet,
+        # the legacy fallback used to copy attr -> label; skip that — modern
+        # palettes drive color, not label inference.
 
 
 def _apply_palette_source(graph: dict, current_path: str | Path | None, source_field: str, palette_field: str, palettes_field: str, color_by_field: str) -> None:
@@ -777,6 +817,8 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         graph["view_projections"] = config["view_projections"]
     if "filter_attributes" in config and "filter_attributes" not in graph:
         graph["filter_attributes"] = config["filter_attributes"]
+    if "hover_attrs" in config and "hover_attrs" not in graph:
+        graph["hover_attrs"] = config["hover_attrs"]
     if config.get("color_palette_source") and not graph.get("color_palette_source"):
         graph["color_palette_source"] = config["color_palette_source"]
     if config.get("color_by") and not graph.get("color_by"):
@@ -833,6 +875,7 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "color_by": graph.get("color_by", ""),
         "default_color_by": graph.get("default_color_by", ""),
         "filter_attributes": graph.get("filter_attributes", []),
+        "hover_attrs": graph.get("hover_attrs", []),
         "color_palette": graph.get("color_palette", {}),
         "node_color_palettes": graph.get("node_color_palettes", {}),
         "color_palette_source": graph.get("color_palette_source", ""),

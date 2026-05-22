@@ -122,6 +122,9 @@ function logTasksDebug(label, payload = {}) {
     return event;
 }
 
+const TASKS_PREFS_INDEX_KEY = 'vyasa:tasks:prefs:__index__';
+const TASKS_PREFS_MAX_ENTRIES = 200;
+
 function tasksPrefsKey(model) {
     const storageId = String(model?.storage_id || '').trim();
     if (storageId) return `vyasa:tasks:prefs:${storageId}`;
@@ -129,14 +132,67 @@ function tasksPrefsKey(model) {
     return graphId ? `vyasa:tasks:prefs:${graphId}` : '';
 }
 
+function tasksGetStorage() {
+    if (typeof window === 'undefined') return null;
+    try {
+        return window.localStorage || null;
+    } catch {
+        return null;
+    }
+}
+
+function readTasksPrefsIndex(storage) {
+    try {
+        const raw = storage.getItem(TASKS_PREFS_INDEX_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+        return {};
+    }
+}
+
+function writeTasksPrefsIndex(storage, index) {
+    try {
+        storage.setItem(TASKS_PREFS_INDEX_KEY, JSON.stringify(index));
+    } catch {
+        // If even the index can't write, the next eviction round will handle it.
+    }
+}
+
+function touchTasksPrefsIndex(storage, key) {
+    if (!storage || !key) return;
+    const index = readTasksPrefsIndex(storage);
+    index[key] = Date.now();
+    writeTasksPrefsIndex(storage, index);
+}
+
+function evictTasksPrefsLRU(storage, keepKey = '', maxEntries = TASKS_PREFS_MAX_ENTRIES) {
+    if (!storage) return;
+    const index = readTasksPrefsIndex(storage);
+    const entries = Object.entries(index).sort((a, b) => a[1] - b[1]);
+    let removed = 0;
+    while (entries.length > maxEntries) {
+        const [key] = entries.shift();
+        if (key === keepKey) continue;
+        try { storage.removeItem(key); } catch { /* ignore */ }
+        delete index[key];
+        removed += 1;
+    }
+    if (removed) writeTasksPrefsIndex(storage, index);
+}
+
 function readTasksPrefs(model) {
     const key = tasksPrefsKey(model);
-    if (!key || typeof window === 'undefined') return {};
+    const storage = tasksGetStorage();
+    if (!key || !storage) return {};
     try {
-        const storage = window.localStorage;
-        if (!storage) return {};
         const parsed = JSON.parse(storage.getItem(key) || '{}');
-        return parsed && typeof parsed === 'object' ? parsed : {};
+        if (parsed && typeof parsed === 'object') {
+            touchTasksPrefsIndex(storage, key);
+            return parsed;
+        }
+        return {};
     } catch {
         return {};
     }
@@ -156,21 +212,32 @@ function readTasksProjectionPrefs(prefs, projectionId) {
 
 function writeTasksPrefs(model, prefs) {
     const key = tasksPrefsKey(model);
-    if (!key || typeof window === 'undefined') return;
+    const storage = tasksGetStorage();
+    if (!key || !storage) return;
+    const projectionId = String(prefs?.projectionId || '').trim();
+    const projectionPrefs = prefs?.projectionPrefs && typeof prefs.projectionPrefs === 'object'
+        ? prefs.projectionPrefs
+        : {};
+    const payload = JSON.stringify({
+        version: 1,
+        projectionId,
+        projectionPrefs,
+    });
+    const attempt = () => {
+        storage.setItem(key, payload);
+        touchTasksPrefsIndex(storage, key);
+    };
     try {
-        const storage = window.localStorage;
-        if (!storage) return;
-        const projectionId = String(prefs?.projectionId || '').trim();
-        const projectionPrefs = prefs?.projectionPrefs && typeof prefs.projectionPrefs === 'object'
-            ? prefs.projectionPrefs
-            : {};
-        storage.setItem(key, JSON.stringify({
-            version: 1,
-            projectionId,
-            projectionPrefs,
-        }));
+        attempt();
+        evictTasksPrefsLRU(storage, key);
     } catch {
-        // localStorage may be unavailable in private or restricted contexts.
+        // Most likely QuotaExceededError. Evict aggressively (keep half the budget) and retry once.
+        try {
+            evictTasksPrefsLRU(storage, key, Math.floor(TASKS_PREFS_MAX_ENTRIES / 2));
+            attempt();
+        } catch {
+            // localStorage may be unavailable, full, or restricted. Silent fail is fine — prefs are best-effort.
+        }
     }
 }
 
@@ -481,8 +548,31 @@ function tasksNodeMatchesFilters(node, filters) {
     });
 }
 
+function resolveTasksProjectionGroupOwnColor(node, model) {
+    if (!node || !node.__projection_group__) return '';
+    const palettes = model?.node_color_palettes;
+    if (!palettes || typeof palettes !== 'object') return '';
+    const reserved = new Set(['id', 'label', 'parent_group_id', 'projection', '__projection_group__', 'href', 'color']);
+    for (const [key, value] of Object.entries(node)) {
+        if (reserved.has(key)) continue;
+        if (value === null || value === undefined || String(value).trim() === '') continue;
+        const palette = palettes[key];
+        if (!palette || typeof palette !== 'object') continue;
+        if (isTasksGradientPalette(palette)) {
+            const color = resolveTasksGradientColor(palette, value);
+            if (color) return color;
+            continue;
+        }
+        const color = palette[String(value)];
+        if (typeof color === 'string' && color.trim()) return color.trim();
+    }
+    return '';
+}
+
 function resolveTasksNodeOwnColor(node, model, colorByOverride = null, paletteOverride = null) {
     if (!node) return '';
+    const projectionColor = resolveTasksProjectionGroupOwnColor(node, model);
+    if (projectionColor) return projectionColor;
     const colorBy = colorByOverride !== null
         ? String(colorByOverride || '').trim()
         : (typeof model?.color_by === 'string' ? model.color_by.trim() : '');
@@ -1657,16 +1747,64 @@ function tasksEdgeLabelPoint(props) {
     };
 }
 
+function tasksActiveHoverAttrs(sourceModel, activeProjectionId) {
+    const projections = Array.isArray(sourceModel?.view_projections) ? sourceModel.view_projections : [];
+    const id = String(activeProjectionId || '').trim();
+    if (id) {
+        const projection = projections.find((p) => p && p.id === id);
+        if (projection && Array.isArray(projection.hover_attrs)) {
+            return projection.hover_attrs.map((attr) => String(attr || '').trim()).filter(Boolean);
+        }
+    }
+    if (Array.isArray(sourceModel?.hover_attrs)) {
+        return sourceModel.hover_attrs.map((attr) => String(attr || '').trim()).filter(Boolean);
+    }
+    return [];
+}
+
+function tasksFormatHoverValue(attr, value) {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'number') {
+        if (Number.isInteger(value) && Math.abs(value) >= 1000) {
+            return value.toLocaleString('en-US');
+        }
+        return String(value);
+    }
+    const str = String(value).trim();
+    if (!str) return '';
+    // Try numeric formatting for stringy numbers (the fence parser stores everything as strings).
+    if (/^-?\d+(\.\d+)?$/.test(str)) {
+        const num = Number(str);
+        if (Number.isFinite(num) && Math.abs(num) >= 1000) return num.toLocaleString('en-US');
+    }
+    return str;
+}
+
+function tasksHoverAttrRows(node, hoverAttrs) {
+    if (!node || !Array.isArray(hoverAttrs) || !hoverAttrs.length) return [];
+    const rows = [];
+    for (const attr of hoverAttrs) {
+        const value = node[attr];
+        if (value === null || value === undefined || String(value).trim() === '') continue;
+        rows.push({ attr, label: tasksNodeMetaLabel(attr), value: tasksFormatHoverValue(attr, value) });
+    }
+    return rows;
+}
+
 function tasksProjectionOptions(model, ganttEnabled = false) {
     const projections = Array.isArray(model?.view_projections) ? model.view_projections : [];
     if (!projections.length && !ganttEnabled) return [];
     const options = [
-        { id: '', label: 'Default' },
+        { id: '', label: 'Default', caption: '' },
         ...projections
             .filter((projection) => projection && projection.id && model?.projection_models?.[projection.id])
-            .map((projection) => ({ id: String(projection.id), label: String(projection.label || projection.id) })),
+            .map((projection) => ({
+                id: String(projection.id),
+                label: String(projection.label || projection.id),
+                caption: String(projection.caption || '').trim(),
+            })),
     ];
-    if (ganttEnabled) options.push({ id: TASKS_GANTT_PROJECTION_ID, label: 'Gantt' });
+    if (ganttEnabled) options.push({ id: TASKS_GANTT_PROJECTION_ID, label: 'Gantt', caption: '' });
     return options;
 }
 
@@ -1756,14 +1894,20 @@ async function renderTasksGraphs(rootElement = document) {
             const graphBaseRef = React.useRef({ nodes: [], edges: [] });
             const flowWrapperRef = React.useRef(null);
             const filterPanelRef = React.useRef(null);
-            const [expanded, setExpanded] = React.useState(() => new Set(initialExpandedSet));
-            const [selectedNodeId, setSelectedNodeId] = React.useState(null);
-            const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
-            const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
             const projectionPrefs = React.useMemo(
                 () => readTasksProjectionPrefs({ projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId),
                 [activeProjectionId]
             );
+            const hydrateExpandedSet = React.useCallback((prefs) => {
+                const validIds = new Set((model.groups || []).map((group) => group.id));
+                const saved = Array.isArray(prefs?.expandedGroupIds) ? prefs.expandedGroupIds : null;
+                if (saved) return new Set(saved.filter((id) => validIds.has(id)));
+                return new Set(initialExpandedSet);
+            }, [model, initialExpandedSet]);
+            const [expanded, setExpanded] = React.useState(() => hydrateExpandedSet(projectionPrefs));
+            const [selectedNodeId, setSelectedNodeId] = React.useState(null);
+            const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
+            const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
             const [activeFilters, setActiveFilters] = React.useState(() => (
                 projectionPrefs?.filters && typeof projectionPrefs.filters === 'object'
                     ? projectionPrefs.filters
@@ -1794,11 +1938,12 @@ async function renderTasksGraphs(rootElement = document) {
                 baseLayoutRef.current = null;
                 groupLayoutsRef.current = {};
                 graphBaseRef.current = { nodes: [], edges: [] };
-                setExpanded(new Set(initialExpandedSet));
+                const nextPrefs = readTasksProjectionPrefs({ projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
+                setExpanded(hydrateExpandedSet(nextPrefs));
                 setSelectedNodeId(null);
                 setHoveredNodeId(null);
                 pendingFitActionRef.current = 'mode';
-            }, [activeProjectionId, initialExpandedSet]);
+            }, [activeProjectionId, hydrateExpandedSet]);
             React.useEffect(() => {
                 const nextPrefs = readTasksProjectionPrefs({ projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
                 setActiveFilters(nextPrefs?.filters && typeof nextPrefs.filters === 'object' ? nextPrefs.filters : {});
@@ -1833,6 +1978,7 @@ async function renderTasksGraphs(rootElement = document) {
                         filters: activeFilters,
                         colorBy: activeColorBy,
                         filtersCollapsed,
+                        expandedGroupIds: Array.from(expanded),
                     },
                 };
                 storedProjectionPrefsRef.current = nextProjectionPrefs;
@@ -1840,7 +1986,7 @@ async function renderTasksGraphs(rootElement = document) {
                     projectionId: activeProjectionId,
                     projectionPrefs: nextProjectionPrefs,
                 });
-            }, [sourceModel, activeFilters, activeColorBy, activeProjectionId, filtersCollapsed]);
+            }, [sourceModel, activeFilters, activeColorBy, activeProjectionId, filtersCollapsed, expanded]);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
                 const viewport = reactFlow.getViewport();
                 return reactFlow.setViewport(
@@ -1955,15 +2101,21 @@ async function renderTasksGraphs(rootElement = document) {
                         ? TASKS_TASK_Z + depth
                         : ((isExpanded ? TASKS_GROUP_BG_Z : TASKS_GROUP_Z) + depth);
                     const nodeColor = resolveTasksNodeColor(n, model, activeColorBy, activeColorPalette);
+                    const isProjectionGroup = n.__kind__ === 'group' && n.__projection_group__;
+                    const groupFillExpanded = isProjectionGroup ? 3 : 7;
+                    const groupFillCollapsed = isProjectionGroup ? 8 : 14;
+                    const groupBorderMix = isProjectionGroup ? 28 : 70;
                     const background = n.__kind__ === 'group'
                         ? (nodeColor
                             ? (isExpanded
-                                ? `color-mix(in srgb, ${nodeColor} 7%, transparent)`
-                                : `color-mix(in srgb, var(--vyasa-paper) 86%, ${nodeColor} 14%)`)
+                                ? `color-mix(in srgb, ${nodeColor} ${groupFillExpanded}%, transparent)`
+                                : `color-mix(in srgb, var(--vyasa-paper) ${100 - groupFillCollapsed}%, ${nodeColor} ${groupFillCollapsed}%)`)
                             : (isExpanded ? TASKS_GROUP_EXPANDED_BG : TASKS_GROUP_BG))
                         : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 78%, ${nodeColor} 22%)` : TASKS_NODE_BG);
                     const border = nodeColor
-                        ? `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`
+                        ? (n.__kind__ === 'group'
+                            ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${nodeColor} ${groupBorderMix}%)`
+                            : `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`)
                         : TASKS_NODE_BORDER;
                     const rfNode = {
                         id: n.id,
@@ -2241,7 +2393,11 @@ async function renderTasksGraphs(rootElement = document) {
             }, [graphRevision, selectedNodeId, hoveredNodeId, applyHighlight]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnExpand()) {
-                    pendingFitActionRef.current = null;
+                    // Only clear expand-driven requests. Leave 'mode' (projection-swap)
+                    // and 'collapse' (intentional collapse) alone.
+                    if (pendingFitActionRef.current === 'expand') {
+                        pendingFitActionRef.current = null;
+                    }
                     prevExpandedCountRef.current = expanded.size;
                     return;
                 }
@@ -2518,14 +2674,9 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 rebuildLayout(expanded);
             }, [expanded, viewMode, rebuildLayout]);
-            React.useEffect(() => {
-                if (pendingFitActionRef.current !== 'mode') return;
-                const rafId = window.requestAnimationFrame(() => {
-                    reactFlowApiRef.current?.fitView({ duration: 200, padding: 0.16, includeHiddenNodes: true });
-                    pendingFitActionRef.current = null;
-                });
-                return () => window.cancelAnimationFrame(rafId);
-            }, [graphRevision, viewMode]);
+            // Fit-on-mode-change is driven from inside ReactFlowProvider via
+            // FitOnNodesReady below — it waits for useNodesInitialized() so the
+            // fit lands after React Flow has finished measuring node rects.
             const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [expanded, selectedNodeId, hoveredNodeId]);
             const edgeTypes = React.useMemo(() => ({ vyasaEdge: CustomEdge }), []);
             const FitViewHotkey = () => {
@@ -2836,13 +2987,11 @@ async function renderTasksGraphs(rootElement = document) {
             const clearGroupHoverTooltip = React.useCallback(() => {
                 setGroupHoverTooltip(null);
             }, []);
+            const activeHoverAttrs = React.useMemo(
+                () => tasksActiveHoverAttrs(sourceModel, activeProjectionId),
+                [sourceModel, activeProjectionId]
+            );
             const updateGroupHoverTooltip = React.useCallback((event) => {
-                const target = event.target instanceof Element ? event.target : null;
-                const overNode = target?.closest?.('.react-flow__node');
-                if (overNode && !overNode.classList.contains('vyasa-tasks-node--background')) {
-                    clearGroupHoverTooltip();
-                    return;
-                }
                 const reactFlow = reactFlowApiRef.current;
                 const wrapper = flowWrapperRef.current;
                 if (!reactFlow || !wrapper) return;
@@ -2860,8 +3009,10 @@ async function renderTasksGraphs(rootElement = document) {
                     }
                     return { x, y, width: node.style?.width || node.width || 0, height: node.style?.height || node.height || 0 };
                 };
+                // Pick the deepest hit (highest z) under the cursor, considering leaf nodes
+                // and groups. groupTitle is a synthetic overlay — skip it, we want the source.
                 const hit = baseNodes
-                    .filter((node) => node.data?.__kind__ === 'group' && expanded.has(node.id))
+                    .filter((node) => node.data?.__kind__ !== 'groupTitle')
                     .map((node) => ({ node, rect: absoluteRect(node), z: Number(node.zIndex || node.style?.zIndex || 0) }))
                     .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
                     .sort((a, b) => b.z - a.z)[0];
@@ -2869,13 +3020,21 @@ async function renderTasksGraphs(rootElement = document) {
                     clearGroupHoverTooltip();
                     return;
                 }
+                const nodeData = hit.node.data || {};
+                const rows = tasksHoverAttrRows(nodeData, activeHoverAttrs);
+                const label = nodeData.label || hit.node.id;
+                if (!label && !rows.length) {
+                    clearGroupHoverTooltip();
+                    return;
+                }
                 const bounds = wrapper.getBoundingClientRect();
                 setGroupHoverTooltip({
-                    label: hit.node.data?.label || hit.node.id,
+                    label,
+                    rows,
                     x: event.clientX - bounds.left + 12,
                     y: event.clientY - bounds.top + 18,
                 });
-            }, [expanded, clearGroupHoverTooltip]);
+            }, [expanded, clearGroupHoverTooltip, activeHoverAttrs]);
             const selectGraphNode = React.useCallback((_, node) => {
                 if (!isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id))) {
                     clearSelection();
@@ -2989,14 +3148,28 @@ async function renderTasksGraphs(rootElement = document) {
                 }, [reactFlow]);
                 return null;
             };
+            const FitOnNodesReady = () => {
+                const reactFlow = rf.useReactFlow();
+                React.useEffect(() => {
+                    if (pendingFitActionRef.current !== 'mode') return;
+                    // Pragmatic: wait long enough for the layout to settle, then fit.
+                    // Same call the F key triggers, just timed past any settle race.
+                    const timeoutId = window.setTimeout(() => {
+                        reactFlow.fitView({ duration: 200, padding: 0.16, includeHiddenNodes: true });
+                        pendingFitActionRef.current = null;
+                    }, 350);
+                    return () => window.clearTimeout(timeoutId);
+                }, [reactFlow, graphRevision, viewMode]);
+                return null;
+            };
             const flowWrapperClassName = hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '';
+            const projectionGridCols = Math.max(1, Math.ceil(Math.sqrt(projectionOptions.length)));
             const ProjectionToggle = () => projectionOptions.length <= 1 ? null : window.React.createElement('div', {
                 style: {
-                    display: 'inline-flex',
-                    flexWrap: 'wrap',
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${projectionGridCols}, minmax(0, 1fr))`,
                     width: '100%',
                     boxSizing: 'border-box',
-                    justifyContent: 'space-between',
                     gap: '2px',
                     padding: '3px',
                     borderRadius: '10px',
@@ -3021,7 +3194,6 @@ async function renderTasksGraphs(rootElement = document) {
                 style: {
                     border: 0,
                     borderRadius: '7px',
-                    flex: '1 1 auto',
                     minWidth: '0',
                     padding: '6px 9px',
                     cursor: 'pointer',
@@ -3034,6 +3206,29 @@ async function renderTasksGraphs(rootElement = document) {
                         : 'transparent',
                 },
             }, projection.label)));
+            const ProjectionCaption = () => {
+                const active = projectionOptions.find((p) => (
+                    viewMode === 'gantt'
+                        ? p.id === TASKS_GANTT_PROJECTION_ID
+                        : p.id === activeProjectionId
+                ));
+                const caption = active && typeof active.caption === 'string' ? active.caption.trim() : '';
+                if (!caption) return null;
+                return window.React.createElement('div', {
+                    style: {
+                        padding: '6px 10px',
+                        borderRadius: '8px',
+                        border: '1px solid color-mix(in srgb, var(--vyasa-primary) 18%, transparent)',
+                        background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)',
+                        fontSize: '11px',
+                        fontStyle: 'italic',
+                        fontWeight: 500,
+                        lineHeight: 1.35,
+                        color: 'color-mix(in srgb, currentColor 75%, transparent)',
+                        pointerEvents: 'auto',
+                    },
+                }, caption);
+            };
             const RightRail = () => {
                 const hasProjectionMenu = projectionOptions.length > 1;
                 if (!hasProjectionMenu && !selectedNodeId) return null;
@@ -3052,27 +3247,50 @@ async function renderTasksGraphs(rootElement = document) {
                     },
                 },
                     window.React.createElement(ProjectionToggle),
+                    window.React.createElement(ProjectionCaption),
                     window.React.createElement(SelectedNodePanel)
                 );
             };
-            const GroupHoverTooltip = () => groupHoverTooltip && window.React.createElement('div', {
-                style: {
-                    position: 'absolute',
-                    left: groupHoverTooltip.x,
-                    top: groupHoverTooltip.y,
-                    zIndex: 2400,
-                    pointerEvents: 'none',
-                    padding: '4px 7px',
-                    borderRadius: '6px',
-                    background: 'color-mix(in srgb, var(--vyasa-paper) 92%, var(--vyasa-primary) 8%)',
-                    border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
-                    fontSize: '12px',
-                    fontWeight: 650,
-                    lineHeight: 1.2,
-                    whiteSpace: 'nowrap',
+            const GroupHoverTooltip = () => {
+                if (!groupHoverTooltip) return null;
+                const rows = Array.isArray(groupHoverTooltip.rows) ? groupHoverTooltip.rows : [];
+                const children = [
+                    window.React.createElement('div', {
+                        key: '__label__',
+                        style: { fontWeight: 700, fontSize: '12px', lineHeight: 1.2, marginBottom: rows.length ? '4px' : 0 },
+                    }, groupHoverTooltip.label),
+                ];
+                if (rows.length) {
+                    children.push(window.React.createElement('div', {
+                        key: '__rows__',
+                        style: { display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '8px', rowGap: '2px', fontSize: '11px', fontWeight: 500, lineHeight: 1.25 },
+                    }, rows.flatMap((row) => [
+                        window.React.createElement('span', {
+                            key: `k-${row.attr}`,
+                            style: { color: 'color-mix(in srgb, currentColor 60%, transparent)', whiteSpace: 'nowrap' },
+                        }, row.label),
+                        window.React.createElement('span', {
+                            key: `v-${row.attr}`,
+                            style: { fontWeight: 650, whiteSpace: 'nowrap' },
+                        }, row.value),
+                    ])));
                 }
-            }, groupHoverTooltip.label);
+                return window.React.createElement('div', {
+                    style: {
+                        position: 'absolute',
+                        left: groupHoverTooltip.x,
+                        top: groupHoverTooltip.y,
+                        zIndex: 2400,
+                        pointerEvents: 'none',
+                        padding: rows.length ? '6px 9px' : '4px 7px',
+                        borderRadius: '6px',
+                        background: 'color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%)',
+                        border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
+                        maxWidth: '280px',
+                    },
+                }, ...children);
+            };
             const filterPanelElement = window.React.createElement(FilterPanel);
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none', position: 'relative' }, onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }), onPointerMove: updateGroupHoverTooltip, onPointerLeave: clearGroupHoverTooltip },
@@ -3081,7 +3299,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
                     window.React.createElement(FitViewHotkey),
-                    window.React.createElement(ActionBridge)
+                    window.React.createElement(ActionBridge),
+                    window.React.createElement(FitOnNodesReady)
                     ),
                     window.React.createElement(RightRail),
                     filterPanelElement,
@@ -3093,7 +3312,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
                     window.React.createElement(FitViewHotkey),
-                    window.React.createElement(ActionBridge)
+                    window.React.createElement(ActionBridge),
+                    window.React.createElement(FitOnNodesReady)
                 ),
                 window.React.createElement(RightRail),
                 filterPanelElement,

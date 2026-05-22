@@ -1,9 +1,9 @@
 ---
-title: SF First Visit Transit Itinerary
+title: Sample Itinerary
 ---
 
-> [!note]
-> Two-day first San Francisco visit from downtown San Jose, assuming no car and public transit only.
+> !Note
+> Two-day San Francisco visit from downtown San Jose, assuming no car and public transit only.
 
 Start Saturday around 9 AM from downtown San Jose. Stay near Union Square or Powell St because it keeps BART, Muni, cable cars, and return transit simple.
 
