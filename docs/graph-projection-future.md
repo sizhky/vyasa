@@ -1,5 +1,5 @@
 ---
-title: Graph Lens Future
+title: Graph Projection Future
 ---
 
 > [!note]
@@ -13,9 +13,9 @@ title: "Japan Trip Map"
 default_open_depth: 1
 width: 88vw
 min_height: 70vh
-color_palette_source: graph-lens-palettes.json
+color_palette_source: graph-projection-palettes.json
 default_color_by: trip_stage
-view_lenses:
+view_projections:
   - id: author
     label: "City View"
     groups_from: city
@@ -26,7 +26,7 @@ view_lenses:
     label: "Trip Flow"
     groups_from: trip_stage
     edge_focus: relation
-default_lens: learn
+default_projection: learn
 reveal_on:
   search_hit: nearest-group
   backlink_jump: owning-group

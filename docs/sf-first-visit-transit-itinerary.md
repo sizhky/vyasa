@@ -21,7 +21,7 @@ width: 92vw
 min_height: 72vh
 color_palette_source: sf-itinerary-palettes.json
 default_color_by: day
-view_lenses:
+view_projections:
   - id: day
     label: "Day View"
     groups_from: day
@@ -34,7 +34,7 @@ view_lenses:
   - id: transit
     label: "Transit View"
     groups_from: transit_mode
-default_lens: day
+default_projection: day
 edge_color_palette: relation
   transit: "#2563eb"
   walk: "#16a34a"

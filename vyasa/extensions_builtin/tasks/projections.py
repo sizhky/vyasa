@@ -12,14 +12,14 @@ def _slugify(value: str) -> str:
     return slug or "item"
 
 
-def _clean_lens_id(value: str) -> str:
+def _clean_projection_id(value: str) -> str:
     return _slugify(str(value or "").strip())
 
 
-def normalize_lenses(value) -> list[dict]:
+def normalize_projections(value) -> list[dict]:
     if not isinstance(value, list):
         return []
-    lenses = []
+    projections = []
     seen = set()
     for raw in value:
         if not isinstance(raw, dict):
@@ -27,21 +27,21 @@ def normalize_lenses(value) -> list[dict]:
         groups_from = str(raw.get("groups_from") or "").strip()
         if not groups_from:
             continue
-        lens_id = _clean_lens_id(raw.get("id") or groups_from)
-        if not lens_id or lens_id in seen:
+        projection_id = _clean_projection_id(raw.get("id") or groups_from)
+        if not projection_id or projection_id in seen:
             continue
-        seen.add(lens_id)
-        lenses.append({
-            "id": lens_id,
+        seen.add(projection_id)
+        projections.append({
+            "id": projection_id,
             "label": str(raw.get("label") or groups_from.replace("_", " ").title()).strip(),
             "groups_from": groups_from,
             "edge_focus": str(raw.get("edge_focus") or "").strip(),
         })
-    return lenses
+    return projections
 
 
-def build_lens_model(base_model: dict, lens: dict) -> dict:
-    group_attr = lens["groups_from"]
+def build_projection_model(base_model: dict, projection: dict) -> dict:
+    group_attr = projection["groups_from"]
     buckets: dict[str, list[dict]] = defaultdict(list)
     for task in base_model.get("tasks", []):
         value = str(task.get(group_attr) or "(unset)").strip() or "(unset)"
@@ -53,7 +53,7 @@ def build_lens_model(base_model: dict, lens: dict) -> dict:
     task_children = defaultdict(list)
     used_group_ids = set()
     for value in sorted(buckets):
-        group_id = _slugify(f"{lens['id']}-{value}")
+        group_id = _slugify(f"{projection['id']}-{value}")
         if group_id in used_group_ids:
             suffix = 2
             while f"{group_id}-{suffix}" in used_group_ids:
@@ -64,8 +64,8 @@ def build_lens_model(base_model: dict, lens: dict) -> dict:
             "id": group_id,
             "label": value,
             "parent_group_id": None,
-            "__lens_group__": True,
-            "lens": lens["id"],
+            "__projection_group__": True,
+            "projection": projection["id"],
         }
         group[group_attr] = value
         groups.append(group)
@@ -75,9 +75,9 @@ def build_lens_model(base_model: dict, lens: dict) -> dict:
             tasks.append(task)
             task_children[group_id].append(task["id"])
 
-    lens_model = {
+    projection_model = {
         **base_model,
-        "graph_id": f"{base_model.get('graph_id')}-{lens['id']}",
+        "graph_id": f"{base_model.get('graph_id')}-{projection['id']}",
         "title": base_model.get("title", ""),
         "groups": groups,
         "tasks": tasks,
@@ -85,23 +85,23 @@ def build_lens_model(base_model: dict, lens: dict) -> dict:
         "group_tree": dict(group_tree),
         "task_children": dict(task_children),
         "document_order": [group["id"] for group in groups] + [task["id"] for task in tasks],
-        "active_lens": lens["id"],
+        "active_projection": projection["id"],
     }
-    lens_model.pop("lens_models", None)
-    lens_model.pop("view_lenses", None)
-    return lens_model
+    projection_model.pop("projection_models", None)
+    projection_model.pop("view_projections", None)
+    return projection_model
 
 
-def attach_lens_models(model: dict) -> dict:
-    lenses = normalize_lenses(model.get("view_lenses"))
-    model["view_lenses"] = lenses
-    model["lens_models"] = {}
-    for lens in lenses:
-        lens_model = build_lens_model(model, lens)
-        model["lens_models"][lens["id"]] = {
-            "model": lens_model,
-            "graph": build_collapsed_graph(lens_model),
+def attach_projection_models(model: dict) -> dict:
+    projections = normalize_projections(model.get("view_projections"))
+    model["view_projections"] = projections
+    model["projection_models"] = {}
+    for projection in projections:
+        projection_model = build_projection_model(model, projection)
+        model["projection_models"][projection["id"]] = {
+            "model": projection_model,
+            "graph": build_collapsed_graph(projection_model),
         }
-    if model.get("default_lens") and model["default_lens"] not in model["lens_models"]:
-        model["default_lens"] = ""
+    if model.get("default_projection") and model["default_projection"] not in model["projection_models"]:
+        model["default_projection"] = ""
     return model

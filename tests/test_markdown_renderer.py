@@ -197,7 +197,7 @@ goal-01 -> oq-01 | relation: depends_on
     assert payload["dependency_edges"][0]["label"] == "depends_on"
 
 
-def test_items_render_payload_contains_lens_models():
+def test_items_render_payload_contains_projection_models():
     refresh_extension_runtime({})
 
     rendered = to_xml(
@@ -205,8 +205,8 @@ def test_items_render_payload_contains_lens_models():
             """```items
 ---
 title: Travel
-default_lens: city
-view_lenses:
+default_projection: city
+view_projections:
   - id: city
     label: City View
     groups_from: city
@@ -221,9 +221,9 @@ Places:
 
     assert match is not None
     payload = json.loads(html.unescape(match.group(2)))
-    assert payload["default_lens"] == "city"
-    assert payload["view_lenses"][0]["label"] == "City View"
-    assert payload["lens_models"]["city"]["model"]["groups"][0]["label"] == "Kyoto"
+    assert payload["default_projection"] == "city"
+    assert payload["view_projections"][0]["label"] == "City View"
+    assert payload["projection_models"]["city"]["model"]["groups"][0]["label"] == "Kyoto"
 
 
 def test_markdown_fragment_include_does_not_leak_root_wrapper(tmp_path, monkeypatch):

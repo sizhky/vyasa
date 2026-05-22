@@ -149,7 +149,7 @@ function writeTasksPrefs(model, prefs) {
             version: 1,
             filters: prefs?.filters && typeof prefs.filters === 'object' ? prefs.filters : {},
             colorBy: String(prefs?.colorBy || ''),
-            lensId: String(prefs?.lensId || ''),
+            projectionId: String(prefs?.projectionId || ''),
             filtersCollapsed: Boolean(prefs?.filtersCollapsed),
         }));
     } catch {
@@ -1551,24 +1551,24 @@ function tasksEdgeLabelPoint(props) {
     };
 }
 
-function tasksLensOptions(model) {
-    const lenses = Array.isArray(model?.view_lenses) ? model.view_lenses : [];
-    if (!lenses.length) return [];
+function tasksProjectionOptions(model) {
+    const projections = Array.isArray(model?.view_projections) ? model.view_projections : [];
+    if (!projections.length) return [];
     return [
         { id: '', label: 'Default' },
-        ...lenses
-            .filter((lens) => lens && lens.id && model?.lens_models?.[lens.id])
-            .map((lens) => ({ id: String(lens.id), label: String(lens.label || lens.id) })),
+        ...projections
+            .filter((projection) => projection && projection.id && model?.projection_models?.[projection.id])
+            .map((projection) => ({ id: String(projection.id), label: String(projection.label || projection.id) })),
     ];
 }
 
-function selectTasksLensState(sourceModel, sourceGraph, lensId) {
-    const id = String(lensId || '').trim();
-    const entry = id ? sourceModel?.lens_models?.[id] : null;
+function selectTasksProjectionState(sourceModel, sourceGraph, projectionId) {
+    const id = String(projectionId || '').trim();
+    const entry = id ? sourceModel?.projection_models?.[id] : null;
     if (!entry || !entry.model || !entry.graph) {
-        return { model: sourceModel, graph: sourceGraph, lensId: '' };
+        return { model: sourceModel, graph: sourceGraph, projectionId: '' };
     }
-    return { model: entry.model, graph: entry.graph, lensId: id };
+    return { model: entry.model, graph: entry.graph, projectionId: id };
 }
 
 async function renderTasksGraphs(rootElement = document) {
@@ -1597,22 +1597,22 @@ async function renderTasksGraphs(rootElement = document) {
             const Position = rf.Position;
             const sourcePrefsRef = React.useRef(null);
             if (sourcePrefsRef.current === null) sourcePrefsRef.current = readTasksPrefs(sourceModel);
-            const lensOptions = React.useMemo(() => tasksLensOptions(sourceModel), []);
-            const initialLensId = React.useMemo(() => {
-                const saved = String(sourcePrefsRef.current?.lensId || '').trim();
-                if (lensOptions.some((option) => option.id === saved)) return saved;
-                const configured = String(sourceModel?.default_lens || '').trim();
-                return lensOptions.some((option) => option.id === configured) ? configured : '';
-            }, [lensOptions]);
-            const [activeLensId, setActiveLensId] = React.useState(initialLensId);
-            const lensState = React.useMemo(
-                () => selectTasksLensState(sourceModel, sourceGraph, activeLensId),
-                [activeLensId]
+            const projectionOptions = React.useMemo(() => tasksProjectionOptions(sourceModel), []);
+            const initialProjectionId = React.useMemo(() => {
+                const saved = String(sourcePrefsRef.current?.projectionId || '').trim();
+                if (projectionOptions.some((option) => option.id === saved)) return saved;
+                const configured = String(sourceModel?.default_projection || '').trim();
+                return projectionOptions.some((option) => option.id === configured) ? configured : '';
+            }, [projectionOptions]);
+            const [activeProjectionId, setActiveProjectionId] = React.useState(initialProjectionId);
+            const projectionState = React.useMemo(
+                () => selectTasksProjectionState(sourceModel, sourceGraph, activeProjectionId),
+                [activeProjectionId]
             );
-            const model = lensState.model;
+            const model = projectionState.model;
             const rawGraph = React.useMemo(
-                () => normalizeTasksGraphNodes(lensState.graph || { nodes: [], edges: [] }, model),
-                [lensState, model]
+                () => normalizeTasksGraphNodes(projectionState.graph || { nodes: [], edges: [] }, model),
+                [projectionState, model]
             );
             const initialExpandedSet = React.useMemo(
                 () => collectExpandedGroupsByDepth(model.group_tree, Number.isNaN(defaultOpenDepth) ? 0 : defaultOpenDepth),
@@ -1660,7 +1660,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setSelectedNodeId(null);
                 setHoveredNodeId(null);
                 pendingFitActionRef.current = 'mode';
-            }, [activeLensId, initialExpandedSet]);
+            }, [activeProjectionId, initialExpandedSet]);
             React.useEffect(() => {
                 const validFilterKeys = new Set(tasksFilterOptions(model).map((option) => option.key));
                 const validColorKeys = new Set(tasksColorOptions(model).map((option) => option.key));
@@ -1677,10 +1677,10 @@ async function renderTasksGraphs(rootElement = document) {
                 writeTasksPrefs(sourceModel, {
                     filters: activeFilters,
                     colorBy: activeColorBy,
-                    lensId: activeLensId,
+                    projectionId: activeProjectionId,
                     filtersCollapsed,
                 });
-            }, [sourceModel, activeFilters, activeColorBy, activeLensId, filtersCollapsed]);
+            }, [sourceModel, activeFilters, activeColorBy, activeProjectionId, filtersCollapsed]);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
                 const viewport = reactFlow.getViewport();
                 return reactFlow.setViewport(
@@ -2842,7 +2842,7 @@ async function renderTasksGraphs(rootElement = document) {
                     background: viewMode === mode ? 'color-mix(in srgb, var(--vyasa-primary) 18%, transparent)' : 'transparent',
                 },
             }, mode)));
-            const LensToggle = () => lensOptions.length <= 1 ? null : window.React.createElement('div', {
+            const ProjectionToggle = () => projectionOptions.length <= 1 ? null : window.React.createElement('div', {
                 style: {
                     display: 'inline-flex',
                     flexWrap: 'wrap',
@@ -2857,11 +2857,11 @@ async function renderTasksGraphs(rootElement = document) {
                     boxShadow: '0 10px 24px rgba(0,0,0,0.10)',
                     pointerEvents: 'auto',
                 },
-            }, lensOptions.map((lens) => window.React.createElement('button', {
-                key: lens.id || '__default__',
+            }, projectionOptions.map((projection) => window.React.createElement('button', {
+                key: projection.id || '__default__',
                 type: 'button',
                 onClick: () => {
-                    setActiveLensId(lens.id);
+                    setActiveProjectionId(projection.id);
                     pendingFitActionRef.current = 'mode';
                 },
                 style: {
@@ -2874,12 +2874,12 @@ async function renderTasksGraphs(rootElement = document) {
                     fontSize: '12px',
                     fontWeight: 700,
                     color: 'inherit',
-                    background: activeLensId === lens.id ? 'color-mix(in srgb, var(--vyasa-primary) 18%, transparent)' : 'transparent',
+                    background: activeProjectionId === projection.id ? 'color-mix(in srgb, var(--vyasa-primary) 18%, transparent)' : 'transparent',
                 },
-            }, lens.label)));
+            }, projection.label)));
             const RightRail = () => {
-                const hasLensMenu = lensOptions.length > 1;
-                if (!hasLensMenu && !selectedNodeId) return null;
+                const hasProjectionMenu = projectionOptions.length > 1;
+                if (!hasProjectionMenu && !selectedNodeId) return null;
                 return window.React.createElement('div', {
                     style: {
                         position: 'absolute',
@@ -2894,7 +2894,7 @@ async function renderTasksGraphs(rootElement = document) {
                         pointerEvents: 'none',
                     },
                 },
-                    window.React.createElement(LensToggle),
+                    window.React.createElement(ProjectionToggle),
                     window.React.createElement(SelectedNodePanel)
                 );
             };

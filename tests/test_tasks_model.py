@@ -378,12 +378,12 @@ Roadmap:
     assert model["filter_attributes"] == ["owner", "status"]
 
 
-def test_items_parser_builds_lens_models_from_frontmatter():
+def test_items_parser_builds_projection_models_from_frontmatter():
     model = parse_tasks_text(
         """```items
 ---
-default_lens: theme
-view_lenses:
+default_projection: theme
+view_projections:
   - id: city
     label: City View
     groups_from: city
@@ -399,10 +399,10 @@ tsukiji -> dotonbori
 ```"""
     )
 
-    assert model["default_lens"] == "theme"
-    assert [lens["id"] for lens in model["view_lenses"]] == ["city", "theme"]
-    city_model = model["lens_models"]["city"]["model"]
-    theme_model = model["lens_models"]["theme"]["model"]
+    assert model["default_projection"] == "theme"
+    assert [projection["id"] for projection in model["view_projections"]] == ["city", "theme"]
+    city_model = model["projection_models"]["city"]["model"]
+    theme_model = model["projection_models"]["theme"]["model"]
     assert [group["label"] for group in city_model["groups"]] == ["Kyoto", "Osaka", "Tokyo"]
     assert [group["label"] for group in theme_model["groups"]] == ["Food", "Temples"]
     food_group_id = next(group["id"] for group in theme_model["groups"] if group["label"] == "Food")
