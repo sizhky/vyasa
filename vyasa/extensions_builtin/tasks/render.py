@@ -2,14 +2,58 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from itertools import count
 
 from ...markdown_fence import normalize_items_model_hrefs, split_fence_frontmatter
 from .layout import build_collapsed_graph
 from .model import apply_edge_label_fallbacks, parse_tasks_text
+from ..markdown.renderer import _render_markdown_fragment
 
 
 _diagram_uid_counter = count(1)
+_RENDERABLE_NODE_KEYS = {
+    "id", "label", "kind", "__kind__", "group_id", "parent_group_id",
+    "handlelayout", "highlightmode", "sourcegroupid",
+    "width", "height", "position", "parentid", "color", "href", "rank",
+    "__rendered_attrs__",
+}
+
+
+def _prepare_node_attr_markdown(value) -> str:
+    text = str(value)
+    return re.sub(r"(?<!\n)\n(?!\n)", "<br>\n", text)
+
+
+def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
+    for bucket in ("groups", "tasks"):
+        for node in model.get(bucket, []):
+            rendered_attrs = {}
+            for key, value in node.items():
+                lowered = str(key).lower()
+                if lowered in _RENDERABLE_NODE_KEYS:
+                    continue
+                if value is None or value == "":
+                    continue
+                if not isinstance(value, (str, int, float, bool)):
+                    continue
+                rendered_attrs[key] = _render_markdown_fragment(
+                    _prepare_node_attr_markdown(value),
+                    current_path=current_path,
+                )
+            if rendered_attrs:
+                node["__rendered_attrs__"] = rendered_attrs
+
+
+def _should_open_filters_by_default(width_value) -> bool:
+    width_text = str(width_value or "").strip().lower()
+    match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)vw", width_text)
+    if not match:
+        return False
+    try:
+        return float(match.group(1)) >= 90.0
+    except ValueError:
+        return False
 
 
 def render_tasks_block(code: str, current_path: str | None = None, fence_name: str = "tasks") -> str:
@@ -43,6 +87,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             model["edge_color_palettes"] = {**model.get("edge_color_palettes", {}), model.get("edge_color_by", ""): config["edge_color_palette"]}
         apply_edge_label_fallbacks(model)
         normalize_items_model_hrefs(model, current_path)
+        _attach_rendered_node_attrs(model, current_path)
         graph = build_collapsed_graph(model)
     except Exception:
         model = {
@@ -70,8 +115,10 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     default_view = str(config.get("default_view") or config.get("view") or "graph").strip().lower()
     default_view = "gantt" if gantt_enabled and default_view == "gantt" else "graph"
     width = config.get("width") or "65vw"
+    open_filters_by_default = _should_open_filters_by_default(width)
     min_height = config.get("min_height") or ("420px" if fence_name != "tasks" else "")
     flow_height = html.escape(str(config.get("height") or "70vh"))
+    node_card_width = html.escape(str(config.get("node-card-width") or "480px"))
     jitter = html.escape(str(config.get("jitter") or 0))
     jitter_y = html.escape(str(config.get("jitter_y") or config.get("jitter") or 0))
     spacing = html.escape(str(config.get("spacing") or "normal"))
@@ -100,7 +147,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     return (
         f'<div class="tasks-container relative my-6 rounded-xl border-4 border-slate-200 dark:border-slate-800" '
         f'style="{container_style}" '
-        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-gantt="{str(gantt_enabled).lower()}" data-tasks-default-view="{html.escape(default_view)}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
+        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-gantt="{str(gantt_enabled).lower()}" data-tasks-default-view="{html.escape(default_view)}" data-tasks-open-filters-default="{str(open_filters_by_default).lower()}" data-tasks-node-card-width="{node_card_width}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
         f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'
         f'<button onclick="openTasksFullscreen(\'{widget_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>'
         f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">'

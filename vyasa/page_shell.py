@@ -75,6 +75,9 @@ class StaticShellRenderer:
                 <a href="/index.html" class="text-center truncate">{blog_title}</a>
             </div>
             <div class="flex items-center gap-1">
+                <button type="button" class="vyasa-navbar-search-trigger inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm" data-vyasa-command-trigger="true">
+                    <span uk-icon="search" class="w-4 h-4"></span>
+                </button>
                 <button id="mobile-toc-toggle" title="Toggle table of contents" class="p-2 rounded transition-colors hover:bg-slate-800" type="button" onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()">
                     <span uk-icon="list" class="w-5 h-5"></span>
                 </button>
@@ -85,7 +88,13 @@ class StaticShellRenderer:
             <div class="flex items-center gap-3">
                 <a href="/index.html">{blog_title}</a>
             </div>
-            {self._theme_toggle()}
+            <div class="flex items-center gap-3">
+                <div class="vyasa-navbar-search-block relative hidden md:block w-[30rem] max-w-[44vw]">
+                    <input type="search" name="q" placeholder="Search files…" autocomplete="off" hx-get="/_sidebar/posts/search" hx-trigger="input changed delay:180ms" hx-target="next .vyasa-navbar-search-results" hx-swap="innerHTML" class="vyasa-navbar-search-input w-full" />
+                    <div class="vyasa-navbar-search-results hidden-empty"></div>
+                </div>
+                {self._theme_toggle()}
+            </div>
         </div>
     </div>
     '''

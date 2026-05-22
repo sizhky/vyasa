@@ -84,6 +84,8 @@ def escape_attr(value):
 
 
 def split_fence_frontmatter(code):
+    code = code.lstrip()
+
     def clean(value):
         return value.strip().strip('"').strip("'")
 
@@ -118,8 +120,25 @@ def split_fence_frontmatter(code):
         key = clean(key)
         value = value.strip()
         if key == "filter_attributes":
-            config[key] = parse_string_list(value)
+            if value:
+                config[key] = parse_string_list(value)
+                index += 1
+                continue
+            values = []
             index += 1
+            while index < len(lines):
+                child_raw = lines[index]
+                if not child_raw.strip():
+                    index += 1
+                    continue
+                child_indent = len(child_raw) - len(child_raw.lstrip(" "))
+                if child_indent <= indent:
+                    break
+                child_line = child_raw.strip()
+                if child_line.startswith("- "):
+                    values.append(clean(child_line[2:]))
+                index += 1
+            config[key] = values
             continue
         if key == "color_by":
             if value:

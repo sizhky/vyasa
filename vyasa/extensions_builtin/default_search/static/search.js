@@ -437,6 +437,12 @@ function initCommandPalette() {
             close();
         }
     }, true);
+    document.addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-vyasa-command-trigger]');
+        if (!trigger) return;
+        event.preventDefault();
+        open();
+    });
 }
 
 window.__vyasaInitSearchPlaceholderCycle = initSearchPlaceholderCycle;

@@ -13,6 +13,7 @@ default_open_depth: -1
 default_color_by: status
 width: 80vw
 height: 70vh
+node-card-width: 36rem
 color_by:
   status:
     "On Track": "#86efac"
@@ -36,8 +37,9 @@ T-002, T-010 -> T-003
 ## Frontmatter
 
 - Frontmatter is optional YAML at the top of the fence.
-- Supported renderer keys include `title`, `default_open_depth`, `default_color_by`, `width`, `min_height`, `height`, `color_by`, `edge_color_palette`, and `color_palette_source`.
+- Supported renderer keys include `title`, `default_open_depth`, `default_color_by`, `width`, `min_height`, `height`, `node-card-width`, `color_by`, `edge_color_palette`, and `color_palette_source`.
 - Size keys should use full CSS lengths such as `760px`, `70vh`, `80vw`, or `calc(85vh - 57px)`.
+- `node-card-width` controls the width of the selected-node details card on the right. Default is `480px`.
 - Do not use bare numbers like `height: 760`.
 - `default_open_depth` is an integer: `0` folds all groups, `1` opens root groups, larger values open deeper levels, `-1` opens all groups.
 - Preferred colors use nested palettes under `color_by`.
@@ -106,6 +108,8 @@ item-a, item-b ->|edge label| item-c
 - First-class author attrs include `estimate`, `priority`, `points`, `owner`, and `phase`.
 - Labels and attr values may contain normal markdown links.
 - Good: `owner: [Alice](team/alice)` or `spec: [API](guide#api)`.
+- Attr values may contain escaped newlines inside quoted JSON strings. Example: `summary: "Line one\nLine two"`.
+- The selected-node details card renders attr values through the normal Vyasa markdown pipeline, so links, emphasis, code, callout-safe inline markdown, and escaped newlines render there the same way they do elsewhere.
 - Use `href: <target>` when the whole group or item label should navigate.
 - Good: `- api :: API Contract | href: guide#api`.
 - Use normal markdown links when only part of a label or attr value should link.

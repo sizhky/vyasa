@@ -197,7 +197,7 @@ function tasksNodeMetaEntries(node) {
     if (!node) return [];
     const hidden = new Set([
         'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
-        'handlelayout', 'highlightmode', 'sourcegroupid',
+        'handlelayout', 'highlightmode', 'sourcegroupid', '__rendered_attrs__',
         'width', 'height', 'position', 'parentId', 'color', 'href', 'rank',
     ]);
     return Object.entries(node)
@@ -206,6 +206,7 @@ function tasksNodeMetaEntries(node) {
             key,
             label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
             value: String(value),
+            renderedValue: typeof node?.__rendered_attrs__?.[key] === 'string' ? node.__rendered_attrs__[key] : '',
         }));
 }
 
@@ -1351,7 +1352,11 @@ function paintTasksScene(scene, mount, graph, laidOut) {
         const p = positions[n.id] || n;
         const bg = n.__kind__ === 'group' ? 'color-mix(in srgb, currentColor 6%, transparent)' : 'color-mix(in srgb, currentColor 10%, transparent)';
         const exp = n.__kind__ === 'group' ? '<div data-node-expander="true" style="position:absolute;right:10px;top:8px;font-size:18px;opacity:.55">+</div>' : '';
-        return `<div class="vyasa-task-card" data-node-id="${n.id}" data-node-kind="${n.__kind__}" style="position:absolute;left:${p.x}px;top:${p.y}px;width:${n.width}px;height:${n.height}px;border:1px solid color-mix(in srgb, currentColor 35%, transparent);border-radius:14px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;text-align:center;padding:8px;cursor:${n.__kind__ === 'group' ? 'pointer' : 'default'}"><span>${n.label}</span>${exp}</div>`;
+        const linkKinds = Array.from(tasksNodeLinkKinds(n));
+        const linkIcon = linkKinds.length
+            ? `<span class="vyasa-task-link-badge" aria-hidden="true" style="position:absolute;top:8px;right:${n.__kind__ === 'group' ? '32px' : '10px'}">${linkKinds.map((kind) => `<span uk-icon="${kind === 'external' ? 'link-external' : 'link'}"></span>`).join('')}</span>`
+            : '';
+        return `<div class="vyasa-task-card" data-node-id="${n.id}" data-node-kind="${n.__kind__}" style="position:absolute;left:${p.x}px;top:${p.y}px;width:${n.width}px;height:${n.height}px;border:1px solid color-mix(in srgb, currentColor 35%, transparent);border-radius:14px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;text-align:center;padding:8px;cursor:${n.__kind__ === 'group' ? 'pointer' : 'default'}"><span>${n.label}</span>${linkIcon}${exp}</div>`;
     }).join('');
     scene.style.width = `${Math.max(laidOut.width || 1200, mount.clientWidth)}px`;
     scene.style.height = `${Math.max(laidOut.height || 420, mount.clientHeight)}px`;
@@ -1431,6 +1436,80 @@ function renderTasksInlineLinks(value, options = {}) {
     return parts.length ? parts : text;
 }
 
+function tasksValueContainsUrl(value) {
+    if (value === null || value === undefined) return false;
+    const text = String(value).trim();
+    if (!text) return false;
+    if (/\[[^\]]+\]\(([^)\s]+(?:\s[^)]*)?)\)/.test(text)) return true;
+    return /(^|\s)(https?:\/\/[^\s)]+|mailto:[^\s)]+|\/posts\/[^\s)]+|\/[^\s)]+\.[^\s)]+|(?:\.\.?\/)[^\s)]+|#[A-Za-z0-9._:-]+)/.test(text);
+}
+
+function tasksExtractUrls(value) {
+    if (value === null || value === undefined) return [];
+    const text = String(value).trim();
+    if (!text) return [];
+    const urls = [];
+    const markdownPattern = /\[([^\]]+)\]\(([^)\s]+(?:\s[^)]*)?)\)/g;
+    let match;
+    while ((match = markdownPattern.exec(text)) !== null) {
+        const href = String(match[2] || '').trim();
+        if (href) urls.push(href);
+    }
+    const rawPattern = /(^|\s)(https?:\/\/[^\s)]+|mailto:[^\s)]+|\/posts\/[^\s)]+|\/[^\s)]+\.[^\s)]+|(?:\.\.?\/)[^\s)]+|#[A-Za-z0-9._:-]+)/g;
+    while ((match = rawPattern.exec(text)) !== null) {
+        const href = String(match[2] || '').trim();
+        if (href) urls.push(href);
+    }
+    return urls;
+}
+
+function tasksHrefKind(href) {
+    const text = String(href || '').trim();
+    if (!text) return '';
+    if (/^(https?:)?\/\//.test(text) || text.startsWith('mailto:')) return 'external';
+    return 'internal';
+}
+
+function tasksNodeLinkKinds(node) {
+    const kinds = new Set();
+    if (!node || typeof node !== 'object') return kinds;
+    for (const href of tasksExtractUrls(node.href)) {
+        const kind = tasksHrefKind(href);
+        if (kind) kinds.add(kind);
+    }
+    const hidden = new Set([
+        'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
+        'handlelayout', 'highlightmode', 'sourcegroupid',
+        'width', 'height', 'position', 'parentid', 'color', 'rank',
+    ]);
+    for (const [key, value] of Object.entries(node)) {
+        if (hidden.has(String(key || '').toLowerCase())) continue;
+        if (!(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) continue;
+        for (const href of tasksExtractUrls(value)) {
+            const kind = tasksHrefKind(href);
+            if (kind) kinds.add(kind);
+        }
+    }
+    return kinds;
+}
+
+function renderTasksNodeLinkBadge(React, options = {}) {
+    const kinds = Array.isArray(options.kinds) ? options.kinds : [];
+    if (!kinds.length) return null;
+    return React.createElement('span', {
+        className: 'vyasa-task-link-badge',
+        'aria-hidden': 'true',
+        style: {
+            position: 'absolute',
+            top: '8px',
+            right: options.right || '10px',
+        },
+    }, ...kinds.map((kind) => React.createElement('span', {
+        key: kind,
+        'uk-icon': kind === 'external' ? 'link-external' : 'link',
+    })));
+}
+
 function stableEdgeHash(text) {
     let hash = 2166136261;
     for (let index = 0; index < text.length; index += 1) {
@@ -1489,6 +1568,8 @@ async function renderTasksGraphs(rootElement = document) {
         const defaultOpenDepth = Number.parseInt(wrapper.dataset.tasksDefaultOpenDepth || '0', 10);
         const ganttEnabled = String(wrapper.dataset.tasksGantt || '').trim().toLowerCase() === 'true';
         const defaultViewMode = ganttEnabled && String(wrapper.dataset.tasksDefaultView || '').trim().toLowerCase() === 'gantt' ? 'gantt' : 'graph';
+        const defaultFiltersOpen = String(wrapper.dataset.tasksOpenFiltersDefault || '').trim().toLowerCase() === 'true';
+        const nodeCardWidth = String(wrapper.dataset.tasksNodeCardWidth || '480px').trim() || '480px';
         const initialExpandedSet = collectExpandedGroupsByDepth(model.group_tree, Number.isNaN(defaultOpenDepth) ? 0 : defaultOpenDepth);
         const TasksGraphApp = (props) => {
             const React = window.React;
@@ -1515,7 +1596,11 @@ async function renderTasksGraphs(rootElement = document) {
                     ? initialPrefsRef.current.colorBy.trim()
                     : String(model?.default_color_by || '').trim()
             ));
-            const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => initialPrefsRef.current?.filtersCollapsed !== false);
+            const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => (
+                typeof initialPrefsRef.current?.filtersCollapsed === 'boolean'
+                    ? initialPrefsRef.current.filtersCollapsed
+                    : !defaultFiltersOpen
+            ));
             const [viewMode, setViewMode] = React.useState(defaultViewMode);
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
             const [graphRevision, setGraphRevision] = React.useState(0);
@@ -2056,6 +2141,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const sourceNodeId = data?.__kind__ === 'groupTitle' ? data?.sourceGroupId : id;
                 const isActiveNode = !selectedNodeId || selectedNodeId === sourceNodeId;
                 const linksInteractive = isActiveNode;
+                const linkKinds = Array.from(tasksNodeLinkKinds(data));
                 const handleInactiveLinkClick = (event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -2096,8 +2182,10 @@ async function renderTasksGraphs(rootElement = document) {
                             padding: '8px 10px',
                             fontWeight: '600',
                             fontSize: '13px',
+                            position: 'relative',
                         }
                     },
+                        linkKinds.length ? renderTasksNodeLinkBadge(React, { right: '32px', kinds: linkKinds }) : null,
                         React.createElement('span', {
                             style: {
                                 minWidth: 0,
@@ -2134,8 +2222,10 @@ async function renderTasksGraphs(rootElement = document) {
                             fontSize: '12px',
                             fontWeight: 650,
                             opacity: isDimmed ? 0.22 : 1,
+                            position: 'relative',
                         },
                     },
+                        linkKinds.length ? renderTasksNodeLinkBadge(React, { kinds: linkKinds }) : null,
                         ...renderHandles('target'),
                         React.createElement('span', { style: { minWidth: 0, whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.25 } }, labelContent),
                         React.createElement('span', { style: { fontSize: '10px', opacity: 0.62, fontVariantNumeric: 'tabular-nums' } }, `${data.gantt_duration || 1}u`),
@@ -2188,8 +2278,10 @@ async function renderTasksGraphs(rootElement = document) {
                         overflow: 'hidden',
                         opacity: isDimmed ? 0.22 : 1,
                         cursor: hasHref ? 'pointer' : undefined,
+                        position: 'relative',
                     }
                 },
+                    linkKinds.length ? renderTasksNodeLinkBadge(React, { right: isGroup ? '32px' : '10px', kinds: linkKinds }) : null,
                     ...renderHandles('target'),
                     React.createElement('span', {
                         style: {
@@ -2327,16 +2419,35 @@ async function renderTasksGraphs(rootElement = document) {
                     : tasksNodeMetaEntries(selectedNode);
                 if (!selectedNode || entries.length === 0) return null;
                 return React.createElement('div', {
-                    style: { position: 'absolute', right: '12px', top: '12px', zIndex: 29, width: '240px', maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
+                    style: { position: 'absolute', right: '12px', top: '12px', zIndex: 29, width: nodeCardWidth, maxWidth: 'calc(100% - 24px)', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px' },
                 },
                     React.createElement('div', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.65, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Node Details'),
                     React.createElement(selectedNode.href ? 'a' : 'div', selectedNode.href
                         ? { href: selectedNode.href, onClick: (e) => openTasksNodeHref(selectedNode.href, e), style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, marginBottom: '10px', display: 'block', textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit' } }
                         : { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, marginBottom: '10px' } }, selectedNode.label || selectedNode.id),
-                    React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(72px, 88px) 1fr', gap: '6px 10px', fontSize: '12px', lineHeight: 1.35 } },
-                        ...entries.map((entry) => React.createElement(React.Fragment, { key: entry.key },
+                    React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: '12px', lineHeight: 1.35 } },
+                        ...entries.map((entry, index) => React.createElement('div', {
+                            key: entry.key,
+                            style: {
+                                display: 'grid',
+                                gridTemplateColumns: 'minmax(72px, 88px) 1fr',
+                                gap: '6px 10px',
+                                paddingTop: index === 0 ? '0' : '8px',
+                                marginTop: index === 0 ? '0' : '8px',
+                                borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)',
+                            },
+                        },
                             React.createElement('div', { style: { fontWeight: 700, opacity: 0.7 } }, entry.label),
-                            React.createElement('div', { style: { minWidth: 0, overflowWrap: 'anywhere' } }, renderTasksInlineLinks(entry.value)),
+                            entry.renderedValue
+                                ? React.createElement('div', {
+                                    className: 'vyasa-task-node-card-value',
+                                    style: { minWidth: 0, overflowWrap: 'anywhere' },
+                                    dangerouslySetInnerHTML: { __html: entry.renderedValue },
+                                })
+                                : React.createElement('div', {
+                                    className: 'vyasa-task-node-card-value',
+                                    style: { minWidth: 0, overflowWrap: 'anywhere', whiteSpace: 'pre-line' },
+                                }, entry.value),
                         ))
                     )
                 );
@@ -2896,6 +3007,8 @@ window.openTasksFullscreen = async function(id) {
     fullscreenWrapper.setAttribute('data-tasks-default-open-depth', wrapper.getAttribute('data-tasks-default-open-depth') || '0');
     fullscreenWrapper.setAttribute('data-tasks-gantt', wrapper.getAttribute('data-tasks-gantt') || 'false');
     fullscreenWrapper.setAttribute('data-tasks-default-view', wrapper.getAttribute('data-tasks-default-view') || 'graph');
+    fullscreenWrapper.setAttribute('data-tasks-open-filters-default', wrapper.getAttribute('data-tasks-open-filters-default') || 'false');
+    fullscreenWrapper.setAttribute('data-tasks-node-card-width', wrapper.getAttribute('data-tasks-node-card-width') || '480px');
     fullscreenWrapper.setAttribute('data-tasks-jitter', wrapper.getAttribute('data-tasks-jitter') || '0');
     fullscreenWrapper.setAttribute('data-tasks-jitter-y', wrapper.getAttribute('data-tasks-jitter-y') || wrapper.getAttribute('data-tasks-jitter') || '0');
     fullscreenWrapper.setAttribute('data-tasks-spacing', wrapper.getAttribute('data-tasks-spacing') || 'normal');

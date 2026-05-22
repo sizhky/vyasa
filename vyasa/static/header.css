@@ -347,6 +347,59 @@ summary {
     background: rgba(242, 244, 243, 0.14) !important;
 }
 
+.vyasa-navbar-search-trigger {
+    border: 1px solid color-mix(in srgb, var(--vyasa-primary-text) 20%, transparent);
+    background: color-mix(in srgb, var(--vyasa-primary-text) 10%, transparent);
+}
+
+.vyasa-navbar-search-trigger:hover,
+.vyasa-navbar-search-trigger:focus-visible {
+    border-color: color-mix(in srgb, var(--vyasa-primary-text) 34%, transparent);
+    background: color-mix(in srgb, var(--vyasa-primary-text) 16%, transparent) !important;
+}
+
+.vyasa-navbar-search-kbd {
+    border-left: 1px solid color-mix(in srgb, var(--vyasa-primary-text) 22%, transparent);
+    padding-left: 0.6rem;
+}
+
+.vyasa-navbar-search-input {
+    border: 1px solid color-mix(in srgb, var(--vyasa-primary-text) 20%, transparent);
+    background: color-mix(in srgb, var(--vyasa-primary-text) 10%, transparent);
+    color: var(--vyasa-primary-text) !important;
+    border-radius: var(--vyasa-rect-radius);
+    padding: 0.7rem 1rem;
+}
+
+.vyasa-navbar-search-input::placeholder {
+    color: color-mix(in srgb, var(--vyasa-primary-text) 68%, transparent);
+}
+
+.vyasa-navbar-search-input:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--vyasa-primary-text) 38%, transparent);
+    background: color-mix(in srgb, var(--vyasa-primary-text) 14%, transparent);
+}
+
+.vyasa-navbar-search-results {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    width: 100%;
+    max-height: min(26rem, 70vh);
+    overflow-y: auto;
+    border-radius: var(--vyasa-rect-radius);
+    border: 1px solid color-mix(in srgb, var(--vyasa-ink) 10%, transparent);
+    background: var(--vyasa-paper);
+    box-shadow: 0 20px 40px -24px rgba(15, 23, 42, 0.55);
+    padding: 0.5rem;
+    z-index: 1500;
+}
+
+.vyasa-navbar-search-results:empty {
+    display: none;
+}
+
 .vyasa-emphasis-control {
     color: var(--vyasa-emphasis-control-text) !important;
     background: var(--vyasa-emphasis-control-bg) !important;

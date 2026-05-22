@@ -28,11 +28,10 @@ def _fold_all_action(context):
 def _copy_raw_action(context):
     if not context.raw_content:
         return None
-    target_id = "raw-md-clipboard"
     toast_id = "raw-md-toast"
     return DocumentActionItem(
         id="documents.copy_raw",
-        node=copy_raw_button("Copy Markdown", target_id, toast_id),
+        node=copy_raw_button("Copy Markdown", context.raw_content, toast_id),
         aux_nodes=copy_raw_nodes(context.raw_content),
         order=30,
     )

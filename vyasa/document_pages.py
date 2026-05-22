@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import html
 from dataclasses import dataclass
 from typing import Any
@@ -16,6 +17,18 @@ COPY_RAW_JS = (
     "setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};"
     "if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>{document.execCommand('copy');done();});}"
     "else{document.execCommand('copy');done();}})()"
+)
+COPY_RAW_PAYLOAD_JS = (
+    "(function(btn){const toast=document.getElementById('%s');"
+    "const binary=atob(btn.dataset.copyPayload||'');"
+    "const bytes=Uint8Array.from(binary,(char)=>char.charCodeAt(0));"
+    "const text=new TextDecoder().decode(bytes);"
+    "const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');"
+    "setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};"
+    "const fallback=()=>{const el=document.createElement('textarea');el.value=text;el.setAttribute('readonly','');"
+    "el.style.position='absolute';el.style.left='-9999px';document.body.appendChild(el);el.select();document.execCommand('copy');document.body.removeChild(el);done();};"
+    "if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>fallback());}"
+    "else{fallback();}})(this)"
 )
 ACTION_ICONS = {
     "clipboard": '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-page-action-icon"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3"/></svg>',
@@ -98,14 +111,19 @@ def meta_line(source_text: str, file_path=None):
     return P(*items, cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2 flex flex-wrap items-center gap-2")
 
 
-def copy_raw_button(label: str, target_id: str, toast_id: str):
+def _copy_payload_attrs(text: str):
+    return {"data_copy_payload": base64.b64encode(text.encode("utf-8")).decode("ascii")}
+
+
+def copy_raw_button(label: str, raw_content: str, toast_id: str):
     return Button(
         action_icon("clipboard"),
         Span(label, cls="text-sm font-medium"),
         type="button",
         title=f"Copy raw {label.removeprefix('Copy ').lower()}",
-        onclick=COPY_RAW_JS % (target_id, toast_id),
+        onclick=COPY_RAW_PAYLOAD_JS % toast_id,
         cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+        **_copy_payload_attrs(raw_content),
     )
 
 
@@ -160,11 +178,9 @@ def document_header(title: str, source_text: str, *, actions=(), breadcrumbs=Non
 
 def copy_raw_nodes(raw_content: str, *, kind: str = "md"):
     title = "Copied Raw Markdown!"
-    target_id = f"raw-{kind}-clipboard"
     toast_id = f"raw-{kind}-toast"
     return (
         Div(title, id=toast_id, cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"),
-        Textarea(raw_content, id=target_id, cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"),
     )
 
 
