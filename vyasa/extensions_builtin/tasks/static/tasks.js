@@ -1728,46 +1728,6 @@ function renderTasksNodeLinkBadge(React, options = {}) {
     })));
 }
 
-function stableEdgeHash(text) {
-    let hash = 2166136261;
-    for (let index = 0; index < text.length; index += 1) {
-        hash ^= text.charCodeAt(index);
-        hash = Math.imul(hash, 16777619);
-    }
-    return hash >>> 0;
-}
-
-function edgeControlPoint(x, y, position, otherX, otherY) {
-    const dx = otherX - x;
-    const dy = otherY - y;
-    const distance = Math.max(Math.abs(dx), Math.abs(dy), 40) * 0.5;
-    if (position === 'left') return { x: x - distance, y };
-    if (position === 'right') return { x: x + distance, y };
-    if (position === 'top') return { x, y: y - distance };
-    return { x, y: y + distance };
-}
-
-function cubicBezierPoint(p0, p1, p2, p3, t) {
-    const mt = 1 - t;
-    return (
-        (mt ** 3) * p0 +
-        3 * (mt ** 2) * t * p1 +
-        3 * mt * (t ** 2) * p2 +
-        (t ** 3) * p3
-    );
-}
-
-function tasksEdgeLabelPoint(props) {
-    const seed = `${props.source}->${props.target}|${props.label || ''}`;
-    const t = 0.25 + ((stableEdgeHash(seed) % 51) / 100);
-    const c1 = edgeControlPoint(props.sourceX, props.sourceY, props.sourcePosition, props.targetX, props.targetY);
-    const c2 = edgeControlPoint(props.targetX, props.targetY, props.targetPosition, props.sourceX, props.sourceY);
-    return {
-        x: cubicBezierPoint(props.sourceX, c1.x, c2.x, props.targetX, t),
-        y: cubicBezierPoint(props.sourceY, c1.y, c2.y, props.targetY, t),
-    };
-}
-
 function tasksActiveHoverAttrs(sourceModel, activeProjectionId) {
     const projections = Array.isArray(sourceModel?.view_projections) ? sourceModel.view_projections : [];
     const id = String(activeProjectionId || '').trim();
@@ -2477,7 +2437,6 @@ async function renderTasksGraphs(rootElement = document) {
             }, [graphRevision, activeFilters]);
             const CustomEdge = React.memo((props) => {
                 const [path, labelX, labelY] = rf.getBezierPath(props);
-                const labelPoint = tasksEdgeLabelPoint(props);
                 const fullLabel = String(props.label || '').replace(/\\n/g, '\n');
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
@@ -2493,7 +2452,7 @@ async function renderTasksGraphs(rootElement = document) {
                         React.createElement('div', {
                             style: {
                                 position: 'absolute',
-                                transform: `translate(-50%, -50%) translate(${labelPoint.x || labelX}px, ${labelPoint.y || labelY}px)`,
+                                transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
                                 pointerEvents: 'none',
                                 zIndex: props.labelZIndex || TASKS_EDGE_LABEL_Z,
                                 padding: `${props.labelBgPadding?.[1] || 0}px ${props.labelBgPadding?.[0] || 0}px`,

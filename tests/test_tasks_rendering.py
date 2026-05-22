@@ -176,6 +176,13 @@ def test_tasks_source_supports_continuous_gradient_palettes():
     assert "continuousColorKeys.has" in source
 
 
+def test_tasks_edge_labels_use_react_flow_bezier_coordinates():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const [path, labelX, labelY] = rf.getBezierPath(props);" in source
+    assert "translate(${labelX}px, ${labelY}px)" in source
+
+
 def test_tasks_block_serializes_labeled_edges():
     md = dedent("""\
     ```items
