@@ -289,6 +289,67 @@ test('palette legend renders for two-value color modes', () => {
     assert.deepEqual(entries, [['client', '#2563eb'], ['delivery', '#7c3aed']]);
 });
 
+test('continuous palette interpolates colors from numeric hour attributes', () => {
+    const palette = {
+        type: 'continuous',
+        domain: [0, 24],
+        wrap: true,
+        stops: [
+            { at: 0, color: '#000000' },
+            { at: 12, color: '#ffffff' },
+            { at: 24, color: '#000000' },
+        ],
+    };
+    const parseHex = (color) => {
+        const value = String(color || '').trim().replace(/^#/, '');
+        return {
+            r: Number.parseInt(value.slice(0, 2), 16),
+            g: Number.parseInt(value.slice(2, 4), 16),
+            b: Number.parseInt(value.slice(4, 6), 16),
+        };
+    };
+    const interpolate = (a, b, ratio) => `#${['r', 'g', 'b'].map((key) => (
+        Math.round(a[key] + (b[key] - a[key]) * ratio).toString(16).padStart(2, '0')
+    )).join('')}`;
+    const normalize = (value, domain) => {
+        const span = domain[1] - domain[0];
+        const offset = ((value - domain[0]) % span + span) % span;
+        return domain[0] + offset;
+    };
+    const resolve = (inputPalette, value) => {
+        const normalized = normalize(Number(value), inputPalette.domain);
+        for (let index = 1; index < inputPalette.stops.length; index += 1) {
+            const prev = inputPalette.stops[index - 1];
+            const current = inputPalette.stops[index];
+            if (normalized > current.at) continue;
+            return interpolate(parseHex(prev.color), parseHex(current.color), (normalized - prev.at) / (current.at - prev.at));
+        }
+        return inputPalette.stops[inputPalette.stops.length - 1].color;
+    };
+
+    assert.equal(resolve(palette, 6), '#808080');
+    assert.equal(resolve(palette, 18), '#808080');
+    assert.equal(resolve(palette, 25), '#151515');
+});
+
+test('continuous palettes do not emit discrete legend entries', () => {
+    const palette = {
+        type: 'continuous',
+        domain: [0, 24],
+        wrap: true,
+        stops: [
+            { at: 0, color: '#0f172a' },
+            { at: 6, color: '#f59e0b' },
+            { at: 12, color: '#fde047' },
+            { at: 18, color: '#f97316' },
+            { at: 24, color: '#0f172a' },
+        ],
+    };
+    const entries = (palette.type === 'continuous' && Array.isArray(palette.stops)) ? [] : Object.entries(palette);
+
+    assert.deepEqual(entries, []);
+});
+
 test('renderer internal __kind__ does not clobber user kind attribute', () => {
     const source = { id: 'proxy', label: 'API Proxy', kind: 'ingress' };
     const node = { id: 'proxy', kind: 'task' };

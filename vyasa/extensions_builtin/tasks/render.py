@@ -59,12 +59,15 @@ def _should_open_filters_by_default(width_value) -> bool:
 def render_tasks_block(code: str, current_path: str | None = None, fence_name: str = "tasks") -> str:
     raw_code = html.unescape(code)
     config, code = split_fence_frontmatter(raw_code)
+    storage_suffix = abs(hash((current_path or "", raw_code))) & 0xFFFFFF
     try:
         model = parse_tasks_text(f"```tasks\n{raw_code}\n```", current_path=current_path)
         if config.get("title") and not model.get("title"):
             model["title"] = config["title"]
         if config.get("id"):
             model["graph_id"] = config["id"]
+        model["document_path"] = str(current_path or "")
+        model["storage_id"] = f"tasks-block-{storage_suffix}"
         if "default_color_by" in config:
             model["default_color_by"] = config["default_color_by"]
         if "filter_attributes" in config:
@@ -104,6 +107,8 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             "edge_color_palette": {},
             "edge_color_palettes": {},
             "node_color_palettes": {},
+            "document_path": str(current_path or ""),
+            "storage_id": f"tasks-block-{storage_suffix}",
         }
         graph = {"nodes": [], "edges": []}
     widget_id = f"tasks-{abs(hash(code)) & 0xFFFFFF}-{next(_diagram_uid_counter)}"
@@ -119,6 +124,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     min_height = config.get("min_height") or ("420px" if fence_name != "tasks" else "")
     flow_height = html.escape(str(config.get("height") or "70vh"))
     node_card_width = html.escape(str(config.get("node-card-width") or "480px"))
+    projection_group_opacity = html.escape(str(config.get("projection-group-opacity") or "12"))
     jitter = html.escape(str(config.get("jitter") or 0))
     jitter_y = html.escape(str(config.get("jitter_y") or config.get("jitter") or 0))
     spacing = html.escape(str(config.get("spacing") or "normal"))
@@ -147,7 +153,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     return (
         f'<div class="tasks-container relative my-6 rounded-xl border-4 border-slate-200 dark:border-slate-800" '
         f'style="{container_style}" '
-        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-gantt="{str(gantt_enabled).lower()}" data-tasks-default-view="{html.escape(default_view)}" data-tasks-open-filters-default="{str(open_filters_by_default).lower()}" data-tasks-node-card-width="{node_card_width}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
+        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-gantt="{str(gantt_enabled).lower()}" data-tasks-default-view="{html.escape(default_view)}" data-tasks-open-filters-default="{str(open_filters_by_default).lower()}" data-tasks-node-card-width="{node_card_width}" data-tasks-projection-group-opacity="{projection_group_opacity}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
         f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'
         f'<button onclick="openTasksFullscreen(\'{widget_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>'
         f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">'

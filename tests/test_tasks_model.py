@@ -362,6 +362,50 @@ Roadmap:
     assert model["color_by"] == ""
 
 
+def test_items_parser_reads_continuous_gradient_palette_from_json(tmp_path):
+    palette_path = tmp_path / "shared-palettes.json"
+    palette_path.write_text(
+        json.dumps({
+            "node_color_palettes": {
+                "sun_hour": {
+                    "type": "continuous",
+                    "domain": [0, 24],
+                    "wrap": True,
+                    "stops": [
+                        {"at": 0, "color": "#0f172a"},
+                        {"at": 6, "color": "#f59e0b"},
+                        {"at": 12, "color": "#fde047"},
+                        {"at": 18, "color": "#f97316"},
+                        {"at": 24, "color": "#0f172a"},
+                    ],
+                }
+            }
+        }),
+        encoding="utf-8",
+    )
+    markdown_path = tmp_path / "graph.md"
+    markdown_path.write_text(
+        """```items
+---
+color_palette_source: shared-palettes.json
+default_color_by: sun_hour
+---
+Route:
+  - dawn :: Dawn | sun_hour: 6.5
+```""",
+        encoding="utf-8",
+    )
+
+    model = parse_tasks_text(markdown_path.read_text(encoding="utf-8"), current_path=markdown_path)
+
+    assert model["color_by"] == "sun_hour"
+    assert model["default_color_by"] == "sun_hour"
+    assert model["node_color_palettes"]["sun_hour"]["type"] == "continuous"
+    assert model["node_color_palettes"]["sun_hour"]["domain"] == [0.0, 24.0]
+    assert model["node_color_palettes"]["sun_hour"]["wrap"] is True
+    assert model["node_color_palettes"]["sun_hour"]["stops"][2] == {"at": 12.0, "color": "#fde047"}
+
+
 def test_items_parser_reads_filter_attributes():
     model = parse_tasks_text(
         """```items
@@ -376,6 +420,63 @@ Roadmap:
     )
 
     assert model["filter_attributes"] == ["owner", "status"]
+
+
+def test_items_parser_builds_projection_models_from_frontmatter():
+    model = parse_tasks_text(
+        """```items
+---
+default_projection: theme
+view_projections:
+  - id: city
+    label: City View
+    groups_from: city
+    default_color_by: city
+  - id: theme
+    label: Theme View
+    groups_from: theme
+    default_color_by: theme
+---
+Places:
+  - tsukiji :: Tsukiji | city: Tokyo | theme: Food
+  - fushimi :: Fushimi Inari | city: Kyoto | theme: Temples
+  - dotonbori :: Dotonbori | city: Osaka | theme: Food
+tsukiji -> dotonbori
+```"""
+    )
+
+    assert model["default_projection"] == "theme"
+    assert [projection["id"] for projection in model["view_projections"]] == ["city", "theme"]
+    assert model["view_projections"][0]["default_color_by"] == "city"
+    city_model = model["projection_models"]["city"]["model"]
+    theme_model = model["projection_models"]["theme"]["model"]
+    assert city_model["default_color_by"] == "city"
+    assert theme_model["default_color_by"] == "theme"
+    assert [group["label"] for group in city_model["groups"]] == ["City > Tokyo", "City > Kyoto", "City > Osaka"]
+    assert [group["label"] for group in theme_model["groups"]] == ["Theme > Food", "Theme > Temples"]
+    food_group_id = next(group["id"] for group in theme_model["groups"] if group["label"] == "Theme > Food")
+    assert theme_model["task_children"][food_group_id] == ["tsukiji", "dotonbori"]
+    assert {"source": "tsukiji", "target": "dotonbori"} in theme_model["dependency_edges"]
+
+
+def test_items_parser_prefixes_nested_projection_group_labels_with_dimension():
+    model = parse_tasks_text(
+        """```items
+---
+view_projections:
+  - id: shopping
+    groups_from: [shop_type, energy]
+---
+Places:
+  - tsutaya :: Tsutaya | shop_type: Books | energy: Jetlag
+```"""
+    )
+
+    shopping_model = model["projection_models"]["shopping"]["model"]
+    assert [group["label"] for group in shopping_model["groups"]] == [
+        "Shop Type > Books",
+        "Energy > Jetlag",
+    ]
 
 
 def test_collapsed_graph_projects_nested_task_edges_to_root_groups():

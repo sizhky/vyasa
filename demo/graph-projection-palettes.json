@@ -1,0 +1,212 @@
+{
+  "node_color_palettes": {
+    "kind": {
+      "sight": "#2563eb",
+      "experience": "#16a34a",
+      "transit": "#94a3b8",
+      "hotel": "#7c3aed",
+      "restaurant": "#ea580c",
+      "shop": "#0891b2"
+    },
+    "region": {
+      "Kanto": "#2563eb",
+      "Chubu": "#16a34a",
+      "Hokuriku": "#b45309",
+      "Kansai": "#dc2626",
+      "Chugoku": "#9333ea",
+      "Shikoku": "#c026d3"
+    },
+    "city": {
+      "Tokyo": "#2563eb",
+      "Nikko": "#0891b2",
+      "Kamakura": "#0d9488",
+      "Enoshima": "#14b8a6",
+      "Hakone": "#059669",
+      "Fujikawaguchiko": "#16a34a",
+      "Matsumoto": "#84cc16",
+      "Kamikochi": "#22c55e",
+      "Takayama": "#a16207",
+      "Shirakawa-go": "#ca8a04",
+      "Kanazawa": "#b45309",
+      "Kyoto": "#d97706",
+      "Nara": "#f59e0b",
+      "Koyasan": "#7c3aed",
+      "Osaka": "#dc2626",
+      "Himeji": "#f97316",
+      "Naoshima": "#c026d3",
+      "Hiroshima": "#9333ea",
+      "Miyajima": "#a855f7"
+    },
+    "trip_stage": {
+      "Arrive": "#64748b",
+      "First Tokyo": "#2563eb",
+      "Kanto Trips": "#0d9488",
+      "Mountain Reset": "#059669",
+      "Fuji Arc": "#16a34a",
+      "Alps Pivot": "#84cc16",
+      "Hokuriku Arc": "#b45309",
+      "Kyoto Core": "#d97706",
+      "Nara Loop": "#f59e0b",
+      "Koyasan Side": "#7c3aed",
+      "Osaka Bite": "#dc2626",
+      "West Run": "#f97316",
+      "Art Island": "#c026d3",
+      "Peace + Sea": "#9333ea",
+      "Return Loop": "#0891b2",
+      "Depart": "#334155"
+    },
+    "spend_band": {
+      "Free": "#86efac",
+      "Low": "#bef264",
+      "Medium": "#fcd34d",
+      "High": "#fb923c",
+      "Splurge": "#dc2626"
+    },
+    "energy": {
+      "Jetlag": "#64748b",
+      "Reset": "#94a3b8",
+      "Recover": "#a7f3d0",
+      "Soft": "#86efac",
+      "Medium": "#facc15",
+      "High": "#f97316",
+      "Heavy": "#dc2626"
+    },
+    "transit_mode": {
+      "Walk": "#84cc16",
+      "Rail": "#2563eb",
+      "Bus": "#f59e0b",
+      "Boat": "#06b6d4",
+      "Ropeway": "#a855f7"
+    },
+    "adventure_tier": {
+      "Gentle": "#86efac",
+      "Moderate": "#fcd34d",
+      "Committed": "#fb923c",
+      "Hardcore": "#dc2626"
+    },
+    "essentialness": {
+      "Must Do": "#dc2626",
+      "Flexible": "#fcd34d",
+      "Weather Dependent": "#06b6d4",
+      "Skippable": "#94a3b8"
+    },
+    "cuisine": {
+      "Sushi": "#0891b2",
+      "Ramen": "#f97316",
+      "Kaiseki": "#7c3aed",
+      "Yakitori": "#dc2626",
+      "Wagyu": "#9333ea",
+      "Street": "#ea580c",
+      "Seafood": "#0ea5e9",
+      "Tea": "#16a34a",
+      "Okonomiyaki": "#f59e0b"
+    },
+    "shop_type": {
+      "Artisan": "#b45309",
+      "Department Store": "#7c3aed",
+      "Souvenir": "#f59e0b",
+      "Electronics": "#2563eb",
+      "Fashion": "#db2777",
+      "Books": "#16a34a",
+      "Market": "#ea580c"
+    },
+    "meal_band": {
+      "None": "#cbd5e1",
+      "Snack": "#d61500",
+      "Tea": "#fcb04d",
+      "Lunch": "#fbd53c",
+      "Dinner": "#003b9a"
+    },
+    "day_num": {
+      "type": "continuous",
+      "label": "Day of Trip",
+      "domain": [1, 20],
+      "stops": [
+        { "at": 1,  "color": "#38e000", "label": "Tokyo Start" },
+        { "at": 20, "color": "#dd0202", "label": "Depart" }
+      ]
+    },
+    "sun_hour": {
+      "type": "continuous",
+      "label": "Sun Hour",
+      "domain": [0, 24],
+      "wrap": true,
+      "stops": [
+        { "at": 0,  "color": "#0f172a", "label": "Night" },
+        { "at": 5,  "color": "#1e3a8a", "label": "Dawn" },
+        { "at": 7,  "color": "#f59e0b", "label": "Morning" },
+        { "at": 12, "color": "#fde047", "label": "Noon" },
+        { "at": 17, "color": "#fb923c", "label": "Evening" },
+        { "at": 20, "color": "#7c3aed", "label": "Dusk" },
+        { "at": 24, "color": "#0f172a", "label": "Night" }
+      ]
+    },
+    "cost_yen": {
+      "type": "continuous",
+      "label": "Cost (yen)",
+      "domain": [0, 65000],
+      "stops": [
+        { "at": 0,     "color": "#86efac", "label": "Free" },
+        { "at": 2000,  "color": "#bef264", "label": "Cheap" },
+        { "at": 8000,  "color": "#fcd34d", "label": "Mid" },
+        { "at": 20000, "color": "#fb923c", "label": "Pricey" },
+        { "at": 40000, "color": "#dc2626", "label": "Splurge" },
+        { "at": 65000, "color": "#7f1d1d", "label": "Top" }
+      ]
+    },
+    "trip_hour": {
+      "type": "continuous",
+      "label": "Trip Hour",
+      "domain": [0, 480],
+      "stops": [
+        { "at": 0,   "color": "#fca5a5", "label": "Land" },
+        { "at": 120, "color": "#86efac", "label": "Mountains" },
+        { "at": 240, "color": "#a5b4fc", "label": "Mid Trip" },
+        { "at": 360, "color": "#c026d3", "label": "West Japan" },
+        { "at": 480, "color": "#0f172a", "label": "Depart" }
+      ]
+    }
+  },
+  "edge_color_palettes": {
+    "transit_mode": {
+      "Walk": "#84cc16",
+      "Rail": "#2563eb",
+      "Bus": "#f59e0b",
+      "Boat": "#06b6d4",
+      "Ropeway": "#a855f7"
+    },
+    "kind": {
+      "shinkansen": "#dc2626",
+      "thunderbird": "#b45309",
+      "rain pivot": "#0ea5e9",
+      "food crawl": "#ea580c",
+      "home base": "#7c3aed",
+      "sacred arc": "#b45309",
+      "art arc": "#c026d3",
+      "castle line": "#92400e",
+      "splurge": "#dc2626",
+      "segment": "#94a3b8",
+      "walk": "#84cc16",
+      "rail": "#2563eb",
+      "bus": "#f59e0b",
+      "boat": "#06b6d4",
+      "ropeway": "#a855f7"
+    }
+  },
+  "edge_kinds": {
+    "shinkansen":     { "transit_mode": "Rail", "narrative": "Shinkansen" },
+    "thunderbird":    { "transit_mode": "Rail", "narrative": "Thunderbird Express" },
+    "rain pivot":     { "transit_mode": "Walk", "narrative": "Rain pivot" },
+    "food crawl":     { "transit_mode": "Walk", "narrative": "Food crawl" },
+    "home base":      { "transit_mode": "Walk", "narrative": "Anchored to hotel" },
+    "sacred arc":     { "transit_mode": "Rail", "narrative": "Sacred arc" },
+    "art arc":        { "transit_mode": "Rail", "narrative": "Art arc" },
+    "castle line":    { "transit_mode": "Rail", "narrative": "Castle line" },
+    "splurge":        { "transit_mode": "Walk", "narrative": "Splurge chain" },
+    "walk":           { "transit_mode": "Walk", "narrative": "Walk" },
+    "rail":           { "transit_mode": "Rail", "narrative": "Rail" },
+    "bus":            { "transit_mode": "Bus",  "narrative": "Bus" },
+    "boat":           { "transit_mode": "Boat", "narrative": "Boat" },
+    "ropeway":        { "transit_mode": "Ropeway", "narrative": "Ropeway" }
+  }
+}
