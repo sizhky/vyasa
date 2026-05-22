@@ -1,0 +1,62 @@
+{
+  "node_color_palettes": {
+    "day": {
+      "Saturday": "#2563eb",
+      "Sunday": "#16a34a"
+    },
+    "area": {
+      "San Jose": "#475569",
+      "South Bay": "#64748b",
+      "Union Square": "#7c3aed",
+      "Union Square to Waterfront": "#b45309",
+      "Waterfront": "#0d9488",
+      "Bay": "#0891b2",
+      "North Beach": "#ea580c",
+      "Mission": "#db2777",
+      "Alamo Square": "#9333ea",
+      "Golden Gate Park": "#16a34a",
+      "Golden Gate Bridge": "#dc2626"
+    },
+    "mood": {
+      "Start": "#475569",
+      "Transfer": "#64748b",
+      "Home Base": "#7c3aed",
+      "Logistics": "#334155",
+      "Classic SF": "#b45309",
+      "Tourist Classic": "#0d9488",
+      "Food": "#ea580c",
+      "Transit": "#2563eb",
+      "History": "#9333ea",
+      "Viewpoint": "#dc2626",
+      "Culture": "#db2777",
+      "Iconic Photo": "#a855f7",
+      "Park": "#16a34a",
+      "Garden": "#65a30d",
+      "Iconic View": "#ef4444",
+      "Return Setup": "#475569",
+      "Finish": "#334155"
+    },
+    "transit_mode": {
+      "Bus+BART": "#2563eb",
+      "BART": "#1d4ed8",
+      "Walk": "#16a34a",
+      "Cable Car": "#b45309",
+      "Ferry": "#0d9488",
+      "BART/Muni": "#7c3aed",
+      "Bus": "#0891b2",
+      "Bus/Muni": "#06b6d4",
+      "BART+Bus": "#475569"
+    }
+  },
+  "edge_color_palettes": {
+    "relation": {
+      "transit": "#2563eb",
+      "walk": "#16a34a",
+      "cable-car": "#b45309",
+      "ferry": "#0d9488",
+      "meal": "#ea580c",
+      "optional": "#64748b",
+      "return": "#475569"
+    }
+  }
+}
