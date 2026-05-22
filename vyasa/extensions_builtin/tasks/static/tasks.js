@@ -277,6 +277,12 @@ function tasksFilterOptions(model) {
         ? model.filter_attributes.map((key) => String(key || '').trim()).filter(Boolean)
         : [];
     const allowedKeys = allowedFilterAttributes.length ? new Set(allowedFilterAttributes) : null;
+    const continuousColorKeys = new Set(
+        Object.entries(model?.node_color_palettes && typeof model.node_color_palettes === 'object' ? model.node_color_palettes : {})
+            .filter(([, palette]) => isTasksGradientPalette(palette))
+            .map(([key]) => String(key || '').trim())
+            .filter(Boolean)
+    );
     const hidden = new Set([
         'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
         'handlelayout', 'highlightmode', 'sourcegroupid',
@@ -287,6 +293,7 @@ function tasksFilterOptions(model) {
         if (!node) return;
         for (const [key, value] of Object.entries(node)) {
             if (hidden.has(String(key).toLowerCase()) || value === null || value === undefined || value === '') continue;
+            if (continuousColorKeys.has(String(key))) continue;
             if (allowedKeys && !allowedKeys.has(String(key))) continue;
             if (!(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) continue;
             if (!buckets.has(key)) buckets.set(key, { values: new Set(), kinds: new Set() });
@@ -324,6 +331,85 @@ function tasksColorOptions(model) {
         .sort((a, b) => a.label.localeCompare(b.label));
 }
 
+function isTasksGradientPalette(palette) {
+    return Boolean(
+        palette
+        && typeof palette === 'object'
+        && String(palette.type || '').trim() === 'continuous'
+        && Array.isArray(palette.stops)
+        && palette.stops.length >= 2
+    );
+}
+
+function normalizeTasksGradientStops(palette) {
+    if (!isTasksGradientPalette(palette)) return [];
+    return palette.stops
+        .map((stop) => ({
+            at: Number(stop?.at),
+            color: typeof stop?.color === 'string' ? stop.color.trim() : '',
+            label: typeof stop?.label === 'string' ? stop.label.trim() : '',
+        }))
+        .filter((stop) => Number.isFinite(stop.at) && stop.color)
+        .sort((a, b) => a.at - b.at);
+}
+
+function tasksGradientDomain(palette, stops) {
+    const rawDomain = Array.isArray(palette?.domain) ? palette.domain : [];
+    const start = Number(rawDomain[0]);
+    const end = Number(rawDomain[1]);
+    if (Number.isFinite(start) && Number.isFinite(end) && end !== start) return { start, end };
+    if (stops.length >= 2) return { start: stops[0].at, end: stops[stops.length - 1].at };
+    return null;
+}
+
+function normalizeTasksGradientValue(value, domain, wrap) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || !domain) return null;
+    const span = domain.end - domain.start;
+    if (!Number.isFinite(span) || span === 0) return null;
+    if (!wrap) return Math.min(domain.end, Math.max(domain.start, numericValue));
+    const offset = ((numericValue - domain.start) % span + span) % span;
+    return domain.start + offset;
+}
+
+function parseTasksHexColor(color) {
+    const value = String(color || '').trim().replace(/^#/, '');
+    if (!/^[0-9a-f]{6}$/i.test(value)) return null;
+    return {
+        r: Number.parseInt(value.slice(0, 2), 16),
+        g: Number.parseInt(value.slice(2, 4), 16),
+        b: Number.parseInt(value.slice(4, 6), 16),
+    };
+}
+
+function interpolateTasksHexColor(startColor, endColor, ratio) {
+    const start = parseTasksHexColor(startColor);
+    const end = parseTasksHexColor(endColor);
+    if (!start || !end) return '';
+    const mix = (from, to) => Math.round(from + (to - from) * ratio);
+    return `#${[mix(start.r, end.r), mix(start.g, end.g), mix(start.b, end.b)]
+        .map((part) => part.toString(16).padStart(2, '0'))
+        .join('')}`;
+}
+
+function resolveTasksGradientColor(palette, value) {
+    const stops = normalizeTasksGradientStops(palette);
+    if (stops.length < 2) return '';
+    const domain = tasksGradientDomain(palette, stops);
+    const normalized = normalizeTasksGradientValue(value, domain, Boolean(palette?.wrap));
+    if (normalized === null) return '';
+    if (normalized <= stops[0].at) return stops[0].color;
+    for (let index = 1; index < stops.length; index += 1) {
+        const prev = stops[index - 1];
+        const current = stops[index];
+        if (normalized > current.at) continue;
+        const span = current.at - prev.at;
+        if (!Number.isFinite(span) || span <= 0) return current.color;
+        return interpolateTasksHexColor(prev.color, current.color, (normalized - prev.at) / span) || current.color;
+    }
+    return stops[stops.length - 1].color;
+}
+
 function tasksColorPaletteFor(model, colorBy) {
     const key = String(colorBy || '').trim();
     if (!key) return {};
@@ -341,13 +427,15 @@ function tasksColorPaletteFor(model, colorBy) {
 function tasksColorPaletteEntries(model, colorBy) {
     const key = String(colorBy || '').trim();
     if (!key) return [];
+    const palette = tasksColorPaletteFor(model, colorBy);
+    if (isTasksGradientPalette(palette)) return [];
     const presentValues = new Set(
         [...(model?.groups || []), ...(model?.tasks || [])]
             .map((node) => node?.[key])
             .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
             .map((value) => String(value))
     );
-    return Object.entries(tasksColorPaletteFor(model, colorBy))
+    return Object.entries(palette)
         .filter(([value]) => presentValues.has(String(value)))
         .filter(([, color]) => typeof color === 'string' && color.trim())
         .sort(([a], [b]) => String(a).localeCompare(String(b)));
@@ -404,6 +492,7 @@ function resolveTasksNodeOwnColor(node, model, colorByOverride = null, paletteOv
     if (colorBy) {
         const value = node[colorBy];
         if (value !== null && value !== undefined && String(value).trim()) {
+            if (isTasksGradientPalette(palette)) return resolveTasksGradientColor(palette, value);
             const color = palette[String(value)];
             if (typeof color === 'string' && color.trim()) return color.trim();
         }
@@ -1699,6 +1788,8 @@ async function renderTasksGraphs(rootElement = document) {
             const prevExpandedCountRef = React.useRef(0);
             const hoverClearTimerRef = React.useRef(null);
             const activeColorPalette = React.useMemo(() => tasksColorPaletteFor(model, activeColorBy), [model, activeColorBy]);
+            const activeGradientStops = React.useMemo(() => normalizeTasksGradientStops(activeColorPalette), [activeColorPalette]);
+            const activeGradientDomain = React.useMemo(() => tasksGradientDomain(activeColorPalette, activeGradientStops), [activeColorPalette, activeGradientStops]);
             React.useEffect(() => {
                 baseLayoutRef.current = null;
                 groupLayoutsRef.current = {};
@@ -2575,6 +2666,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const options = tasksFilterOptions(model);
                 const colorOptions = tasksColorOptions(model);
                 const activePaletteEntries = activeColorBy === 'rank' ? [] : tasksColorPaletteEntries(model, activeColorBy);
+                const activeGradientPalette = isTasksGradientPalette(activeColorPalette);
                 const activeCount = Object.values(activeFilters || {}).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : (value ? 1 : 0)), 0) + (activeColorBy ? 1 : 0);
                 const isOpen = !filtersCollapsed;
                 return React.createElement('aside', {
@@ -2648,7 +2740,29 @@ async function renderTasksGraphs(rootElement = document) {
                                         }),
                                         React.createElement('span', { style: { opacity: 0.85 } }, option.label)
                                     )),
-                                    activePaletteEntries.length > 0
+                                    activeGradientPalette
+                                        ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
+                                            React.createElement('div', { style: { display: 'grid', gap: '6px', fontSize: '11px', lineHeight: 1.3, opacity: 0.85 } },
+                                                React.createElement('div', {
+                                                    style: {
+                                                        height: '12px',
+                                                        borderRadius: '999px',
+                                                        border: '1px solid color-mix(in srgb, currentColor 12%, transparent)',
+                                                        background: `linear-gradient(90deg, ${activeGradientStops.map((stop) => {
+                                                            const start = activeGradientDomain?.start ?? activeGradientStops[0]?.at ?? 0;
+                                                            const end = activeGradientDomain?.end ?? activeGradientStops[activeGradientStops.length - 1]?.at ?? 1;
+                                                            const span = Math.max(end - start, 1);
+                                                            const pct = ((stop.at - start) / span) * 100;
+                                                            return `${stop.color} ${pct}%`;
+                                                        }).join(', ')})`,
+                                                    },
+                                                }),
+                                                React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' } },
+                                                    ...activeGradientStops.map((stop, index) => React.createElement('span', { key: `${activeColorBy}-stop-${index}` }, stop.label || (Number.isInteger(stop.at) ? `${stop.at}` : `${stop.at}`)))
+                                                )
+                                            )
+                                        )
+                                        : activePaletteEntries.length > 0
                                         ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
                                             React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '11px', lineHeight: 1.3, opacity: 0.8 } },
                                                 ...activePaletteEntries.map(([value, color]) => {

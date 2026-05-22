@@ -36,36 +36,28 @@ view_projections:
     label: "Transit View"
     groups_from: transit_mode
 default_projection: day
-edge_color_palette: relation
-  transit: "#2563eb"
-  walk: "#16a34a"
-  cable-car: "#b45309"
-  ferry: "#0d9488"
-  meal: "#ea580c"
-  optional: "#64748b"
-  return: "#475569"
 ---
 Route:
-  - sj-downtown :: Downtown San Jose | day: Saturday | area: San Jose | mood: Start | transit_mode: Bus+BART
-  - berryessa :: Berryessa BART | day: Saturday | area: South Bay | mood: Transfer | transit_mode: Bus+BART
-  - powell :: Powell St / Union Square | day: Saturday | area: Union Square | mood: Home Base | transit_mode: BART
-  - hotel :: Drop Bags Near Union Square | day: Saturday | area: Union Square | mood: Logistics | transit_mode: Walk
-  - cable-car :: Powell-Hyde Cable Car | day: Saturday | area: Union Square to Waterfront | mood: Classic SF | transit_mode: Cable Car
-  - wharf :: Fisherman's Wharf | day: Saturday | area: Waterfront | mood: Tourist Classic | transit_mode: Walk
-  - pier39 :: Pier 39 Sea Lions | day: Saturday | area: Waterfront | mood: Tourist Classic | transit_mode: Walk
-  - lunch :: Clam Chowder Lunch | day: Saturday | area: Waterfront | mood: Food | transit_mode: Walk
-  - pier33 :: Pier 33 Ferry Terminal | day: Saturday | area: Waterfront | mood: Transit | transit_mode: Walk
-  - alcatraz :: Alcatraz Island Tour | day: Saturday | area: Bay | mood: History | transit_mode: Ferry
-  - north-beach :: North Beach Dinner | day: Saturday | area: North Beach | mood: Food | transit_mode: Walk
-  - coit :: Coit Tower Optional View | day: Saturday | area: North Beach | mood: Viewpoint | transit_mode: Walk
-  - mission :: Mission Carnaval Parade | day: Sunday | area: Mission | mood: Culture | transit_mode: BART/Muni
-  - painted-ladies :: Painted Ladies / Alamo Square | day: Sunday | area: Alamo Square | mood: Iconic Photo | transit_mode: Bus
-  - ggp :: Golden Gate Park | day: Sunday | area: Golden Gate Park | mood: Park | transit_mode: Bus/Muni
-  - tea-garden :: Japanese Tea Garden | day: Sunday | area: Golden Gate Park | mood: Garden | transit_mode: Walk
-  - bridge-welcome :: Golden Gate Bridge Welcome Center | day: Sunday | area: Golden Gate Bridge | mood: Iconic View | transit_mode: Bus
-  - bridge-walk :: Golden Gate Bridge Walk | day: Sunday | area: Golden Gate Bridge | mood: Iconic View | transit_mode: Walk
-  - powell-return :: Powell St Return | day: Sunday | area: Union Square | mood: Return Setup | transit_mode: Bus+BART
-  - sj-home :: Downtown San Jose Return | day: Sunday | area: San Jose | mood: Finish | transit_mode: BART+Bus
+  - sj-downtown :: Downtown San Jose | day: Saturday | area: San Jose | mood: Start | transit_mode: Bus+BART | sun_hour: 9.0
+  - berryessa :: Berryessa BART | day: Saturday | area: South Bay | mood: Transfer | transit_mode: Bus+BART | sun_hour: 9.5
+  - powell :: Powell St / Union Square | day: Saturday | area: Union Square | mood: Home Base | transit_mode: BART | sun_hour: 10.75
+  - hotel :: Drop Bags Near Union Square | day: Saturday | area: Union Square | mood: Logistics | transit_mode: Walk | sun_hour: 11.0
+  - cable-car :: Powell-Hyde Cable Car | day: Saturday | area: Union Square to Waterfront | mood: Classic SF | transit_mode: Cable Car | sun_hour: 11.5
+  - wharf :: Fisherman's Wharf | day: Saturday | area: Waterfront | mood: Tourist Classic | transit_mode: Walk | sun_hour: 12.0
+  - pier39 :: Pier 39 Sea Lions | day: Saturday | area: Waterfront | mood: Tourist Classic | transit_mode: Walk | sun_hour: 12.3
+  - lunch :: Clam Chowder Lunch | day: Saturday | area: Waterfront | mood: Food | transit_mode: Walk | sun_hour: 13.0
+  - pier33 :: Pier 33 Ferry Terminal | day: Saturday | area: Waterfront | mood: Transit | transit_mode: Walk | sun_hour: 13.8
+  - alcatraz :: Alcatraz Island Tour | day: Saturday | area: Bay | mood: History | transit_mode: Ferry | sun_hour: 14.5
+  - north-beach :: North Beach Dinner | day: Saturday | area: North Beach | mood: Food | transit_mode: Walk | sun_hour: 18.5
+  - coit :: Coit Tower Optional View | day: Saturday | area: North Beach | mood: Viewpoint | transit_mode: Walk | sun_hour: 20.0
+  - mission :: Mission Carnaval Parade | day: Sunday | area: Mission | mood: Culture | transit_mode: BART/Muni | sun_hour: 10.0
+  - painted-ladies :: Painted Ladies / Alamo Square | day: Sunday | area: Alamo Square | mood: Iconic Photo | transit_mode: Bus | sun_hour: 12.0
+  - ggp :: Golden Gate Park | day: Sunday | area: Golden Gate Park | mood: Park | transit_mode: Bus/Muni | sun_hour: 13.5
+  - tea-garden :: Japanese Tea Garden | day: Sunday | area: Golden Gate Park | mood: Garden | transit_mode: Walk | sun_hour: 14.5
+  - bridge-welcome :: Golden Gate Bridge Welcome Center | day: Sunday | area: Golden Gate Bridge | mood: Iconic View | transit_mode: Bus | sun_hour: 17.0
+  - bridge-walk :: Golden Gate Bridge Walk | day: Sunday | area: Golden Gate Bridge | mood: Iconic View | transit_mode: Walk | sun_hour: 18.0
+  - powell-return :: Powell St Return | day: Sunday | area: Union Square | mood: Return Setup | transit_mode: Bus+BART | sun_hour: 19.5
+  - sj-home :: Downtown San Jose Return | day: Sunday | area: San Jose | mood: Finish | transit_mode: BART+Bus | sun_hour: 22.0
 
 sj-downtown ->|Rapid 500| berryessa | relation: transit
 berryessa ->|BART to Powell| powell | relation: transit

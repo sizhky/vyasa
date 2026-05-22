@@ -362,6 +362,50 @@ Roadmap:
     assert model["color_by"] == ""
 
 
+def test_items_parser_reads_continuous_gradient_palette_from_json(tmp_path):
+    palette_path = tmp_path / "shared-palettes.json"
+    palette_path.write_text(
+        json.dumps({
+            "node_color_palettes": {
+                "sun_hour": {
+                    "type": "continuous",
+                    "domain": [0, 24],
+                    "wrap": True,
+                    "stops": [
+                        {"at": 0, "color": "#0f172a"},
+                        {"at": 6, "color": "#f59e0b"},
+                        {"at": 12, "color": "#fde047"},
+                        {"at": 18, "color": "#f97316"},
+                        {"at": 24, "color": "#0f172a"},
+                    ],
+                }
+            }
+        }),
+        encoding="utf-8",
+    )
+    markdown_path = tmp_path / "graph.md"
+    markdown_path.write_text(
+        """```items
+---
+color_palette_source: shared-palettes.json
+default_color_by: sun_hour
+---
+Route:
+  - dawn :: Dawn | sun_hour: 6.5
+```""",
+        encoding="utf-8",
+    )
+
+    model = parse_tasks_text(markdown_path.read_text(encoding="utf-8"), current_path=markdown_path)
+
+    assert model["color_by"] == "sun_hour"
+    assert model["default_color_by"] == "sun_hour"
+    assert model["node_color_palettes"]["sun_hour"]["type"] == "continuous"
+    assert model["node_color_palettes"]["sun_hour"]["domain"] == [0.0, 24.0]
+    assert model["node_color_palettes"]["sun_hour"]["wrap"] is True
+    assert model["node_color_palettes"]["sun_hour"]["stops"][2] == {"at": 12.0, "color": "#fde047"}
+
+
 def test_items_parser_reads_filter_attributes():
     model = parse_tasks_text(
         """```items

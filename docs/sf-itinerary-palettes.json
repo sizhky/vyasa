@@ -46,6 +46,21 @@
       "Bus": "#0891b2",
       "Bus/Muni": "#06b6d4",
       "BART+Bus": "#475569"
+    },
+    "sun_hour": {
+      "type": "continuous",
+      "label": "Sun Hour",
+      "domain": [0, 24],
+      "wrap": true,
+      "stops": [
+        { "at": 0, "color": "#0f172a", "label": "Night" },
+        { "at": 5, "color": "#1e3a8a", "label": "Dawn" },
+        { "at": 7, "color": "#f59e0b", "label": "Morning" },
+        { "at": 12, "color": "#fde047", "label": "Noon" },
+        { "at": 17, "color": "#fb923c", "label": "Evening" },
+        { "at": 20, "color": "#7c3aed", "label": "Dusk" },
+        { "at": 24, "color": "#0f172a", "label": "Night" }
+      ]
     }
   },
   "edge_color_palettes": {

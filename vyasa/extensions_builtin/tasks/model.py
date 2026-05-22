@@ -310,15 +310,60 @@ def _clean_palette_map(value) -> dict:
     }
 
 
+def _clean_gradient_palette(value) -> dict:
+    if not isinstance(value, dict):
+        return {}
+    stops = value.get("stops")
+    if not isinstance(stops, list):
+        return {}
+    cleaned_stops = []
+    for stop in stops:
+        if not isinstance(stop, dict):
+            continue
+        color = str(stop.get("color") or "").strip()
+        if not color:
+            continue
+        try:
+            at = float(stop.get("at"))
+        except (TypeError, ValueError):
+            continue
+        cleaned_stops.append({"at": at, "color": color})
+    if len(cleaned_stops) < 2:
+        return {}
+    gradient = {"type": "continuous", "stops": cleaned_stops}
+    domain = value.get("domain")
+    if isinstance(domain, list) and len(domain) == 2:
+        try:
+            start = float(domain[0])
+            end = float(domain[1])
+        except (TypeError, ValueError):
+            start = end = None
+        if start is not None and end is not None and start != end:
+            gradient["domain"] = [start, end]
+    if "wrap" in value:
+        gradient["wrap"] = bool(value.get("wrap"))
+    label = str(value.get("label") or "").strip()
+    if label:
+        gradient["label"] = label
+    return gradient
+
+
+def _clean_palette_definition(value) -> dict:
+    gradient = _clean_gradient_palette(value)
+    if gradient:
+        return gradient
+    return _clean_palette_map(value)
+
+
 def _clean_palette_sources(value) -> dict[str, dict]:
     if not isinstance(value, dict):
         return {}
     if not value or not all(isinstance(palette, dict) for palette in value.values()):
         return {}
     return {
-        str(key).strip(): _clean_palette_map(palette)
+        str(key).strip(): _clean_palette_definition(palette)
         for key, palette in value.items()
-        if str(key).strip() and _clean_palette_map(palette)
+        if str(key).strip() and _clean_palette_definition(palette)
     }
 
 
@@ -359,7 +404,7 @@ def _load_palette_source(current_path: str | Path | None, source: str, palette_k
         payload = json.loads(resolved.read_text(encoding="utf-8"))
     except Exception:
         return {}, {}, ""
-    palette = _clean_palette_map(payload)
+    palette = _clean_palette_definition(payload)
     if not palette:
         return {}, {}, ""
     selected_key = str(palette_key or "").strip()

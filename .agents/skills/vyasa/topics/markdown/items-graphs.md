@@ -45,6 +45,7 @@ T-002, T-010 -> T-003
 - Preferred colors use nested palettes under `color_by`.
 - Use `default_color_by: <attr>` when a graph should open with that node palette active.
 - Only attrs declared under `color_by` appear in the UI color-mode dropdown.
+- Continuous palettes are also allowed in shared JSON for numeric attrs such as hour-of-day; they color nodes by interpolation instead of discrete buckets.
 - Shared palette JSON uses `node_color_palettes` and `edge_color_palettes`, loaded with `color_palette_source: path/to/palettes.json`.
 - Do not use removed legacy shared keys: `palette_source` or `color_palettes`.
 - Legacy inline `color_by: status` plus `color_palette:` remains backward-compatible.
@@ -80,6 +81,32 @@ Then reference it from the graph frontmatter:
 default_color_by: kind
 color_palette_source: .daksh/shared-palettes.json
 ```
+
+Continuous shared palettes use a gradient spec instead of value-to-hex pairs:
+
+```json
+{
+  "node_color_palettes": {
+    "sun_hour": {
+      "type": "continuous",
+      "domain": [0, 24],
+      "wrap": true,
+      "stops": [
+        { "at": 0, "color": "#0f172a", "label": "Night" },
+        { "at": 7, "color": "#f59e0b", "label": "Morning" },
+        { "at": 12, "color": "#fde047", "label": "Noon" },
+        { "at": 17, "color": "#fb923c", "label": "Evening" },
+        { "at": 24, "color": "#0f172a", "label": "Night" }
+      ]
+    }
+  }
+}
+```
+
+- Use a numeric node attr like `sun_hour: 18.5`.
+- `domain` is the numeric range; `wrap: true` makes cyclic ranges like clocks loop cleanly.
+- `stops[].label` is optional and feeds the gradient legend.
+- Continuous color attrs are for coloring, not checkbox filtering; keep a separate categorical attr if the user must filter by phase names.
 
 ## Body Syntax
 
