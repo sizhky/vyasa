@@ -18,6 +18,7 @@ Pick `Union Square / Powell St` as home base. It is less charming than the water
 title: "San Francisco First Visit"
 default_open_depth: 1
 width: 92vw
+gantt: true
 min_height: 72vh
 color_palette_source: sf-itinerary-palettes.json
 default_color_by: day

@@ -59,12 +59,15 @@ def _should_open_filters_by_default(width_value) -> bool:
 def render_tasks_block(code: str, current_path: str | None = None, fence_name: str = "tasks") -> str:
     raw_code = html.unescape(code)
     config, code = split_fence_frontmatter(raw_code)
+    storage_suffix = abs(hash((current_path or "", raw_code))) & 0xFFFFFF
     try:
         model = parse_tasks_text(f"```tasks\n{raw_code}\n```", current_path=current_path)
         if config.get("title") and not model.get("title"):
             model["title"] = config["title"]
         if config.get("id"):
             model["graph_id"] = config["id"]
+        model["document_path"] = str(current_path or "")
+        model["storage_id"] = f"tasks-block-{storage_suffix}"
         if "default_color_by" in config:
             model["default_color_by"] = config["default_color_by"]
         if "filter_attributes" in config:
@@ -104,6 +107,8 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             "edge_color_palette": {},
             "edge_color_palettes": {},
             "node_color_palettes": {},
+            "document_path": str(current_path or ""),
+            "storage_id": f"tasks-block-{storage_suffix}",
         }
         graph = {"nodes": [], "edges": []}
     widget_id = f"tasks-{abs(hash(code)) & 0xFFFFFF}-{next(_diagram_uid_counter)}"

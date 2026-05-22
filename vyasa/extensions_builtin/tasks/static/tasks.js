@@ -34,6 +34,7 @@ const TASKS_GANTT_ROW_GAP = 56;
 const TASKS_GANTT_BAR_MIN_HEIGHT = 34;
 const TASKS_GANTT_LEFT = 210;
 const TASKS_GANTT_TOP = 86;
+const TASKS_GANTT_PROJECTION_ID = '__gantt__';
 const TASKS_SPACING_PRESETS = {
     compact: { nodeSpacing: 24, layerSpacing: 64, collisionGap: 56, groupPadding: 28, edgeLabelWidth: 220 },
     normal: { nodeSpacing: 44, layerSpacing: 96, collisionGap: 96, groupPadding: 40, edgeLabelWidth: 240 },
@@ -122,6 +123,8 @@ function logTasksDebug(label, payload = {}) {
 }
 
 function tasksPrefsKey(model) {
+    const storageId = String(model?.storage_id || '').trim();
+    if (storageId) return `vyasa:tasks:prefs:${storageId}`;
     const graphId = String(model?.graph_id || '').trim();
     return graphId ? `vyasa:tasks:prefs:${graphId}` : '';
 }
@@ -1565,15 +1568,17 @@ function tasksEdgeLabelPoint(props) {
     };
 }
 
-function tasksProjectionOptions(model) {
+function tasksProjectionOptions(model, ganttEnabled = false) {
     const projections = Array.isArray(model?.view_projections) ? model.view_projections : [];
-    if (!projections.length) return [];
-    return [
+    if (!projections.length && !ganttEnabled) return [];
+    const options = [
         { id: '', label: 'Default' },
         ...projections
             .filter((projection) => projection && projection.id && model?.projection_models?.[projection.id])
             .map((projection) => ({ id: String(projection.id), label: String(projection.label || projection.id) })),
     ];
+    if (ganttEnabled) options.push({ id: TASKS_GANTT_PROJECTION_ID, label: 'Gantt' });
+    return options;
 }
 
 function tasksProjectionDefaultColorBy(model) {
@@ -1592,6 +1597,16 @@ function selectTasksProjectionState(sourceModel, sourceGraph, projectionId) {
         return { model: sourceModel, graph: sourceGraph, projectionId: '' };
     }
     return { model: entry.model, graph: entry.graph, projectionId: id };
+}
+
+function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode) {
+    const projectionState = selectTasksProjectionState(sourceModel, sourceGraph, projectionId);
+    if (viewMode !== 'gantt') return projectionState;
+    return {
+        ...projectionState,
+        graph: buildGanttTasksGraph(projectionState.model),
+        viewMode: 'gantt',
+    };
 }
 
 async function renderTasksGraphs(rootElement = document) {
@@ -1620,20 +1635,23 @@ async function renderTasksGraphs(rootElement = document) {
             const Position = rf.Position;
             const sourcePrefsRef = React.useRef(null);
             if (sourcePrefsRef.current === null) sourcePrefsRef.current = readTasksPrefs(sourceModel);
-            const projectionOptions = React.useMemo(() => tasksProjectionOptions(sourceModel), []);
+            const projectionOptions = React.useMemo(() => tasksProjectionOptions(sourceModel, ganttEnabled), []);
             const storedProjectionPrefsRef = React.useRef(sourcePrefsRef.current?.projectionPrefs && typeof sourcePrefsRef.current.projectionPrefs === 'object'
                 ? sourcePrefsRef.current.projectionPrefs
                 : {});
             const initialProjectionId = React.useMemo(() => {
+                if (defaultViewMode === 'gantt') return TASKS_GANTT_PROJECTION_ID;
                 const saved = String(sourcePrefsRef.current?.projectionId || '').trim();
                 if (projectionOptions.some((option) => option.id === saved)) return saved;
                 const configured = String(sourceModel?.default_projection || '').trim();
                 return projectionOptions.some((option) => option.id === configured) ? configured : '';
             }, [projectionOptions]);
-            const [activeProjectionId, setActiveProjectionId] = React.useState(initialProjectionId);
+            const initialGraphProjectionId = initialProjectionId === TASKS_GANTT_PROJECTION_ID ? '' : initialProjectionId;
+            const [activeProjectionId, setActiveProjectionId] = React.useState(initialGraphProjectionId);
+            const [viewMode, setViewMode] = React.useState(defaultViewMode);
             const projectionState = React.useMemo(
-                () => selectTasksProjectionState(sourceModel, sourceGraph, activeProjectionId),
-                [activeProjectionId]
+                () => buildTasksViewState(sourceModel, sourceGraph, activeProjectionId, viewMode),
+                [activeProjectionId, viewMode]
             );
             const model = projectionState.model;
             const rawGraph = React.useMemo(
@@ -1672,7 +1690,6 @@ async function renderTasksGraphs(rootElement = document) {
                     ? projectionPrefs.filtersCollapsed
                     : !defaultFiltersOpen
             ));
-            const [viewMode, setViewMode] = React.useState(defaultViewMode);
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
@@ -1746,9 +1763,8 @@ async function renderTasksGraphs(rootElement = document) {
             }, [rawGraph, model]);
             const rebuildLayout = React.useCallback(async (expandedSet, mode = viewMode) => {
                 if (mode === 'gantt') {
-                    const gantt = buildGanttTasksGraph(model);
                     const edgeColorPalette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
-                    const nodesWithStyle = gantt.nodes.map((node) => {
+                    const nodesWithStyle = rawGraph.nodes.map((node) => {
                         if (node.__kind__ === 'ganttHeader') {
                             return {
                                 id: node.id,
@@ -1784,7 +1800,7 @@ async function renderTasksGraphs(rootElement = document) {
                             selectable: true,
                         };
                     });
-                    const anchored = buildTaskEdgeAnchors(nodesWithStyle, gantt.edges);
+                    const anchored = buildTaskEdgeAnchors(nodesWithStyle, rawGraph.edges);
                     const baseEdges = anchored.edges.map((edge) => {
                         const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
                         return {
@@ -2860,40 +2876,6 @@ async function renderTasksGraphs(rootElement = document) {
                 return null;
             };
             const flowWrapperClassName = hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '';
-            const ViewModeToggle = () => !ganttEnabled ? null : window.React.createElement('div', {
-                style: {
-                    position: 'absolute',
-                    left: '12px',
-                    top: '12px',
-                    zIndex: 32,
-                    display: 'inline-flex',
-                    borderRadius: '10px',
-                    overflow: 'hidden',
-                    border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)',
-                    background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
-                    boxShadow: '0 10px 24px rgba(0,0,0,0.10)',
-                },
-            }, ['graph', 'gantt'].map((mode) => window.React.createElement('button', {
-                key: mode,
-                type: 'button',
-                onClick: () => {
-                    setSelectedNodeId(null);
-                    setHoveredNodeId(null);
-                    setViewMode(mode);
-                    pendingFitActionRef.current = 'mode';
-                },
-                style: {
-                    border: 0,
-                    borderRight: mode === 'graph' ? '1px solid color-mix(in srgb, currentColor 12%, transparent)' : 0,
-                    padding: '7px 10px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    textTransform: 'capitalize',
-                    color: 'inherit',
-                    background: viewMode === mode ? 'color-mix(in srgb, var(--vyasa-primary) 18%, transparent)' : 'transparent',
-                },
-            }, mode)));
             const ProjectionToggle = () => projectionOptions.length <= 1 ? null : window.React.createElement('div', {
                 style: {
                     display: 'inline-flex',
@@ -2913,7 +2895,13 @@ async function renderTasksGraphs(rootElement = document) {
                 key: projection.id || '__default__',
                 type: 'button',
                 onClick: () => {
-                    setActiveProjectionId(projection.id);
+                    setSelectedNodeId(null);
+                    setHoveredNodeId(null);
+                    if (projection.id === TASKS_GANTT_PROJECTION_ID) setViewMode('gantt');
+                    else {
+                        setActiveProjectionId(projection.id);
+                        setViewMode('graph');
+                    }
                     pendingFitActionRef.current = 'mode';
                 },
                 style: {
@@ -2926,7 +2914,10 @@ async function renderTasksGraphs(rootElement = document) {
                     fontSize: '12px',
                     fontWeight: 700,
                     color: 'inherit',
-                    background: activeProjectionId === projection.id ? 'color-mix(in srgb, var(--vyasa-primary) 18%, transparent)' : 'transparent',
+                    background: ((projection.id === TASKS_GANTT_PROJECTION_ID && viewMode === 'gantt')
+                        || (projection.id !== TASKS_GANTT_PROJECTION_ID && viewMode !== 'gantt' && activeProjectionId === projection.id))
+                        ? 'color-mix(in srgb, var(--vyasa-primary) 18%, transparent)'
+                        : 'transparent',
                 },
             }, projection.label)));
             const RightRail = () => {
@@ -2978,7 +2969,6 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge)
                     ),
-                    window.React.createElement(ViewModeToggle),
                     window.React.createElement(RightRail),
                     filterPanelElement,
                     window.React.createElement(GroupHoverTooltip)
@@ -2991,7 +2981,6 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge)
                 ),
-                window.React.createElement(ViewModeToggle),
                 window.React.createElement(RightRail),
                 filterPanelElement,
                 window.React.createElement(GroupHoverTooltip)
