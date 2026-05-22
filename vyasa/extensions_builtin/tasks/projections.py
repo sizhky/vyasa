@@ -31,6 +31,16 @@ def _normalize_groups_from(value) -> list[str]:
     return out
 
 
+def _projection_group_label(attr: str, value: str) -> str:
+    attr_label = str(attr or "").strip().replace("_", " ").title()
+    value_label = str(value or "").strip()
+    if not attr_label:
+        return value_label
+    if not value_label:
+        return attr_label
+    return f"{attr_label} > {value_label}"
+
+
 def normalize_projections(value) -> list[dict]:
     if not isinstance(value, list):
         return []
@@ -101,7 +111,7 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
             parent_id = groups_by_path[parent_path]["id"] if parent_path else None
             group = {
                 "id": group_id,
-                "label": value,
+                "label": _projection_group_label(attr, value),
                 "parent_group_id": parent_id,
                 "__projection_group__": True,
                 "projection": projection["id"],

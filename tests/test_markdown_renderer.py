@@ -225,8 +225,34 @@ Places:
     assert payload["default_projection"] == "city"
     assert payload["view_projections"][0]["label"] == "City View"
     assert payload["view_projections"][0]["default_color_by"] == "city"
-    assert payload["projection_models"]["city"]["model"]["groups"][0]["label"] == "Kyoto"
+    assert payload["projection_models"]["city"]["model"]["groups"][0]["label"] == "City > Tokyo"
     assert payload["projection_models"]["city"]["model"]["default_color_by"] == "city"
+
+
+def test_items_render_payload_prefixes_nested_projection_group_labels():
+    refresh_extension_runtime({})
+
+    rendered = to_xml(
+        from_md(
+            """```items
+---
+view_projections:
+  - id: shopping
+    groups_from: [shop_type, energy]
+---
+Places:
+  - tsutaya :: Tsutaya | shop_type: Books | energy: Jetlag
+```"""
+        )
+    )
+    match = re.search(r"""data-tasks-payload=(["'])(.*?)\1""", rendered)
+
+    assert match is not None
+    payload = json.loads(html.unescape(match.group(2)))
+    assert [group["label"] for group in payload["projection_models"]["shopping"]["model"]["groups"]] == [
+        "Shop Type > Books",
+        "Energy > Jetlag",
+    ]
 
 
 def test_markdown_fragment_include_does_not_leak_root_wrapper(tmp_path, monkeypatch):

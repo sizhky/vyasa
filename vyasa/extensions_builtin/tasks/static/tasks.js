@@ -29,6 +29,7 @@ const TASKS_EDGE_FOCUS_IN_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 40%, 
 const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
 const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
 const TASKS_FILTER_PANEL_WIDTH = 320;
+const TASKS_PROJECTION_GROUP_OPACITY_DEFAULT = 12;
 const TASKS_GANTT_UNIT_WIDTH = 340;
 const TASKS_GANTT_ROW_GAP = 56;
 const TASKS_GANTT_BAR_MIN_HEIGHT = 34;
@@ -569,7 +570,23 @@ function tasksNodeMatchesFilters(node, filters) {
     });
 }
 
-function resolveTasksProjectionGroupOwnColor(node, model) {
+function resolveTasksProjectionGroupOwnColor(node, model, colorByOverride = null, paletteOverride = null) {
+    if (!node || !node.__projection_group__) return '';
+    const colorBy = colorByOverride !== null
+        ? String(colorByOverride || '').trim()
+        : (typeof model?.color_by === 'string' ? model.color_by.trim() : '');
+    if (!colorBy) return '';
+    const palette = paletteOverride && typeof paletteOverride === 'object'
+        ? paletteOverride
+        : tasksColorPaletteFor(model, colorBy);
+    const value = node[colorBy];
+    if (value === null || value === undefined || String(value).trim() === '') return '';
+    if (isTasksGradientPalette(palette)) return resolveTasksGradientColor(palette, value);
+    const color = palette[String(value)];
+    return typeof color === 'string' && color.trim() ? color.trim() : '';
+}
+
+function resolveTasksProjectionGroupDimensionColor(node, model) {
     if (!node || !node.__projection_group__) return '';
     const palettes = model?.node_color_palettes;
     if (!palettes || typeof palettes !== 'object') return '';
@@ -577,7 +594,7 @@ function resolveTasksProjectionGroupOwnColor(node, model) {
     for (const [key, value] of Object.entries(node)) {
         if (reserved.has(key)) continue;
         if (value === null || value === undefined || String(value).trim() === '') continue;
-        const palette = palettes[key];
+        const palette = tasksColorPaletteFor(model, key);
         if (!palette || typeof palette !== 'object') continue;
         if (isTasksGradientPalette(palette)) {
             const color = resolveTasksGradientColor(palette, value);
@@ -592,7 +609,7 @@ function resolveTasksProjectionGroupOwnColor(node, model) {
 
 function resolveTasksNodeOwnColor(node, model, colorByOverride = null, paletteOverride = null) {
     if (!node) return '';
-    const projectionColor = resolveTasksProjectionGroupOwnColor(node, model);
+    const projectionColor = resolveTasksProjectionGroupOwnColor(node, model, colorByOverride, paletteOverride);
     if (projectionColor) return projectionColor;
     const colorBy = colorByOverride !== null
         ? String(colorByOverride || '').trim()
@@ -1851,6 +1868,8 @@ async function renderTasksGraphs(rootElement = document) {
         const defaultViewMode = ganttEnabled && String(wrapper.dataset.tasksDefaultView || '').trim().toLowerCase() === 'gantt' ? 'gantt' : 'graph';
         const defaultFiltersOpen = String(wrapper.dataset.tasksOpenFiltersDefault || '').trim().toLowerCase() === 'true';
         const nodeCardWidth = String(wrapper.dataset.tasksNodeCardWidth || '480px').trim() || '480px';
+        const projectionGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(wrapper.dataset.tasksProjectionGroupOpacity || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`) || TASKS_PROJECTION_GROUP_OPACITY_DEFAULT));
+        const projectionGroupExpandedOpacity = Math.max(1, Math.min(projectionGroupOpacity, Math.round(projectionGroupOpacity * 0.5)));
         const TasksGraphApp = (props) => {
             const React = window.React;
             const Handle = rf.Handle;
@@ -2104,19 +2123,21 @@ async function renderTasksGraphs(rootElement = document) {
                         : ((isExpanded ? TASKS_GROUP_BG_Z : TASKS_GROUP_Z) + depth);
                     const nodeColor = resolveTasksNodeColor(n, model, activeColorBy, activeColorPalette);
                     const isProjectionGroup = n.__kind__ === 'group' && n.__projection_group__;
-                    const groupFillExpanded = isProjectionGroup ? 3 : 7;
-                    const groupFillCollapsed = isProjectionGroup ? 8 : 14;
+                    const projectionGroupTone = isProjectionGroup ? resolveTasksProjectionGroupDimensionColor(n, model) : '';
+                    const groupColor = projectionGroupTone || nodeColor;
+                    const groupFillExpanded = isProjectionGroup ? projectionGroupExpandedOpacity : 7;
+                    const groupFillCollapsed = isProjectionGroup ? projectionGroupOpacity : 14;
                     const groupBorderMix = isProjectionGroup ? 28 : 70;
                     const background = n.__kind__ === 'group'
-                        ? (nodeColor
+                        ? (groupColor
                             ? (isExpanded
-                                ? `color-mix(in srgb, ${nodeColor} ${groupFillExpanded}%, transparent)`
-                                : `color-mix(in srgb, var(--vyasa-paper) ${100 - groupFillCollapsed}%, ${nodeColor} ${groupFillCollapsed}%)`)
+                                ? `color-mix(in srgb, ${groupColor} ${groupFillExpanded}%, transparent)`
+                                : `color-mix(in srgb, var(--vyasa-paper) ${100 - groupFillCollapsed}%, ${groupColor} ${groupFillCollapsed}%)`)
                             : (isExpanded ? TASKS_GROUP_EXPANDED_BG : TASKS_GROUP_BG))
                         : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 78%, ${nodeColor} 22%)` : TASKS_NODE_BG);
-                    const border = nodeColor
+                    const border = groupColor
                         ? (n.__kind__ === 'group'
-                            ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${nodeColor} ${groupBorderMix}%)`
+                            ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${groupColor} ${groupBorderMix}%)`
                             : `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`)
                         : TASKS_NODE_BORDER;
                     const rfNode = {
@@ -3499,6 +3520,7 @@ window.openTasksFullscreen = async function(id) {
     fullscreenWrapper.setAttribute('data-tasks-default-view', wrapper.getAttribute('data-tasks-default-view') || 'graph');
     fullscreenWrapper.setAttribute('data-tasks-open-filters-default', wrapper.getAttribute('data-tasks-open-filters-default') || 'false');
     fullscreenWrapper.setAttribute('data-tasks-node-card-width', wrapper.getAttribute('data-tasks-node-card-width') || '480px');
+    fullscreenWrapper.setAttribute('data-tasks-projection-group-opacity', wrapper.getAttribute('data-tasks-projection-group-opacity') || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`);
     fullscreenWrapper.setAttribute('data-tasks-jitter', wrapper.getAttribute('data-tasks-jitter') || '0');
     fullscreenWrapper.setAttribute('data-tasks-jitter-y', wrapper.getAttribute('data-tasks-jitter-y') || wrapper.getAttribute('data-tasks-jitter') || '0');
     fullscreenWrapper.setAttribute('data-tasks-spacing', wrapper.getAttribute('data-tasks-spacing') || 'normal');

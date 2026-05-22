@@ -90,6 +90,20 @@ foundation :: Foundation:
     assert 'data-tasks-node-card-width="36rem"' in html
 
 
+def test_tasks_block_reads_projection_group_opacity_option():
+    md = """```tasks
+---
+title: Projection Group Opacity
+projection-group-opacity: 18
+---
+foundation :: Foundation:
+```"""
+
+    html = to_xml(from_md(md))
+
+    assert 'data-tasks-projection-group-opacity="18"' in html
+
+
 def test_tasks_block_opens_filters_by_default_for_width_over_90vw():
     md = """```tasks
 ---
@@ -150,6 +164,7 @@ def test_tasks_fullscreen_copies_filter_default_flag():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "data-tasks-open-filters-default" in source
+    assert "data-tasks-projection-group-opacity" in source
 
 
 def test_tasks_source_uses_projection_scoped_prefs():
@@ -174,6 +189,23 @@ def test_tasks_source_supports_continuous_gradient_palettes():
     assert "linear-gradient(90deg" in source
     assert "stop.label ||" in source
     assert "continuousColorKeys.has" in source
+
+
+def test_tasks_projection_group_colors_respect_active_color_by_only():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    projection_color_source = source.split("function resolveTasksProjectionGroupOwnColor", 1)[1].split("function resolveTasksProjectionGroupDimensionColor", 1)[0]
+
+    assert "colorByOverride = null" in projection_color_source
+    assert "const value = node[colorBy];" in projection_color_source
+    assert "Object.entries(node)" not in projection_color_source
+
+
+def test_tasks_projection_groups_use_their_own_dimension_tone():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function resolveTasksProjectionGroupDimensionColor" in source
+    assert "const projectionGroupTone = isProjectionGroup ? resolveTasksProjectionGroupDimensionColor(n, model) : '';" in source
+    assert "const groupColor = projectionGroupTone || nodeColor;" in source
 
 
 def test_tasks_edge_labels_use_react_flow_bezier_coordinates():

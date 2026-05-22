@@ -452,11 +452,31 @@ tsukiji -> dotonbori
     theme_model = model["projection_models"]["theme"]["model"]
     assert city_model["default_color_by"] == "city"
     assert theme_model["default_color_by"] == "theme"
-    assert [group["label"] for group in city_model["groups"]] == ["Tokyo", "Kyoto", "Osaka"]
-    assert [group["label"] for group in theme_model["groups"]] == ["Food", "Temples"]
-    food_group_id = next(group["id"] for group in theme_model["groups"] if group["label"] == "Food")
+    assert [group["label"] for group in city_model["groups"]] == ["City > Tokyo", "City > Kyoto", "City > Osaka"]
+    assert [group["label"] for group in theme_model["groups"]] == ["Theme > Food", "Theme > Temples"]
+    food_group_id = next(group["id"] for group in theme_model["groups"] if group["label"] == "Theme > Food")
     assert theme_model["task_children"][food_group_id] == ["tsukiji", "dotonbori"]
     assert {"source": "tsukiji", "target": "dotonbori"} in theme_model["dependency_edges"]
+
+
+def test_items_parser_prefixes_nested_projection_group_labels_with_dimension():
+    model = parse_tasks_text(
+        """```items
+---
+view_projections:
+  - id: shopping
+    groups_from: [shop_type, energy]
+---
+Places:
+  - tsutaya :: Tsutaya | shop_type: Books | energy: Jetlag
+```"""
+    )
+
+    shopping_model = model["projection_models"]["shopping"]["model"]
+    assert [group["label"] for group in shopping_model["groups"]] == [
+        "Shop Type > Books",
+        "Energy > Jetlag",
+    ]
 
 
 def test_collapsed_graph_projects_nested_task_edges_to_root_groups():
