@@ -13,6 +13,7 @@ import hashlib
 from pathlib import Path
 from typing import Optional
 from .helpers import slug_to_title
+from .theme_colors import normalize_theme_primary
 from .theme_extensions import (
     resolve_theme_extension,
     theme_extension_meta,
@@ -170,7 +171,10 @@ class VyasaConfig:
     
     def get_theme_primary(self) -> str | None:
         value = self.get('theme_primary', 'VYASA_THEME_PRIMARY', None)
-        return str(value).strip() if value else None
+        if not value:
+            return None
+        raw = str(value).strip()
+        return normalize_theme_primary(raw).get("theme_primary", raw)
     
     def get_theme_preset(self) -> str | None:
         value = self.get('theme_preset', 'VYASA_THEME_PRESET', None)
@@ -241,6 +245,14 @@ class VyasaConfig:
                 continue
             token_name = key.removeprefix("theme_").replace("_", "-")
             tokens[token_name] = str(value).strip()
+        primary = self.get('theme_primary', 'VYASA_THEME_PRIMARY', None)
+        if primary:
+            derived = normalize_theme_primary(str(primary).strip())
+            for key, value in derived.items():
+                if key == "theme_primary":
+                    continue
+                token_name = key.removeprefix("theme_").replace("_", "-")
+                tokens[token_name] = value
         return tokens
     
     def get_host(self) -> str:

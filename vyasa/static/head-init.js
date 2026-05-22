@@ -19,7 +19,7 @@
                 : `--vyasa-${key.slice(6).replace(/_/g, '-')}`;
             document.documentElement.style.setProperty(cssName, String(value));
         });
-        if (theme.theme_primary) {
+        if (theme.theme_primary && !theme.theme_primary_dim) {
             document.documentElement.style.setProperty('--vyasa-primary-dim', `color-mix(in srgb, ${theme.theme_primary} 82%, black)`);
         }
         franken.resolvedPreset = resolved || requested;

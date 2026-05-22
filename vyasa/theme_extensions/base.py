@@ -7,6 +7,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Iterable
 
+from ..theme_colors import normalize_theme_primary
+
 
 @dataclass(frozen=True)
 class ThemeExtension:
@@ -24,11 +26,13 @@ def load_theme_toml(theme_name: str, base_dir: Path | None = None) -> dict[str, 
         preset_file = base_dir / ".vyasa-themes" / f"{name}.toml"
         if preset_file.exists():
             with open(preset_file, "rb") as f:
-                return tomllib.load(f)
+                theme = tomllib.load(f)
+                return {**theme, **normalize_theme_primary(theme.get("theme_primary", ""))}
     package_file = resources.files("vyasa.themes").joinpath(f"{name}.toml")
     if package_file.is_file():
         with package_file.open("rb") as f:
-            return tomllib.load(f)
+            theme = tomllib.load(f)
+            return {**theme, **normalize_theme_primary(theme.get("theme_primary", ""))}
     return {}
 
 
