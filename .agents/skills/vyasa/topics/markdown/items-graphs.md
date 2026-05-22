@@ -37,7 +37,7 @@ T-002, T-010 -> T-003
 ## Frontmatter
 
 - Frontmatter is optional YAML at the top of the fence.
-- Supported renderer keys include `title`, `default_open_depth`, `default_color_by`, `width`, `min_height`, `height`, `node-card-width`, `color_by`, `edge_color_palette`, and `color_palette_source`.
+- Supported renderer keys include `title`, `default_open_depth`, `default_color_by`, `default_projection`, `width`, `min_height`, `height`, `node-card-width`, `color_by`, `color_palette_source`, `filter_attributes`, `hover_attrs`, `view_projections`, `edge_color_by`, `edge_color_palette`, and `edge_label_from`.
 - Size keys should use full CSS lengths such as `760px`, `70vh`, `80vw`, or `calc(85vh - 57px)`.
 - `node-card-width` controls the width of the selected-node details card on the right. Default is `480px`.
 - Do not use bare numbers like `height: 760`.
@@ -47,8 +47,11 @@ T-002, T-010 -> T-003
 - Only attrs declared under `color_by` appear in the UI color-mode dropdown.
 - Continuous palettes are also allowed in shared JSON for numeric attrs such as hour-of-day; they color nodes by interpolation instead of discrete buckets.
 - Shared palette JSON uses `node_color_palettes` and `edge_color_palettes`, loaded with `color_palette_source: path/to/palettes.json`.
+- Shared palette JSON may also define `edge_kinds`; those defaults are merged into edges by label before rendering.
 - Do not use removed legacy shared keys: `palette_source` or `color_palettes`.
 - Legacy inline `color_by: status` plus `color_palette:` remains backward-compatible.
+- `filter_attributes` whitelists which attrs appear in the checkbox filter UI. Omit it to expose all categorical attrs.
+- `hover_attrs` sets the attr order shown in hover/details summaries.
 
 ## Shared Palette JSON
 
@@ -107,6 +110,32 @@ Continuous shared palettes use a gradient spec instead of value-to-hex pairs:
 - `domain` is the numeric range; `wrap: true` makes cyclic ranges like clocks loop cleanly.
 - `stops[].label` is optional and feeds the gradient legend.
 - Continuous color attrs are for coloring, not checkbox filtering; keep a separate categorical attr if the user must filter by phase names.
+
+## Projection Views
+
+Use projections when the same items need multiple grouped views without duplicating the graph body.
+
+```yaml
+default_projection: city
+view_projections:
+  - id: city
+    label: City View
+    groups_from: city
+    default_color_by: city
+  - id: theme
+    label: Theme View
+    groups_from: [theme, city]
+    caption: "Food and temples, then where they live."
+    default_color_by: theme
+    hover_attrs: [city, owner, status]
+    edge_label_from: relation
+```
+
+- `groups_from` accepts one attr or a list for nested groups.
+- `default_projection` picks the initial projection tab; invalid ids fall back to the base view.
+- Projection `hover_attrs` override graph-level `hover_attrs` for that view only.
+- Projection `edge_label_from` chooses which edge attr becomes the displayed label in that view.
+- Projection groups are synthesized from item attrs; author the items once and let the renderer regroup them.
 
 ## Body Syntax
 
