@@ -1640,6 +1640,36 @@ function getThemeSwitcher(source) {
     return source?.closest?.('[data-theme-switcher]') || document.querySelector('[data-theme-switcher]');
 }
 
+function closeNavbarSearchResults() {
+    document.querySelectorAll('.vyasa-navbar-search-results').forEach((results) => {
+        results.innerHTML = '';
+    });
+}
+
+function closeThemePresetMenus() {
+    document.querySelectorAll('#theme-preset-menu').forEach((menu) => {
+        menu.style.display = 'none';
+    });
+}
+
+function initFloatingUiDismiss() {
+    if (window.__vyasaFloatingUiDismissBound) return;
+    window.__vyasaFloatingUiDismissBound = true;
+    document.addEventListener('click', (event) => {
+        if (!event.target.closest('.vyasa-navbar-search-block')) {
+            closeNavbarSearchResults();
+        }
+        if (!event.target.closest('[data-theme-switcher]')) {
+            closeThemePresetMenus();
+        }
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        closeNavbarSearchResults();
+        closeThemePresetMenus();
+    });
+}
+
 function syncThemePresetSelect(next, source) {
     const scope = getThemeSwitcher(source);
     const label = scope?.querySelector('#theme-preset-active-label') || getVisibleThemeControl('theme-preset-active-label');
@@ -1720,6 +1750,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSidebarResizers(document);
     initMobileScrollProgress(document);
     syncThemePresetDebug(document);
+    initFloatingUiDismiss();
     replaceEscapedDollarPlaceholders(document.body);
     renderMathSafely(document.body);
     refreshVyasaTableScrollShadows(document);

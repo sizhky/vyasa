@@ -89,9 +89,10 @@ class StaticShellRenderer:
                 <a href="/index.html">{blog_title}</a>
             </div>
             <div class="flex items-center gap-3">
-                <button type="button" class="vyasa-navbar-search-trigger inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm min-w-0 max-w-[13rem]" data-vyasa-command-trigger="true">
-                    <span uk-icon="search" class="w-4 h-4"></span><span class="truncate hidden sm:inline">Search files</span><span class="vyasa-navbar-search-kbd text-[11px] font-semibold uppercase tracking-[0.12em] opacity-75 hidden sm:inline">Ctrl+K</span>
-                </button>
+                <div class="vyasa-navbar-search-block relative hidden md:block w-[30rem] max-w-[44vw]">
+                    <input type="search" name="q" placeholder="Search files…" autocomplete="off" hx-get="/_sidebar/posts/search" hx-trigger="input changed delay:180ms" hx-target="next .vyasa-navbar-search-results" hx-swap="innerHTML" class="vyasa-navbar-search-input w-full" />
+                    <div class="vyasa-navbar-search-results hidden-empty"></div>
+                </div>
                 {self._theme_toggle()}
             </div>
         </div>

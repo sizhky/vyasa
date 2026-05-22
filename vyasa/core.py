@@ -224,6 +224,8 @@ def _hljs_theme_href(theme_name: str) -> str:
 
 
 hdrs = (
+    Script(f"window.__VYASA_THEME_PRESETS__ = {json.dumps(get_config().get_theme_extension_payloads())};"),
+    Script(f"window.__VYASA_THEME_EXTENSION_META__ = {json.dumps(get_config().get_theme_extension_meta())};"),
     Script(src=_asset_url("/static/head-init.js")),
     Style(
         """
@@ -246,6 +248,8 @@ hdrs = (
         """
     ),
     *Theme.slate.headers(highlightjs=False),
+    Script(src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit.min.js"),
+    Script(src="https://cdn.jsdelivr.net/npm/uikit@3.16.14/dist/js/uikit-icons.min.js"),
     Meta(name="vyasa-code-theme-light", content=get_config().get_code_theme_light()),
     Meta(name="vyasa-code-theme-dark", content=get_config().get_code_theme_dark()),
     Link(rel="icon", href=get_favicon_href()),
@@ -537,6 +541,7 @@ def theme_toggle():
     active = cfg.get_theme_preset() or ""
     presets = cfg.get_theme_extension_payloads()
     preset_meta = cfg.get_theme_extension_meta()
+    random_icon = to_xml(UkIcon("shuffle"))
     menu_items = "".join(
         f'<button type="button" data-theme-name="{name}" '
         f'onclick="window.vyasaApplyThemePreset && window.vyasaApplyThemePreset(this.dataset.themeName, this)" '
@@ -563,14 +568,7 @@ def theme_toggle():
                 <button type="button" title="Random theme font"
                     onclick="window.vyasaApplyRandomThemePreset && window.vyasaApplyRandomThemePreset(this)"
                     class="vyasa-emphasis-control vyasa-emphasis-control-icon rounded-md px-3 py-2">
-                    <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 7h10"/>
-                        <path d="M11 4l3 3-3 3"/>
-                        <path d="M20 17H10"/>
-                        <path d="M13 14l-3 3 3 3"/>
-                        <path d="M17 7c1.8 0 3 1.2 3 3"/>
-                        <path d="M7 17c-1.8 0-3-1.2-3-3"/>
-                    </svg>
+                    {random_icon}
                 </button>
             </div>
             """

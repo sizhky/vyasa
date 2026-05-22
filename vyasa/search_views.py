@@ -75,3 +75,21 @@ def posts_search_block(initial_results):
         Div(initial_results, id="posts-search-results", cls="posts-search-results mt-4 max-h-64 overflow-y-auto bg-white/0 dark:bg-slate-950/0"),
         cls="posts-search-block sticky top-0 z-10 bg-white/20 dark:bg-slate-950/70 mb-3",
     )
+
+
+def navbar_search_block(initial_results):
+    return Div(
+        Input(
+            type="search",
+            name="q",
+            placeholder="Search files…",
+            autocomplete="off",
+            hx_get="/_sidebar/posts/search",
+            hx_trigger="input changed delay:180ms",
+            hx_target="next .vyasa-navbar-search-results",
+            hx_swap="innerHTML",
+            cls="vyasa-navbar-search-input w-full",
+        ),
+        Div(initial_results, cls="vyasa-navbar-search-results hidden-empty"),
+        cls="vyasa-navbar-search-block relative hidden md:block w-[30rem] max-w-[44vw]",
+    )

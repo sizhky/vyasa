@@ -1,4 +1,31 @@
 (function () {
+    function applyStoredThemePreset(franken) {
+        const presets = window.__VYASA_THEME_PRESETS__ || {};
+        const meta = window.__VYASA_THEME_EXTENSION_META__ || {};
+        const requested = typeof franken?.preset === 'string' ? franken.preset : '';
+        let resolved = typeof franken?.resolvedPreset === 'string' ? franken.resolvedPreset : '';
+        if (!requested) return franken;
+        if (!resolved && meta[requested]?.randomizable && Array.isArray(meta[requested]?.choices)) {
+            resolved = meta[requested].choices.find((name) => presets[name]) || '';
+        }
+        const theme = presets[resolved || requested];
+        if (!theme) return franken;
+        Object.entries(theme).forEach(([key, value]) => {
+            if (!key.startsWith('theme_') || !value || key === 'theme_preset') return;
+            const cssName = key === 'theme_body_font' ? '--vyasa-font-body'
+                : key === 'theme_heading_font' ? '--vyasa-font-heading'
+                : key === 'theme_ui_font' ? '--vyasa-font-ui'
+                : key === 'theme_mono_font' ? '--vyasa-font-mono'
+                : `--vyasa-${key.slice(6).replace(/_/g, '-')}`;
+            document.documentElement.style.setProperty(cssName, String(value));
+        });
+        if (theme.theme_primary) {
+            document.documentElement.style.setProperty('--vyasa-primary-dim', `color-mix(in srgb, ${theme.theme_primary} 82%, black)`);
+        }
+        franken.resolvedPreset = resolved || requested;
+        return franken;
+    }
+
     const prefersDark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
     let franken = { mode: prefersDark ? 'dark' : 'light' };
     try {
@@ -16,6 +43,8 @@
     } else {
         document.documentElement.classList.remove('dark');
     }
+
+    franken = applyStoredThemePreset(franken);
 
     function syncHighlightTheme() {
         const dark = document.documentElement.classList.contains('dark');
