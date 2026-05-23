@@ -9,6 +9,7 @@ Read only the drawer needed:
 - `topics/markdown/callouts.md`
 - `topics/markdown/items-graphs.md`
 - `topics/markdown/items-behavior.md`
+- `topics/story-telling-with-graphs/SKILL.md`
 - `topics/markdown/code-includes-links.md`
 - `topics/markdown/misc.md`
 
