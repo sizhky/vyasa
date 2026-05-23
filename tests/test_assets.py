@@ -35,7 +35,11 @@ def test_bundle_asset_nodes_emit_css_and_js_once():
 
     assert len(nodes) == 3
     assert rendered[0]["href"].startswith("/static/a.css")
+    assert rendered[0]["data-vyasa-bundle-asset"] == "true"
+    assert rendered[0]["data-vyasa-bundle-kind"] == "css"
     assert rendered[1]["src"].startswith("/static/a.js")
+    assert rendered[1]["data-vyasa-bundle-asset"] == "true"
+    assert rendered[1]["data-vyasa-bundle-kind"] == "js"
     assert rendered[2]["src"].startswith("/static/b.js")
 
 

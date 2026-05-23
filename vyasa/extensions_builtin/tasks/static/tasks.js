@@ -1849,12 +1849,18 @@ function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode) {
 }
 
 async function renderTasksGraphs(rootElement = document) {
+    const wrappers = Array.from(rootElement.querySelectorAll('.tasks-container[data-tasks-widget="true"]'));
+    if (!wrappers.length) return;
     const rf = await ensureTasksReactFlow();
-    for (const wrapper of rootElement.querySelectorAll('.tasks-container[data-tasks-widget="true"]')) {
+    let needsRetry = false;
+    for (const wrapper of wrappers) {
         if (wrapper.dataset.tasksMounted === 'true') continue;
         const mount = wrapper.querySelector('.vyasa-tasks-flow');
         if (!mount || !rf) continue;
-        if (wrapper.offsetParent === null || mount.clientWidth <= 0 || mount.clientHeight <= 0) continue;
+        if (wrapper.offsetParent === null || mount.clientWidth <= 0 || mount.clientHeight <= 0) {
+            needsRetry = true;
+            continue;
+        }
         const jitterConfig = {
             x: Number.parseFloat(wrapper.dataset.tasksJitter || '0'),
             y: Number.parseFloat(wrapper.dataset.tasksJitterY || wrapper.dataset.tasksJitter || '0'),
@@ -3352,6 +3358,7 @@ async function renderTasksGraphs(rootElement = document) {
         if (window.ReactDOM.createRoot) window.ReactDOM.createRoot(mount).render(window.React.createElement(TasksGraphApp)); else window.ReactDOM.render(window.React.createElement(TasksGraphApp), mount);
         wrapper.dataset.tasksMounted = 'true';
     }
+    if (needsRetry) window.requestAnimationFrame(() => { renderTasksGraphs(rootElement); });
 }
 
 function bindPanZoomGestures(wrapper, state, { getTarget, applyState, maxScale = 55 }) {

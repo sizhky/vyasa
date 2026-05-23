@@ -84,6 +84,36 @@ function initHeadingPermalinkCopy(root = document) {
     });
 }
 
+function assetAlreadyInstalled(tagName, url) {
+    if (!url) return true;
+    if (tagName === 'LINK') {
+        return !!document.head.querySelector(`link[rel="stylesheet"][href="${url}"]`);
+    }
+    return !!document.head.querySelector(`script[src="${url}"]`)
+        || !!Array.from(document.body.children || []).find((node) => (
+            node.tagName === 'SCRIPT' && node.getAttribute('src') === url
+        ));
+}
+
+async function ensureBundleAssets(root = document) {
+    const assets = Array.from(root.querySelectorAll?.('[data-vyasa-bundle-asset="true"]') || []);
+    for (const asset of assets) {
+        const tagName = asset.tagName;
+        const url = tagName === 'LINK' ? asset.getAttribute('href') : asset.getAttribute('src');
+        if (assetAlreadyInstalled(tagName, url)) continue;
+        await new Promise((resolve) => {
+            const node = document.createElement(tagName.toLowerCase());
+            for (const attr of Array.from(asset.attributes)) {
+                if (attr.name === 'data-vyasa-bundle-asset') continue;
+                node.setAttribute(attr.name, attr.value);
+            }
+            node.addEventListener('load', resolve, { once: true });
+            node.addEventListener('error', resolve, { once: true });
+            (tagName === 'LINK' ? document.head : document.body).appendChild(node);
+        });
+    }
+}
+
 function syncPostsSearchControls(block) {
     if (!block) return;
     const input = block.querySelector('.posts-search-block input[type="search"][name="q"]');
@@ -1151,12 +1181,13 @@ async function renderMermaidAfterSwap(scope) {
     window.__vyasaRenderMermaidInScope?.(scope);
 }
 
-document.body.addEventListener('htmx:afterSwap', function(event) {
+document.body.addEventListener('htmx:afterSwap', async function(event) {
     if (isLightweightSearchSwap(event.target)) {
         window.__vyasaInitBookmarksButtons?.(event.target);
         return;
     }
     const swapScope = event.target || document;
+    await ensureBundleAssets(swapScope);
     renderMermaidAfterSwap(swapScope).catch(() => {});
     window.__vyasaRenderD2?.(swapScope);
     window.__vyasaRenderTasksGraphs?.(swapScope);

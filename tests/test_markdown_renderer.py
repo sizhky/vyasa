@@ -145,6 +145,7 @@ def test_markdown_include_section_renders_mermaid_and_bubbles_assets(tmp_path, m
         html = to_xml(from_md("{ ./doc.md#diagram }", current_path="page"))
         assert 'class="mermaid-container' in html
         assert "/static/extensions/mermaid/mermaid.js" in html
+        assert 'data-vyasa-bundle-asset="true"' in html
         assert "--&amp;gt;" not in html
     finally:
         reload_config()

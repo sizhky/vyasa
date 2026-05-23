@@ -167,6 +167,22 @@ def test_tasks_fullscreen_copies_filter_default_flag():
     assert "data-tasks-projection-group-opacity" in source
 
 
+def test_tasks_source_lazy_loads_react_flow_only_when_widgets_exist():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const wrappers = Array.from(rootElement.querySelectorAll('.tasks-container[data-tasks-widget=\"true\"]'));" in source
+    assert "if (!wrappers.length) return;" in source
+    assert "const rf = await ensureTasksReactFlow();" in source
+
+
+def test_tasks_source_retries_mount_after_swap_when_widget_size_is_zero():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "let needsRetry = false;" in source
+    assert "needsRetry = true;" in source
+    assert "window.requestAnimationFrame(() => { renderTasksGraphs(rootElement); });" in source
+
+
 def test_tasks_source_uses_projection_scoped_prefs():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 

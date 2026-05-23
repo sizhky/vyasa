@@ -107,11 +107,25 @@ def bundle_asset_nodes(bundle_names: tuple[str, ...] | list[str], runtime=None) 
         for href in bundle.css:
             if href not in seen:
                 seen.add(href)
-                nodes.append(Link(rel="stylesheet", href=asset_url(href)))
+                nodes.append(
+                    Link(
+                        rel="stylesheet",
+                        href=asset_url(href),
+                        data_vyasa_bundle_asset="true",
+                        data_vyasa_bundle_kind="css",
+                    )
+                )
         for src in bundle.js:
             if src not in seen:
                 seen.add(src)
-                nodes.append(Script(src=asset_url(src), type="module"))
+                nodes.append(
+                    Script(
+                        src=asset_url(src),
+                        type="module",
+                        data_vyasa_bundle_asset="true",
+                        data_vyasa_bundle_kind="js",
+                    )
+                )
     return tuple(nodes)
 
 
