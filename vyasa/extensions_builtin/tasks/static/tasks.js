@@ -30,6 +30,8 @@ const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
 const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
 const TASKS_FILTER_PANEL_WIDTH = 320;
 const TASKS_PROJECTION_GROUP_OPACITY_DEFAULT = 12;
+const TASKS_EDGE_OPACITY_MIN = 0.05;
+const TASKS_EDGE_OPACITY_MAX = 1;
 const TASKS_GANTT_UNIT_WIDTH = 340;
 const TASKS_GANTT_ROW_GAP = 56;
 const TASKS_GANTT_BAR_MIN_HEIGHT = 34;
@@ -85,6 +87,34 @@ function tasksFilterPanelMaxHeight(wrapper) {
     const bounds = wrapper.getBoundingClientRect();
     const available = Math.max(220, Math.floor(bounds.height));
     return `${available}px`;
+}
+
+function clampTasksEdgeOpacity(value) {
+    const parsed = Number.parseFloat(String(value ?? ''));
+    if (!Number.isFinite(parsed)) return TASKS_EDGE_OPACITY_MAX;
+    return Math.max(TASKS_EDGE_OPACITY_MIN, Math.min(TASKS_EDGE_OPACITY_MAX, parsed));
+}
+
+function tasksDefaultEdgeOpacity(edgeCount) {
+    const count = Math.max(1, Number.parseFloat(String(edgeCount ?? '')) || 1);
+    return clampTasksEdgeOpacity(5 / Math.sqrt(count));
+}
+
+function tasksApplyEdgeOpacity(alpha, opacity) {
+    const base = Number(alpha);
+    const normalized = Number.isFinite(base) ? Math.max(0, Math.min(1, base)) : 1;
+    return Number((normalized * clampTasksEdgeOpacity(opacity)).toFixed(4));
+}
+
+function tasksProminentEdgeOpacity() {
+    return 1;
+}
+
+function tasksEdgeOpacityLabel(opacity) {
+    const value = clampTasksEdgeOpacity(opacity);
+    if (value <= 0.2) return 'Faint';
+    if (value >= 0.85) return 'Bold';
+    return 'Clear';
 }
 
 window.__vyasaTasksActions = window.__vyasaTasksActions || {};
@@ -1839,6 +1869,23 @@ function tasksSelectedPanelWidth(node, entries) {
     return Math.round(Math.min(560, Math.max(250, titleWidth + 32, weightedWidth + 110)));
 }
 
+function tasksHoverTooltipWidth(label, rows, hoverFontSize) {
+    const titleFont = `700 calc(${hoverFontSize} * 1.12) ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    const bodyFont = `500 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    const keyFont = `700 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    const titleWidth = measureTextWidth(label || '', titleFont);
+    const rowWidths = (rows || []).map((row) => {
+        const keyWidth = measureTextWidth(row?.label || '', keyFont);
+        const rawValue = String(row?.value || '');
+        const firstLine = rawValue.split(/\r?\n/, 1)[0];
+        const valueWidth = Math.min(measureTextWidth(firstLine, bodyFont), 420);
+        const weight = rawValue.length > 96 ? 0.46 : rawValue.length > 48 ? 0.66 : 0.88;
+        return keyWidth + valueWidth * weight;
+    }).sort((left, right) => left - right);
+    const weightedWidth = rowWidths.length ? rowWidths[Math.max(0, Math.floor(rowWidths.length * 0.62) - 1)] : 0;
+    return Math.round(Math.min(560, Math.max(220, titleWidth + 34, weightedWidth + 116)));
+}
+
 function tasksHoverAttrRows(node, hoverAttrs) {
     if (!node || !Array.isArray(hoverAttrs) || !hoverAttrs.length) return [];
     const rows = [];
@@ -2002,7 +2049,16 @@ async function renderTasksGraphs(rootElement = document) {
                     ? projectionPrefs.filtersCollapsed
                     : !defaultFiltersOpen
             ));
-            const [edgesVisible, setEdgesVisible] = React.useState(true);
+            const [edgesVisible, setEdgesVisible] = React.useState(() => (
+                typeof projectionPrefs?.edgesVisible === 'boolean' ? projectionPrefs.edgesVisible : true
+            ));
+            const defaultEdgeOpacity = React.useMemo(
+                () => tasksDefaultEdgeOpacity((rawGraph.edges || []).length),
+                [rawGraph]
+            );
+            const [edgeOpacity, setEdgeOpacity] = React.useState(() => (
+                projectionPrefs?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(projectionPrefs.edgeOpacity)
+            ));
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
@@ -2035,7 +2091,9 @@ async function renderTasksGraphs(rootElement = document) {
                 setActiveFilters(nextPrefs?.filters && typeof nextPrefs.filters === 'object' ? nextPrefs.filters : {});
                 setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, nextPrefs));
                 setFiltersCollapsed(typeof nextPrefs?.filtersCollapsed === 'boolean' ? nextPrefs.filtersCollapsed : !defaultFiltersOpen);
-            }, [activeProjectionId, model, defaultFiltersOpen]);
+                setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
+                setEdgeOpacity(nextPrefs?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(nextPrefs.edgeOpacity));
+            }, [activeProjectionId, model, defaultFiltersOpen, defaultEdgeOpacity]);
             React.useEffect(() => {
                 const validFilterKeys = new Set(tasksFilterOptions(model).map((option) => option.key));
                 const validColorKeys = new Set(tasksColorOptions(model).map((option) => option.key));
@@ -2064,6 +2122,8 @@ async function renderTasksGraphs(rootElement = document) {
                         filters: activeFilters,
                         colorBy: activeColorBy,
                         filtersCollapsed,
+                        edgesVisible,
+                        edgeOpacity,
                         expandedGroupIds: Array.from(expanded),
                     },
                 };
@@ -2072,7 +2132,7 @@ async function renderTasksGraphs(rootElement = document) {
                     projectionId: activeProjectionId,
                     projectionPrefs: nextProjectionPrefs,
                 });
-            }, [sourceModel, activeFilters, activeColorBy, activeProjectionId, filtersCollapsed, expanded]);
+            }, [sourceModel, activeFilters, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeOpacity, expanded]);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
                 const viewport = reactFlow.getViewport();
                 return reactFlow.setViewport(
@@ -2135,9 +2195,9 @@ async function renderTasksGraphs(rootElement = document) {
                             data: { ...(edge.data || {}), edgeColor },
                             markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: edgeColor || 'currentColor' },
                             zIndex: TASKS_EDGE_Z,
-                            labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || 'currentColor' },
+                            labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || 'currentColor', opacity: edgeOpacity },
                             labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
-                            style: { strokeWidth: 2.5, opacity: 1, stroke: edgeColor || 'currentColor' },
+                            style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: edgeColor || 'currentColor' },
                         };
                     });
                     const anchoredNodes = nodesWithStyle.map((node) => ({ ...node, data: { ...node.data, handleLayout: anchored.nodeHandles[node.id] || { source: [], target: [] } } }));
@@ -2284,9 +2344,9 @@ async function renderTasksGraphs(rootElement = document) {
                         labelBgBorderRadius: 3,
                         labelZIndex: TASKS_EDGE_LABEL_Z,
                         labelMaxWidth: layoutConfig.edgeLabelWidth,
-                        labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || 'currentColor' },
+                        labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || 'currentColor', opacity: edgeOpacity },
                         labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
-                        style: { strokeWidth: 2.5, opacity: 1, stroke: edgeColor || 'currentColor' },
+                        style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: edgeColor || 'currentColor' },
                     };
                 });
                 const anchoredNodes = baseNodes.map((node) => ({
@@ -2314,11 +2374,11 @@ async function renderTasksGraphs(rootElement = document) {
                 setNodes(anchoredNodes);
                 setEdges(edgesVisible ? baseEdges : []);
                 setGraphRevision((value) => value + 1);
-            }, [ensureBaseLayout, model, activeColorBy, activeColorPalette, activeProjection, viewMode, edgesVisible]);
+            }, [ensureBaseLayout, model, activeColorBy, activeColorPalette, activeProjection, viewMode, edgesVisible, edgeOpacity]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,
-                style: { strokeWidth: 2.5, opacity: 1, stroke: 'currentColor' },
-            }), []);
+                style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: 'currentColor' },
+            }), [edgeOpacity]);
             const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null) => {
                 const baseNodes = graphBaseRef.current.nodes || [];
                 const baseEdges = graphBaseRef.current.edges || [];
@@ -2341,12 +2401,16 @@ async function renderTasksGraphs(rootElement = document) {
                         return {
                             ...edge,
                             data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim' },
-                            labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: hit ? 1 : 0.12 },
+                            labelStyle: {
+                                ...(edge.labelStyle || {}),
+                                fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)',
+                                opacity: hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity),
+                            },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fillOpacity: hit ? 0.88 : 0.06 },
                             style: {
                                 ...edge.style,
                                 stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)',
-                                opacity: hit ? 0.98 : 0.08,
+                                opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity),
                                 strokeWidth: hit ? 4.5 : 2.5,
                                 strokeLinecap: hit ? 'round' : undefined,
                                 '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s',
@@ -2440,8 +2504,8 @@ async function renderTasksGraphs(rootElement = document) {
                                 ? focusColor
                                 : (highlighted ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)'),
                             opacity: hoveredNodeId
-                                ? ((mode === 'focused-in' || mode === 'focused-out') ? 1 : 0.05)
-                                : ((mode === 'focused-in' || mode === 'focused-out') ? 1 : (highlighted ? 1 : 0.18)),
+                                ? ((mode === 'focused-in' || mode === 'focused-out') ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.05, edgeOpacity))
+                                : ((mode === 'focused-in' || mode === 'focused-out') ? tasksProminentEdgeOpacity() : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.18, edgeOpacity))),
                             fontWeight: (mode === 'focused-in' || mode === 'focused-out') ? 800 : 600,
                         },
                         labelBgStyle: {
@@ -2460,7 +2524,9 @@ async function renderTasksGraphs(rootElement = document) {
                             stroke: mode === 'focused-in' || mode === 'focused-out'
                                 ? focusColor
                                 : (highlighted ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)'),
-                            opacity: (mode === 'focused-in' || mode === 'focused-out') ? 1 : (highlighted ? 0.95 : 0.08),
+                            opacity: (mode === 'focused-in' || mode === 'focused-out')
+                                ? tasksProminentEdgeOpacity()
+                                : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.08, edgeOpacity)),
                             strokeWidth: (mode === 'focused-in' || mode === 'focused-out') ? 5 : (mode === 'selected' ? 3.5 : 2.5),
                             strokeDasharray: dashArray,
                             '--vyasa-edge-dash-cycle': dashCycle,
@@ -2473,7 +2539,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdges(edgesVisible ? nextEdges : []);
-            }, [activeFilters, model, activeColorBy, edgesVisible]);
+            }, [activeFilters, model, activeColorBy, edgesVisible, edgeOpacity]);
             React.useEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -2545,8 +2611,8 @@ async function renderTasksGraphs(rootElement = document) {
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
                 const showFullLabel = highlightMode !== 'dim' && highlightMode !== 'none';
-                const hoverFocused = highlightMode === 'focused-in' || highlightMode === 'focused-out';
-                const labelScale = hoverFocused && Number.isFinite(viewport?.zoom) && viewport.zoom > 0 ? 1 / viewport.zoom : 1;
+                const prominentLabel = highlightMode === 'selected' || highlightMode === 'focused-in' || highlightMode === 'focused-out';
+                const labelScale = prominentLabel && Number.isFinite(viewport?.zoom) && viewport.zoom > 0 ? 1 / viewport.zoom : 1;
                 const displayLabel = showFullLabel
                     ? fullLabel
                     : (labelLines.length > 1 ? `${labelLines[0]}...` : fullLabel);
@@ -2571,7 +2637,10 @@ async function renderTasksGraphs(rootElement = document) {
                                 padding: `${props.labelBgPadding?.[1] || 0}px ${props.labelBgPadding?.[0] || 0}px`,
                                 borderRadius: `${props.labelBgBorderRadius || 0}px`,
                                 background: labelBgStyle.fill || 'transparent',
-                                opacity: labelBgStyle.fillOpacity ?? labelStyle.opacity ?? 1,
+                                opacity: labelBgStyle.fillOpacity ?? 1,
+                            },
+                        }, React.createElement('div', {
+                            style: {
                                 color: labelStyle.fill || 'currentColor',
                                 fontSize: tasksCssFontSize(labelStyle.fontSize),
                                 fontWeight: labelStyle.fontWeight || 600,
@@ -2579,8 +2648,9 @@ async function renderTasksGraphs(rootElement = document) {
                                 textAlign: 'center',
                                 lineHeight: 1.35,
                                 maxWidth: `${props.labelMaxWidth || 240}px`,
+                                opacity: labelStyle.opacity ?? 1,
                             },
-                        }, displayLabel))
+                        }, displayLabel)))
                     )
                 );
             });
@@ -2981,8 +3051,21 @@ async function renderTasksGraphs(rootElement = document) {
                             paddingBottom: '2px',
                         },
                     },
-                        React.createElement('div', { style: { marginBottom: '12px', display: 'flex', justifyContent: 'flex-end' } },
-                            React.createElement('button', { type: 'button', onClick: () => { setActiveFilters({}); setActiveColorBy(tasksResolvedProjectionDefaultColorBy(model)); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' } }, 'Reset')
+                        React.createElement('div', { style: { marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' } },
+                            React.createElement('label', { style: { display: 'grid', gridTemplateColumns: 'max-content minmax(84px, 1fr) max-content', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0, fontSize: '12px' } },
+                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Edge'),
+                                React.createElement('input', {
+                                    type: 'range',
+                                    min: TASKS_EDGE_OPACITY_MIN,
+                                    max: TASKS_EDGE_OPACITY_MAX,
+                                    step: 'any',
+                                    value: edgeOpacity,
+                                    onChange: (e) => setEdgeOpacity(clampTasksEdgeOpacity(e.target.value)),
+                                    style: { width: '100%', minWidth: 0, margin: 0 },
+                                }),
+                                React.createElement('span', { style: { opacity: 0.8, minWidth: '3.5em', textAlign: 'right' } }, tasksEdgeOpacityLabel(edgeOpacity))
+                            ),
+                            React.createElement('button', { type: 'button', onClick: () => { setActiveFilters({}); setActiveColorBy(tasksResolvedProjectionDefaultColorBy(model)); setEdgeOpacity(defaultEdgeOpacity); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline', whiteSpace: 'nowrap' } }, 'Reset')
                         ),
                         React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                             React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
@@ -3366,6 +3449,7 @@ async function renderTasksGraphs(rootElement = document) {
             const GroupHoverTooltip = () => {
                 if (!groupHoverTooltip) return null;
                 const rows = Array.isArray(groupHoverTooltip.rows) ? groupHoverTooltip.rows : [];
+                const panelWidth = tasksHoverTooltipWidth(groupHoverTooltip.label || '', rows, hoverFontSize);
                 const children = [
                     window.React.createElement('div', {
                         key: '__label__',
@@ -3375,7 +3459,7 @@ async function renderTasksGraphs(rootElement = document) {
                 if (rows.length) {
                     children.push(window.React.createElement('div', {
                         key: '__rows__',
-                        style: { display: 'grid', gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)', columnGap: '8px', rowGap: '2px', fontSize: hoverFontSize, fontWeight: 500, lineHeight: 1.35 },
+                        style: { display: 'grid', gridTemplateColumns: 'minmax(96px, max-content) minmax(180px, 1fr)', columnGap: '10px', rowGap: '2px', fontSize: hoverFontSize, fontWeight: 500, lineHeight: 1.35, alignItems: 'start' },
                     }, rows.flatMap((row) => [
                         window.React.createElement('span', {
                             key: `k-${row.attr}`,
@@ -3399,8 +3483,9 @@ async function renderTasksGraphs(rootElement = document) {
                         background: 'color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%)',
                         border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)',
                         boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
-                        width: rows.length ? 'min(280px, max-content)' : 'max-content',
-                        maxWidth: '280px',
+                        width: `min(${panelWidth}px, calc(100vw - 32px))`,
+                        maxWidth: 'calc(100vw - 32px)',
+                        minWidth: '220px',
                         boxSizing: 'border-box',
                     },
                 }, ...children);
