@@ -37,9 +37,10 @@ T-002, T-010 -> T-003
 ## Frontmatter
 
 - Frontmatter is optional YAML at the top of the fence.
-- Supported renderer keys include `title`, `default_open_depth`, `default_color_by`, `default_projection`, `width`, `min_height`, `height`, `node-card-width`, `color_by`, `color_palette_source`, `filter_attributes`, `hover_attrs`, `view_projections`, `edge_color_by`, `edge_color_palette`, and `edge_label_from`.
+- Supported renderer keys include `title`, `default_open_depth`, `default_color_by`, `default_projection`, `base_view_label`, `width`, `min_height`, `height`, `node-card-width`, `hover-font-size`, `color_by`, `color_palette_source`, `filter_attributes`, `hover_attrs`, `view_projections`, `edge_color_by`, `edge_color_palette`, and `edge_label_from`.
 - Size keys should use full CSS lengths such as `760px`, `70vh`, `80vw`, or `calc(85vh - 57px)`.
 - `node-card-width` controls the width of the selected-node details card on the right. Default is `480px`.
+- `hover-font-size` controls tooltip row text size. Default is `12px`.
 - Do not use bare numbers like `height: 760`.
 - `default_open_depth` is an integer: `0` folds all groups, `1` opens root groups, larger values open deeper levels, `-1` opens all groups.
 - Preferred colors use nested palettes under `color_by`.
@@ -133,6 +134,7 @@ view_projections:
 
 - `groups_from` accepts one attr or a list for nested groups.
 - `default_projection` picks the initial projection tab; invalid ids fall back to the base view.
+- `base_view_label` renames the authored non-projection tab. Omit it and the UI uses `Default`.
 - Projection `hover_attrs` override graph-level `hover_attrs` for that view only.
 - Projection `edge_label_from` chooses which edge attr becomes the displayed label in that view.
 - Projection groups are synthesized from item attrs; author the items once and let the renderer regroup them.

@@ -52,7 +52,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                 continue
             key = line[:key_index].strip()
             value = line[key_index + 1:].strip()
-            if key in {"id", "title", "default_color_by", "default_projection", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source"}:
+            if key in {"id", "title", "default_color_by", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source"}:
                 config[key] = _read_string(value)
                 cursor += 1
                 continue
@@ -579,7 +579,7 @@ def _parse_items_graph(body: str) -> dict:
         if indent == 0 and _find_unquoted(line, ":") > 0 and _find_unquoted(line, "->") < 0:
             key, value = line.split(":", 1)
             key = key.strip()
-            if key in {"id", "title", "default_color_by", "default_projection", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source"}:
+            if key in {"id", "title", "default_color_by", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source"}:
                 graph[key] = _read_string(value.strip())
                 index += 1
                 continue
@@ -844,6 +844,8 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         graph["default_color_by"] = config["default_color_by"]
     if "default_projection" in config and "default_projection" not in graph:
         graph["default_projection"] = config["default_projection"]
+    if "base_view_label" in config and "base_view_label" not in graph:
+        graph["base_view_label"] = config["base_view_label"]
     if "view_projections" in config and "view_projections" not in graph:
         graph["view_projections"] = config["view_projections"]
     if "filter_attributes" in config and "filter_attributes" not in graph:
@@ -922,6 +924,7 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "edge_kinds": graph.get("edge_kinds", {}),
         "edge_label_from": graph.get("edge_label_from", ""),
         "default_projection": graph.get("default_projection", ""),
+        "base_view_label": graph.get("base_view_label", ""),
         "view_projections": graph.get("view_projections", []),
         "projection_models": {},
     }

@@ -459,6 +459,23 @@ tsukiji -> dotonbori
     assert {"source": "tsukiji", "target": "dotonbori"} in theme_model["dependency_edges"]
 
 
+def test_items_parser_reads_base_view_label():
+    model = parse_tasks_text(
+        """```items
+---
+base_view_label: Authored View
+view_projections:
+  - id: city
+    groups_from: city
+---
+Places:
+  - tsukiji :: Tsukiji | city: Tokyo
+```"""
+    )
+
+    assert model["base_view_label"] == "Authored View"
+
+
 def test_items_parser_prefixes_nested_projection_group_labels_with_dimension():
     model = parse_tasks_text(
         """```items
@@ -476,6 +493,26 @@ Places:
     assert [group["label"] for group in shopping_model["groups"]] == [
         "Shop Type > Books",
         "Energy > Jetlag",
+    ]
+
+
+def test_items_projection_uses_unspecified_instead_of_unset_for_missing_attrs():
+    model = parse_tasks_text(
+        """```items
+---
+view_projections:
+  - id: shopping
+    groups_from: [shop_type, energy]
+---
+Places:
+  - tsutaya :: Tsutaya | shop_type: Books
+```"""
+    )
+
+    shopping_model = model["projection_models"]["shopping"]["model"]
+    assert [group["label"] for group in shopping_model["groups"]] == [
+        "Shop Type > Books",
+        "Energy > Unspecified",
     ]
 
 

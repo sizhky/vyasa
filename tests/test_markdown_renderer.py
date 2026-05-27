@@ -230,6 +230,30 @@ Places:
     assert payload["projection_models"]["city"]["model"]["default_color_by"] == "city"
 
 
+def test_items_render_payload_contains_base_view_label():
+    refresh_extension_runtime({})
+
+    rendered = to_xml(
+        from_md(
+            """```items
+---
+base_view_label: Authored View
+view_projections:
+  - id: city
+    groups_from: city
+---
+Places:
+  - tsukiji :: Tsukiji | city: Tokyo
+```"""
+        )
+    )
+    match = re.search(r"""data-tasks-payload=(["'])(.*?)\1""", rendered)
+
+    assert match is not None
+    payload = json.loads(html.unescape(match.group(2)))
+    assert payload["base_view_label"] == "Authored View"
+
+
 def test_items_render_payload_prefixes_nested_projection_group_labels():
     refresh_extension_runtime({})
 

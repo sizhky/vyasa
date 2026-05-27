@@ -90,6 +90,20 @@ foundation :: Foundation:
     assert 'data-tasks-node-card-width="36rem"' in html
 
 
+def test_tasks_block_reads_hover_font_size_option():
+    md = """```tasks
+---
+title: Hover Font
+hover-font-size: 14px
+---
+foundation :: Foundation:
+```"""
+
+    html = to_xml(from_md(md))
+
+    assert 'data-tasks-hover-font-size="14px"' in html
+
+
 def test_tasks_block_reads_projection_group_opacity_option():
     md = """```tasks
 ---
@@ -165,6 +179,7 @@ def test_tasks_fullscreen_copies_filter_default_flag():
 
     assert "data-tasks-open-filters-default" in source
     assert "data-tasks-projection-group-opacity" in source
+    assert "data-tasks-hover-font-size" in source
 
 
 def test_tasks_source_lazy_loads_react_flow_only_when_widgets_exist():
@@ -189,6 +204,13 @@ def test_tasks_source_uses_projection_scoped_prefs():
     assert "function readTasksProjectionPrefs" in source
     assert "projectionPrefs" in source
     assert "buildTasksViewState" in source
+
+
+def test_tasks_source_uses_base_view_label_for_default_projection_tab():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const baseViewLabel = String(model?.base_view_label || '').trim() || 'Default';" in source
+    assert "{ id: '', label: baseViewLabel, caption: '' }" in source
 
 
 def test_tasks_source_uses_reset_button_label():
@@ -238,6 +260,18 @@ def test_tasks_selected_panel_uses_measured_adaptive_width():
     assert "measureTextWidth(node?.label || node?.id || ''" in source
     assert "Math.min(560, Math.max(250" in source
     assert "width: `min(${panelWidth}px, 100%)`" in source
+
+
+def test_tasks_group_hover_tooltip_wraps_long_values_inside_max_width():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)'" in source
+    assert "whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0" in source
+    assert "width: rows.length ? 'min(280px, max-content)' : 'max-content'" in source
+    assert "maxWidth: '280px'" in source
+    assert "boxSizing: 'border-box'" in source
+    assert "fontSize: hoverFontSize" in source
+    assert "fontSize: `calc(${hoverFontSize} * 1.12)`" in source
 
 
 def test_tasks_block_serializes_labeled_edges():

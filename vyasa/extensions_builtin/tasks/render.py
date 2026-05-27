@@ -68,8 +68,6 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             model["graph_id"] = config["id"]
         model["document_path"] = str(current_path or "")
         model["storage_id"] = f"tasks-block-{storage_suffix}"
-        if "default_color_by" in config:
-            model["default_color_by"] = config["default_color_by"]
         if "filter_attributes" in config:
             model["filter_attributes"] = config["filter_attributes"]
         if isinstance(config.get("color_by"), str) and config.get("color_by") and not model.get("color_by"):
@@ -124,6 +122,9 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     min_height = config.get("min_height") or ("420px" if fence_name != "tasks" else "")
     flow_height = html.escape(str(config.get("height") or "70vh"))
     node_card_width = html.escape(str(config.get("node-card-width") or "480px"))
+    hover_font_size = html.escape(str(config.get("hover-font-size") or "12px"))
+    color_mix = html.escape(str(config.get("color_mix", True)).lower())
+    color_mix_intensity = html.escape(str(config.get("color_mix_intensity") or "22"))
     projection_group_opacity = html.escape(str(config.get("projection-group-opacity") or "12"))
     jitter = html.escape(str(config.get("jitter") or 0))
     jitter_y = html.escape(str(config.get("jitter_y") or config.get("jitter") or 0))
@@ -153,7 +154,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     return (
         f'<div class="tasks-container relative my-6 rounded-xl border-4 border-slate-200 dark:border-slate-800" '
         f'style="{container_style}" '
-        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-gantt="{str(gantt_enabled).lower()}" data-tasks-default-view="{html.escape(default_view)}" data-tasks-open-filters-default="{str(open_filters_by_default).lower()}" data-tasks-node-card-width="{node_card_width}" data-tasks-projection-group-opacity="{projection_group_opacity}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
+        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-gantt="{str(gantt_enabled).lower()}" data-tasks-default-view="{html.escape(default_view)}" data-tasks-open-filters-default="{str(open_filters_by_default).lower()}" data-tasks-node-card-width="{node_card_width}" data-tasks-hover-font-size="{hover_font_size}" data-tasks-color-mix="{color_mix}" data-tasks-color-mix-intensity="{color_mix_intensity}" data-tasks-projection-group-opacity="{projection_group_opacity}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
         f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'
         f'<button onclick="openTasksFullscreen(\'{widget_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>'
         f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">'
@@ -162,6 +163,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         f'<button type="button" title="Collapse deepest group depth" onclick="runTasksHeaderAction(\'{widget_id}\', \'collapseDepth\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">O</button>'
         f'<button type="button" title="Unfold all groups" onclick="runTasksHeaderAction(\'{widget_id}\', \'expand\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">U</button>'
         f'<button type="button" title="Collapse all groups" onclick="runTasksHeaderAction(\'{widget_id}\', \'collapse\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">P</button>'
+        f'<button type="button" title="Toggle edges" onclick="runTasksHeaderAction(\'{widget_id}\', \'toggleEdges\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">E</button>'
         f'</div>'
         f'</div>'
         f'<div class="px-4 py-3 pr-14 border-b border-slate-200 dark:border-slate-800 flex items-start gap-3">'
