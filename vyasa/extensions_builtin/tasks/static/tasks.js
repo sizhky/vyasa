@@ -74,6 +74,12 @@ function readTasksColorMixConfig(wrapper) {
     return { enabled, intensity, paper: Math.max(0, 100 - intensity) };
 }
 
+function tasksCssFontSize(value, fallback = '11px') {
+    if (typeof value === 'number' && Number.isFinite(value)) return `${value}px`;
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    return fallback;
+}
+
 function tasksFilterPanelMaxHeight(wrapper) {
     if (!wrapper) return '100%';
     const bounds = wrapper.getBoundingClientRect();
@@ -2129,7 +2135,7 @@ async function renderTasksGraphs(rootElement = document) {
                             data: { ...(edge.data || {}), edgeColor },
                             markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: edgeColor || 'currentColor' },
                             zIndex: TASKS_EDGE_Z,
-                            labelStyle: { fontSize: 11, fontWeight: 600, fill: edgeColor || 'currentColor' },
+                            labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || 'currentColor' },
                             labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
                             style: { strokeWidth: 2.5, opacity: 1, stroke: edgeColor || 'currentColor' },
                         };
@@ -2278,7 +2284,7 @@ async function renderTasksGraphs(rootElement = document) {
                         labelBgBorderRadius: 3,
                         labelZIndex: TASKS_EDGE_LABEL_Z,
                         labelMaxWidth: layoutConfig.edgeLabelWidth,
-                        labelStyle: { fontSize: 11, fontWeight: 600, fill: edgeColor || 'currentColor' },
+                        labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || 'currentColor' },
                         labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
                         style: { strokeWidth: 2.5, opacity: 1, stroke: edgeColor || 'currentColor' },
                     };
@@ -2533,11 +2539,14 @@ async function renderTasksGraphs(rootElement = document) {
                 };
             }, [graphRevision, activeFilters]);
             const CustomEdge = React.memo((props) => {
+                const viewport = typeof rf.useViewport === 'function' ? rf.useViewport() : { zoom: 1 };
                 const [path, labelX, labelY] = rf.getBezierPath(props);
                 const fullLabel = String(props.label || '').replace(/\\n/g, '\n');
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
                 const showFullLabel = highlightMode !== 'dim' && highlightMode !== 'none';
+                const hoverFocused = highlightMode === 'focused-in' || highlightMode === 'focused-out';
+                const labelScale = hoverFocused && Number.isFinite(viewport?.zoom) && viewport.zoom > 0 ? 1 / viewport.zoom : 1;
                 const displayLabel = showFullLabel
                     ? fullLabel
                     : (labelLines.length > 1 ? `${labelLines[0]}...` : fullLabel);
@@ -2549,23 +2558,29 @@ async function renderTasksGraphs(rootElement = document) {
                         React.createElement('div', {
                             style: {
                                 position: 'absolute',
-                                transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+                                transform: `translate(${labelX}px, ${labelY}px)`,
                                 pointerEvents: 'none',
                                 zIndex: props.labelZIndex || TASKS_EDGE_LABEL_Z,
+                            },
+                            title: fullLabel,
+                        },
+                        React.createElement('div', {
+                            style: {
+                                transform: `translate(-50%, -50%) scale(${labelScale})`,
+                                transformOrigin: 'center center',
                                 padding: `${props.labelBgPadding?.[1] || 0}px ${props.labelBgPadding?.[0] || 0}px`,
                                 borderRadius: `${props.labelBgBorderRadius || 0}px`,
                                 background: labelBgStyle.fill || 'transparent',
                                 opacity: labelBgStyle.fillOpacity ?? labelStyle.opacity ?? 1,
                                 color: labelStyle.fill || 'currentColor',
-                                fontSize: `${labelStyle.fontSize || 11}px`,
+                                fontSize: tasksCssFontSize(labelStyle.fontSize),
                                 fontWeight: labelStyle.fontWeight || 600,
                                 whiteSpace: 'pre-line',
                                 textAlign: 'center',
                                 lineHeight: 1.35,
                                 maxWidth: `${props.labelMaxWidth || 240}px`,
                             },
-                            title: fullLabel,
-                        }, displayLabel)
+                        }, displayLabel))
                     )
                 );
             });
