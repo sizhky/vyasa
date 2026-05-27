@@ -267,7 +267,9 @@ def test_tasks_group_hover_tooltip_wraps_long_values_inside_max_width():
 
     assert "gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)'" in source
     assert "whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0" in source
+    assert "width: rows.length ? 'min(280px, max-content)' : 'max-content'" in source
     assert "maxWidth: '280px'" in source
+    assert "boxSizing: 'border-box'" in source
     assert "fontSize: hoverFontSize" in source
     assert "fontSize: `calc(${hoverFontSize} * 1.12)`" in source
 

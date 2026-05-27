@@ -496,6 +496,26 @@ Places:
     ]
 
 
+def test_items_projection_uses_unspecified_instead_of_unset_for_missing_attrs():
+    model = parse_tasks_text(
+        """```items
+---
+view_projections:
+  - id: shopping
+    groups_from: [shop_type, energy]
+---
+Places:
+  - tsutaya :: Tsutaya | shop_type: Books
+```"""
+    )
+
+    shopping_model = model["projection_models"]["shopping"]["model"]
+    assert [group["label"] for group in shopping_model["groups"]] == [
+        "Shop Type > Books",
+        "Energy > Unspecified",
+    ]
+
+
 def test_collapsed_graph_projects_nested_task_edges_to_root_groups():
     model = parse_tasks_text(
         """```items

@@ -6,6 +6,8 @@ from collections import defaultdict
 
 from .layout import build_collapsed_graph
 
+TASKS_PROJECTION_UNSPECIFIED_LABEL = "Unspecified"
+
 
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", (value or "").lower()).strip("-")
@@ -83,7 +85,7 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
 
     def value_path(task: dict) -> tuple[str, ...]:
         return tuple(
-            (str(task.get(attr) or "").strip() or "(unset)")
+            (str(task.get(attr) or "").strip() or TASKS_PROJECTION_UNSPECIFIED_LABEL)
             for attr in group_attrs
         )
 

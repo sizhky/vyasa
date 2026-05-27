@@ -3347,7 +3347,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const children = [
                     window.React.createElement('div', {
                         key: '__label__',
-                        style: { fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, marginBottom: rows.length ? '4px' : 0 },
+                        style: { fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, marginBottom: rows.length ? '4px' : 0, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 },
                     }, groupHoverTooltip.label),
                 ];
                 if (rows.length) {
@@ -3377,7 +3377,9 @@ async function renderTasksGraphs(rootElement = document) {
                         background: 'color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%)',
                         border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)',
                         boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
+                        width: rows.length ? 'min(280px, max-content)' : 'max-content',
                         maxWidth: '280px',
+                        boxSizing: 'border-box',
                     },
                 }, ...children);
             };
