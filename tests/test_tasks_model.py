@@ -459,6 +459,23 @@ tsukiji -> dotonbori
     assert {"source": "tsukiji", "target": "dotonbori"} in theme_model["dependency_edges"]
 
 
+def test_items_parser_reads_base_view_label():
+    model = parse_tasks_text(
+        """```items
+---
+base_view_label: Authored View
+view_projections:
+  - id: city
+    groups_from: city
+---
+Places:
+  - tsukiji :: Tsukiji | city: Tokyo
+```"""
+    )
+
+    assert model["base_view_label"] == "Authored View"
+
+
 def test_items_parser_prefixes_nested_projection_group_labels_with_dimension():
     model = parse_tasks_text(
         """```items

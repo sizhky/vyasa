@@ -1846,9 +1846,10 @@ function tasksHoverAttrRows(node, hoverAttrs) {
 
 function tasksProjectionOptions(model, ganttEnabled = false) {
     const projections = Array.isArray(model?.view_projections) ? model.view_projections : [];
+    const baseViewLabel = String(model?.base_view_label || '').trim() || 'Default';
     if (!projections.length && !ganttEnabled) return [];
     const options = [
-        { id: '', label: 'Default', caption: '' },
+        { id: '', label: baseViewLabel, caption: '' },
         ...projections
             .filter((projection) => projection && projection.id && model?.projection_models?.[projection.id])
             .map((projection) => ({
@@ -1926,6 +1927,7 @@ async function renderTasksGraphs(rootElement = document) {
         const defaultViewMode = ganttEnabled && String(wrapper.dataset.tasksDefaultView || '').trim().toLowerCase() === 'gantt' ? 'gantt' : 'graph';
         const defaultFiltersOpen = String(wrapper.dataset.tasksOpenFiltersDefault || '').trim().toLowerCase() === 'true';
         const nodeCardWidth = String(wrapper.dataset.tasksNodeCardWidth || '480px').trim() || '480px';
+        const hoverFontSize = String(wrapper.dataset.tasksHoverFontSize || '12px').trim() || '12px';
         const colorMix = readTasksColorMixConfig(wrapper);
         const projectionGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(wrapper.dataset.tasksProjectionGroupOpacity || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`) || TASKS_PROJECTION_GROUP_OPACITY_DEFAULT));
         const projectionGroupExpandedOpacity = Math.max(1, Math.min(projectionGroupOpacity, Math.round(projectionGroupOpacity * 0.5)));
@@ -3345,13 +3347,13 @@ async function renderTasksGraphs(rootElement = document) {
                 const children = [
                     window.React.createElement('div', {
                         key: '__label__',
-                        style: { fontWeight: 700, fontSize: '12px', lineHeight: 1.2, marginBottom: rows.length ? '4px' : 0 },
+                        style: { fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, marginBottom: rows.length ? '4px' : 0 },
                     }, groupHoverTooltip.label),
                 ];
                 if (rows.length) {
                     children.push(window.React.createElement('div', {
                         key: '__rows__',
-                        style: { display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '8px', rowGap: '2px', fontSize: '11px', fontWeight: 500, lineHeight: 1.25 },
+                        style: { display: 'grid', gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)', columnGap: '8px', rowGap: '2px', fontSize: hoverFontSize, fontWeight: 500, lineHeight: 1.35 },
                     }, rows.flatMap((row) => [
                         window.React.createElement('span', {
                             key: `k-${row.attr}`,
@@ -3359,7 +3361,7 @@ async function renderTasksGraphs(rootElement = document) {
                         }, row.label),
                         window.React.createElement('span', {
                             key: `v-${row.attr}`,
-                            style: { fontWeight: 650, whiteSpace: 'nowrap' },
+                            style: { fontWeight: 650, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 },
                         }, row.value),
                     ])));
                 }
@@ -3580,6 +3582,7 @@ window.openTasksFullscreen = async function(id) {
     fullscreenWrapper.setAttribute('data-tasks-default-view', wrapper.getAttribute('data-tasks-default-view') || 'graph');
     fullscreenWrapper.setAttribute('data-tasks-open-filters-default', wrapper.getAttribute('data-tasks-open-filters-default') || 'false');
     fullscreenWrapper.setAttribute('data-tasks-node-card-width', wrapper.getAttribute('data-tasks-node-card-width') || '480px');
+    fullscreenWrapper.setAttribute('data-tasks-hover-font-size', wrapper.getAttribute('data-tasks-hover-font-size') || '12px');
     fullscreenWrapper.setAttribute('data-tasks-projection-group-opacity', wrapper.getAttribute('data-tasks-projection-group-opacity') || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`);
     fullscreenWrapper.setAttribute('data-tasks-jitter', wrapper.getAttribute('data-tasks-jitter') || '0');
     fullscreenWrapper.setAttribute('data-tasks-jitter-y', wrapper.getAttribute('data-tasks-jitter-y') || wrapper.getAttribute('data-tasks-jitter') || '0');
