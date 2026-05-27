@@ -1996,6 +1996,7 @@ async function renderTasksGraphs(rootElement = document) {
                     ? projectionPrefs.filtersCollapsed
                     : !defaultFiltersOpen
             ));
+            const [edgesVisible, setEdgesVisible] = React.useState(true);
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
@@ -2136,7 +2137,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const anchoredNodes = nodesWithStyle.map((node) => ({ ...node, data: { ...node.data, handleLayout: anchored.nodeHandles[node.id] || { source: [], target: [] } } }));
                     graphBaseRef.current = { nodes: anchoredNodes, edges: baseEdges };
                     setNodes(anchoredNodes);
-                    setEdges(baseEdges);
+                    setEdges(edgesVisible ? baseEdges : []);
                     setGraphRevision((value) => value + 1);
                     return;
                 }
@@ -2305,9 +2306,9 @@ async function renderTasksGraphs(rootElement = document) {
                 };
                 logTasksDebugVerbose('reactFlowState', window.__vyasaTasksDebug.latest);
                 setNodes(anchoredNodes);
-                setEdges(baseEdges);
+                setEdges(edgesVisible ? baseEdges : []);
                 setGraphRevision((value) => value + 1);
-            }, [ensureBaseLayout, model, activeColorBy, activeColorPalette, activeProjection, viewMode]);
+            }, [ensureBaseLayout, model, activeColorBy, activeColorPalette, activeProjection, viewMode, edgesVisible]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: 1, stroke: 'currentColor' },
@@ -2319,7 +2320,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const hasFilters = Object.values(activeFilters).some((value) => Array.isArray(value) ? value.length > 0 : Boolean(value));
                     if (!hasFilters) {
                         setNodes(baseNodes);
-                        setEdges(baseEdges);
+                        setEdges(edgesVisible ? baseEdges : []);
                         return;
                     }
                     const matchingIds = new Set(baseNodes.filter((node) => tasksNodeMatchesFilters(node.data, activeFilters)).map((node) => node.id));
@@ -2328,7 +2329,7 @@ async function renderTasksGraphs(rootElement = document) {
                         data: { ...node.data, highlightMode: matchingIds.has(node.id) ? 'selected' : 'dim' },
                         style: { ...node.style, opacity: matchingIds.has(node.id) ? 1 : 0.18 },
                     })));
-                    setEdges(baseEdges.map((edge) => {
+                    setEdges(edgesVisible ? baseEdges.map((edge) => {
                         const hit = matchingIds.has(edge.source) && matchingIds.has(edge.target);
                         const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
                         return {
@@ -2346,7 +2347,7 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                             animated: hit,
                         };
-                    }));
+                    }) : []);
                     return;
                 }
                 const highlightedEdgeIds = new Set();
@@ -2465,8 +2466,8 @@ async function renderTasksGraphs(rootElement = document) {
                 });
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
-                setEdges(nextEdges);
-            }, [activeFilters, model, activeColorBy]);
+                setEdges(edgesVisible ? nextEdges : []);
+            }, [activeFilters, model, activeColorBy, edgesVisible]);
             React.useEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -2780,6 +2781,11 @@ async function renderTasksGraphs(rootElement = document) {
                         if (key === 'f') {
                             event.preventDefault();
                             reactFlow.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true });
+                            return;
+                        }
+                        if (key === 'e') {
+                            event.preventDefault();
+                            setEdgesVisible((current) => !current);
                             return;
                         }
                         if (key === 'i' || key === 'o') {
@@ -3229,6 +3235,7 @@ async function renderTasksGraphs(rootElement = document) {
                         toggleFilters: () => setFiltersCollapsed((current) => !current),
                         openFilters: () => setFiltersCollapsed(false),
                         closeFilters: () => setFiltersCollapsed(true),
+                        toggleEdges: () => setEdgesVisible((current) => !current),
                     };
                     return () => {
                         delete window.__vyasaTasksActions[widgetId];

@@ -26,7 +26,7 @@ Bad: `[Guide](guide.md#install)`.
 | Request | Route |
 |---|---|
 | `.vyasa`, CLI, env, auth, RBAC | `routes/config.md` |
-| Markdown authoring or rendering | `routes/markdown.md` |
+| Markdown authoring or rendering, including Knowledge Graph blocks (`items`/`tasks`) | `routes/markdown.md` |
 | Mermaid, D2, Cytograph, `.cytree` | `routes/diagrams.md` |
 | CSS, theme presets, shell styling | `routes/theming.md` |
 | Static build or deploy | `routes/static-build.md` |
@@ -37,6 +37,8 @@ Bad: `[Guide](guide.md#install)`.
 ## Hard Rules
 
 - Do not invent unsupported frontmatter, config keys, sort modes, or fence syntax.
+- Use `Knowledge Graph` as the user-facing product term for `items`/`tasks` graph blocks.
+- When an abstract question is best answered as a Knowledge Graph, route to the `story-telling-with-graphs` skill first, then come back and emit Vyasa syntax.
 - New feature logic usually belongs in an extension, not `core.py`.
 - Runtime and static build output must agree.
 - Never emit real secret values; use explicit placeholders.
