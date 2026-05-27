@@ -68,6 +68,12 @@ function readTasksLayoutConfig(wrapper) {
     };
 }
 
+function readTasksColorMixConfig(wrapper) {
+    const enabled = String(wrapper.dataset.tasksColorMix || 'true').trim().toLowerCase() !== 'false';
+    const intensity = Math.max(0, Math.min(100, Number.parseFloat(wrapper.dataset.tasksColorMixIntensity || '22') || 22));
+    return { enabled, intensity, paper: Math.max(0, 100 - intensity) };
+}
+
 function tasksFilterPanelMaxHeight(wrapper) {
     if (!wrapper) return '100%';
     const bounds = wrapper.getBoundingClientRect();
@@ -79,6 +85,7 @@ window.__vyasaTasksActions = window.__vyasaTasksActions || {};
 window.__vyasaTasksConfig = window.__vyasaTasksConfig || {};
 window.__vyasaTasksDebug = window.__vyasaTasksDebug || { events: [] };
 window.__vyasaTasksDebug.enabled = window.__vyasaTasksDebug.enabled === true || new URLSearchParams(window.location.search).has('tasks_debug');
+window.__vyasaTasksDebug.verbose = window.__vyasaTasksDebug.verbose === true || new URLSearchParams(window.location.search).has('tasks_debug_verbose');
 if (!Array.isArray(window.__vyasaTasksDebug.watch) || window.__vyasaTasksDebug.watch.length === 0) {
     const rawWatch = new URLSearchParams(window.location.search).getAll('tasks_watch');
     window.__vyasaTasksDebug.watch = rawWatch
@@ -121,6 +128,40 @@ function logTasksDebug(label, payload = {}) {
     console.log(`[vyasa][tasks-debug] ${label} ${JSON.stringify(payload)}`);
     renderTasksDebugOverlay();
     return event;
+}
+
+function logTasksDebugVerbose(label, payload = {}) {
+    if (!window.__vyasaTasksDebug.verbose) return null;
+    return logTasksDebug(label, payload);
+}
+
+function logTasksColorDebug(model, nodes, activeColorBy, activeColorPalette, colorMix) {
+    if (!window.__vyasaTasksDebug.enabled) return;
+    const candidates = (nodes || [])
+        .filter((node) => node && node.__kind__ !== 'groupTitle' && node.__kind__ !== 'ganttHeader')
+        .map((node) => ({
+            id: node.id,
+            kind: node.__kind__,
+            entity_type: node.entity_type || '',
+            colorByValue: activeColorBy ? (node[activeColorBy] ?? '') : '',
+            resolvedColor: resolveTasksNodeColor(node, model, activeColorBy, activeColorPalette) || '',
+        }));
+    const hits = candidates.filter((node) => node.resolvedColor).slice(0, 4);
+    const misses = candidates.filter((node) => !node.resolvedColor).slice(0, 4);
+    const availableColorModes = tasksColorOptions(model).map((option) => option.key);
+    const resolvedCount = candidates.filter((node) => node.resolvedColor).length;
+    logTasksDebug('color-state', {
+        graphId: model?.graph_id || '',
+        activeProjection: model?.active_projection || '',
+        activeColorBy,
+        defaultColorBy: tasksResolvedProjectionDefaultColorBy(model),
+        availableColorModes,
+        colorMix,
+        resolvedCount,
+        nodeCount: candidates.length,
+        hits,
+        misses,
+    });
 }
 
 const TASKS_PREFS_INDEX_KEY = 'vyasa:tasks:prefs:__index__';
@@ -1210,13 +1251,13 @@ async function layoutBaseTasksGraph(graph, model, jitterConfig = {}, layoutConfi
         nodes: graph.nodes.filter((n) => rootNodeIds.has(n.id)),
         edges: rootEdges,
     };
-    logTasksDebug('rootGraph', {
+    logTasksDebugVerbose('rootGraph', {
         nodes: rootGraph.nodes.map(n => n.id),
         edges: rootGraph.edges,
         edgeCount: rootGraph.edges.length,
     });
     const laidOut = await layoutTasksGraph(rootGraph, model, new Set(), jitterConfig, layoutConfig);
-    logTasksDebug('baseLayout', {
+    logTasksDebugVerbose('baseLayout', {
         width: Math.round(laidOut.width || 0),
         height: Math.round(laidOut.height || 0),
         positions: Object.fromEntries(Object.entries(laidOut.absoluteChildPositions || {}).map(([id, rect]) => [id, rectSummary(rect)])),
@@ -1329,7 +1370,7 @@ async function layoutExpandedGroups(model, expandedSet, jitterConfig = {}, layou
 
 function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout, groupLayouts, layoutConfig = {}) {
     const visible = buildVisibleTasksGraph(model, expandedSet);
-    logTasksDebug('visibleGraph', {
+    logTasksDebugVerbose('visibleGraph', {
         expanded: Array.from(expandedSet),
         nodes: visible.nodes.map(n => n.id),
         edges: visible.edges,
@@ -1467,7 +1508,7 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
             .map((id) => topLevelState[id])
             .filter(Boolean)
             .sort((a, b) => (a.y - b.y) || (a.x - b.x));
-        logTasksDebug('unwarpBeforeCollisions', {
+        logTasksDebugVerbose('unwarpBeforeCollisions', {
             expandedTopLevelIds,
             topLevelState: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
         });
@@ -1491,7 +1532,7 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
                     }
                 }
             }
-            logTasksDebug('unwarpPass', {
+            logTasksDebugVerbose('unwarpPass', {
                 pass,
                 collisionMoves,
                 topLevelState: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
@@ -1549,7 +1590,7 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
             node.position = { x: state.x, y: state.y };
         }
 
-        logTasksDebug('unwarpFinal', {
+        logTasksDebugVerbose('unwarpFinal', {
             topLevelNodes: nodes.filter(n => !n.parentId).map(n => ({
                 id: n.id,
                 x: Math.round(n.position.x),
@@ -1567,7 +1608,7 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
         target: e.target,
         label: e.label || undefined,
     }));
-    logTasksDebug('deriveResult', { visibleEdges: visible.edges, finalEdges });
+    logTasksDebugVerbose('deriveResult', { visibleEdges: visible.edges, finalEdges });
     return {
         nodes,
         edges: finalEdges,
@@ -1829,6 +1870,17 @@ function tasksResolvedProjectionDefaultColorBy(model) {
     return tasksColorOptions(model).some((option) => option.key === defaultColorBy) ? defaultColorBy : '';
 }
 
+function resolveTasksPreferredColorBy(model, projectionId, prefs) {
+    const saved = typeof prefs?.colorBy === 'string' ? prefs.colorBy.trim() : '';
+    const validColorKeys = new Set(tasksColorOptions(model).map((option) => option.key));
+    const defaultColorBy = tasksResolvedProjectionDefaultColorBy(model);
+    if (!String(projectionId || '').trim() && defaultColorBy && validColorKeys.has(defaultColorBy)) {
+        return defaultColorBy;
+    }
+    if (saved && validColorKeys.has(saved)) return saved;
+    return validColorKeys.has(defaultColorBy) ? defaultColorBy : '';
+}
+
 function selectTasksProjectionState(sourceModel, sourceGraph, projectionId) {
     const id = String(projectionId || '').trim();
     const entry = id ? sourceModel?.projection_models?.[id] : null;
@@ -1874,6 +1926,7 @@ async function renderTasksGraphs(rootElement = document) {
         const defaultViewMode = ganttEnabled && String(wrapper.dataset.tasksDefaultView || '').trim().toLowerCase() === 'gantt' ? 'gantt' : 'graph';
         const defaultFiltersOpen = String(wrapper.dataset.tasksOpenFiltersDefault || '').trim().toLowerCase() === 'true';
         const nodeCardWidth = String(wrapper.dataset.tasksNodeCardWidth || '480px').trim() || '480px';
+        const colorMix = readTasksColorMixConfig(wrapper);
         const projectionGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(wrapper.dataset.tasksProjectionGroupOpacity || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`) || TASKS_PROJECTION_GROUP_OPACITY_DEFAULT));
         const projectionGroupExpandedOpacity = Math.max(1, Math.min(projectionGroupOpacity, Math.round(projectionGroupOpacity * 0.5)));
         const TasksGraphApp = (props) => {
@@ -1934,9 +1987,7 @@ async function renderTasksGraphs(rootElement = document) {
                     : {}
             ));
             const [activeColorBy, setActiveColorBy] = React.useState(() => (
-                typeof projectionPrefs?.colorBy === 'string' && projectionPrefs.colorBy.trim()
-                    ? projectionPrefs.colorBy.trim()
-                    : tasksResolvedProjectionDefaultColorBy(model)
+                resolveTasksPreferredColorBy(model, activeProjectionId, projectionPrefs)
             ));
             const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => (
                 typeof projectionPrefs?.filtersCollapsed === 'boolean'
@@ -1947,6 +1998,7 @@ async function renderTasksGraphs(rootElement = document) {
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
+            const lastPersistedProjectionIdRef = React.useRef(activeProjectionId);
             const pendingFitActionRef = React.useRef(null);
             const reactFlowApiRef = React.useRef(null);
             const prevExpandedCountRef = React.useRef(0);
@@ -1972,11 +2024,7 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 const nextPrefs = readTasksProjectionPrefs({ projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
                 setActiveFilters(nextPrefs?.filters && typeof nextPrefs.filters === 'object' ? nextPrefs.filters : {});
-                setActiveColorBy(
-                    typeof nextPrefs?.colorBy === 'string' && nextPrefs.colorBy.trim()
-                        ? nextPrefs.colorBy.trim()
-                        : tasksResolvedProjectionDefaultColorBy(model)
-                );
+                setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, nextPrefs));
                 setFiltersCollapsed(typeof nextPrefs?.filtersCollapsed === 'boolean' ? nextPrefs.filtersCollapsed : !defaultFiltersOpen);
             }, [activeProjectionId, model, defaultFiltersOpen]);
             React.useEffect(() => {
@@ -1996,6 +2044,10 @@ async function renderTasksGraphs(rootElement = document) {
                 });
             }, [model]);
             React.useEffect(() => {
+                if (lastPersistedProjectionIdRef.current !== activeProjectionId) {
+                    lastPersistedProjectionIdRef.current = activeProjectionId;
+                    return;
+                }
                 const projectionKey = tasksProjectionPrefsKey(activeProjectionId);
                 const nextProjectionPrefs = {
                     ...storedProjectionPrefsRef.current,
@@ -2024,6 +2076,7 @@ async function renderTasksGraphs(rootElement = document) {
                 return baseLayoutRef.current;
             }, [rawGraph, model]);
             const rebuildLayout = React.useCallback(async (expandedSet, mode = viewMode) => {
+                logTasksColorDebug(model, rawGraph.nodes, activeColorBy, activeColorPalette, colorMix);
                 if (mode === 'gantt') {
                     const edgeColorPalette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
                     const nodesWithStyle = rawGraph.nodes.map((node) => {
@@ -2050,7 +2103,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 width: node.width,
                                 height: node.height,
                                 zIndex: TASKS_TASK_Z,
-                                background: nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 72%, ${nodeColor} 28%)` : TASKS_NODE_BG,
+                                background: nodeColor ? (colorMix.enabled ? `color-mix(in srgb, var(--vyasa-paper) ${colorMix.paper}%, ${nodeColor} ${colorMix.intensity}%)` : nodeColor) : TASKS_NODE_BG,
                                 border: nodeColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 28%, ${nodeColor} 72%)` : TASKS_NODE_BORDER,
                                 borderRadius: 6,
                                 boxShadow: 'none',
@@ -2140,7 +2193,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 ? `color-mix(in srgb, ${groupColor} ${groupFillExpanded}%, transparent)`
                                 : `color-mix(in srgb, var(--vyasa-paper) ${100 - groupFillCollapsed}%, ${groupColor} ${groupFillCollapsed}%)`)
                             : (isExpanded ? TASKS_GROUP_EXPANDED_BG : TASKS_GROUP_BG))
-                        : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 78%, ${nodeColor} 22%)` : TASKS_NODE_BG);
+                        : (nodeColor ? (colorMix.enabled ? `color-mix(in srgb, var(--vyasa-paper) ${colorMix.paper}%, ${nodeColor} ${colorMix.intensity}%)` : nodeColor) : TASKS_NODE_BG);
                     const border = groupColor
                         ? (n.__kind__ === 'group'
                             ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${groupColor} ${groupBorderMix}%)`
@@ -2248,7 +2301,7 @@ async function renderTasksGraphs(rootElement = document) {
                     })),
                     edges: baseEdges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, label: edge.label || '' })),
                 };
-                logTasksDebug('reactFlowState', window.__vyasaTasksDebug.latest);
+                logTasksDebugVerbose('reactFlowState', window.__vyasaTasksDebug.latest);
                 setNodes(anchoredNodes);
                 setEdges(baseEdges);
                 setGraphRevision((value) => value + 1);
@@ -2343,7 +2396,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     ? (nodeColor
                                         ? `color-mix(in srgb, ${nodeColor} 10%, transparent)`
                                         : TASKS_GROUP_BG_ACTIVE)
-                                    : (nodeColor ? `color-mix(in srgb, var(--vyasa-paper) 68%, ${nodeColor} 32%)` : TASKS_NODE_BG_ACTIVE)),
+                                    : (nodeColor ? (colorMix.enabled ? `color-mix(in srgb, var(--vyasa-paper) ${colorMix.paper}%, ${nodeColor} ${colorMix.intensity}%)` : nodeColor) : TASKS_NODE_BG_ACTIVE)),
                             opacity: mode === 'dim' ? 0.22 : 1,
                             boxShadow: (mode === 'selected' || mode === 'selected-focus')
                                 ? `0 0 0 2px color-mix(in srgb, ${nodeColor || 'var(--vyasa-primary)'} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
