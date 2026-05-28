@@ -3797,32 +3797,16 @@ window.openTasksFullscreen = async function(id) {
 
     const modal = document.createElement('div');
     modal.id = 'tasks-fullscreen-modal';
-    modal.className = 'fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4';
+    modal.className = 'fixed inset-0 z-[10000] bg-black/88 backdrop-blur-sm';
     modal.style.animation = 'fadeIn 0.2s ease-in';
 
     const modalContent = document.createElement('div');
-    modalContent.className = 'relative rounded-lg shadow-2xl w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col';
+    modalContent.className = 'relative w-full h-full flex flex-col';
     modalContent.style.background = 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)';
     modalContent.style.color = 'var(--vyasa-ink)';
 
-    const header = document.createElement('div');
-    header.className = 'flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700';
-
-    const title = document.createElement('h3');
-    title.className = 'text-lg font-semibold text-slate-800 dark:text-slate-200';
-    title.textContent = originalTitle;
-
-    const closeBtn = document.createElement('button');
-    closeBtn.innerHTML = '✕';
-    closeBtn.className = 'px-3 py-1 text-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors';
-    closeBtn.title = 'Close (Esc)';
-    closeBtn.onclick = () => document.body.removeChild(modal);
-
-    header.appendChild(title);
-    header.appendChild(closeBtn);
-
     const body = document.createElement('div');
-    body.className = 'flex-1 overflow-hidden p-4';
+    body.className = 'flex-1 overflow-hidden';
     body.style.background = 'transparent';
 
     const fullscreenWrapper = document.createElement('div');
@@ -3857,10 +3841,17 @@ window.openTasksFullscreen = async function(id) {
     fullscreenWrapper.setAttribute('data-tasks-graph', originalGraph);
     const fullscreenId = fullscreenWrapper.id;
     const headerBar = document.createElement('div');
-    headerBar.className = 'px-4 py-3 pr-14 border-b border-slate-200 dark:border-slate-800 flex items-start gap-3 relative';
+    headerBar.className = 'px-3 py-2 pr-14 border-b border-slate-200 dark:border-slate-800 flex items-start gap-2 relative';
     const topRightControls = document.createElement('div');
     topRightControls.className = 'absolute top-2 right-2 z-10 flex items-center gap-1';
     topRightControls.innerHTML = tasksHeaderControlsHtml(fullscreenId, false);
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.title = 'Close (Esc)';
+    closeBtn.className = 'rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300';
+    closeBtn.textContent = 'X';
+    closeBtn.onclick = () => document.body.removeChild(modal);
+    topRightControls.appendChild(closeBtn);
     const headerTitle = document.createElement('div');
     headerTitle.className = 'min-w-0 flex-1';
     const filterButton = document.createElement('button');
@@ -3871,17 +3862,17 @@ window.openTasksFullscreen = async function(id) {
     filterButton.className = 'relative z-40 mt-0.5 rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-2 py-1 font-mono text-xs leading-none text-slate-700 dark:text-slate-300';
     filterButton.textContent = '☰';
     const headerName = document.createElement('span');
-    headerName.className = 'text-sm font-semibold';
+    headerName.className = 'text-xs font-semibold';
     headerName.textContent = originalTitle;
     const headerSummary = document.createElement('div');
-    headerSummary.className = 'text-xs text-slate-500 dark:text-slate-400';
+    headerSummary.className = 'text-[10px] text-slate-500 dark:text-slate-400';
     headerSummary.textContent = wrapper.querySelector('.text-xs.text-slate-500, .text-xs.text-slate-500.dark\\:text-slate-400')?.textContent || '';
     headerTitle.append(headerName, headerSummary);
     headerBar.append(filterButton, headerTitle, topRightControls);
 
     const flow = document.createElement('div');
     flow.className = 'vyasa-tasks-flow';
-    flow.style.height = 'calc(100% - 57px)';
+    flow.style.height = 'calc(100% - 41px)';
     flow.style.overflow = 'hidden';
     flow.style.cursor = 'grab';
 
@@ -3896,7 +3887,6 @@ window.openTasksFullscreen = async function(id) {
     fullscreenWrapper.appendChild(flow);
 
     body.appendChild(fullscreenWrapper);
-    modalContent.appendChild(header);
     modalContent.appendChild(body);
     modal.appendChild(modalContent);
     document.body.appendChild(modal);

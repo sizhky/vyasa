@@ -283,6 +283,8 @@ def test_tasks_fullscreen_reuses_canvas_background_contract():
     assert "fullscreenWrapper.className = `${wrapper.className} w-full h-full`" in source
     assert "tasksHeaderControlsHtml(fullscreenId, false)" in source
     assert "runTasksHeaderAction('${fullscreenId}', 'toggleFilters')" in source
+    assert "modal.className = 'fixed inset-0 z-[10000] bg-black/88 backdrop-blur-sm';" in source
+    assert "flow.style.height = 'calc(100% - 41px)';" in source
 
 
 def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():
