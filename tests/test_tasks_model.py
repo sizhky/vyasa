@@ -422,6 +422,23 @@ Roadmap:
     assert model["filter_attributes"] == ["owner", "status"]
 
 
+def test_items_parser_reads_filter_whitelist_and_blacklist():
+    model = parse_tasks_text(
+        """```items
+---
+filter_whitelist: [owner, status]
+filter_blacklist:
+  - priority
+---
+Roadmap:
+  - one :: First | owner: Alice | status: Active | priority: High
+```"""
+    )
+
+    assert model["filter_whitelist"] == ["owner", "status"]
+    assert model["filter_blacklist"] == ["priority"]
+
+
 def test_items_parser_builds_projection_models_from_frontmatter():
     model = parse_tasks_text(
         """```items

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, layoutDisconnectedTaskNodes, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea, toggleMultiValueFilter } = await import('../vyasa/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, layoutDisconnectedTaskNodes, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea, toggleMultiValueFilter } = await import('../vyasa/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -193,6 +193,22 @@ test('toggleMultiValueFilter supports multi-color selection and reset', () => {
     assert.deepEqual(reduced, { kind: ['risk'] });
     const cleared = toggleMultiValueFilter(reduced, 'kind', 'risk', false);
     assert.deepEqual(cleared, {});
+});
+
+test('applyTasksFilterAttributePolicy respects whitelist and blacklist', () => {
+    assert.deepEqual(
+        applyTasksFilterAttributePolicy(['owner', 'status', 'priority'], {
+            filter_whitelist: ['owner', 'status'],
+            filter_blacklist: ['status'],
+        }),
+        ['owner'],
+    );
+    assert.deepEqual(
+        applyTasksFilterAttributePolicy(['owner', 'status', 'priority'], {
+            filter_blacklist: ['priority'],
+        }),
+        ['owner', 'status'],
+    );
 });
 
 test('color_by palette attrs can be hidden from filters and still exist on the model', () => {

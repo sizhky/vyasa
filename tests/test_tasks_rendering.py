@@ -274,6 +274,37 @@ def test_tasks_group_hover_tooltip_wraps_long_values_inside_max_width():
     assert "fontSize: `calc(${hoverFontSize} * 1.12)`" in source
 
 
+def test_tasks_fullscreen_reuses_canvas_background_contract():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function tasksBackgroundProps(widgetId)" in source
+    assert "id: `${key}-bg`" in source
+    assert "window.React.createElement(rf.Background, backgroundProps)" in source
+    assert "fullscreenWrapper.className = `${wrapper.className} w-full h-full`" in source
+    assert "tasksHeaderControlsHtml(fullscreenId, false)" in source
+    assert "runTasksHeaderAction('${fullscreenId}', 'toggleFilters')" in source
+
+
+def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function tasksSearchSpec(query)" in source
+    assert "function tasksCollectSearchMatches(nodes, edges, query)" in source
+    assert "const [searchInputValue, setSearchInputValue] = React.useState" in source
+    assert "window.setTimeout(() => {" in source
+    assert "}, 140);" in source
+    assert "placeholder: 'text or /regex/i'" in source
+    assert "setSearchQuery('')" in source
+    assert "const hasSearch = searchMatches.active && !searchMatches.error;" in source
+    assert "const filterPanelElement = FilterPanel();" in source
+
+
+def test_tasks_edge_zoom_agnostic_label_scale_only_on_hover_focus():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const prominentLabel = highlightMode === 'focused-in' || highlightMode === 'focused-out';" in source
+
+
 def test_tasks_block_serializes_labeled_edges():
     md = dedent("""\
     ```items
@@ -390,6 +421,22 @@ Foundation:
     html = to_xml(from_md(md))
 
     assert '"filter_attributes": ["owner", "status"]' in html
+
+
+def test_tasks_block_reads_filter_whitelist_and_blacklist():
+    md = """```items
+---
+filter_whitelist: [owner, status]
+filter_blacklist: [priority]
+---
+Foundation:
+  - t1 :: Define graph payload | owner: Alice | status: Active | priority: High
+```"""
+
+    html = to_xml(from_md(md))
+
+    assert '"filter_whitelist": ["owner", "status"]' in html
+    assert '"filter_blacklist": ["priority"]' in html
 
 
 def test_tasks_block_serializes_rendered_attr_html_for_node_card():
