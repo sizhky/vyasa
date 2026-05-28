@@ -733,6 +733,19 @@ def _rank_palette(size: int) -> dict[str, str]:
     return palette
 
 
+def _centrality_palette() -> dict:
+    return {
+        "type": "continuous",
+        "domain": [0.0, 1.0],
+        "stops": [
+            {"at": 0.0, "color": "#22c55e"},
+            {"at": 0.5, "color": "#facc15"},
+            {"at": 1.0, "color": "#dc2626"},
+        ],
+        "label": "Centrality",
+    }
+
+
 def _apply_dag_ranks(graph: dict) -> None:
     nodes = {item["id"]: item for item in [*graph.get("groups", []), *graph.get("tasks", [])]}
     children_by_group = defaultdict(list)
@@ -761,6 +774,35 @@ def _apply_dag_ranks(graph: dict) -> None:
             if indegree[target] == 0:
                 queue.append(target)
 
+    centrality = {node_id: 0.0 for node_id in nodes}
+    for source in nodes:
+        stack = []
+        predecessors = {node_id: [] for node_id in nodes}
+        shortest_path_count = {node_id: 0.0 for node_id in nodes}
+        shortest_path_count[source] = 1.0
+        distance = {node_id: -1 for node_id in nodes}
+        distance[source] = 0
+        traversal_queue = [source]
+        while traversal_queue:
+            current = traversal_queue.pop(0)
+            stack.append(current)
+            for target in outgoing[current]:
+                if distance[target] < 0:
+                    traversal_queue.append(target)
+                    distance[target] = distance[current] + 1
+                if distance[target] == distance[current] + 1:
+                    shortest_path_count[target] += shortest_path_count[current]
+                    predecessors[target].append(current)
+        dependency = {node_id: 0.0 for node_id in nodes}
+        while stack:
+            target = stack.pop()
+            for current in predecessors[target]:
+                if shortest_path_count[target] == 0:
+                    continue
+                dependency[current] += (shortest_path_count[current] / shortest_path_count[target]) * (1.0 + dependency[target])
+            if target != source:
+                centrality[target] += dependency[target]
+
     def apply_group_rank(group_id: str) -> int:
         child_ranks = [rank.get(child_id, 0) for child_id in children_by_group.get(group_id, [])]
         for child_id in children_by_group.get(group_id, []):
@@ -770,12 +812,31 @@ def _apply_dag_ranks(graph: dict) -> None:
             rank[group_id] = max(rank.get(group_id, 0), max(child_ranks))
         return rank.get(group_id, 0)
 
+    def apply_group_centrality(group_id: str) -> float:
+        child_values = []
+        for child_id in children_by_group.get(group_id, []):
+            if child_id in nodes and "parent_group_id" in nodes[child_id]:
+                child_values.append(apply_group_centrality(child_id))
+            else:
+                child_values.append(centrality.get(child_id, 0.0))
+        if child_values:
+            centrality[group_id] = max(centrality.get(group_id, 0.0), sum(child_values) / len(child_values))
+        return centrality.get(group_id, 0.0)
+
     for group in graph.get("groups", []):
         apply_group_rank(group["id"])
+        apply_group_centrality(group["id"])
+    max_centrality = max(centrality.values(), default=0.0)
     for node_id, node in nodes.items():
         node.setdefault("rank", str(rank.get(node_id, 0)))
+        normalized_centrality = 0.0 if max_centrality <= 0 else (centrality.get(node_id, 0.0) / max_centrality)
+        node.setdefault("centrality", f"{normalized_centrality:.3f}".rstrip("0").rstrip("."))
     max_rank = max(rank.values(), default=0)
-    graph["node_color_palettes"] = {"rank": _rank_palette(max_rank + 1), **graph.get("node_color_palettes", {})}
+    graph["node_color_palettes"] = {
+        "rank": _rank_palette(max_rank + 1),
+        "centrality": _centrality_palette(),
+        **graph.get("node_color_palettes", {}),
+    }
 
 
 def apply_edge_kind_defaults(graph: dict) -> None:

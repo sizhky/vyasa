@@ -383,39 +383,93 @@ function tasksColorModeLabel(key) {
     return key === 'rank' ? 'Flow position' : tasksNodeMetaLabel(key);
 }
 
-function tasksNodeAggregateEntries(nodeId, model) {
-    if (!nodeId || !model) return [];
+function collectTasksGroupDescendants(nodeId, model) {
+    if (!nodeId || !model) return { groups: [], tasks: [] };
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
     const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
-    const hidden = new Set([
-        'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
-        'handleLayout', 'highlightMode', 'sourceGroupId',
-        'width', 'height', 'position', 'parentId',
-    ]);
-    const totals = new Map();
-    const visitNode = (item) => {
-        if (!item) return;
-        for (const [key, value] of Object.entries(item)) {
-            if (hidden.has(key)) continue;
-            const numeric = typeof value === 'number'
-                ? value
-                : (typeof value === 'string' && /^-?\d+$/.test(value.trim()) ? Number.parseInt(value.trim(), 10) : null);
-            if (!Number.isInteger(numeric)) continue;
-            totals.set(key, (totals.get(key) || 0) + numeric);
-        }
-    };
+    const groups = [];
+    const tasks = [];
     const walkGroup = (groupId) => {
         const group = groupsById[groupId];
-        visitNode(group);
-        for (const taskId of (model.task_children?.[groupId] || [])) visitNode(tasksById[taskId]);
+        if (!group) return;
+        groups.push(group);
+        for (const taskId of (model.task_children?.[groupId] || [])) {
+            if (tasksById[taskId]) tasks.push(tasksById[taskId]);
+        }
         for (const childGroupId of (model.group_tree?.[groupId] || [])) walkGroup(childGroupId);
     };
-    walkGroup(nodeId);
-    return Array.from(totals.entries()).map(([key, value]) => ({
-        key,
-        label: tasksNodeMetaLabel(key),
-        value: String(value),
-    }));
+    for (const childGroupId of (model.group_tree?.[nodeId] || [])) walkGroup(childGroupId);
+    for (const taskId of (model.task_children?.[nodeId] || [])) {
+        if (tasksById[taskId]) tasks.push(tasksById[taskId]);
+    }
+    return { groups, tasks };
+}
+
+function tasksGroupDetailEntries(nodeId, model) {
+    if (!nodeId || !model) return [];
+    const group = (model.groups || []).find((entry) => entry.id === nodeId);
+    if (!group) return [];
+    const excludedDerivedKeys = new Set(['rank', 'centrality']);
+    const hidden = new Set([
+        'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
+        'handlelayout', 'highlightmode', 'sourcegroupid', '__rendered_attrs__',
+        'width', 'height', 'position', 'parentid', 'color', 'href', 'rank', 'centrality',
+    ]);
+    const descendants = collectTasksGroupDescendants(nodeId, model);
+    const sampleNodes = descendants.tasks.length ? descendants.tasks : descendants.groups;
+    const metrics = new Map();
+    const discreteColorCounts = new Map();
+    const colorPalettes = model?.node_color_palettes && typeof model.node_color_palettes === 'object'
+        ? model.node_color_palettes
+        : {};
+    for (const item of sampleNodes) {
+        for (const [key, value] of Object.entries(item || {})) {
+            if (hidden.has(String(key).toLowerCase())) continue;
+            const numeric = parseTasksNumericValue(value);
+            if (numeric === null) continue;
+            const stat = metrics.get(key) || { count: 0, sum: 0, min: numeric, max: numeric };
+            stat.count += 1;
+            stat.sum += numeric;
+            stat.min = Math.min(stat.min, numeric);
+            stat.max = Math.max(stat.max, numeric);
+            metrics.set(key, stat);
+        }
+        for (const [key, palette] of Object.entries(colorPalettes)) {
+            if (excludedDerivedKeys.has(String(key || '').toLowerCase())) continue;
+            if (!key || !palette || typeof palette !== 'object' || isTasksGradientPalette(palette)) continue;
+            const rawValue = item?.[key];
+            if (rawValue === null || rawValue === undefined || String(rawValue).trim() === '') continue;
+            const value = String(rawValue);
+            if (!(value in palette)) continue;
+            if (!discreteColorCounts.has(key)) discreteColorCounts.set(key, new Map());
+            const counts = discreteColorCounts.get(key);
+            counts.set(value, (counts.get(value) || 0) + 1);
+        }
+    }
+    const detailEntries = [...tasksNodeMetaEntries(group)]
+        .filter((entry) => !excludedDerivedKeys.has(String(entry?.key || '').toLowerCase()));
+    if (sampleNodes.length) {
+        detailEntries.push({
+            key: '__child_count__',
+            label: descendants.tasks.length ? 'Child items' : 'Child groups',
+            value: String(sampleNodes.length),
+        });
+    }
+    for (const [key, stat] of Array.from(metrics.entries()).sort(([left], [right]) => left.localeCompare(right))) {
+        if (excludedDerivedKeys.has(String(key || '').toLowerCase())) continue;
+        const label = tasksNodeMetaLabel(key);
+        detailEntries.push({ key: `avg:${key}`, label: `Avg ${label}`, value: formatTasksMetricValue(stat.sum / Math.max(stat.count, 1)) });
+        detailEntries.push({ key: `min:${key}`, label: `Min ${label}`, value: formatTasksMetricValue(stat.min) });
+        detailEntries.push({ key: `max:${key}`, label: `Max ${label}`, value: formatTasksMetricValue(stat.max) });
+    }
+    for (const [key, counts] of Array.from(discreteColorCounts.entries()).sort(([left], [right]) => left.localeCompare(right))) {
+        const summary = Array.from(counts.entries())
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([value, count]) => `${value}: ${count}`)
+            .join(', ');
+        detailEntries.push({ key: `counts:${key}`, label: `${tasksNodeMetaLabel(key)} Counts`, value: summary });
+    }
+    return detailEntries;
 }
 
 function tasksFilterOptions(model) {
@@ -534,6 +588,27 @@ function interpolateTasksHexColor(startColor, endColor, ratio) {
     return `#${[mix(start.r, end.r), mix(start.g, end.g), mix(start.b, end.b)]
         .map((part) => part.toString(16).padStart(2, '0'))
         .join('')}`;
+}
+
+function averageTasksHexColors(colors) {
+    const parsed = (colors || []).map(parseTasksHexColor).filter(Boolean);
+    if (!parsed.length) return '';
+    const average = (key) => Math.round(parsed.reduce((sum, color) => sum + color[key], 0) / parsed.length);
+    return `#${['r', 'g', 'b'].map((key) => average(key).toString(16).padStart(2, '0')).join('')}`;
+}
+
+function parseTasksNumericValue(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const text = String(value ?? '').trim();
+    if (!/^-?\d+(?:\.\d+)?$/.test(text)) return null;
+    const parsed = Number(text);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatTasksMetricValue(value) {
+    if (!Number.isFinite(value)) return '';
+    if (Math.abs(value - Math.round(value)) < 0.001) return Math.round(value).toLocaleString('en-US');
+    return value.toFixed(2).replace(/\.?0+$/, '');
 }
 
 function resolveTasksGradientColor(palette, value) {
@@ -774,6 +849,32 @@ function resolveTasksNodeColor(node, model, colorByOverride = null, paletteOverr
         parentId = parent.parent_group_id || null;
     }
     return '';
+}
+
+function resolveTasksCollapsedGroupColor(node, model, colorByOverride = null, paletteOverride = null) {
+    if (!node || node.__kind__ !== 'group') return '';
+    const colorBy = colorByOverride !== null
+        ? String(colorByOverride || '').trim()
+        : (typeof model?.color_by === 'string' ? model.color_by.trim() : '');
+    if (!colorBy) return '';
+    const palette = paletteOverride && typeof paletteOverride === 'object'
+        ? paletteOverride
+        : tasksColorPaletteFor(model, colorBy);
+    const descendants = collectTasksGroupDescendants(node.id, model);
+    const colorSources = descendants.tasks.length ? descendants.tasks : descendants.groups;
+    if (!colorSources.length) return '';
+    if (isTasksGradientPalette(palette)) {
+        const values = colorSources.map((entry) => parseTasksNumericValue(entry?.[colorBy])).filter((value) => value !== null);
+        if (values.length) {
+            const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+            return resolveTasksGradientColor(palette, average);
+        }
+    }
+    return averageTasksHexColors(
+        colorSources
+            .map((entry) => resolveTasksNodeOwnColor(entry, model, colorBy, palette))
+            .filter(Boolean)
+    );
 }
 
 window.runTasksHeaderAction = function(widgetId, action) {
@@ -2350,9 +2451,10 @@ async function renderTasksGraphs(rootElement = document) {
                         ? TASKS_TASK_Z + depth
                         : ((isExpanded ? TASKS_GROUP_BG_Z : TASKS_GROUP_Z) + depth);
                     const nodeColor = resolveTasksNodeColor(n, model, activeColorBy, activeColorPalette);
+                    const collapsedGroupColor = !isExpanded ? resolveTasksCollapsedGroupColor(n, model, activeColorBy, activeColorPalette) : '';
                     const isProjectionGroup = n.__kind__ === 'group' && n.__projection_group__;
                     const projectionGroupTone = isProjectionGroup ? resolveTasksProjectionGroupDimensionColor(n, model) : '';
-                    const groupColor = projectionGroupTone || nodeColor;
+                    const groupColor = projectionGroupTone || collapsedGroupColor || nodeColor;
                     const groupFillExpanded = isProjectionGroup ? projectionGroupExpandedOpacity : 7;
                     const groupFillCollapsed = isProjectionGroup ? projectionGroupOpacity : 14;
                     const groupBorderMix = isProjectionGroup ? 28 : 70;
@@ -2558,6 +2660,10 @@ async function renderTasksGraphs(rootElement = document) {
                             : (node.id === hoveredNodeId ? 'neighbor-focus' : 'neighbor'))
                         : 'dim';
                     const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette);
+                    const collapsedGroupColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
+                        ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
+                        : '';
+                    const displayColor = collapsedGroupColor || nodeColor;
                     const baseZIndex = Number.isFinite(Number(node.zIndex))
                         ? Number(node.zIndex)
                         : Number(node.style?.zIndex || 0);
@@ -2573,15 +2679,15 @@ async function renderTasksGraphs(rootElement = document) {
                             background: mode === 'dim'
                                 ? node.style.background
                                 : (node.data?.__kind__ === 'group'
-                                    ? (nodeColor
-                                        ? `color-mix(in srgb, ${nodeColor} 10%, transparent)`
+                                    ? (displayColor
+                                        ? `color-mix(in srgb, ${displayColor} 10%, transparent)`
                                         : TASKS_GROUP_BG_ACTIVE)
                                     : (nodeColor ? (colorMix.enabled ? `color-mix(in srgb, var(--vyasa-paper) ${colorMix.paper}%, ${nodeColor} ${colorMix.intensity}%)` : nodeColor) : TASKS_NODE_BG_ACTIVE)),
                             opacity: mode === 'dim' ? 0.22 : 1,
                             boxShadow: (mode === 'selected' || mode === 'selected-focus')
-                                ? `0 0 0 2px color-mix(in srgb, ${nodeColor || 'var(--vyasa-primary)'} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
+                                ? `0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
                                 : (mode === 'neighbor-focus'
-                                    ? `0 0 0 2px color-mix(in srgb, ${nodeColor || 'var(--vyasa-primary)'} 60%, transparent)`
+                                    ? `0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 60%, transparent)`
                                     : 'none'),
                         },
                         zIndex,
@@ -3064,7 +3170,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === selectedNodeId)?.data || null;
                 const sourceNodeId = selectedNode?.__kind__ === 'groupTitle' ? selectedNode.sourceGroupId : selectedNode?.id;
                 const entries = selectedNode?.__kind__ === 'group'
-                    ? tasksNodeAggregateEntries(sourceNodeId, model)
+                    ? tasksGroupDetailEntries(sourceNodeId, model)
                     : tasksNodeMetaEntries(selectedNode);
                 if (!selectedNode || entries.length === 0) return null;
                 const panelWidth = tasksSelectedPanelWidth(selectedNode, entries);

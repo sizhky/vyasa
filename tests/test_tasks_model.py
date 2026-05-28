@@ -250,6 +250,34 @@ api -> ui
     }
 
 
+def test_items_parser_adds_centrality_color_mode():
+    model = parse_tasks_text(
+        """```items
+---
+default_color_by: centrality
+---
+Plan:
+  Backend:
+    - db :: DB
+    - api :: API
+  Frontend:
+    - ui :: UI
+
+db -> api
+api -> ui
+```"""
+    )
+
+    tasks = {task["id"]: task for task in model["tasks"]}
+    groups = {group["id"]: group for group in model["groups"]}
+    assert model["default_color_by"] == "centrality"
+    assert float(tasks["api"]["centrality"]) > float(tasks["db"]["centrality"])
+    assert float(tasks["api"]["centrality"]) > float(tasks["ui"]["centrality"])
+    assert float(groups["backend"]["centrality"]) > 0
+    assert model["node_color_palettes"]["centrality"]["type"] == "continuous"
+    assert model["node_color_palettes"]["centrality"]["domain"] == [0.0, 1.0]
+
+
 def test_items_parser_supports_edge_color_palette_and_override():
     model = parse_tasks_text(
         """```items

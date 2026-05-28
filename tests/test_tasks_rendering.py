@@ -243,7 +243,7 @@ def test_tasks_projection_groups_use_their_own_dimension_tone():
 
     assert "function resolveTasksProjectionGroupDimensionColor" in source
     assert "const projectionGroupTone = isProjectionGroup ? resolveTasksProjectionGroupDimensionColor(n, model) : '';" in source
-    assert "const groupColor = projectionGroupTone || nodeColor;" in source
+    assert "const groupColor = projectionGroupTone || collapsedGroupColor || nodeColor;" in source
 
 
 def test_tasks_edge_labels_use_react_flow_bezier_coordinates():
