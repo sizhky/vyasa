@@ -79,6 +79,27 @@ export function toggleMultiValueFilter(filters, key, value, enabled) {
     return next;
 }
 
+export function applyTasksFilterAttributePolicy(keys, model) {
+    const candidates = Array.isArray(keys)
+        ? keys.map((key) => String(key || '').trim()).filter(Boolean)
+        : [];
+    const whitelistSource = Array.isArray(model?.filter_whitelist) && model.filter_whitelist.length
+        ? model.filter_whitelist
+        : model?.filter_attributes;
+    const whitelist = Array.isArray(whitelistSource)
+        ? new Set(whitelistSource.map((key) => String(key || '').trim()).filter(Boolean))
+        : null;
+    const blacklist = new Set(
+        Array.isArray(model?.filter_blacklist)
+            ? model.filter_blacklist.map((key) => String(key || '').trim()).filter(Boolean)
+            : []
+    );
+    return candidates.filter((key) => {
+        if (whitelist && !whitelist.has(key)) return false;
+        return !blacklist.has(key);
+    });
+}
+
 export function layoutDisconnectedTaskNodes(nodes, direction = 'DOWN', options = {}) {
     const orderedNodes = Array.isArray(nodes) ? nodes : [];
     const gap = Math.max(0, Number(options.gap) || 0);

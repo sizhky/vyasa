@@ -112,7 +112,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                     projections.append(current)
                 config["view_projections"] = normalize_projections(projections)
                 continue
-            if key in {"filter_attributes", "hover_attrs"}:
+            if key in {"filter_attributes", "filter_whitelist", "filter_blacklist", "hover_attrs"}:
                 if value:
                     config[key] = _read_string_list(value)
                     cursor += 1
@@ -850,6 +850,10 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         graph["view_projections"] = config["view_projections"]
     if "filter_attributes" in config and "filter_attributes" not in graph:
         graph["filter_attributes"] = config["filter_attributes"]
+    if "filter_whitelist" in config and "filter_whitelist" not in graph:
+        graph["filter_whitelist"] = config["filter_whitelist"]
+    if "filter_blacklist" in config and "filter_blacklist" not in graph:
+        graph["filter_blacklist"] = config["filter_blacklist"]
     if "hover_attrs" in config and "hover_attrs" not in graph:
         graph["hover_attrs"] = config["hover_attrs"]
     if config.get("color_palette_source") and not graph.get("color_palette_source"):
@@ -913,6 +917,8 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "color_by": graph.get("color_by", ""),
         "default_color_by": graph.get("default_color_by", ""),
         "filter_attributes": graph.get("filter_attributes", []),
+        "filter_whitelist": graph.get("filter_whitelist", []),
+        "filter_blacklist": graph.get("filter_blacklist", []),
         "hover_attrs": graph.get("hover_attrs", []),
         "color_palette": graph.get("color_palette", {}),
         "node_color_palettes": graph.get("node_color_palettes", {}),

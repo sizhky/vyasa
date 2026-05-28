@@ -70,6 +70,10 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         model["storage_id"] = f"tasks-block-{storage_suffix}"
         if "filter_attributes" in config:
             model["filter_attributes"] = config["filter_attributes"]
+        if "filter_whitelist" in config:
+            model["filter_whitelist"] = config["filter_whitelist"]
+        if "filter_blacklist" in config:
+            model["filter_blacklist"] = config["filter_blacklist"]
         if isinstance(config.get("color_by"), str) and config.get("color_by") and not model.get("color_by"):
             model["color_by"] = config["color_by"]
         if isinstance(config.get("color_by"), dict):

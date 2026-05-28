@@ -37,7 +37,7 @@ T-002, T-010 -> T-003
 ## Frontmatter
 
 - Frontmatter is optional YAML at the top of the fence.
-- Supported renderer keys include `title`, `default_open_depth`, `default_color_by`, `default_projection`, `base_view_label`, `width`, `min_height`, `height`, `node-card-width`, `hover-font-size`, `color_by`, `color_palette_source`, `filter_attributes`, `hover_attrs`, `view_projections`, `edge_color_by`, `edge_color_palette`, and `edge_label_from`.
+- Supported renderer keys include `title`, `default_open_depth`, `default_color_by`, `default_projection`, `base_view_label`, `width`, `min_height`, `height`, `node-card-width`, `hover-font-size`, `color_by`, `color_palette_source`, `filter_attributes`, `filter_whitelist`, `filter_blacklist`, `hover_attrs`, `view_projections`, `edge_color_by`, `edge_color_palette`, and `edge_label_from`.
 - Size keys should use full CSS lengths such as `760px`, `70vh`, `80vw`, or `calc(85vh - 57px)`.
 - `node-card-width` controls the width of the selected-node details card on the right. Default is `480px`.
 - `hover-font-size` controls tooltip row text size. Default is `12px`.
@@ -51,8 +51,19 @@ T-002, T-010 -> T-003
 - Shared palette JSON may also define `edge_kinds`; those defaults are merged into edges by label before rendering.
 - Do not use removed legacy shared keys: `palette_source` or `color_palettes`.
 - Legacy inline `color_by: status` plus `color_palette:` remains backward-compatible.
-- `filter_attributes` whitelists which attrs appear in the checkbox filter UI. Omit it to expose all categorical attrs.
+- By default, all categorical attrs appear in the checkbox filter UI.
+- `filter_whitelist` keeps only the named attrs in the filter UI.
+- `filter_blacklist` removes named attrs from the filter UI.
+- If both are present, blacklist wins.
+- Legacy `filter_attributes` remains supported as a whitelist alias.
 - `hover_attrs` sets the attr order shown in hover/details summaries.
+
+Example:
+
+```yaml
+filter_whitelist: [owner, status, phase]
+filter_blacklist: [phase]
+```
 
 ## Shared Palette JSON
 
