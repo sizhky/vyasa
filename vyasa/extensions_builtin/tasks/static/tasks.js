@@ -458,9 +458,11 @@ function tasksGroupDetailEntries(nodeId, model) {
     for (const [key, stat] of Array.from(metrics.entries()).sort(([left], [right]) => left.localeCompare(right))) {
         if (excludedDerivedKeys.has(String(key || '').toLowerCase())) continue;
         const label = tasksNodeMetaLabel(key);
-        detailEntries.push({ key: `avg:${key}`, label: `Avg ${label}`, value: formatTasksMetricValue(stat.sum / Math.max(stat.count, 1)) });
-        detailEntries.push({ key: `min:${key}`, label: `Min ${label}`, value: formatTasksMetricValue(stat.min) });
-        detailEntries.push({ key: `max:${key}`, label: `Max ${label}`, value: formatTasksMetricValue(stat.max) });
+        detailEntries.push({
+            key: `range:${key}`,
+            label,
+            value: `${formatTasksMetricValue(stat.min)} ≤ ${label} (μ ${formatTasksMetricValue(stat.sum / Math.max(stat.count, 1))}) ≤ ${formatTasksMetricValue(stat.max)}`,
+        });
     }
     for (const [key, counts] of Array.from(discreteColorCounts.entries()).sort(([left], [right]) => left.localeCompare(right))) {
         const summary = Array.from(counts.entries())
