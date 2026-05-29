@@ -61,6 +61,7 @@ foundation :: Foundation:
 ```""")
 
     assert model["graph_id"].startswith("demo-graph-")
+    assert model["persistence_id"] == "demo-graph"
 
 
 def test_tasks_parser_supports_explicit_labeled_edges():

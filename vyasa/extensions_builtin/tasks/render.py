@@ -66,6 +66,10 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             model["title"] = config["title"]
         if config.get("id"):
             model["graph_id"] = config["id"]
+            model["persistence_id"] = config["id"]
+        elif not model.get("persistence_id") and model.get("title"):
+            slug = re.sub(r"[^a-z0-9]+", "-", str(model.get("title") or "").lower()).strip("-")
+            model["persistence_id"] = slug or ""
         model["document_path"] = str(current_path or "")
         model["storage_id"] = f"tasks-block-{storage_suffix}"
         if "filter_attributes" in config:
@@ -97,6 +101,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     except Exception:
         model = {
             "graph_id": f"tasks-{next(_diagram_uid_counter)}",
+            "persistence_id": (re.sub(r"[^a-z0-9]+", "-", str(config.get("id") or config.get("title") or "").lower()).strip("-") or ""),
             "title": "",
             "groups": [],
             "tasks": [],

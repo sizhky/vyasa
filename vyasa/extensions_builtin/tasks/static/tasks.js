@@ -205,17 +205,19 @@ const TASKS_PREFS_INDEX_KEY = 'vyasa:tasks:prefs:__index__';
 const TASKS_PREFS_MAX_ENTRIES = 200;
 
 function tasksPrefsKey(model) {
-    const storageId = String(model?.storage_id || '').trim();
-    if (storageId) return `vyasa:tasks:prefs:${storageId}`;
+    const persistenceId = String(model?.persistence_id || '').trim();
+    const documentPath = String(model?.document_path || '').trim();
+    if (persistenceId) return `vyasa:tasks:prefs:${documentPath}::${persistenceId}`;
     const graphId = String(model?.graph_id || '').trim();
     return graphId ? `vyasa:tasks:prefs:${graphId}` : '';
 }
 
 function tasksCheckedStateKey(model) {
     const documentPath = String(model?.document_path || '').trim();
-    const title = String(model?.title || '').trim();
+    const persistenceId = String(model?.persistence_id || '').trim();
     const graphId = String(model?.graph_id || '').trim();
-    const stableId = title || graphId;
+    const title = String(model?.title || '').trim();
+    const stableId = persistenceId || title || graphId;
     if (!stableId) return '';
     return `vyasa:tasks:checked:${documentPath}::${stableId}`;
 }

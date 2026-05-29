@@ -949,6 +949,7 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         task_children[task.get("group_id")].append(task["id"])
     model = {
         "graph_id": graph.get("id") or _generated_graph_id(graph),
+        "persistence_id": graph.get("id") or _slugify(graph.get("title", "")) or "",
         "title": graph.get("title", ""),
         "groups": groups,
         "tasks": tasks,

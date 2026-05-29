@@ -500,3 +500,4 @@ Foundation:
 
     assert '"document_path": "docs/feed/personalization"' in html
     assert '"storage_id": "tasks-block-' in html
+    assert '"persistence_id":' in html
