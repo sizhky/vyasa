@@ -90,6 +90,14 @@ foundation :: Foundation:
     assert 'data-tasks-node-card-width="36rem"' in html
 
 
+def test_tasks_block_defaults_to_95vw_width():
+    html = to_xml(from_md("""```tasks
+foundation :: Foundation:
+```"""))
+
+    assert 'style="width: 95vw; position: relative;' in html
+
+
 def test_tasks_block_reads_hover_font_size_option():
     md = """```tasks
 ---
@@ -204,6 +212,23 @@ def test_tasks_source_uses_projection_scoped_prefs():
     assert "function readTasksProjectionPrefs" in source
     assert "projectionPrefs" in source
     assert "buildTasksViewState" in source
+
+
+def test_tasks_source_persists_checked_nodes_per_graph():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function normalizeTasksCheckedNodeIds" in source
+    assert "checkedNodeIds" in source
+    assert "toggleCheckedNode(sourceNodeId)" in source
+
+
+def test_tasks_source_renders_hover_checkbox_and_done_badge():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "type: 'checkbox'" in source
+    assert "const doneBadge = isChecked ?" in source
+    assert "} , 'Done')" not in source
+    assert "}, 'Done')" in source
 
 
 def test_tasks_source_uses_base_view_label_for_default_projection_tab():

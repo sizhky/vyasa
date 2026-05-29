@@ -121,7 +121,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     gantt_enabled = str(config.get("gantt") or "").strip().lower() in {"1", "true", "yes", "on"}
     default_view = str(config.get("default_view") or config.get("view") or "graph").strip().lower()
     default_view = "gantt" if gantt_enabled and default_view == "gantt" else "graph"
-    width = config.get("width") or "65vw"
+    width = config.get("width") or "95vw"
     open_filters_by_default = _should_open_filters_by_default(width)
     min_height = config.get("min_height") or ("420px" if fence_name != "tasks" else "")
     flow_height = html.escape(str(config.get("height") or "70vh"))

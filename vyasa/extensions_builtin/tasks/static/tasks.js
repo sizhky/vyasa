@@ -32,6 +32,7 @@ const TASKS_FILTER_PANEL_WIDTH = 320;
 const TASKS_PROJECTION_GROUP_OPACITY_DEFAULT = 12;
 const TASKS_EDGE_OPACITY_MIN = 0.05;
 const TASKS_EDGE_OPACITY_MAX = 1;
+const TASKS_DONE_ACCENT = '#22c55e';
 const TASKS_GANTT_UNIT_WIDTH = 340;
 const TASKS_GANTT_ROW_GAP = 56;
 const TASKS_GANTT_BAR_MIN_HEIGHT = 34;
@@ -288,6 +289,11 @@ function readTasksProjectionPrefs(prefs, projectionId) {
     return prefs && typeof prefs === 'object' ? prefs : {};
 }
 
+function normalizeTasksCheckedNodeIds(value) {
+    if (!Array.isArray(value)) return [];
+    return Array.from(new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean)));
+}
+
 function writeTasksPrefs(model, prefs) {
     const key = tasksPrefsKey(model);
     const storage = tasksGetStorage();
@@ -297,10 +303,12 @@ function writeTasksPrefs(model, prefs) {
         ? prefs.projectionPrefs
         : {};
     const edgeOpacity = prefs?.edgeOpacity;
+    const checkedNodeIds = normalizeTasksCheckedNodeIds(prefs?.checkedNodeIds);
     const payload = JSON.stringify({
         version: 1,
         projectionId,
         edgeOpacity,
+        checkedNodeIds,
         projectionPrefs,
     });
     const attempt = () => {
@@ -2242,6 +2250,7 @@ async function renderTasksGraphs(rootElement = document) {
             const [edgeOpacity, setEdgeOpacity] = React.useState(() => (
                 sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity)
             ));
+            const [checkedNodeIds, setCheckedNodeIds] = React.useState(() => normalizeTasksCheckedNodeIds(sourcePrefsRef.current?.checkedNodeIds));
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
@@ -2327,15 +2336,28 @@ async function renderTasksGraphs(rootElement = document) {
                     ...(sourcePrefsRef.current || {}),
                     projectionId: activeProjectionId,
                     edgeOpacity,
+                    checkedNodeIds: normalizeTasksCheckedNodeIds(checkedNodeIds),
                     projectionPrefs: nextProjectionPrefs,
                 };
                 storedProjectionPrefsRef.current = nextProjectionPrefs;
                 writeTasksPrefs(sourceModel, {
                     projectionId: activeProjectionId,
                     edgeOpacity,
+                    checkedNodeIds,
                     projectionPrefs: nextProjectionPrefs,
                 });
-            }, [sourceModel, activeFilters, searchQuery, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeOpacity, expanded]);
+            }, [sourceModel, activeFilters, searchQuery, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeOpacity, expanded, checkedNodeIds]);
+            const checkedNodeIdSet = React.useMemo(() => new Set(normalizeTasksCheckedNodeIds(checkedNodeIds)), [checkedNodeIds]);
+            const toggleCheckedNode = React.useCallback((nodeId) => {
+                const normalizedId = String(nodeId || '').trim();
+                if (!normalizedId) return;
+                setCheckedNodeIds((current) => {
+                    const next = new Set(normalizeTasksCheckedNodeIds(current));
+                    if (next.has(normalizedId)) next.delete(normalizedId);
+                    else next.add(normalizedId);
+                    return Array.from(next);
+                });
+            }, []);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
                 const viewport = reactFlow.getViewport();
                 return reactFlow.setViewport(
@@ -2366,19 +2388,24 @@ async function renderTasksGraphs(rootElement = document) {
                             };
                         }
                         const nodeColor = resolveTasksNodeColor(node, model, activeColorBy, activeColorPalette);
+                        const isChecked = checkedNodeIdSet.has(String(node.id || ''));
                         return {
                             id: node.id,
                             type: 'vyasaTask',
                             position: node.position,
-                            data: node,
+                            data: { ...node, __checked__: isChecked },
                             style: {
                                 width: node.width,
                                 height: node.height,
                                 zIndex: TASKS_TASK_Z,
                                 background: nodeColor ? (colorMix.enabled ? `color-mix(in srgb, var(--vyasa-paper) ${colorMix.paper}%, ${nodeColor} ${colorMix.intensity}%)` : nodeColor) : TASKS_NODE_BG,
-                                border: nodeColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 28%, ${nodeColor} 72%)` : TASKS_NODE_BORDER,
+                                border: isChecked
+                                    ? `2px solid color-mix(in srgb, ${TASKS_DONE_ACCENT} 78%, white 22%)`
+                                    : (nodeColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 28%, ${nodeColor} 72%)` : TASKS_NODE_BORDER),
                                 borderRadius: 6,
-                                boxShadow: 'none',
+                                boxShadow: isChecked
+                                    ? `inset 0 0 0 2px color-mix(in srgb, ${TASKS_DONE_ACCENT} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${TASKS_DONE_ACCENT} 34%, transparent)`
+                                    : 'none',
                                 overflow: 'hidden',
                             },
                             zIndex: TASKS_TASK_Z,
@@ -2454,6 +2481,7 @@ async function renderTasksGraphs(rootElement = document) {
                         : ((isExpanded ? TASKS_GROUP_BG_Z : TASKS_GROUP_Z) + depth);
                     const nodeColor = resolveTasksNodeColor(n, model, activeColorBy, activeColorPalette);
                     const collapsedGroupColor = !isExpanded ? resolveTasksCollapsedGroupColor(n, model, activeColorBy, activeColorPalette) : '';
+                    const isChecked = checkedNodeIdSet.has(String(n.id || ''));
                     const isProjectionGroup = n.__kind__ === 'group' && n.__projection_group__;
                     const projectionGroupTone = isProjectionGroup ? resolveTasksProjectionGroupDimensionColor(n, model) : '';
                     const groupColor = projectionGroupTone || collapsedGroupColor || nodeColor;
@@ -2476,15 +2504,19 @@ async function renderTasksGraphs(rootElement = document) {
                         id: n.id,
                         type: 'vyasaTask',
                         position: n.position,
-                        data: n,
+                        data: { ...n, __checked__: isChecked },
                         style: {
                             width: n.width,
                             height: n.height,
                             zIndex: nodeZ,
                             background,
-                            border,
+                            border: isChecked
+                                ? `2px solid color-mix(in srgb, ${TASKS_DONE_ACCENT} 78%, white 22%)`
+                                : border,
                             borderRadius: isExpanded ? 12 : 6,
-                            boxShadow: 'none',
+                            boxShadow: isChecked
+                                ? `inset 0 0 0 2px color-mix(in srgb, ${TASKS_DONE_ACCENT} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${TASKS_DONE_ACCENT} 34%, transparent)`
+                                : 'none',
                             overflow: 'hidden',
                         },
                         zIndex: nodeZ,
@@ -2578,7 +2610,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setNodes(anchoredNodes);
                 setEdges(edgesVisible ? baseEdges : []);
                 setGraphRevision((value) => value + 1);
-            }, [ensureBaseLayout, model, activeColorBy, activeColorPalette, activeProjection, viewMode, edgesVisible, edgeOpacity]);
+            }, [ensureBaseLayout, model, activeColorBy, activeColorPalette, activeProjection, viewMode, edgesVisible, edgeOpacity, checkedNodeIdSet]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: 'currentColor' },
@@ -2666,6 +2698,9 @@ async function renderTasksGraphs(rootElement = document) {
                         ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
                         : '';
                     const displayColor = collapsedGroupColor || nodeColor;
+                    const checkedShadow = node.data?.__checked__
+                        ? `inset 0 0 0 2px color-mix(in srgb, ${TASKS_DONE_ACCENT} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${TASKS_DONE_ACCENT} 34%, transparent)`
+                        : 'none';
                     const baseZIndex = Number.isFinite(Number(node.zIndex))
                         ? Number(node.zIndex)
                         : Number(node.style?.zIndex || 0);
@@ -2687,10 +2722,10 @@ async function renderTasksGraphs(rootElement = document) {
                                     : (nodeColor ? (colorMix.enabled ? `color-mix(in srgb, var(--vyasa-paper) ${colorMix.paper}%, ${nodeColor} ${colorMix.intensity}%)` : nodeColor) : TASKS_NODE_BG_ACTIVE)),
                             opacity: mode === 'dim' ? 0.22 : 1,
                             boxShadow: (mode === 'selected' || mode === 'selected-focus')
-                                ? `0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
+                                ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
                                 : (mode === 'neighbor-focus'
-                                    ? `0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 60%, transparent)`
-                                    : 'none'),
+                                    ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 60%, transparent)`
+                                    : checkedShadow),
                         },
                         zIndex,
                     };
@@ -2755,7 +2790,7 @@ async function renderTasksGraphs(rootElement = document) {
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdges(edgesVisible ? nextEdges : []);
             }, [activeFilters, searchMatches, model, activeColorBy, edgesVisible, edgeOpacity]);
-            React.useEffect(() => {
+            React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
                     setSelectedNodeId(null);
@@ -2896,6 +2931,8 @@ async function renderTasksGraphs(rootElement = document) {
                 const highlightMode = data?.highlightMode || 'none';
                 const isDimmed = highlightMode === 'dim';
                 const sourceNodeId = data?.__kind__ === 'groupTitle' ? data?.sourceGroupId : id;
+                const isChecked = data?.__checked__ === true;
+                const showCheckbox = selectedNodeId === sourceNodeId;
                 const isActiveNode = !selectedNodeId || selectedNodeId === sourceNodeId;
                 const linksInteractive = isActiveNode;
                 const linkKinds = Array.from(tasksNodeLinkKinds(data));
@@ -2993,12 +3030,69 @@ async function renderTasksGraphs(rootElement = document) {
                     ? React.createElement('a', {
                         href: data.href,
                         onClick: (e) => openTasksNodeHref(data.href, e),
-                        style: { color: 'inherit', textDecoration: 'underline', textUnderlineOffset: '2px' },
+                        style: {
+                            color: 'inherit',
+                            textDecoration: isChecked ? 'line-through underline' : 'underline',
+                            textUnderlineOffset: '2px',
+                            textDecorationThickness: isChecked ? '1.6px' : undefined,
+                        },
                     }, labelContent)
                     : React.createElement('span', {
                         onClick: linksInteractive ? undefined : handleInactiveLinkClick,
-                        style: { color: 'inherit', textDecoration: 'none' },
+                        style: {
+                            color: 'inherit',
+                            textDecoration: isChecked ? 'line-through' : 'none',
+                            textDecorationThickness: isChecked ? '1.8px' : undefined,
+                        },
                     }, labelContent);
+                const checkboxControl = showCheckbox ? React.createElement('label', {
+                    'data-vyasa-task-control': 'true',
+                    onMouseDown: (event) => event.stopPropagation(),
+                    onPointerDown: (event) => event.stopPropagation(),
+                    onClick: (event) => event.stopPropagation(),
+                    style: {
+                        position: 'absolute',
+                        left: '6px',
+                        top: '6px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '16px',
+                        height: '16px',
+                        borderRadius: '5px',
+                        border: `1px solid color-mix(in srgb, var(--vyasa-ink) 18%, ${TASKS_DONE_ACCENT} 24%)`,
+                        background: isChecked
+                            ? `color-mix(in srgb, var(--vyasa-paper) 70%, ${TASKS_DONE_ACCENT} 30%)`
+                            : 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                        boxShadow: isChecked ? `inset 0 0 0 1px color-mix(in srgb, ${TASKS_DONE_ACCENT} 20%, transparent)` : 'none',
+                        cursor: 'pointer',
+                        zIndex: 2,
+                    },
+                }, React.createElement('input', {
+                    type: 'checkbox',
+                    checked: isChecked,
+                    onMouseDown: (event) => event.stopPropagation(),
+                    onPointerDown: (event) => event.stopPropagation(),
+                    onChange: () => toggleCheckedNode(sourceNodeId),
+                    style: { margin: 0, width: '10px', height: '10px', accentColor: TASKS_DONE_ACCENT, cursor: 'pointer' },
+                })) : null;
+                const doneBadge = isChecked ? React.createElement('div', {
+                    style: {
+                        position: 'absolute',
+                        right: isGroup ? '34px' : '8px',
+                        bottom: '8px',
+                        padding: '2px 6px',
+                        borderRadius: '999px',
+                        background: `color-mix(in srgb, ${TASKS_DONE_ACCENT} 76%, white 24%)`,
+                        color: '#052e16',
+                        fontSize: '9px',
+                        fontWeight: 800,
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                        boxShadow: `0 0 0 1px color-mix(in srgb, ${TASKS_DONE_ACCENT} 36%, transparent)`,
+                        zIndex: 2,
+                    },
+                }, 'Done') : null;
                 const handleExpand = (e) => {
                     e.stopPropagation();
                     const next = new Set(expanded);
@@ -3014,6 +3108,8 @@ async function renderTasksGraphs(rootElement = document) {
                             opacity: isDimmed ? 0.22 : 1,
                         }
                     },
+                        checkboxControl,
+                        doneBadge,
                         ...renderHandles('target'),
                         React.createElement('div', { style: { flex: 1, minHeight: '48px', position: 'relative' } }),
                         ...renderHandles('source')
@@ -3036,8 +3132,11 @@ async function renderTasksGraphs(rootElement = document) {
                         opacity: isDimmed ? 0.22 : 1,
                         cursor: hasHref ? 'pointer' : undefined,
                         position: 'relative',
+                        background: isChecked ? `linear-gradient(135deg, color-mix(in srgb, ${TASKS_DONE_ACCENT} 12%, transparent), transparent 55%)` : undefined,
                     }
                 },
+                    checkboxControl,
+                    doneBadge,
                     linkKinds.length ? renderTasksNodeLinkBadge(React, { right: isGroup ? '32px' : '10px', kinds: linkKinds }) : null,
                     ...renderHandles('target'),
                     React.createElement('span', {
@@ -3052,6 +3151,8 @@ async function renderTasksGraphs(rootElement = document) {
                             lineHeight: '1.25',
                             overflowWrap: 'anywhere',
                             wordBreak: 'break-word',
+                            textDecoration: isChecked ? 'line-through' : 'none',
+                            textDecorationThickness: isChecked ? '2px' : undefined,
                         }
                     }, labelNode),
                     isGroup && React.createElement('button', {
