@@ -250,11 +250,11 @@ api -> ui
     }
 
 
-def test_items_parser_adds_centrality_color_mode():
+def test_items_parser_adds_connectivity_color_mode():
     model = parse_tasks_text(
         """```items
 ---
-default_color_by: centrality
+default_color_by: connectivity
 ---
 Plan:
   Backend:
@@ -270,12 +270,12 @@ api -> ui
 
     tasks = {task["id"]: task for task in model["tasks"]}
     groups = {group["id"]: group for group in model["groups"]}
-    assert model["default_color_by"] == "centrality"
-    assert float(tasks["api"]["centrality"]) > float(tasks["db"]["centrality"])
-    assert float(tasks["api"]["centrality"]) > float(tasks["ui"]["centrality"])
-    assert float(groups["backend"]["centrality"]) > 0
-    assert model["node_color_palettes"]["centrality"]["type"] == "continuous"
-    assert model["node_color_palettes"]["centrality"]["domain"] == [0.0, 1.0]
+    assert model["default_color_by"] == "connectivity"
+    assert float(tasks["api"]["connectivity"]) > float(tasks["db"]["connectivity"])
+    assert float(tasks["api"]["connectivity"]) > float(tasks["ui"]["connectivity"])
+    assert float(groups["backend"]["connectivity"]) > 0
+    assert model["node_color_palettes"]["connectivity"]["type"] == "continuous"
+    assert model["node_color_palettes"]["connectivity"]["domain"] == [0.0, 1.0]
 
 
 def test_items_parser_supports_edge_color_palette_and_override():

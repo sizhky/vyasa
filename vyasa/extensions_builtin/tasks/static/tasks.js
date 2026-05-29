@@ -409,11 +409,11 @@ function tasksGroupDetailEntries(nodeId, model) {
     if (!nodeId || !model) return [];
     const group = (model.groups || []).find((entry) => entry.id === nodeId);
     if (!group) return [];
-    const excludedDerivedKeys = new Set(['rank', 'centrality']);
+    const excludedDerivedKeys = new Set(['rank', 'centrality', 'connectivity']);
     const hidden = new Set([
         'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
         'handlelayout', 'highlightmode', 'sourcegroupid', '__rendered_attrs__',
-        'width', 'height', 'position', 'parentid', 'color', 'href', 'rank', 'centrality',
+        'width', 'height', 'position', 'parentid', 'color', 'href', 'rank', 'centrality', 'connectivity',
     ]);
     const descendants = collectTasksGroupDescendants(nodeId, model);
     const sampleNodes = descendants.tasks.length ? descendants.tasks : descendants.groups;
