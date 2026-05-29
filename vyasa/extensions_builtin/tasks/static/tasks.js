@@ -211,6 +211,15 @@ function tasksPrefsKey(model) {
     return graphId ? `vyasa:tasks:prefs:${graphId}` : '';
 }
 
+function tasksCheckedStateKey(model) {
+    const documentPath = String(model?.document_path || '').trim();
+    const title = String(model?.title || '').trim();
+    const graphId = String(model?.graph_id || '').trim();
+    const stableId = title || graphId;
+    if (!stableId) return '';
+    return `vyasa:tasks:checked:${documentPath}::${stableId}`;
+}
+
 function tasksGetStorage() {
     if (typeof window === 'undefined') return null;
     try {
@@ -294,6 +303,28 @@ function normalizeTasksCheckedNodeIds(value) {
     return Array.from(new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean)));
 }
 
+function readTasksCheckedNodeIds(model) {
+    const key = tasksCheckedStateKey(model);
+    const storage = tasksGetStorage();
+    if (!key || !storage) return [];
+    try {
+        return normalizeTasksCheckedNodeIds(JSON.parse(storage.getItem(key) || '[]'));
+    } catch {
+        return [];
+    }
+}
+
+function writeTasksCheckedNodeIds(model, checkedNodeIds) {
+    const key = tasksCheckedStateKey(model);
+    const storage = tasksGetStorage();
+    if (!key || !storage) return;
+    try {
+        storage.setItem(key, JSON.stringify(normalizeTasksCheckedNodeIds(checkedNodeIds)));
+    } catch {
+        // Best effort only.
+    }
+}
+
 function writeTasksPrefs(model, prefs) {
     const key = tasksPrefsKey(model);
     const storage = tasksGetStorage();
@@ -303,12 +334,10 @@ function writeTasksPrefs(model, prefs) {
         ? prefs.projectionPrefs
         : {};
     const edgeOpacity = prefs?.edgeOpacity;
-    const checkedNodeIds = normalizeTasksCheckedNodeIds(prefs?.checkedNodeIds);
     const payload = JSON.stringify({
         version: 1,
         projectionId,
         edgeOpacity,
-        checkedNodeIds,
         projectionPrefs,
     });
     const attempt = () => {
@@ -2250,7 +2279,10 @@ async function renderTasksGraphs(rootElement = document) {
             const [edgeOpacity, setEdgeOpacity] = React.useState(() => (
                 sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity)
             ));
-            const [checkedNodeIds, setCheckedNodeIds] = React.useState(() => normalizeTasksCheckedNodeIds(sourcePrefsRef.current?.checkedNodeIds));
+            const [checkedNodeIds, setCheckedNodeIds] = React.useState(() => {
+                const stableCheckedNodeIds = readTasksCheckedNodeIds(sourceModel);
+                return stableCheckedNodeIds.length ? stableCheckedNodeIds : normalizeTasksCheckedNodeIds(sourcePrefsRef.current?.checkedNodeIds);
+            });
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
@@ -2336,16 +2368,15 @@ async function renderTasksGraphs(rootElement = document) {
                     ...(sourcePrefsRef.current || {}),
                     projectionId: activeProjectionId,
                     edgeOpacity,
-                    checkedNodeIds: normalizeTasksCheckedNodeIds(checkedNodeIds),
                     projectionPrefs: nextProjectionPrefs,
                 };
                 storedProjectionPrefsRef.current = nextProjectionPrefs;
                 writeTasksPrefs(sourceModel, {
                     projectionId: activeProjectionId,
                     edgeOpacity,
-                    checkedNodeIds,
                     projectionPrefs: nextProjectionPrefs,
                 });
+                writeTasksCheckedNodeIds(sourceModel, checkedNodeIds);
             }, [sourceModel, activeFilters, searchQuery, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeOpacity, expanded, checkedNodeIds]);
             const checkedNodeIdSet = React.useMemo(() => new Set(normalizeTasksCheckedNodeIds(checkedNodeIds)), [checkedNodeIds]);
             const toggleCheckedNode = React.useCallback((nodeId) => {

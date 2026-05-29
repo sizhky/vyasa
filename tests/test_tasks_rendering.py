@@ -218,6 +218,10 @@ def test_tasks_source_persists_checked_nodes_per_graph():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "function normalizeTasksCheckedNodeIds" in source
+    assert "function tasksCheckedStateKey" in source
+    assert "document_path" in source
+    assert "title || graphId" in source
+    assert "writeTasksCheckedNodeIds(sourceModel, checkedNodeIds);" in source
     assert "checkedNodeIds" in source
     assert "toggleCheckedNode(sourceNodeId)" in source
 
