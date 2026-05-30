@@ -28,7 +28,7 @@ roadmap.kg/chapter-1.kg.edges  # optional story/topology edge source
 ## Schema
 
 ```text
-@graph id=roadmap title=Roadmap initial_view=delivery
+@graph id=roadmap title=Roadmap initial_view=delivery card_states="Not Done,Done,Deferred/Cancelled"
 
 @sources
 nodes=kg.nodes
@@ -67,6 +67,7 @@ dependency:
 ```
 
 - `@graph` names the graph and picks `initial_view`; there is no generic `Default` tab.
+- Optional `card_states` defines the click-cycle for card completion state. Omit it for default `Not Done,Done`.
 - Prefer folder packs and point markdown to `items_schema: roadmap.kg/kg.schema`.
 - Top-level `nodes=` and `attrs=` in `@sources` are common to every source.
 - Source `edges=` can select a story/topology by edge endpoints.
@@ -150,6 +151,11 @@ confidence:
 ```json
 {
   "node_color_palettes": {
+    "card_state": {
+      "Not Done": "#94a3b8",
+      "Done": "#22c55e",
+      "Deferred/Cancelled": "#f97316"
+    },
     "status": {
       "todo": "#f59e0b",
       "done": "#22c55e"
@@ -163,6 +169,9 @@ confidence:
   }
 }
 ```
+
+- Card state colors come from `node_color_palettes.card_state`.
+- The first card state is active text. Every later state is struck through with its palette color.
 
 ## Cache And CLI
 
