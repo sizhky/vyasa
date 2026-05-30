@@ -505,6 +505,40 @@ tsukiji -> dotonbori
     assert {"source": "tsukiji", "target": "dotonbori"} in theme_model["dependency_edges"]
 
 
+def test_items_projection_overrides_display_controls():
+    model = parse_tasks_text(
+        """```items
+---
+edge_color_by: relation
+edge_label_from: relation
+hover_attrs: [city]
+aggregate_edges:
+  when_collapsed: true
+  by: relation
+view_projections:
+  - id: city
+    groups_from: city
+    default_color_by: mood
+    edge_color_by: kind
+    edge_label_from: kind
+    hover_attrs: [mood]
+    aggregate_edges: "when_collapsed=false by=kind"
+---
+Places:
+  - a :: A | city: Tokyo | mood: Bright
+  - b :: B | city: Osaka | mood: Dim
+a -> b | relation: visits | kind: jump
+```"""
+    )
+
+    city = model["projection_models"]["city"]["model"]
+    assert city["default_color_by"] == "mood"
+    assert city["edge_color_by"] == "kind"
+    assert city["edge_label_from"] == "kind"
+    assert city["hover_attrs"] == ["mood"]
+    assert city["aggregate_edges"] == {"when_collapsed": False, "by": "kind"}
+
+
 def test_items_parser_reads_base_view_label():
     model = parse_tasks_text(
         """```items

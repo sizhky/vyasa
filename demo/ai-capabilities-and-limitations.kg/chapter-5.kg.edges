@@ -1,0 +1,5 @@
+c5e1: n18 -> n19 fails_as
+c5e2: n18 -> n20 fails_as
+c5e3: n19 -> n27 fails_as
+c5e4: n18 -> n32 mitigated_by
+c5e5: n27 -> n38 requires

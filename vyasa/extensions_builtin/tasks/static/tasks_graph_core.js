@@ -86,7 +86,7 @@ export function applyTasksFilterAttributePolicy(keys, model) {
     const whitelistSource = Array.isArray(model?.filter_whitelist) && model.filter_whitelist.length
         ? model.filter_whitelist
         : model?.filter_attributes;
-    const whitelist = Array.isArray(whitelistSource)
+    const whitelist = Array.isArray(whitelistSource) && whitelistSource.length
         ? new Set(whitelistSource.map((key) => String(key || '').trim()).filter(Boolean))
         : null;
     const blacklist = new Set(

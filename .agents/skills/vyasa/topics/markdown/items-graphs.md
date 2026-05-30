@@ -17,12 +17,12 @@ items_schema: roadmap.kg.schema
 ## Sidecars
 
 ```text
-roadmap.kg.schema   # metadata, source aliases, optional relation defaults, purposeful views
-roadmap.kg.nodes    # markerless compact node ids, labels, unique inline attrs
-roadmap.kg.edges    # markerless edge ids, source/target, one relation, unique inline attrs
-roadmap.kg.attrs    # shared node/edge attr assignments
-roadmap.kg.palette  # node/edge palettes as JSON payload
-roadmap.kg.cache    # generated CLI lookup cache; do not edit
+roadmap.kg/kg.schema   # metadata, common files, source aliases, purposeful views
+roadmap.kg/kg.nodes    # markerless compact node ids, labels, unique inline attrs
+roadmap.kg/kg.edges    # base markerless edge set
+roadmap.kg/kg.attrs    # shared indexed node/edge attr assignments
+roadmap.kg/kg.palette  # node/edge palettes as JSON payload
+roadmap.kg/chapter-1.kg.edges  # optional story/topology edge source
 ```
 
 ## Schema
@@ -31,14 +31,18 @@ roadmap.kg.cache    # generated CLI lookup cache; do not edit
 @graph id=roadmap title=Roadmap initial_view=delivery
 
 @sources
+nodes=kg.nodes
+attrs=kg.attrs
 base:
-	nodes=roadmap.kg.nodes
-	edges=roadmap.kg.edges
-	attrs=roadmap.kg.attrs
-dep:
-	edges=roadmap.dep.kg.edges
-palette=roadmap.kg.palette
-cache=roadmap.kg.cache
+	edges=kg.edges
+chapter1:
+	edges=chapter-1.kg.edges
+chapter2:
+	edges=kg.edges
+	attrs:
+		stage: [Draft, Review]
+		owner: [Design, Eng]
+palette=kg.palette
 
 @relations
 unlocks color=relation.unlocks
@@ -51,23 +55,27 @@ delivery:
 	group_by,color_by=status
 	caption="Track delivery state"
 owners:
-	source=base
+	source=chapter2
 	group_by=owner
 	color_by=status
 	caption="Find ownership gaps"
 dependency:
-	source=base+dep
+	source=chapter1
 	group_by=status
 	edge_label_from=relation
 	caption="Inspect flow"
 ```
 
 - `@graph` names the graph and picks `initial_view`; there is no generic `Default` tab.
-- `@sources` defines reusable aliases. Use aliases instead of repeating file paths in every view.
-- `base+dep` composes source aliases. Shared nodes/attrs can combine with alternate edge files for different projections.
+- Prefer folder packs and point markdown to `items_schema: roadmap.kg/kg.schema`.
+- Top-level `nodes=` and `attrs=` in `@sources` are common to every source.
+- Source `edges=` can select a story/topology by edge endpoints.
+- Source nested `attrs:` selects nodes organically by indexed attr groups. Multiple attr keys are ANDed; listed values inside one key are ORed.
+- `base+dep` composes source aliases.
 - `@relations` is optional edge-type vocabulary. Use it to document relation ids, attach default presentation such as `color`, and let CLI validation catch typos. Relation label text defaults to the relation id.
 - `@views` must have a real purpose through `caption`.
 - `group_by,color_by=status` expands to `group_by=status color_by=status`; `X,Y,Z=value` is valid for simple scalar values.
+- Projection display controls may live on views: `hover_attrs`, `edge_color_by`, `edge_label_from`, `aggregate_edges`, `default_open_depth`, and spacing/layout keys.
 
 ## Nodes
 
@@ -121,12 +129,19 @@ confidence:
   medium: e2
 ```
 
-- Attributes stored in `.kg.nodes` or `.kg.edges` are inline attrs.
-- Attributes stored in `.kg.attrs` are indexed/shared attrs.
+- Attributes stored in `.kg.nodes` or `.kg.edges` are inline attrs. They are detail/search material, not default filter/group-by dimensions.
+- Attributes stored in `.kg.attrs` are indexed/shared attrs. They are default filter/group-by dimensions.
 - The rendered model and CLI cache merge both into one logical attr map.
 - Prefer `.kg.attrs` when the same key/value applies to many records.
 - Attr values before `:` are raw text; do not quote values with spaces unless they contain `:` or newlines.
 - Prefer readable block form over long lines when values are descriptive text.
+- Derived runtime metrics such as `rank`, `connectivity`, and `centrality` are special metrics, not indexed attrs.
+
+## Runtime Filters And Grouping
+
+- Filter panel defaults to indexed `.kg.attrs` keys.
+- Custom `Group by` in the default view builds an ad hoc hierarchy from indexed attrs only.
+- Custom grouping opens all generated groups, equivalent to `default_open_depth=-1`.
 
 ## Palette
 

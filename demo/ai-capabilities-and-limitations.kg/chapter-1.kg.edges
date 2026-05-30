@@ -1,0 +1,5 @@
+c1e1: n1 -> n2 defines
+c1e2: n1 -> n4 introduces
+c1e3: n4 -> n5 becomes
+c1e4: n5 -> n12 powers
+c1e5: n12 -> n13 powers

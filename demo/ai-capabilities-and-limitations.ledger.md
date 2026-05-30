@@ -14,14 +14,7 @@ default_open_depth: -1
 width: 96vw
 min_height: 80vh
 node-card-width: 34rem
-default_color_by: role
-hover_attrs: [chapter, role, property, failure_family, mitigation_family, habit]
-edge_color_by: relation
-edge_label_from: relation
-aggregate_edges:
-  when_collapsed: true
-  by: relation
-items_schema: ai-capabilities-and-limitations.kg.schema
+items_schema: ai-capabilities-and-limitations.kg/kg.schema
 ---
 ```
 

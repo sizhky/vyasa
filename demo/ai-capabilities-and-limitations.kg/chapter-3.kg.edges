@@ -1,0 +1,5 @@
+c3e1: n12 -> n14 fails_as
+c3e2: n12 -> n15 introduces
+c3e3: n15 -> n18 introduces
+c3e4: n18 -> n21 introduces
+c3e5: n21 -> n22 powers

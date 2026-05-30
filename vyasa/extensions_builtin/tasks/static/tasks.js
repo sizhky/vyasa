@@ -39,6 +39,8 @@ const TASKS_GANTT_BAR_MIN_HEIGHT = 34;
 const TASKS_GANTT_LEFT = 210;
 const TASKS_GANTT_TOP = 86;
 const TASKS_GANTT_PROJECTION_ID = '__gantt__';
+const TASKS_PROJECTION_UNSPECIFIED_LABEL = 'Unspecified';
+const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity', 'centrality']);
 const TASKS_SPACING_PRESETS = {
     compact: { nodeSpacing: 24, layerSpacing: 64, collisionGap: 56, groupPadding: 28, edgeLabelWidth: 220 },
     normal: { nodeSpacing: 44, layerSpacing: 96, collisionGap: 96, groupPadding: 40, edgeLabelWidth: 240 },
@@ -74,6 +76,32 @@ function readTasksLayoutConfig(wrapper) {
 function readTasksColorMixConfig(wrapper) {
     const enabled = String(wrapper.dataset.tasksColorMix || 'true').trim().toLowerCase() !== 'false';
     const intensity = Math.max(0, Math.min(100, Number.parseFloat(wrapper.dataset.tasksColorMixIntensity || '22') || 22));
+    return { enabled, intensity, paper: Math.max(0, 100 - intensity) };
+}
+
+function tasksModelSetting(model, key, fallback = '') {
+    const value = model && Object.prototype.hasOwnProperty.call(model, key) ? model[key] : undefined;
+    if (value === null || value === undefined || String(value).trim?.() === '') return fallback;
+    return value;
+}
+
+function readTasksLayoutConfigForModel(wrapper, model) {
+    const presetName = String(tasksModelSetting(model, 'spacing', wrapper.dataset.tasksSpacing || 'normal')).trim().toLowerCase();
+    const preset = TASKS_SPACING_PRESETS[presetName] || TASKS_SPACING_PRESETS.normal;
+    return {
+        spacing: presetName,
+        elkDirection: readTasksDirection(tasksModelSetting(model, 'layout_direction', wrapper.dataset.tasksLayoutDirection)),
+        nodeSpacing: readTasksNumber(tasksModelSetting(model, 'node_spacing', wrapper.dataset.tasksNodeSpacing), preset.nodeSpacing),
+        layerSpacing: readTasksNumber(tasksModelSetting(model, 'layer_spacing', wrapper.dataset.tasksLayerSpacing), preset.layerSpacing),
+        collisionGap: readTasksNumber(tasksModelSetting(model, 'collision_gap', wrapper.dataset.tasksCollisionGap), preset.collisionGap),
+        groupPadding: readTasksNumber(tasksModelSetting(model, 'group_padding', wrapper.dataset.tasksGroupPadding), preset.groupPadding),
+        edgeLabelWidth: readTasksNumber(tasksModelSetting(model, 'edge_label_width', wrapper.dataset.tasksEdgeLabelWidth), preset.edgeLabelWidth),
+    };
+}
+
+function readTasksColorMixConfigForModel(wrapper, model) {
+    const enabled = String(tasksModelSetting(model, 'color_mix', wrapper.dataset.tasksColorMix || 'true')).trim().toLowerCase() !== 'false';
+    const intensity = Math.max(0, Math.min(100, Number.parseFloat(tasksModelSetting(model, 'color_mix_intensity', wrapper.dataset.tasksColorMixIntensity || '22')) || 22));
     return { enabled, intensity, paper: Math.max(0, 100 - intensity) };
 }
 
@@ -335,11 +363,15 @@ function writeTasksPrefs(model, prefs) {
     const projectionPrefs = prefs?.projectionPrefs && typeof prefs.projectionPrefs === 'object'
         ? prefs.projectionPrefs
         : {};
+    const groupByHierarchy = Array.isArray(prefs?.groupByHierarchy)
+        ? prefs.groupByHierarchy.map((entry) => String(entry || '').trim()).filter(Boolean)
+        : [];
     const edgeOpacity = prefs?.edgeOpacity;
     const payload = JSON.stringify({
         version: 1,
         projectionId,
         edgeOpacity,
+        groupByHierarchy,
         projectionPrefs,
     });
     const attempt = () => {
@@ -402,7 +434,8 @@ function tasksNodeMetaEntries(node) {
     const hidden = new Set([
         'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
         'handlelayout', 'highlightmode', 'sourcegroupid', '__rendered_attrs__',
-        'width', 'height', 'position', 'parentId', 'color', 'href', 'rank',
+        'width', 'height', 'position', 'parentId', 'color', 'href',
+        ...TASKS_DERIVED_METRIC_KEYS,
     ]);
     return Object.entries(node)
         .filter(([key, value]) => !hidden.has(String(key).toLowerCase()) && value !== null && value !== undefined && value !== '' && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))
@@ -448,11 +481,12 @@ function tasksGroupDetailEntries(nodeId, model) {
     if (!nodeId || !model) return [];
     const group = (model.groups || []).find((entry) => entry.id === nodeId);
     if (!group) return [];
-    const excludedDerivedKeys = new Set(['rank', 'centrality', 'connectivity']);
+    const excludedDerivedKeys = TASKS_DERIVED_METRIC_KEYS;
     const hidden = new Set([
         'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
         'handlelayout', 'highlightmode', 'sourcegroupid', '__rendered_attrs__',
-        'width', 'height', 'position', 'parentid', 'color', 'href', 'rank', 'centrality', 'connectivity',
+        'width', 'height', 'position', 'parentid', 'color', 'href',
+        ...TASKS_DERIVED_METRIC_KEYS,
     ]);
     const descendants = collectTasksGroupDescendants(nodeId, model);
     const sampleNodes = descendants.tasks.length ? descendants.tasks : descendants.groups;
@@ -524,7 +558,8 @@ function tasksFilterOptions(model) {
     const hidden = new Set([
         'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
         'handlelayout', 'highlightmode', 'sourcegroupid',
-        'width', 'height', 'position', 'parentId', 'color', 'href', 'rank',
+        'width', 'height', 'position', 'parentId', 'color', 'href',
+        ...TASKS_DERIVED_METRIC_KEYS,
     ]);
     const buckets = new Map();
     const visit = (node) => {
@@ -556,7 +591,7 @@ function tasksColorOptions(model) {
     const palettes = model?.node_color_palettes && typeof model.node_color_palettes === 'object'
         ? model.node_color_palettes
         : {};
-    const declaredKeys = Object.keys(palettes).filter((key) => key && typeof palettes[key] === 'object' && Object.keys(palettes[key] || {}).length > 0);
+    const declaredKeys = Object.keys(palettes).filter((key) => key && !TASKS_DERIVED_METRIC_KEYS.has(String(key).toLowerCase()) && typeof palettes[key] === 'object' && Object.keys(palettes[key] || {}).length > 0);
     const nodes = [...(model?.groups || []), ...(model?.tasks || [])];
     return declaredKeys
         .filter((key) => nodes.some((node) => {
@@ -568,6 +603,134 @@ function tasksColorOptions(model) {
             label: tasksColorModeLabel(key),
         }))
         .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function tasksGroupByOptions(model) {
+    const keys = Array.isArray(model?.index_attributes) ? model.index_attributes : [];
+    return Array.from(new Set(keys.map((key) => String(key || '').trim()).filter(Boolean)))
+        .filter((key) => !TASKS_DERIVED_METRIC_KEYS.has(key.toLowerCase()))
+        .map((key) => ({ key, label: tasksNodeMetaLabel(key) }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function tasksSlug(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'item';
+}
+
+function buildTasksCollapsedGraph(model) {
+    const groupTree = model.group_tree || {};
+    const taskChildren = model.task_children || {};
+    const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
+    const taskToGroup = Object.fromEntries((model.tasks || []).map((task) => [task.id, task.group_id || null]));
+    const groupParent = Object.fromEntries((model.groups || []).map((group) => [group.id, group.parent_group_id || null]));
+    const nodes = [];
+    const queue = [...(groupTree.null || [])];
+    const order = [];
+    while (queue.length) {
+        const groupId = queue.shift();
+        order.push(groupId);
+        queue.push(...(groupTree[groupId] || []));
+    }
+    order.forEach((groupId, index) => {
+        const group = groupsById[groupId] || {};
+        nodes.push({
+            id: groupId,
+            label: group.label || groupId,
+            href: group.href,
+            kind: 'group',
+            collapsed: true,
+            x: 80 + (index % 3) * 280,
+            y: 80 + Math.floor(index / 3) * 140,
+            width: 250,
+            height: 80,
+            child_group_ids: groupTree[groupId] || [],
+            child_task_ids: taskChildren[groupId] || [],
+        });
+    });
+    for (const task of model.tasks || []) {
+        if (task.group_id !== null && task.group_id !== undefined) continue;
+        nodes.push({ id: task.id, label: task.label || task.id, href: task.href, kind: 'task', collapsed: true, x: 80, y: 80, width: 220, height: 60 });
+    }
+    const collapsedOwner = (taskId) => {
+        let cur = taskToGroup[taskId] || null;
+        let owner = null;
+        while (cur !== null && cur !== undefined) {
+            owner = cur;
+            cur = groupParent[cur] || null;
+        }
+        return owner || taskId;
+    };
+    const edges = [];
+    const seen = new Set();
+    for (const edge of model.dependency_edges || []) {
+        const source = collapsedOwner(edge.source);
+        const target = collapsedOwner(edge.target);
+        const key = `${source}->${target}`;
+        if (source === target || seen.has(key)) continue;
+        seen.add(key);
+        edges.push({ ...edge, source, target, kind: 'collapsed-proxy' });
+    }
+    return { nodes, edges };
+}
+
+function buildTasksGroupedState(sourceModel, groupByHierarchy) {
+    const attrs = (groupByHierarchy || []).map((attr) => String(attr || '').trim()).filter(Boolean);
+    if (!attrs.length) return null;
+    const groups = [];
+    const groupsByPath = new Map();
+    const groupTree = { null: [] };
+    const taskChildren = {};
+    const tasks = [];
+    const valuePath = (task) => attrs.map((attr) => String(task?.[attr] ?? '').trim() || TASKS_PROJECTION_UNSPECIFIED_LABEL);
+    for (const task of sourceModel.tasks || []) {
+        const path = valuePath(task);
+        for (let depth = 1; depth <= path.length; depth += 1) {
+            const prefix = path.slice(0, depth);
+            const key = prefix.join('\u001f');
+            if (groupsByPath.has(key)) continue;
+            const parentKey = prefix.slice(0, -1).join('\u001f');
+            const parentId = parentKey ? groupsByPath.get(parentKey)?.id : null;
+            const attr = attrs[depth - 1];
+            const value = prefix[prefix.length - 1];
+            const groupId = tasksSlug(['custom', ...prefix.map((part, index) => `${attrs[index]}-${part}`)].join('__'));
+            const group = {
+                id: groupId,
+                label: tasksNodeMetaLabel(attr) + ' > ' + value,
+                parent_group_id: parentId,
+                __projection_group__: true,
+                projection: '__custom_group_by__',
+                [attr]: value,
+            };
+            groups.push(group);
+            groupsByPath.set(key, group);
+            const parentTreeKey = parentId === null ? 'null' : parentId;
+            if (!groupTree[parentTreeKey]) groupTree[parentTreeKey] = [];
+            groupTree[parentTreeKey].push(groupId);
+        }
+        const leaf = groupsByPath.get(path.join('\u001f'));
+        const taskCopy = { ...task, group_id: leaf?.id || null };
+        tasks.push(taskCopy);
+        const childKey = taskCopy.group_id === null ? 'null' : taskCopy.group_id;
+        if (!taskChildren[childKey]) taskChildren[childKey] = [];
+        taskChildren[childKey].push(taskCopy.id);
+    }
+    const visibleTaskIds = new Set(tasks.map((task) => task.id));
+    const model = {
+        ...sourceModel,
+        graph_id: `${sourceModel.graph_id || 'tasks'}-custom-group-by`,
+        groups,
+        tasks,
+        dependency_edges: (sourceModel.dependency_edges || []).filter((edge) => visibleTaskIds.has(edge.source) && visibleTaskIds.has(edge.target)),
+        group_tree: groupTree,
+        task_children: taskChildren,
+        document_order: [...groups.map((group) => group.id), ...tasks.map((task) => task.id)],
+        active_projection: '__custom_group_by__',
+        default_color_by: attrs[0] || sourceModel.default_color_by || '',
+        default_open_depth: -1,
+    };
+    delete model.projection_models;
+    delete model.view_projections;
+    return { model, graph: buildTasksCollapsedGraph(model), projectionId: '__custom_group_by__' };
 }
 
 function isTasksGradientPalette(palette) {
@@ -2160,8 +2323,9 @@ function selectTasksProjectionState(sourceModel, sourceGraph, projectionId) {
     return { model: entry.model, graph: entry.graph, projectionId: id };
 }
 
-function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode) {
-    const projectionState = selectTasksProjectionState(sourceModel, sourceGraph, projectionId);
+function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode, groupByHierarchy = []) {
+    const customGroupedState = !String(projectionId || '').trim() ? buildTasksGroupedState(sourceModel, groupByHierarchy) : null;
+    const projectionState = customGroupedState || selectTasksProjectionState(sourceModel, sourceGraph, projectionId);
     if (viewMode !== 'gantt') return projectionState;
     return {
         ...projectionState,
@@ -2183,11 +2347,6 @@ async function renderTasksGraphs(rootElement = document) {
             needsRetry = true;
             continue;
         }
-        const jitterConfig = {
-            x: Number.parseFloat(wrapper.dataset.tasksJitter || '0'),
-            y: Number.parseFloat(wrapper.dataset.tasksJitterY || wrapper.dataset.tasksJitter || '0'),
-        };
-        const layoutConfig = readTasksLayoutConfig(wrapper);
         const sourceModel = JSON.parse(wrapper.dataset.tasksPayload || '{"groups":[],"tasks":[],"group_tree":{},"task_children":{},"dependency_edges":[]}');
         const sourceGraph = normalizeTasksGraphNodes(JSON.parse(wrapper.dataset.tasksGraph || '{"nodes":[],"edges":[]}'), sourceModel);
         const widgetId = wrapper.id;
@@ -2195,11 +2354,6 @@ async function renderTasksGraphs(rootElement = document) {
         const ganttEnabled = String(wrapper.dataset.tasksGantt || '').trim().toLowerCase() === 'true';
         const defaultViewMode = ganttEnabled && String(wrapper.dataset.tasksDefaultView || '').trim().toLowerCase() === 'gantt' ? 'gantt' : 'graph';
         const defaultFiltersOpen = String(wrapper.dataset.tasksOpenFiltersDefault || '').trim().toLowerCase() === 'true';
-        const nodeCardWidth = String(wrapper.dataset.tasksNodeCardWidth || '480px').trim() || '480px';
-        const hoverFontSize = String(wrapper.dataset.tasksHoverFontSize || '12px').trim() || '12px';
-        const colorMix = readTasksColorMixConfig(wrapper);
-        const projectionGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(wrapper.dataset.tasksProjectionGroupOpacity || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`) || TASKS_PROJECTION_GROUP_OPACITY_DEFAULT));
-        const projectionGroupExpandedOpacity = Math.max(1, Math.min(projectionGroupOpacity, Math.round(projectionGroupOpacity * 0.5)));
         const TasksGraphApp = (props) => {
             const React = window.React;
             const Handle = rf.Handle;
@@ -2220,18 +2374,32 @@ async function renderTasksGraphs(rootElement = document) {
             const initialGraphProjectionId = initialProjectionId === TASKS_GANTT_PROJECTION_ID ? '' : initialProjectionId;
             const [activeProjectionId, setActiveProjectionId] = React.useState(initialGraphProjectionId);
             const [viewMode, setViewMode] = React.useState(defaultViewMode);
+            const [groupByHierarchy, setGroupByHierarchy] = React.useState(() => (
+                Array.isArray(sourcePrefsRef.current?.groupByHierarchy) ? sourcePrefsRef.current.groupByHierarchy : []
+            ));
             const projectionState = React.useMemo(
-                () => buildTasksViewState(sourceModel, sourceGraph, activeProjectionId, viewMode),
-                [activeProjectionId, viewMode]
+                () => buildTasksViewState(sourceModel, sourceGraph, activeProjectionId, viewMode, groupByHierarchy),
+                [activeProjectionId, viewMode, groupByHierarchy]
             );
             const model = projectionState.model;
+            const effectiveDefaultOpenDepth = Number.parseInt(tasksModelSetting(model, 'default_open_depth', `${defaultOpenDepth}`), 10);
+            const jitterConfig = React.useMemo(() => ({
+                x: Number.parseFloat(tasksModelSetting(model, 'jitter', wrapper.dataset.tasksJitter || '0')),
+                y: Number.parseFloat(tasksModelSetting(model, 'jitter_y', wrapper.dataset.tasksJitterY || wrapper.dataset.tasksJitter || '0')),
+            }), [model]);
+            const layoutConfig = React.useMemo(() => readTasksLayoutConfigForModel(wrapper, model), [model]);
+            const nodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '480px')).trim() || '480px';
+            const hoverFontSize = String(tasksModelSetting(model, 'hover-font-size', wrapper.dataset.tasksHoverFontSize || '12px')).trim() || '12px';
+            const colorMix = readTasksColorMixConfigForModel(wrapper, model);
+            const projectionGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(tasksModelSetting(model, 'projection-group-opacity', wrapper.dataset.tasksProjectionGroupOpacity || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`)) || TASKS_PROJECTION_GROUP_OPACITY_DEFAULT));
+            const projectionGroupExpandedOpacity = Math.max(1, Math.min(projectionGroupOpacity, Math.round(projectionGroupOpacity * 0.5)));
             const rawGraph = React.useMemo(
                 () => normalizeTasksGraphNodes(projectionState.graph || { nodes: [], edges: [] }, model),
                 [projectionState, model]
             );
             const initialExpandedSet = React.useMemo(
-                () => collectExpandedGroupsByDepth(model.group_tree, Number.isNaN(defaultOpenDepth) ? 0 : defaultOpenDepth),
-                [model]
+                () => collectExpandedGroupsByDepth(model.group_tree, Number.isNaN(effectiveDefaultOpenDepth) ? 0 : effectiveDefaultOpenDepth),
+                [model, effectiveDefaultOpenDepth]
             );
             const baseLayoutRef = React.useRef(null);
             const groupLayoutsRef = React.useRef({});
@@ -2244,6 +2412,7 @@ async function renderTasksGraphs(rootElement = document) {
             );
             const hydrateExpandedSet = React.useCallback((prefs) => {
                 const validIds = new Set((model.groups || []).map((group) => group.id));
+                if (model.active_projection === '__custom_group_by__') return new Set(initialExpandedSet);
                 const saved = Array.isArray(prefs?.expandedGroupIds) ? prefs.expandedGroupIds : null;
                 if (saved) return new Set(saved.filter((id) => validIds.has(id)));
                 return new Set(initialExpandedSet);
@@ -2370,16 +2539,18 @@ async function renderTasksGraphs(rootElement = document) {
                     ...(sourcePrefsRef.current || {}),
                     projectionId: activeProjectionId,
                     edgeOpacity,
+                    groupByHierarchy,
                     projectionPrefs: nextProjectionPrefs,
                 };
                 storedProjectionPrefsRef.current = nextProjectionPrefs;
                 writeTasksPrefs(sourceModel, {
                     projectionId: activeProjectionId,
                     edgeOpacity,
+                    groupByHierarchy,
                     projectionPrefs: nextProjectionPrefs,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIds);
-            }, [sourceModel, activeFilters, searchQuery, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeOpacity, expanded, checkedNodeIds]);
+            }, [sourceModel, activeFilters, searchQuery, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeOpacity, groupByHierarchy, expanded, checkedNodeIds]);
             const checkedNodeIdSet = React.useMemo(() => new Set(normalizeTasksCheckedNodeIds(checkedNodeIds)), [checkedNodeIds]);
             const toggleCheckedNode = React.useCallback((nodeId) => {
                 const normalizedId = String(nodeId || '').trim();
@@ -2401,7 +2572,7 @@ async function renderTasksGraphs(rootElement = document) {
             const ensureBaseLayout = React.useCallback(async () => {
                 if (!baseLayoutRef.current) baseLayoutRef.current = await layoutBaseTasksGraph(rawGraph, model, jitterConfig, layoutConfig);
                 return baseLayoutRef.current;
-            }, [rawGraph, model]);
+            }, [rawGraph, model, jitterConfig, layoutConfig]);
             const rebuildLayout = React.useCallback(async (expandedSet, mode = viewMode) => {
                 logTasksColorDebug(model, rawGraph.nodes, activeColorBy, activeColorPalette, colorMix);
                 if (mode === 'gantt') {
@@ -3347,9 +3518,13 @@ async function renderTasksGraphs(rootElement = document) {
             const FilterPanel = () => {
                 const options = tasksFilterOptions(model);
                 const colorOptions = tasksColorOptions(model);
+                const groupByOptions = tasksGroupByOptions(sourceModel);
                 const activePaletteEntries = activeColorBy === 'rank' ? [] : tasksColorPaletteEntries(model, activeColorBy);
                 const activeGradientPalette = isTasksGradientPalette(activeColorPalette);
-                const activeCount = Object.values(activeFilters || {}).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : (value ? 1 : 0)), 0) + (activeColorBy ? 1 : 0) + (searchMatches.active ? 1 : 0);
+                const customGroupingActive = !String(activeProjectionId || '').trim() && viewMode !== 'gantt';
+                const activeGroupByCount = customGroupingActive ? groupByHierarchy.filter(Boolean).length : 0;
+                const groupByLevels = [...groupByHierarchy.filter(Boolean), ''];
+                const activeCount = Object.values(activeFilters || {}).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : (value ? 1 : 0)), 0) + (activeColorBy ? 1 : 0) + (searchMatches.active ? 1 : 0) + activeGroupByCount;
                 const isOpen = !filtersCollapsed;
                 return React.createElement('aside', {
                     ref: filterPanelRef,
@@ -3417,7 +3592,44 @@ async function renderTasksGraphs(rootElement = document) {
                                 }),
                                 React.createElement('span', { style: { opacity: 0.8, minWidth: '3.5em', textAlign: 'right' } }, tasksEdgeOpacityLabel(edgeOpacity))
                             ),
-                            React.createElement('button', { type: 'button', onClick: () => { setActiveFilters({}); setSearchInputValue(''); setSearchQuery(''); setActiveColorBy(tasksResolvedProjectionDefaultColorBy(model)); setEdgeOpacity(defaultEdgeOpacity); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline', whiteSpace: 'nowrap' } }, 'Reset')
+                            React.createElement('button', { type: 'button', onClick: () => { setActiveFilters({}); setSearchInputValue(''); setSearchQuery(''); setActiveColorBy(tasksResolvedProjectionDefaultColorBy(model)); setGroupByHierarchy([]); setEdgeOpacity(defaultEdgeOpacity); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline', whiteSpace: 'nowrap' } }, 'Reset')
+                        ),
+                        React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
+                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Group by'),
+                                React.createElement('div', { style: { display: 'grid', gap: '6px', minWidth: 0 } },
+                                    groupByLevels.map((selectedKey, level) => React.createElement('select', {
+                                        key: `group-by-${level}`,
+                                        value: selectedKey,
+                                        disabled: Boolean(activeProjectionId) || viewMode === 'gantt',
+                                        onChange: (event) => {
+                                            const next = groupByHierarchy.slice();
+                                            next[level] = event.target.value;
+                                            setGroupByHierarchy(next.slice(0, level + 1).filter(Boolean));
+                                            setActiveProjectionId('');
+                                            setViewMode('graph');
+                                            pendingFitActionRef.current = 'mode';
+                                        },
+                                        style: {
+                                            width: '100%',
+                                            minWidth: 0,
+                                            border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                            borderRadius: '8px',
+                                            padding: '6px 8px',
+                                            background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                            color: 'inherit',
+                                        },
+                                    },
+                                        React.createElement('option', { value: '' }, level === 0 ? 'No custom grouping' : `Level ${level + 1}: none`),
+                                        ...groupByOptions
+                                            .filter((option) => option.key === groupByHierarchy[level] || !groupByHierarchy.includes(option.key))
+                                            .map((option) => React.createElement('option', { key: option.key, value: option.key }, option.label))
+                                    )),
+                                    activeProjectionId || viewMode === 'gantt'
+                                        ? React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.3 } }, 'Custom grouping applies to Default view.')
+                                        : null
+                                )
+                            )
                         ),
                         React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                             React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },

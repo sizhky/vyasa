@@ -53,9 +53,13 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                 continue
             key = line[:key_index].strip()
             value = line[key_index + 1:].strip()
-            if key in {"id", "title", "default_color_by", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source", "items_schema"}:
+            if key in {"id", "title", "default_color_by", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source", "items_schema", "default_open_depth"}:
                 config[key] = _read_string(value)
                 cursor += 1
+                continue
+            if key == "aggregate_edges":
+                config[key] = _read_mapping_block(frontmatter_lines, cursor, indent)
+                cursor = config[key].pop("__next_cursor__", cursor + 1)
                 continue
             if key == "view_projections":
                 projections = []
@@ -324,6 +328,26 @@ def _read_string_list(text: str) -> list[str]:
             return []
         return [_read_string(part) for part in _split_unquoted(inner, ",") if part.strip()]
     return [_read_string(part) for part in value.split(",") if part.strip()]
+
+
+def _read_mapping_block(lines: list[str], cursor: int, indent: int) -> dict:
+    out = {}
+    cursor += 1
+    while cursor < len(lines):
+        raw = lines[cursor]
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            cursor += 1
+            continue
+        child_indent = _count_indent(raw)
+        if child_indent <= indent:
+            break
+        line = raw.strip()
+        key_index = _find_unquoted(line, ":")
+        if key_index >= 0:
+            out[line[:key_index].strip()] = _read_attr_value(line[key_index + 1:].strip())
+        cursor += 1
+    out["__next_cursor__"] = cursor
+    return out
 
 
 def _clean_palette_map(value) -> dict:
@@ -890,7 +914,7 @@ def _apply_kg_schema(graph: dict, current_path: str | Path | None) -> None:
         return
     schema_path = _resolve_required_source(current_path, schema_source)
     compiled = read_kg_pack(schema_path)
-    for key in ("id", "title", "default_projection", "view_projections", "color_palette_source", "kg_schema", "kg_cache", "kg_sources"):
+    for key in ("id", "title", "default_projection", "view_projections", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "index_attributes", "filter_attributes"):
         if compiled.get(key) and not graph.get(key):
             graph[key] = compiled[key]
     graph["tasks"].extend(compiled.get("tasks", []))
@@ -929,6 +953,10 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         graph["filter_blacklist"] = config["filter_blacklist"]
     if "hover_attrs" in config and "hover_attrs" not in graph:
         graph["hover_attrs"] = config["hover_attrs"]
+    if "aggregate_edges" in config and "aggregate_edges" not in graph:
+        graph["aggregate_edges"] = config["aggregate_edges"]
+    if "default_open_depth" in config and "default_open_depth" not in graph:
+        graph["default_open_depth"] = config["default_open_depth"]
     if config.get("color_palette_source") and not graph.get("color_palette_source"):
         graph["color_palette_source"] = config["color_palette_source"]
     if config.get("color_by") and not graph.get("color_by"):
@@ -991,9 +1019,12 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "color_by": graph.get("color_by", ""),
         "default_color_by": graph.get("default_color_by", ""),
         "filter_attributes": graph.get("filter_attributes", []),
+        "index_attributes": graph.get("index_attributes", []),
         "filter_whitelist": graph.get("filter_whitelist", []),
         "filter_blacklist": graph.get("filter_blacklist", []),
         "hover_attrs": graph.get("hover_attrs", []),
+        "aggregate_edges": graph.get("aggregate_edges", {}),
+        "default_open_depth": graph.get("default_open_depth", ""),
         "color_palette": graph.get("color_palette", {}),
         "node_color_palettes": graph.get("node_color_palettes", {}),
         "color_palette_source": graph.get("color_palette_source", ""),

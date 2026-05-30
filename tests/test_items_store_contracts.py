@@ -129,10 +129,10 @@ def test_items_parser_loads_kg_schema_pack(tmp_path):
         """@graph id=roadmap title=Roadmap initial_view=delivery
 
 @sources
+nodes=roadmap.kg.nodes
+attrs=roadmap.kg.attrs
 base:
-    nodes=roadmap.kg.nodes
     edges=roadmap.kg.edges
-    attrs=roadmap.kg.attrs
 palette=roadmap.kg.palette
 cache=roadmap.kg.cache
 
@@ -146,10 +146,13 @@ delivery:
     caption="Track delivery"
 ownership:
     source=base
-    node_ids="n1 n2"
+    where=owner:eng
     group_by=owner
     color_by=status
+    edge_color_by=relation
     edge_label_from=relation
+    hover_attrs=owner,status
+    aggregate_edges="when_collapsed=true by=relation"
 """,
         encoding="utf-8",
     )
@@ -169,31 +172,109 @@ items_schema: roadmap.kg.schema
     assert model["tasks"][0]["status"] == "todo"
     assert model["dependency_edges"][0]["relation"] == "unlocks"
     assert model["dependency_edges"][0]["confidence"] == "high"
-    assert model["view_projections"][1]["node_ids"] == ["n1", "n2"]
+    assert model["view_projections"][1]["where"] == {"owner": "eng"}
+    assert model["view_projections"][1]["edge_color_by"] == "relation"
+    assert model["view_projections"][1]["hover_attrs"] == ["owner", "status"]
+    assert model["view_projections"][1]["aggregate_edges"] == {"when_collapsed": True, "by": "relation"}
+    assert model["projection_models"]["ownership"]["model"]["edge_color_by"] == "relation"
+    assert model["projection_models"]["ownership"]["model"]["hover_attrs"] == ["owner", "status"]
+    assert model["index_attributes"] == ["status", "owner"]
+    assert model["filter_attributes"] == ["status", "owner"]
+    assert model["node_color_palettes"]["status"] == {"todo": "#f00", "done": "#0f0"}
     assert model["view_projections"][0]["caption"] == "Track delivery"
     assert model["default_projection"] == "delivery"
 
 
-def test_kg_pack_projection_node_ids_scope_projection_graph(tmp_path):
+def test_kg_pack_projection_where_scopes_projection_graph(tmp_path):
     (tmp_path / "roadmap.kg.schema").write_text(
         """@graph id=roadmap title=Roadmap initial_view=chapter
 
 @sources
+nodes=roadmap.kg.nodes
+attrs=roadmap.kg.attrs
 base:
-    nodes=roadmap.kg.nodes
     edges=roadmap.kg.edges
-    attrs=roadmap.kg.attrs
 
 @views
 chapter:
-    node_ids="n1 n2"
-    group_by=color_by=status
+    where=status:now
+    group_by,color_by=status
 """,
         encoding="utf-8",
     )
     (tmp_path / "roadmap.kg.nodes").write_text("n1: Start\nn2: Middle\nn3: Later\n", encoding="utf-8")
     (tmp_path / "roadmap.kg.edges").write_text("e1: n1 -> n2 unlocks\ne2: n2 -> n3 unlocks\n", encoding="utf-8")
     (tmp_path / "roadmap.kg.attrs").write_text("@node_attrs\nstatus:\n  now: n1 n2\n  later: n3\n", encoding="utf-8")
+
+    model = parse_tasks_text("""```items
+---
+items_schema: roadmap.kg.schema
+---
+```""", current_path=tmp_path / "graph.md")
+
+    chapter = model["projection_models"]["chapter"]["model"]
+    assert [task["id"] for task in chapter["tasks"]] == ["n1", "n2"]
+    assert [edge["id"] for edge in chapter["dependency_edges"]] == ["e1"]
+
+
+def test_kg_pack_projection_edge_source_selects_endpoint_nodes(tmp_path):
+    (tmp_path / "roadmap.kg.schema").write_text(
+        """@graph id=roadmap title=Roadmap initial_view=chapter
+
+@sources
+nodes=roadmap.kg.nodes
+attrs=roadmap.kg.attrs
+base:
+    edges=roadmap.kg.edges
+chapter:
+    edges=chapter.kg.edges
+
+@views
+chapter:
+    source=chapter
+    group_by,color_by=status
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "roadmap.kg.nodes").write_text("n1: Start\nn2: Middle\nn3: Later\n", encoding="utf-8")
+    (tmp_path / "roadmap.kg.edges").write_text("e1: n1 -> n2 unlocks\ne2: n2 -> n3 unlocks\n", encoding="utf-8")
+    (tmp_path / "chapter.kg.edges").write_text("c1: n2 -> n3 unlocks\n", encoding="utf-8")
+    (tmp_path / "roadmap.kg.attrs").write_text("@node_attrs\nstatus:\n  now: n1 n2\n  later: n3\n", encoding="utf-8")
+
+    model = parse_tasks_text("""```items
+---
+items_schema: roadmap.kg.schema
+---
+```""", current_path=tmp_path / "graph.md")
+
+    chapter = model["projection_models"]["chapter"]["model"]
+    assert [task["id"] for task in chapter["tasks"]] == ["n2", "n3"]
+    assert [edge["id"] for edge in chapter["dependency_edges"]] == ["c1"]
+
+
+def test_kg_pack_source_attr_groups_scope_projection_nodes(tmp_path):
+    (tmp_path / "roadmap.kg.schema").write_text(
+        """@graph id=roadmap title=Roadmap initial_view=chapter
+
+@sources
+nodes=roadmap.kg.nodes
+attrs=roadmap.kg.attrs
+chapter:
+    edges=roadmap.kg.edges
+    attrs:
+        role: [Mechanism, Outcome]
+        property: ["Next Token Prediction", Knowledge]
+
+@views
+chapter:
+    source=chapter
+    group_by,color_by=role
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "roadmap.kg.nodes").write_text("n1: Generator\nn2: Knowledge\nn3: Memory\n", encoding="utf-8")
+    (tmp_path / "roadmap.kg.edges").write_text("e1: n1 -> n2 unlocks\ne2: n2 -> n3 unlocks\n", encoding="utf-8")
+    (tmp_path / "roadmap.kg.attrs").write_text("@node_attrs\nrole:\n  Mechanism: n1 n3\n  Outcome: n2\nproperty:\n  Next Token Prediction: n1\n  Knowledge: n2\n  Working Memory: n3\n", encoding="utf-8")
 
     model = parse_tasks_text("""```items
 ---
