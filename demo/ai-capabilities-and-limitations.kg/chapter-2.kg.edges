@@ -1,5 +1,8 @@
-c2e1: n6 -> n7 becomes
-c2e2: n7 -> n8 leaves
-c2e3: n7 -> n9 leaves
-c2e4: n7 -> n10 leaves
-c2e5: n7 -> n11 leaves
+c2e1: n3 -> n4 produces
+c2e2: n4 -> n6 becomes
+c2e3: n5 -> n6 shapes
+c2e4: n5 -> n7 enables
+c2e5: n5 -> n8 can-cause
+c2e6: n5 -> n9 can-cause
+c2e7: n5 -> n10 can-cause
+c2e8: n5 -> n11 can-cause

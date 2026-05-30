@@ -2,58 +2,25 @@
   "edge_color_palettes": {
     "relation": {
       "becomes": "#7c3aed",
-      "collides_with": "#111827",
-      "defines": "#475569",
-      "fails_as": "#dc2626",
-      "leaves": "#db2777",
-      "mitigated_by": "#0f766e",
-      "powers": "#2563eb",
-      "requires": "#ca8a04",
-      "sharpens": "#0369a1"
+      "produces": "#6d28d9",
+      "enables": "#16a34a",
+      "shapes": "#0891b2",
+      "can-cause": "#dc2626",
+      "reduces": "#0f766e",
+      "calls-for": "#ea580c"
     }
   },
   "node_color_palettes": {
-    "chapter": {
-      "Failures": "#dc2626",
-      "Fingerprints": "#db2777",
-      "Mitigations": "#0f766e",
+    "kind": {
+      "Mechanism": "#7c3aed",
+      "Property": "#2563eb",
+      "Fingerprint": "#db2777",
+      "Capability": "#16a34a",
+      "Limitation": "#dc2626",
+      "Fix": "#0f766e",
+      "Failure": "#b91c1c",
       "Practice": "#ca8a04",
-      "Premise": "#475569",
-      "Properties": "#2563eb",
-      "Training": "#7c3aed"
-    },
-    "failure_family": {
-      "Attention": "#f97316",
-      "Character": "#db2777",
-      "Compound": "#111827",
-      "Control": "#7c3aed",
-      "Fabrication": "#dc2626",
-      "None": "#cbd5e1",
-      "Staleness": "#b91c1c"
-    },
-    "mitigation_family": {
-      "Context": "#0891b2",
-      "Control": "#7c3aed",
-      "Grounding": "#0f766e",
-      "None": "#cbd5e1",
-      "Retrieval": "#16a34a",
-      "Verification": "#ca8a04"
-    },
-    "property": {
-      "Knowledge": "#16a34a",
-      "Next Token Prediction": "#2563eb",
-      "None": "#94a3b8",
-      "Steerability": "#7c3aed",
-      "Training": "#db2777",
-      "Working Memory": "#ea580c"
-    },
-    "role": {
-      "Constraint": "#dc2626",
-      "Definition": "#475569",
-      "Habit": "#ca8a04",
-      "Mechanism": "#2563eb",
-      "Mitigation": "#0f766e",
-      "Outcome": "#7c3aed"
+      "Human": "#0891b2"
     }
   }
 }

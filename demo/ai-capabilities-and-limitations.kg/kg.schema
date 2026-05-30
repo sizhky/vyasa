@@ -1,4 +1,4 @@
-@graph id=ai-capabilities-and-limitations title="AI Capabilities and Limitations" initial_view=chapter-1-premise
+@graph id=ai-capabilities-and-limitations title="AI Capabilities and Limitations" initial_view=chapter-1-just-very-good-autocomplete
 
 @sources
 nodes=kg.nodes
@@ -8,19 +8,11 @@ base:
 chapter1:
 	edges=chapter-1.kg.edges
 chapter2:
-	edges=kg.edges
-	attrs:
-		chapter: [Training, Fingerprints]
-		role: [Outcome, Constraint]
-		property: [Training, Steerability]
+	edges=chapter-2.kg.edges
 chapter3:
 	edges=chapter-3.kg.edges
 chapter4:
-	edges=kg.edges
-	attrs:
-		property: [Knowledge, Next Token Prediction]
-		role: [Mechanism, Constraint]
-		failure_family: [None, Staleness, Compound]
+	edges=chapter-4.kg.edges
 chapter5:
 	edges=chapter-5.kg.edges
 chapter6:
@@ -28,87 +20,99 @@ chapter6:
 chapter7:
 	edges=chapter-7.kg.edges
 chapter8:
-	edges=kg.edges
-	attrs:
-		section: [Practice]
-		role: [Habit, Outcome]
-		property: [None, Next Token Prediction, Working Memory, Steerability]
+	edges=chapter-8.kg.edges
+chapter9:
+	edges=chapter-9.kg.edges
 palette=kg.palette
 
 @relations
-becomes
-collides_with
-defines
-fails_as
-introduces
-leaves
-mitigated_by
-powers
-requires
-sharpens
+becomes label=becomes
+produces label=produces
+enables label=enables
+shapes label=shapes
+can-cause label="can cause"
+reduces label=reduces
+calls-for label="calls for"
 
 @views
-chapter-1-premise:
+chapter-1-just-very-good-autocomplete:
 	source=chapter1
-	group_by,color_by=role
-	hover_attrs=role,property,habit
-	edge_color_by,edge_label_from=relation
+	group_by,color_by=kind
+	hover_attrs=kind
+	edge_color_by=relation
+	edge_label_from=label
 	aggregate_edges="when_collapsed=true by=relation"
 	default_open_depth=-1
-	caption="Start here: generative AI is not all AI, and the raw engine is a document completer riding next-token prediction."
-chapter-2-assistant-mask:
+	caption="Generative AI is really one engine — autocomplete at vast scale. The same engine that writes fluently is the one that makes things up."
+chapter-2-how-it-learns-to-help:
 	source=chapter2
-	group_by,color_by=role
-	hover_attrs=role,failure_family,habit
-	edge_color_by,edge_label_from=relation
+	group_by,color_by=kind
+	hover_attrs=kind
+	edge_color_by=relation
+	edge_label_from=label
 	aggregate_edges="when_collapsed=true by=relation"
 	default_open_depth=-1
-	caption="Fine-tuning makes the machine feel helpful, but the same shaping leaves character fingerprints."
-chapter-3-four-load-bearing-limits:
+	caption="Two training stages turn that raw engine into a helpful assistant — and the shaping leaves fingerprints you will keep seeing."
+chapter-3-where-answers-come-from:
 	source=chapter3
-	group_by,color_by=property
-	hover_attrs=property,role,habit
-	edge_color_by,edge_label_from=relation
+	group_by,color_by=kind
+	hover_attrs=kind
+	edge_color_by=relation
+	edge_label_from=label
 	aggregate_edges="when_collapsed=true by=relation"
 	default_open_depth=-1
-	caption="The useful mental model has four limits: prediction, knowledge, working memory, and steerability."
-chapter-4-when-knowledge-breaks:
+	caption="Answers are generated, not looked up: fluent everywhere, but prone to hallucinate, confabulate, and waver — worst in the specifics. Ground them, and bring your discernment and diligence."
+chapter-4-what-it-actually-knows:
 	source=chapter4
-	group_by,color_by=failure_family
-	hover_attrs=failure_family,property,mitigation_family,habit
-	edge_color_by,edge_label_from=relation
+	group_by,color_by=kind
+	hover_attrs=kind
+	edge_color_by=relation
+	edge_label_from=label
 	aggregate_edges="when_collapsed=true by=relation"
 	default_open_depth=-1
-	caption="Knowledge looks confident even when it is stale, source-amnesic, or citation-shaped fiction."
-chapter-5-when-context-breaks:
+	caption="What it knows is broad but frozen at a cutoff — stale, uneven, biased, and unsourced at the edges. Reach for live retrieval, and delegate what it can't know."
+chapter-5-what-it-pays-attention-to:
 	source=chapter5
-	group_by,color_by=mitigation_family
-	hover_attrs=mitigation_family,property,failure_family,habit
-	edge_color_by,edge_label_from=relation
+	group_by,color_by=kind
+	hover_attrs=kind
+	edge_color_by=relation
+	edge_label_from=label
 	aggregate_edges="when_collapsed=true by=relation"
 	default_open_depth=-1
-	caption="Working memory helps until the important fact falls out, lands in the middle, or must be supplied again."
-chapter-6-when-control-breaks:
+	caption="It can only think about what fits its attention window. Powerful with your context, but it truncates, loses the middle, and forgets between sessions. Save context, and describe what matters."
+chapter-6-how-much-youre-in-control:
 	source=chapter6
-	group_by,color_by=failure_family
-	hover_attrs=failure_family,property,mitigation_family,habit
-	edge_color_by,edge_label_from=relation
+	group_by,color_by=kind
+	hover_attrs=kind
+	edge_color_by=relation
+	edge_label_from=label
 	aggregate_edges="when_collapsed=true by=relation"
 	default_open_depth=-1
-	caption="Instructions steer behavior, but literal obedience, drift, math errors, and agreeable premises still need checkpoints."
-chapter-7-ground-the-output:
+	caption="It follows instructions by pattern, not understanding: precise on simple asks, but drifting, over-literal, and hijackable. Guide its execution, and keep describing your real intent."
+chapter-7-when-limits-collide:
 	source=chapter7
-	group_by,color_by=mitigation_family
-	hover_attrs=mitigation_family,property,habit
-	edge_color_by,edge_label_from=relation
+	group_by,color_by=kind
+	hover_attrs=kind
+	edge_color_by=relation
+	edge_label_from=label
 	aggregate_edges="when_collapsed=true by=relation"
 	default_open_depth=-1
-	caption="Grounding turns fluent answers into inspectable work: sources, retrieval, tools, uncertainty, and independent checks."
-chapter-8-human-loop:
+	caption="Real failures are two limits meeting at once — a hallucination plus a knowledge gap becomes a fake citation. Name the pair and the fix becomes obvious."
+chapter-8-trust-sized-to-the-task:
 	source=chapter8
-	group_by,color_by=role
-	hover_attrs=role,habit,property
-	edge_color_by,edge_label_from=relation
+	group_by,color_by=kind
+	hover_attrs=kind
+	edge_color_by=relation
+	edge_label_from=label
 	aggregate_edges="when_collapsed=true by=relation"
 	default_open_depth=-1
-	caption="End here: trust is calibrated by habit, not mood. Verify specifics, supply context, state goals, and name collisions."
+	caption="Hold a small model of the four properties; remember each is a continuum. Diagnose which kind of wrong you're seeing and size your trust to the task — an understanding that lasts as models change."
+chapter-9-two-halves-of-one-system:
+	source=chapter9
+	group_by,color_by=kind
+	hover_attrs=kind
+	edge_color_by=relation
+	edge_label_from=label
+	aggregate_edges="when_collapsed=true by=relation"
+	default_open_depth=-1
+	caption="The machine half is only one side. Your 4D Framework — delegation, description, discernment, diligence — is what you do in response. Together they make collaboration work."

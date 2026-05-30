@@ -1,83 +1,12 @@
 @node_attrs
-chapter:
-  Failures: n25 n26 n27 n28 n29
-  Fingerprints: n8 n9 n10 n11
-  Mitigations: n30 n31 n32 n33 n34 n35
-  Practice: n36 n37 n38 n39 n40 n41
-  Premise: n1 n2 n3
-  Properties: n12 n13 n14 n15 n16 n17 n18 n19 n20 n21 n22 n23 n24
-  Training: n4 n5 n6 n7
-failure_family:
-  Attention: n19 n20 n38
-  Character: n8 n9 n10 n11
-  Compound: n25 n26 n27 n28 n29 n40
-  Control: n23 n24 n39
-  Fabrication: n14 n37
-  None: n1 n2 n3 n4 n5 n6 n7 n12 n13 n15 n18 n21 n22 n30 n31 n32 n33 n34 n35 n36 n41
-  Staleness: n16 n17
-habit:
-  Ask for disagreement: n29
-  Ask what it would have read: n15
-  Calibrated trust: n3 n5 n36
-  Check names, dates, numbers, quotes: n14
-  Check recency: n16
-  Constrain format: n9
-  Curate context: n18
-  Front-load and repeat what matters: n19
-  Insert checkpoints: n24
-  Inspect step two: n33
-  Invite pushback: n8
-  Keep reusable context nearby: n32
-  Locate the task: n1 n2
-  Move exact work into exact tools: n34
-  Name the collision: n40
-  Offload exactness to tools: n28
-  Patch the cutoff: n31
-  Prefer traceable sources: n17
-  Re-supply critical context: n20
-  Restart or summarize: n27
-  Restate the actual goal: n23
-  Right-size the risk: n10
-  State goal with instruction: n21
-  State goals: n39
-  State the goal: n7
-  Supply context: n38
-  Think in properties: n41
-  Trace claims: n30
-  Understand the machine: n4 n6
-  Use for common patterns: n13
-  Use search for live facts: n26
-  Use short verifiable asks: n22
-  Verify specifics: n11 n12 n25 n37
-  Watch where the model hesitates: n35
-mitigation_family:
-  Context: n18 n19 n20 n27 n32 n38
-  Control: n8 n9 n10 n21 n23 n24 n28 n29 n33 n34 n39
-  Grounding: n17 n25 n30
-  None: n1 n2 n3 n4 n5 n6 n7 n13 n22 n41
-  Retrieval: n15 n16 n26 n31
-  Verification: n11 n12 n14 n35 n36 n37 n40
-property:
-  Knowledge: n15 n16 n17 n26 n31
-  Next Token Prediction: n5 n12 n13 n14 n25 n30 n35 n37
-  None: n1 n2 n3 n36 n40 n41
-  Steerability: n7 n21 n22 n23 n24 n28 n33 n34 n39
-  Training: n4 n6 n8 n9 n10 n11 n29
-  Working Memory: n18 n19 n20 n27 n32 n38
-role:
-  Constraint: n8 n9 n10 n11 n14 n16 n17 n19 n20 n23 n24 n25 n26 n27 n28 n29
-  Definition: n1 n2
-  Habit: n36 n37 n38 n39 n40
-  Mechanism: n4 n6 n12 n15 n18 n21
-  Mitigation: n30 n31 n32 n33 n34 n35
-  Outcome: n3 n5 n7 n13 n22 n41
-section:
-  Failures: n25 n26 n27 n28 n29
-  Fingerprints: n8 n9 n10 n11
-  Mitigations: n30 n31 n32 n33 n34 n35
-  Practice: n36 n37 n38 n39 n40 n41
-  Premise: n1 n2 n3
-  Properties: n12 n13 n14 n15 n16 n17 n18 n19 n20 n21 n22 n23 n24
-  Training: n4 n5 n6 n7
-
+kind:
+  Mechanism: n1 n3 n4 n5 n6 n7
+  Property: n2 n18 n25 n31
+  Fingerprint: n8 n9 n10 n11
+  Capability: n12 n19 n26 n32
+  Limitation: n13 n14 n15 n16 n20 n21 n22 n23 n27 n28 n29 n52 n33 n34 n35
+  Fix: n17 n24 n30 n36
+  Failure: n37 n38 n39 n40
+  Practice: n41 n42 n43 n44 n45 n51
+  Human: n46 n47 n48 n49 n50
 @edge_attrs

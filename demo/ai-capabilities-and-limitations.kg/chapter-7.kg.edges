@@ -1,5 +1,8 @@
-c7e1: n25 -> n30 mitigated_by
-c7e2: n25 -> n31 mitigated_by
-c7e3: n25 -> n37 requires
-c7e4: n34 -> n37 sharpens
-c7e5: n35 -> n37 sharpens
+c7e1: n13 -> n37 can-cause
+c7e2: n20 -> n37 can-cause
+c7e3: n28 -> n38 can-cause
+c7e4: n33 -> n38 can-cause
+c7e5: n33 -> n39 can-cause
+c7e6: n11 -> n39 can-cause
+c7e7: n8 -> n40 can-cause
+c7e8: n31 -> n40 can-cause

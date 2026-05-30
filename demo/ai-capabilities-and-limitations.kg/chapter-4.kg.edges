@@ -1,5 +1,8 @@
-c4e1: n15 -> n16 fails_as
-c4e2: n15 -> n17 fails_as
-c4e3: n16 -> n26 fails_as
-c4e4: n17 -> n25 fails_as
-c4e5: n15 -> n31 mitigated_by
+c4e1: n18 -> n19 enables
+c4e2: n18 -> n20 can-cause
+c4e3: n18 -> n21 can-cause
+c4e4: n18 -> n22 can-cause
+c4e5: n18 -> n23 can-cause
+c4e6: n24 -> n20 reduces
+c4e7: n24 -> n21 reduces
+c4e8: n18 -> n47 calls-for
