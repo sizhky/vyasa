@@ -264,6 +264,22 @@ def test_tasks_source_supports_configurable_card_states():
     assert "TASKS_CARD_STATE_ATTR" in source
 
 
+def test_tasks_source_supports_local_card_notes():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function normalizeTasksNodeNotes" in source
+    assert "nodeNotes" in source
+    assert "setNoteInputValue(event.target.value)" in source
+    assert "updateNodeNote(selectedNodeId, noteInputValue)" in source
+    assert "placeholder: 'Notes'" in source
+    assert "SelectedNodePanel()" in source
+    assert "__has_note__" in source
+    assert "title: 'Has note'" in source
+    assert "kinds: ['note']" in source
+    assert "TASKS_HAS_NOTE_PALETTE = { yes: '#22c55e', no: '#dc2626' }" in source
+    assert "tasksHasAnyNodeNote(nodeNotes)" in source
+
+
 def test_tasks_source_uses_base_view_label_for_default_projection_tab():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 

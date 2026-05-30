@@ -34,6 +34,8 @@ const TASKS_EDGE_OPACITY_MIN = 0.05;
 const TASKS_EDGE_OPACITY_MAX = 1;
 const TASKS_DONE_ACCENT = '#22c55e';
 const TASKS_CARD_STATE_ATTR = 'card_state';
+const TASKS_HAS_NOTE_ATTR = 'has_note';
+const TASKS_HAS_NOTE_PALETTE = { yes: '#22c55e', no: '#dc2626' };
 const TASKS_DEFAULT_CARD_STATES = ['Not Done', 'Done'];
 const TASKS_GANTT_UNIT_WIDTH = 340;
 const TASKS_GANTT_ROW_GAP = 56;
@@ -350,6 +352,17 @@ function normalizeTasksNodeStates(value, cardStates) {
         .filter(([nodeId, state]) => nodeId && state && state !== firstState && valid.has(state)));
 }
 
+function normalizeTasksNodeNotes(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value)
+        .map(([nodeId, note]) => [String(nodeId || '').trim(), String(note || '')])
+        .filter(([nodeId, note]) => nodeId && note.trim()));
+}
+
+function tasksHasAnyNodeNote(nodeNotes) {
+    return Object.values(nodeNotes || {}).some((note) => String(note || '').trim());
+}
+
 function tasksCardStateColor(model, state) {
     const palette = model?.node_color_palettes?.[TASKS_CARD_STATE_ATTR];
     if (palette && typeof palette === 'object' && state in palette) return palette[state];
@@ -404,6 +417,7 @@ function writeTasksPrefs(model, prefs) {
     const nodeStates = prefs?.nodeStates && typeof prefs.nodeStates === 'object' && !Array.isArray(prefs.nodeStates)
         ? prefs.nodeStates
         : {};
+    const nodeNotes = normalizeTasksNodeNotes(prefs?.nodeNotes);
     const payload = JSON.stringify({
         version: 1,
         projectionId,
@@ -411,6 +425,7 @@ function writeTasksPrefs(model, prefs) {
         groupByHierarchy,
         projectionPrefs,
         nodeStates,
+        nodeNotes,
     });
     const attempt = () => {
         storage.setItem(key, payload);
@@ -625,17 +640,19 @@ function tasksFilterOptions(model) {
         .sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function tasksColorOptions(model) {
+function tasksColorOptions(model, nodeNotes = null) {
     const palettes = model?.node_color_palettes && typeof model.node_color_palettes === 'object'
         ? model.node_color_palettes
         : {};
     const declaredKeys = Object.keys(palettes).filter((key) => key && !TASKS_DERIVED_METRIC_KEYS.has(String(key).toLowerCase()) && typeof palettes[key] === 'object' && Object.keys(palettes[key] || {}).length > 0);
     const nodes = [...(model?.groups || []), ...(model?.tasks || [])];
-    return declaredKeys
+    const keys = declaredKeys
         .filter((key) => nodes.some((node) => {
             const value = node?.[key];
             return value !== null && value !== undefined && String(value).trim() !== '';
-        }))
+        }));
+    if (tasksHasAnyNodeNote(nodeNotes) && !keys.includes(TASKS_HAS_NOTE_ATTR)) keys.push(TASKS_HAS_NOTE_ATTR);
+    return keys
         .map((key) => ({
             key,
             label: tasksColorModeLabel(key),
@@ -874,6 +891,7 @@ function resolveTasksGradientColor(palette, value) {
 function tasksColorPaletteFor(model, colorBy) {
     const key = String(colorBy || '').trim();
     if (!key) return {};
+    if (key === TASKS_HAS_NOTE_ATTR) return TASKS_HAS_NOTE_PALETTE;
     const palettes = model?.node_color_palettes && typeof model.node_color_palettes === 'object'
         ? model.node_color_palettes
         : {};
@@ -885,11 +903,12 @@ function tasksColorPaletteFor(model, colorBy) {
     return {};
 }
 
-function tasksColorPaletteEntries(model, colorBy) {
+function tasksColorPaletteEntries(model, colorBy, nodeNotes = null) {
     const key = String(colorBy || '').trim();
     if (!key) return [];
     const palette = tasksColorPaletteFor(model, colorBy);
     if (isTasksGradientPalette(palette)) return [];
+    if (key === TASKS_HAS_NOTE_ATTR) return tasksHasAnyNodeNote(nodeNotes) ? Object.entries(palette) : [];
     const presentValues = new Set(
         [...(model?.groups || []), ...(model?.tasks || [])]
             .map((node) => node?.[key])
@@ -1065,6 +1084,10 @@ function resolveTasksNodeOwnColor(node, model, colorByOverride = null, paletteOv
         ? paletteOverride
         : tasksColorPaletteFor(model, colorBy);
     if (colorBy) {
+        if (colorBy === TASKS_HAS_NOTE_ATTR) {
+            const value = node?.__has_note__ ? 'yes' : 'no';
+            return TASKS_HAS_NOTE_PALETTE[value] || '';
+        }
         const value = node[colorBy];
         if (value !== null && value !== undefined && String(value).trim()) {
             if (isTasksGradientPalette(palette)) return resolveTasksGradientColor(palette, value);
@@ -2207,14 +2230,16 @@ function renderTasksNodeLinkBadge(React, options = {}) {
     return React.createElement('span', {
         className: 'vyasa-task-link-badge',
         'aria-hidden': 'true',
+        title: options.title || undefined,
         style: {
             position: 'absolute',
-            top: '8px',
+            top: options.top || '8px',
             right: options.right || '10px',
+            bottom: options.bottom || undefined,
         },
     }, ...kinds.map((kind) => React.createElement('span', {
         key: kind,
-        'uk-icon': kind === 'external' ? 'link-external' : 'link',
+        'uk-icon': kind === 'external' ? 'link-external' : (kind === 'note' ? 'file-text' : 'link'),
     })));
 }
 
@@ -2336,15 +2361,15 @@ function tasksProjectionDefaultColorBy(model) {
     return String(model?.default_color_by || '').trim();
 }
 
-function tasksResolvedProjectionDefaultColorBy(model) {
+function tasksResolvedProjectionDefaultColorBy(model, nodeNotes = null) {
     const defaultColorBy = tasksProjectionDefaultColorBy(model);
-    return tasksColorOptions(model).some((option) => option.key === defaultColorBy) ? defaultColorBy : '';
+    return tasksColorOptions(model, nodeNotes).some((option) => option.key === defaultColorBy) ? defaultColorBy : '';
 }
 
-function resolveTasksPreferredColorBy(model, projectionId, prefs) {
+function resolveTasksPreferredColorBy(model, projectionId, prefs, nodeNotes = null) {
     const saved = typeof prefs?.colorBy === 'string' ? prefs.colorBy.trim() : '';
-    const validColorKeys = new Set(tasksColorOptions(model).map((option) => option.key));
-    const defaultColorBy = tasksResolvedProjectionDefaultColorBy(model);
+    const validColorKeys = new Set(tasksColorOptions(model, nodeNotes).map((option) => option.key));
+    const defaultColorBy = tasksResolvedProjectionDefaultColorBy(model, nodeNotes);
     if (!String(projectionId || '').trim() && defaultColorBy && validColorKeys.has(defaultColorBy)) {
         return defaultColorBy;
     }
@@ -2470,8 +2495,9 @@ async function renderTasksGraphs(rootElement = document) {
             const [searchInputValue, setSearchInputValue] = React.useState(() => (
                 typeof projectionPrefs?.searchQuery === 'string' ? projectionPrefs.searchQuery : ''
             ));
+            const [nodeNotes, setNodeNotes] = React.useState(() => normalizeTasksNodeNotes(sourcePrefsRef.current?.nodeNotes));
             const [activeColorBy, setActiveColorBy] = React.useState(() => (
-                resolveTasksPreferredColorBy(model, activeProjectionId, projectionPrefs)
+                resolveTasksPreferredColorBy(model, activeProjectionId, projectionPrefs, nodeNotes)
             ));
             const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => (
                 typeof projectionPrefs?.filtersCollapsed === 'boolean'
@@ -2496,6 +2522,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const checkedIds = stableCheckedNodeIds.length ? stableCheckedNodeIds : normalizeTasksCheckedNodeIds(sourcePrefsRef.current?.checkedNodeIds);
                 return Object.fromEntries(checkedIds.map((nodeId) => [nodeId, cardStates[1] || TASKS_DEFAULT_CARD_STATES[1]]));
             });
+            const [noteInputValue, setNoteInputValue] = React.useState('');
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
@@ -2529,11 +2556,11 @@ async function renderTasksGraphs(rootElement = document) {
                 setActiveFilters(nextPrefs?.filters && typeof nextPrefs.filters === 'object' ? nextPrefs.filters : {});
                 setSearchQuery(typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : '');
                 setSearchInputValue(typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : '');
-                setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, nextPrefs));
+                setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, nextPrefs, nodeNotes));
                 setFiltersCollapsed(typeof nextPrefs?.filtersCollapsed === 'boolean' ? nextPrefs.filtersCollapsed : !defaultFiltersOpen);
                 setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
                 setEdgeOpacity(sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity));
-            }, [activeProjectionId, model, defaultFiltersOpen, defaultEdgeOpacity]);
+            }, [activeProjectionId, model, nodeNotes, defaultFiltersOpen, defaultEdgeOpacity]);
             React.useEffect(() => {
                 const timeoutId = window.setTimeout(() => {
                     setSearchQuery(searchInputValue);
@@ -2546,8 +2573,8 @@ async function renderTasksGraphs(rootElement = document) {
             );
             React.useEffect(() => {
                 const validFilterKeys = new Set(tasksFilterOptions(model).map((option) => option.key));
-                const validColorKeys = new Set(tasksColorOptions(model).map((option) => option.key));
-                const defaultColorBy = tasksResolvedProjectionDefaultColorBy(model);
+                const validColorKeys = new Set(tasksColorOptions(model, nodeNotes).map((option) => option.key));
+                const defaultColorBy = tasksResolvedProjectionDefaultColorBy(model, nodeNotes);
                 setActiveFilters((current) => Object.fromEntries(
                     Object.entries(current || {}).filter(([key, value]) => {
                         if (!validFilterKeys.has(key)) return false;
@@ -2559,7 +2586,7 @@ async function renderTasksGraphs(rootElement = document) {
                     if (current && validColorKeys.has(current)) return current;
                     return validColorKeys.has(defaultColorBy) ? defaultColorBy : '';
                 });
-            }, [model]);
+            }, [model, nodeNotes]);
             React.useEffect(() => {
                 if (lastPersistedProjectionIdRef.current !== activeProjectionId) {
                     lastPersistedProjectionIdRef.current = activeProjectionId;
@@ -2584,6 +2611,7 @@ async function renderTasksGraphs(rootElement = document) {
                     groupByHierarchy,
                     projectionPrefs: nextProjectionPrefs,
                     nodeStates,
+                    nodeNotes,
                 };
                 storedProjectionPrefsRef.current = nextProjectionPrefs;
                 writeTasksPrefs(sourceModel, {
@@ -2592,9 +2620,10 @@ async function renderTasksGraphs(rootElement = document) {
                     groupByHierarchy,
                     projectionPrefs: nextProjectionPrefs,
                     nodeStates,
+                    nodeNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [sourceModel, activeFilters, searchQuery, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeOpacity, groupByHierarchy, expanded, nodeStates]);
+            }, [sourceModel, activeFilters, searchQuery, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes]);
             const checkedNodeIdSet = React.useMemo(() => new Set(checkedNodeIdsFromStates(nodeStates)), [nodeStates]);
             const toggleCheckedNode = React.useCallback((nodeId) => {
                 const normalizedId = String(nodeId || '').trim();
@@ -2610,6 +2639,27 @@ async function renderTasksGraphs(rootElement = document) {
                     return next;
                 });
             }, [cardStates]);
+            const updateNodeNote = React.useCallback((nodeId, note) => {
+                const normalizedId = String(nodeId || '').trim();
+                if (!normalizedId) return;
+                setNodeNotes((current) => {
+                    const next = { ...(current || {}) };
+                    const text = String(note || '');
+                    if (text.trim()) next[normalizedId] = text;
+                    else delete next[normalizedId];
+                    return next;
+                });
+            }, []);
+            React.useEffect(() => {
+                setNoteInputValue(nodeNotes[String(selectedNodeId || '')] || '');
+            }, [selectedNodeId]);
+            React.useEffect(() => {
+                if (!selectedNodeId) return undefined;
+                const timeoutId = window.setTimeout(() => {
+                    updateNodeNote(selectedNodeId, noteInputValue);
+                }, 180);
+                return () => window.clearTimeout(timeoutId);
+            }, [selectedNodeId, noteInputValue, updateNodeNote]);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
                 const viewport = reactFlow.getViewport();
                 return reactFlow.setViewport(
@@ -2639,15 +2689,17 @@ async function renderTasksGraphs(rootElement = document) {
                                 selectable: false,
                             };
                         }
-                        const nodeColor = resolveTasksNodeColor(node, model, activeColorBy, activeColorPalette);
                         const isChecked = checkedNodeIdSet.has(String(node.id || ''));
+                        const hasNote = Boolean((nodeNotes[String(node.id || '')] || '').trim());
+                        const colorNode = { ...node, __has_note__: hasNote };
+                        const nodeColor = resolveTasksNodeColor(colorNode, model, activeColorBy, activeColorPalette);
                         const cardState = tasksCardStateForNode(sourceModel, nodeStates, node.id, cardStates);
                         const stateAccent = cardState.color || TASKS_DONE_ACCENT;
                         return {
                             id: node.id,
                             type: 'vyasaTask',
                             position: node.position,
-                            data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color },
+                            data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote },
                             style: {
                                 width: node.width,
                                 height: node.height,
@@ -2733,9 +2785,11 @@ async function renderTasksGraphs(rootElement = document) {
                     const nodeZ = n.__kind__ !== 'group'
                         ? TASKS_TASK_Z + depth
                         : ((isExpanded ? TASKS_GROUP_BG_Z : TASKS_GROUP_Z) + depth);
-                    const nodeColor = resolveTasksNodeColor(n, model, activeColorBy, activeColorPalette);
-                    const collapsedGroupColor = !isExpanded ? resolveTasksCollapsedGroupColor(n, model, activeColorBy, activeColorPalette) : '';
                     const isChecked = checkedNodeIdSet.has(String(n.id || ''));
+                    const hasNote = Boolean((nodeNotes[String(n.id || '')] || '').trim());
+                    const colorNode = { ...n, __has_note__: hasNote };
+                    const nodeColor = resolveTasksNodeColor(colorNode, model, activeColorBy, activeColorPalette);
+                    const collapsedGroupColor = !isExpanded ? resolveTasksCollapsedGroupColor(colorNode, model, activeColorBy, activeColorPalette) : '';
                     const isProjectionGroup = n.__kind__ === 'group' && n.__projection_group__;
                     const projectionGroupTone = isProjectionGroup ? resolveTasksProjectionGroupDimensionColor(n, model) : '';
                     const groupColor = projectionGroupTone || collapsedGroupColor || nodeColor;
@@ -2760,7 +2814,7 @@ async function renderTasksGraphs(rootElement = document) {
                         id: n.id,
                         type: 'vyasaTask',
                         position: n.position,
-                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color },
+                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote },
                         style: {
                             width: n.width,
                             height: n.height,
@@ -2866,7 +2920,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setNodes(anchoredNodes);
                 setEdges(edgesVisible ? baseEdges : []);
                 setGraphRevision((value) => value + 1);
-            }, [ensureBaseLayout, model, sourceModel, activeColorBy, activeColorPalette, activeProjection, viewMode, edgesVisible, edgeOpacity, checkedNodeIdSet, nodeStates, cardStates]);
+            }, [ensureBaseLayout, model, sourceModel, activeColorBy, activeColorPalette, activeProjection, viewMode, edgesVisible, edgeOpacity, checkedNodeIdSet, nodeStates, nodeNotes, cardStates]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: 'currentColor' },
@@ -3342,6 +3396,9 @@ async function renderTasksGraphs(rootElement = document) {
                     onClick: () => toggleCheckedNode(sourceNodeId),
                     style: { border: 'none', background: 'transparent', padding: 0, width: '10px', height: '10px', cursor: 'pointer' },
                 })) : null;
+                const noteBadge = data?.__has_note__
+                    ? renderTasksNodeLinkBadge(React, { kinds: ['note'], title: 'Has note', top: 'auto', bottom: isChecked ? '30px' : '8px', right: isChecked ? '8px' : (isGroup ? '34px' : '8px') })
+                    : null;
                 const doneBadge = isChecked ? React.createElement('div', {
                     style: {
                         position: 'absolute',
@@ -3376,6 +3433,7 @@ async function renderTasksGraphs(rootElement = document) {
                     },
                         checkboxControl,
                         doneBadge,
+                        noteBadge,
                         ...renderHandles('target'),
                         React.createElement('div', { style: { flex: 1, minHeight: '48px', position: 'relative' } }),
                         ...renderHandles('source')
@@ -3403,6 +3461,7 @@ async function renderTasksGraphs(rootElement = document) {
                 },
                     checkboxControl,
                     doneBadge,
+                    noteBadge,
                     linkKinds.length ? renderTasksNodeLinkBadge(React, { right: isGroup ? '32px' : '10px', kinds: linkKinds }) : null,
                     ...renderHandles('target'),
                     React.createElement('span', {
@@ -3542,7 +3601,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const entries = selectedNode?.__kind__ === 'group'
                     ? tasksGroupDetailEntries(sourceNodeId, model)
                     : tasksNodeMetaEntries(selectedNode);
-                if (!selectedNode || entries.length === 0) return null;
+                if (!selectedNode) return null;
                 const panelWidth = tasksSelectedPanelWidth(selectedNode, entries);
                 return React.createElement('div', {
                     style: { width: `min(${panelWidth}px, 100%)`, maxWidth: '100%', minWidth: 'min(220px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto', minHeight: 0, flex: '0 1 auto', overflowY: 'auto', overscrollBehavior: 'contain' },
@@ -3574,15 +3633,47 @@ async function renderTasksGraphs(rootElement = document) {
                                     className: 'vyasa-task-node-card-value',
                                     style: { minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'pre-line' },
                                 }, entry.value),
-                        ))
+                        )),
+                        React.createElement('label', {
+                            style: {
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '6px',
+                                paddingTop: entries.length ? '10px' : '0',
+                                marginTop: entries.length ? '10px' : '0',
+                                borderTop: entries.length ? '1px dashed color-mix(in srgb, currentColor 18%, transparent)' : 'none',
+                            },
+                        },
+                            React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Notes'),
+                            React.createElement('textarea', {
+                                'data-vyasa-task-control': 'true',
+                                value: noteInputValue,
+                                placeholder: 'Notes',
+                                rows: 4,
+                                onChange: (event) => setNoteInputValue(event.target.value),
+                                style: {
+                                    width: '100%',
+                                    minHeight: '76px',
+                                    resize: 'vertical',
+                                    border: '1px solid color-mix(in srgb, var(--vyasa-ink) 18%, transparent)',
+                                    borderRadius: '8px',
+                                    background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)',
+                                    color: 'var(--vyasa-ink)',
+                                    fontSize: '12px',
+                                    lineHeight: 1.35,
+                                    padding: '8px',
+                                    boxSizing: 'border-box',
+                                },
+                            })
+                        )
                     )
                 );
             };
             const FilterPanel = () => {
                 const options = tasksFilterOptions(model);
-                const colorOptions = tasksColorOptions(model);
+                const colorOptions = tasksColorOptions(model, nodeNotes);
                 const groupByOptions = tasksGroupByOptions(sourceModel);
-                const activePaletteEntries = activeColorBy === 'rank' ? [] : tasksColorPaletteEntries(model, activeColorBy);
+                const activePaletteEntries = activeColorBy === 'rank' ? [] : tasksColorPaletteEntries(model, activeColorBy, nodeNotes);
                 const activeGradientPalette = isTasksGradientPalette(activeColorPalette);
                 const customGroupingActive = !String(activeProjectionId || '').trim() && viewMode !== 'gantt';
                 const activeGroupByCount = customGroupingActive ? groupByHierarchy.filter(Boolean).length : 0;
@@ -3655,7 +3746,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 }),
                                 React.createElement('span', { style: { opacity: 0.8, minWidth: '3.5em', textAlign: 'right' } }, tasksEdgeOpacityLabel(edgeOpacity))
                             ),
-                            React.createElement('button', { type: 'button', onClick: () => { setActiveFilters({}); setSearchInputValue(''); setSearchQuery(''); setActiveColorBy(tasksResolvedProjectionDefaultColorBy(model)); setGroupByHierarchy([]); setEdgeOpacity(defaultEdgeOpacity); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline', whiteSpace: 'nowrap' } }, 'Reset')
+                            React.createElement('button', { type: 'button', onClick: () => { setActiveFilters({}); setSearchInputValue(''); setSearchQuery(''); setActiveColorBy(tasksResolvedProjectionDefaultColorBy(model, nodeNotes)); setGroupByHierarchy([]); setEdgeOpacity(defaultEdgeOpacity); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline', whiteSpace: 'nowrap' } }, 'Reset')
                         ),
                         React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                             React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
@@ -4094,9 +4185,9 @@ async function renderTasksGraphs(rootElement = document) {
                         minHeight: 0,
                     },
                 },
-                    window.React.createElement(ProjectionToggle),
-                    window.React.createElement(ProjectionCaption),
-                    window.React.createElement(SelectedNodePanel)
+                    ProjectionToggle(),
+                    ProjectionCaption(),
+                    SelectedNodePanel()
                 );
             };
             const GroupHoverTooltip = () => {
@@ -4160,7 +4251,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(ActionBridge),
                     window.React.createElement(FitOnNodesReady)
                     ),
-                    window.React.createElement(RightRail),
+                    RightRail(),
                     filterPanelElement,
                     window.React.createElement(GroupHoverTooltip)
                 )
@@ -4173,7 +4264,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(ActionBridge),
                     window.React.createElement(FitOnNodesReady)
                 ),
-                window.React.createElement(RightRail),
+                RightRail(),
                 filterPanelElement,
                 window.React.createElement(GroupHoverTooltip)
             );
