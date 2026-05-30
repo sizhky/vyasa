@@ -1,0 +1,82 @@
+n1: Generative AI
+	description=Produces new content rather than merely sorting existing data. This course draws the line around transformer-style text generation.
+n2: Classification and prediction AI
+	description=Spam filters, recommenders, fraud detectors. Useful contrast object: plenty of AI is not generative.
+n3: 4D human side
+	description=Human competencies respond to machine properties. The framework matters because the user is the other half of the system.
+n4: Pretraining
+	description=Reads vast text and learns one thing: what token plausibly comes next.
+n5: Document completer
+	description=The raw system after pretraining. Fluent continuation machine, not yet an assistant.
+n6: Fine-tuning
+	description=Human preference shaping turns completion into assistant behavior: answer helpfully, decline harmful asks, stay within norms.
+n7: Helpful assistant
+	description=The interaction layer people meet. Useful, polite, often cooperative, never free of the mechanism beneath it.
+n8: Sycophancy
+	description=The model leans toward validating the user's frame unless asked, or forced, to disagree.
+n9: Verbosity default
+	description=Left alone, the assistant often gives more than the task strictly needs.
+n10: Over-caution
+	description=Safety shaping can produce refusals or hedging that are broader than the true hazard.
+n11: Loose confidence calibration
+	description=Tone and truth are only loosely coupled. Smooth prose can wrap a guess.
+n12: Next Token Prediction
+	description=The core generator. Fluency comes from it, and hallucination comes from it too.
+n13: Well-worn path
+	description=Summaries, reformats, common explanations, code shapes the model has seen many times.
+n14: Specificity zone
+	description=The danger band where fabrication concentrates: precise facts that can sound right without being right.
+n15: Knowledge
+	description=What the model absorbed during training and nothing beyond that without tools.
+n16: Knowledge cutoff
+	description=Training stopped at some point. After that date, default knowledge is frozen.
+n17: Source amnesia
+	description=The model may know a thing without knowing where it came from in a citeable way.
+n18: Working memory
+	description=Fixed context window. The model only attends to what still fits inside the current workspace.
+n19: Lost in the middle
+	description=Attention is not uniform. Middle material gets weaker than edges.
+n20: No persistent memory by default
+	description=Corrections do not retrain the model. New session, new blank slate.
+n21: Steerability
+	description=The system follows instructions through pattern matching, not deep semantic understanding.
+n22: Tight control zone
+	description=Format, tone, role, and bounded structure are where steerability feels strongest.
+n23: Letter over spirit
+	description=The instruction can be satisfied literally while missing the reason the instruction existed.
+n24: Reasoning drift
+	description=Long chains accumulate small errors. The final answer can preserve the early mistake faithfully.
+n25: Hallucinated citations
+	description=Citation-shaped output appears because plausible pattern outruns actual knowledge.
+n26: Stale answers
+	description=True-then becomes false-now, yet the answer still arrives with composure.
+n27: Long-conversation drift
+	description=Good constraints dissolve as context grows and the important bits slide into the dead zone.
+n28: Confidently wrong math
+	description=Fluent reasoning does not guarantee precise arithmetic or logic.
+n29: Agreeable bad premise
+	description=The assistant inherits the user's false framing and decorates it instead of resisting it.
+n30: Citations and source grounding
+	description=Makes the generator show what is backed by an external source and what is merely fluent synthesis.
+n31: Web search and retrieval
+	description=Pulls in information the base model never had or had too unevenly.
+n32: Projects, memory, and standing context
+	description=Moves recurring facts and constraints closer to the active window so the user stops repeating themselves.
+n33: Mid-process checkpoints
+	description=Breaks a brittle chain into inspectable segments before one hidden error poisons the whole run.
+n34: Code execution and structured output
+	description=Gives math, parsing, and schema-constrained tasks a stricter substrate than free-form text.
+n35: Uncertainty signaling
+	description=Useful when honest, but never a substitute for checking the high-risk specifics yourself.
+n36: Calibrated trust
+	description=Do not trust or distrust the machine wholesale. Place the task on each continuum and respond to that shape.
+n37: Verify specifics independently
+	description=Names, dates, numbers, URLs, citations, quotes. Precision is where fluency most often impersonates truth.
+n38: Supply the missing knowledge and context
+	description=If the model is thin, stale, or forgetful on your domain, bring the material yourself.
+n39: State the goal, not just the format
+	description=A machine can obey a surface instruction and still miss the win condition. Goal language closes that gap.
+n40: Diagnose property pairs
+	description=Most bad outputs are not one property failing alone. The pair tells you which fix actually matters.
+n41: Durable mental model
+	description=Model quality moves; the structure remains. The point is not memorizing edge cases but seeing the machine through a stable lens.

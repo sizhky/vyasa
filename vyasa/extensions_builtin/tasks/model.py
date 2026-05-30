@@ -5,6 +5,7 @@ import re
 import secrets
 
 from ...markdown_fence import current_content_path, get_root_folder
+from .items_pack import read_kg_pack
 from .projections import attach_projection_models, normalize_projections
 
 
@@ -52,7 +53,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                 continue
             key = line[:key_index].strip()
             value = line[key_index + 1:].strip()
-            if key in {"id", "title", "default_color_by", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source"}:
+            if key in {"id", "title", "default_color_by", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source", "items_schema"}:
                 config[key] = _read_string(value)
                 cursor += 1
                 continue
@@ -579,7 +580,7 @@ def _parse_items_graph(body: str) -> dict:
         if indent == 0 and _find_unquoted(line, ":") > 0 and _find_unquoted(line, "->") < 0:
             key, value = line.split(":", 1)
             key = key.strip()
-            if key in {"id", "title", "default_color_by", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source"}:
+            if key in {"id", "title", "default_color_by", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source", "items_schema"}:
                 graph[key] = _read_string(value.strip())
                 index += 1
                 continue
@@ -876,9 +877,38 @@ def _apply_palette_source(graph: dict, current_path: str | Path | None, source_f
         graph[palette_field] = palette
 
 
+def _resolve_required_source(current_path: str | Path | None, source: str) -> Path:
+    resolved = _resolve_tasks_source_path(current_path, source)
+    if not resolved or not resolved.exists():
+        raise ValueError(f"Missing KG source: {source}")
+    return resolved
+
+
+def _apply_kg_schema(graph: dict, current_path: str | Path | None) -> None:
+    schema_source = str(graph.get("items_schema") or "").strip()
+    if not schema_source:
+        return
+    schema_path = _resolve_required_source(current_path, schema_source)
+    compiled = read_kg_pack(schema_path)
+    for key in ("id", "title", "default_projection", "view_projections", "color_palette_source", "kg_schema", "kg_cache", "kg_sources"):
+        if compiled.get(key) and not graph.get(key):
+            graph[key] = compiled[key]
+    graph["tasks"].extend(compiled.get("tasks", []))
+    graph["dependency_edges"].extend(compiled.get("dependency_edges", []))
+    graph["items_schema"] = schema_source
+
+
 def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
     config, body = _read_fence_frontmatter(_extract_tasks_body(text).strip())
     graph = _parse_items_graph(body)
+    if config.get("id") and not graph.get("id"):
+        graph["id"] = config["id"]
+    if config.get("title") and not graph.get("title"):
+        graph["title"] = config["title"]
+    for key in ("items_schema",):
+        if key in config and key not in graph:
+            graph[key] = config[key]
+    _apply_kg_schema(graph, current_path)
     if config.get("id") and not graph.get("id"):
         graph["id"] = config["id"]
     if config.get("title") and not graph.get("title"):
@@ -977,6 +1007,10 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "base_view_label": graph.get("base_view_label", ""),
         "view_projections": graph.get("view_projections", []),
         "projection_models": {},
+        "items_schema": graph.get("items_schema", ""),
+        "kg_schema": graph.get("kg_schema", ""),
+        "kg_cache": graph.get("kg_cache", ""),
+        "kg_sources": graph.get("kg_sources", {}),
     }
     return attach_projection_models(model)
 

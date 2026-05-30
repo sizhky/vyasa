@@ -1,0 +1,46 @@
+@graph id=ai-capabilities-and-limitations title="AI Capabilities and Limitations" initial_view=arc
+
+@sources
+base:
+	nodes=ai-capabilities-and-limitations.kg.nodes
+	edges=ai-capabilities-and-limitations.kg.edges
+	attrs=ai-capabilities-and-limitations.kg.attrs
+palette=ai-capabilities-and-limitations.kg.palette
+cache=ai-capabilities-and-limitations.kg.cache
+
+@relations
+becomes
+collides_with
+defines
+fails_as
+leaves
+mitigated_by
+powers
+requires
+sharpens
+
+@views
+arc:
+	source=base
+	group_by,color_by=chapter
+	caption="The course as a machine story: definition, shaping, constraints, collisions, response."
+properties:
+	source=base
+	group_by="[property,chapter]"
+	color_by=property
+	caption="Same nodes regrouped by the property they mostly belong to. Read this when diagnosing a real task."
+failures:
+	source=base
+	group_by="[failure_family,chapter]"
+	color_by=failure_family
+	caption="Where the clean machine story breaks into practical disappointments."
+mitigations:
+	source=base
+	group_by="[mitigation_family,chapter]"
+	color_by=mitigation_family
+	caption="The tools and habits that push each edge outward without pretending the edge vanished."
+practice:
+	source=base
+	group_by="[habit,chapter]"
+	color_by=role
+	caption="Machine properties only matter because they sharpen human habits: verify, supply context, state goals, and insert checkpoints."

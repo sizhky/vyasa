@@ -1,0 +1,1033 @@
+{
+  "edges": {
+    "e1": {
+      "id": "e1",
+      "label": "defines",
+      "note": "contrast",
+      "relation": "defines",
+      "source": "n1",
+      "target": "n2"
+    },
+    "e10": {
+      "id": "e10",
+      "label": "leaves",
+      "relation": "leaves",
+      "source": "n7",
+      "target": "n8"
+    },
+    "e11": {
+      "id": "e11",
+      "label": "leaves",
+      "relation": "leaves",
+      "source": "n7",
+      "target": "n9"
+    },
+    "e12": {
+      "id": "e12",
+      "label": "leaves",
+      "relation": "leaves",
+      "source": "n7",
+      "target": "n10"
+    },
+    "e13": {
+      "id": "e13",
+      "label": "leaves",
+      "relation": "leaves",
+      "source": "n7",
+      "target": "n11"
+    },
+    "e14": {
+      "id": "e14",
+      "label": "powers",
+      "relation": "powers",
+      "source": "n12",
+      "target": "n13"
+    },
+    "e15": {
+      "id": "e15",
+      "label": "fails_as",
+      "relation": "fails_as",
+      "source": "n12",
+      "target": "n14"
+    },
+    "e16": {
+      "id": "e16",
+      "label": "fails_as",
+      "relation": "fails_as",
+      "source": "n15",
+      "target": "n16"
+    },
+    "e17": {
+      "id": "e17",
+      "label": "fails_as",
+      "relation": "fails_as",
+      "source": "n15",
+      "target": "n17"
+    },
+    "e18": {
+      "id": "e18",
+      "label": "fails_as",
+      "relation": "fails_as",
+      "source": "n18",
+      "target": "n19"
+    },
+    "e19": {
+      "id": "e19",
+      "label": "fails_as",
+      "relation": "fails_as",
+      "source": "n18",
+      "target": "n20"
+    },
+    "e2": {
+      "id": "e2",
+      "label": "requires",
+      "relation": "requires",
+      "source": "n1",
+      "target": "n3"
+    },
+    "e20": {
+      "id": "e20",
+      "label": "powers",
+      "relation": "powers",
+      "source": "n21",
+      "target": "n22"
+    },
+    "e21": {
+      "id": "e21",
+      "label": "fails_as",
+      "relation": "fails_as",
+      "source": "n21",
+      "target": "n23"
+    },
+    "e22": {
+      "id": "e22",
+      "label": "fails_as",
+      "relation": "fails_as",
+      "source": "n21",
+      "target": "n24"
+    },
+    "e23": {
+      "id": "e23",
+      "label": "fails_as",
+      "relation": "fails_as",
+      "source": "n14",
+      "target": "n25"
+    },
+    "e24": {
+      "id": "e24",
+      "label": "fails_as",
+      "relation": "fails_as",
+      "source": "n16",
+      "target": "n26"
+    },
+    "e25": {
+      "id": "e25",
+      "label": "fails_as",
+      "relation": "fails_as",
+      "source": "n19",
+      "target": "n27"
+    },
+    "e26": {
+      "id": "e26",
+      "label": "fails_as",
+      "relation": "fails_as",
+      "source": "n24",
+      "target": "n28"
+    },
+    "e27": {
+      "id": "e27",
+      "label": "fails_as",
+      "relation": "fails_as",
+      "source": "n8",
+      "target": "n29"
+    },
+    "e28": {
+      "id": "e28",
+      "label": "mitigated_by",
+      "relation": "mitigated_by",
+      "source": "n12",
+      "target": "n30"
+    },
+    "e29": {
+      "id": "e29",
+      "label": "mitigated_by",
+      "relation": "mitigated_by",
+      "source": "n12",
+      "target": "n35"
+    },
+    "e3": {
+      "id": "e3",
+      "label": "becomes",
+      "relation": "becomes",
+      "source": "n4",
+      "target": "n5"
+    },
+    "e30": {
+      "id": "e30",
+      "label": "mitigated_by",
+      "relation": "mitigated_by",
+      "source": "n15",
+      "target": "n31"
+    },
+    "e31": {
+      "id": "e31",
+      "label": "mitigated_by",
+      "relation": "mitigated_by",
+      "source": "n18",
+      "target": "n32"
+    },
+    "e32": {
+      "id": "e32",
+      "label": "mitigated_by",
+      "relation": "mitigated_by",
+      "source": "n18",
+      "target": "n33"
+    },
+    "e33": {
+      "id": "e33",
+      "label": "mitigated_by",
+      "relation": "mitigated_by",
+      "source": "n21",
+      "target": "n33"
+    },
+    "e34": {
+      "id": "e34",
+      "label": "mitigated_by",
+      "relation": "mitigated_by",
+      "source": "n21",
+      "target": "n34"
+    },
+    "e35": {
+      "id": "e35",
+      "label": "requires",
+      "relation": "requires",
+      "source": "n25",
+      "target": "n37"
+    },
+    "e36": {
+      "id": "e36",
+      "label": "requires",
+      "relation": "requires",
+      "source": "n26",
+      "target": "n38"
+    },
+    "e37": {
+      "id": "e37",
+      "label": "requires",
+      "relation": "requires",
+      "source": "n27",
+      "target": "n38"
+    },
+    "e38": {
+      "id": "e38",
+      "label": "requires",
+      "relation": "requires",
+      "source": "n28",
+      "target": "n33"
+    },
+    "e39": {
+      "id": "e39",
+      "label": "requires",
+      "relation": "requires",
+      "source": "n28",
+      "target": "n34"
+    },
+    "e4": {
+      "id": "e4",
+      "label": "becomes",
+      "relation": "becomes",
+      "source": "n6",
+      "target": "n7"
+    },
+    "e40": {
+      "id": "e40",
+      "label": "requires",
+      "relation": "requires",
+      "source": "n29",
+      "target": "n40"
+    },
+    "e41": {
+      "id": "e41",
+      "label": "sharpens",
+      "relation": "sharpens",
+      "source": "n12",
+      "target": "n37"
+    },
+    "e42": {
+      "id": "e42",
+      "label": "sharpens",
+      "relation": "sharpens",
+      "source": "n15",
+      "target": "n38"
+    },
+    "e43": {
+      "id": "e43",
+      "label": "sharpens",
+      "relation": "sharpens",
+      "source": "n18",
+      "target": "n38"
+    },
+    "e44": {
+      "id": "e44",
+      "label": "sharpens",
+      "relation": "sharpens",
+      "source": "n21",
+      "target": "n39"
+    },
+    "e45": {
+      "id": "e45",
+      "label": "sharpens",
+      "relation": "sharpens",
+      "source": "n8",
+      "target": "n40"
+    },
+    "e46": {
+      "id": "e46",
+      "label": "sharpens",
+      "relation": "sharpens",
+      "source": "n9",
+      "target": "n39"
+    },
+    "e47": {
+      "id": "e47",
+      "label": "sharpens",
+      "relation": "sharpens",
+      "source": "n10",
+      "target": "n36"
+    },
+    "e48": {
+      "id": "e48",
+      "label": "sharpens",
+      "relation": "sharpens",
+      "source": "n11",
+      "target": "n37"
+    },
+    "e49": {
+      "id": "e49",
+      "label": "collides_with",
+      "relation": "collides_with",
+      "source": "n25",
+      "target": "n12"
+    },
+    "e5": {
+      "id": "e5",
+      "label": "powers",
+      "relation": "powers",
+      "source": "n5",
+      "target": "n12"
+    },
+    "e50": {
+      "id": "e50",
+      "label": "collides_with",
+      "relation": "collides_with",
+      "source": "n25",
+      "target": "n15"
+    },
+    "e51": {
+      "id": "e51",
+      "label": "collides_with",
+      "relation": "collides_with",
+      "source": "n27",
+      "target": "n18"
+    },
+    "e52": {
+      "id": "e52",
+      "label": "collides_with",
+      "relation": "collides_with",
+      "source": "n27",
+      "target": "n21"
+    },
+    "e53": {
+      "id": "e53",
+      "label": "collides_with",
+      "relation": "collides_with",
+      "source": "n28",
+      "target": "n12"
+    },
+    "e54": {
+      "id": "e54",
+      "label": "collides_with",
+      "relation": "collides_with",
+      "source": "n28",
+      "target": "n21"
+    },
+    "e55": {
+      "id": "e55",
+      "label": "collides_with",
+      "relation": "collides_with",
+      "source": "n29",
+      "target": "n8"
+    },
+    "e56": {
+      "id": "e56",
+      "label": "collides_with",
+      "relation": "collides_with",
+      "source": "n29",
+      "target": "n21"
+    },
+    "e57": {
+      "id": "e57",
+      "label": "becomes",
+      "relation": "becomes",
+      "source": "n37",
+      "target": "n41"
+    },
+    "e58": {
+      "id": "e58",
+      "label": "becomes",
+      "relation": "becomes",
+      "source": "n38",
+      "target": "n41"
+    },
+    "e59": {
+      "id": "e59",
+      "label": "becomes",
+      "relation": "becomes",
+      "source": "n39",
+      "target": "n41"
+    },
+    "e6": {
+      "id": "e6",
+      "label": "leaves",
+      "relation": "leaves",
+      "source": "n6",
+      "target": "n8"
+    },
+    "e60": {
+      "id": "e60",
+      "label": "becomes",
+      "relation": "becomes",
+      "source": "n40",
+      "target": "n41"
+    },
+    "e61": {
+      "id": "e61",
+      "label": "requires",
+      "relation": "requires",
+      "source": "n41",
+      "target": "n36"
+    },
+    "e62": {
+      "id": "e62",
+      "label": "requires",
+      "relation": "requires",
+      "source": "n41",
+      "target": "n3"
+    },
+    "e7": {
+      "id": "e7",
+      "label": "leaves",
+      "relation": "leaves",
+      "source": "n6",
+      "target": "n9"
+    },
+    "e8": {
+      "id": "e8",
+      "label": "leaves",
+      "relation": "leaves",
+      "source": "n6",
+      "target": "n10"
+    },
+    "e9": {
+      "id": "e9",
+      "label": "leaves",
+      "relation": "leaves",
+      "source": "n6",
+      "target": "n11"
+    }
+  },
+  "generated": true,
+  "nodes": {
+    "n1": {
+      "chapter": "Premise",
+      "description": "Produces new content rather than merely sorting existing data. This course draws the line around transformer-style text generation.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Locate the task",
+      "id": "n1",
+      "label": "Generative AI",
+      "mitigation_family": "None",
+      "property": "None",
+      "role": "Definition",
+      "section": "Premise"
+    },
+    "n10": {
+      "chapter": "Fingerprints",
+      "description": "Safety shaping can produce refusals or hedging that are broader than the true hazard.",
+      "failure_family": "Character",
+      "group_id": null,
+      "habit": "Right-size the risk",
+      "id": "n10",
+      "label": "Over-caution",
+      "mitigation_family": "Control",
+      "property": "Training",
+      "role": "Constraint",
+      "section": "Fingerprints"
+    },
+    "n11": {
+      "chapter": "Fingerprints",
+      "description": "Tone and truth are only loosely coupled. Smooth prose can wrap a guess.",
+      "failure_family": "Character",
+      "group_id": null,
+      "habit": "Verify specifics",
+      "id": "n11",
+      "label": "Loose confidence calibration",
+      "mitigation_family": "Verification",
+      "property": "Training",
+      "role": "Constraint",
+      "section": "Fingerprints"
+    },
+    "n12": {
+      "chapter": "Properties",
+      "description": "The core generator. Fluency comes from it, and hallucination comes from it too.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Verify specifics",
+      "id": "n12",
+      "label": "Next Token Prediction",
+      "mitigation_family": "Verification",
+      "property": "Next Token Prediction",
+      "role": "Mechanism",
+      "section": "Properties"
+    },
+    "n13": {
+      "chapter": "Properties",
+      "description": "Summaries, reformats, common explanations, code shapes the model has seen many times.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Use for common patterns",
+      "id": "n13",
+      "label": "Well-worn path",
+      "mitigation_family": "None",
+      "property": "Next Token Prediction",
+      "role": "Outcome",
+      "section": "Properties"
+    },
+    "n14": {
+      "chapter": "Properties",
+      "description": "The danger band where fabrication concentrates: precise facts that can sound right without being right.",
+      "failure_family": "Fabrication",
+      "group_id": null,
+      "habit": "Check names, dates, numbers, quotes",
+      "id": "n14",
+      "label": "Specificity zone",
+      "mitigation_family": "Verification",
+      "property": "Next Token Prediction",
+      "role": "Constraint",
+      "section": "Properties"
+    },
+    "n15": {
+      "chapter": "Properties",
+      "description": "What the model absorbed during training and nothing beyond that without tools.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Ask what it would have read",
+      "id": "n15",
+      "label": "Knowledge",
+      "mitigation_family": "Retrieval",
+      "property": "Knowledge",
+      "role": "Mechanism",
+      "section": "Properties"
+    },
+    "n16": {
+      "chapter": "Properties",
+      "description": "Training stopped at some point. After that date, default knowledge is frozen.",
+      "failure_family": "Staleness",
+      "group_id": null,
+      "habit": "Check recency",
+      "id": "n16",
+      "label": "Knowledge cutoff",
+      "mitigation_family": "Retrieval",
+      "property": "Knowledge",
+      "role": "Constraint",
+      "section": "Properties"
+    },
+    "n17": {
+      "chapter": "Properties",
+      "description": "The model may know a thing without knowing where it came from in a citeable way.",
+      "failure_family": "Staleness",
+      "group_id": null,
+      "habit": "Prefer traceable sources",
+      "id": "n17",
+      "label": "Source amnesia",
+      "mitigation_family": "Grounding",
+      "property": "Knowledge",
+      "role": "Constraint",
+      "section": "Properties"
+    },
+    "n18": {
+      "chapter": "Properties",
+      "description": "Fixed context window. The model only attends to what still fits inside the current workspace.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Curate context",
+      "id": "n18",
+      "label": "Working memory",
+      "mitigation_family": "Context",
+      "property": "Working Memory",
+      "role": "Mechanism",
+      "section": "Properties"
+    },
+    "n19": {
+      "chapter": "Properties",
+      "description": "Attention is not uniform. Middle material gets weaker than edges.",
+      "failure_family": "Attention",
+      "group_id": null,
+      "habit": "Front-load and repeat what matters",
+      "id": "n19",
+      "label": "Lost in the middle",
+      "mitigation_family": "Context",
+      "property": "Working Memory",
+      "role": "Constraint",
+      "section": "Properties"
+    },
+    "n2": {
+      "chapter": "Premise",
+      "description": "Spam filters, recommenders, fraud detectors. Useful contrast object: plenty of AI is not generative.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Locate the task",
+      "id": "n2",
+      "label": "Classification and prediction AI",
+      "mitigation_family": "None",
+      "property": "None",
+      "role": "Definition",
+      "section": "Premise"
+    },
+    "n20": {
+      "chapter": "Properties",
+      "description": "Corrections do not retrain the model. New session, new blank slate.",
+      "failure_family": "Attention",
+      "group_id": null,
+      "habit": "Re-supply critical context",
+      "id": "n20",
+      "label": "No persistent memory by default",
+      "mitigation_family": "Context",
+      "property": "Working Memory",
+      "role": "Constraint",
+      "section": "Properties"
+    },
+    "n21": {
+      "chapter": "Properties",
+      "description": "The system follows instructions through pattern matching, not deep semantic understanding.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "State goal with instruction",
+      "id": "n21",
+      "label": "Steerability",
+      "mitigation_family": "Control",
+      "property": "Steerability",
+      "role": "Mechanism",
+      "section": "Properties"
+    },
+    "n22": {
+      "chapter": "Properties",
+      "description": "Format, tone, role, and bounded structure are where steerability feels strongest.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Use short verifiable asks",
+      "id": "n22",
+      "label": "Tight control zone",
+      "mitigation_family": "None",
+      "property": "Steerability",
+      "role": "Outcome",
+      "section": "Properties"
+    },
+    "n23": {
+      "chapter": "Properties",
+      "description": "The instruction can be satisfied literally while missing the reason the instruction existed.",
+      "failure_family": "Control",
+      "group_id": null,
+      "habit": "Restate the actual goal",
+      "id": "n23",
+      "label": "Letter over spirit",
+      "mitigation_family": "Control",
+      "property": "Steerability",
+      "role": "Constraint",
+      "section": "Properties"
+    },
+    "n24": {
+      "chapter": "Properties",
+      "description": "Long chains accumulate small errors. The final answer can preserve the early mistake faithfully.",
+      "failure_family": "Control",
+      "group_id": null,
+      "habit": "Insert checkpoints",
+      "id": "n24",
+      "label": "Reasoning drift",
+      "mitigation_family": "Control",
+      "property": "Steerability",
+      "role": "Constraint",
+      "section": "Properties"
+    },
+    "n25": {
+      "chapter": "Failures",
+      "description": "Citation-shaped output appears because plausible pattern outruns actual knowledge.",
+      "failure_family": "Compound",
+      "group_id": null,
+      "habit": "Verify specifics",
+      "id": "n25",
+      "label": "Hallucinated citations",
+      "mitigation_family": "Grounding",
+      "property": "Next Token Prediction",
+      "role": "Constraint",
+      "section": "Failures"
+    },
+    "n26": {
+      "chapter": "Failures",
+      "description": "True-then becomes false-now, yet the answer still arrives with composure.",
+      "failure_family": "Compound",
+      "group_id": null,
+      "habit": "Use search for live facts",
+      "id": "n26",
+      "label": "Stale answers",
+      "mitigation_family": "Retrieval",
+      "property": "Knowledge",
+      "role": "Constraint",
+      "section": "Failures"
+    },
+    "n27": {
+      "chapter": "Failures",
+      "description": "Good constraints dissolve as context grows and the important bits slide into the dead zone.",
+      "failure_family": "Compound",
+      "group_id": null,
+      "habit": "Restart or summarize",
+      "id": "n27",
+      "label": "Long-conversation drift",
+      "mitigation_family": "Context",
+      "property": "Working Memory",
+      "role": "Constraint",
+      "section": "Failures"
+    },
+    "n28": {
+      "chapter": "Failures",
+      "description": "Fluent reasoning does not guarantee precise arithmetic or logic.",
+      "failure_family": "Compound",
+      "group_id": null,
+      "habit": "Offload exactness to tools",
+      "id": "n28",
+      "label": "Confidently wrong math",
+      "mitigation_family": "Control",
+      "property": "Steerability",
+      "role": "Constraint",
+      "section": "Failures"
+    },
+    "n29": {
+      "chapter": "Failures",
+      "description": "The assistant inherits the user's false framing and decorates it instead of resisting it.",
+      "failure_family": "Compound",
+      "group_id": null,
+      "habit": "Ask for disagreement",
+      "id": "n29",
+      "label": "Agreeable bad premise",
+      "mitigation_family": "Control",
+      "property": "Training",
+      "role": "Constraint",
+      "section": "Failures"
+    },
+    "n3": {
+      "chapter": "Premise",
+      "description": "Human competencies respond to machine properties. The framework matters because the user is the other half of the system.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Calibrated trust",
+      "id": "n3",
+      "label": "4D human side",
+      "mitigation_family": "None",
+      "property": "None",
+      "role": "Outcome",
+      "section": "Premise"
+    },
+    "n30": {
+      "chapter": "Mitigations",
+      "description": "Makes the generator show what is backed by an external source and what is merely fluent synthesis.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Trace claims",
+      "id": "n30",
+      "label": "Citations and source grounding",
+      "mitigation_family": "Grounding",
+      "property": "Next Token Prediction",
+      "role": "Mitigation",
+      "section": "Mitigations"
+    },
+    "n31": {
+      "chapter": "Mitigations",
+      "description": "Pulls in information the base model never had or had too unevenly.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Patch the cutoff",
+      "id": "n31",
+      "label": "Web search and retrieval",
+      "mitigation_family": "Retrieval",
+      "property": "Knowledge",
+      "role": "Mitigation",
+      "section": "Mitigations"
+    },
+    "n32": {
+      "chapter": "Mitigations",
+      "description": "Moves recurring facts and constraints closer to the active window so the user stops repeating themselves.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Keep reusable context nearby",
+      "id": "n32",
+      "label": "Projects, memory, and standing context",
+      "mitigation_family": "Context",
+      "property": "Working Memory",
+      "role": "Mitigation",
+      "section": "Mitigations"
+    },
+    "n33": {
+      "chapter": "Mitigations",
+      "description": "Breaks a brittle chain into inspectable segments before one hidden error poisons the whole run.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Inspect step two",
+      "id": "n33",
+      "label": "Mid-process checkpoints",
+      "mitigation_family": "Control",
+      "property": "Steerability",
+      "role": "Mitigation",
+      "section": "Mitigations"
+    },
+    "n34": {
+      "chapter": "Mitigations",
+      "description": "Gives math, parsing, and schema-constrained tasks a stricter substrate than free-form text.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Move exact work into exact tools",
+      "id": "n34",
+      "label": "Code execution and structured output",
+      "mitigation_family": "Control",
+      "property": "Steerability",
+      "role": "Mitigation",
+      "section": "Mitigations"
+    },
+    "n35": {
+      "chapter": "Mitigations",
+      "description": "Useful when honest, but never a substitute for checking the high-risk specifics yourself.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Watch where the model hesitates",
+      "id": "n35",
+      "label": "Uncertainty signaling",
+      "mitigation_family": "Verification",
+      "property": "Next Token Prediction",
+      "role": "Mitigation",
+      "section": "Mitigations"
+    },
+    "n36": {
+      "chapter": "Practice",
+      "description": "Do not trust or distrust the machine wholesale. Place the task on each continuum and respond to that shape.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Calibrated trust",
+      "id": "n36",
+      "label": "Calibrated trust",
+      "mitigation_family": "Verification",
+      "property": "None",
+      "role": "Habit",
+      "section": "Practice"
+    },
+    "n37": {
+      "chapter": "Practice",
+      "description": "Names, dates, numbers, URLs, citations, quotes. Precision is where fluency most often impersonates truth.",
+      "failure_family": "Fabrication",
+      "group_id": null,
+      "habit": "Verify specifics",
+      "id": "n37",
+      "label": "Verify specifics independently",
+      "mitigation_family": "Verification",
+      "property": "Next Token Prediction",
+      "role": "Habit",
+      "section": "Practice"
+    },
+    "n38": {
+      "chapter": "Practice",
+      "description": "If the model is thin, stale, or forgetful on your domain, bring the material yourself.",
+      "failure_family": "Attention",
+      "group_id": null,
+      "habit": "Supply context",
+      "id": "n38",
+      "label": "Supply the missing knowledge and context",
+      "mitigation_family": "Context",
+      "property": "Working Memory",
+      "role": "Habit",
+      "section": "Practice"
+    },
+    "n39": {
+      "chapter": "Practice",
+      "description": "A machine can obey a surface instruction and still miss the win condition. Goal language closes that gap.",
+      "failure_family": "Control",
+      "group_id": null,
+      "habit": "State goals",
+      "id": "n39",
+      "label": "State the goal, not just the format",
+      "mitigation_family": "Control",
+      "property": "Steerability",
+      "role": "Habit",
+      "section": "Practice"
+    },
+    "n4": {
+      "chapter": "Training",
+      "description": "Reads vast text and learns one thing: what token plausibly comes next.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Understand the machine",
+      "id": "n4",
+      "label": "Pretraining",
+      "mitigation_family": "None",
+      "property": "Training",
+      "role": "Mechanism",
+      "section": "Training"
+    },
+    "n40": {
+      "chapter": "Practice",
+      "description": "Most bad outputs are not one property failing alone. The pair tells you which fix actually matters.",
+      "failure_family": "Compound",
+      "group_id": null,
+      "habit": "Name the collision",
+      "id": "n40",
+      "label": "Diagnose property pairs",
+      "mitigation_family": "Verification",
+      "property": "None",
+      "role": "Habit",
+      "section": "Practice"
+    },
+    "n41": {
+      "chapter": "Practice",
+      "description": "Model quality moves; the structure remains. The point is not memorizing edge cases but seeing the machine through a stable lens.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Think in properties",
+      "id": "n41",
+      "label": "Durable mental model",
+      "mitigation_family": "None",
+      "property": "None",
+      "role": "Outcome",
+      "section": "Practice"
+    },
+    "n5": {
+      "chapter": "Training",
+      "description": "The raw system after pretraining. Fluent continuation machine, not yet an assistant.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Calibrated trust",
+      "id": "n5",
+      "label": "Document completer",
+      "mitigation_family": "None",
+      "property": "Next Token Prediction",
+      "role": "Outcome",
+      "section": "Training"
+    },
+    "n6": {
+      "chapter": "Training",
+      "description": "Human preference shaping turns completion into assistant behavior: answer helpfully, decline harmful asks, stay within norms.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "Understand the machine",
+      "id": "n6",
+      "label": "Fine-tuning",
+      "mitigation_family": "None",
+      "property": "Training",
+      "role": "Mechanism",
+      "section": "Training"
+    },
+    "n7": {
+      "chapter": "Training",
+      "description": "The interaction layer people meet. Useful, polite, often cooperative, never free of the mechanism beneath it.",
+      "failure_family": "None",
+      "group_id": null,
+      "habit": "State the goal",
+      "id": "n7",
+      "label": "Helpful assistant",
+      "mitigation_family": "None",
+      "property": "Steerability",
+      "role": "Outcome",
+      "section": "Training"
+    },
+    "n8": {
+      "chapter": "Fingerprints",
+      "description": "The model leans toward validating the user's frame unless asked, or forced, to disagree.",
+      "failure_family": "Character",
+      "group_id": null,
+      "habit": "Invite pushback",
+      "id": "n8",
+      "label": "Sycophancy",
+      "mitigation_family": "Control",
+      "property": "Training",
+      "role": "Constraint",
+      "section": "Fingerprints"
+    },
+    "n9": {
+      "chapter": "Fingerprints",
+      "description": "Left alone, the assistant often gives more than the task strictly needs.",
+      "failure_family": "Character",
+      "group_id": null,
+      "habit": "Constrain format",
+      "id": "n9",
+      "label": "Verbosity default",
+      "mitigation_family": "Control",
+      "property": "Training",
+      "role": "Constraint",
+      "section": "Fingerprints"
+    }
+  },
+  "sources": {
+    "base": {
+      "attrs": "ai-capabilities-and-limitations.kg.attrs",
+      "edges": "ai-capabilities-and-limitations.kg.edges",
+      "nodes": "ai-capabilities-and-limitations.kg.nodes"
+    }
+  },
+  "views": [
+    {
+      "caption": "The course as a machine story: definition, shaping, constraints, collisions, response.",
+      "default_color_by": "chapter",
+      "groups_from": [
+        "chapter"
+      ],
+      "id": "arc",
+      "label": "Arc"
+    },
+    {
+      "caption": "Same nodes regrouped by the property they mostly belong to. Read this when diagnosing a real task.",
+      "default_color_by": "property",
+      "groups_from": [
+        "property",
+        "chapter"
+      ],
+      "id": "properties",
+      "label": "Properties"
+    },
+    {
+      "caption": "Where the clean machine story breaks into practical disappointments.",
+      "default_color_by": "failure_family",
+      "groups_from": [
+        "failure_family",
+        "chapter"
+      ],
+      "id": "failures",
+      "label": "Failures"
+    },
+    {
+      "caption": "The tools and habits that push each edge outward without pretending the edge vanished.",
+      "default_color_by": "mitigation_family",
+      "groups_from": [
+        "mitigation_family",
+        "chapter"
+      ],
+      "id": "mitigations",
+      "label": "Mitigations"
+    },
+    {
+      "caption": "Machine properties only matter because they sharpen human habits: verify, supply context, state goals, and insert checkpoints.",
+      "default_color_by": "role",
+      "groups_from": [
+        "habit",
+        "chapter"
+      ],
+      "id": "practice",
+      "label": "Practice"
+    }
+  ]
+}
