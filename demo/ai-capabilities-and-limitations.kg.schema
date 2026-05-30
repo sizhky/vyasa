@@ -1,4 +1,4 @@
-@graph id=ai-capabilities-and-limitations title="AI Capabilities and Limitations" initial_view=arc
+@graph id=ai-capabilities-and-limitations title="AI Capabilities and Limitations" initial_view=chapter-1-premise
 
 @sources
 base:
@@ -20,27 +20,43 @@ requires
 sharpens
 
 @views
-arc:
+chapter-1-premise:
 	source=base
-	group_by,color_by=chapter
-	caption="The course as a machine story: definition, shaping, constraints, collisions, response."
-properties:
+	node_ids="n1 n2 n4 n5 n12 n13"
+	group_by,color_by=role
+	caption="Start here: generative AI is not all AI, and the raw engine is a document completer riding next-token prediction."
+chapter-2-assistant-mask:
 	source=base
-	group_by="[property,chapter]"
-	color_by=property
-	caption="Same nodes regrouped by the property they mostly belong to. Read this when diagnosing a real task."
-failures:
+	node_ids="n6 n7 n8 n9 n10 n11"
+	group_by,color_by=role
+	caption="Fine-tuning makes the machine feel helpful, but the same shaping leaves character fingerprints."
+chapter-3-four-load-bearing-limits:
 	source=base
-	group_by="[failure_family,chapter]"
-	color_by=failure_family
-	caption="Where the clean machine story breaks into practical disappointments."
-mitigations:
+	node_ids="n12 n14 n15 n18 n21 n22"
+	group_by=color_by=property
+	caption="The useful mental model has four limits: prediction, knowledge, working memory, and steerability."
+chapter-4-when-knowledge-breaks:
 	source=base
-	group_by="[mitigation_family,chapter]"
-	color_by=mitigation_family
-	caption="The tools and habits that push each edge outward without pretending the edge vanished."
-practice:
+	node_ids="n15 n16 n17 n25 n26 n31"
+	group_by=color_by=failure_family
+	caption="Knowledge looks confident even when it is stale, source-amnesic, or citation-shaped fiction."
+chapter-5-when-context-breaks:
 	source=base
-	group_by="[habit,chapter]"
-	color_by=role
-	caption="Machine properties only matter because they sharpen human habits: verify, supply context, state goals, and insert checkpoints."
+	node_ids="n18 n19 n20 n27 n32 n38"
+	group_by=color_by=mitigation_family
+	caption="Working memory helps until the important fact falls out, lands in the middle, or must be supplied again."
+chapter-6-when-control-breaks:
+	source=base
+	node_ids="n21 n23 n24 n28 n29 n33"
+	group_by=color_by=failure_family
+	caption="Instructions steer behavior, but literal obedience, drift, math errors, and agreeable premises still need checkpoints."
+chapter-7-ground-the-output:
+	source=base
+	node_ids="n25 n30 n31 n34 n35 n37"
+	group_by=color_by=mitigation_family
+	caption="Grounding turns fluent answers into inspectable work: sources, retrieval, tools, uncertainty, and independent checks."
+chapter-8-human-loop:
+	source=base
+	node_ids="n36 n37 n38 n39 n40 n41"
+	group_by=color_by=role
+	caption="End here: trust is calibrated by habit, not mood. Verify specifics, supply context, state goals, and name collisions."

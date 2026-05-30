@@ -146,6 +146,7 @@ delivery:
     caption="Track delivery"
 ownership:
     source=base
+    node_ids="n1 n2"
     group_by=owner
     color_by=status
     edge_label_from=relation
@@ -168,8 +169,41 @@ items_schema: roadmap.kg.schema
     assert model["tasks"][0]["status"] == "todo"
     assert model["dependency_edges"][0]["relation"] == "unlocks"
     assert model["dependency_edges"][0]["confidence"] == "high"
+    assert model["view_projections"][1]["node_ids"] == ["n1", "n2"]
     assert model["view_projections"][0]["caption"] == "Track delivery"
     assert model["default_projection"] == "delivery"
+
+
+def test_kg_pack_projection_node_ids_scope_projection_graph(tmp_path):
+    (tmp_path / "roadmap.kg.schema").write_text(
+        """@graph id=roadmap title=Roadmap initial_view=chapter
+
+@sources
+base:
+    nodes=roadmap.kg.nodes
+    edges=roadmap.kg.edges
+    attrs=roadmap.kg.attrs
+
+@views
+chapter:
+    node_ids="n1 n2"
+    group_by=color_by=status
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "roadmap.kg.nodes").write_text("n1: Start\nn2: Middle\nn3: Later\n", encoding="utf-8")
+    (tmp_path / "roadmap.kg.edges").write_text("e1: n1 -> n2 unlocks\ne2: n2 -> n3 unlocks\n", encoding="utf-8")
+    (tmp_path / "roadmap.kg.attrs").write_text("@node_attrs\nstatus:\n  now: n1 n2\n  later: n3\n", encoding="utf-8")
+
+    model = parse_tasks_text("""```items
+---
+items_schema: roadmap.kg.schema
+---
+```""", current_path=tmp_path / "graph.md")
+
+    chapter = model["projection_models"]["chapter"]["model"]
+    assert [task["id"] for task in chapter["tasks"]] == ["n1", "n2"]
+    assert [edge["id"] for edge in chapter["dependency_edges"]] == ["e1"]
 
 
 def test_kg_pack_checked_state_is_separate_from_node_attrs():

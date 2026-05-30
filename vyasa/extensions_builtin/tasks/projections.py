@@ -33,6 +33,21 @@ def _normalize_groups_from(value) -> list[str]:
     return out
 
 
+def _normalize_node_ids(value) -> list[str]:
+    if isinstance(value, list):
+        items = value
+    elif value is None:
+        return []
+    else:
+        items = str(value).replace(",", " ").split()
+    out = []
+    for item in items:
+        node_id = str(item or "").strip()
+        if node_id and node_id not in out:
+            out.append(node_id)
+    return out
+
+
 def _projection_group_label(attr: str, value: str) -> str:
     attr_label = str(attr or "").strip().replace("_", " ").title()
     value_label = str(value or "").strip()
@@ -71,6 +86,7 @@ def normalize_projections(value) -> list[dict]:
             "id": projection_id,
             "label": str(raw.get("label") or default_label).strip(),
             "caption": str(raw.get("caption") or "").strip(),
+            "node_ids": _normalize_node_ids(raw.get("node_ids")),
             "groups_from": groups_from,
             "default_color_by": str(raw.get("default_color_by") or groups_from[-1]).strip(),
             "edge_focus": str(raw.get("edge_focus") or "").strip(),
@@ -82,6 +98,7 @@ def normalize_projections(value) -> list[dict]:
 
 def build_projection_model(base_model: dict, projection: dict) -> dict:
     group_attrs: list[str] = projection["groups_from"]
+    scoped_node_ids = set(projection.get("node_ids") or [])
 
     def value_path(task: dict) -> tuple[str, ...]:
         return tuple(
@@ -97,6 +114,8 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
     tasks: list[dict] = []
 
     for task in base_model.get("tasks", []):
+        if scoped_node_ids and task.get("id") not in scoped_node_ids:
+            continue
         path = value_path(task)
         # Ensure ancestor groups exist for every prefix of the path.
         for depth in range(1, len(path) + 1):
@@ -135,7 +154,11 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
         "default_color_by": str(projection.get("default_color_by") or base_model.get("default_color_by") or "").strip(),
         "groups": groups,
         "tasks": tasks,
-        "dependency_edges": copy.deepcopy(base_model.get("dependency_edges", [])),
+        "dependency_edges": [
+            copy.deepcopy(edge)
+            for edge in base_model.get("dependency_edges", [])
+            if not scoped_node_ids or (edge.get("source") in scoped_node_ids and edge.get("target") in scoped_node_ids)
+        ],
         "group_tree": dict(group_tree),
         "task_children": dict(task_children),
         "document_order": [group["id"] for group in groups] + [task["id"] for task in tasks],

@@ -11,6 +11,7 @@ from typing import Any
 class KgView:
     id: str
     source: str = "base"
+    node_ids: list[str] = field(default_factory=list)
     group_by: list[str] = field(default_factory=list)
     color_by: str = ""
     edge_color_by: str = ""
@@ -201,6 +202,8 @@ def _update_view(view: KgView, payload: dict[str, str]) -> None:
     group_by = _list_value(payload.get("group_by", ""))
     if "source" in payload:
         view.source = payload["source"]
+    if "node_ids" in payload:
+        view.node_ids = _id_list(payload["node_ids"])
     if group_by:
         view.group_by = group_by
     if "color_by" in payload:
@@ -219,6 +222,7 @@ def _projection(view: KgView) -> dict[str, Any]:
         "label": view.id.replace("_", " ").replace("-", " ").title(),
         "groups_from": view.group_by,
         "default_color_by": view.color_by,
+        "node_ids": view.node_ids,
         "edge_label_from": view.edge_label_from,
         "caption": view.caption,
     }
@@ -270,6 +274,14 @@ def _list_value(value: str) -> list[str]:
     if text.startswith("[") and text.endswith("]"):
         return [part.strip() for part in text[1:-1].split(",") if part.strip()]
     return [text] if text else []
+
+
+def _id_list(value: str) -> list[str]:
+    out = []
+    for item in str(value or "").replace(",", " ").split():
+        if item and item not in out:
+            out.append(item)
+    return out
 
 
 def _resolve(schema_path: Path, value: str) -> Path:
