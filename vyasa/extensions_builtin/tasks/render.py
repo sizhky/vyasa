@@ -78,6 +78,8 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             model["filter_whitelist"] = config["filter_whitelist"]
         if "filter_blacklist" in config:
             model["filter_blacklist"] = config["filter_blacklist"]
+        if "card_states" in config:
+            model["card_states"] = config["card_states"]
         if isinstance(config.get("color_by"), str) and config.get("color_by") and not model.get("color_by"):
             model["color_by"] = config["color_by"]
         if isinstance(config.get("color_by"), dict):
@@ -114,6 +116,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             "edge_color_palette": {},
             "edge_color_palettes": {},
             "node_color_palettes": {},
+            "card_states": [],
             "document_path": str(current_path or ""),
             "storage_id": f"tasks-block-{storage_suffix}",
         }

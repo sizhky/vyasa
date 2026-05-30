@@ -45,6 +45,7 @@ def read_kg_pack(schema_path: str | Path) -> dict[str, Any]:
         "dependency_edges": [],
         "view_projections": [_projection(view) for view in schema.views],
         "default_projection": schema.graph.get("initial_view", schema.views[0].id if schema.views else ""),
+        "card_states": _list_value(schema.graph.get("card_states", "")),
     }
     nodes_by_id: dict[str, dict] = {}
     edges_by_id: dict[str, dict] = {}

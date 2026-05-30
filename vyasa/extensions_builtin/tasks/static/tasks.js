@@ -33,6 +33,8 @@ const TASKS_PROJECTION_GROUP_OPACITY_DEFAULT = 12;
 const TASKS_EDGE_OPACITY_MIN = 0.05;
 const TASKS_EDGE_OPACITY_MAX = 1;
 const TASKS_DONE_ACCENT = '#22c55e';
+const TASKS_CARD_STATE_ATTR = 'card_state';
+const TASKS_DEFAULT_CARD_STATES = ['Not Done', 'Done'];
 const TASKS_GANTT_UNIT_WIDTH = 340;
 const TASKS_GANTT_ROW_GAP = 56;
 const TASKS_GANTT_BAR_MIN_HEIGHT = 34;
@@ -333,6 +335,38 @@ function normalizeTasksCheckedNodeIds(value) {
     return Array.from(new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean)));
 }
 
+function normalizeTasksCardStates(model) {
+    const raw = Array.isArray(model?.card_states) ? model.card_states : [];
+    const states = raw.map((entry) => String(entry || '').trim()).filter(Boolean);
+    return Array.from(new Set(states.length ? states : TASKS_DEFAULT_CARD_STATES));
+}
+
+function normalizeTasksNodeStates(value, cardStates) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const valid = new Set(cardStates);
+    const firstState = cardStates[0] || TASKS_DEFAULT_CARD_STATES[0];
+    return Object.fromEntries(Object.entries(value)
+        .map(([nodeId, state]) => [String(nodeId || '').trim(), String(state || '').trim()])
+        .filter(([nodeId, state]) => nodeId && state && state !== firstState && valid.has(state)));
+}
+
+function tasksCardStateColor(model, state) {
+    const palette = model?.node_color_palettes?.[TASKS_CARD_STATE_ATTR];
+    if (palette && typeof palette === 'object' && state in palette) return palette[state];
+    return state === TASKS_DEFAULT_CARD_STATES[1] ? TASKS_DONE_ACCENT : '';
+}
+
+function tasksCardStateForNode(model, nodeStates, nodeId, cardStates) {
+    const firstState = cardStates[0] || TASKS_DEFAULT_CARD_STATES[0];
+    const state = nodeStates?.[String(nodeId || '')] || firstState;
+    const index = Math.max(0, cardStates.indexOf(state));
+    return { label: state, done: index > 0, color: tasksCardStateColor(model, state) };
+}
+
+function checkedNodeIdsFromStates(nodeStates) {
+    return Object.keys(nodeStates || {}).filter(Boolean);
+}
+
 function readTasksCheckedNodeIds(model) {
     const key = tasksCheckedStateKey(model);
     const storage = tasksGetStorage();
@@ -367,12 +401,16 @@ function writeTasksPrefs(model, prefs) {
         ? prefs.groupByHierarchy.map((entry) => String(entry || '').trim()).filter(Boolean)
         : [];
     const edgeOpacity = prefs?.edgeOpacity;
+    const nodeStates = prefs?.nodeStates && typeof prefs.nodeStates === 'object' && !Array.isArray(prefs.nodeStates)
+        ? prefs.nodeStates
+        : {};
     const payload = JSON.stringify({
         version: 1,
         projectionId,
         edgeOpacity,
         groupByHierarchy,
         projectionPrefs,
+        nodeStates,
     });
     const attempt = () => {
         storage.setItem(key, payload);
@@ -2450,9 +2488,13 @@ async function renderTasksGraphs(rootElement = document) {
             const [edgeOpacity, setEdgeOpacity] = React.useState(() => (
                 sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity)
             ));
-            const [checkedNodeIds, setCheckedNodeIds] = React.useState(() => {
+            const cardStates = React.useMemo(() => normalizeTasksCardStates(sourceModel), [sourceModel]);
+            const [nodeStates, setNodeStates] = React.useState(() => {
                 const stableCheckedNodeIds = readTasksCheckedNodeIds(sourceModel);
-                return stableCheckedNodeIds.length ? stableCheckedNodeIds : normalizeTasksCheckedNodeIds(sourcePrefsRef.current?.checkedNodeIds);
+                const storedStates = normalizeTasksNodeStates(sourcePrefsRef.current?.nodeStates, cardStates);
+                if (Object.keys(storedStates).length) return storedStates;
+                const checkedIds = stableCheckedNodeIds.length ? stableCheckedNodeIds : normalizeTasksCheckedNodeIds(sourcePrefsRef.current?.checkedNodeIds);
+                return Object.fromEntries(checkedIds.map((nodeId) => [nodeId, cardStates[1] || TASKS_DEFAULT_CARD_STATES[1]]));
             });
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
             const [graphRevision, setGraphRevision] = React.useState(0);
@@ -2541,6 +2583,7 @@ async function renderTasksGraphs(rootElement = document) {
                     edgeOpacity,
                     groupByHierarchy,
                     projectionPrefs: nextProjectionPrefs,
+                    nodeStates,
                 };
                 storedProjectionPrefsRef.current = nextProjectionPrefs;
                 writeTasksPrefs(sourceModel, {
@@ -2548,20 +2591,25 @@ async function renderTasksGraphs(rootElement = document) {
                     edgeOpacity,
                     groupByHierarchy,
                     projectionPrefs: nextProjectionPrefs,
+                    nodeStates,
                 });
-                writeTasksCheckedNodeIds(sourceModel, checkedNodeIds);
-            }, [sourceModel, activeFilters, searchQuery, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeOpacity, groupByHierarchy, expanded, checkedNodeIds]);
-            const checkedNodeIdSet = React.useMemo(() => new Set(normalizeTasksCheckedNodeIds(checkedNodeIds)), [checkedNodeIds]);
+                writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
+            }, [sourceModel, activeFilters, searchQuery, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeOpacity, groupByHierarchy, expanded, nodeStates]);
+            const checkedNodeIdSet = React.useMemo(() => new Set(checkedNodeIdsFromStates(nodeStates)), [nodeStates]);
             const toggleCheckedNode = React.useCallback((nodeId) => {
                 const normalizedId = String(nodeId || '').trim();
                 if (!normalizedId) return;
-                setCheckedNodeIds((current) => {
-                    const next = new Set(normalizeTasksCheckedNodeIds(current));
-                    if (next.has(normalizedId)) next.delete(normalizedId);
-                    else next.add(normalizedId);
-                    return Array.from(next);
+                setNodeStates((current) => {
+                    const firstState = cardStates[0] || TASKS_DEFAULT_CARD_STATES[0];
+                    const currentState = current?.[normalizedId] || firstState;
+                    const currentIndex = Math.max(0, cardStates.indexOf(currentState));
+                    const nextState = cardStates[(currentIndex + 1) % cardStates.length] || firstState;
+                    const next = { ...(current || {}) };
+                    if (nextState === firstState) delete next[normalizedId];
+                    else next[normalizedId] = nextState;
+                    return next;
                 });
-            }, []);
+            }, [cardStates]);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
                 const viewport = reactFlow.getViewport();
                 return reactFlow.setViewport(
@@ -2593,22 +2641,24 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         const nodeColor = resolveTasksNodeColor(node, model, activeColorBy, activeColorPalette);
                         const isChecked = checkedNodeIdSet.has(String(node.id || ''));
+                        const cardState = tasksCardStateForNode(sourceModel, nodeStates, node.id, cardStates);
+                        const stateAccent = cardState.color || TASKS_DONE_ACCENT;
                         return {
                             id: node.id,
                             type: 'vyasaTask',
                             position: node.position,
-                            data: { ...node, __checked__: isChecked },
+                            data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color },
                             style: {
                                 width: node.width,
                                 height: node.height,
                                 zIndex: TASKS_TASK_Z,
                                 background: nodeColor ? (colorMix.enabled ? `color-mix(in srgb, var(--vyasa-paper) ${colorMix.paper}%, ${nodeColor} ${colorMix.intensity}%)` : nodeColor) : TASKS_NODE_BG,
                                 border: isChecked
-                                    ? `2px solid color-mix(in srgb, ${TASKS_DONE_ACCENT} 78%, white 22%)`
+                                    ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
                                     : (nodeColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 28%, ${nodeColor} 72%)` : TASKS_NODE_BORDER),
                                 borderRadius: 6,
                                 boxShadow: isChecked
-                                    ? `inset 0 0 0 2px color-mix(in srgb, ${TASKS_DONE_ACCENT} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${TASKS_DONE_ACCENT} 34%, transparent)`
+                                    ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
                                     : 'none',
                                 overflow: 'hidden',
                             },
@@ -2692,6 +2742,8 @@ async function renderTasksGraphs(rootElement = document) {
                     const groupFillExpanded = isProjectionGroup ? projectionGroupExpandedOpacity : 7;
                     const groupFillCollapsed = isProjectionGroup ? projectionGroupOpacity : 14;
                     const groupBorderMix = isProjectionGroup ? 28 : 70;
+                    const cardState = tasksCardStateForNode(sourceModel, nodeStates, n.id, cardStates);
+                    const stateAccent = cardState.color || TASKS_DONE_ACCENT;
                     const background = n.__kind__ === 'group'
                         ? (groupColor
                             ? (isExpanded
@@ -2708,18 +2760,18 @@ async function renderTasksGraphs(rootElement = document) {
                         id: n.id,
                         type: 'vyasaTask',
                         position: n.position,
-                        data: { ...n, __checked__: isChecked },
+                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color },
                         style: {
                             width: n.width,
                             height: n.height,
                             zIndex: nodeZ,
                             background,
                             border: isChecked
-                                ? `2px solid color-mix(in srgb, ${TASKS_DONE_ACCENT} 78%, white 22%)`
+                                ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
                                 : border,
                             borderRadius: isExpanded ? 12 : 6,
                             boxShadow: isChecked
-                                ? `inset 0 0 0 2px color-mix(in srgb, ${TASKS_DONE_ACCENT} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${TASKS_DONE_ACCENT} 34%, transparent)`
+                                ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
                                 : 'none',
                             overflow: 'hidden',
                         },
@@ -2814,7 +2866,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setNodes(anchoredNodes);
                 setEdges(edgesVisible ? baseEdges : []);
                 setGraphRevision((value) => value + 1);
-            }, [ensureBaseLayout, model, activeColorBy, activeColorPalette, activeProjection, viewMode, edgesVisible, edgeOpacity, checkedNodeIdSet]);
+            }, [ensureBaseLayout, model, sourceModel, activeColorBy, activeColorPalette, activeProjection, viewMode, edgesVisible, edgeOpacity, checkedNodeIdSet, nodeStates, cardStates]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: 'currentColor' },
@@ -2902,8 +2954,9 @@ async function renderTasksGraphs(rootElement = document) {
                         ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
                         : '';
                     const displayColor = collapsedGroupColor || nodeColor;
+                    const stateAccent = node.data?.__card_state_color__ || TASKS_DONE_ACCENT;
                     const checkedShadow = node.data?.__checked__
-                        ? `inset 0 0 0 2px color-mix(in srgb, ${TASKS_DONE_ACCENT} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${TASKS_DONE_ACCENT} 34%, transparent)`
+                        ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
                         : 'none';
                     const baseZIndex = Number.isFinite(Number(node.zIndex))
                         ? Number(node.zIndex)
@@ -3136,6 +3189,8 @@ async function renderTasksGraphs(rootElement = document) {
                 const isDimmed = highlightMode === 'dim';
                 const sourceNodeId = data?.__kind__ === 'groupTitle' ? data?.sourceGroupId : id;
                 const isChecked = data?.__checked__ === true;
+                const taskStateLabel = String(data?.__card_state__ || (isChecked ? TASKS_DEFAULT_CARD_STATES[1] : TASKS_DEFAULT_CARD_STATES[0]));
+                const taskStateColor = data?.__card_state_color__ || TASKS_DONE_ACCENT;
                 const showCheckbox = selectedNodeId === sourceNodeId;
                 const isActiveNode = !selectedNodeId || selectedNodeId === sourceNodeId;
                 const linksInteractive = isActiveNode;
@@ -3237,6 +3292,7 @@ async function renderTasksGraphs(rootElement = document) {
                         style: {
                             color: 'inherit',
                             textDecoration: isChecked ? 'line-through underline' : 'underline',
+                            textDecorationColor: isChecked ? taskStateColor : undefined,
                             textUnderlineOffset: '2px',
                             textDecorationThickness: isChecked ? '1.6px' : undefined,
                         },
@@ -3246,6 +3302,7 @@ async function renderTasksGraphs(rootElement = document) {
                         style: {
                             color: 'inherit',
                             textDecoration: isChecked ? 'line-through' : 'none',
+                            textDecorationColor: isChecked ? taskStateColor : undefined,
                             textDecorationThickness: isChecked ? '1.8px' : undefined,
                         },
                     }, labelContent);
@@ -3264,21 +3321,26 @@ async function renderTasksGraphs(rootElement = document) {
                         width: '16px',
                         height: '16px',
                         borderRadius: '5px',
-                        border: `1px solid color-mix(in srgb, var(--vyasa-ink) 18%, ${TASKS_DONE_ACCENT} 24%)`,
+                        border: `1px solid color-mix(in srgb, var(--vyasa-ink) 18%, ${taskStateColor} 24%)`,
                         background: isChecked
-                            ? `color-mix(in srgb, var(--vyasa-paper) 70%, ${TASKS_DONE_ACCENT} 30%)`
+                            ? `color-mix(in srgb, var(--vyasa-paper) 70%, ${taskStateColor} 30%)`
                             : 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
-                        boxShadow: isChecked ? `inset 0 0 0 1px color-mix(in srgb, ${TASKS_DONE_ACCENT} 20%, transparent)` : 'none',
+                        boxShadow: isChecked ? `inset 0 0 0 1px color-mix(in srgb, ${taskStateColor} 20%, transparent)` : 'none',
                         cursor: 'pointer',
                         zIndex: 2,
                     },
-                }, React.createElement('input', {
+                }, cardStates.length <= 2 ? React.createElement('input', {
                     type: 'checkbox',
                     checked: isChecked,
                     onMouseDown: (event) => event.stopPropagation(),
                     onPointerDown: (event) => event.stopPropagation(),
                     onChange: () => toggleCheckedNode(sourceNodeId),
-                    style: { margin: 0, width: '10px', height: '10px', accentColor: TASKS_DONE_ACCENT, cursor: 'pointer' },
+                    style: { margin: 0, width: '10px', height: '10px', accentColor: taskStateColor, cursor: 'pointer' },
+                }) : React.createElement('button', {
+                    type: 'button',
+                    title: `State: ${taskStateLabel}`,
+                    onClick: () => toggleCheckedNode(sourceNodeId),
+                    style: { border: 'none', background: 'transparent', padding: 0, width: '10px', height: '10px', cursor: 'pointer' },
                 })) : null;
                 const doneBadge = isChecked ? React.createElement('div', {
                     style: {
@@ -3287,16 +3349,16 @@ async function renderTasksGraphs(rootElement = document) {
                         bottom: '8px',
                         padding: '2px 6px',
                         borderRadius: '999px',
-                        background: `color-mix(in srgb, ${TASKS_DONE_ACCENT} 76%, white 24%)`,
+                        background: `color-mix(in srgb, ${taskStateColor} 76%, white 24%)`,
                         color: '#052e16',
                         fontSize: '9px',
                         fontWeight: 800,
                         letterSpacing: '0.08em',
                         textTransform: 'uppercase',
-                        boxShadow: `0 0 0 1px color-mix(in srgb, ${TASKS_DONE_ACCENT} 36%, transparent)`,
+                        boxShadow: `0 0 0 1px color-mix(in srgb, ${taskStateColor} 36%, transparent)`,
                         zIndex: 2,
                     },
-                }, 'Done') : null;
+                }, taskStateLabel) : null;
                 const handleExpand = (e) => {
                     e.stopPropagation();
                     const next = new Set(expanded);
@@ -3336,7 +3398,7 @@ async function renderTasksGraphs(rootElement = document) {
                         opacity: isDimmed ? 0.22 : 1,
                         cursor: hasHref ? 'pointer' : undefined,
                         position: 'relative',
-                        background: isChecked ? `linear-gradient(135deg, color-mix(in srgb, ${TASKS_DONE_ACCENT} 12%, transparent), transparent 55%)` : undefined,
+                        background: isChecked ? `linear-gradient(135deg, color-mix(in srgb, ${taskStateColor} 12%, transparent), transparent 55%)` : undefined,
                     }
                 },
                     checkboxControl,
@@ -3356,6 +3418,7 @@ async function renderTasksGraphs(rootElement = document) {
                             overflowWrap: 'anywhere',
                             wordBreak: 'break-word',
                             textDecoration: isChecked ? 'line-through' : 'none',
+                            textDecorationColor: isChecked ? taskStateColor : undefined,
                             textDecorationThickness: isChecked ? '2px' : undefined,
                         }
                     }, labelNode),
@@ -3373,7 +3436,7 @@ async function renderTasksGraphs(rootElement = document) {
             // Fit-on-mode-change is driven from inside ReactFlowProvider via
             // FitOnNodesReady below — it waits for useNodesInitialized() so the
             // fit lands after React Flow has finished measuring node rects.
-            const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [expanded, selectedNodeId, hoveredNodeId]);
+            const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [expanded, selectedNodeId, hoveredNodeId, cardStates]);
             const edgeTypes = React.useMemo(() => ({ vyasaEdge: CustomEdge }), []);
             const FitViewHotkey = () => {
                 const reactFlow = rf.useReactFlow();

@@ -241,8 +241,9 @@ def test_tasks_source_persists_checked_nodes_per_graph():
     assert "function tasksCheckedStateKey" in source
     assert "document_path" in source
     assert "title || graphId" in source
-    assert "writeTasksCheckedNodeIds(sourceModel, checkedNodeIds);" in source
+    assert "writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));" in source
     assert "checkedNodeIds" in source
+    assert "nodeStates" in source
     assert "toggleCheckedNode(sourceNodeId)" in source
 
 
@@ -251,8 +252,16 @@ def test_tasks_source_renders_hover_checkbox_and_done_badge():
 
     assert "type: 'checkbox'" in source
     assert "const doneBadge = isChecked ?" in source
-    assert "} , 'Done')" not in source
-    assert "}, 'Done')" in source
+    assert "taskStateLabel" in source
+
+
+def test_tasks_source_supports_configurable_card_states():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "TASKS_DEFAULT_CARD_STATES = ['Not Done', 'Done']" in source
+    assert "function normalizeTasksCardStates" in source
+    assert "nodeStates" in source
+    assert "TASKS_CARD_STATE_ATTR" in source
 
 
 def test_tasks_source_uses_base_view_label_for_default_projection_tab():

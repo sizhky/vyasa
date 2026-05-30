@@ -126,7 +126,7 @@ n-api -> n-ui | relation: enables
 
 def test_items_parser_loads_kg_schema_pack(tmp_path):
     (tmp_path / "roadmap.kg.schema").write_text(
-        """@graph id=roadmap title=Roadmap initial_view=delivery
+        """@graph id=roadmap title=Roadmap initial_view=delivery card_states="Not Done,Done,Deferred/Cancelled"
 
 @sources
 nodes=roadmap.kg.nodes
@@ -183,6 +183,7 @@ items_schema: roadmap.kg.schema
     assert model["node_color_palettes"]["status"] == {"todo": "#f00", "done": "#0f0"}
     assert model["view_projections"][0]["caption"] == "Track delivery"
     assert model["default_projection"] == "delivery"
+    assert model["card_states"] == ["Not Done", "Done", "Deferred/Cancelled"]
 
 
 def test_kg_pack_projection_where_scopes_projection_graph(tmp_path):

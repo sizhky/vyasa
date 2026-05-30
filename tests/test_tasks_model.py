@@ -218,6 +218,26 @@ Roadmap:
     assert model["default_color_by"] == "sprint"
 
 
+def test_items_parser_reads_card_states():
+    model = parse_tasks_text(
+        """```items
+---
+card_states: [Not Done, Done, Deferred/Cancelled]
+color_by:
+  card_state:
+    Not Done: "#94a3b8"
+    Done: "#22c55e"
+    Deferred/Cancelled: "#f97316"
+---
+Roadmap:
+  - one :: First
+```"""
+    )
+
+    assert model["card_states"] == ["Not Done", "Done", "Deferred/Cancelled"]
+    assert model["node_color_palettes"]["card_state"]["Deferred/Cancelled"] == "#f97316"
+
+
 def test_items_parser_adds_rank_color_mode_from_dag_depth():
     model = parse_tasks_text(
         """```items

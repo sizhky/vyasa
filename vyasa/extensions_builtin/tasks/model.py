@@ -117,7 +117,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                     projections.append(current)
                 config["view_projections"] = normalize_projections(projections)
                 continue
-            if key in {"filter_attributes", "filter_whitelist", "filter_blacklist", "hover_attrs"}:
+            if key in {"filter_attributes", "filter_whitelist", "filter_blacklist", "hover_attrs", "card_states"}:
                 if value:
                     config[key] = _read_string_list(value)
                     cursor += 1
@@ -914,7 +914,7 @@ def _apply_kg_schema(graph: dict, current_path: str | Path | None) -> None:
         return
     schema_path = _resolve_required_source(current_path, schema_source)
     compiled = read_kg_pack(schema_path)
-    for key in ("id", "title", "default_projection", "view_projections", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "index_attributes", "filter_attributes"):
+    for key in ("id", "title", "default_projection", "view_projections", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "index_attributes", "filter_attributes", "card_states"):
         if compiled.get(key) and not graph.get(key):
             graph[key] = compiled[key]
     graph["tasks"].extend(compiled.get("tasks", []))
@@ -953,6 +953,8 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         graph["filter_blacklist"] = config["filter_blacklist"]
     if "hover_attrs" in config and "hover_attrs" not in graph:
         graph["hover_attrs"] = config["hover_attrs"]
+    if "card_states" in config and "card_states" not in graph:
+        graph["card_states"] = config["card_states"]
     if "aggregate_edges" in config and "aggregate_edges" not in graph:
         graph["aggregate_edges"] = config["aggregate_edges"]
     if "default_open_depth" in config and "default_open_depth" not in graph:
@@ -1023,6 +1025,7 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "filter_whitelist": graph.get("filter_whitelist", []),
         "filter_blacklist": graph.get("filter_blacklist", []),
         "hover_attrs": graph.get("hover_attrs", []),
+        "card_states": graph.get("card_states", []),
         "aggregate_edges": graph.get("aggregate_edges", {}),
         "default_open_depth": graph.get("default_open_depth", ""),
         "color_palette": graph.get("color_palette", {}),
