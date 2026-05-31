@@ -64,14 +64,14 @@ def test_tasks_filter_panel_has_group_by_hierarchy_controls():
     assert "buildTasksGroupedState" in source
 
 
-def test_tasks_node_detail_rows_use_hybrid_layout():
+def test_tasks_node_detail_rows_use_inline_label_flow():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "function tasksDetailEntryIsStacked" in source
-    assert "label.length > 18" in source
-    assert "value.length > 52" in source
-    assert "gridTemplateColumns: stacked ?" in source
-    assert "minmax(7rem, max-content) minmax(0, 1fr)" in source
+    assert "`${entry.label}: `" in source
+    assert "React.createElement('span', { style: { fontWeight: 700" in source
+    assert "overflowWrap: 'anywhere'" in source
+    assert "whiteSpace: 'pre-line'" in source
+    assert "gridTemplateColumns: stacked ?" not in source
 
 
 def test_tasks_node_metadata_hides_internal_keys():
