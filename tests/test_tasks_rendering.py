@@ -66,12 +66,14 @@ def test_tasks_filter_panel_has_group_by_hierarchy_controls():
 
 def test_tasks_node_detail_rows_use_inline_label_flow():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "`${entry.label}: `" in source
     assert "React.createElement('span', { style: { fontWeight: 700" in source
     assert "overflowWrap: 'anywhere'" in source
     assert "whiteSpace: 'pre-line'" in source
     assert "gridTemplateColumns: stacked ?" not in source
+    assert ".vyasa-task-node-card-value > p:first-child { display: inline; }" in css
 
 
 def test_tasks_node_metadata_hides_internal_keys():
