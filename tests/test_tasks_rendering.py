@@ -74,6 +74,16 @@ def test_tasks_node_detail_rows_use_hybrid_layout():
     assert "minmax(7rem, max-content) minmax(0, 1fr)" in source
 
 
+def test_tasks_node_metadata_hides_internal_keys():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const TASKS_INTERNAL_NODE_META_KEYS" in source
+    assert "'__projection_group__', 'projection', '__kg_sources'" in source
+    assert "'child_group_ids'" in source
+    assert "function tasksIsHiddenNodeMetaKey" in source
+    assert ".filter(([key, value]) => !tasksIsHiddenNodeMetaKey(key)" in source
+
+
 def test_tasks_block_invalid_body_falls_back_to_empty_payload():
     md = """```tasks
 id: broken

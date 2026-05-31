@@ -45,6 +45,14 @@ const TASKS_SPECIAL_NODE_ATTRS = new Set([
     '__card_state_color__',
     '__has_note__',
 ]);
+const TASKS_INTERNAL_NODE_META_KEYS = new Set([
+    'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
+    'handlelayout', 'highlightmode', 'sourcegroupid', 'source_group_id',
+    '__rendered_attrs__', 'width', 'height', 'position', 'parentid',
+    'parent_id', 'color', 'href', 'collapsed', 'child_group_ids',
+    'child_task_ids', '__projection_group__', 'projection', '__kg_sources',
+    'active_projection', 'graph_x', 'graph_y', '__gantt',
+]);
 const TASKS_GANTT_UNIT_WIDTH = 340;
 const TASKS_GANTT_ROW_GAP = 56;
 const TASKS_GANTT_BAR_MIN_HEIGHT = 34;
@@ -492,14 +500,8 @@ function shouldAutoFitTasksOnFilter() {
 
 function tasksNodeMetaEntries(node) {
     if (!node) return [];
-    const hidden = new Set([
-        'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
-        'handlelayout', 'highlightmode', 'sourcegroupid', '__rendered_attrs__',
-        'width', 'height', 'position', 'parentId', 'color', 'href',
-        ...TASKS_DERIVED_METRIC_KEYS,
-    ]);
     return Object.entries(node)
-        .filter(([key, value]) => !hidden.has(String(key).toLowerCase()) && !TASKS_SPECIAL_NODE_ATTRS.has(String(key)) && value !== null && value !== undefined && value !== '' && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))
+        .filter(([key, value]) => !tasksIsHiddenNodeMetaKey(key) && value !== null && value !== undefined && value !== '' && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))
         .map(([key, value]) => ({
             key,
             label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
@@ -510,6 +512,13 @@ function tasksNodeMetaEntries(node) {
 
 function tasksNodeMetaLabel(key) {
     return key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function tasksIsHiddenNodeMetaKey(key) {
+    const normalized = String(key || '').toLowerCase();
+    return TASKS_INTERNAL_NODE_META_KEYS.has(normalized)
+        || TASKS_SPECIAL_NODE_ATTRS.has(String(key))
+        || TASKS_DERIVED_METRIC_KEYS.has(normalized);
 }
 
 function tasksColorModeLabel(key) {
@@ -549,12 +558,6 @@ function tasksGroupDetailEntries(nodeId, model) {
     const group = (model.groups || []).find((entry) => entry.id === nodeId);
     if (!group) return [];
     const excludedDerivedKeys = TASKS_DERIVED_METRIC_KEYS;
-    const hidden = new Set([
-        'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
-        'handlelayout', 'highlightmode', 'sourcegroupid', '__rendered_attrs__',
-        'width', 'height', 'position', 'parentid', 'color', 'href',
-        ...TASKS_DERIVED_METRIC_KEYS,
-    ]);
     const descendants = collectTasksGroupDescendants(nodeId, model);
     const sampleNodes = descendants.tasks.length ? descendants.tasks : descendants.groups;
     const metrics = new Map();
@@ -564,7 +567,7 @@ function tasksGroupDetailEntries(nodeId, model) {
         : {};
     for (const item of sampleNodes) {
         for (const [key, value] of Object.entries(item || {})) {
-            if (hidden.has(String(key).toLowerCase()) || TASKS_SPECIAL_NODE_ATTRS.has(String(key))) continue;
+            if (tasksIsHiddenNodeMetaKey(key)) continue;
             const numeric = parseTasksNumericValue(value);
             if (numeric === null) continue;
             const stat = metrics.get(key) || { count: 0, sum: 0, min: numeric, max: numeric };
@@ -622,17 +625,11 @@ function tasksFilterOptions(model) {
             .map(([key]) => String(key || '').trim())
             .filter(Boolean)
     );
-    const hidden = new Set([
-        'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
-        'handlelayout', 'highlightmode', 'sourcegroupid',
-        'width', 'height', 'position', 'parentId', 'color', 'href',
-        ...TASKS_DERIVED_METRIC_KEYS,
-    ]);
     const buckets = new Map();
     const visit = (node) => {
         if (!node) return;
         for (const [key, value] of Object.entries(node)) {
-            if (hidden.has(String(key).toLowerCase()) || TASKS_SPECIAL_NODE_ATTRS.has(String(key)) || value === null || value === undefined || value === '') continue;
+            if (tasksIsHiddenNodeMetaKey(key) || value === null || value === undefined || value === '') continue;
             if (continuousColorKeys.has(String(key))) continue;
             if (!(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) continue;
             if (!buckets.has(key)) buckets.set(key, { values: new Set(), kinds: new Set() });
@@ -1022,14 +1019,13 @@ function tasksCollectSearchMatches(nodes, edges, query) {
     const nodeIds = new Set();
     const edgeIds = new Set();
     if (!spec.active || spec.error || !spec.matcher) return { ...spec, nodeIds, edgeIds };
-    const hiddenNodeKeys = new Set(['__kind__', 'handlelayout', 'highlightmode', 'sourcegroupid', '__rendered_attrs__', 'position', 'width', 'height', 'parentid']);
     const hiddenEdgeKeys = new Set(['id', 'source', 'target', 'type', 'animated', 'markerend', 'labelstyle', 'labelbgstyle', 'style', 'data', 'zindex', 'sourcehandle', 'targethandle']);
     for (const node of (nodes || [])) {
         const data = node?.data || {};
         if (data.__kind__ === 'groupTitle') continue;
         const values = [];
         for (const [key, value] of Object.entries(data)) {
-            if (hiddenNodeKeys.has(String(key).toLowerCase())) continue;
+            if (tasksIsHiddenNodeMetaKey(key)) continue;
             if (value === null || value === undefined || typeof value === 'object' || typeof value === 'function') continue;
             values.push(value);
         }
@@ -2260,13 +2256,8 @@ function tasksNodeLinkKinds(node) {
         const kind = tasksHrefKind(href);
         if (kind) kinds.add(kind);
     }
-    const hidden = new Set([
-        'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
-        'handlelayout', 'highlightmode', 'sourcegroupid',
-        'width', 'height', 'position', 'parentid', 'color', 'rank',
-    ]);
     for (const [key, value] of Object.entries(node)) {
-        if (hidden.has(String(key || '').toLowerCase())) continue;
+        if (tasksIsHiddenNodeMetaKey(key)) continue;
         if (!(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) continue;
         for (const href of tasksExtractUrls(value)) {
             const kind = tasksHrefKind(href);
