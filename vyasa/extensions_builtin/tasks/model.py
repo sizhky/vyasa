@@ -5,6 +5,7 @@ import re
 import secrets
 
 from ...markdown_fence import current_content_path, get_root_folder
+from .items_pack import read_kg_pack
 from .projections import attach_projection_models, normalize_projections
 
 
@@ -52,9 +53,13 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                 continue
             key = line[:key_index].strip()
             value = line[key_index + 1:].strip()
-            if key in {"id", "title", "default_color_by", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source"}:
+            if key in {"id", "title", "default_color_by", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source", "items_schema", "default_open_depth"}:
                 config[key] = _read_string(value)
                 cursor += 1
+                continue
+            if key == "aggregate_edges":
+                config[key] = _read_mapping_block(frontmatter_lines, cursor, indent)
+                cursor = config[key].pop("__next_cursor__", cursor + 1)
                 continue
             if key == "view_projections":
                 projections = []
@@ -112,7 +117,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                     projections.append(current)
                 config["view_projections"] = normalize_projections(projections)
                 continue
-            if key in {"filter_attributes", "filter_whitelist", "filter_blacklist", "hover_attrs"}:
+            if key in {"filter_attributes", "filter_whitelist", "filter_blacklist", "hover_attrs", "card_states"}:
                 if value:
                     config[key] = _read_string_list(value)
                     cursor += 1
@@ -323,6 +328,26 @@ def _read_string_list(text: str) -> list[str]:
             return []
         return [_read_string(part) for part in _split_unquoted(inner, ",") if part.strip()]
     return [_read_string(part) for part in value.split(",") if part.strip()]
+
+
+def _read_mapping_block(lines: list[str], cursor: int, indent: int) -> dict:
+    out = {}
+    cursor += 1
+    while cursor < len(lines):
+        raw = lines[cursor]
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            cursor += 1
+            continue
+        child_indent = _count_indent(raw)
+        if child_indent <= indent:
+            break
+        line = raw.strip()
+        key_index = _find_unquoted(line, ":")
+        if key_index >= 0:
+            out[line[:key_index].strip()] = _read_attr_value(line[key_index + 1:].strip())
+        cursor += 1
+    out["__next_cursor__"] = cursor
+    return out
 
 
 def _clean_palette_map(value) -> dict:
@@ -579,7 +604,7 @@ def _parse_items_graph(body: str) -> dict:
         if indent == 0 and _find_unquoted(line, ":") > 0 and _find_unquoted(line, "->") < 0:
             key, value = line.split(":", 1)
             key = key.strip()
-            if key in {"id", "title", "default_color_by", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source"}:
+            if key in {"id", "title", "default_color_by", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "color_palette_source", "edge_color_palette_source", "items_schema"}:
                 graph[key] = _read_string(value.strip())
                 index += 1
                 continue
@@ -733,7 +758,7 @@ def _rank_palette(size: int) -> dict[str, str]:
     return palette
 
 
-def _centrality_palette() -> dict:
+def _connectivity_palette() -> dict:
     return {
         "type": "continuous",
         "domain": [0.0, 1.0],
@@ -742,7 +767,7 @@ def _centrality_palette() -> dict:
             {"at": 0.5, "color": "#facc15"},
             {"at": 1.0, "color": "#dc2626"},
         ],
-        "label": "Centrality",
+        "label": "Connectivity",
     }
 
 
@@ -774,34 +799,16 @@ def _apply_dag_ranks(graph: dict) -> None:
             if indegree[target] == 0:
                 queue.append(target)
 
-    centrality = {node_id: 0.0 for node_id in nodes}
-    for source in nodes:
-        stack = []
-        predecessors = {node_id: [] for node_id in nodes}
-        shortest_path_count = {node_id: 0.0 for node_id in nodes}
-        shortest_path_count[source] = 1.0
-        distance = {node_id: -1 for node_id in nodes}
-        distance[source] = 0
-        traversal_queue = [source]
-        while traversal_queue:
-            current = traversal_queue.pop(0)
-            stack.append(current)
-            for target in outgoing[current]:
-                if distance[target] < 0:
-                    traversal_queue.append(target)
-                    distance[target] = distance[current] + 1
-                if distance[target] == distance[current] + 1:
-                    shortest_path_count[target] += shortest_path_count[current]
-                    predecessors[target].append(current)
-        dependency = {node_id: 0.0 for node_id in nodes}
-        while stack:
-            target = stack.pop()
-            for current in predecessors[target]:
-                if shortest_path_count[target] == 0:
-                    continue
-                dependency[current] += (shortest_path_count[current] / shortest_path_count[target]) * (1.0 + dependency[target])
-            if target != source:
-                centrality[target] += dependency[target]
+    indegree_counts = {node_id: 0 for node_id in nodes}
+    outdegree_counts = {node_id: 0 for node_id in nodes}
+    for source, targets in outgoing.items():
+        outdegree_counts[source] = len(targets)
+        for target in targets:
+            indegree_counts[target] += 1
+    connectivity = {
+        node_id: float(indegree_counts.get(node_id, 0) + outdegree_counts.get(node_id, 0))
+        for node_id in nodes
+    }
 
     def apply_group_rank(group_id: str) -> int:
         child_ranks = [rank.get(child_id, 0) for child_id in children_by_group.get(group_id, [])]
@@ -812,29 +819,29 @@ def _apply_dag_ranks(graph: dict) -> None:
             rank[group_id] = max(rank.get(group_id, 0), max(child_ranks))
         return rank.get(group_id, 0)
 
-    def apply_group_centrality(group_id: str) -> float:
+    def apply_group_connectivity(group_id: str) -> float:
         child_values = []
         for child_id in children_by_group.get(group_id, []):
             if child_id in nodes and "parent_group_id" in nodes[child_id]:
-                child_values.append(apply_group_centrality(child_id))
+                child_values.append(apply_group_connectivity(child_id))
             else:
-                child_values.append(centrality.get(child_id, 0.0))
+                child_values.append(connectivity.get(child_id, 0.0))
         if child_values:
-            centrality[group_id] = max(centrality.get(group_id, 0.0), sum(child_values) / len(child_values))
-        return centrality.get(group_id, 0.0)
+            connectivity[group_id] = max(connectivity.get(group_id, 0.0), sum(child_values) / len(child_values))
+        return connectivity.get(group_id, 0.0)
 
     for group in graph.get("groups", []):
         apply_group_rank(group["id"])
-        apply_group_centrality(group["id"])
-    max_centrality = max(centrality.values(), default=0.0)
+        apply_group_connectivity(group["id"])
+    max_connectivity = max(connectivity.values(), default=0.0)
     for node_id, node in nodes.items():
         node.setdefault("rank", str(rank.get(node_id, 0)))
-        normalized_centrality = 0.0 if max_centrality <= 0 else (centrality.get(node_id, 0.0) / max_centrality)
-        node.setdefault("centrality", f"{normalized_centrality:.3f}".rstrip("0").rstrip("."))
+        normalized_connectivity = 0.0 if max_connectivity <= 0 else (connectivity.get(node_id, 0.0) / max_connectivity)
+        node.setdefault("connectivity", f"{normalized_connectivity:.3f}".rstrip("0").rstrip("."))
     max_rank = max(rank.values(), default=0)
     graph["node_color_palettes"] = {
         "rank": _rank_palette(max_rank + 1),
-        "centrality": _centrality_palette(),
+        "connectivity": _connectivity_palette(),
         **graph.get("node_color_palettes", {}),
     }
 
@@ -894,9 +901,38 @@ def _apply_palette_source(graph: dict, current_path: str | Path | None, source_f
         graph[palette_field] = palette
 
 
+def _resolve_required_source(current_path: str | Path | None, source: str) -> Path:
+    resolved = _resolve_tasks_source_path(current_path, source)
+    if not resolved or not resolved.exists():
+        raise ValueError(f"Missing KG source: {source}")
+    return resolved
+
+
+def _apply_kg_schema(graph: dict, current_path: str | Path | None) -> None:
+    schema_source = str(graph.get("items_schema") or "").strip()
+    if not schema_source:
+        return
+    schema_path = _resolve_required_source(current_path, schema_source)
+    compiled = read_kg_pack(schema_path)
+    for key in ("id", "title", "default_projection", "view_projections", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "index_attributes", "filter_attributes", "card_states"):
+        if compiled.get(key) and not graph.get(key):
+            graph[key] = compiled[key]
+    graph["tasks"].extend(compiled.get("tasks", []))
+    graph["dependency_edges"].extend(compiled.get("dependency_edges", []))
+    graph["items_schema"] = schema_source
+
+
 def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
     config, body = _read_fence_frontmatter(_extract_tasks_body(text).strip())
     graph = _parse_items_graph(body)
+    if config.get("id") and not graph.get("id"):
+        graph["id"] = config["id"]
+    if config.get("title") and not graph.get("title"):
+        graph["title"] = config["title"]
+    for key in ("items_schema",):
+        if key in config and key not in graph:
+            graph[key] = config[key]
+    _apply_kg_schema(graph, current_path)
     if config.get("id") and not graph.get("id"):
         graph["id"] = config["id"]
     if config.get("title") and not graph.get("title"):
@@ -917,6 +953,12 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         graph["filter_blacklist"] = config["filter_blacklist"]
     if "hover_attrs" in config and "hover_attrs" not in graph:
         graph["hover_attrs"] = config["hover_attrs"]
+    if "card_states" in config and "card_states" not in graph:
+        graph["card_states"] = config["card_states"]
+    if "aggregate_edges" in config and "aggregate_edges" not in graph:
+        graph["aggregate_edges"] = config["aggregate_edges"]
+    if "default_open_depth" in config and "default_open_depth" not in graph:
+        graph["default_open_depth"] = config["default_open_depth"]
     if config.get("color_palette_source") and not graph.get("color_palette_source"):
         graph["color_palette_source"] = config["color_palette_source"]
     if config.get("color_by") and not graph.get("color_by"):
@@ -967,6 +1009,7 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         task_children[task.get("group_id")].append(task["id"])
     model = {
         "graph_id": graph.get("id") or _generated_graph_id(graph),
+        "persistence_id": graph.get("id") or _slugify(graph.get("title", "")) or "",
         "title": graph.get("title", ""),
         "groups": groups,
         "tasks": tasks,
@@ -978,9 +1021,13 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "color_by": graph.get("color_by", ""),
         "default_color_by": graph.get("default_color_by", ""),
         "filter_attributes": graph.get("filter_attributes", []),
+        "index_attributes": graph.get("index_attributes", []),
         "filter_whitelist": graph.get("filter_whitelist", []),
         "filter_blacklist": graph.get("filter_blacklist", []),
         "hover_attrs": graph.get("hover_attrs", []),
+        "card_states": graph.get("card_states", []),
+        "aggregate_edges": graph.get("aggregate_edges", {}),
+        "default_open_depth": graph.get("default_open_depth", ""),
         "color_palette": graph.get("color_palette", {}),
         "node_color_palettes": graph.get("node_color_palettes", {}),
         "color_palette_source": graph.get("color_palette_source", ""),
@@ -994,6 +1041,10 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "base_view_label": graph.get("base_view_label", ""),
         "view_projections": graph.get("view_projections", []),
         "projection_models": {},
+        "items_schema": graph.get("items_schema", ""),
+        "kg_schema": graph.get("kg_schema", ""),
+        "kg_cache": graph.get("kg_cache", ""),
+        "kg_sources": graph.get("kg_sources", {}),
     }
     return attach_projection_models(model)
 

@@ -119,7 +119,7 @@ def split_fence_frontmatter(code):
         key, value = line.split(":", 1)
         key = clean(key)
         value = value.strip()
-        if key in {"filter_attributes", "filter_whitelist", "filter_blacklist"}:
+        if key in {"filter_attributes", "filter_whitelist", "filter_blacklist", "card_states"}:
             if value:
                 config[key] = parse_string_list(value)
                 index += 1

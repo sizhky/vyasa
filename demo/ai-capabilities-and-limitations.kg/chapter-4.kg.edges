@@ -1,0 +1,8 @@
+c4e1: n18 -> n19 enables
+c4e2: n18 -> n20 can-cause
+c4e3: n18 -> n21 can-cause
+c4e4: n18 -> n22 can-cause
+c4e5: n18 -> n23 can-cause
+c4e6: n24 -> n20 reduces
+c4e7: n24 -> n21 reduces
+c4e8: n18 -> n47 calls-for

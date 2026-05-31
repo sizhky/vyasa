@@ -8,7 +8,7 @@ from textwrap import dedent
 from vyasa.extensions_builtin.markdown.renderer import from_md
 
 
-def test_tasks_block_renders_widget_payload_and_summary():
+def test_tasks_block_renders_widget_payload_without_summary():
     md = """```tasks
 title: Hybrid Task Rendering
 foundation :: Foundation:
@@ -21,7 +21,7 @@ foundation :: Foundation:
     assert 'data-tasks-widget="true"' in html
     assert '"graph_id": "hybrid-task-rendering-' in html
     assert '"label": "Foundation"' in html
-    assert "1 groups, 1 items, 0 edges" in html
+    assert "1 groups, 1 items, 0 edges" not in html
 
 
 def test_tasks_block_renders_title_filter_toggle():
@@ -38,8 +38,52 @@ foundation :: Foundation:
 def test_tasks_filter_source_hides_rank():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     filter_source = source.split("function tasksFilterOptions", 1)[1].split("function tasksColorOptions", 1)[0]
+    color_source = source.split("function tasksColorOptions", 1)[1].split("function tasksGroupByOptions", 1)[0]
 
-    assert "'rank'" in filter_source
+    assert "TASKS_DERIVED_METRIC_KEYS" in filter_source
+    assert "TASKS_DERIVED_METRIC_KEYS" not in color_source
+
+
+def test_tasks_filter_policy_empty_attributes_do_not_hide_all_keys():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks_graph_core.js").read_text()
+
+    assert "Array.isArray(whitelistSource) && whitelistSource.length" in source
+
+
+def test_tasks_filter_panel_has_group_by_hierarchy_controls():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function tasksGroupByOptions" in source
+    assert "TASKS_DERIVED_METRIC_KEYS" in source
+    assert "['rank', 'connectivity']" in source
+    assert "groupByHierarchy" in source
+    assert "const groupByLevels = [...groupByHierarchy.filter(Boolean), ''];" in source
+    assert "model.active_projection === '__custom_group_by__'" in source
+    assert "default_open_depth: -1" in source
+    assert "Group by" in source
+    assert "buildTasksGroupedState" in source
+
+
+def test_tasks_node_detail_rows_use_inline_label_flow():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+
+    assert "`${entry.label}: `" in source
+    assert "React.createElement('span', { style: { fontWeight: 700" in source
+    assert "overflowWrap: 'anywhere'" in source
+    assert "whiteSpace: 'pre-line'" in source
+    assert "gridTemplateColumns: stacked ?" not in source
+    assert ".vyasa-task-node-card-value > p:first-child { display: inline; }" in css
+
+
+def test_tasks_node_metadata_hides_internal_keys():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const TASKS_INTERNAL_NODE_META_KEYS" in source
+    assert "'__projection_group__', 'projection', '__kg_sources'" in source
+    assert "'child_group_ids'" in source
+    assert "function tasksIsHiddenNodeMetaKey" in source
+    assert ".filter(([key, value]) => !tasksIsHiddenNodeMetaKey(key)" in source
 
 
 def test_tasks_block_invalid_body_falls_back_to_empty_payload():
@@ -88,6 +132,14 @@ foundation :: Foundation:
     html = to_xml(from_md(md))
 
     assert 'data-tasks-node-card-width="36rem"' in html
+
+
+def test_tasks_block_defaults_to_95vw_width():
+    html = to_xml(from_md("""```tasks
+foundation :: Foundation:
+```"""))
+
+    assert 'style="width: 95vw; position: relative;' in html
 
 
 def test_tasks_block_reads_hover_font_size_option():
@@ -204,6 +256,71 @@ def test_tasks_source_uses_projection_scoped_prefs():
     assert "function readTasksProjectionPrefs" in source
     assert "projectionPrefs" in source
     assert "buildTasksViewState" in source
+
+
+def test_tasks_source_persists_checked_nodes_per_graph():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function normalizeTasksCheckedNodeIds" in source
+    assert "function tasksCheckedStateKey" in source
+    assert "document_path" in source
+    assert "title || graphId" in source
+    assert "writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));" in source
+    assert "checkedNodeIds" in source
+    assert "nodeStates" in source
+    assert "toggleCheckedNode(sourceNodeId)" in source
+
+
+def test_tasks_source_renders_hover_checkbox_and_done_badge():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "type: 'checkbox'" in source
+    assert "const doneBadge = isChecked ?" in source
+    assert "taskStateLabel" in source
+
+
+def test_tasks_source_supports_configurable_card_states():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "TASKS_DEFAULT_CARD_STATES = ['Not Done', 'Done']" in source
+    assert "function normalizeTasksCardStates" in source
+    assert "nodeStates" in source
+    assert "TASKS_CARD_STATE_ATTR" in source
+    assert "String(model?.card_states || '').split(',')" in source
+    assert "TASKS_SPECIAL_NODE_ATTRS" in source
+
+
+def test_tasks_block_reads_comma_card_states_from_render_frontmatter():
+    md = """```items
+---
+card_states: not-done,done,deferred,cancelled
+---
+Foundation:
+  - t1 :: Define graph payload
+```"""
+
+    rendered = to_xml(from_md(md))
+    match = re.search(r"""data-tasks-payload=(["'])(.*?)\1""", rendered)
+
+    assert match is not None
+    payload = json.loads(html.unescape(match.group(2)))
+    assert payload["card_states"] == ["not-done", "done", "deferred", "cancelled"]
+
+
+def test_tasks_source_supports_local_card_notes():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function normalizeTasksNodeNotes" in source
+    assert "nodeNotes" in source
+    assert "setNoteInputValue(event.target.value)" in source
+    assert "updateNodeNote(selectedNodeId, noteInputValue)" in source
+    assert "placeholder: 'Notes'" in source
+    assert "SelectedNodePanel()" in source
+    assert "__has_note__" in source
+    assert "title: 'Has note'" in source
+    assert "kinds: ['note']" in source
+    assert "TASKS_HAS_NOTE_PALETTE = { yes: '#22c55e', no: '#dc2626' }" in source
+    assert "tasksHasAnyNodeNote(nodeNotes)" in source
 
 
 def test_tasks_source_uses_base_view_label_for_default_projection_tab():
@@ -471,3 +588,4 @@ Foundation:
 
     assert '"document_path": "docs/feed/personalization"' in html
     assert '"storage_id": "tasks-block-' in html
+    assert '"persistence_id":' in html

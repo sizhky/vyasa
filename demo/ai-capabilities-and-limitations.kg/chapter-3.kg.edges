@@ -1,0 +1,9 @@
+c3e1: n2 -> n12 enables
+c3e2: n2 -> n13 can-cause
+c3e3: n2 -> n14 can-cause
+c3e4: n2 -> n15 can-cause
+c3e5: n16 -> n13 can-cause
+c3e6: n17 -> n13 reduces
+c3e7: n17 -> n14 reduces
+c3e8: n2 -> n46 calls-for
+c3e9: n16 -> n49 calls-for

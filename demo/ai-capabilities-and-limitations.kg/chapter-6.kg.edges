@@ -1,0 +1,7 @@
+c6e1: n31 -> n32 enables
+c6e2: n31 -> n33 can-cause
+c6e3: n31 -> n34 can-cause
+c6e4: n31 -> n35 can-cause
+c6e5: n36 -> n33 reduces
+c6e6: n36 -> n34 reduces
+c6e7: n31 -> n48 calls-for

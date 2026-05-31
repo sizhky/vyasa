@@ -61,6 +61,7 @@ foundation :: Foundation:
 ```""")
 
     assert model["graph_id"].startswith("demo-graph-")
+    assert model["persistence_id"] == "demo-graph"
 
 
 def test_tasks_parser_supports_explicit_labeled_edges():
@@ -217,6 +218,26 @@ Roadmap:
     assert model["default_color_by"] == "sprint"
 
 
+def test_items_parser_reads_card_states():
+    model = parse_tasks_text(
+        """```items
+---
+card_states: [Not Done, Done, Deferred/Cancelled]
+color_by:
+  card_state:
+    Not Done: "#94a3b8"
+    Done: "#22c55e"
+    Deferred/Cancelled: "#f97316"
+---
+Roadmap:
+  - one :: First
+```"""
+    )
+
+    assert model["card_states"] == ["Not Done", "Done", "Deferred/Cancelled"]
+    assert model["node_color_palettes"]["card_state"]["Deferred/Cancelled"] == "#f97316"
+
+
 def test_items_parser_adds_rank_color_mode_from_dag_depth():
     model = parse_tasks_text(
         """```items
@@ -250,11 +271,11 @@ api -> ui
     }
 
 
-def test_items_parser_adds_centrality_color_mode():
+def test_items_parser_adds_connectivity_color_mode():
     model = parse_tasks_text(
         """```items
 ---
-default_color_by: centrality
+default_color_by: connectivity
 ---
 Plan:
   Backend:
@@ -270,12 +291,12 @@ api -> ui
 
     tasks = {task["id"]: task for task in model["tasks"]}
     groups = {group["id"]: group for group in model["groups"]}
-    assert model["default_color_by"] == "centrality"
-    assert float(tasks["api"]["centrality"]) > float(tasks["db"]["centrality"])
-    assert float(tasks["api"]["centrality"]) > float(tasks["ui"]["centrality"])
-    assert float(groups["backend"]["centrality"]) > 0
-    assert model["node_color_palettes"]["centrality"]["type"] == "continuous"
-    assert model["node_color_palettes"]["centrality"]["domain"] == [0.0, 1.0]
+    assert model["default_color_by"] == "connectivity"
+    assert float(tasks["api"]["connectivity"]) > float(tasks["db"]["connectivity"])
+    assert float(tasks["api"]["connectivity"]) > float(tasks["ui"]["connectivity"])
+    assert float(groups["backend"]["connectivity"]) > 0
+    assert model["node_color_palettes"]["connectivity"]["type"] == "continuous"
+    assert model["node_color_palettes"]["connectivity"]["domain"] == [0.0, 1.0]
 
 
 def test_items_parser_supports_edge_color_palette_and_override():
@@ -502,6 +523,40 @@ tsukiji -> dotonbori
     food_group_id = next(group["id"] for group in theme_model["groups"] if group["label"] == "Theme > Food")
     assert theme_model["task_children"][food_group_id] == ["tsukiji", "dotonbori"]
     assert {"source": "tsukiji", "target": "dotonbori"} in theme_model["dependency_edges"]
+
+
+def test_items_projection_overrides_display_controls():
+    model = parse_tasks_text(
+        """```items
+---
+edge_color_by: relation
+edge_label_from: relation
+hover_attrs: [city]
+aggregate_edges:
+  when_collapsed: true
+  by: relation
+view_projections:
+  - id: city
+    groups_from: city
+    default_color_by: mood
+    edge_color_by: kind
+    edge_label_from: kind
+    hover_attrs: [mood]
+    aggregate_edges: "when_collapsed=false by=kind"
+---
+Places:
+  - a :: A | city: Tokyo | mood: Bright
+  - b :: B | city: Osaka | mood: Dim
+a -> b | relation: visits | kind: jump
+```"""
+    )
+
+    city = model["projection_models"]["city"]["model"]
+    assert city["default_color_by"] == "mood"
+    assert city["edge_color_by"] == "kind"
+    assert city["edge_label_from"] == "kind"
+    assert city["hover_attrs"] == ["mood"]
+    assert city["aggregate_edges"] == {"when_collapsed": False, "by": "kind"}
 
 
 def test_items_parser_reads_base_view_label():

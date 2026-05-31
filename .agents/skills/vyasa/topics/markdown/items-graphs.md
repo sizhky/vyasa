@@ -1,213 +1,190 @@
 # Items Graphs
 
-Use fenced `tasks` or `items` blocks inside normal markdown pages.
-Do not propose separate graph files unless the user asks for legacy compatibility.
+Default to KG Pack sidecars for new Knowledge Graphs. Use legacy inline syntax only when reading or editing an existing document that already has groups, nodes, edges, and attrs inside the fenced block; see `items-graphs-legacy.md` only for that case.
 
-## Fence Shape
+## Fence
 
-````markdown
-```tasks
+Keep the rendered markdown fence tiny:
+
+```markdown
+```items
 ---
-title: Sprint Slice
-default_open_depth: -1
-default_color_by: status
-width: 80vw
-height: 70vh
-node-card-width: 36rem
-color_by:
-  status:
-    "On Track": "#86efac"
-    "At Risk": "#fcd34d"
-  owner:
-    Alice: "#93c5fd"
+items_schema: roadmap.kg.schema
 ---
-id: sprint-slice
-title: Sprint Slice
-Frontend:
-  - T-001 :: Design | estimate: 1d | owner: Alice | status: "On Track"
-  - T-002 :: Build | estimate: 2d | owner: Alice | spec: [UI](guide#ui)
-API:
-  - T-010 :: Contract | estimate: 1d | owner: Bob
-  - T-003 :: Backend | estimate: 3d | owner: Bob | color: "#fca5a5"
-T-001 ->|unblocks| T-002, T-010
-T-002, T-010 -> T-003
 ```
-````
-
-## Frontmatter
-
-- Frontmatter is optional YAML at the top of the fence.
-- Supported renderer keys include `title`, `default_open_depth`, `default_color_by`, `default_projection`, `base_view_label`, `width`, `min_height`, `height`, `node-card-width`, `hover-font-size`, `color_by`, `color_palette_source`, `filter_attributes`, `filter_whitelist`, `filter_blacklist`, `hover_attrs`, `view_projections`, `edge_color_by`, `edge_color_palette`, and `edge_label_from`.
-- Size keys should use full CSS lengths such as `760px`, `70vh`, `80vw`, or `calc(85vh - 57px)`.
-- `node-card-width` controls the width of the selected-node details card on the right. Default is `480px`.
-- `hover-font-size` controls tooltip row text size. Default is `12px`.
-- Do not use bare numbers like `height: 760`.
-- `default_open_depth` is an integer: `0` folds all groups, `1` opens root groups, larger values open deeper levels, `-1` opens all groups.
-- Preferred colors use nested palettes under `color_by`.
-- Use `default_color_by: <attr>` when a graph should open with that node palette active.
-- Only attrs declared under `color_by` appear in the UI color-mode dropdown.
-- Continuous palettes are also allowed in shared JSON for numeric attrs such as hour-of-day; they color nodes by interpolation instead of discrete buckets.
-- Shared palette JSON uses `node_color_palettes` and `edge_color_palettes`, loaded with `color_palette_source: path/to/palettes.json`.
-- Shared palette JSON may also define `edge_kinds`; those defaults are merged into edges by label before rendering.
-- Do not use removed legacy shared keys: `palette_source` or `color_palettes`.
-- Legacy inline `color_by: status` plus `color_palette:` remains backward-compatible.
-- By default, all categorical attrs appear in the checkbox filter UI.
-- `filter_whitelist` keeps only the named attrs in the filter UI.
-- `filter_blacklist` removes named attrs from the filter UI.
-- If both are present, blacklist wins.
-- Legacy `filter_attributes` remains supported as a whitelist alias.
-- `hover_attrs` sets the attr order shown in hover/details summaries.
-
-Example:
-
-```yaml
-filter_whitelist: [owner, status, phase]
-filter_blacklist: [phase]
 ```
 
-## Shared Palette JSON
+## Sidecars
 
-Use this when multiple graphs should share the same colors:
+```text
+roadmap.kg/kg.schema   # metadata, common files, source aliases, purposeful views
+roadmap.kg/kg.nodes    # markerless compact node ids, labels, unique inline attrs
+roadmap.kg/kg.edges    # base markerless edge set
+roadmap.kg/kg.attrs    # shared indexed node/edge attr assignments
+roadmap.kg/kg.palette  # node/edge palettes as JSON payload
+roadmap.kg/chapter-1.kg.edges  # optional story/topology edge source
+```
+
+## Schema
+
+```text
+@graph id=roadmap title=Roadmap initial_view=delivery card_states="Not Done,Done,Deferred/Cancelled"
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+base:
+	edges=kg.edges
+chapter1:
+	edges=chapter-1.kg.edges
+chapter2:
+	edges=kg.edges
+	attrs:
+		stage: [Draft, Review]
+		owner: [Design, Eng]
+palette=kg.palette
+
+@relations
+unlocks color=relation.unlocks
+blocks color=relation.blocks
+explains
+
+@views
+delivery:
+	source=base
+	group_by,color_by=status
+	caption="Track delivery state"
+owners:
+	source=chapter2
+	group_by=owner
+	color_by=status
+	caption="Find ownership gaps"
+dependency:
+	source=chapter1
+	group_by=status
+	edge_label_from=relation
+	caption="Inspect flow"
+```
+
+- `@graph` names the graph and picks `initial_view`; there is no generic `Default` tab.
+- Optional `card_states` defines the click-cycle for card completion state. Omit it for default `Not Done,Done`.
+- Prefer folder packs and point markdown to `items_schema: roadmap.kg/kg.schema`.
+- Top-level `nodes=` and `attrs=` in `@sources` are common to every source.
+- Source `edges=` can select a story/topology by edge endpoints.
+- Source nested `attrs:` selects nodes organically by indexed attr groups. Multiple attr keys are ANDed; listed values inside one key are ORed.
+- `base+dep` composes source aliases.
+- `@relations` is optional edge-type vocabulary. Use it to document relation ids, attach default presentation such as `color`, and let CLI validation catch typos. Relation label text defaults to the relation id.
+- `@views` must have a real purpose through `caption`.
+- `group_by,color_by=status` expands to `group_by=status color_by=status`; `X,Y,Z=value` is valid for simple scalar values.
+- Projection display controls may live on views: `hover_attrs`, `edge_color_by`, `edge_label_from`, `aggregate_edges`, `default_open_depth`, and spacing/layout keys.
+
+## Nodes
+
+`roadmap.kg.nodes` is markerless because the filename already declares record kind:
+
+```text
+n1: Login
+	summary=User signs in
+n2: Checkout
+	description=User pays for cart
+n3: Receipt
+```
+
+- Preferred format: `<id>: <label>` followed by indented `key=value` lines for unique attrs.
+- One-line `<id> <label> key=value ...` remains readable for tiny nodes, but avoid it for long text.
+- Prefer compact sequential node ids like `n1`, `n2`, `n3`; labels carry human meaning and compact ids reduce tokens in edges and attr lists.
+- Keep unique/descriptive attrs inline here: `summary`, `description`, `notes`, `rationale`.
+
+## Edges
+
+`roadmap.kg.edges` is markerless:
+
+```text
+e1: n1 -> n2 unlocks note="Requires auth"
+e2: n2 -> n3 creates
+```
+
+- Format: `<edge_id>: <source> -> <target> <relation> key=value ...`
+- One edge has one primary relation.
+- Relation has no leading `:`; write `unlocks`, not `:unlocks`.
+- Use another edge for another semantic relation between the same nodes.
+- Keep unique edge attrs inline only when UI/CLI can query or display them; otherwise omit dead text attrs.
+
+## Attrs
+
+Use `roadmap.kg.attrs` for shared categorical assignments:
+
+```text
+@node_attrs
+status:
+  todo: n1
+  done: n2 n3
+owner:
+  eng: n1 n2 n3
+habit:
+  Ask for disagreement: n4
+
+@edge_attrs
+confidence:
+  high: e1
+  medium: e2
+```
+
+- Attributes stored in `.kg.nodes` or `.kg.edges` are inline attrs. They are detail/search material, not default filter/group-by dimensions.
+- Attributes stored in `.kg.attrs` are indexed/shared attrs. They are default filter/group-by dimensions.
+- The rendered model and CLI cache merge both into one logical attr map.
+- Prefer `.kg.attrs` when the same key/value applies to many records.
+- Attr values before `:` are raw text; do not quote values with spaces unless they contain `:` or newlines.
+- Prefer readable block form over long lines when values are descriptive text.
+- Derived runtime metrics such as `rank`, `connectivity`, and `centrality` are special metrics, not indexed attrs.
+
+## Runtime Filters And Grouping
+
+- Filter panel defaults to indexed `.kg.attrs` keys.
+- Custom `Group by` in the default view builds an ad hoc hierarchy from indexed attrs only.
+- Custom grouping opens all generated groups, equivalent to `default_open_depth=-1`.
+
+## Palette
+
+`roadmap.kg.palette` uses JSON payload but the extension intentionally avoids `.json` so humans/LLMs treat it as generated or tooling-owned when appropriate:
 
 ```json
 {
   "node_color_palettes": {
-    "kind": {
-      "goal": "#f97316",
-      "decision": "#6366f1",
-      "milestone": "#06b6d4",
-      "requirement": "#84cc16",
-      "metric": "#8b5cf6"
+    "card_state": {
+      "Not Done": "#94a3b8",
+      "Done": "#22c55e",
+      "Deferred/Cancelled": "#f97316"
+    },
+    "status": {
+      "todo": "#f59e0b",
+      "done": "#22c55e"
     }
   },
   "edge_color_palettes": {
     "relation": {
-      "depends_on": "#2563eb",
-      "validates": "#84cc16",
-      "gates": "#dc2626"
+      "unlocks": "#2563eb",
+      "blocks": "#dc2626"
     }
   }
 }
 ```
 
-Then reference it from the graph frontmatter:
+- Card state colors come from `node_color_palettes.card_state`.
+- The first card state is active text. Every later state is struck through with its palette color.
 
-```yaml
-default_color_by: kind
-color_palette_source: .daksh/shared-palettes.json
-```
+## Cache And CLI
 
-Continuous shared palettes use a gradient spec instead of value-to-hex pairs:
+- `roadmap.kg.cache` is generated, disposable lookup state. Do not hand edit it.
+- LLM tools should query and mutate through the KG CLI/cache instead of reading every sidecar for small changes.
+- Core queries: `get`, `neighbors`, `incoming`, `outgoing`, `list_by_attr`, `color_modes`, `filter_policy`, `hover_policy`, `projections`, `projection_groups`, `validate`, `compile`.
+- Core mutations: `upsert_record`, `delete_record`, `bulk_set_attr`, `move_node`, `rename_id`, `upsert_edge`, `delete_edge`, palette updates, filter/hover policy updates, projection updates. The mutation surface is `scripts/kg_cli.py`.
+- `bulk_set_attr` means one key/value patch applied to a selected set of nodes or edges.
+- **Offline validation:** `scripts/validate_kg_pack.py <pack-or-mom-path>` checks referential integrity without a running server — every edge endpoint and attr id resolves to a defined node, schema `@sources` files exist, the palette is valid JSON, and (when given a `.md`) the `items` fence points at the pack. Any consumer that emits KG Packs (e.g. the minutes-of-meeting skill) should call this rather than re-implementing format checks.
 
-```json
-{
-  "node_color_palettes": {
-    "sun_hour": {
-      "type": "continuous",
-      "domain": [0, 24],
-      "wrap": true,
-      "stops": [
-        { "at": 0, "color": "#0f172a", "label": "Night" },
-        { "at": 7, "color": "#f59e0b", "label": "Morning" },
-        { "at": 12, "color": "#fde047", "label": "Noon" },
-        { "at": 17, "color": "#fb923c", "label": "Evening" },
-        { "at": 24, "color": "#0f172a", "label": "Night" }
-      ]
-    }
-  }
-}
-```
+## Compatibility
 
-- Use a numeric node attr like `sun_hour: 18.5`.
-- `domain` is the numeric range; `wrap: true` makes cyclic ranges like clocks loop cleanly.
-- `stops[].label` is optional and feeds the gradient legend.
-- Continuous color attrs are for coloring, not checkbox filtering; keep a separate categorical attr if the user must filter by phase names.
-
-## Projection Views
-
-Use projections when the same items need multiple grouped views without duplicating the graph body.
-
-```yaml
-default_projection: city
-view_projections:
-  - id: city
-    label: City View
-    groups_from: city
-    default_color_by: city
-  - id: theme
-    label: Theme View
-    groups_from: [theme, city]
-    caption: "Food and temples, then where they live."
-    default_color_by: theme
-    hover_attrs: [city, owner, status]
-    edge_label_from: relation
-```
-
-- `groups_from` accepts one attr or a list for nested groups.
-- `default_projection` picks the initial projection tab; invalid ids fall back to the base view.
-- `base_view_label` renames the authored non-projection tab. Omit it and the UI uses `Default`.
-- Projection `hover_attrs` override graph-level `hover_attrs` for that view only.
-- Projection `edge_label_from` chooses which edge attr becomes the displayed label in that view.
-- Projection groups are synthesized from item attrs; author the items once and let the renderer regroup them.
-
-## Body Syntax
-
-```md
-id: graph-id
-title: Graph Title
-Group Label:
-  - item-id :: Item Label
-  Child Group:
-    - child-id :: Child Label | owner: Alice | priority: high
-item-a, item-b ->|edge label| item-c
-```
-
-- The graph body is terse line syntax, not YAML.
-- `id:` and `title:` are graph-level metadata.
-- `Group Label:` creates a group.
-- Group attrs go before the trailing `:`. Example: `Milestone | direction: lr:`.
-- Indentation creates nested groups.
-- `- id :: Item Label` creates an item inside the nearest group.
-- Direct items are valid when grouping adds no value.
-- Do not wrap the whole graph in one fake root group.
-
-## Attrs And Links
-
-- Inline attrs follow `|`, as in `| owner: Alice | estimate: 1d`.
-- First-class author attrs include `estimate`, `priority`, `points`, `owner`, and `phase`.
-- Labels and attr values may contain normal markdown links.
-- Good: `owner: [Alice](team/alice)` or `spec: [API](guide#api)`.
-- Attr values may contain escaped newlines inside quoted JSON strings. Example: `summary: "Line one\nLine two"`.
-- The selected-node details card renders attr values through the normal Vyasa markdown pipeline, so links, emphasis, code, callout-safe inline markdown, and escaped newlines render there the same way they do elsewhere.
-- Use `href: <target>` when the whole group or item label should navigate.
-- Good: `- api :: API Contract | href: guide#api`.
-- Use normal markdown links when only part of a label or attr value should link.
-- Use `color: "#hex"` for a per-node color override.
-- Node colors resolve: active `color_by` palette, then per-node `color`, then nearest colored parent group only when no color mode is active.
-
-## Edges
-
-- Use global edge lines for dependencies.
-- Valid shapes: `a -> b`, `a, b -> c`, `a -> b, c`, `a ->|label| b`, and chained edges like `m-1 -> m-2 -> m-3`.
-- Chained edges expand into consecutive dependencies: `m-1 -> m-2 -> m-3 -> m-4` means `m-1 -> m-2`, `m-2 -> m-3`, and `m-3 -> m-4`.
-- Edge labels are optional.
-- When `edge_color_by` is active and an edge has no explicit `|label|`, the renderer falls back to the edge attr for that color key, such as `| relation: depends_on` showing `depends_on`.
-- Keep edge lines outside groups unless existing parser behavior proves indentation is supported.
-- Edge routing is renderer-owned; do not surface handle placement as author syntax.
-
-## Quoting
-
-- Quote complex ids, labels, attrs, or edge labels as JSON strings.
-- Use quotes for commas, pipes, brackets, or embedded newlines.
-- Example:
-
-```md
-"task-id" :: "Line one\nLine two with \"quotes\" and [brackets]"
-```
-
-## Persistence
-
-- Persisted edits rewrite the fenced block source in the markdown file.
-- Editing clears legacy chain state.
-- Renderer-owned attrs such as `graph_x`, `graph_y`, `collapsed`, `pill_x`, and `pill_y` may appear after interaction.
-- Treat renderer-owned attrs as implementation details, not authoring API.
+- KG Pack is the default for new graphs and for converted legacy graphs.
+- Backward compatibility is only with original inline `items`/`tasks` markdown syntax.
+- Do not use JSONL or the previous compact integer ledger.
+- Ticked/checked node state is runtime-local UI state keyed by `document_path` plus `persistence_id`; do not encode transient ticking as normal node attrs unless adding explicit persisted task completion semantics.

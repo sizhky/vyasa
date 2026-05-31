@@ -1,0 +1,104 @@
+n1: Generative AI
+	description=Software that writes brand-new text one word at a time, instead of sorting or scoring things that already exist.
+n2: Next-token prediction
+	description=The single engine under the hood: it repeatedly guesses the most likely next word, like autocomplete at an enormous scale.
+n3: Pretraining
+	description=The first training stage, where the model reads a vast library of text and learns only to continue it.
+n4: Document completer
+	description=What pretraining produces: a fluent text-continuer that has no idea it is supposed to help anyone.
+n5: Fine-tuning
+	description=The second training stage, where human examples and preferences teach the completer to behave like an assistant.
+n6: Helpful assistant
+	description=The polished chatbot you actually talk to — cooperative and useful, but still running on next-token prediction.
+n7: Helpful, honest, harmless
+	description=The behavioral target fine-tuning instills: be useful, tell the truth, and decline harmful requests.
+n8: Sycophancy
+	description=A trained habit of agreeing with you, even when you are wrong.
+n9: Verbosity
+	description=A default toward long answers, even when a single sentence would do.
+n10: Over-caution
+	description=Refusing or hedging on safe requests more than the real risk warrants.
+n11: Overconfidence
+	description=Sounding equally sure whether it actually knows the answer or is only guessing.
+n12: Fluent writing
+	description=Smooth, natural text in almost any style, fast synthesis across fields, and confident handling of familiar tasks.
+n13: Hallucination
+	description=A confident, plausible-sounding answer that simply isn't true.
+n14: Confabulation
+	description=Filling a gap with invented material instead of flagging that it doesn't know.
+n15: Inconsistency
+	description=The same prompt yielding different answers, because each word is sampled afresh.
+n16: Specific details
+	description=Names, dates, statistics, quotes, and citations — the exact zone where made-up answers hide best.
+n17: Source grounding
+	description=Citations, retrieval, uncertainty flags, and verifier passes that show which claims are actually backed.
+n18: Trained knowledge
+	description=Everything the model absorbed during training — broad, but frozen at a cutoff date.
+n19: Broad expertise
+	description=Wide, instant recall across mainstream subjects, with surprising cross-field connections.
+n20: Stale knowledge
+	description=Facts that were true at the training cutoff but may be outdated now.
+n21: Uneven coverage
+	description=Deep on popular topics, thin on niche, local, or specialist ones.
+n22: Inherited bias
+	description=Default assumptions that mirror the blind spots of the training data.
+n23: Source amnesia
+	description=Knowing a fact but being unable to say where it came from.
+n24: Live retrieval
+	description=Web search, document retrieval, and tools that fetch current information the model never trained on.
+n25: Working memory
+	description=The fixed-size window of text the model can pay attention to at one time.
+n26: Context as leverage
+	description=Feeding in your own documents and examples to sharpen answers on the spot.
+n27: Silent truncation
+	description=When the input runs past the window, the overflow is dropped without warning.
+n28: Lost in the middle
+	description=Attention is uneven, so facts buried in the middle of a long input are easily missed.
+n29: No session memory
+	description=Each new chat starts from zero; it doesn't remember past sessions or learn from your corrections.
+n52: Hard cliff
+	description=Working memory fails as a cliff, not a slope: everything works until the window fills, then breaks suddenly and without warning — unlike the other three properties, which degrade gradually.
+n30: Saved context
+	description=Memory, compaction, projects, and bigger windows that keep what matters reliably in view.
+n31: Steerability
+	description=How reliably it follows your instructions — by matching patterns, not by truly understanding.
+n32: Precise control
+	description=Tight control over format, length, tone, role, and multi-step process when the ask is clear.
+n33: Reasoning drift
+	description=Over a long chain of steps, small early errors compound into a wrong final answer.
+n34: Letter over spirit
+	description=Following your words exactly while missing what you actually meant.
+n35: Prompt injection
+	description=Hidden instructions inside a document or webpage being obeyed as if you wrote them.
+n36: Guided execution
+	description=System prompts, code execution, visible reasoning, and structured output that keep intent from diluting.
+n37: Fake citation
+	description=A real-sounding source that does not actually exist.
+n38: Conversation drift
+	description=A long chat that quietly loses track of its original goal.
+n39: Confident wrong math
+	description=A fluent, self-assured answer with a broken calculation inside.
+n40: Agreeable bad premise
+	description=The model cheerfully building on a false assumption you handed it.
+n41: Failure diagnosis
+	description=Naming which two properties collided, which points straight at the right fix.
+n42: Capability–limitation continuum
+	description=Every property runs from capability to limitation; the same mechanism gives both ends.
+n43: Mental model of the machine
+	description=A small, durable picture of these four properties and how they behave.
+n44: Calibrated trust
+	description=Trust sized to the task — locating it on each continuum instead of trusting all-or-nothing.
+n45: Durable understanding
+	description=Because the continua stay stable as models improve, this understanding keeps working even as the boundaries move.
+n46: Discernment
+	description=The human skill of judging AI output critically, especially where it is fluent but wrong.
+n47: Delegation
+	description=The human skill of deciding what to hand to AI and what to keep, based on where it is strong or thin.
+n48: Description
+	description=The human skill of communicating intent clearly: the task, the context, and the output you want.
+n49: Diligence
+	description=The human skill of using AI responsibly: verifying claims, staying accountable, and being transparent.
+n50: 4D Framework
+	description=The human half of the system — Delegation, Description, Discernment, and Diligence — what you do when you work with AI.
+n51: Effective AI collaboration
+	description=The payoff when both halves meet: human skill and a clear model of the machine, working together.

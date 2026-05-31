@@ -16,6 +16,7 @@ _RENDERABLE_NODE_KEYS = {
     "id", "label", "kind", "__kind__", "group_id", "parent_group_id",
     "handlelayout", "highlightmode", "sourcegroupid",
     "width", "height", "position", "parentid", "color", "href", "rank",
+    "card_state", "__checked__", "__card_state__", "__card_state_color__", "__has_note__",
     "__rendered_attrs__",
 }
 
@@ -66,6 +67,10 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             model["title"] = config["title"]
         if config.get("id"):
             model["graph_id"] = config["id"]
+            model["persistence_id"] = config["id"]
+        elif not model.get("persistence_id") and model.get("title"):
+            slug = re.sub(r"[^a-z0-9]+", "-", str(model.get("title") or "").lower()).strip("-")
+            model["persistence_id"] = slug or ""
         model["document_path"] = str(current_path or "")
         model["storage_id"] = f"tasks-block-{storage_suffix}"
         if "filter_attributes" in config:
@@ -74,6 +79,8 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             model["filter_whitelist"] = config["filter_whitelist"]
         if "filter_blacklist" in config:
             model["filter_blacklist"] = config["filter_blacklist"]
+        if "card_states" in config:
+            model["card_states"] = config["card_states"]
         if isinstance(config.get("color_by"), str) and config.get("color_by") and not model.get("color_by"):
             model["color_by"] = config["color_by"]
         if isinstance(config.get("color_by"), dict):
@@ -97,6 +104,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     except Exception:
         model = {
             "graph_id": f"tasks-{next(_diagram_uid_counter)}",
+            "persistence_id": (re.sub(r"[^a-z0-9]+", "-", str(config.get("id") or config.get("title") or "").lower()).strip("-") or ""),
             "title": "",
             "groups": [],
             "tasks": [],
@@ -109,6 +117,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             "edge_color_palette": {},
             "edge_color_palettes": {},
             "node_color_palettes": {},
+            "card_states": [],
             "document_path": str(current_path or ""),
             "storage_id": f"tasks-block-{storage_suffix}",
         }
@@ -121,7 +130,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     gantt_enabled = str(config.get("gantt") or "").strip().lower() in {"1", "true", "yes", "on"}
     default_view = str(config.get("default_view") or config.get("view") or "graph").strip().lower()
     default_view = "gantt" if gantt_enabled and default_view == "gantt" else "graph"
-    width = config.get("width") or "65vw"
+    width = config.get("width") or "95vw"
     open_filters_by_default = _should_open_filters_by_default(width)
     min_height = config.get("min_height") or ("420px" if fence_name != "tasks" else "")
     flow_height = html.escape(str(config.get("height") or "70vh"))
@@ -147,7 +156,6 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         if key in config:
             optional_layout_attrs.append(f'{data_name}="{html.escape(str(config[key]))}"')
     optional_layout_attrs_str = (" " + " ".join(optional_layout_attrs)) if optional_layout_attrs else ""
-    summary = f'{len(model["groups"])} groups, {len(model["tasks"])} items, {len(model["dependency_edges"])} edges'
     breakout = str(width).lower() in {"100%", "100vw"} or "vw" in str(width).lower()
     container_style_parts = [f"width: {width};"]
     if min_height:
@@ -174,7 +182,6 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         f'<button type="button" title="Toggle filters" aria-label="Toggle task filters" onclick="runTasksHeaderAction(\'{widget_id}\', \'toggleFilters\')" class="relative z-40 mt-0.5 rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-2 py-1 font-mono text-xs leading-none text-slate-700 dark:text-slate-300">☰</button>'
         f'<div class="min-w-0 flex-1">'
         f'<div class="text-sm font-semibold">{title}</div>'
-        f'<div class="text-xs text-slate-500 dark:text-slate-400">{html.escape(summary)}</div>'
         f'</div>'
         f'</div>'
         f'<div class="vyasa-tasks-flow" style="height:{flow_height};min-height:420px;overflow:hidden;cursor:grab">'

@@ -15,6 +15,9 @@ Node colors resolve in order:
 Use `default_color_by: <attr>` to boot a graph into a color mode.
 If a stored UI preference says no color mode, the renderer should still honor the authored default on first load.
 
+Card state defaults to `Not Done` and `Done`.
+KG schema can declare more states with `card_states`; the first state is non-struck active text, and every later state is struck through using `node_color_palettes.card_state`.
+
 Graph layout attrs `graph_x` and `graph_y` are renderer-owned; avoid user guidance unless debugging persistence.
 
 Group-local layout direction is supported with `direction: lr` or `layout_direction: lr` on the group line.

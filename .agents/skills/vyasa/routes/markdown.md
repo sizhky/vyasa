@@ -8,6 +8,7 @@ Read only the drawer needed:
 - `topics/markdown/toc-headings-math.md`
 - `topics/markdown/callouts.md`
 - `topics/markdown/items-graphs.md`
+- `topics/markdown/items-graphs-legacy.md` only for existing inline `items` / `tasks` docs.
 - `topics/markdown/items-behavior.md`
 - `topics/story-telling-with-graphs/SKILL.md`
 - `topics/markdown/code-includes-links.md`
@@ -16,5 +17,5 @@ Read only the drawer needed:
 Rules:
 
 - Prefer existing Obsidian-compatible syntax where supported.
-- For `items` / `tasks`, use normal markdown links in authored labels and attrs, or `href:` when the whole node should navigate.
+- For new `items` / `tasks` Knowledge Graphs, default to KG Pack sidecars. Use legacy inline graph syntax only when the existing document already uses it.
 - Do not invent parser syntax until existing drawers prove no fit.

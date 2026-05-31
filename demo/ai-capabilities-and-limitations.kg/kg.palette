@@ -1,0 +1,26 @@
+{
+  "edge_color_palettes": {
+    "relation": {
+      "becomes": "#7c3aed",
+      "produces": "#6d28d9",
+      "enables": "#16a34a",
+      "shapes": "#0891b2",
+      "can-cause": "#dc2626",
+      "reduces": "#0f766e",
+      "calls-for": "#ea580c"
+    }
+  },
+  "node_color_palettes": {
+    "kind": {
+      "Mechanism": "#7c3aed",
+      "Property": "#2563eb",
+      "Fingerprint": "#db2777",
+      "Capability": "#16a34a",
+      "Limitation": "#dc2626",
+      "Fix": "#0f766e",
+      "Failure": "#b91c1c",
+      "Practice": "#ca8a04",
+      "Human": "#0891b2"
+    }
+  }
+}
