@@ -156,7 +156,6 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         if key in config:
             optional_layout_attrs.append(f'{data_name}="{html.escape(str(config[key]))}"')
     optional_layout_attrs_str = (" " + " ".join(optional_layout_attrs)) if optional_layout_attrs else ""
-    summary = f'{len(model["groups"])} groups, {len(model["tasks"])} items, {len(model["dependency_edges"])} edges'
     breakout = str(width).lower() in {"100%", "100vw"} or "vw" in str(width).lower()
     container_style_parts = [f"width: {width};"]
     if min_height:
@@ -183,7 +182,6 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         f'<button type="button" title="Toggle filters" aria-label="Toggle task filters" onclick="runTasksHeaderAction(\'{widget_id}\', \'toggleFilters\')" class="relative z-40 mt-0.5 rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-2 py-1 font-mono text-xs leading-none text-slate-700 dark:text-slate-300">☰</button>'
         f'<div class="min-w-0 flex-1">'
         f'<div class="text-sm font-semibold">{title}</div>'
-        f'<div class="text-xs text-slate-500 dark:text-slate-400">{html.escape(summary)}</div>'
         f'</div>'
         f'</div>'
         f'<div class="vyasa-tasks-flow" style="height:{flow_height};min-height:420px;overflow:hidden;cursor:grab">'

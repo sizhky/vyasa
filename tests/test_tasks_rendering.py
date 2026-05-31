@@ -8,7 +8,7 @@ from textwrap import dedent
 from vyasa.extensions_builtin.markdown.renderer import from_md
 
 
-def test_tasks_block_renders_widget_payload_and_summary():
+def test_tasks_block_renders_widget_payload_without_summary():
     md = """```tasks
 title: Hybrid Task Rendering
 foundation :: Foundation:
@@ -21,7 +21,7 @@ foundation :: Foundation:
     assert 'data-tasks-widget="true"' in html
     assert '"graph_id": "hybrid-task-rendering-' in html
     assert '"label": "Foundation"' in html
-    assert "1 groups, 1 items, 0 edges" in html
+    assert "1 groups, 1 items, 0 edges" not in html
 
 
 def test_tasks_block_renders_title_filter_toggle():

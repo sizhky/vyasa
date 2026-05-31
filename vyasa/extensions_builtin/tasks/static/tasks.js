@@ -4508,10 +4508,7 @@ window.openTasksFullscreen = async function(id) {
     const headerName = document.createElement('span');
     headerName.className = 'text-xs font-semibold';
     headerName.textContent = originalTitle;
-    const headerSummary = document.createElement('div');
-    headerSummary.className = 'text-[10px] text-slate-500 dark:text-slate-400';
-    headerSummary.textContent = wrapper.querySelector('.text-xs.text-slate-500, .text-xs.text-slate-500.dark\\:text-slate-400')?.textContent || '';
-    headerTitle.append(headerName, headerSummary);
+    headerTitle.append(headerName);
     headerBar.append(filterButton, headerTitle, topRightControls);
 
     const flow = document.createElement('div');
