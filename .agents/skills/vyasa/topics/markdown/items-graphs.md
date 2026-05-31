@@ -83,17 +83,27 @@ dependency:
 `roadmap.kg.nodes` is markerless because the filename already declares record kind:
 
 ```text
-n1: Login
-	summary=User signs in
-n2: Checkout
-	description=User pays for cart
-n3: Receipt
+b1: Apartment Building
+	city=Hyderabad
+	inherit=city
+	p1: Yesh
+		role=tenant
+	d1: Bruno
+		species=dog
+c1: Honda City
+	type=car
 ```
 
 - Preferred format: `<id>: <label>` followed by indented `key=value` lines for unique attrs.
+- Indented `<id>: <label>` lines are child nodes. Indented `key=value` lines are attrs.
+- A node with child nodes becomes a real group/container node; leaf nodes remain task/card nodes.
+- Node ids are global. Edges still reference ids, not paths.
+- Duplicate node ids may merge only when the label matches and there is no parent conflict; conflicting labels or multiple parents are invalid.
 - One-line `<id> <label> key=value ...` remains readable for tiny nodes, but avoid it for long text.
 - Prefer compact sequential node ids like `n1`, `n2`, `n3`; labels carry human meaning and compact ids reduce tokens in edges and attr lists.
 - Keep unique/descriptive attrs inline here: `summary`, `description`, `notes`, `rationale`.
+- Attr inheritance is whitelist-only through `inherit=key1,key2`. The named parent attrs copy to descendants only when the child does not already define that key.
+- Put `inherit=` before child nodes. Default is no attr inheritance.
 
 ## Edges
 
