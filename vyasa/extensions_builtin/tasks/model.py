@@ -456,16 +456,34 @@ def _resolve_tasks_source_path(current_path: str | Path | None, source: str) -> 
     source_path = Path(source_text)
     if source_path.is_absolute():
         return source_path
+    candidate_bases: list[Path] = []
     if current_path:
         current_path = Path(str(current_path))
         if current_path.exists():
-            base = current_path.parent if current_path.is_file() else current_path
+            candidate_bases.append(current_path.parent if current_path.is_file() else current_path)
         else:
             resolved = current_content_path(str(current_path))
-            base = resolved.parent if resolved else get_root_folder().resolve()
+            if resolved:
+                candidate_bases.append(resolved.parent)
+                if not resolved.suffix:
+                    candidate_bases.append(resolved.with_suffix(".md").parent)
+            root = get_root_folder().resolve()
+            relative = Path(str(current_path).strip("/"))
+            candidate_bases.append((root / relative).parent)
+            if relative.parts and relative.parts[0] == root.name:
+                candidate_bases.append((root / Path(*relative.parts[1:])).parent)
     else:
-        base = get_root_folder().resolve()
-    return (base / source_path).resolve()
+        candidate_bases.append(get_root_folder().resolve())
+    candidate_bases.append(get_root_folder().resolve())
+    seen: set[Path] = set()
+    for base in candidate_bases:
+        resolved = (base / source_path).resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if resolved.exists():
+            return resolved
+    return next(iter(seen), None)
 
 
 def _load_palette_source(current_path: str | Path | None, source: str, palette_key: str = "") -> tuple[dict, dict, str]:
