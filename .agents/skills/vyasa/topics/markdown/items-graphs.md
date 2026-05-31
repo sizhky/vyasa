@@ -178,8 +178,9 @@ confidence:
 - `roadmap.kg.cache` is generated, disposable lookup state. Do not hand edit it.
 - LLM tools should query and mutate through the KG CLI/cache instead of reading every sidecar for small changes.
 - Core queries: `get`, `neighbors`, `incoming`, `outgoing`, `list_by_attr`, `color_modes`, `filter_policy`, `hover_policy`, `projections`, `projection_groups`, `validate`, `compile`.
-- Core mutations: `upsert_record`, `delete_record`, `bulk_set_attr`, `move_node`, `rename_id`, `upsert_edge`, `delete_edge`, palette updates, filter/hover policy updates, projection updates.
+- Core mutations: `upsert_record`, `delete_record`, `bulk_set_attr`, `move_node`, `rename_id`, `upsert_edge`, `delete_edge`, palette updates, filter/hover policy updates, projection updates. The mutation surface is `scripts/kg_cli.py`.
 - `bulk_set_attr` means one key/value patch applied to a selected set of nodes or edges.
+- **Offline validation:** `scripts/validate_kg_pack.py <pack-or-mom-path>` checks referential integrity without a running server — every edge endpoint and attr id resolves to a defined node, schema `@sources` files exist, the palette is valid JSON, and (when given a `.md`) the `items` fence points at the pack. Any consumer that emits KG Packs (e.g. the minutes-of-meeting skill) should call this rather than re-implementing format checks.
 
 ## Compatibility
 
