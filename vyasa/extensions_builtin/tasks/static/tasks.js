@@ -37,6 +37,14 @@ const TASKS_CARD_STATE_ATTR = 'card_state';
 const TASKS_HAS_NOTE_ATTR = 'has_note';
 const TASKS_HAS_NOTE_PALETTE = { yes: '#22c55e', no: '#dc2626' };
 const TASKS_DEFAULT_CARD_STATES = ['Not Done', 'Done'];
+const TASKS_SPECIAL_NODE_ATTRS = new Set([
+    TASKS_CARD_STATE_ATTR,
+    TASKS_HAS_NOTE_ATTR,
+    '__checked__',
+    '__card_state__',
+    '__card_state_color__',
+    '__has_note__',
+]);
 const TASKS_GANTT_UNIT_WIDTH = 340;
 const TASKS_GANTT_ROW_GAP = 56;
 const TASKS_GANTT_BAR_MIN_HEIGHT = 34;
@@ -338,7 +346,7 @@ function normalizeTasksCheckedNodeIds(value) {
 }
 
 function normalizeTasksCardStates(model) {
-    const raw = Array.isArray(model?.card_states) ? model.card_states : [];
+    const raw = Array.isArray(model?.card_states) ? model.card_states : String(model?.card_states || '').split(',');
     const states = raw.map((entry) => String(entry || '').trim()).filter(Boolean);
     return Array.from(new Set(states.length ? states : TASKS_DEFAULT_CARD_STATES));
 }
@@ -491,7 +499,7 @@ function tasksNodeMetaEntries(node) {
         ...TASKS_DERIVED_METRIC_KEYS,
     ]);
     return Object.entries(node)
-        .filter(([key, value]) => !hidden.has(String(key).toLowerCase()) && value !== null && value !== undefined && value !== '' && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))
+        .filter(([key, value]) => !hidden.has(String(key).toLowerCase()) && !TASKS_SPECIAL_NODE_ATTRS.has(String(key)) && value !== null && value !== undefined && value !== '' && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))
         .map(([key, value]) => ({
             key,
             label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
@@ -550,7 +558,7 @@ function tasksGroupDetailEntries(nodeId, model) {
         : {};
     for (const item of sampleNodes) {
         for (const [key, value] of Object.entries(item || {})) {
-            if (hidden.has(String(key).toLowerCase())) continue;
+            if (hidden.has(String(key).toLowerCase()) || TASKS_SPECIAL_NODE_ATTRS.has(String(key))) continue;
             const numeric = parseTasksNumericValue(value);
             if (numeric === null) continue;
             const stat = metrics.get(key) || { count: 0, sum: 0, min: numeric, max: numeric };
@@ -561,7 +569,7 @@ function tasksGroupDetailEntries(nodeId, model) {
             metrics.set(key, stat);
         }
         for (const [key, palette] of Object.entries(colorPalettes)) {
-            if (excludedDerivedKeys.has(String(key || '').toLowerCase())) continue;
+            if (excludedDerivedKeys.has(String(key || '').toLowerCase()) || TASKS_SPECIAL_NODE_ATTRS.has(String(key))) continue;
             if (!key || !palette || typeof palette !== 'object' || isTasksGradientPalette(palette)) continue;
             const rawValue = item?.[key];
             if (rawValue === null || rawValue === undefined || String(rawValue).trim() === '') continue;
@@ -618,7 +626,7 @@ function tasksFilterOptions(model) {
     const visit = (node) => {
         if (!node) return;
         for (const [key, value] of Object.entries(node)) {
-            if (hidden.has(String(key).toLowerCase()) || value === null || value === undefined || value === '') continue;
+            if (hidden.has(String(key).toLowerCase()) || TASKS_SPECIAL_NODE_ATTRS.has(String(key)) || value === null || value === undefined || value === '') continue;
             if (continuousColorKeys.has(String(key))) continue;
             if (!(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) continue;
             if (!buckets.has(key)) buckets.set(key, { values: new Set(), kinds: new Set() });
@@ -644,7 +652,7 @@ function tasksColorOptions(model, nodeNotes = null) {
     const palettes = model?.node_color_palettes && typeof model.node_color_palettes === 'object'
         ? model.node_color_palettes
         : {};
-    const declaredKeys = Object.keys(palettes).filter((key) => key && !TASKS_DERIVED_METRIC_KEYS.has(String(key).toLowerCase()) && typeof palettes[key] === 'object' && Object.keys(palettes[key] || {}).length > 0);
+    const declaredKeys = Object.keys(palettes).filter((key) => key && !TASKS_DERIVED_METRIC_KEYS.has(String(key).toLowerCase()) && !TASKS_SPECIAL_NODE_ATTRS.has(String(key)) && typeof palettes[key] === 'object' && Object.keys(palettes[key] || {}).length > 0);
     const nodes = [...(model?.groups || []), ...(model?.tasks || [])];
     const keys = declaredKeys
         .filter((key) => nodes.some((node) => {

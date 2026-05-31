@@ -262,6 +262,25 @@ def test_tasks_source_supports_configurable_card_states():
     assert "function normalizeTasksCardStates" in source
     assert "nodeStates" in source
     assert "TASKS_CARD_STATE_ATTR" in source
+    assert "String(model?.card_states || '').split(',')" in source
+    assert "TASKS_SPECIAL_NODE_ATTRS" in source
+
+
+def test_tasks_block_reads_comma_card_states_from_render_frontmatter():
+    md = """```items
+---
+card_states: not-done,done,deferred,cancelled
+---
+Foundation:
+  - t1 :: Define graph payload
+```"""
+
+    rendered = to_xml(from_md(md))
+    match = re.search(r"""data-tasks-payload=(["'])(.*?)\1""", rendered)
+
+    assert match is not None
+    payload = json.loads(html.unescape(match.group(2)))
+    assert payload["card_states"] == ["not-done", "done", "deferred", "cancelled"]
 
 
 def test_tasks_source_supports_local_card_notes():

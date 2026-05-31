@@ -16,6 +16,7 @@ _RENDERABLE_NODE_KEYS = {
     "id", "label", "kind", "__kind__", "group_id", "parent_group_id",
     "handlelayout", "highlightmode", "sourcegroupid",
     "width", "height", "position", "parentid", "color", "href", "rank",
+    "card_state", "__checked__", "__card_state__", "__card_state_color__", "__has_note__",
     "__rendered_attrs__",
 }
 
