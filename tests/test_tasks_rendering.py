@@ -64,6 +64,16 @@ def test_tasks_filter_panel_has_group_by_hierarchy_controls():
     assert "buildTasksGroupedState" in source
 
 
+def test_tasks_node_detail_rows_use_hybrid_layout():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function tasksDetailEntryIsStacked" in source
+    assert "label.length > 18" in source
+    assert "value.length > 52" in source
+    assert "gridTemplateColumns: stacked ?" in source
+    assert "minmax(7rem, max-content) minmax(0, 1fr)" in source
+
+
 def test_tasks_block_invalid_body_falls_back_to_empty_payload():
     md = """```tasks
 id: broken

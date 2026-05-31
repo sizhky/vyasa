@@ -516,6 +516,12 @@ function tasksColorModeLabel(key) {
     return key === 'rank' ? 'Flow position' : tasksNodeMetaLabel(key);
 }
 
+function tasksDetailEntryIsStacked(entry) {
+    const label = String(entry?.label || '');
+    const value = String(entry?.value || '');
+    return Boolean(entry?.renderedValue) || label.length > 18 || value.length > 52 || value.includes('\n');
+}
+
 function collectTasksGroupDescendants(nodeId, model) {
     if (!nodeId || !model) return { groups: [], tasks: [] };
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
@@ -3657,29 +3663,32 @@ async function renderTasksGraphs(rootElement = document) {
                         ? { href: selectedNode.href, onClick: (e) => openTasksNodeHref(selectedNode.href, e), style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, marginBottom: '10px', display: 'block', textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit' } }
                         : { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, marginBottom: '10px' } }, selectedNode.label || selectedNode.id),
                     React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: '12px', lineHeight: 1.35 } },
-                        ...entries.map((entry, index) => React.createElement('div', {
-                            key: entry.key,
-                            style: {
-                                display: 'grid',
-                                gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)',
-                                gap: '6px 14px',
-                                paddingTop: index === 0 ? '0' : '8px',
-                                marginTop: index === 0 ? '0' : '8px',
-                                borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)',
+                        ...entries.map((entry, index) => {
+                            const stacked = tasksDetailEntryIsStacked(entry);
+                            return React.createElement('div', {
+                                key: entry.key,
+                                style: {
+                                    display: 'grid',
+                                    gridTemplateColumns: stacked ? 'minmax(0, 1fr)' : 'minmax(7rem, max-content) minmax(0, 1fr)',
+                                    gap: stacked ? '4px' : '6px 12px',
+                                    paddingTop: index === 0 ? '0' : '8px',
+                                    marginTop: index === 0 ? '0' : '8px',
+                                    borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)',
+                                },
                             },
-                        },
-                            React.createElement('div', { style: { fontWeight: 700, opacity: 0.7, minWidth: 0 } }, entry.label),
-                            entry.renderedValue
-                                ? React.createElement('div', {
-                                    className: 'vyasa-task-node-card-value',
-                                    style: { minWidth: 0, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' },
-                                    dangerouslySetInnerHTML: { __html: entry.renderedValue },
-                                })
-                                : React.createElement('div', {
-                                    className: 'vyasa-task-node-card-value',
-                                    style: { minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'pre-line' },
-                                }, entry.value),
-                        )),
+                                React.createElement('div', { style: { fontWeight: 700, opacity: 0.72, minWidth: 0, overflowWrap: 'anywhere' } }, `${entry.label}:`),
+                                entry.renderedValue
+                                    ? React.createElement('div', {
+                                        className: 'vyasa-task-node-card-value',
+                                        style: { minWidth: 0, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' },
+                                        dangerouslySetInnerHTML: { __html: entry.renderedValue },
+                                    })
+                                    : React.createElement('div', {
+                                        className: 'vyasa-task-node-card-value',
+                                        style: { minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'pre-line' },
+                                    }, entry.value),
+                            );
+                        }),
                         React.createElement('label', {
                             style: {
                                 display: 'flex',
