@@ -119,6 +119,13 @@ class ContentTree:
 
     def resolve_document(self, slug: str | Path) -> ResolvedDocument | None:
         clean_slug = str(slug).strip("/")
+        for suffix in self.allowed_suffixes:
+            path = self._path_for_slug(clean_slug, suffix)
+            if path and path.exists():
+                kind = document_kind_for_suffix(suffix)
+                if not kind:
+                    continue
+                return ResolvedDocument(clean_slug, path, kind, content_url_for_slug(clean_slug, prefix="/posts"))
         folder_path = self._path_for_slug(clean_slug)
         if folder_path and folder_path.exists() and folder_path.is_dir():
             note = self.find_folder_note(clean_slug)
@@ -127,13 +134,6 @@ class ContentTree:
                 if note_slug:
                     return ResolvedDocument(note_slug, note, "markdown", content_url_for_slug(note_slug), folder_note=note)
             return ResolvedDocument(clean_slug, folder_path, "folder", content_url_for_slug(clean_slug))
-        for suffix in self.allowed_suffixes:
-            path = self._path_for_slug(clean_slug, suffix)
-            if path and path.exists():
-                kind = document_kind_for_suffix(suffix)
-                if not kind:
-                    continue
-                return ResolvedDocument(clean_slug, path, kind, content_url_for_slug(clean_slug, prefix="/posts"))
         return None
 
     def find_folder_note(self, folder_slug: str | Path = "") -> Path | None:

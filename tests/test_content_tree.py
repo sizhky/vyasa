@@ -44,6 +44,18 @@ def test_content_tree_preserves_vyasa_order_hidden_pruning_and_folder_notes(tmp_
     assert tree.find_folder_note("guide") == (root / "guide" / "index.md").resolve()
 
 
+def test_content_tree_resolves_document_before_same_name_folder(tmp_path):
+    root = tmp_path
+    (root / "docs" / "architecture").mkdir(parents=True)
+    (root / "docs" / "architecture.md").write_text("# Architecture\n", encoding="utf-8")
+
+    resolved = ContentTree(root=root).resolve_document("docs/architecture")
+
+    assert resolved is not None
+    assert resolved.kind == "markdown"
+    assert resolved.path == (root / "docs" / "architecture.md").resolve()
+
+
 def test_content_tree_visibility_filters_file_entries(tmp_path):
     root = tmp_path
     (root / "public.md").write_text("# Public\n", encoding="utf-8")
