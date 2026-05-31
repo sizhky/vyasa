@@ -14,7 +14,8 @@ from vyasa.extensions_builtin.tasks.items_store_contracts import (
     ValidationFinding,
 )
 from vyasa.extensions_builtin.tasks.items_pack import read_kg_pack
-from vyasa.extensions_builtin.tasks.model import parse_tasks_text
+from vyasa.extensions_builtin.tasks.model import _resolve_tasks_source_path, parse_tasks_text
+from vyasa.config import reload_config
 
 import sys
 from pathlib import Path
@@ -184,6 +185,22 @@ items_schema: roadmap.kg.schema
     assert model["view_projections"][0]["caption"] == "Track delivery"
     assert model["default_projection"] == "delivery"
     assert model["card_states"] == ["Not Done", "Done", "Deferred/Cancelled"]
+
+
+def test_items_schema_resolution_handles_route_slug_under_docs_root(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    (root / ".vyasa").write_text("", encoding="utf-8")
+    (root / "solution-architecture.kg").mkdir()
+    schema_path = root / "solution-architecture.kg" / "kg.schema"
+    schema_path.write_text("@graph id=demo\n", encoding="utf-8")
+    reload_config(root / ".vyasa")
+
+    try:
+        resolved = _resolve_tasks_source_path("docs/solution-architecture", "solution-architecture.kg/kg.schema")
+        assert resolved == schema_path.resolve()
+    finally:
+        reload_config()
 
 
 def test_kg_pack_projection_where_scopes_projection_graph(tmp_path):
