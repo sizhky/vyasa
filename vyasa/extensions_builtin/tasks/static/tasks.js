@@ -1768,7 +1768,7 @@ function hasExplicitGroupDirection(model) {
     return (model.groups || []).some((group) => group && (group.direction || group.layout_direction));
 }
 
-async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig = {}, layoutConfig = {}) {
+async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig = {}, layoutConfig = {}, useElkForGroups = true) {
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
     const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
     const groupDirection = readTasksDirection(groupsById[groupId]?.layout_direction || groupsById[groupId]?.direction || layoutConfig.elkDirection);
@@ -1780,6 +1780,44 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
         return {
             positions: {},
             bbox: { width: 250, height: 80 },
+        };
+    }
+    const childIds = new Set(groupChildren.map((child) => child.id));
+    const childEdges = reduceTransitiveEdges((model.dependency_edges || [])
+        .filter((edge) => childIds.has(edge.source) && childIds.has(edge.target)));
+    if (useElkForGroups && childEdges.length > 0) {
+        const elkLayout = await tasksElk.layout({
+            id: `group-${groupId}`,
+            layoutOptions: {
+                'elk.algorithm': 'layered',
+                'elk.direction': groupDirection,
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
+                'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`,
+            },
+            children: groupChildren.map((child) => ({
+                id: child.id,
+                width: child.width || 250,
+                height: child.height || 80,
+            })),
+            edges: childEdges.map((edge, index) => ({ id: `e${index}`, sources: [edge.source], targets: [edge.target] })),
+        });
+        const positions = {};
+        for (const child of elkLayout.children || []) {
+            const jitter = stableTaskJitter(child.id, jitterConfig.x ?? 14, jitterConfig.y ?? 8);
+            positions[child.id] = {
+                x: (child.x || 0) + jitter.x,
+                y: (child.y || 0) + jitter.y,
+                width: child.width || 0,
+                height: child.height || 0,
+            };
+        }
+        return {
+            positions,
+            bbox: {
+                width: Math.max(elkLayout.width || 0, 250),
+                height: Math.max(elkLayout.height || 0, 80),
+            },
         };
     }
     const packedLayout = layoutDisconnectedTaskNodes(groupChildren, groupDirection, {
@@ -1808,7 +1846,7 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
     };
 }
 
-async function layoutExpandedGroups(model, expandedSet, jitterConfig = {}, layoutConfig = {}) {
+async function layoutExpandedGroups(model, expandedSet, jitterConfig = {}, layoutConfig = {}, useElkForGroups = true) {
     const expandedIds = Array.from(expandedSet);
     const groupParent = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
     const depthOf = (id) => {
@@ -1826,7 +1864,7 @@ async function layoutExpandedGroups(model, expandedSet, jitterConfig = {}, layou
         for (const childId of (model.group_tree?.[groupId] || [])) {
             if (layouts[childId]) childSizes[childId] = layouts[childId].bbox;
         }
-        layouts[groupId] = await layoutGroupInternal(groupId, model, childSizes, jitterConfig, layoutConfig);
+        layouts[groupId] = await layoutGroupInternal(groupId, model, childSizes, jitterConfig, layoutConfig, useElkForGroups);
     }
     return layouts;
 }
@@ -2753,7 +2791,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const effectiveExpandedSet = effectiveExpandedGroups(model, expandedSet);
                 const baseLayout = await ensureBaseLayout();
-                groupLayoutsRef.current = await layoutExpandedGroups(model, effectiveExpandedSet, jitterConfig, layoutConfig);
+                groupLayoutsRef.current = await layoutExpandedGroups(model, effectiveExpandedSet, jitterConfig, layoutConfig, true);
                 const rootGroupIds = new Set(model.group_tree?.["null"] || []);
                 const rootTaskIds = new Set(model.task_children?.["null"] || []);
                 const rootNodeIds = new Set([...rootGroupIds, ...rootTaskIds]);
