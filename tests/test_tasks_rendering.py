@@ -38,8 +38,10 @@ foundation :: Foundation:
 def test_tasks_filter_source_hides_rank():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     filter_source = source.split("function tasksFilterOptions", 1)[1].split("function tasksColorOptions", 1)[0]
+    color_source = source.split("function tasksColorOptions", 1)[1].split("function tasksGroupByOptions", 1)[0]
 
     assert "TASKS_DERIVED_METRIC_KEYS" in filter_source
+    assert "TASKS_DERIVED_METRIC_KEYS" not in color_source
 
 
 def test_tasks_filter_policy_empty_attributes_do_not_hide_all_keys():
@@ -53,7 +55,7 @@ def test_tasks_filter_panel_has_group_by_hierarchy_controls():
 
     assert "function tasksGroupByOptions" in source
     assert "TASKS_DERIVED_METRIC_KEYS" in source
-    assert "['rank', 'connectivity', 'centrality']" in source
+    assert "['rank', 'connectivity']" in source
     assert "groupByHierarchy" in source
     assert "const groupByLevels = [...groupByHierarchy.filter(Boolean), ''];" in source
     assert "model.active_projection === '__custom_group_by__'" in source

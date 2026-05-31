@@ -52,7 +52,7 @@ const TASKS_GANTT_LEFT = 210;
 const TASKS_GANTT_TOP = 86;
 const TASKS_GANTT_PROJECTION_ID = '__gantt__';
 const TASKS_PROJECTION_UNSPECIFIED_LABEL = 'Unspecified';
-const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity', 'centrality']);
+const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity']);
 const TASKS_SPACING_PRESETS = {
     compact: { nodeSpacing: 24, layerSpacing: 64, collisionGap: 56, groupPadding: 28, edgeLabelWidth: 220 },
     normal: { nodeSpacing: 44, layerSpacing: 96, collisionGap: 96, groupPadding: 40, edgeLabelWidth: 240 },
@@ -652,7 +652,7 @@ function tasksColorOptions(model, nodeNotes = null) {
     const palettes = model?.node_color_palettes && typeof model.node_color_palettes === 'object'
         ? model.node_color_palettes
         : {};
-    const declaredKeys = Object.keys(palettes).filter((key) => key && !TASKS_DERIVED_METRIC_KEYS.has(String(key).toLowerCase()) && !TASKS_SPECIAL_NODE_ATTRS.has(String(key)) && typeof palettes[key] === 'object' && Object.keys(palettes[key] || {}).length > 0);
+    const declaredKeys = Object.keys(palettes).filter((key) => key && !TASKS_SPECIAL_NODE_ATTRS.has(String(key)) && typeof palettes[key] === 'object' && Object.keys(palettes[key] || {}).length > 0);
     const nodes = [...(model?.groups || []), ...(model?.tasks || [])];
     const keys = declaredKeys
         .filter((key) => nodes.some((node) => {

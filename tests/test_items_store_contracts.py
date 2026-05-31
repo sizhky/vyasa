@@ -218,6 +218,42 @@ items_schema: roadmap.kg.schema
     assert [edge["id"] for edge in chapter["dependency_edges"]] == ["e1"]
 
 
+def test_kg_pack_projection_can_use_derived_color_modes(tmp_path):
+    (tmp_path / "roadmap.kg.schema").write_text(
+        """@graph id=roadmap title=Roadmap initial_view=flow
+
+@sources
+nodes=roadmap.kg.nodes
+base:
+    edges=roadmap.kg.edges
+
+@views
+flow:
+    group_by,color_by=rank
+connected:
+    group_by=rank
+    color_by=connectivity
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "roadmap.kg.nodes").write_text("n1: Start\nn2: Middle\nn3: End\n", encoding="utf-8")
+    (tmp_path / "roadmap.kg.edges").write_text("e1: n1 -> n2 unlocks\ne2: n2 -> n3 unlocks\n", encoding="utf-8")
+
+    model = parse_tasks_text("""```items
+---
+items_schema: roadmap.kg.schema
+---
+```""", current_path=tmp_path / "graph.md")
+
+    flow = model["projection_models"]["flow"]["model"]
+    connected = model["projection_models"]["connected"]["model"]
+    assert flow["default_color_by"] == "rank"
+    assert connected["default_color_by"] == "connectivity"
+    assert "rank" in flow["node_color_palettes"]
+    assert "connectivity" in connected["node_color_palettes"]
+    assert all("rank" in task and "connectivity" in task for task in connected["tasks"])
+
+
 def test_kg_pack_projection_edge_source_selects_endpoint_nodes(tmp_path):
     (tmp_path / "roadmap.kg.schema").write_text(
         """@graph id=roadmap title=Roadmap initial_view=chapter
