@@ -67,6 +67,7 @@ def read_kg_pack(schema_path: str | Path) -> dict[str, Any]:
             for key in indexed.get("node", []):
                 if key not in index_attributes:
                     index_attributes.append(key)
+    _propagate_inherited_attrs(nodes_by_id)
     groups = []
     tasks = []
     for node in nodes_by_id.values():
@@ -228,6 +229,8 @@ def apply_attrs(path: str | Path, nodes: dict[str, dict], edges: dict[str, dict]
             for record_id in shlex.split(ids_text):
                 if record_id in target:
                     target[record_id][current_key] = value.strip()
+                    if section == "@node_attrs" and current_key == "inherit":
+                        target[record_id]["__inherit_keys__"] = _list_value(value.strip())
     return indexed
 
 
@@ -349,6 +352,22 @@ def _apply_inherited_attrs(parent: dict[str, Any], child: dict[str, Any]) -> Non
     for key in inherit_keys:
         if key in parent and key not in child:
             child[key] = parent[key]
+
+
+def _propagate_inherited_attrs(nodes_by_id: dict[str, dict[str, Any]]) -> None:
+    children_by_parent: dict[str | None, list[str]] = {}
+    for node in nodes_by_id.values():
+        children_by_parent.setdefault(node.get("group_id"), []).append(node["id"])
+
+    def visit(node_id: str) -> None:
+        parent = nodes_by_id[node_id]
+        for child_id in children_by_parent.get(node_id, []):
+            child = nodes_by_id[child_id]
+            _apply_inherited_attrs(parent, child)
+            visit(child_id)
+
+    for root_id in children_by_parent.get(None, []):
+        visit(root_id)
 
 
 def _merge_node(existing: dict[str, Any], node: dict[str, Any], path: str | Path) -> None:

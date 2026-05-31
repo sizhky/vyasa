@@ -189,6 +189,34 @@ items_schema: roadmap.kg.schema
     assert model["card_states"] == ["Not Done", "Done", "Deferred/Cancelled"]
 
 
+def test_items_parser_inherits_attrs_after_attr_overlay(tmp_path):
+    (tmp_path / "nest.kg.schema").write_text(
+        """@graph id=nest title=Nest initial_view=module
+
+@sources
+nodes=nest.kg.nodes
+attrs=nest.kg.attrs
+base:
+    edges=nest.kg.edges
+
+@views
+module:
+    source=base
+    group_by=module
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "nest.kg.nodes").write_text("n1: Root\n\tinherit=module\n\tn2: Child\n", encoding="utf-8")
+    (tmp_path / "nest.kg.attrs").write_text("@node_attrs\nmodule:\n  Data & Ingest: n1\n", encoding="utf-8")
+    (tmp_path / "nest.kg.edges").write_text("", encoding="utf-8")
+
+    graph = read_kg_pack(tmp_path / "nest.kg.schema")
+
+    assert graph["groups"][0]["module"] == "Data & Ingest"
+    assert graph["tasks"][0]["module"] == "Data & Ingest"
+    assert graph["index_attributes"] == ["module"]
+
+
 def test_items_schema_resolution_handles_route_slug_under_docs_root(tmp_path):
     root = tmp_path / "docs"
     root.mkdir()
