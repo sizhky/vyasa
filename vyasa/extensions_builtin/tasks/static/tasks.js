@@ -24,7 +24,7 @@ const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 42%, 
 const TASKS_GROUP_TITLE_BG = 'color-mix(in srgb, var(--vyasa-paper) 76%, var(--vyasa-primary) 24%)';
 const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 74%, var(--vyasa-primary) 26%)';
 const TASKS_GROUP_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-primary) 10%, transparent)';
-const TASKS_EDGE_FOCUS_OUT_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 55%, #f59e0b 45%)';
+const TASKS_EDGE_FOCUS_OUT_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 42%, #ef4444 58%)';
 const TASKS_EDGE_FOCUS_IN_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 40%, #22c55e 60%)';
 const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
 const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
@@ -3316,7 +3316,7 @@ async function renderTasksGraphs(rootElement = document) {
                             fill: mode === 'focused-in'
                                 ? 'color-mix(in srgb, var(--vyasa-paper) 78%, #22c55e 22%)'
                                 : (mode === 'focused-out'
-                                    ? 'color-mix(in srgb, var(--vyasa-paper) 80%, #f59e0b 20%)'
+                                    ? 'color-mix(in srgb, var(--vyasa-paper) 80%, #ef4444 20%)'
                                     : 'var(--vyasa-paper)'),
                             fillOpacity: hoveredNodeId
                                 ? ((mode === 'focused-in' || mode === 'focused-out') ? 0.96 : 0.02)
@@ -3360,7 +3360,7 @@ async function renderTasksGraphs(rootElement = document) {
                     setHoveredNodeId(null);
                     return;
                 }
-                applyHighlight(selectedNodeId, selectedNodeIds.size ? null : hoveredNodeId, selectedNodeIds);
+                applyHighlight(selectedNodeId, selectedNodeId ? hoveredNodeId : null, selectedNodeIds);
             }, [graphRevision, selectedNodeId, selectedNodeIds, hoveredNodeId, applyHighlight]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnExpand()) {
@@ -3417,6 +3417,21 @@ async function renderTasksGraphs(rootElement = document) {
                     if (rafId !== null) window.cancelAnimationFrame(rafId);
                 };
             }, [graphRevision, activeFilters, searchMatches]);
+            React.useEffect(() => {
+                if (!shouldAutoFitTasksOnFilter()) return;
+                if (selectedNodeId || !selectedNodeIds.size) return;
+                const reactFlow = reactFlowApiRef.current;
+                const matchedNodes = (graphBaseRef.current.nodes || []).filter((node) => (
+                    node?.id
+                    && node.data?.__kind__ !== 'groupTitle'
+                    && selectedNodeIds.has(node.id)
+                ));
+                if (!reactFlow || matchedNodes.length === 0) return;
+                const rafId = window.requestAnimationFrame(() => {
+                    reactFlow.fitView({ nodes: matchedNodes, duration: 220, padding: 0.28, includeHiddenNodes: true });
+                });
+                return () => window.cancelAnimationFrame(rafId);
+            }, [graphRevision, selectedNodeId, selectedNodeIds]);
             const CustomEdge = React.memo((props) => {
                 const viewport = typeof rf.useViewport === 'function' ? rf.useViewport() : { zoom: 1 };
                 const [path, labelX, labelY] = rf.getBezierPath(props);
