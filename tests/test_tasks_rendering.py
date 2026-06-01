@@ -81,6 +81,7 @@ def test_tasks_node_metadata_hides_internal_keys():
 
     assert "const TASKS_INTERNAL_NODE_META_KEYS" in source
     assert "'__projection_group__', 'projection', '__kg_sources'" in source
+    assert "'__projection_branch_opacity__'" in source
     assert "'child_group_ids'" in source
     assert "function tasksIsHiddenNodeMetaKey" in source
     assert ".filter(([key, value]) => !tasksIsHiddenNodeMetaKey(key)" in source
@@ -319,7 +320,7 @@ def test_tasks_source_supports_local_card_notes():
     assert "__has_note__" in source
     assert "title: 'Has note'" in source
     assert "kinds: ['note']" in source
-    assert "TASKS_HAS_NOTE_PALETTE = { yes: '#22c55e', no: '#dc2626' }" in source
+    assert "TASKS_HAS_NOTE_PALETTE = { yes: '#22c55e', no: 'rgba(220, 38, 38, 0.28)' }" in source
     assert "tasksHasAnyNodeNote(nodeNotes)" in source
 
 

@@ -542,6 +542,7 @@ view_projections:
     edge_color_by: kind
     edge_label_from: kind
     hover_attrs: [mood]
+    projection-unspecified-group-opacity: 9
     aggregate_edges: "when_collapsed=false by=kind"
 ---
 Places:
@@ -556,6 +557,7 @@ a -> b | relation: visits | kind: jump
     assert city["edge_color_by"] == "kind"
     assert city["edge_label_from"] == "kind"
     assert city["hover_attrs"] == ["mood"]
+    assert city["projection-unspecified-group-opacity"] == "9"
     assert city["aggregate_edges"] == {"when_collapsed": False, "by": "kind"}
 
 

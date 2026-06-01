@@ -9,7 +9,8 @@ from .layout import build_collapsed_graph
 TASKS_PROJECTION_UNSPECIFIED_LABEL = "Unspecified"
 PROJECTION_DISPLAY_KEYS = {
     "default_open_depth", "node-card-width", "hover-font-size", "color_mix",
-    "color_mix_intensity", "projection-group-opacity", "jitter", "jitter_y",
+    "color_mix_intensity", "projection-group-opacity", "projection-unspecified-group-opacity",
+    "projection-unspecified-content-opacity", "jitter", "jitter_y",
     "spacing", "node_spacing", "layer_spacing", "group_padding",
     "layout_direction", "collision_gap", "edge_label_width",
 }

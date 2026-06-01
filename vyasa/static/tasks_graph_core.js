@@ -62,6 +62,35 @@ export function tasksGraphNodeHitArea(kind, isExpanded = false) {
     return 'passive';
 }
 
+export function tasksGraphStatsLabel(model) {
+    const nodeCount = (Array.isArray(model?.groups) ? model.groups.length : 0)
+        + (Array.isArray(model?.tasks) ? model.tasks.length : 0);
+    const edgeCount = Array.isArray(model?.dependency_edges) ? model.dependency_edges.length : 0;
+    const nodeLabel = nodeCount === 1 ? 'Node' : 'Nodes';
+    const edgeLabel = edgeCount === 1 ? 'Edge' : 'Edges';
+    return `${nodeCount} ${nodeLabel} and ${edgeCount} ${edgeLabel}`;
+}
+
+export function tasksProjectionGroupByHierarchy(sourceModel, projectionId) {
+    const id = String(projectionId || '').trim();
+    const projections = Array.isArray(sourceModel?.view_projections) ? sourceModel.view_projections : [];
+    const projection = projections.find((item) => String(item?.id || '').trim() === id);
+    return Array.isArray(projection?.groups_from)
+        ? projection.groups_from.map((key) => String(key || '').trim()).filter(Boolean)
+        : [];
+}
+
+export function isTasksUnspecifiedProjectionGroup(node, unspecifiedLabel = 'Unspecified') {
+    if (!node || node.__projection_group__ !== true) return false;
+    const label = String(unspecifiedLabel || 'Unspecified').trim() || 'Unspecified';
+    if (String(node.label || '').trim().endsWith(`> ${label}`)) return true;
+    return Object.entries(node).some(([key, value]) => (
+        !String(key || '').startsWith('__')
+        && !['id', 'label', 'parent_group_id', 'projection'].includes(String(key || ''))
+        && String(value || '').trim() === label
+    ));
+}
+
 export function toggleMultiValueFilter(filters, key, value, enabled) {
     const filterKey = String(key || '').trim();
     const filterValue = String(value || '').trim();
