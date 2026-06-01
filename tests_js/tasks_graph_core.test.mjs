@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -175,6 +175,15 @@ test('task and collapsed group nodes are selectable in items graph', () => {
     assert.equal(isTasksGraphNodeSelectable('group', false), true);
     assert.equal(isTasksGraphNodeSelectable('group', true), false);
     assert.equal(isTasksGraphNodeSelectable('groupTitle'), false);
+});
+
+test('drag rect selects selectable task nodes and skips expanded groups', () => {
+    const nodes = [
+        { id: 'group-a', position: { x: 100, y: 100 }, style: { width: 160, height: 120 }, data: { __kind__: 'group' } },
+        { id: 'task-a', parentId: 'group-a', position: { x: 20, y: 20 }, style: { width: 80, height: 40 }, data: { __kind__: 'task' } },
+        { id: 'task-b', position: { x: 360, y: 100 }, style: { width: 80, height: 40 }, data: { __kind__: 'task' } },
+    ];
+    assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 110, y1: 110, x2: 230, y2: 170 }, new Set(['group-a'])), ['task-a']);
 });
 
 test('graph stats count groups, tasks, and dependency edges', () => {

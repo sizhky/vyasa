@@ -18,6 +18,7 @@ from vyasa.extensions_builtin.tasks.model import _resolve_tasks_source_path, par
 from vyasa.config import reload_config
 
 import sys
+import json
 from pathlib import Path
 
 SKILL_SCRIPT_DIR = Path(__file__).resolve().parents[1] / ".agents/skills/vyasa/scripts"
@@ -189,6 +190,21 @@ items_schema: roadmap.kg.schema
     assert model["card_states"] == ["Not Done", "Done", "Deferred/Cancelled"]
 
 
+def test_read_kg_pack_writes_and_refreshes_kg_cache(tmp_path):
+    (tmp_path / "roadmap.kg.schema").write_text("@graph id=roadmap\n@sources\nnodes=roadmap.kg.nodes\nbase:\n    edges=roadmap.kg.edges\ncache=roadmap.kg.cache\n", encoding="utf-8")
+    (tmp_path / "roadmap.kg.nodes").write_text("n1: Login\n", encoding="utf-8")
+    (tmp_path / "roadmap.kg.edges").write_text("", encoding="utf-8")
+
+    read_kg_pack(tmp_path / "roadmap.kg.schema")
+    first_cache = json.loads((tmp_path / "roadmap.kg.cache").read_text(encoding="utf-8"))
+    assert sorted(first_cache["nodes"]) == ["n1"]
+
+    (tmp_path / "roadmap.kg.nodes").write_text("n1: Login\nn2: Checkout\n", encoding="utf-8")
+    read_kg_pack(tmp_path / "roadmap.kg.schema")
+    refreshed_cache = json.loads((tmp_path / "roadmap.kg.cache").read_text(encoding="utf-8"))
+    assert sorted(refreshed_cache["nodes"]) == ["n1", "n2"]
+
+
 def test_items_parser_inherits_attrs_after_attr_overlay(tmp_path):
     (tmp_path / "nest.kg.schema").write_text(
         """@graph id=nest title=Nest initial_view=module
@@ -231,6 +247,34 @@ def test_items_schema_resolution_handles_route_slug_under_docs_root(tmp_path):
         assert resolved == schema_path.resolve()
     finally:
         reload_config()
+
+
+def test_parse_tasks_text_keeps_groups_from_items_schema(tmp_path):
+    (tmp_path / "nest.kg.schema").write_text(
+        """@graph id=nest title=Nest
+
+@sources
+base:
+    nodes=nest.kg.nodes
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "nest.kg.nodes").write_text(
+        """n1: Parent
+\tn2: Child
+""",
+        encoding="utf-8",
+    )
+
+    model = parse_tasks_text("""```items
+---
+items_schema: nest.kg.schema
+---
+```""", current_path=tmp_path / "graph.md")
+
+    assert [group["id"] for group in model["groups"]] == ["n1"]
+    assert [task["id"] for task in model["tasks"]] == ["n2"]
+    assert model["task_children"]["n1"] == ["n2"]
 
 
 def test_kg_pack_projection_where_scopes_projection_graph(tmp_path):

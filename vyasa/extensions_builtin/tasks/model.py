@@ -935,6 +935,7 @@ def _apply_kg_schema(graph: dict, current_path: str | Path | None) -> None:
     for key in ("id", "title", "default_projection", "view_projections", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "index_attributes", "filter_attributes", "card_states"):
         if compiled.get(key) and not graph.get(key):
             graph[key] = compiled[key]
+    graph["groups"].extend(compiled.get("groups", []))
     graph["tasks"].extend(compiled.get("tasks", []))
     graph["dependency_edges"].extend(compiled.get("dependency_edges", []))
     graph["items_schema"] = schema_source

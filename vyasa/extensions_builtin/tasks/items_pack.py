@@ -87,7 +87,24 @@ def read_kg_pack(schema_path: str | Path) -> dict[str, Any]:
     graph["kg_sources"] = schema.sources
     graph["index_attributes"] = index_attributes
     graph["filter_attributes"] = index_attributes
+    _write_kg_cache(schema_path, schema.cache, graph)
     return graph
+
+
+def _write_kg_cache(schema_path: Path, cache_name: str, graph: dict[str, Any]) -> None:
+    cache_name = str(cache_name or "").strip()
+    if not cache_name:
+        return
+    cache_path = _resolve(schema_path, cache_name)
+    payload = {
+        "generated": True,
+        "nodes": {node["id"]: node for node in graph.get("tasks", [])},
+        "edges": {edge["id"]: edge for edge in graph.get("dependency_edges", [])},
+        "views": graph.get("view_projections", []),
+        "sources": graph.get("kg_sources", {}),
+    }
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def read_schema(path: str | Path) -> KgSchema:
