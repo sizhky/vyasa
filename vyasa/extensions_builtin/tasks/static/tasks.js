@@ -357,6 +357,7 @@ function readTasksProjectionPrefs(prefs, projectionId) {
     const key = tasksProjectionPrefsKey(projectionId);
     const scoped = prefs?.projectionPrefs?.[key];
     if (scoped && typeof scoped === 'object') return scoped;
+    if (prefs?.projectionPrefs && typeof prefs.projectionPrefs === 'object') return {};
     return prefs && typeof prefs === 'object' ? prefs : {};
 }
 
@@ -1081,8 +1082,6 @@ function tasksCollectSearchMatches(nodes, edges, query) {
     const spec = tasksSearchSpec(query);
     const nodeIds = new Set();
     const edgeIds = new Set();
-    const matchedNodeLabels = [];
-    const matchedEdgeLabels = [];
     if (!spec.active || spec.error || !spec.matcher) return { ...spec, nodeIds, edgeIds };
     const hiddenEdgeKeys = new Set(['id', 'source', 'target', 'type', 'animated', 'markerend', 'labelstyle', 'labelbgstyle', 'style', 'data', 'zindex', 'sourcehandle', 'targethandle']);
     for (const node of (nodes || [])) {
@@ -1094,10 +1093,7 @@ function tasksCollectSearchMatches(nodes, edges, query) {
             if (value === null || value === undefined || typeof value === 'object' || typeof value === 'function') continue;
             values.push(value);
         }
-        if (values.some((value) => tasksSearchMatchesText(value, spec))) {
-            nodeIds.add(node.id);
-            if (matchedNodeLabels.length < 8) matchedNodeLabels.push(data.label || node.id);
-        }
+        if (values.some((value) => tasksSearchMatchesText(value, spec))) nodeIds.add(node.id);
     }
     for (const edge of (edges || [])) {
         const values = [];
@@ -1108,21 +1104,9 @@ function tasksCollectSearchMatches(nodes, edges, query) {
         }
         if (!values.some((value) => tasksSearchMatchesText(value, spec))) continue;
         edgeIds.add(edge.id);
-        if (matchedEdgeLabels.length < 8) matchedEdgeLabels.push(edge.label || edge.id || `${edge.source}->${edge.target}`);
         if (edge.source) nodeIds.add(edge.source);
         if (edge.target) nodeIds.add(edge.target);
     }
-    logTasksDebug('searchMatches', {
-        rawQuery: String(query ?? ''),
-        normalizedQuery: spec.raw,
-        matcher: spec.matcher instanceof RegExp ? spec.matcher.toString() : spec.matcher,
-        nodeCount: (nodes || []).length,
-        edgeCount: (edges || []).length,
-        matchedNodeCount: nodeIds.size,
-        matchedEdgeCount: edgeIds.size,
-        matchedNodeLabels,
-        matchedEdgeLabels,
-    });
     return { ...spec, nodeIds, edgeIds };
 }
 
@@ -2629,7 +2613,7 @@ async function renderTasksGraphs(rootElement = document) {
                 [activeProjectionId]
             );
             const hydrateExpandedSet = React.useCallback((prefs) => {
-                const validIds = new Set((model.groups || []).map((group) => group.id));
+                const validIds = tasksExpandableNodeIds(model);
                 if (model.active_projection === '__custom_group_by__') return new Set(initialExpandedSet);
                 const saved = Array.isArray(prefs?.expandedGroupIds) ? prefs.expandedGroupIds : null;
                 if (saved) return new Set(saved.filter((id) => validIds.has(id)));
@@ -3107,8 +3091,15 @@ async function renderTasksGraphs(rootElement = document) {
                 graphBaseRef.current = { nodes: anchoredNodes, edges: baseEdges };
                 window.__vyasaTasksDebug.latest = {
                     widgetId,
+                    activeProjectionId,
+                    activeProjectionLabel: activeProjection?.label || '',
+                    viewMode,
                     expanded: Array.from(expandedSet),
                     effectiveExpanded: Array.from(effectiveExpandedSet),
+                    rawGraphNodeCount: (rawGraph.nodes || []).length,
+                    rawGraphEdgeCount: (rawGraph.edges || []).length,
+                    renderedNodeCount: anchoredNodes.length,
+                    renderedEdgeCount: baseEdges.length,
                     nodes: anchoredNodes.map((node) => ({
                         id: node.id,
                         label: node.data?.label,

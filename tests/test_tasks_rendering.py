@@ -458,7 +458,6 @@ def test_tasks_search_normalizes_whitespace_and_wrapping_quotes():
     assert "replace(/\\s+/g, ' ').trim()" in source
     assert "raw.slice(1, -1).trim()" in source
     assert "text.toLowerCase().includes(spec.matcher)" in source
-    assert "logTasksDebug('searchMatches'" in source
     assert "const values = [data.label];" in source
 
 
@@ -467,6 +466,7 @@ def test_tasks_base_view_supports_task_parent_expansion():
 
     assert "function tasksNodeHasChildren(nodeId, model)" in source
     assert "function tasksVisibleGraphStatsLabel(nodes, edges)" in source
+    assert "if (prefs?.projectionPrefs && typeof prefs.projectionPrefs === 'object') return {};" in source
     assert "setExpanded(tasksExpandableNodeIds(model));" in source
     assert "const canExpand = tasksNodeHasChildren(id, model);" in source
     assert "tasksChildTaskIds(nodeId, model).forEach((id) => visibleTasks.add(id));" in source
