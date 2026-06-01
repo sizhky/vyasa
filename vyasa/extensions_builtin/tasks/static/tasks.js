@@ -512,6 +512,15 @@ function shouldAutoFitTasksOnFilter() {
     return typeof override === 'boolean' ? override : TASKS_AUTO_FIT_ON_FILTER_DEFAULT;
 }
 
+function escapeTasksHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function tasksNodeMetaEntries(node) {
     if (!node) return [];
     return Object.entries(node)
@@ -522,6 +531,14 @@ function tasksNodeMetaEntries(node) {
             value: String(value),
             renderedValue: typeof node?.__rendered_attrs__?.[key] === 'string' ? node.__rendered_attrs__[key] : '',
         }));
+}
+
+function tasksOpenDecisionEntry(node) {
+    if (!node || node?.__kind__ === 'group' || node?.__kind__ === 'groupTitle') return null;
+    if (node?.__checked__ === true) return null;
+    const value = String(node?.open_decision || node?.decision || 'What is the open decision?').trim();
+    if (!value) return null;
+    return { key: '__open_decision__', label: 'Open decision', value };
 }
 
 function tasksNodeMetaLabel(key) {
@@ -2162,9 +2179,16 @@ function findTaskCardFromEvent(event) {
 
 function openTasksNodeHref(href, event = null) {
     if (!href) return;
+    logTasksDebug('nodeHrefOpen:start', {
+        href,
+        tagName: event?.target?.tagName || '',
+        pathname: window.location.pathname,
+        hasMainContent: Boolean(document.getElementById('main-content')),
+    });
     event?.preventDefault();
     event?.stopPropagation();
     if (href.startsWith('#')) {
+        logTasksDebug('nodeHrefOpen:fragment', { href });
         document.getElementById(href.slice(1))?.scrollIntoView({ block: 'start', behavior: 'smooth' });
         window.history.pushState(null, '', href);
         return;
@@ -2172,9 +2196,17 @@ function openTasksNodeHref(href, event = null) {
     const [pathOnly, hash = ''] = String(href).split('#', 2);
     const isInternal = href.startsWith('/posts/') || (href.startsWith('/') && !href.startsWith('/slides/') && !href.split('/').pop().includes('.'));
     if (isInternal && window.htmx?.ajax) {
+        logTasksDebug('nodeHrefOpen:htmxRequest', { href, pathOnly, hash, targetId: 'main-content' });
         const onSwap = (swapEvent) => {
             if (swapEvent.target?.id !== 'main-content') return;
             document.body.removeEventListener('htmx:afterSwap', onSwap);
+            logTasksDebug('nodeHrefOpen:htmxSwap', {
+                href,
+                pathOnly,
+                hash,
+                swappedId: swapEvent.target?.id || '',
+                childCount: swapEvent.target?.childElementCount ?? -1,
+            });
             if (hash) {
                 const fragment = `#${hash}`;
                 document.getElementById(hash)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -2191,6 +2223,7 @@ function openTasksNodeHref(href, event = null) {
         window.htmx.ajax('GET', pathOnly, { target: '#main-content', swap: 'outerHTML show:window:top settle:0.1s' });
         return;
     }
+    logTasksDebug('nodeHrefOpen:nativeAssign', { href, isInternal, hasHtmx: Boolean(window.htmx?.ajax) });
     window.location.assign(href);
 }
 
@@ -3413,7 +3446,6 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const isGroup = data?.__kind__ === 'group';
                 const isExpanded = expanded.has(id);
-                const hasHref = Boolean(linksInteractive && data?.href);
                 const labelContent = renderTasksInlineLinks(data?.label || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick });
                 if (data?.__gantt) {
                     return React.createElement('div', {
@@ -3440,27 +3472,15 @@ async function renderTasksGraphs(rootElement = document) {
                         ...renderHandles('source')
                     );
                 }
-                const labelNode = hasHref
-                    ? React.createElement('a', {
-                        href: data.href,
-                        onClick: (e) => openTasksNodeHref(data.href, e),
-                        style: {
-                            color: 'inherit',
-                            textDecoration: isChecked ? 'line-through underline' : 'underline',
-                            textDecorationColor: isChecked ? taskStateColor : undefined,
-                            textUnderlineOffset: '2px',
-                            textDecorationThickness: isChecked ? '1.6px' : undefined,
-                        },
-                    }, labelContent)
-                    : React.createElement('span', {
-                        onClick: linksInteractive ? undefined : handleInactiveLinkClick,
-                        style: {
-                            color: 'inherit',
-                            textDecoration: isChecked ? 'line-through' : 'none',
-                            textDecorationColor: isChecked ? taskStateColor : undefined,
-                            textDecorationThickness: isChecked ? '1.8px' : undefined,
-                        },
-                    }, labelContent);
+                const labelNode = React.createElement('span', {
+                    onClick: linksInteractive ? undefined : handleInactiveLinkClick,
+                    style: {
+                        color: 'inherit',
+                        textDecoration: isChecked ? 'line-through' : 'none',
+                        textDecorationColor: isChecked ? taskStateColor : undefined,
+                        textDecorationThickness: isChecked ? '1.8px' : undefined,
+                    },
+                }, labelContent);
                 const checkboxControl = showCheckbox ? React.createElement('label', {
                     'data-vyasa-task-control': 'true',
                     onMouseDown: (event) => event.stopPropagation(),
@@ -3555,7 +3575,6 @@ async function renderTasksGraphs(rootElement = document) {
                         padding: '10px 12px',
                         overflow: 'hidden',
                         opacity: isDimmed ? 0.22 : 1,
-                        cursor: hasHref ? 'pointer' : undefined,
                         position: 'relative',
                         background: isChecked ? `linear-gradient(135deg, color-mix(in srgb, ${taskStateColor} 12%, transparent), transparent 55%)` : undefined,
                     }
@@ -3699,17 +3718,27 @@ async function renderTasksGraphs(rootElement = document) {
             const SelectedNodePanel = () => {
                 const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === selectedNodeId)?.data || null;
                 const sourceNodeId = selectedNode?.__kind__ === 'groupTitle' ? selectedNode.sourceGroupId : selectedNode?.id;
-                const entries = selectedNode?.__kind__ === 'group'
+                const baseEntries = selectedNode?.__kind__ === 'group'
                     ? tasksGroupDetailEntries(sourceNodeId, model)
                     : tasksNodeMetaEntries(selectedNode);
                 if (!selectedNode) return null;
+                const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
+                const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;
                 const panelWidth = tasksSelectedPanelWidth(selectedNode, entries);
+                const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));
+                const panelHref = String(selectedNode?.href || '').trim();
                 return React.createElement('div', {
                     style: { width: `min(${panelWidth}px, 100%)`, maxWidth: '100%', minWidth: 'min(220px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto', minHeight: 0, flex: '0 1 auto', overflowY: 'auto', overscrollBehavior: 'contain' },
                 },
-                    React.createElement(selectedNode.href ? 'a' : 'div', selectedNode.href
-                        ? { href: selectedNode.href, onClick: (e) => openTasksNodeHref(selectedNode.href, e), style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, marginBottom: '10px', display: 'block', textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit' } }
-                        : { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, marginBottom: '10px' } }, selectedNode.label || selectedNode.id),
+                    React.createElement('div', { style: { position: 'relative', paddingRight: panelLinkKinds.length ? '28px' : '0', marginBottom: '10px' } },
+                        panelLinkKinds.length ? renderTasksNodeLinkBadge(React, { kinds: panelLinkKinds, right: '0', top: '0' }) : null,
+                        React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3 } }, selectedNode.label || selectedNode.id),
+                        panelHref ? React.createElement('a', {
+                            href: panelHref,
+                            onClick: (event) => openTasksNodeHref(panelHref, event),
+                            style: { display: 'inline-block', marginTop: '6px', fontSize: '12px', lineHeight: 1.3, textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit', overflowWrap: 'anywhere', wordBreak: 'break-word' },
+                        }, panelHref) : null,
+                    ),
                     React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: '12px', lineHeight: 1.35 } },
                         ...entries.map((entry, index) => {
                             return React.createElement('div', {
@@ -4642,3 +4671,18 @@ window.openTasksFullscreen = async function(id) {
 window.__vyasaRenderTasksGraphs = renderTasksGraphs;
 document.addEventListener('DOMContentLoaded', () => { renderTasksGraphs(document); });
 document.body.addEventListener('htmx:afterSwap', (event) => { renderTasksGraphs(event.target || document); });
+document.body.addEventListener('htmx:beforeRequest', (event) => {
+    if (!window.__vyasaTasksDebug.enabled) return;
+    logTasksDebug('htmx:beforeRequest', {
+        path: event.detail?.pathInfo?.requestPath || '',
+        targetId: event.detail?.target?.id || '',
+    });
+});
+document.body.addEventListener('htmx:responseError', (event) => {
+    if (!window.__vyasaTasksDebug.enabled) return;
+    logTasksDebug('htmx:responseError', {
+        path: event.detail?.pathInfo?.requestPath || '',
+        targetId: event.detail?.target?.id || '',
+        status: event.detail?.xhr?.status ?? -1,
+    });
+});

@@ -324,6 +324,38 @@ def test_tasks_source_supports_local_card_notes():
     assert "tasksHasAnyNodeNote(nodeNotes)" in source
 
 
+def test_tasks_selected_panel_shows_href_as_detail_instead_of_title_link():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));" in source
+    assert "const panelHref = String(selectedNode?.href || '').trim();" in source
+    assert "renderTasksNodeLinkBadge(React, { kinds: panelLinkKinds, right: '0', top: '0' })" in source
+    assert "onClick: (event) => openTasksNodeHref(panelHref, event)" in source
+    assert "React.createElement('a', {" not in source.split("const labelContent = renderTasksInlineLinks(data?.label || id", 1)[1].split("const checkboxControl =", 1)[0]
+    assert "cursor: hasHref ? 'pointer' : undefined" not in source
+    assert "function tasksHrefDetailEntry(href)" not in source
+
+
+def test_tasks_selected_panel_shows_open_decision_for_open_items():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function tasksOpenDecisionEntry(node)" in source
+    assert "node?.__checked__ === true" in source
+    assert "String(node?.open_decision || node?.decision || 'What is the open decision?').trim()" in source
+    assert "const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;" in source
+
+
+def test_tasks_source_logs_node_href_navigation_flow():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function escapeTasksHtml(value)" in source
+    assert "logTasksDebug('nodeHrefOpen:start'" in source
+    assert "logTasksDebug('nodeHrefOpen:htmxRequest'" in source
+    assert "logTasksDebug('nodeHrefOpen:htmxSwap'" in source
+    assert "logTasksDebug('htmx:beforeRequest'" in source
+    assert "logTasksDebug('htmx:responseError'" in source
+
+
 def test_tasks_source_uses_base_view_label_for_default_projection_tab():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
