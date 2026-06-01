@@ -440,6 +440,7 @@ def test_tasks_fullscreen_reuses_canvas_background_contract():
 def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
+    assert "function tasksSearchNormalizeText(value)" in source
     assert "function tasksSearchSpec(query)" in source
     assert "function tasksCollectSearchMatches(nodes, edges, query)" in source
     assert "const [searchInputValue, setSearchInputValue] = React.useState" in source
@@ -449,6 +450,14 @@ def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():
     assert "setSearchQuery('')" in source
     assert "const hasSearch = searchMatches.active && !searchMatches.error;" in source
     assert "const filterPanelElement = FilterPanel();" in source
+
+
+def test_tasks_search_normalizes_whitespace_and_wrapping_quotes():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "replace(/\\s+/g, ' ').trim()" in source
+    assert "raw.slice(1, -1).trim()" in source
+    assert "text.toLowerCase().includes(spec.matcher)" in source
 
 
 def test_tasks_edge_zoom_agnostic_label_scale_only_on_hover_focus():

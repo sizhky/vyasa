@@ -1018,8 +1018,12 @@ function tasksNodeMatchesFilters(node, filters) {
     });
 }
 
+function tasksSearchNormalizeText(value) {
+    return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
 function tasksSearchSpec(query) {
-    const raw = String(query || '').trim();
+    const raw = tasksSearchNormalizeText(query);
     if (!raw) return { active: false, raw: '', error: '', matcher: null };
     if (raw.startsWith('/') && raw.lastIndexOf('/') > 0) {
         const end = raw.lastIndexOf('/');
@@ -1029,12 +1033,15 @@ function tasksSearchSpec(query) {
             return { active: true, raw, error: error instanceof Error ? error.message : 'Invalid regex', matcher: null };
         }
     }
-    return { active: true, raw, error: '', matcher: raw.toLowerCase() };
+    const normalized = ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'")))
+        ? raw.slice(1, -1).trim()
+        : raw;
+    return { active: true, raw, error: '', matcher: normalized.toLowerCase() };
 }
 
 function tasksSearchMatchesText(value, spec) {
     if (!spec?.active || !spec.matcher) return false;
-    const text = String(value ?? '').trim();
+    const text = tasksSearchNormalizeText(value);
     if (!text) return false;
     return spec.matcher instanceof RegExp ? spec.matcher.test(text) : text.toLowerCase().includes(spec.matcher);
 }
