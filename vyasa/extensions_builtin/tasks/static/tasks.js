@@ -31,7 +31,7 @@ const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
 const TASKS_FILTER_PANEL_WIDTH = 320;
 const TASKS_PROJECTION_GROUP_OPACITY_DEFAULT = 12;
 const TASKS_PROJECTION_UNSPECIFIED_GROUP_OPACITY_DEFAULT = 7;
-const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.12;
+const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;
 const TASKS_EDGE_OPACITY_MIN = 0.05;
 const TASKS_EDGE_OPACITY_MAX = 1;
 const TASKS_DONE_ACCENT = '#22c55e';
@@ -3852,7 +3852,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     React.createElement('span', { style: { opacity: 0.8, minWidth: '3.5em', textAlign: 'right' } }, tasksEdgeOpacityLabel(edgeOpacity))
                                 ),
                                 React.createElement('label', { style: { display: 'grid', gridTemplateColumns: 'max-content minmax(84px, 1fr) max-content', alignItems: 'center', gap: '8px', minWidth: 0, fontSize: '12px' } },
-                                    React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Fallback Intensity'),
+                                    React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Ø Intensity'),
                                     React.createElement('input', {
                                         type: 'range',
                                         min: 0.02,

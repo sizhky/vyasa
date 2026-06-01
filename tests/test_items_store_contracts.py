@@ -212,8 +212,8 @@ module:
 
     graph = read_kg_pack(tmp_path / "nest.kg.schema")
 
-    assert graph["groups"][0]["module"] == "Data & Ingest"
     assert graph["tasks"][0]["module"] == "Data & Ingest"
+    assert graph["tasks"][1]["module"] == "Data & Ingest"
     assert graph["index_attributes"] == ["module"]
 
 
