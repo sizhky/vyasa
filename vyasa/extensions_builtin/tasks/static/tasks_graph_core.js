@@ -62,6 +62,32 @@ export function tasksGraphNodeHitArea(kind, isExpanded = false) {
     return 'passive';
 }
 
+export function selectTasksGraphNodeIdsInRect(nodes, rect) {
+    const bounds = {
+        left: Math.min(Number(rect?.x1) || 0, Number(rect?.x2) || 0),
+        right: Math.max(Number(rect?.x1) || 0, Number(rect?.x2) || 0),
+        top: Math.min(Number(rect?.y1) || 0, Number(rect?.y2) || 0),
+        bottom: Math.max(Number(rect?.y1) || 0, Number(rect?.y2) || 0),
+    };
+    const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
+    const absoluteRect = (node) => {
+        let x = Number(node?.position?.x) || 0;
+        let y = Number(node?.position?.y) || 0;
+        let parent = node?.parentId ? byId[node.parentId] : null;
+        while (parent) {
+            x += Number(parent?.position?.x) || 0;
+            y += Number(parent?.position?.y) || 0;
+            parent = parent?.parentId ? byId[parent.parentId] : null;
+        }
+        return { left: x, right: x + (Number(node?.style?.width ?? node?.width) || 0), top: y, bottom: y + (Number(node?.style?.height ?? node?.height) || 0) };
+    };
+    return (nodes || []).filter((node) => {
+        if (node?.data?.__kind__ !== 'task' && node?.data?.__kind__ !== 'group') return false;
+        const box = absoluteRect(node);
+        return box.left >= bounds.left && box.right <= bounds.right && box.top >= bounds.top && box.bottom <= bounds.bottom;
+    }).map((node) => node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id).filter(Boolean);
+}
+
 export function tasksGraphStatsLabel(model) {
     const nodeCount = (Array.isArray(model?.groups) ? model.groups.length : 0)
         + (Array.isArray(model?.tasks) ? model.tasks.length : 0);
