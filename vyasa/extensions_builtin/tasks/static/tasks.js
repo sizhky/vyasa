@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
 
 const tasksElk = new ELK();
 let tasksReactFlowReady = null;
@@ -578,6 +578,37 @@ function collectTasksGroupDescendants(nodeId, model) {
     return { groups, tasks };
 }
 
+function tasksChildGroupIds(nodeId, model) {
+    return model?.group_tree?.[nodeId] || [];
+}
+
+function tasksChildTaskIds(nodeId, model) {
+    return model?.task_children?.[nodeId] || [];
+}
+
+function tasksNodeHasChildren(nodeId, model) {
+    return tasksChildGroupIds(nodeId, model).length > 0 || tasksChildTaskIds(nodeId, model).length > 0;
+}
+
+function tasksVisibleGraphStatsLabel(nodes, edges) {
+    const nodeCount = Array.isArray(nodes) ? nodes.length : 0;
+    const edgeCount = Array.isArray(edges) ? edges.length : 0;
+    const nodeLabel = nodeCount === 1 ? 'Node' : 'Nodes';
+    const edgeLabel = edgeCount === 1 ? 'Edge' : 'Edges';
+    return `${nodeCount} ${nodeLabel} and ${edgeCount} ${edgeLabel}`;
+}
+
+function tasksExpandableNodeIds(model) {
+    const ids = new Set();
+    for (const group of (model?.groups || [])) {
+        if (tasksNodeHasChildren(group.id, model)) ids.add(group.id);
+    }
+    for (const task of (model?.tasks || [])) {
+        if (tasksNodeHasChildren(task.id, model)) ids.add(task.id);
+    }
+    return ids;
+}
+
 function tasksGroupDetailEntries(nodeId, model) {
     if (!nodeId || !model) return [];
     const group = (model.groups || []).find((entry) => entry.id === nodeId);
@@ -1050,18 +1081,23 @@ function tasksCollectSearchMatches(nodes, edges, query) {
     const spec = tasksSearchSpec(query);
     const nodeIds = new Set();
     const edgeIds = new Set();
+    const matchedNodeLabels = [];
+    const matchedEdgeLabels = [];
     if (!spec.active || spec.error || !spec.matcher) return { ...spec, nodeIds, edgeIds };
     const hiddenEdgeKeys = new Set(['id', 'source', 'target', 'type', 'animated', 'markerend', 'labelstyle', 'labelbgstyle', 'style', 'data', 'zindex', 'sourcehandle', 'targethandle']);
     for (const node of (nodes || [])) {
         const data = node?.data || {};
         if (data.__kind__ === 'groupTitle') continue;
-        const values = [];
+        const values = [data.label];
         for (const [key, value] of Object.entries(data)) {
             if (tasksIsHiddenNodeMetaKey(key)) continue;
             if (value === null || value === undefined || typeof value === 'object' || typeof value === 'function') continue;
             values.push(value);
         }
-        if (values.some((value) => tasksSearchMatchesText(value, spec))) nodeIds.add(node.id);
+        if (values.some((value) => tasksSearchMatchesText(value, spec))) {
+            nodeIds.add(node.id);
+            if (matchedNodeLabels.length < 8) matchedNodeLabels.push(data.label || node.id);
+        }
     }
     for (const edge of (edges || [])) {
         const values = [];
@@ -1072,9 +1108,21 @@ function tasksCollectSearchMatches(nodes, edges, query) {
         }
         if (!values.some((value) => tasksSearchMatchesText(value, spec))) continue;
         edgeIds.add(edge.id);
+        if (matchedEdgeLabels.length < 8) matchedEdgeLabels.push(edge.label || edge.id || `${edge.source}->${edge.target}`);
         if (edge.source) nodeIds.add(edge.source);
         if (edge.target) nodeIds.add(edge.target);
     }
+    logTasksDebug('searchMatches', {
+        rawQuery: String(query ?? ''),
+        normalizedQuery: spec.raw,
+        matcher: spec.matcher instanceof RegExp ? spec.matcher.toString() : spec.matcher,
+        nodeCount: (nodes || []).length,
+        edgeCount: (edges || []).length,
+        matchedNodeCount: nodeIds.size,
+        matchedEdgeCount: edgeIds.size,
+        matchedNodeLabels,
+        matchedEdgeLabels,
+    });
     return { ...spec, nodeIds, edgeIds };
 }
 
@@ -1332,9 +1380,9 @@ function buildVisibleTasksGraph(model, expanded) {
     const tasksById = Object.fromEntries((model.tasks || []).map((t) => [t.id, t]));
     const visibleGroups = new Set(model.group_tree?.["null"] || []);
     const visibleTasks = new Set(model.task_children?.["null"] || []);
-    for (const groupId of expanded) {
-        (model.group_tree?.[groupId] || []).forEach((id) => visibleGroups.add(id));
-        (model.task_children?.[groupId] || []).forEach((id) => visibleTasks.add(id));
+    for (const nodeId of expanded) {
+        tasksChildGroupIds(nodeId, model).forEach((id) => visibleGroups.add(id));
+        tasksChildTaskIds(nodeId, model).forEach((id) => visibleTasks.add(id));
     }
     const visibleNodes = [
         ...Array.from(visibleGroups).map((id) => ({ ...(groupsById[id] || {}), id, label: groupsById[id]?.label || id, __kind__: 'group', ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
@@ -1342,12 +1390,17 @@ function buildVisibleTasksGraph(model, expanded) {
     ];
     const parentOfGroup = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
     const parentOfTask = Object.fromEntries((model.tasks || []).map((t) => [t.id, t.group_id || null]));
+    const nextVisibleParent = (id) => {
+        if (visibleGroups.has(id) || visibleTasks.has(id)) return id;
+        if (parentOfTask[id] !== undefined) return parentOfTask[id] || null;
+        return parentOfGroup[id] || null;
+    };
     const nearestVisible = (id) => {
         if (visibleGroups.has(id) || visibleTasks.has(id)) return id;
-        let cur = parentOfTask[id] ?? parentOfGroup[id] ?? null;
+        let cur = nextVisibleParent(id);
         while (cur) {
-            if (visibleGroups.has(cur)) return cur;
-            cur = parentOfGroup[cur] ?? null;
+            if (visibleGroups.has(cur) || visibleTasks.has(cur)) return cur;
+            cur = nextVisibleParent(cur);
         }
         return id;
     };
@@ -1532,24 +1585,32 @@ function collectExpandedGroupsByDepth(groupTree, defaultOpenDepth) {
     return expanded;
 }
 
-function expandOneGroupDepth(groupTree, expandedSet) {
+function expandOneGroupDepth(model, expandedSet) {
     const expanded = new Set(expandedSet || []);
-    const roots = groupTree?.["null"] || [];
+    const roots = Array.from(tasksExpandableNodeIds(model)).filter((id) => {
+        const parentId = (model?.tasks || []).find((task) => task.id === id)?.group_id
+            ?? (model?.groups || []).find((group) => group.id === id)?.parent_group_id
+            ?? null;
+        return !parentId;
+    });
     if (expanded.size === 0) {
         roots.forEach((id) => expanded.add(id));
         return expanded;
     }
-    for (const groupId of Array.from(expanded)) {
-        for (const childId of (groupTree?.[groupId] || [])) expanded.add(childId);
+    for (const nodeId of Array.from(expanded)) {
+        for (const childId of [...tasksChildGroupIds(nodeId, model), ...tasksChildTaskIds(nodeId, model)]) {
+            if (tasksNodeHasChildren(childId, model)) expanded.add(childId);
+        }
     }
     return expanded;
 }
 
-function collapseOneGroupDepth(groupTree, expandedSet) {
+function collapseOneGroupDepth(model, expandedSet) {
     const expanded = new Set(expandedSet || []);
-    for (const groupId of Array.from(expanded)) {
-        const hasExpandedChild = (groupTree?.[groupId] || []).some((childId) => expanded.has(childId));
-        if (!hasExpandedChild) expanded.delete(groupId);
+    for (const nodeId of Array.from(expanded)) {
+        const childIds = [...tasksChildGroupIds(nodeId, model), ...tasksChildTaskIds(nodeId, model)];
+        const hasExpandedChild = childIds.some((childId) => expanded.has(childId));
+        if (!hasExpandedChild) expanded.delete(nodeId);
     }
     return expanded;
 }
@@ -2554,11 +2615,6 @@ async function renderTasksGraphs(rootElement = document) {
                 () => normalizeTasksGraphNodes(projectionState.graph || { nodes: [], edges: [] }, model),
                 [projectionState, model]
             );
-            const graphStatsLabel = React.useMemo(() => tasksGraphStatsLabel(sourceModel), []);
-            React.useEffect(() => {
-                const statsEl = wrapper.querySelector('[data-tasks-stats]');
-                if (statsEl) statsEl.textContent = graphStatsLabel;
-            }, [graphStatsLabel]);
             const initialExpandedSet = React.useMemo(
                 () => collectExpandedGroupsByDepth(model.group_tree, Number.isNaN(effectiveDefaultOpenDepth) ? 0 : effectiveDefaultOpenDepth),
                 [model, effectiveDefaultOpenDepth]
@@ -2631,6 +2687,17 @@ async function renderTasksGraphs(rootElement = document) {
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
+            const graphStatsLabel = React.useMemo(
+                () => tasksVisibleGraphStatsLabel(
+                    graphBaseRef.current.nodes || [],
+                    edgesVisible ? (graphBaseRef.current.edges || []) : []
+                ),
+                [graphRevision, edgesVisible]
+            );
+            React.useEffect(() => {
+                const statsEl = wrapper.querySelector('[data-tasks-stats]');
+                if (statsEl) statsEl.textContent = graphStatsLabel;
+            }, [graphStatsLabel]);
             const backgroundProps = React.useMemo(() => tasksBackgroundProps(widgetId), []);
             const lastPersistedProjectionIdRef = React.useRef(activeProjectionId);
             const pendingFitActionRef = React.useRef(null);
@@ -3452,6 +3519,7 @@ async function renderTasksGraphs(rootElement = document) {
                     );
                 }
                 const isGroup = data?.__kind__ === 'group';
+                const canExpand = tasksNodeHasChildren(id, model);
                 const isExpanded = expanded.has(id);
                 const labelContent = renderTasksInlineLinks(data?.label || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick });
                 if (data?.__gantt) {
@@ -3525,12 +3593,12 @@ async function renderTasksGraphs(rootElement = document) {
                     style: { border: 'none', background: 'transparent', padding: 0, width: '10px', height: '10px', cursor: 'pointer' },
                 })) : null;
                 const noteBadge = data?.__has_note__
-                    ? renderTasksNodeLinkBadge(React, { kinds: ['note'], title: 'Has note', top: 'auto', bottom: isChecked ? '30px' : '8px', right: isChecked ? '8px' : (isGroup ? '34px' : '8px') })
+                    ? renderTasksNodeLinkBadge(React, { kinds: ['note'], title: 'Has note', top: 'auto', bottom: isChecked ? '30px' : '8px', right: isChecked ? '8px' : (canExpand ? '34px' : '8px') })
                     : null;
                 const doneBadge = isChecked ? React.createElement('div', {
                     style: {
                         position: 'absolute',
-                        right: isGroup ? '34px' : '8px',
+                        right: canExpand ? '34px' : '8px',
                         bottom: '8px',
                         padding: '2px 6px',
                         borderRadius: '999px',
@@ -3589,7 +3657,7 @@ async function renderTasksGraphs(rootElement = document) {
                     checkboxControl,
                     doneBadge,
                     noteBadge,
-                    linkKinds.length ? renderTasksNodeLinkBadge(React, { right: isGroup ? '32px' : '10px', kinds: linkKinds }) : null,
+                    linkKinds.length ? renderTasksNodeLinkBadge(React, { right: canExpand ? '32px' : '10px', kinds: linkKinds }) : null,
                     ...renderHandles('target'),
                     React.createElement('span', {
                         style: {
@@ -3608,11 +3676,11 @@ async function renderTasksGraphs(rootElement = document) {
                             textDecorationThickness: isChecked ? '2px' : undefined,
                         }
                     }, labelNode),
-                    isGroup && React.createElement('button', {
+                    canExpand && React.createElement('button', {
                         onClick: handleExpand,
                         'data-vyasa-task-control': 'true',
                         style: { position: 'absolute', right: '8px', top: '8px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
-                    }, '+'),
+                    }, isExpanded ? '−' : '+'),
                     ...renderHandles('source')
                 );
             });
@@ -4208,7 +4276,7 @@ async function renderTasksGraphs(rootElement = document) {
                             logTasksDebug('manualSelect', { nodeId });
                         },
                         expand: () => {
-                            setExpanded(new Set((model.groups || []).map((group) => group.id)));
+                            setExpanded(tasksExpandableNodeIds(model));
                         },
                         collapse: () => {
                             pendingFitActionRef.current = 'collapse';
@@ -4216,7 +4284,7 @@ async function renderTasksGraphs(rootElement = document) {
                         },
                         expandDepth: () => {
                             setExpanded((current) => {
-                                const next = expandOneGroupDepth(model.group_tree, current);
+                                const next = expandOneGroupDepth(model, current);
                                 logTasksDebug('manualExpandDepth', { expanded: Array.from(next) });
                                 return next;
                             });
@@ -4224,7 +4292,7 @@ async function renderTasksGraphs(rootElement = document) {
                         collapseDepth: () => {
                             pendingFitActionRef.current = 'collapse';
                             setExpanded((current) => {
-                                const next = collapseOneGroupDepth(model.group_tree, current);
+                                const next = collapseOneGroupDepth(model, current);
                                 logTasksDebug('manualCollapseDepth', { expanded: Array.from(next) });
                                 return next;
                             });
