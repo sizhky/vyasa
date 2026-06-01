@@ -112,12 +112,14 @@ n-api -> n-ui | relation: enables
 
     conversion = convert_legacy_items_markdown(markdown_path)
 
-    assert "items_schema: legacy.kg.schema" in conversion.markdown_text
+    assert "items_schema: legacy.kg/kg.schema" in conversion.markdown_text
     assert "color_by:\n  status:" not in conversion.markdown_text
     assert "edge_color_palette:" not in conversion.markdown_text
     assert '"status"' in conversion.palette_text
     assert '"enables": "#2563eb"' in conversion.palette_text
-    assert "base:\n\tnodes=legacy.kg.nodes\n\tedges=legacy.kg.edges\n\tattrs=legacy.kg.attrs" in conversion.schema_text
+    assert "nodes=kg.nodes" in conversion.schema_text
+    assert "attrs=kg.attrs" in conversion.schema_text
+    assert "\tedges=kg.edges" in conversion.schema_text
     assert "overview:\n\tsource=base\n\tgroup_by,color_by=status" in conversion.schema_text
     assert conversion.nodes_text.startswith("n1: API")
     assert "status:\n  done: n1" in conversion.attrs_text
@@ -185,6 +187,34 @@ items_schema: roadmap.kg.schema
     assert model["view_projections"][0]["caption"] == "Track delivery"
     assert model["default_projection"] == "delivery"
     assert model["card_states"] == ["Not Done", "Done", "Deferred/Cancelled"]
+
+
+def test_items_parser_inherits_attrs_after_attr_overlay(tmp_path):
+    (tmp_path / "nest.kg.schema").write_text(
+        """@graph id=nest title=Nest initial_view=module
+
+@sources
+nodes=nest.kg.nodes
+attrs=nest.kg.attrs
+base:
+    edges=nest.kg.edges
+
+@views
+module:
+    source=base
+    group_by=module
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "nest.kg.nodes").write_text("n1: Root\n\tinherit=module\n\tn2: Child\n", encoding="utf-8")
+    (tmp_path / "nest.kg.attrs").write_text("@node_attrs\nmodule:\n  Data & Ingest: n1\n", encoding="utf-8")
+    (tmp_path / "nest.kg.edges").write_text("", encoding="utf-8")
+
+    graph = read_kg_pack(tmp_path / "nest.kg.schema")
+
+    assert graph["tasks"][0]["module"] == "Data & Ingest"
+    assert graph["tasks"][1]["module"] == "Data & Ingest"
+    assert graph["index_attributes"] == ["module"]
 
 
 def test_items_schema_resolution_handles_route_slug_under_docs_root(tmp_path):
@@ -339,6 +369,45 @@ items_schema: roadmap.kg.schema
     chapter = model["projection_models"]["chapter"]["model"]
     assert [task["id"] for task in chapter["tasks"]] == ["n1", "n2"]
     assert [edge["id"] for edge in chapter["dependency_edges"]] == ["e1"]
+
+
+def test_kg_pack_nodes_support_nested_children_and_inherit_whitelist(tmp_path):
+    (tmp_path / "home.kg.schema").write_text("@graph id=home\n@sources\nnodes=home.kg.nodes\n", encoding="utf-8")
+    (tmp_path / "home.kg.nodes").write_text(
+        """b1: Apartment Building
+    city=Hyderabad
+    type=building
+    inherit=city
+    p1: Yesh
+        role=tenant
+    c1: Honda City
+        type=car
+""",
+        encoding="utf-8",
+    )
+
+    graph = read_kg_pack(tmp_path / "home.kg.schema")
+
+    assert graph["groups"][0]["id"] == "b1"
+    assert graph["groups"][0]["type"] == "building"
+    assert [task["id"] for task in graph["tasks"]] == ["p1", "c1"]
+    assert all(task["group_id"] == "b1" for task in graph["tasks"])
+    assert all(task["city"] == "Hyderabad" for task in graph["tasks"])
+    assert "type" not in graph["tasks"][0]
+    assert graph["tasks"][1]["type"] == "car"
+
+
+def test_kg_pack_nodes_reject_duplicate_child_with_conflicting_label(tmp_path):
+    nodes_path = tmp_path / "bad.kg.nodes"
+    nodes_path.write_text("b1: Building\n    p1: Person\np1: Parking\n", encoding="utf-8")
+
+    try:
+        (tmp_path / "bad.kg.schema").write_text("@graph id=bad\n@sources\nnodes=bad.kg.nodes\n", encoding="utf-8")
+        read_kg_pack(tmp_path / "bad.kg.schema")
+    except ValueError as exc:
+        assert "conflicting labels" in str(exc)
+    else:
+        raise AssertionError("expected duplicate node guard")
 
 
 def test_kg_pack_checked_state_is_separate_from_node_attrs():

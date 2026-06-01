@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, layoutDisconnectedTaskNodes, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea, toggleMultiValueFilter } = await import('../vyasa/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, sizeTaskNode, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -175,6 +175,30 @@ test('task and collapsed group nodes are selectable in items graph', () => {
     assert.equal(isTasksGraphNodeSelectable('group', false), true);
     assert.equal(isTasksGraphNodeSelectable('group', true), false);
     assert.equal(isTasksGraphNodeSelectable('groupTitle'), false);
+});
+
+test('graph stats count groups, tasks, and dependency edges', () => {
+    assert.equal(tasksGraphStatsLabel({
+        groups: [{ id: 'g1' }],
+        tasks: [{ id: 'n1' }, { id: 'n2' }],
+        dependency_edges: [{ source: 'n1', target: 'n2' }],
+    }), '3 Nodes and 1 Edge');
+});
+
+test('projection group dropdown hierarchy reflects active projection groups', () => {
+    const model = { view_projections: [{ id: 'city', groups_from: ['city', 'mood'] }] };
+    assert.deepEqual(tasksProjectionGroupByHierarchy(model, 'city'), ['city', 'mood']);
+    assert.deepEqual(tasksProjectionGroupByHierarchy(model, ''), []);
+});
+
+test('unspecified projection groups are detectable for reduced opacity', () => {
+    assert.equal(isTasksUnspecifiedProjectionGroup({
+        id: 'city-unspecified',
+        label: 'City > Unspecified',
+        __projection_group__: true,
+        city: 'Unspecified',
+    }), true);
+    assert.equal(isTasksUnspecifiedProjectionGroup({ id: 'city-tokyo', __projection_group__: true, city: 'Tokyo' }), false);
 });
 
 test('group panels use passive hit areas in items graph', () => {

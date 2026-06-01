@@ -4,7 +4,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import json
 import shlex
+import re
 from typing import Any
+
+NODE_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 
 
 @dataclass
@@ -64,7 +67,18 @@ def read_kg_pack(schema_path: str | Path) -> dict[str, Any]:
             for key in indexed.get("node", []):
                 if key not in index_attributes:
                     index_attributes.append(key)
-    graph["tasks"] = list(nodes_by_id.values())
+    _propagate_inherited_attrs(nodes_by_id)
+    groups = []
+    tasks = []
+    for node in nodes_by_id.values():
+        clean = {key: value for key, value in node.items() if key not in {"__is_group__", "__inherit_keys__"}}
+        if node.get("__is_group__"):
+            clean["parent_group_id"] = clean.pop("group_id", None)
+            groups.append(clean)
+        else:
+            tasks.append(clean)
+    graph["groups"] = groups
+    graph["tasks"] = tasks
     graph["dependency_edges"] = list(edges_by_id.values())
     if schema.palette:
         graph["color_palette_source"] = str(_resolve(schema_path, schema.palette))
@@ -129,27 +143,43 @@ def read_schema(path: str | Path) -> KgSchema:
 
 
 def read_nodes(path: str | Path) -> list[dict[str, str]]:
-    nodes = []
-    current: dict[str, str] | None = None
+    nodes_by_id: dict[str, dict[str, Any]] = {}
+    stack: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
     for raw in _record_raw_lines(path):
-        if raw.startswith((" ", "\t")):
-            if current is not None:
-                key, value = _split_inline_assignment(raw.strip())
-                if key:
-                    current[key] = value
-            continue
+        indent = _indent_width(raw)
         line = raw.strip()
-        if ":" in line and not line.split(":", 1)[0].strip().endswith(("http", "https")):
-            node_id, label = line.split(":", 1)
-            current = {"id": node_id.strip(), "label": label.strip(), "group_id": None}
-            nodes.append(current)
+        if _looks_like_node_line(line):
+            while stack and stack[-1]["indent"] >= indent:
+                stack.pop()
+            parent = stack[-1]["node"] if stack else None
+            node = _read_node_line(line, path)
+            if parent is not None:
+                parent["__is_group__"] = True
+                node["group_id"] = parent["id"]
+                _apply_inherited_attrs(parent, node)
+            existing = nodes_by_id.get(node["id"])
+            if existing is not None:
+                _merge_node(existing, node, path)
+                node = existing
+            else:
+                nodes_by_id[node["id"]] = node
+            stack.append({"indent": indent, "node": node})
+            current = node
             continue
-        parts = shlex.split(line)
-        if len(parts) >= 2:
-            current = {"id": parts[0], "label": parts[1], "group_id": None}
-            current.update(_assignments(parts[2:]))
-            nodes.append(current)
-    return nodes
+        if "=" in line:
+            if current is None:
+                continue
+            key, value = _split_inline_assignment(line)
+            if not key:
+                continue
+            current[key] = value
+            if key == "inherit":
+                current["__inherit_keys__"] = _list_value(value)
+            continue
+        if ":" in line:
+            raise ValueError(f"{path}: invalid node line {line!r}; node children must use '<id>: <label>' with a valid id")
+    return list(nodes_by_id.values())
 
 
 def read_edges(path: str | Path, relations: dict[str, dict[str, str]] | None = None) -> list[dict[str, str]]:
@@ -199,6 +229,8 @@ def apply_attrs(path: str | Path, nodes: dict[str, dict], edges: dict[str, dict]
             for record_id in shlex.split(ids_text):
                 if record_id in target:
                     target[record_id][current_key] = value.strip()
+                    if section == "@node_attrs" and current_key == "inherit":
+                        target[record_id]["__inherit_keys__"] = _list_value(value.strip())
     return indexed
 
 
@@ -292,6 +324,62 @@ def _split_inline_assignment(text: str) -> tuple[str, str]:
         return "", ""
     key, value = text.split("=", 1)
     return key.strip(), value.strip()
+
+
+def _indent_width(raw: str) -> int:
+    return len(raw) - len(raw.lstrip(" \t"))
+
+
+def _looks_like_node_line(line: str) -> bool:
+    if ":" not in line:
+        return False
+    node_id, _label = line.split(":", 1)
+    return bool(NODE_ID_RE.fullmatch(node_id.strip()))
+
+
+def _read_node_line(line: str, path: str | Path) -> dict[str, Any]:
+    node_id, label = line.split(":", 1)
+    node_id = node_id.strip()
+    if not NODE_ID_RE.fullmatch(node_id):
+        raise ValueError(f"{path}: invalid node id {node_id!r}")
+    return {"id": node_id, "label": label.strip(), "group_id": None}
+
+
+def _apply_inherited_attrs(parent: dict[str, Any], child: dict[str, Any]) -> None:
+    inherit_keys = parent.get("__inherit_keys__") or []
+    if inherit_keys:
+        child.setdefault("__inherit_keys__", list(inherit_keys))
+    for key in inherit_keys:
+        if key in parent and key not in child:
+            child[key] = parent[key]
+
+
+def _propagate_inherited_attrs(nodes_by_id: dict[str, dict[str, Any]]) -> None:
+    children_by_parent: dict[str | None, list[str]] = {}
+    for node in nodes_by_id.values():
+        children_by_parent.setdefault(node.get("group_id"), []).append(node["id"])
+
+    def visit(node_id: str) -> None:
+        parent = nodes_by_id[node_id]
+        for child_id in children_by_parent.get(node_id, []):
+            child = nodes_by_id[child_id]
+            _apply_inherited_attrs(parent, child)
+            visit(child_id)
+
+    for root_id in children_by_parent.get(None, []):
+        visit(root_id)
+
+
+def _merge_node(existing: dict[str, Any], node: dict[str, Any], path: str | Path) -> None:
+    if existing.get("label") and node.get("label") and existing["label"] != node["label"]:
+        raise ValueError(f"{path}: duplicate node id {node['id']!r} has conflicting labels")
+    for key, value in node.items():
+        if key in existing and existing[key] not in (value, None, "") and value not in (None, ""):
+            if key in {"group_id", "parent_group_id"}:
+                raise ValueError(f"{path}: duplicate node id {node['id']!r} has multiple parents")
+            continue
+        if value not in (None, ""):
+            existing[key] = value
 
 
 def _resolve_source(schema: KgSchema, name: str) -> dict[str, Any]:
