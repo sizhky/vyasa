@@ -249,6 +249,34 @@ def test_items_schema_resolution_handles_route_slug_under_docs_root(tmp_path):
         reload_config()
 
 
+def test_parse_tasks_text_keeps_groups_from_items_schema(tmp_path):
+    (tmp_path / "nest.kg.schema").write_text(
+        """@graph id=nest title=Nest
+
+@sources
+base:
+    nodes=nest.kg.nodes
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "nest.kg.nodes").write_text(
+        """n1: Parent
+\tn2: Child
+""",
+        encoding="utf-8",
+    )
+
+    model = parse_tasks_text("""```items
+---
+items_schema: nest.kg.schema
+---
+```""", current_path=tmp_path / "graph.md")
+
+    assert [group["id"] for group in model["groups"]] == ["n1"]
+    assert [task["id"] for task in model["tasks"]] == ["n2"]
+    assert model["task_children"]["n1"] == ["n2"]
+
+
 def test_kg_pack_projection_where_scopes_projection_graph(tmp_path):
     (tmp_path / "roadmap.kg.schema").write_text(
         """@graph id=roadmap title=Roadmap initial_view=chapter
