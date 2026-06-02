@@ -4598,7 +4598,6 @@ async function renderTasksGraphs(rootElement = document) {
                 }, 90);
             }, [expanded]);
             const startDragSelection = React.useCallback((event) => {
-                if (egoMode) return;
                 const mode = event.metaKey ? 'lasso' : (event.shiftKey ? 'rect' : '');
                 if (!mode || (event.pointerType === 'mouse' && event.button !== 0)) return;
                 if (event.target?.closest?.('button, input, textarea, select, a, .react-flow__controls, .vyasa-tasks-filter-card')) return;
