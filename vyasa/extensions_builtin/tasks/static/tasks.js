@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
 
 const tasksElk = new ELK();
 let tasksReactFlowReady = null;
@@ -13,6 +13,7 @@ const TASKS_EDGE_LABEL_Z = 6;
 const TASKS_EDGE_LABEL_FOCUS_Z = 1400;
 const TASKS_GROUP_Z = 180;
 const TASKS_TASK_Z = 1000;
+const TASKS_EDGE_LABEL_SELECTED_Z = TASKS_TASK_Z - 1;
 const TASKS_TITLE_Z = 300;
 const TASKS_NEIGHBOR_Z_BOOST = 260;
 const TASKS_EDGE_FOCUS_Z = 1450;
@@ -22,6 +23,7 @@ const TASKS_GROUP_BG = 'color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-p
 const TASKS_GROUP_EXPANDED_BG = 'color-mix(in srgb, var(--vyasa-primary) 7%, transparent)';
 const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 42%, var(--vyasa-primary) 58%)';
 const TASKS_GROUP_TITLE_BG = 'color-mix(in srgb, var(--vyasa-paper) 76%, var(--vyasa-primary) 24%)';
+const TASKS_EDGE_LABEL_BG = 'color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%)';
 const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 74%, var(--vyasa-primary) 26%)';
 const TASKS_GROUP_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-primary) 10%, transparent)';
 const TASKS_EDGE_FOCUS_OUT_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 42%, #ef4444 58%)';
@@ -46,12 +48,13 @@ const TASKS_SPECIAL_NODE_ATTRS = new Set([
     '__card_state__',
     '__card_state_color__',
     '__has_note__',
+    '__node_image__',
 ]);
 const TASKS_INTERNAL_NODE_META_KEYS = new Set([
     'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
     'handlelayout', 'highlightmode', 'sourcegroupid', 'source_group_id',
     '__rendered_attrs__', 'width', 'height', 'position', 'parentid',
-    'parent_id', 'color', 'href', 'collapsed', 'child_group_ids',
+    'parent_id', 'color', 'href', 'image', 'image_by', 'collapsed', 'child_group_ids',
     'child_task_ids', '__projection_group__', 'projection', '__kg_sources',
     'active_projection', 'graph_x', 'graph_y', '__gantt', '__projection_branch_opacity__',
 ]);
@@ -1458,8 +1461,16 @@ function buildVisibleTasksGraph(model, expanded) {
         tasksChildTaskIds(nodeId, model).forEach((id) => visibleTasks.add(id));
     }
     const visibleNodes = [
-        ...Array.from(visibleGroups).map((id) => ({ ...(groupsById[id] || {}), id, label: groupsById[id]?.label || id, __kind__: 'group', ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
-        ...Array.from(visibleTasks).map((id) => ({ ...(tasksById[id] || {}), id, label: tasksById[id]?.label || id, __kind__: 'task', ...sizeTaskNode(tasksById[id]?.label || id, 'task') })),
+        ...Array.from(visibleGroups).map((id) => {
+            const source = groupsById[id] || {};
+            const label = source.label || id;
+            return { ...source, id, label, __kind__: 'group', ...sizeTaskNode(label, 'group', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
+        }),
+        ...Array.from(visibleTasks).map((id) => {
+            const source = tasksById[id] || {};
+            const label = source.label || id;
+            return { ...source, id, label, __kind__: 'task', ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
+        }),
     ];
     const parentOfGroup = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
     const parentOfTask = Object.fromEntries((model.tasks || []).map((t) => [t.id, t.group_id || null]));
@@ -1546,7 +1557,7 @@ function normalizeTasksGraphNodes(graph, model) {
             const { kind: _legacyNodeKind, ...nodeRest } = node;
             const kind = node.__kind__ || _legacyNodeKind || (groupsById[node.id] ? 'group' : 'task');
             const label = node.label || source.label || node.id;
-            return { ...source, ...nodeRest, __kind__: kind, label, ...sizeTaskNode(label, kind) };
+            return { ...source, ...nodeRest, __kind__: kind, label, ...sizeTaskNode(label, kind, null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
         }),
     };
 }
@@ -1602,7 +1613,7 @@ function buildGanttTasksGraph(model) {
         const task = byId[id];
         const time = timing[id] || { start: 0, duration: 1 };
         const width = Math.max(TASKS_GANTT_UNIT_WIDTH - 52, time.duration * TASKS_GANTT_UNIT_WIDTH - 68);
-        const sized = sizeTaskNode(task.label || id, 'task', width);
+        const sized = sizeTaskNode(task.label || id, 'task', width, { hasImage: Boolean(resolveTasksNodeImage(task, model)) });
         const height = Math.max(TASKS_GANTT_BAR_MIN_HEIGHT, sized.height - 18);
         rowHeights.set(row, Math.max(rowHeights.get(row) || 0, height));
         return {
@@ -1941,8 +1952,16 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
     const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
     const groupDirection = readTasksDirection(groupsById[groupId]?.layout_direction || groupsById[groupId]?.direction || layoutConfig.elkDirection);
     const groupChildren = [
-        ...(model.group_tree?.[groupId] || []).map((id) => ({ id, __kind__: 'group', label: groupsById[id]?.label || id, ...sizeTaskNode(groupsById[id]?.label || id, 'group') })),
-        ...(model.task_children?.[groupId] || []).map((id) => ({ id, __kind__: 'task', label: tasksById[id]?.label || id, ...sizeTaskNode(tasksById[id]?.label || id, 'task') })),
+        ...(model.group_tree?.[groupId] || []).map((id) => {
+            const source = groupsById[id] || {};
+            const label = source.label || id;
+            return { id, __kind__: 'group', label, ...sizeTaskNode(label, 'group', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
+        }),
+        ...(model.task_children?.[groupId] || []).map((id) => {
+            const source = tasksById[id] || {};
+            const label = source.label || id;
+            return { id, __kind__: 'task', label, ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
+        }),
     ].map((child) => childSizes[child.id] ? { ...child, ...childSizes[child.id] } : child);
     if (groupChildren.length === 0) {
         return {
@@ -2515,7 +2534,7 @@ function tasksSelectedPanelWidth(node, entries) {
     return Math.round(Math.min(560, Math.max(250, titleWidth + 32, weightedWidth + 110)));
 }
 
-function tasksHoverTooltipWidth(label, rows, hoverFontSize) {
+function tasksHoverTooltipWidth(label, rows, hoverFontSize, hasImage = false) {
     const titleFont = `700 calc(${hoverFontSize} * 1.12) ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
     const bodyFont = `500 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
     const keyFont = `700 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
@@ -2529,7 +2548,8 @@ function tasksHoverTooltipWidth(label, rows, hoverFontSize) {
         return keyWidth + valueWidth * weight;
     }).sort((left, right) => left - right);
     const weightedWidth = rowWidths.length ? rowWidths[Math.max(0, Math.floor(rowWidths.length * 0.62) - 1)] : 0;
-    return Math.round(Math.min(560, Math.max(220, titleWidth + 34, weightedWidth + 116)));
+    const imageReserve = hasImage ? 34 : 0;
+    return Math.round(Math.min(560, Math.max(220, titleWidth + imageReserve + 34, weightedWidth + 116)));
 }
 
 function tasksBackgroundProps(widgetId) {
@@ -3010,7 +3030,7 @@ async function renderTasksGraphs(rootElement = document) {
                             markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: edgeColor || 'currentColor' },
                             zIndex: TASKS_EDGE_Z,
                             labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || 'currentColor', opacity: edgeOpacity },
-                            labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
+                            labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
                             style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: edgeColor || 'currentColor' },
                         };
                     });
@@ -3098,6 +3118,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const hasNote = Boolean((nodeNotes[String(n.id || '')] || '').trim());
                     const colorNode = { ...n, __has_note__: hasNote };
                     const nodeColor = resolveTasksNodeColor(colorNode, model, activeColorBy, activeColorPalette);
+                    const nodeImage = resolveTasksNodeImage(n, model);
                     const collapsedGroupColor = !isExpanded ? resolveTasksCollapsedGroupColor(colorNode, model, activeColorBy, activeColorPalette) : '';
                     const isProjectionGroup = n.__kind__ === 'group' && n.__projection_group__;
                     const projectionGroupTone = isProjectionGroup ? resolveTasksProjectionGroupDimensionColor(n, model) : '';
@@ -3130,7 +3151,7 @@ async function renderTasksGraphs(rootElement = document) {
                         id: n.id,
                         type: 'vyasaTask',
                         position: n.position,
-                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __projection_branch_opacity__: branchOpacity },
+                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __projection_branch_opacity__: branchOpacity },
                         style: {
                             width: n.width,
                             height: n.height,
@@ -3162,14 +3183,15 @@ async function renderTasksGraphs(rootElement = document) {
                     const position = absolutePosition(n);
                     const titleZ = TASKS_TITLE_Z + depthOf(n);
                     const titleWidth = Math.max(80, n.width - 16);
-                    const titleHeight = sizeTaskNode(n.label || n.id, 'groupTitle', titleWidth).height;
+                    const titleImage = resolveTasksNodeImage(n, model);
+                    const titleHeight = sizeTaskNode(n.label || n.id, 'groupTitle', titleWidth, { hasImage: Boolean(titleImage) }).height;
                     const titleOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1)
                         * (egoMode && model.ego_include_neighbors && !egoHighOpacityIds.has(n.id) ? 0.25 : 1);
                     baseNodes.push({
                         id: `${n.id}__title`,
                         type: 'vyasaTask',
                         position: { x: position.x + 8, y: position.y + 8 },
-                        data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, __kind__: 'groupTitle', __projection_branch_opacity__: titleOpacity },
+                        data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, __kind__: 'groupTitle', __node_image__: titleImage, __projection_branch_opacity__: titleOpacity },
                         style: {
                             width: titleWidth,
                             height: titleHeight,
@@ -3215,7 +3237,7 @@ async function renderTasksGraphs(rootElement = document) {
                         labelZIndex: TASKS_EDGE_LABEL_Z,
                         labelMaxWidth: layoutConfig.edgeLabelWidth,
                         labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || 'currentColor', opacity: edgeOpacity * branchOpacity * egoEdgeOpacity },
-                        labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
+                        labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
                         style: { strokeWidth: 2.5, opacity: edgeOpacity * branchOpacity * egoEdgeOpacity, stroke: edgeColor || 'currentColor' },
                     };
                 });
@@ -3296,7 +3318,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ...edge,
                             data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim' },
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity },
-                            labelBgStyle: { ...(edge.labelBgStyle || {}), fillOpacity: hit ? 0.88 : 0.06 },
+                            labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
                             style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity, strokeWidth: hit ? 4.5 : 2.5, strokeLinecap: hit ? 'round' : undefined, '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s' },
                             animated: hit,
                         };
@@ -3338,7 +3360,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)',
                                 opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity,
                             },
-                            labelBgStyle: { ...(edge.labelBgStyle || {}), fillOpacity: hit ? 0.88 : 0.06 },
+                            labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
                             style: {
                                 ...edge.style,
                                 stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)',
@@ -3354,6 +3376,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const highlightedEdgeIds = new Set();
                 const descendantIds = collectTasksGroupDescendantIds(nodeId, model);
+                const selectedScopeIds = new Set([nodeId, ...descendantIds]);
                 const directEndpointIds = new Set([nodeId, ...descendantIds]);
                 const isFocusedPrimary = hoveredNodeId === nodeId;
                 const isFocusedNeighbor = hoveredNodeId && hoveredNodeId !== nodeId;
@@ -3362,6 +3385,9 @@ async function renderTasksGraphs(rootElement = document) {
                         highlightedEdgeIds.add(edge.id);
                         directEndpointIds.add(edge.source);
                         directEndpointIds.add(edge.target);
+                    }
+                    if (isTasksEdgeInternalToSelection(edge, selectedScopeIds)) {
+                        highlightedEdgeIds.add(edge.id);
                     }
                 }
                 for (const endpointId of Array.from(directEndpointIds)) {
@@ -3372,7 +3398,9 @@ async function renderTasksGraphs(rootElement = document) {
                 const focusedEdgeModes = new Map();
                 if (isFocusedPrimary) {
                     for (const edge of baseEdges) {
-                        if (highlightedEdgeIds.has(edge.id)) focusedEdgeModes.set(edge.id, edge.source === nodeId ? 'focused-out' : 'focused-in');
+                        if (highlightedEdgeIds.has(edge.id) && (edge.source === nodeId || edge.target === nodeId)) {
+                            focusedEdgeModes.set(edge.id, edge.source === nodeId ? 'focused-out' : 'focused-in');
+                        }
                     }
                 } else if (isFocusedNeighbor && directEndpointIds.has(hoveredNodeId)) {
                     for (const edge of baseEdges) {
@@ -3382,7 +3410,7 @@ async function renderTasksGraphs(rootElement = document) {
                         if (linksSelectedAndHovered) focusedEdgeModes.set(edge.id, edge.source === nodeId ? 'focused-out' : 'focused-in');
                     }
                 }
-                setNodes(baseNodes.map((node) => {
+                const nextNodes = baseNodes.map((node) => {
                     const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
                     const mode = directEndpointIds.has(sourceNodeId)
                         ? (sourceNodeId === nodeId
@@ -3427,7 +3455,7 @@ async function renderTasksGraphs(rootElement = document) {
                         },
                         zIndex,
                     };
-                }));
+                });
                 const nextEdges = baseEdges.map((edge) => {
                     const mode = focusedEdgeModes.get(edge.id)
                         ? focusedEdgeModes.get(edge.id)
@@ -3437,6 +3465,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
                     const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
                     const activeOpacity = highlighted ? 1 : branchOpacity;
+                    const hoverDimsLabels = isTasksEdgeLabelHoverDimmingActive(nodeId, hoveredNodeId);
                     const dashArray = highlighted ? ((mode === 'focused-in' || mode === 'focused-out') ? '10 6' : '8 6') : undefined;
                     const dashCycle = dashArray
                         ? dashArray.split(/\s+/).map(Number).filter(Number.isFinite).slice(0, 2).reduce((sum, value) => sum + value, 0)
@@ -3445,15 +3474,13 @@ async function renderTasksGraphs(rootElement = document) {
                         ...edge,
                         data: { ...edge.data, highlightMode: mode },
                         zIndex: mode === 'focused-in' || mode === 'focused-out' ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
-                        labelZIndex: mode === 'dim'
-                            ? TASKS_EDGE_LABEL_Z
-                            : TASKS_EDGE_LABEL_FOCUS_Z,
+                        labelZIndex: tasksEdgeLabelZForMode(mode, TASKS_EDGE_LABEL_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_FOCUS_Z),
                         labelStyle: {
                             ...(edge.labelStyle || {}),
                             fill: mode === 'focused-in' || mode === 'focused-out'
                                 ? focusColor
                                 : (highlighted ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)'),
-                            opacity: activeOpacity * (hoveredNodeId
+                            opacity: activeOpacity * (hoverDimsLabels
                                 ? ((mode === 'focused-in' || mode === 'focused-out') ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.05, edgeOpacity))
                                 : ((mode === 'focused-in' || mode === 'focused-out') ? tasksProminentEdgeOpacity() : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.18, edgeOpacity)))),
                             fontWeight: (mode === 'focused-in' || mode === 'focused-out') ? 800 : 600,
@@ -3464,10 +3491,10 @@ async function renderTasksGraphs(rootElement = document) {
                                 ? 'color-mix(in srgb, var(--vyasa-paper) 78%, #22c55e 22%)'
                                 : (mode === 'focused-out'
                                     ? 'color-mix(in srgb, var(--vyasa-paper) 80%, #ef4444 20%)'
-                                    : 'var(--vyasa-paper)'),
-                            fillOpacity: hoveredNodeId
-                                ? ((mode === 'focused-in' || mode === 'focused-out') ? 0.96 : 0.02)
-                                : ((mode === 'focused-in' || mode === 'focused-out') ? 0.96 : (highlighted ? 0.88 : 0.08)),
+                                    : TASKS_EDGE_LABEL_BG),
+                            fillOpacity: hoverDimsLabels
+                                ? ((mode === 'focused-in' || mode === 'focused-out') ? 0.96 : (highlighted ? 0.72 : 0.04))
+                                : ((mode === 'focused-in' || mode === 'focused-out') ? 0.96 : (highlighted ? 0.72 : 0.04)),
                         },
                         style: {
                             ...edge.style,
@@ -3486,6 +3513,46 @@ async function renderTasksGraphs(rootElement = document) {
                         animated: highlighted,
                     };
                 });
+                if (window.__vyasaTasksDebug.enabled) {
+                    const debugPayload = {
+                        selectedNodeId: nodeId,
+                        hoveredNodeId: hoveredNodeId || '',
+                        isFocusedPrimary,
+                        isFocusedNeighbor: Boolean(isFocusedNeighbor),
+                        selectedScopeIds: Array.from(selectedScopeIds),
+                        directEndpointIds: Array.from(directEndpointIds),
+                        highlightedEdgeIds: Array.from(highlightedEdgeIds),
+                        focusedEdgeModes: Object.fromEntries(focusedEdgeModes),
+                        nodes: nextNodes.map((node) => ({
+                            id: node.id,
+                            sourceNodeId: node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id,
+                            kind: node.data?.__kind__,
+                            mode: node.data?.highlightMode || '',
+                            zIndex: node.zIndex ?? null,
+                            styleZ: node.style?.zIndex ?? null,
+                            opacity: node.style?.opacity ?? null,
+                            parentId: node.parentId || '',
+                        })),
+                        edges: nextEdges.map((edge) => ({
+                            id: edge.id,
+                            source: edge.source,
+                            target: edge.target,
+                            mode: edge.data?.highlightMode || '',
+                            animated: Boolean(edge.animated),
+                            zIndex: edge.zIndex ?? null,
+                            labelZIndex: edge.labelZIndex ?? null,
+                            strokeWidth: edge.style?.strokeWidth ?? null,
+                            stroke: edge.style?.stroke || '',
+                            edgeOpacity: edge.style?.opacity ?? null,
+                            labelOpacity: edge.labelStyle?.opacity ?? null,
+                            labelBgFill: edge.labelBgStyle?.fill || '',
+                            labelBgOpacity: edge.labelBgStyle?.fillOpacity ?? null,
+                        })),
+                    };
+                    window.__vyasaTasksDebug.latestHighlight = debugPayload;
+                    logTasksDebugVerbose('highlightState', debugPayload);
+                }
+                setNodes(nextNodes);
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdges(edgesVisible ? nextEdges : []);
@@ -3594,9 +3661,45 @@ async function renderTasksGraphs(rootElement = document) {
                     : (labelLines.length > 1 ? `${labelLines[0]}...` : fullLabel);
                 const labelStyle = props.labelStyle || {};
                 const labelBgStyle = props.labelBgStyle || {};
+                const svgLabelLines = String(displayLabel || '').split(/\r?\n/);
+                const svgFontSize = Number.parseFloat(tasksCssFontSize(labelStyle.fontSize));
+                const svgLineHeight = (Number.isFinite(svgFontSize) ? svgFontSize : 11) * 1.35;
+                const svgLabelHeight = Math.max(svgLineHeight, svgLabelLines.length * svgLineHeight);
+                const svgLabelWidth = Math.min(
+                    props.labelMaxWidth || 240,
+                    Math.max(24, ...svgLabelLines.map((line) => line.length * (Number.isFinite(svgFontSize) ? svgFontSize : 11) * 0.62))
+                );
+                const svgLabelPaddingX = props.labelBgPadding?.[0] || 0;
+                const svgLabelPaddingY = props.labelBgPadding?.[1] || 0;
                 return React.createElement(React.Fragment, null,
                     React.createElement(rf.BaseEdge, { ...props, path }),
-                    displayLabel && React.createElement(rf.EdgeLabelRenderer, null,
+                    displayLabel && !prominentLabel && React.createElement('g', {
+                        transform: `translate(${labelX}, ${labelY})`,
+                        pointerEvents: 'none',
+                    },
+                    React.createElement('title', null, fullLabel),
+                    (labelBgStyle.fillOpacity ?? 0) > 0 && React.createElement('rect', {
+                        x: -(svgLabelWidth / 2) - svgLabelPaddingX,
+                        y: -(svgLabelHeight / 2) - svgLabelPaddingY,
+                        width: svgLabelWidth + (svgLabelPaddingX * 2),
+                        height: svgLabelHeight + (svgLabelPaddingY * 2),
+                        rx: props.labelBgBorderRadius || 0,
+                        fill: labelBgStyle.fill || 'transparent',
+                        opacity: labelBgStyle.fillOpacity ?? 1,
+                    }),
+                    React.createElement('text', {
+                        fill: labelStyle.fill || 'currentColor',
+                        opacity: labelStyle.opacity ?? 1,
+                        fontSize: tasksCssFontSize(labelStyle.fontSize),
+                        fontWeight: labelStyle.fontWeight || 600,
+                        textAnchor: 'middle',
+                        dominantBaseline: 'middle',
+                    }, svgLabelLines.map((line, index) => React.createElement('tspan', {
+                        key: `${index}-${line}`,
+                        x: 0,
+                        dy: index === 0 ? -((svgLabelLines.length - 1) * svgLineHeight) / 2 : svgLineHeight,
+                    }, line)))),
+                    displayLabel && prominentLabel && React.createElement(rf.EdgeLabelRenderer, null,
                         React.createElement('div', {
                             style: {
                                 position: 'absolute',
@@ -3612,11 +3715,21 @@ async function renderTasksGraphs(rootElement = document) {
                                 transformOrigin: 'center center',
                                 padding: `${props.labelBgPadding?.[1] || 0}px ${props.labelBgPadding?.[0] || 0}px`,
                                 borderRadius: `${props.labelBgBorderRadius || 0}px`,
+                                position: 'relative',
+                            },
+                        },
+                        React.createElement('div', {
+                            style: {
+                                position: 'absolute',
+                                inset: 0,
+                                borderRadius: 'inherit',
                                 background: labelBgStyle.fill || 'transparent',
                                 opacity: labelBgStyle.fillOpacity ?? 1,
                             },
-                        }, React.createElement('div', {
+                        }),
+                        React.createElement('div', {
                             style: {
+                                position: 'relative',
                                 color: labelStyle.fill || 'currentColor',
                                 fontSize: tasksCssFontSize(labelStyle.fontSize),
                                 fontWeight: labelStyle.fontWeight || 600,
@@ -3661,6 +3774,22 @@ async function renderTasksGraphs(rootElement = document) {
                 const isActiveNode = !selectedNodeId || selectedNodeId === sourceNodeId;
                 const linksInteractive = isActiveNode;
                 const linkKinds = Array.from(tasksNodeLinkKinds(data));
+                const nodeImage = normalizeTasksNodeImageUrl(data?.__node_image__);
+                const renderNodeImage = (size = 26, style = {}) => nodeImage ? React.createElement('img', {
+                    src: nodeImage,
+                    alt: '',
+                    loading: 'lazy',
+                    draggable: false,
+                    style: {
+                        width: `${size}px`,
+                        height: `${size}px`,
+                        objectFit: 'contain',
+                        flex: '0 0 auto',
+                        filter: isDimmed ? 'grayscale(0.4)' : undefined,
+                        opacity: isDimmed ? 0.58 : 0.96,
+                        ...style,
+                    },
+                }) : null;
                 const handleInactiveLinkClick = (event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -3701,7 +3830,7 @@ async function renderTasksGraphs(rootElement = document) {
                             gap: '8px',
                             padding: '8px 10px',
                             fontWeight: '600',
-                            fontSize: '13px',
+                            fontSize: '16px',
                             position: 'relative',
                         }
                     },
@@ -3710,13 +3839,15 @@ async function renderTasksGraphs(rootElement = document) {
                             style: {
                                 minWidth: 0,
                                 overflow: 'hidden',
-                                display: 'block',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '7px',
                                 whiteSpace: 'pre-line',
-                                lineHeight: '1.3',
+                                lineHeight: '1.28',
                                 overflowWrap: 'anywhere',
                                 wordBreak: 'break-word',
                             }
-                        }, renderTasksInlineLinks(data?.label || data.sourceGroupId || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick })),
+                        }, renderNodeImage(20, { marginTop: '1px' }), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(data?.label || data.sourceGroupId || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick }))),
                         egoMode ? null : React.createElement('button', {
                             onClick: handleCollapse,
                             style: { flex: '0 0 auto', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
@@ -3849,7 +3980,8 @@ async function renderTasksGraphs(rootElement = document) {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '13px',
+                        gap: nodeImage ? '10px' : undefined,
+                        fontSize: '16px',
                         fontWeight: '600',
                         fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
                         textAlign: 'center',
@@ -3865,16 +3997,18 @@ async function renderTasksGraphs(rootElement = document) {
                     noteBadge,
                     linkKinds.length ? renderTasksNodeLinkBadge(React, { right: canExpand ? '32px' : '10px', kinds: linkKinds }) : null,
                     ...renderHandles('target'),
+                    renderNodeImage(isGroup ? 30 : 28),
                     React.createElement('span', {
                         style: {
                             boxSizing: 'border-box',
-                            width: '100%',
+                            flex: '1 1 auto',
+                            minWidth: 0,
+                            width: nodeImage ? 'auto' : '100%',
                             maxWidth: '100%',
-                            maxHeight: '100%',
                             overflow: 'hidden',
                             display: 'block',
                             whiteSpace: 'pre-line',
-                            lineHeight: '1.25',
+                            lineHeight: '1.28',
                             overflowWrap: 'anywhere',
                             wordBreak: 'break-word',
                             textDecoration: isChecked ? 'line-through' : 'none',
@@ -4391,6 +4525,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const nodeData = hit.node.data || {};
                 const rows = tasksHoverAttrRows(nodeData, activeHoverAttrs);
                 const label = nodeData.label || hit.node.id;
+                const image = normalizeTasksNodeImageUrl(nodeData.__node_image__);
                 if (!label && !rows.length) {
                     clearGroupHoverTooltip();
                     return;
@@ -4398,6 +4533,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const bounds = wrapper.getBoundingClientRect();
                 setGroupHoverTooltip({
                     label,
+                    image,
                     rows,
                     x: event.clientX - bounds.left + 12,
                     y: event.clientY - bounds.top + 18,
@@ -4525,8 +4661,12 @@ async function renderTasksGraphs(rootElement = document) {
                     window.__vyasaTasksActions[widgetId] = {
                         fit: () => reactFlow.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true }),
                         dump: () => {
-                            logTasksDebug('manualDump', window.__vyasaTasksDebug.latest || {});
-                            return window.__vyasaTasksDebug.latest;
+                            const payload = {
+                                latest: window.__vyasaTasksDebug.latest || {},
+                                latestHighlight: window.__vyasaTasksDebug.latestHighlight || {},
+                            };
+                            logTasksDebug('manualDump', payload);
+                            return payload;
                         },
                         watchEdge: (source, target) => {
                             window.__vyasaTasksDebug.watch = [{ source, target }];
@@ -4712,7 +4852,8 @@ async function renderTasksGraphs(rootElement = document) {
             const GroupHoverTooltip = () => {
                 if (!groupHoverTooltip) return null;
                 const rows = Array.isArray(groupHoverTooltip.rows) ? groupHoverTooltip.rows : [];
-                const panelWidth = tasksHoverTooltipWidth(groupHoverTooltip.label || '', rows, hoverFontSize);
+                const image = normalizeTasksNodeImageUrl(groupHoverTooltip.image);
+                const panelWidth = tasksHoverTooltipWidth(groupHoverTooltip.label || '', rows, hoverFontSize, Boolean(image));
                 const wrapperWidth = Math.max(240, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().width || 0));
                 const wrapperHeight = Math.max(160, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().height || 0));
                 const maxWidth = Math.max(220, Math.min(panelWidth, wrapperWidth - 24));
@@ -4721,8 +4862,17 @@ async function renderTasksGraphs(rootElement = document) {
                 const children = [
                     window.React.createElement('div', {
                         key: '__label__',
-                        style: { fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, marginBottom: rows.length ? '4px' : 0, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 },
-                    }, groupHoverTooltip.label),
+                        style: { display: 'flex', alignItems: 'center', gap: '7px', fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, marginBottom: rows.length ? '4px' : 0, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 },
+                    },
+                        image ? window.React.createElement('img', {
+                            src: image,
+                            alt: '',
+                            loading: 'lazy',
+                            draggable: false,
+                            style: { width: '22px', height: '22px', objectFit: 'contain', flex: '0 0 auto' },
+                        }) : null,
+                        window.React.createElement('span', { style: { minWidth: 0 } }, groupHoverTooltip.label)
+                    ),
                 ];
                 if (rows.length) {
                     children.push(window.React.createElement('div', {
