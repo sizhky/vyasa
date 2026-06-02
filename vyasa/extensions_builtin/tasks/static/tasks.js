@@ -3387,7 +3387,7 @@ async function renderTasksGraphs(rootElement = document) {
                                         ? `color-mix(in srgb, ${displayColor} 10%, transparent)`
                                         : TASKS_GROUP_BG_ACTIVE)
                                     : (nodeColor ? (colorMix.enabled ? `color-mix(in srgb, var(--vyasa-paper) ${colorMix.paper}%, ${nodeColor} ${colorMix.intensity}%)` : nodeColor) : TASKS_NODE_BG_ACTIVE)),
-                            opacity: branchOpacity * (mode === 'dim' ? 0.22 : 1),
+                            opacity: mode === 'dim' ? branchOpacity * 0.22 : 1,
                             boxShadow: (mode === 'selected' || mode === 'selected-focus')
                                 ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
                                 : (mode === 'neighbor-focus'
@@ -3405,6 +3405,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const focusColor = mode === 'focused-in' ? TASKS_EDGE_FOCUS_IN_COLOR : TASKS_EDGE_FOCUS_OUT_COLOR;
                     const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
                     const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
+                    const activeOpacity = highlighted ? 1 : branchOpacity;
                     const dashArray = highlighted ? ((mode === 'focused-in' || mode === 'focused-out') ? '10 6' : '8 6') : undefined;
                     const dashCycle = dashArray
                         ? dashArray.split(/\s+/).map(Number).filter(Number.isFinite).slice(0, 2).reduce((sum, value) => sum + value, 0)
@@ -3421,7 +3422,7 @@ async function renderTasksGraphs(rootElement = document) {
                             fill: mode === 'focused-in' || mode === 'focused-out'
                                 ? focusColor
                                 : (highlighted ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)'),
-                            opacity: branchOpacity * (hoveredNodeId
+                            opacity: activeOpacity * (hoveredNodeId
                                 ? ((mode === 'focused-in' || mode === 'focused-out') ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.05, edgeOpacity))
                                 : ((mode === 'focused-in' || mode === 'focused-out') ? tasksProminentEdgeOpacity() : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.18, edgeOpacity)))),
                             fontWeight: (mode === 'focused-in' || mode === 'focused-out') ? 800 : 600,
@@ -3442,7 +3443,7 @@ async function renderTasksGraphs(rootElement = document) {
                             stroke: mode === 'focused-in' || mode === 'focused-out'
                                 ? focusColor
                                 : (highlighted ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)'),
-                            opacity: branchOpacity * ((mode === 'focused-in' || mode === 'focused-out')
+                            opacity: activeOpacity * ((mode === 'focused-in' || mode === 'focused-out')
                                 ? tasksProminentEdgeOpacity()
                                 : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.08, edgeOpacity))),
                             strokeWidth: (mode === 'focused-in' || mode === 'focused-out') ? 5 : (mode === 'selected' ? 3.5 : 2.5),
