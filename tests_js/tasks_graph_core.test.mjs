@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -29,6 +29,14 @@ test('sizeTaskNode grows group title height for wrapped text at runtime width', 
     const longTitle = sizeTaskNode('Ground Truth Streams (Phase 2 input to A_17)', 'groupTitle', 234);
     assert.equal(shortTitle.width, 234);
     assert.ok(longTitle.height > shortTitle.height);
+});
+
+test('sizeTaskNode reserves icon width and height when images are present', () => {
+    const plain = sizeTaskNode('Adhoc/flex-gateway-policies/security/ip-allowlist/ip-allowlist-prod', 'task', 220);
+    const withImage = sizeTaskNode('Adhoc/flex-gateway-policies/security/ip-allowlist/ip-allowlist-prod', 'task', 220, { hasImage: true });
+    const shortWithImage = sizeTaskNode('API', 'task', 220, { hasImage: true });
+    assert.ok(withImage.height > plain.height);
+    assert.equal(shortWithImage.height, 60);
 });
 
 test('buildTaskEdgeAnchors flips top/bottom by relative node position', () => {
@@ -328,6 +336,36 @@ test('color_by uses configured color_palettes for node paint lookup', () => {
         return palette[String(value)] || '';
     };
     assert.equal(resolveTasksNodeOwnColor({ kind: 'ingress' }, model), '#93c5fd');
+});
+
+test('node image resolver prefers direct image over image_by palette', () => {
+    const model = {
+        image_by: 'type',
+        node_image_palettes: { type: { database: 'iconify:devicon:postgresql', service: 'https://cdn.example.com/service.svg' } },
+    };
+    assert.equal(normalizeTasksNodeImageUrl('iconify:mdi:api'), 'https://api.iconify.design/mdi/api.svg');
+    assert.equal(resolveTasksNodeImage({ type: 'database' }, model), 'https://api.iconify.design/devicon/postgresql.svg');
+    assert.equal(resolveTasksNodeImage({ type: 'database', image: 'https://cdn.example.com/custom.svg' }, model), 'https://cdn.example.com/custom.svg');
+    assert.equal(resolveTasksNodeImage({ type: 'database', image: 'javascript:alert(1)' }, model), 'https://api.iconify.design/devicon/postgresql.svg');
+});
+
+test('selected group edge filter includes edges internal to selected descendants', () => {
+    const selected = new Set(['group', 'a', 'b']);
+    assert.equal(isTasksEdgeInternalToSelection({ source: 'a', target: 'b' }, selected), true);
+    assert.equal(isTasksEdgeInternalToSelection({ source: 'a', target: 'outside' }, selected), false);
+});
+
+test('selected group self-hover does not dim selected edge labels', () => {
+    assert.equal(isTasksEdgeLabelHoverDimmingActive('group', 'group'), false);
+    assert.equal(isTasksEdgeLabelHoverDimmingActive('group', ''), false);
+    assert.equal(isTasksEdgeLabelHoverDimmingActive('group', 'child'), true);
+});
+
+test('selected edge labels stay below nodes unless edge is focused', () => {
+    assert.equal(tasksEdgeLabelZForMode('selected', 6, 999, 1400), 999);
+    assert.equal(tasksEdgeLabelZForMode('dim', 6, 999, 1400), 6);
+    assert.equal(tasksEdgeLabelZForMode('focused-in', 6, 999, 1400), 1400);
+    assert.equal(tasksEdgeLabelZForMode('focused-out', 6, 999, 1400), 1400);
 });
 
 test('palette legend only shows values present in graph', () => {
