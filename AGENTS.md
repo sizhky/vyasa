@@ -2,11 +2,11 @@
 
 When adding a new Vyasa feature, do not update any skill file automatically.
 
-After the feature is implemented and verified, remind the user by asking literally:
+After the feature is implemented and verified, only remind the user by asking literally when the feature changes how future agents should author, debug, test, or operate Vyasa:
 
 `skill-update`
 
-This is only a reminder prompt. Do not apply the skill update unless the user asks, because the new feature may still have bugs and the skill should only be updated after the behavior is stable.
+This is only a reminder prompt. Do not apply the skill update unless the user asks, because the new feature may still have bugs and the skill should only be updated after the behavior is stable. If the feature is purely UI behavior with no new agent-facing workflow, do not ask `skill-update`.
 
 Remember during refactoring tasks, do not rewrite the same code. Like a human does, use awk and sed to cut paste code snippets to reduce token usage and avoid introducing new bugs. Only rewrite code when necessary, such as when the code is too messy to be cut and pasted.
 
