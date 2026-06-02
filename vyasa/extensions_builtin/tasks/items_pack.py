@@ -205,15 +205,22 @@ def read_edges(path: str | Path, relations: dict[str, dict[str, str]] | None = N
     for line in _record_lines(path):
         head, rest = line.split(":", 1)
         parts = shlex.split(rest)
-        if len(parts) < 4 or parts[1] != "->":
+        if len(parts) < 3 or parts[1] != "->":
             continue
-        relation = parts[3]
-        attrs = _assignments(parts[4:])
-        edge = {"id": head.strip(), "source": parts[0], "target": parts[2], "relation": relation, **attrs}
+        relation = ""
+        attr_parts = parts[3:]
+        if len(parts) >= 4 and "=" not in parts[3]:
+            relation = parts[3]
+            attr_parts = parts[4:]
+        attrs = _assignments(attr_parts)
+        edge = {"id": head.strip(), "source": parts[0], "target": parts[2], **attrs}
+        if relation:
+            edge["relation"] = relation
         if relation in known_relations:
             for key, value in (relations or {}).get(relation, {}).items():
                 edge.setdefault(key, value)
-        edge.setdefault("label", relation)
+        if relation:
+            edge.setdefault("label", relation)
         edges.append(edge)
     return edges
 

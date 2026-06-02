@@ -170,6 +170,18 @@ test('buildTaskEdgeAnchors uses left/right handles for strong lower-right diagon
     assert.equal(edges[0].targetHandle, 'target-right-0');
 });
 
+test('buildTaskEdgeAnchors prefers top/bottom when node sits above wide group', () => {
+    const nodes = [
+        { id: 'node', position: { x: 430, y: 80 }, width: 300, height: 80 },
+        { id: 'group', position: { x: 40, y: 260 }, width: 830, height: 640 },
+    ];
+    const { edges } = buildTaskEdgeAnchors(nodes, [
+        { id: 'stacked', source: 'node', target: 'group' },
+    ]);
+    assert.equal(edges[0].sourceHandle, 'source-bottom-0');
+    assert.equal(edges[0].targetHandle, 'target-top-0');
+});
+
 test('task and collapsed group nodes are selectable in items graph', () => {
     assert.equal(isTasksGraphNodeSelectable('task'), true);
     assert.equal(isTasksGraphNodeSelectable('group', false), true);

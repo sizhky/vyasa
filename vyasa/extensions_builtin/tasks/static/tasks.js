@@ -579,6 +579,11 @@ function collectTasksGroupDescendants(nodeId, model) {
     return { groups, tasks };
 }
 
+function collectTasksGroupDescendantIds(nodeId, model) {
+    const descendants = collectTasksGroupDescendants(nodeId, model);
+    return new Set([...descendants.groups, ...descendants.tasks].map((node) => node.id).filter(Boolean));
+}
+
 function tasksChildGroupIds(nodeId, model) {
     return model?.group_tree?.[nodeId] || [];
 }
@@ -3034,6 +3039,17 @@ async function renderTasksGraphs(rootElement = document) {
                 const egoSelectedIds = egoMode && Array.isArray(model.ego_selected_ids)
                     ? new Set(model.ego_selected_ids.map((id) => String(id || '').trim()).filter(Boolean))
                     : new Set();
+                const egoHighOpacityIds = new Set(egoSelectedIds);
+                if (egoMode && model.ego_include_neighbors) {
+                    const groupIds = new Set((model.groups || []).map((group) => group.id));
+                    const addGroupWithDescendants = (groupId) => {
+                        egoHighOpacityIds.add(groupId);
+                        for (const descendantId of collectTasksGroupDescendantIds(groupId, model)) egoHighOpacityIds.add(descendantId);
+                    };
+                    for (const selectedId of egoSelectedIds) {
+                        if (groupIds.has(selectedId)) addGroupWithDescendants(selectedId);
+                    }
+                }
                 const unspecifiedProjectionGroupIds = new Set(
                     (derived.nodes || [])
                         .filter((node) => isTasksUnspecifiedProjectionGroup(node, TASKS_PROJECTION_UNSPECIFIED_LABEL))
@@ -3108,7 +3124,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${groupColor} ${groupBorderMix}%)`
                             : `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`)
                         : TASKS_NODE_BORDER;
-                    const egoNeighborOpacity = egoMode && model.ego_include_neighbors && !egoSelectedIds.has(n.id) ? 0.25 : 1;
+                    const egoNeighborOpacity = egoMode && model.ego_include_neighbors && n.__kind__ !== 'group' && !egoHighOpacityIds.has(n.id) ? 0.25 : 1;
                     const branchOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1) * egoNeighborOpacity;
                     const rfNode = {
                         id: n.id,
@@ -3147,11 +3163,13 @@ async function renderTasksGraphs(rootElement = document) {
                     const titleZ = TASKS_TITLE_Z + depthOf(n);
                     const titleWidth = Math.max(80, n.width - 16);
                     const titleHeight = sizeTaskNode(n.label || n.id, 'groupTitle', titleWidth).height;
+                    const titleOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1)
+                        * (egoMode && model.ego_include_neighbors && !egoHighOpacityIds.has(n.id) ? 0.25 : 1);
                     baseNodes.push({
                         id: `${n.id}__title`,
                         type: 'vyasaTask',
                         position: { x: position.x + 8, y: position.y + 8 },
-                        data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, __kind__: 'groupTitle', __projection_branch_opacity__: (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1) * (egoMode && model.ego_include_neighbors && !egoSelectedIds.has(n.id) ? 0.25 : 1) },
+                        data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, __kind__: 'groupTitle', __projection_branch_opacity__: titleOpacity },
                         style: {
                             width: titleWidth,
                             height: titleHeight,
@@ -3161,13 +3179,13 @@ async function renderTasksGraphs(rootElement = document) {
                             borderRadius: 6,
                             boxShadow: 'none',
                             overflow: 'hidden',
-                            opacity: (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1) * (egoMode && model.ego_include_neighbors && !egoSelectedIds.has(n.id) ? 0.25 : 1),
+                            opacity: titleOpacity,
                             pointerEvents: 'auto',
                         },
                         zIndex: titleZ,
                         className: `vyasa-tasks-node--${tasksGraphNodeHitArea('groupTitle')}`,
                         draggable: false,
-                        selectable: false,
+                        selectable: isTasksGraphNodeSelectable('groupTitle'),
                     });
                 }
                 const anchored = buildTaskEdgeAnchors(baseNodes, derived.edges);
@@ -3242,11 +3260,17 @@ async function renderTasksGraphs(rootElement = document) {
                 const baseNodes = graphBaseRef.current.nodes || [];
                 const baseEdges = graphBaseRef.current.edges || [];
                 const multiSelectedIds = selectedIds instanceof Set ? selectedIds : new Set(selectedIds || []);
+                const multiSelectedHighlightIds = new Set(multiSelectedIds);
+                for (const selectedId of multiSelectedIds) {
+                    for (const descendantId of collectTasksGroupDescendantIds(selectedId, model)) {
+                        multiSelectedHighlightIds.add(descendantId);
+                    }
+                }
                 const hasNodeSelection = nodeId && baseNodes.some((node) => node.id === nodeId);
                 if (!hasNodeSelection && multiSelectedIds.size > 0) {
                     setNodes(baseNodes.map((node) => {
                         const sourceGroupId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : null;
-                        const selected = multiSelectedIds.has(node.id) || (sourceGroupId && multiSelectedIds.has(sourceGroupId));
+                        const selected = multiSelectedHighlightIds.has(node.id) || (sourceGroupId && multiSelectedHighlightIds.has(sourceGroupId));
                         const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette);
                         const collapsedGroupColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
                             ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
@@ -3265,7 +3289,7 @@ async function renderTasksGraphs(rootElement = document) {
                         };
                     }));
                     setEdges(edgesVisible ? baseEdges.map((edge) => {
-                        const hit = multiSelectedIds.has(edge.source) && multiSelectedIds.has(edge.target);
+                        const hit = multiSelectedHighlightIds.has(edge.source) && multiSelectedHighlightIds.has(edge.target);
                         const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
                         const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
                         return {
@@ -3329,7 +3353,8 @@ async function renderTasksGraphs(rootElement = document) {
                     return;
                 }
                 const highlightedEdgeIds = new Set();
-                const directEndpointIds = new Set([nodeId]);
+                const descendantIds = collectTasksGroupDescendantIds(nodeId, model);
+                const directEndpointIds = new Set([nodeId, ...descendantIds]);
                 const isFocusedPrimary = hoveredNodeId === nodeId;
                 const isFocusedNeighbor = hoveredNodeId && hoveredNodeId !== nodeId;
                 for (const edge of baseEdges) {
@@ -3337,6 +3362,11 @@ async function renderTasksGraphs(rootElement = document) {
                         highlightedEdgeIds.add(edge.id);
                         directEndpointIds.add(edge.source);
                         directEndpointIds.add(edge.target);
+                    }
+                }
+                for (const endpointId of Array.from(directEndpointIds)) {
+                    for (const descendantId of collectTasksGroupDescendantIds(endpointId, model)) {
+                        directEndpointIds.add(descendantId);
                     }
                 }
                 const focusedEdgeModes = new Map();
@@ -3353,10 +3383,11 @@ async function renderTasksGraphs(rootElement = document) {
                     }
                 }
                 setNodes(baseNodes.map((node) => {
-                    const mode = directEndpointIds.has(node.id)
-                        ? (node.id === nodeId
+                    const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                    const mode = directEndpointIds.has(sourceNodeId)
+                        ? (sourceNodeId === nodeId
                             ? (isFocusedPrimary ? 'selected-focus' : 'selected')
-                            : (node.id === hoveredNodeId ? 'neighbor-focus' : 'neighbor'))
+                            : (sourceNodeId === hoveredNodeId ? 'neighbor-focus' : 'neighbor'))
                         : 'dim';
                     const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette);
                     const collapsedGroupColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
