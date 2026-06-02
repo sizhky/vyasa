@@ -3108,7 +3108,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${groupColor} ${groupBorderMix}%)`
                             : `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`)
                         : TASKS_NODE_BORDER;
-                    const egoNeighborOpacity = egoMode && model.ego_include_neighbors && !egoSelectedIds.has(n.id) ? 0.25 : 1;
+                    const egoNeighborOpacity = egoMode && model.ego_include_neighbors && n.__kind__ !== 'group' && !egoSelectedIds.has(n.id) ? 0.25 : 1;
                     const branchOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1) * egoNeighborOpacity;
                     const rfNode = {
                         id: n.id,
@@ -3151,7 +3151,7 @@ async function renderTasksGraphs(rootElement = document) {
                         id: `${n.id}__title`,
                         type: 'vyasaTask',
                         position: { x: position.x + 8, y: position.y + 8 },
-                        data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, __kind__: 'groupTitle', __projection_branch_opacity__: (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1) * (egoMode && model.ego_include_neighbors && !egoSelectedIds.has(n.id) ? 0.25 : 1) },
+                        data: { ...n, id: `${n.id}__title`, sourceGroupId: n.id, __kind__: 'groupTitle', __projection_branch_opacity__: isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1 },
                         style: {
                             width: titleWidth,
                             height: titleHeight,
@@ -3161,7 +3161,7 @@ async function renderTasksGraphs(rootElement = document) {
                             borderRadius: 6,
                             boxShadow: 'none',
                             overflow: 'hidden',
-                            opacity: (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1) * (egoMode && model.ego_include_neighbors && !egoSelectedIds.has(n.id) ? 0.25 : 1),
+                            opacity: isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1,
                             pointerEvents: 'auto',
                         },
                         zIndex: titleZ,

@@ -293,14 +293,26 @@ function edgeAnchorSides(sourceRect, targetRect) {
     const horizontalSide = dx >= 0
         ? { sourceSide: 'right', targetSide: 'left', sortAxis: 'y' }
         : { sourceSide: 'left', targetSide: 'right', sortAxis: 'y' };
+    const verticalSide = dy >= 0
+        ? { sourceSide: 'bottom', targetSide: 'top', sortAxis: 'x' }
+        : { sourceSide: 'top', targetSide: 'bottom', sortAxis: 'x' };
     const significantRowOverlap = overlapY >= Math.min(sourceRect.height, targetRect.height) * 0.35;
     if (significantRowOverlap && Math.abs(dx) >= Math.abs(dy) * 1.1) {
         return horizontalSide;
+    }
+    const significantColumnOverlap = overlapX >= Math.min(sourceRect.width, targetRect.width) * 0.35;
+    if (significantColumnOverlap && Math.abs(dy) >= Math.abs(dx) * 1.1) {
+        return verticalSide;
     }
     const substantialHorizontalGap = gapX >= Math.min(sourceRect.width, targetRect.width) * 0.35;
     const strongHorizontalOffset = substantialHorizontalGap && Math.abs(dx) >= Math.abs(dy) * 0.7;
     if (strongHorizontalOffset) {
         return horizontalSide;
+    }
+    const substantialVerticalGap = gapY >= Math.min(sourceRect.height, targetRect.height) * 0.35;
+    const strongVerticalOffset = substantialVerticalGap && Math.abs(dy) >= Math.abs(dx) * 0.7;
+    if (strongVerticalOffset) {
+        return verticalSide;
     }
     const candidates = [
         {
