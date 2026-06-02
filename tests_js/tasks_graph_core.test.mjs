@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -185,6 +185,16 @@ test('drag rect selects task nodes and expanded groups', () => {
     ];
     assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 110, y1: 110, x2: 230, y2: 170 }), ['task-a']);
     assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 95, y1: 95, x2: 265, y2: 225 }), ['group-a', 'task-a']);
+});
+
+test('polygon select matches nodes whose centers fall inside freeform lasso', () => {
+    const nodes = [
+        { id: 'left', position: { x: 40, y: 40 }, style: { width: 60, height: 40 }, data: { __kind__: 'task' } },
+        { id: 'right', position: { x: 220, y: 40 }, style: { width: 60, height: 40 }, data: { __kind__: 'task' } },
+        { id: 'low', position: { x: 130, y: 180 }, style: { width: 60, height: 40 }, data: { __kind__: 'task' } },
+    ];
+    const polygon = [{ x: 20, y: 20 }, { x: 180, y: 20 }, { x: 180, y: 120 }, { x: 20, y: 120 }];
+    assert.deepEqual(selectTasksGraphNodeIdsInPolygon(nodes, polygon), ['left']);
 });
 
 test('graph stats count groups, tasks, and dependency edges', () => {

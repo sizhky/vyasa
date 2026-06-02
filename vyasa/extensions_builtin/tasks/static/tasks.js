@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
 
 const tasksElk = new ELK();
 let tasksReactFlowReady = null;
@@ -2676,6 +2676,12 @@ async function renderTasksGraphs(rootElement = document) {
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
+            const extendLassoPoints = React.useCallback((points, nextPoint) => {
+                const current = Array.isArray(points) ? points : [];
+                const last = current[current.length - 1];
+                if (last && Math.hypot(last.x - nextPoint.x, last.y - nextPoint.y) < 6) return current;
+                return [...current, nextPoint];
+            }, []);
             const graphStatsLabel = React.useMemo(
                 () => tasksVisibleGraphStatsLabel(
                     graphBaseRef.current.nodes || [],
@@ -4295,7 +4301,8 @@ async function renderTasksGraphs(rootElement = document) {
                 }, 90);
             }, [expanded]);
             const startDragSelection = React.useCallback((event) => {
-                if ((!(event.shiftKey || event.metaKey)) || (event.pointerType === 'mouse' && event.button !== 0)) return;
+                const mode = event.metaKey ? 'lasso' : (event.shiftKey ? 'rect' : '');
+                if (!mode || (event.pointerType === 'mouse' && event.button !== 0)) return;
                 if (event.target?.closest?.('button, input, textarea, select, a, .react-flow__controls, .vyasa-tasks-filter-card')) return;
                 const reactFlow = reactFlowApiRef.current;
                 const el = flowWrapperRef.current;
@@ -4309,7 +4316,7 @@ async function renderTasksGraphs(rootElement = document) {
                 el.focus?.({ preventScroll: true });
                 setSelectedNodeId(null);
                 setHoveredNodeId(null);
-                setDragSelection({ pointerId: event.pointerId, startClientX: event.clientX, startClientY: event.clientY, currentClientX: event.clientX, currentClientY: event.clientY, startFlow, currentFlow: startFlow });
+                setDragSelection({ pointerId: event.pointerId, mode, startClientX: event.clientX, startClientY: event.clientY, currentClientX: event.clientX, currentClientY: event.clientY, startFlow, currentFlow: startFlow, points: [startFlow], clientPoints: [{ x: event.clientX, y: event.clientY }] });
                 event.preventDefault();
                 event.stopPropagation();
             }, []);
@@ -4317,12 +4324,14 @@ async function renderTasksGraphs(rootElement = document) {
                 if (!dragSelection || dragSelection.pointerId !== event.pointerId) return;
                 const reactFlow = reactFlowApiRef.current;
                 if (!reactFlow) return;
+                const currentFlow = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+                const currentClientPoint = { x: event.clientX, y: event.clientY };
                 setDragSelection((current) => current && current.pointerId === event.pointerId
-                    ? { ...current, currentClientX: event.clientX, currentClientY: event.clientY, currentFlow: reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY }) }
+                    ? { ...current, currentClientX: event.clientX, currentClientY: event.clientY, currentFlow, points: current.mode === 'lasso' ? extendLassoPoints(current.points, currentFlow) : current.points, clientPoints: current.mode === 'lasso' ? extendLassoPoints(current.clientPoints, currentClientPoint) : current.clientPoints }
                     : current);
                 event.preventDefault();
                 event.stopPropagation();
-            }, [dragSelection]);
+            }, [dragSelection, extendLassoPoints]);
             const finishDragSelection = React.useCallback((event) => {
                 if (!dragSelection || dragSelection.pointerId !== event.pointerId) return;
                 try {
@@ -4332,12 +4341,14 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const distance = Math.hypot(event.clientX - dragSelection.startClientX, event.clientY - dragSelection.startClientY);
                 if (distance >= 3) {
-                    const selected = selectTasksGraphNodeIdsInRect(graphBaseRef.current.nodes || [], {
-                        x1: dragSelection.startFlow.x,
-                        y1: dragSelection.startFlow.y,
-                        x2: dragSelection.currentFlow.x,
-                        y2: dragSelection.currentFlow.y,
-                    });
+                    const selected = dragSelection.mode === 'lasso'
+                        ? selectTasksGraphNodeIdsInPolygon(graphBaseRef.current.nodes || [], extendLassoPoints(dragSelection.points, dragSelection.currentFlow))
+                        : selectTasksGraphNodeIdsInRect(graphBaseRef.current.nodes || [], {
+                            x1: dragSelection.startFlow.x,
+                            y1: dragSelection.startFlow.y,
+                            x2: dragSelection.currentFlow.x,
+                            y2: dragSelection.currentFlow.y,
+                        });
                     setSelectedNodeIds(new Set(selected));
                     suppressNextGraphClickRef.current = true;
                     window.setTimeout(() => {
@@ -4347,7 +4358,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setDragSelection(null);
                 event.preventDefault();
                 event.stopPropagation();
-            }, [dragSelection, expanded]);
+            }, [dragSelection, expanded, extendLassoPoints]);
             React.useEffect(() => () => {
                 if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
             }, []);
@@ -4593,6 +4604,25 @@ async function renderTasksGraphs(rootElement = document) {
                 const bounds = flowWrapperRef.current?.getBoundingClientRect?.();
                 const offsetX = bounds?.left || 0;
                 const offsetY = bounds?.top || 0;
+                if (dragSelection.mode === 'lasso') {
+                    const d = (dragSelection.clientPoints || []).map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x - offsetX} ${point.y - offsetY}`).join(' ');
+                    return window.React.createElement('svg', {
+                        style: { position: 'absolute', inset: 0, zIndex: 2500, pointerEvents: 'none', overflow: 'visible' },
+                    },
+                    window.React.createElement('path', {
+                        d,
+                        fill: 'none',
+                        stroke: 'color-mix(in srgb, var(--vyasa-primary) 82%, transparent)',
+                        strokeWidth: 2,
+                        strokeLinejoin: 'round',
+                        strokeLinecap: 'round',
+                    }),
+                    window.React.createElement('path', {
+                        d: `${d} Z`,
+                        fill: 'color-mix(in srgb, var(--vyasa-primary) 10%, transparent)',
+                        stroke: 'none',
+                    }));
+                }
                 const left = Math.min(dragSelection.startClientX, dragSelection.currentClientX) - offsetX;
                 const top = Math.min(dragSelection.startClientY, dragSelection.currentClientY) - offsetY;
                 const width = Math.abs(dragSelection.currentClientX - dragSelection.startClientX);
