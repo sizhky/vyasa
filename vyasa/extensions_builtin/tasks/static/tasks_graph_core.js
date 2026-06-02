@@ -51,13 +51,12 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null) {
 }
 
 export function isTasksGraphNodeSelectable(kind, isExpanded = false) {
-    return kind === 'task' || (kind === 'group' && !isExpanded);
+    return kind === 'task' || kind === 'group' || kind === 'groupTitle';
 }
 
 export function tasksGraphNodeHitArea(kind, isExpanded = false) {
     if (kind === 'task') return 'selectable';
-    if (kind === 'groupTitle') return 'control';
-    if (kind === 'group' && isExpanded) return 'background';
+    if (kind === 'groupTitle') return 'selectable';
     if (kind === 'group') return 'selectable';
     return 'passive';
 }
@@ -83,7 +82,7 @@ export function selectTasksGraphNodeIdsInRect(nodes, rect) {
     };
     const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
     return (nodes || []).filter((node) => {
-        if (node?.data?.__kind__ !== 'task' && node?.data?.__kind__ !== 'group') return false;
+        if (node?.data?.__kind__ !== 'task' && node?.data?.__kind__ !== 'group' && node?.data?.__kind__ !== 'groupTitle') return false;
         const box = tasksGraphNodeAbsoluteRect(node, byId);
         return box.left >= bounds.left && box.right <= bounds.right && box.top >= bounds.top && box.bottom <= bounds.bottom;
     }).map((node) => node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id).filter(Boolean);
@@ -108,7 +107,7 @@ export function selectTasksGraphNodeIdsInPolygon(nodes, points) {
     if (polygon.length < 3) return [];
     const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
     return (nodes || []).filter((node) => {
-        if (node?.data?.__kind__ !== 'task' && node?.data?.__kind__ !== 'group') return false;
+        if (node?.data?.__kind__ !== 'task' && node?.data?.__kind__ !== 'group' && node?.data?.__kind__ !== 'groupTitle') return false;
         const box = tasksGraphNodeAbsoluteRect(node, byId);
         return pointInPolygon({ x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 }, polygon);
     }).map((node) => node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id).filter(Boolean);
@@ -279,7 +278,7 @@ function deterministicHandlePct(index, count) {
     return edgeHandlePct(index, count);
 }
 
-function edgeAnchorSides(sourceRect, targetRect) {
+function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode = null) {
     const sourceCenterX = sourceRect.x + sourceRect.width / 2;
     const sourceCenterY = sourceRect.y + sourceRect.height / 2;
     const targetCenterX = targetRect.x + targetRect.width / 2;
@@ -296,6 +295,11 @@ function edgeAnchorSides(sourceRect, targetRect) {
     const verticalSide = dy >= 0
         ? { sourceSide: 'bottom', targetSide: 'top', sortAxis: 'x' }
         : { sourceSide: 'top', targetSide: 'bottom', sortAxis: 'x' };
+    const sourceKind = sourceNode?.data?.__kind__ || sourceNode?.__kind__;
+    const targetKind = targetNode?.data?.__kind__ || targetNode?.__kind__;
+    if (sourceKind === 'group' && targetKind === 'group' && Math.abs(dx) >= Math.abs(dy) * 0.8) {
+        return horizontalSide;
+    }
     const significantRowOverlap = overlapY >= Math.min(sourceRect.height, targetRect.height) * 0.35;
     if (significantRowOverlap && Math.abs(dx) >= Math.abs(dy) * 1.1) {
         return horizontalSide;
@@ -370,13 +374,14 @@ function absoluteNodeRects(nodes) {
 
 export function buildTaskEdgeAnchors(nodes, edges) {
     const rects = absoluteNodeRects(nodes);
+    const nodesById = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
     const outgoingGroups = new Map();
     const incomingGroups = new Map();
     const anchoredEdges = (edges || []).map((edge, index) => {
         const sourceRect = rects[edge.source];
         const targetRect = rects[edge.target];
         if (!sourceRect || !targetRect) return { ...edge, _anchorIndex: index };
-        const { sourceSide, targetSide, sortAxis } = edgeAnchorSides(sourceRect, targetRect);
+        const { sourceSide, targetSide, sortAxis } = edgeAnchorSides(sourceRect, targetRect, nodesById[edge.source], nodesById[edge.target]);
         const anchored = {
             ...edge,
             _anchorIndex: index,

@@ -50,6 +50,38 @@ def test_tasks_filter_policy_empty_attributes_do_not_hide_all_keys():
     assert "Array.isArray(whitelistSource) && whitelistSource.length" in source
 
 
+def test_tasks_groups_remain_selectable_when_expanded():
+    core_source = Path("vyasa/extensions_builtin/tasks/static/tasks_graph_core.js").read_text()
+    graph_source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "return kind === 'task' || kind === 'group' || kind === 'groupTitle';" in core_source
+    assert "if (kind === 'group') return 'selectable';" in core_source
+    assert "const descendantIds = collectTasksGroupDescendantIds(nodeId, model);" in graph_source
+    assert "const directEndpointIds = new Set([nodeId, ...descendantIds]);" in graph_source
+    assert "for (const endpointId of Array.from(directEndpointIds))" in graph_source
+    assert "const egoHighOpacityIds = new Set(egoSelectedIds);" in graph_source
+    assert "const titleOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1)" in graph_source
+    assert "addGroupWithDescendants(edge.target)" not in graph_source
+
+
+def test_tasks_expanded_group_title_bar_selects_source_group():
+    core_source = Path("vyasa/extensions_builtin/tasks/static/tasks_graph_core.js").read_text()
+    graph_source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "kind === 'groupTitle'" in core_source
+    assert "if (kind === 'groupTitle') return 'selectable';" in core_source
+    assert "selectable: isTasksGraphNodeSelectable('groupTitle')" in graph_source
+    assert "const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;" in graph_source
+    assert "const mode = directEndpointIds.has(sourceNodeId)" in graph_source
+
+
+def test_tasks_group_group_edges_prefer_side_anchors_when_side_by_side():
+    core_source = Path("vyasa/extensions_builtin/tasks/static/tasks_graph_core.js").read_text()
+
+    assert "sourceKind === 'group' && targetKind === 'group'" in core_source
+    assert "edgeAnchorSides(sourceRect, targetRect, nodesById[edge.source], nodesById[edge.target])" in core_source
+
+
 def test_tasks_filter_panel_has_group_by_hierarchy_controls():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
