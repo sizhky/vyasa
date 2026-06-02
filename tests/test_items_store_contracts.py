@@ -13,7 +13,7 @@ from vyasa.extensions_builtin.tasks.items_store_contracts import (
     ValidationCode,
     ValidationFinding,
 )
-from vyasa.extensions_builtin.tasks.items_pack import read_kg_pack
+from vyasa.extensions_builtin.tasks.items_pack import read_edges, read_kg_pack
 from vyasa.extensions_builtin.tasks.model import _resolve_tasks_source_path, parse_tasks_text
 from vyasa.config import reload_config
 
@@ -26,6 +26,15 @@ if str(SKILL_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SKILL_SCRIPT_DIR))
 
 from kg_pack_convert import convert_legacy_items_markdown
+
+
+def test_kg_pack_named_edge_without_relation_still_loads(tmp_path):
+    edges_path = tmp_path / "base.edges"
+    edges_path.write_text("e-api-ui: n-api -> n-ui\n", encoding="utf-8")
+
+    edges = read_edges(edges_path)
+
+    assert edges == [{"id": "e-api-ui", "source": "n-api", "target": "n-ui"}]
 
 
 def test_kg_pack_names_are_stable():
