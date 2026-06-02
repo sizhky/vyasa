@@ -456,6 +456,14 @@ def test_tasks_group_hover_tooltip_wraps_long_values_inside_max_width():
     assert "fontSize: `calc(${hoverFontSize} * 1.12)`" in source
 
 
+def test_tasks_ego_views_keep_drag_selection_enabled():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    start_drag_selection = source.split("const startDragSelection = React.useCallback((event) => {", 1)[1].split("const updateDragSelection", 1)[0]
+
+    assert "event.metaKey ? 'lasso' : (event.shiftKey ? 'rect' : '')" in start_drag_selection
+    assert "if (egoMode) return;" not in start_drag_selection
+
+
 def test_tasks_fullscreen_reuses_canvas_background_contract():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
