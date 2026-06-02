@@ -218,6 +218,18 @@ test('group panels use passive hit areas in items graph', () => {
     assert.equal(tasksGraphNodeHitArea('groupTitle'), 'control');
 });
 
+test('note special filter uses derived yes/no value', async () => {
+    const fs = await import('node:fs/promises');
+    const source = await fs.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const match = source.match(/function tasksNodeMatchesFilters\(node, filters\) \{[\s\S]*?\n\}/);
+    assert.ok(match, 'tasksNodeMatchesFilters should exist');
+    const factory = new Function('TASKS_HAS_NOTE_ATTR', `${match[0]}; return tasksNodeMatchesFilters;`);
+    const tasksNodeMatchesFilters = factory('has_note');
+    assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['yes'] }), true);
+    assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['no'] }), false);
+    assert.equal(tasksNodeMatchesFilters({ __has_note__: false }, { has_note: ['no'] }), true);
+});
+
 test('toggleMultiValueFilter supports multi-color selection and reset', () => {
     const selected = toggleMultiValueFilter({}, 'kind', 'assumption', true);
     assert.deepEqual(selected, { kind: ['assumption'] });

@@ -1045,8 +1045,11 @@ function tasksNodeMatchesFilters(node, filters) {
     const entries = Object.entries(filters || {}).filter(([, value]) => value);
     if (!entries.length) return true;
     return entries.every(([key, value]) => {
-        if (Array.isArray(value)) return !value.length || value.includes(String(node?.[key] || ''));
-        return String(node?.[key] || '') === String(value);
+        const nodeValue = key === TASKS_HAS_NOTE_ATTR
+            ? (node?.__has_note__ ? 'yes' : 'no')
+            : node?.[key];
+        if (Array.isArray(value)) return !value.length || value.includes(String(nodeValue || ''));
+        return String(nodeValue || '') === String(value);
     });
 }
 
@@ -4292,7 +4295,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }, 90);
             }, [expanded]);
             const startDragSelection = React.useCallback((event) => {
-                if (!event.shiftKey || (event.pointerType === 'mouse' && event.button !== 0)) return;
+                if ((!(event.shiftKey || event.metaKey)) || (event.pointerType === 'mouse' && event.button !== 0)) return;
                 if (event.target?.closest?.('button, input, textarea, select, a, .react-flow__controls, .vyasa-tasks-filter-card')) return;
                 const reactFlow = reactFlowApiRef.current;
                 const el = flowWrapperRef.current;
