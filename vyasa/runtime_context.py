@@ -82,6 +82,9 @@ def traced(name: str):
             with trace_span(name):
                 return fn(*args, **kwargs)
 
+        for attr in ("cache_clear", "cache_info", "cache_parameters"):
+            if hasattr(fn, attr):
+                setattr(wrapper, attr, getattr(fn, attr))
         return wrapper
 
     return decorate
