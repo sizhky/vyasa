@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -177,13 +177,24 @@ test('task and collapsed group nodes are selectable in items graph', () => {
     assert.equal(isTasksGraphNodeSelectable('groupTitle'), false);
 });
 
-test('drag rect selects selectable task nodes and skips expanded groups', () => {
+test('drag rect selects task nodes and expanded groups', () => {
     const nodes = [
         { id: 'group-a', position: { x: 100, y: 100 }, style: { width: 160, height: 120 }, data: { __kind__: 'group' } },
         { id: 'task-a', parentId: 'group-a', position: { x: 20, y: 20 }, style: { width: 80, height: 40 }, data: { __kind__: 'task' } },
         { id: 'task-b', position: { x: 360, y: 100 }, style: { width: 80, height: 40 }, data: { __kind__: 'task' } },
     ];
-    assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 110, y1: 110, x2: 230, y2: 170 }, new Set(['group-a'])), ['task-a']);
+    assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 110, y1: 110, x2: 230, y2: 170 }), ['task-a']);
+    assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 95, y1: 95, x2: 265, y2: 225 }), ['group-a', 'task-a']);
+});
+
+test('polygon select matches nodes whose centers fall inside freeform lasso', () => {
+    const nodes = [
+        { id: 'left', position: { x: 40, y: 40 }, style: { width: 60, height: 40 }, data: { __kind__: 'task' } },
+        { id: 'right', position: { x: 220, y: 40 }, style: { width: 60, height: 40 }, data: { __kind__: 'task' } },
+        { id: 'low', position: { x: 130, y: 180 }, style: { width: 60, height: 40 }, data: { __kind__: 'task' } },
+    ];
+    const polygon = [{ x: 20, y: 20 }, { x: 180, y: 20 }, { x: 180, y: 120 }, { x: 20, y: 120 }];
+    assert.deepEqual(selectTasksGraphNodeIdsInPolygon(nodes, polygon), ['left']);
 });
 
 test('graph stats count groups, tasks, and dependency edges', () => {
@@ -215,6 +226,18 @@ test('group panels use passive hit areas in items graph', () => {
     assert.equal(tasksGraphNodeHitArea('group', false), 'selectable');
     assert.equal(tasksGraphNodeHitArea('group', true), 'background');
     assert.equal(tasksGraphNodeHitArea('groupTitle'), 'control');
+});
+
+test('note special filter uses derived yes/no value', async () => {
+    const fs = await import('node:fs/promises');
+    const source = await fs.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const match = source.match(/function tasksNodeMatchesFilters\(node, filters\) \{[\s\S]*?\n\}/);
+    assert.ok(match, 'tasksNodeMatchesFilters should exist');
+    const factory = new Function('TASKS_HAS_NOTE_ATTR', `${match[0]}; return tasksNodeMatchesFilters;`);
+    const tasksNodeMatchesFilters = factory('has_note');
+    assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['yes'] }), true);
+    assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['no'] }), false);
+    assert.equal(tasksNodeMatchesFilters({ __has_note__: false }, { has_note: ['no'] }), true);
 });
 
 test('toggleMultiValueFilter supports multi-color selection and reset', () => {
