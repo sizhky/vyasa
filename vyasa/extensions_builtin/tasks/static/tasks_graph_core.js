@@ -18,12 +18,17 @@ export function nextWheelState(state, rect, point, deltaY, maxScale = 55) {
     };
 }
 
-const TASK_NODE_FONT = '600 13px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+const TASK_NODE_FONT = '600 16px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 const TASK_NODE_SPECS = {
     group: { width: 250, minHeight: 80, padX: 32, padY: 28, reserveX: 34 },
     groupTitle: { width: 250, minHeight: 34, padX: 20, padY: 12, reserveX: 28 },
     task: { width: 220, minHeight: 60, padX: 28, padY: 24, reserveX: 0 },
+};
+const TASK_NODE_IMAGE_SPECS = {
+    group: { size: 30, gap: 10 },
+    groupTitle: { size: 20, gap: 7 },
+    task: { size: 28, gap: 10 },
 };
 
 export function measureTextWidth(text, font = TASK_NODE_FONT) {
@@ -36,17 +41,21 @@ export function measureTextWidth(text, font = TASK_NODE_FONT) {
     return ctx.measureText(text).width;
 }
 
-export function sizeTaskNode(label, kind = 'task', widthOverride = null) {
+export function sizeTaskNode(label, kind = 'task', widthOverride = null, options = {}) {
     const spec = TASK_NODE_SPECS[kind] || TASK_NODE_SPECS.task;
     const width = Math.max(32, Number(widthOverride || spec.width));
-    const maxTextWidth = Math.max(32, width - spec.padX - spec.reserveX - 8);
+    const imageSpec = options?.hasImage ? (TASK_NODE_IMAGE_SPECS[kind] || TASK_NODE_IMAGE_SPECS.task) : null;
+    const imageReserve = imageSpec ? imageSpec.size + imageSpec.gap : 0;
+    const maxTextWidth = Math.max(32, width - spec.padX - spec.reserveX - imageReserve - 8);
+    const widthBias = options?.hasImage ? 1.18 : 1.12;
     const lines = String(label || '')
         .split(/\r?\n/)
-        .reduce((count, part) => count + Math.max(1, Math.ceil((measureTextWidth(part) * 1.08) / maxTextWidth)), 0);
-    const textHeight = Math.max(20, lines * 18);
+        .reduce((count, part) => count + Math.max(1, Math.ceil((measureTextWidth(part) * widthBias) / maxTextWidth)), 0);
+    const textHeight = Math.max(24, lines * 21);
+    const contentHeight = Math.max(textHeight, imageSpec?.size || 0);
     return {
         width,
-        height: Math.max(spec.minHeight, Math.ceil(textHeight + spec.padY + 8)),
+        height: Math.max(spec.minHeight, Math.ceil(contentHeight + spec.padY + 8)),
     };
 }
 
@@ -157,6 +166,64 @@ export function toggleMultiValueFilter(filters, key, value, enabled) {
     if (values.length > 0) next[filterKey] = values;
     else delete next[filterKey];
     return next;
+}
+
+export function tasksImagePaletteFor(model, imageBy) {
+    const key = String(imageBy || '').trim();
+    if (!key) return {};
+    const palettes = model?.node_image_palettes && typeof model.node_image_palettes === 'object'
+        ? model.node_image_palettes
+        : {};
+    const configuredPalette = palettes[key];
+    return configuredPalette && typeof configuredPalette === 'object' ? configuredPalette : {};
+}
+
+export function normalizeTasksNodeImageUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('iconify:')) {
+        const parts = raw.split(':').map((part) => part.trim()).filter(Boolean);
+        if (parts.length < 3) return '';
+        const prefix = encodeURIComponent(parts[1]);
+        const name = encodeURIComponent(parts.slice(2).join('-'));
+        return `https://api.iconify.design/${prefix}/${name}.svg`;
+    }
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (raw.startsWith('/') || raw.startsWith('./') || raw.startsWith('../')) return raw;
+    return '';
+}
+
+export function resolveTasksNodeImage(node, model, imageByOverride = null, paletteOverride = null) {
+    if (!node) return '';
+    const ownImage = normalizeTasksNodeImageUrl(node.image);
+    if (ownImage) return ownImage;
+    const imageBy = imageByOverride !== null
+        ? String(imageByOverride || '').trim()
+        : (typeof model?.image_by === 'string' ? model.image_by.trim() : '');
+    if (!imageBy) return '';
+    const palette = paletteOverride && typeof paletteOverride === 'object'
+        ? paletteOverride
+        : tasksImagePaletteFor(model, imageBy);
+    const value = node[imageBy];
+    if (value === null || value === undefined || String(value).trim() === '') return '';
+    return normalizeTasksNodeImageUrl(palette[String(value)]);
+}
+
+export function isTasksEdgeInternalToSelection(edge, selectedNodeIds) {
+    if (!edge || !(selectedNodeIds instanceof Set)) return false;
+    return selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target);
+}
+
+export function isTasksEdgeLabelHoverDimmingActive(selectedNodeId, hoveredNodeId) {
+    const selected = String(selectedNodeId || '').trim();
+    const hovered = String(hoveredNodeId || '').trim();
+    return Boolean(selected && hovered && selected !== hovered);
+}
+
+export function tasksEdgeLabelZForMode(mode, baseZ, selectedZ, focusZ) {
+    if (mode === 'focused-in' || mode === 'focused-out') return focusZ;
+    if (mode === 'selected') return selectedZ;
+    return baseZ;
 }
 
 export function applyTasksFilterAttributePolicy(keys, model) {

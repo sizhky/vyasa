@@ -199,6 +199,41 @@ items_schema: roadmap.kg.schema
     assert model["card_states"] == ["Not Done", "Done", "Deferred/Cancelled"]
 
 
+def test_kg_palette_design_palette_feeds_color_and_image_modes(tmp_path):
+    (tmp_path / "roadmap.kg.schema").write_text(
+        "@graph id=roadmap initial_view=base\n@sources\nnodes=roadmap.kg.nodes\npalette=roadmap.kg.palette\n@views\nbase:\n    source=base\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "roadmap.kg.nodes").write_text("n1: API\n\ttype=service\nn2: DB\n\ttype=database\n", encoding="utf-8")
+    (tmp_path / "roadmap.kg.palette").write_text(
+        json.dumps({
+            "default_design_palette": "architecture",
+            "default_image_by": "type",
+            "node_color_palettes": {"status": {"todo": "#f59e0b"}},
+            "design_palette": {
+                "architecture": {
+                    "colors": {"service": "#2563eb", "database": "#16a34a"},
+                    "images": {"service": "iconify:mdi:cube-outline", "database": "iconify:devicon:postgresql"},
+                },
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    model = parse_tasks_text("""```items
+---
+items_schema: roadmap.kg.schema
+default_color_by: type
+---
+```""", current_path=tmp_path / "graph.md")
+
+    assert model["default_design_palette"] == "architecture"
+    assert model["image_by"] == "type"
+    assert model["node_color_palettes"]["status"] == {"todo": "#f59e0b"}
+    assert model["node_color_palettes"]["type"]["database"] == "#16a34a"
+    assert model["node_image_palettes"]["type"]["service"] == "iconify:mdi:cube-outline"
+
+
 def test_read_kg_pack_writes_and_refreshes_kg_cache(tmp_path):
     (tmp_path / "roadmap.kg.schema").write_text("@graph id=roadmap\n@sources\nnodes=roadmap.kg.nodes\nbase:\n    edges=roadmap.kg.edges\ncache=roadmap.kg.cache\n", encoding="utf-8")
     (tmp_path / "roadmap.kg.nodes").write_text("n1: Login\n", encoding="utf-8")
