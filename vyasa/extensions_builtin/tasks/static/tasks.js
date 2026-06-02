@@ -23,6 +23,7 @@ const TASKS_GROUP_BG = 'color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-p
 const TASKS_GROUP_EXPANDED_BG = 'color-mix(in srgb, var(--vyasa-primary) 7%, transparent)';
 const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 42%, var(--vyasa-primary) 58%)';
 const TASKS_GROUP_TITLE_BG = 'color-mix(in srgb, var(--vyasa-paper) 76%, var(--vyasa-primary) 24%)';
+const TASKS_EDGE_LABEL_BG = 'color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%)';
 const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 74%, var(--vyasa-primary) 26%)';
 const TASKS_GROUP_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-primary) 10%, transparent)';
 const TASKS_EDGE_FOCUS_OUT_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 42%, #ef4444 58%)';
@@ -35,6 +36,7 @@ const TASKS_PROJECTION_UNSPECIFIED_GROUP_OPACITY_DEFAULT = 7;
 const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;
 const TASKS_EDGE_OPACITY_MIN = 0.05;
 const TASKS_EDGE_OPACITY_MAX = 1;
+const TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT = 0.25;
 const TASKS_DONE_ACCENT = '#22c55e';
 const TASKS_CARD_STATE_ATTR = 'card_state';
 const TASKS_HAS_NOTE_ATTR = 'has_note';
@@ -156,6 +158,12 @@ function clampTasksProjectionContentOpacity(value) {
 
 function tasksOpacityPctLabel(value) {
     return `${Math.round(clampTasksProjectionContentOpacity(value) * 100)}%`;
+}
+
+function clampTasksEgoNeighborOpacity(value) {
+    const parsed = Number.parseFloat(String(value ?? ''));
+    if (!Number.isFinite(parsed)) return TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT;
+    return Math.max(0.05, Math.min(1, parsed));
 }
 
 function tasksDefaultEdgeOpacity(edgeCount) {
@@ -2569,7 +2577,7 @@ function tasksHeaderControlsHtml(widgetId, includeFullscreen = false) {
     const fullscreen = includeFullscreen
         ? `<button onclick="openTasksFullscreen('${widgetId}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>`
         : '';
-    return `${fullscreen}<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">${tasksHeaderButtonHtml(widgetId, 'openEgo', 'EG', 'Open selected ego graph')}${tasksHeaderButtonHtml(widgetId, 'openEgoNeighbors', 'EG+', 'Open selected ego graph with neighbors')}${tasksHeaderButtonHtml(widgetId, 'fit', 'F', 'Fit view')}${tasksHeaderButtonHtml(widgetId, 'expandDepth', 'I', 'Expand next group depth')}${tasksHeaderButtonHtml(widgetId, 'collapseDepth', 'O', 'Collapse deepest group depth')}${tasksHeaderButtonHtml(widgetId, 'expand', 'U', 'Unfold all groups')}${tasksHeaderButtonHtml(widgetId, 'collapse', 'P', 'Collapse all groups')}${tasksHeaderButtonHtml(widgetId, 'toggleEdges', 'E', 'Toggle edges')}</div>`;
+    return `${fullscreen}<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">${tasksHeaderButtonHtml(widgetId, 'toggleHelp', '?', 'Show graph shortcuts and gestures')}${tasksHeaderButtonHtml(widgetId, 'openEgo', 'EG', 'Open selected ego graph')}${tasksHeaderButtonHtml(widgetId, 'openEgoNeighbors', 'EG+', 'Open selected ego graph with neighbors')}${tasksHeaderButtonHtml(widgetId, 'fit', 'F', 'Fit view')}${tasksHeaderButtonHtml(widgetId, 'expandDepth', 'I', 'Expand next group depth')}${tasksHeaderButtonHtml(widgetId, 'collapseDepth', 'O', 'Collapse deepest group depth')}${tasksHeaderButtonHtml(widgetId, 'expand', 'U', 'Unfold all groups')}${tasksHeaderButtonHtml(widgetId, 'collapse', 'P', 'Collapse all groups')}${tasksHeaderButtonHtml(widgetId, 'toggleEdges', 'E', 'Toggle edges')}</div>`;
 }
 
 function tasksHoverAttrRows(node, hoverAttrs) {
@@ -2734,6 +2742,7 @@ async function renderTasksGraphs(rootElement = document) {
             const [dragSelection, setDragSelection] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
+            const [helpOpen, setHelpOpen] = React.useState(false);
             const [activeFilters, setActiveFilters] = React.useState(() => egoMode ? {} : (
                 projectionPrefs?.filters && typeof projectionPrefs.filters === 'object'
                     ? projectionPrefs.filters
@@ -2769,6 +2778,7 @@ async function renderTasksGraphs(rootElement = document) {
                     ? defaultProjectionUnspecifiedContentOpacity
                     : clampTasksProjectionContentOpacity(sourcePrefsRef.current.unspecifiedContentOpacity)
             ));
+            const [egoNeighborOpacity, setEgoNeighborOpacity] = React.useState(TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT);
             const cardStates = React.useMemo(() => normalizeTasksCardStates(sourceModel), [sourceModel]);
             const [nodeStates, setNodeStates] = React.useState(() => {
                 const stableCheckedNodeIds = readTasksCheckedNodeIds(sourceModel);
@@ -3029,7 +3039,7 @@ async function renderTasksGraphs(rootElement = document) {
                             markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: edgeColor || 'currentColor' },
                             zIndex: TASKS_EDGE_Z,
                             labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || 'currentColor', opacity: edgeOpacity },
-                            labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
+                            labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
                             style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: edgeColor || 'currentColor' },
                         };
                     });
@@ -3144,8 +3154,8 @@ async function renderTasksGraphs(rootElement = document) {
                             ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${groupColor} ${groupBorderMix}%)`
                             : `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`)
                         : TASKS_NODE_BORDER;
-                    const egoNeighborOpacity = egoMode && model.ego_include_neighbors && n.__kind__ !== 'group' && !egoHighOpacityIds.has(n.id) ? 0.25 : 1;
-                    const branchOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1) * egoNeighborOpacity;
+                    const egoNodeOpacity = egoMode && model.ego_include_neighbors && n.__kind__ !== 'group' && !egoHighOpacityIds.has(n.id) ? egoNeighborOpacity : 1;
+                    const branchOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1) * egoNodeOpacity;
                     const rfNode = {
                         id: n.id,
                         type: 'vyasaTask',
@@ -3185,7 +3195,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const titleImage = resolveTasksNodeImage(n, model);
                     const titleHeight = sizeTaskNode(n.label || n.id, 'groupTitle', titleWidth, { hasImage: Boolean(titleImage) }).height;
                     const titleOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1)
-                        * (egoMode && model.ego_include_neighbors && !egoHighOpacityIds.has(n.id) ? 0.25 : 1);
+                        * (egoMode && model.ego_include_neighbors && !egoHighOpacityIds.has(n.id) ? egoNeighborOpacity : 1);
                     baseNodes.push({
                         id: `${n.id}__title`,
                         type: 'vyasaTask',
@@ -3217,7 +3227,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const branchOpacity = (unspecifiedProjectionBranchIds.has(edge.source) || unspecifiedProjectionBranchIds.has(edge.target))
                         ? projectionUnspecifiedContentOpacity
                         : 1;
-                    const egoEdgeOpacity = egoMode && model.ego_include_neighbors && (!egoSelectedIds.has(edge.source) || !egoSelectedIds.has(edge.target)) ? 0.25 : 1;
+                    const egoEdgeOpacity = egoMode && model.ego_include_neighbors && (!egoSelectedIds.has(edge.source) || !egoSelectedIds.has(edge.target)) ? egoNeighborOpacity : 1;
                     return {
                         ...edge,
                         label: resolvedLabel,
@@ -3236,7 +3246,7 @@ async function renderTasksGraphs(rootElement = document) {
                         labelZIndex: TASKS_EDGE_LABEL_Z,
                         labelMaxWidth: layoutConfig.edgeLabelWidth,
                         labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || 'currentColor', opacity: edgeOpacity * branchOpacity * egoEdgeOpacity },
-                        labelBgStyle: { fill: 'var(--vyasa-paper)', fillOpacity: 0.88 },
+                        labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
                         style: { strokeWidth: 2.5, opacity: edgeOpacity * branchOpacity * egoEdgeOpacity, stroke: edgeColor || 'currentColor' },
                     };
                 });
@@ -3272,7 +3282,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setNodes(anchoredNodes);
                 setEdges(edgesVisible ? baseEdges : []);
                 setGraphRevision((value) => value + 1);
-            }, [ensureBaseLayout, model, sourceModel, activeColorBy, activeColorPalette, activeProjection, viewMode, edgesVisible, edgeOpacity, projectionUnspecifiedContentOpacity, checkedNodeIdSet, nodeStates, nodeNotes, cardStates]);
+            }, [ensureBaseLayout, model, sourceModel, activeColorBy, activeColorPalette, activeProjection, viewMode, edgesVisible, edgeOpacity, projectionUnspecifiedContentOpacity, egoNeighborOpacity, checkedNodeIdSet, nodeStates, nodeNotes, cardStates]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: 'currentColor' },
@@ -3317,7 +3327,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ...edge,
                             data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim' },
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity },
-                            labelBgStyle: { ...(edge.labelBgStyle || {}), fillOpacity: hit ? 0.88 : 0.06 },
+                            labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
                             style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity, strokeWidth: hit ? 4.5 : 2.5, strokeLinecap: hit ? 'round' : undefined, '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s' },
                             animated: hit,
                         };
@@ -3359,7 +3369,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)',
                                 opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity,
                             },
-                            labelBgStyle: { ...(edge.labelBgStyle || {}), fillOpacity: hit ? 0.88 : 0.06 },
+                            labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
                             style: {
                                 ...edge.style,
                                 stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)',
@@ -3490,10 +3500,10 @@ async function renderTasksGraphs(rootElement = document) {
                                 ? 'color-mix(in srgb, var(--vyasa-paper) 78%, #22c55e 22%)'
                                 : (mode === 'focused-out'
                                     ? 'color-mix(in srgb, var(--vyasa-paper) 80%, #ef4444 20%)'
-                                    : 'transparent'),
+                                    : TASKS_EDGE_LABEL_BG),
                             fillOpacity: hoverDimsLabels
-                                ? ((mode === 'focused-in' || mode === 'focused-out') ? 0.96 : 0.02)
-                                : ((mode === 'focused-in' || mode === 'focused-out') ? 0.96 : 0),
+                                ? ((mode === 'focused-in' || mode === 'focused-out') ? 0.96 : (highlighted ? 0.72 : 0.04))
+                                : ((mode === 'focused-in' || mode === 'focused-out') ? 0.96 : (highlighted ? 0.72 : 0.04)),
                         },
                         style: {
                             ...edge.style,
@@ -4047,6 +4057,11 @@ async function renderTasksGraphs(rootElement = document) {
                             reactFlow.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true });
                             return;
                         }
+                        if (event.key === '?' || (event.key === '/' && event.shiftKey)) {
+                            event.preventDefault();
+                            setHelpOpen((current) => !current);
+                            return;
+                        }
                         if (key === 'e') {
                             event.preventDefault();
                             setEdgesVisible((current) => !current);
@@ -4108,10 +4123,15 @@ async function renderTasksGraphs(rootElement = document) {
                             panViewport(reactFlow, -120 * (event.shiftKey ? 2 : 1), 0);
                             return;
                         }
+                        if (event.key === 'Escape' && helpOpen) {
+                            event.preventDefault();
+                            setHelpOpen(false);
+                            return;
+                        }
                     };
                     document.addEventListener('keydown', onKeyDown);
                     return () => document.removeEventListener('keydown', onKeyDown);
-                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode]);
+                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen]);
                 return null;
             };
             const PanControls = () => {
@@ -4734,6 +4754,7 @@ async function renderTasksGraphs(rootElement = document) {
                         openFilters: () => setFiltersCollapsed(false),
                         closeFilters: () => setFiltersCollapsed(true),
                         toggleEdges: () => setEdgesVisible((current) => !current),
+                        toggleHelp: () => setHelpOpen((current) => !current),
                     };
                     return () => {
                         delete window.__vyasaTasksActions[widgetId];
@@ -4848,6 +4869,41 @@ async function renderTasksGraphs(rootElement = document) {
                     SelectedNodePanel()
                 );
             };
+            const EgoNeighborControl = () => {
+                if (!egoMode || !model.ego_include_neighbors) return null;
+                return window.React.createElement('div', {
+                    style: {
+                        position: 'absolute',
+                        left: '12px',
+                        top: '12px',
+                        zIndex: 34,
+                        pointerEvents: 'auto',
+                        display: 'grid',
+                        gridTemplateColumns: 'max-content minmax(92px, 150px) max-content',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '7px 9px',
+                        borderRadius: '8px',
+                        border: '1px solid color-mix(in srgb, var(--vyasa-primary) 22%, transparent)',
+                        background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
+                        boxShadow: '0 10px 24px rgba(0,0,0,0.10)',
+                        backdropFilter: 'blur(8px)',
+                        fontSize: '12px',
+                    },
+                },
+                    window.React.createElement('span', { style: { fontWeight: 700, opacity: 0.72 } }, 'Neighbor Opacity'),
+                    window.React.createElement('input', {
+                        type: 'range',
+                        min: 0.05,
+                        max: 1,
+                        step: 0.01,
+                        value: egoNeighborOpacity,
+                        onChange: (event) => setEgoNeighborOpacity(clampTasksEgoNeighborOpacity(event.target.value)),
+                        style: { width: '100%', minWidth: 0, margin: 0 },
+                    }),
+                    window.React.createElement('span', { style: { opacity: 0.8, minWidth: '3em', textAlign: 'right', fontVariantNumeric: 'tabular-nums' } }, tasksOpacityPctLabel(egoNeighborOpacity))
+                );
+            };
             const GroupHoverTooltip = () => {
                 if (!groupHoverTooltip) return null;
                 const rows = Array.isArray(groupHoverTooltip.rows) ? groupHoverTooltip.rows : [];
@@ -4908,6 +4964,12 @@ async function renderTasksGraphs(rootElement = document) {
                     },
                 }, ...children);
             };
+            const HelpPopup = () => !helpOpen ? null : window.React.createElement('div', {
+                style: { position: 'absolute', left: '12px', top: egoMode && model.ego_include_neighbors ? '58px' : '12px', zIndex: 35, width: 'min(320px, calc(100% - 24px))', padding: '10px 12px', borderRadius: '10px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 22%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 10px 24px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', pointerEvents: 'auto', fontSize: '12px', lineHeight: 1.45 }
+            }, window.React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
+                window.React.createElement('strong', null, 'Graph help'),
+                window.React.createElement('button', { type: 'button', onClick: () => setHelpOpen(false), style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: 1, opacity: 0.7 } }, '×')
+            ), window.React.createElement('div', { style: { whiteSpace: 'pre-line' } }, 'Mouse\nClick node: select card or group\nClick canvas: clear selection\nShift + drag: box select\nCmd + drag: lasso select\nWheel / pinch: zoom\nDrag canvas: pan\n\nKeys\n?: toggle this help\nF: fit view\nE: toggle edges\nI / O: expand or collapse one group depth\nU / P: unfold or collapse all groups\nArrow keys: pan\nShift + arrows: pan faster'));
             const DragSelectionOverlay = () => {
                 if (!dragSelection) return null;
                 const bounds = flowWrapperRef.current?.getBoundingClientRect?.();
@@ -4984,6 +5046,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(FitOnNodesReady)
                     ),
                     RightRail(),
+                    window.React.createElement(EgoNeighborControl),
+                    window.React.createElement(HelpPopup),
                     filterPanelElement,
                     window.React.createElement(GroupHoverTooltip),
                     window.React.createElement(DragSelectionOverlay)
@@ -4998,6 +5062,8 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(FitOnNodesReady)
                 ),
                 RightRail(),
+                window.React.createElement(EgoNeighborControl),
+                window.React.createElement(HelpPopup),
                 filterPanelElement,
                 window.React.createElement(GroupHoverTooltip),
                 window.React.createElement(DragSelectionOverlay)
@@ -5187,7 +5253,7 @@ async function openTasksGraphModal(wrapper, options = {}) {
     const topRightControls = document.createElement('div');
     topRightControls.className = 'absolute top-2 right-2 z-10 flex items-center gap-1';
     topRightControls.innerHTML = options.ego
-        ? `<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">${tasksHeaderButtonHtml(fullscreenId, 'fit', 'F', 'Fit view')}${tasksHeaderButtonHtml(fullscreenId, 'toggleEdges', 'E', 'Toggle edges')}</div>`
+        ? `<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">${tasksHeaderButtonHtml(fullscreenId, 'toggleHelp', '?', 'Show graph shortcuts and gestures')}${tasksHeaderButtonHtml(fullscreenId, 'fit', 'F', 'Fit view')}${tasksHeaderButtonHtml(fullscreenId, 'toggleEdges', 'E', 'Toggle edges')}</div>`
         : tasksHeaderControlsHtml(fullscreenId, false);
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';

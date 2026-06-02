@@ -207,7 +207,7 @@ test('drag rect selects task nodes and expanded groups', () => {
     assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 95, y1: 95, x2: 265, y2: 225 }), ['group-a', 'task-a']);
 });
 
-test('polygon select matches nodes whose centers fall inside freeform lasso', () => {
+test('polygon select requires freeform lasso to contain the whole node', () => {
     const nodes = [
         { id: 'left', position: { x: 40, y: 40 }, style: { width: 60, height: 40 }, data: { __kind__: 'task' } },
         { id: 'right', position: { x: 220, y: 40 }, style: { width: 60, height: 40 }, data: { __kind__: 'task' } },
@@ -215,6 +215,8 @@ test('polygon select matches nodes whose centers fall inside freeform lasso', ()
     ];
     const polygon = [{ x: 20, y: 20 }, { x: 180, y: 20 }, { x: 180, y: 120 }, { x: 20, y: 120 }];
     assert.deepEqual(selectTasksGraphNodeIdsInPolygon(nodes, polygon), ['left']);
+    const partialPolygon = [{ x: 60, y: 20 }, { x: 180, y: 20 }, { x: 180, y: 120 }, { x: 60, y: 120 }];
+    assert.deepEqual(selectTasksGraphNodeIdsInPolygon(nodes, partialPolygon), []);
 });
 
 test('graph stats count groups, tasks, and dependency edges', () => {

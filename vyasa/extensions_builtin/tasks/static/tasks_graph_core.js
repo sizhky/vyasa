@@ -118,7 +118,12 @@ export function selectTasksGraphNodeIdsInPolygon(nodes, points) {
     return (nodes || []).filter((node) => {
         if (node?.data?.__kind__ !== 'task' && node?.data?.__kind__ !== 'group' && node?.data?.__kind__ !== 'groupTitle') return false;
         const box = tasksGraphNodeAbsoluteRect(node, byId);
-        return pointInPolygon({ x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 }, polygon);
+        return [
+            { x: box.left, y: box.top },
+            { x: box.right, y: box.top },
+            { x: box.right, y: box.bottom },
+            { x: box.left, y: box.bottom },
+        ].every((point) => pointInPolygon(point, polygon));
     }).map((node) => node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id).filter(Boolean);
 }
 
