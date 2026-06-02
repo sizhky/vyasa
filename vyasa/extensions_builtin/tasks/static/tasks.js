@@ -3379,8 +3379,9 @@ async function renderTasksGraphs(rootElement = document) {
                 prevExpandedCountRef.current = nextCount;
             }, [expanded]);
             React.useEffect(() => {
-                if (!shouldAutoFitTasksOnExpand()) return;
-                if (!pendingFitActionRef.current) return;
+                const fitAction = pendingFitActionRef.current;
+                if (!fitAction) return;
+                if (!shouldAutoFitTasksOnExpand() && fitAction !== 'shortcut') return;
                 let rafId = null;
                 let framesLeft = 25;
                 const step = () => {
@@ -3771,11 +3772,11 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'i' || key === 'o') {
                             event.preventDefault();
-                            if (key === 'o') pendingFitActionRef.current = 'collapse';
+                            pendingFitActionRef.current = 'shortcut';
                             setExpanded((current) => {
                                 const next = key === 'o'
-                                    ? collapseOneGroupDepth(model.group_tree, current)
-                                    : expandOneGroupDepth(model.group_tree, current);
+                                    ? collapseOneGroupDepth(model, current)
+                                    : expandOneGroupDepth(model, current);
                                 logTasksDebug('shortcutDepth', { direction: key === 'o' ? 'collapse' : 'expand', expanded: Array.from(next) });
                                 return next;
                             });
@@ -3784,7 +3785,7 @@ async function renderTasksGraphs(rootElement = document) {
                         if (key === 'u') {
                             event.preventDefault();
                             const allGroupIds = (model.groups || []).map((group) => group.id);
-                            pendingFitActionRef.current = 'expand';
+                            pendingFitActionRef.current = 'shortcut';
                             setExpanded((current) => {
                                 const next = new Set(allGroupIds);
                                 const unchanged = current.size === next.size && allGroupIds.every((groupId) => current.has(groupId));
@@ -3800,7 +3801,7 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'p') {
                             event.preventDefault();
-                            pendingFitActionRef.current = 'collapse';
+                            pendingFitActionRef.current = 'shortcut';
                             setExpanded(new Set());
                             logTasksDebug('shortcutCollapseAll');
                             return;
@@ -4393,13 +4394,15 @@ async function renderTasksGraphs(rootElement = document) {
                             logTasksDebug('manualSelect', { nodeId });
                         },
                         expand: () => {
+                            pendingFitActionRef.current = 'shortcut';
                             setExpanded(tasksExpandableNodeIds(model));
                         },
                         collapse: () => {
-                            pendingFitActionRef.current = 'collapse';
+                            pendingFitActionRef.current = 'shortcut';
                             setExpanded(new Set());
                         },
                         expandDepth: () => {
+                            pendingFitActionRef.current = 'shortcut';
                             setExpanded((current) => {
                                 const next = expandOneGroupDepth(model, current);
                                 logTasksDebug('manualExpandDepth', { expanded: Array.from(next) });
@@ -4407,7 +4410,7 @@ async function renderTasksGraphs(rootElement = document) {
                             });
                         },
                         collapseDepth: () => {
-                            pendingFitActionRef.current = 'collapse';
+                            pendingFitActionRef.current = 'shortcut';
                             setExpanded((current) => {
                                 const next = collapseOneGroupDepth(model, current);
                                 logTasksDebug('manualCollapseDepth', { expanded: Array.from(next) });
