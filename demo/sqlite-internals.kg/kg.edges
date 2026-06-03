@@ -1,0 +1,4 @@
+e1: sql -> parser is-read-by
+e2: parser -> vdbe builds-steps-for
+e3: vdbe -> btree asks-data-from
+e4: btree -> pager gets-pages-from

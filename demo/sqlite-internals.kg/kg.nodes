@@ -1,0 +1,10 @@
+sql: SQL statement
+	description=The question or command you type.
+parser: Parser
+	description=The part that reads your words and figures out what you mean.
+vdbe: VDBE
+	description=The worker that follows the step-by-step plan.
+btree: B-tree storage
+	description=The place where SQLite keeps rows and indexes in neat order.
+pager: Pager
+	description=The part that brings pieces of the database in and out of memory and disk.

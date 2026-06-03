@@ -10,5 +10,8 @@ Try the wiki link example:
 - [[wikilinks]]
 - [[wikilinks-lab/README]]
 
+Try the SQLite internals KG demo:
+- [[sqlite-internals-as-kg]]
+
 Try the Reveal.js presentation example:
 - [Reveal Slides Demo](./reveal-slides.md)
