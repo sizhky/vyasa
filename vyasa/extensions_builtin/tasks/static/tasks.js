@@ -547,7 +547,8 @@ function tasksNodeMetaEntries(node) {
 function tasksOpenDecisionEntry(node) {
     if (!node || node?.__kind__ === 'group' || node?.__kind__ === 'groupTitle') return null;
     if (node?.__checked__ === true) return null;
-    const value = String(node?.open_decision || node?.decision || 'What is the open decision?').trim();
+    const raw = node?.open_decision ?? node?.decision ?? '';
+    const value = String(raw).trim();
     if (!value) return null;
     return { key: '__open_decision__', label: 'Open decision', value };
 }

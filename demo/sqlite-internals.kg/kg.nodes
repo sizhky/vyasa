@@ -1,10 +1,61 @@
 sql: SQL statement
 	description=The question or command you type.
+	sql-text: SQL text
+		description=The raw words you send to SQLite.
+		example=SQLite receives `SELECT name FROM users WHERE id = 7`.
+	sql-kind: Read-or-write intent
+		description=The part of the SQL that says whether you want to read data or change data.
+		example=This query is a read, not a write.
 parser: Parser
 	description=The part that reads your words and figures out what you mean.
+	parser-read: Token stream
+		description=The SQL broken into small pieces SQLite can work with.
+		example=SQLite splits the query into pieces like SELECT, name, FROM, users, WHERE, id, and 7.
+	parser-check: Checked statement
+		description=A statement whose pieces fit valid SQL rules.
+		example=SQLite confirms this is a valid SELECT with a table, a column, and a filter.
+	parser-build: Bytecode program
+		description=A low-level program SQLite can run.
+		example=SQLite builds a tiny program that says: find user 7, read the name column, return it.
 vdbe: VDBE
 	description=The worker that follows the step-by-step plan.
+	vdbe-run: Bytecode run
+		description=The VDBE actively running the bytecode program.
+		example=The VDBE starts stepping through the program for this SELECT.
+	vdbe-ask: Read request
+		description=A request for rows or index entries.
+		example=The VDBE asks storage for the row where id = 7.
+	vdbe-write: Write request
+		description=A request to insert, update, or delete rows or index entries.
+		example=This query does not use the write path because nothing is being changed.
+	vdbe-result: Query result
+		description=The rows SQLite sends back after a read query.
+		example=SQLite returns one answer row with the user's name.
 btree: B-tree storage
 	description=The place where SQLite keeps rows and indexes in neat order.
+	btree-find: Tree lookup
+		description=A search through the table or index B-tree.
+		example=The B-tree lookup walks toward the entry for id = 7.
+	btree-return: Result row
+		description=A row or index entry found by the lookup.
+		example=The matching row for user 7 is found and handed back.
+	btree-change: Row change
+		description=A changed row or index entry inside the tree.
+		example=This query does not change any row, so this node stays unused here.
 pager: Pager
 	description=The part that brings pieces of the database in and out of memory and disk.
+	pager-cache: Page cache
+		description=Database pages currently sitting in memory.
+		example=SQLite first checks whether the needed page for user 7 is already in memory.
+	pager-read: Disk read
+		description=A read from disk to bring a needed page into memory.
+		example=If that page is not in memory, SQLite reads it from disk.
+	pager-dirty: Dirty page
+		description=A page changed in memory and not yet safely written back.
+		example=This query does not dirty any page because it only reads.
+	pager-write: Commit write
+		description=The moment changed pages are written back during commit.
+		example=This query never reaches commit write because nothing was updated.
+	pager-disk: Database file on disk
+		description=The long-term place where database pages are stored.
+		example=The page holding user 7's row ultimately lives in the database file on disk.
