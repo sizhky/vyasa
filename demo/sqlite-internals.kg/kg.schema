@@ -1,0 +1,24 @@
+@graph id=sqlite-internals title="SQLite Internals as a Knowledge Graph" initial_view=flow
+
+@sources
+nodes=kg.nodes
+base:
+	edges=kg.edges
+
+@relations
+carries label=carries
+produces label=produces
+shapes label=shapes
+becomes label=becomes
+enables label=enables
+can-cause label="can cause"
+can-produce label="can produce"
+asks-for label="asks for"
+asks-pages-from label="asks pages from"
+reads-from label="reads from"
+updates label=updates
+
+@views
+flow:
+	source=base
+	caption="SQLite reads your SQL, turns it into steps, then either reads data through storage or changes data and saves it safely."

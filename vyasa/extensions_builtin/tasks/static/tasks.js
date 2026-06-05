@@ -547,7 +547,8 @@ function tasksNodeMetaEntries(node) {
 function tasksOpenDecisionEntry(node) {
     if (!node || node?.__kind__ === 'group' || node?.__kind__ === 'groupTitle') return null;
     if (node?.__checked__ === true) return null;
-    const value = String(node?.open_decision || node?.decision || 'What is the open decision?').trim();
+    const raw = node?.open_decision ?? node?.decision ?? '';
+    const value = String(raw).trim();
     if (!value) return null;
     return { key: '__open_decision__', label: 'Open decision', value };
 }
@@ -1354,6 +1355,9 @@ function ensureTasksReactFlow() {
                 .react-flow__node.vyasa-tasks-node--background,
                 .react-flow__node.vyasa-tasks-node--passive {
                     pointer-events: none;
+                }
+                .react-flow__node[data-vyasa-group-toggle-hover="true"] {
+                    box-shadow: 0 0 0 2px color-mix(in srgb, var(--vyasa-ink) 52%, transparent), 0 24px 64px color-mix(in srgb, var(--vyasa-primary) 10%, transparent) !important;
                 }
                 .react-flow__node.vyasa-tasks-node--passive [data-vyasa-task-control="true"] {
                     pointer-events: auto;
@@ -2344,6 +2348,19 @@ function findTaskCardFromEvent(event) {
     return null;
 }
 
+function setTasksGroupToggleHover(wrapper, groupId) {
+    if (!wrapper) return;
+    wrapper.querySelectorAll('[data-vyasa-group-toggle-hover="true"]').forEach((node) => {
+        node.removeAttribute('data-vyasa-group-toggle-hover');
+    });
+    const id = String(groupId || '').trim();
+    if (!id) return;
+    const escape = window.CSS?.escape || ((value) => String(value).replace(/["\\]/g, '\\$&'));
+    [`${id}`, `${id}__title`].forEach((nodeId) => {
+        wrapper.querySelector(`.react-flow__node[data-id="${escape(nodeId)}"]`)?.setAttribute('data-vyasa-group-toggle-hover', 'true');
+    });
+}
+
 function openTasksNodeHref(href, event = null) {
     if (!href) return;
     logTasksDebug('nodeHrefOpen:start', {
@@ -2812,6 +2829,7 @@ async function renderTasksGraphs(rootElement = document) {
             const reactFlowApiRef = React.useRef(null);
             const prevExpandedCountRef = React.useRef(0);
             const hoverClearTimerRef = React.useRef(null);
+            const groupToggleHoverIdRef = React.useRef('');
             const suppressNextGraphClickRef = React.useRef(false);
             const activeProjection = React.useMemo(() => {
                 const projections = Array.isArray(sourceModel?.view_projections) ? sourceModel.view_projections : [];
@@ -2831,6 +2849,8 @@ async function renderTasksGraphs(rootElement = document) {
                 setSelectedNodeIds(new Set());
                 setDragSelection(null);
                 setHoveredNodeId(null);
+                groupToggleHoverIdRef.current = '';
+                setTasksGroupToggleHover(flowWrapperRef.current, '');
                 pendingFitActionRef.current = 'mode';
             }, [activeProjectionId, hydrateExpandedSet]);
             React.useEffect(() => {
@@ -4048,10 +4068,11 @@ async function renderTasksGraphs(rootElement = document) {
                         if (event.defaultPrevented || event.repeat) return;
                         if (event.metaKey || event.ctrlKey || event.altKey) return;
                         const wrapper = flowWrapperRef.current;
-                        if (!wrapper || (!wrapper.contains(document.activeElement) && !wrapper.contains(event.target))) return;
                         const target = event.target instanceof Element ? event.target : null;
                         if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName))) return;
                         const key = event.key.toLowerCase();
+                        const graphFocused = wrapper && (wrapper.contains(document.activeElement) || wrapper.contains(event.target));
+                        if (!graphFocused && !(key === 't' && groupToggleHoverIdRef.current)) return;
                         if (key === 'f') {
                             event.preventDefault();
                             reactFlow.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true });
@@ -4065,6 +4086,19 @@ async function renderTasksGraphs(rootElement = document) {
                         if (key === 'e') {
                             event.preventDefault();
                             setEdgesVisible((current) => !current);
+                            return;
+                        }
+                        if (key === 't') {
+                            const nodeId = groupToggleHoverIdRef.current;
+                            if (!egoMode && nodeId && (model.groups || []).some((group) => group.id === nodeId)) {
+                                event.preventDefault();
+                                setExpanded((current) => {
+                                    const next = new Set(current);
+                                    if (next.has(nodeId)) next.delete(nodeId); else next.add(nodeId);
+                                    logTasksDebug('shortcutToggleHoveredGroup', { nodeId, expanded: Array.from(next) });
+                                    return next;
+                                });
+                            }
                             return;
                         }
                         if (key === 'i' || key === 'o') {
@@ -4530,18 +4564,26 @@ async function renderTasksGraphs(rootElement = document) {
                     }
                     return { x, y, width: node.style?.width || node.width || 0, height: node.style?.height || node.height || 0 };
                 };
-                // Pick the deepest hit (highest z) under the cursor, considering leaf nodes
-                // and groups. groupTitle is a synthetic overlay — skip it, we want the source.
+                // Pick the deepest hit (highest z) under the cursor without touching React state.
                 const hit = baseNodes
-                    .filter((node) => node.data?.__kind__ !== 'groupTitle')
+                    .filter((node) => node.data?.__kind__ !== 'ganttHeader')
                     .map((node) => ({ node, rect: absoluteRect(node), z: Number(node.zIndex || node.style?.zIndex || 0) }))
                     .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
                     .sort((a, b) => b.z - a.z)[0];
                 if (!hit) {
+                    groupToggleHoverIdRef.current = '';
+                    setTasksGroupToggleHover(wrapper, '');
                     clearGroupHoverTooltip();
                     return;
                 }
                 const nodeData = hit.node.data || {};
+                const hoverGroupId = nodeData.__kind__ === 'group'
+                    ? hit.node.id
+                    : (nodeData.__kind__ === 'groupTitle' ? nodeData.sourceGroupId : '');
+                if (groupToggleHoverIdRef.current !== hoverGroupId) {
+                    groupToggleHoverIdRef.current = hoverGroupId || '';
+                    setTasksGroupToggleHover(wrapper, hoverGroupId);
+                }
                 const rows = tasksHoverAttrRows(nodeData, activeHoverAttrs);
                 const label = nodeData.label || hit.node.id;
                 const image = normalizeTasksNodeImageUrl(nodeData.__node_image__);
@@ -4968,7 +5010,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, window.React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
                 window.React.createElement('strong', null, 'Graph help'),
                 window.React.createElement('button', { type: 'button', onClick: () => setHelpOpen(false), style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: 1, opacity: 0.7 } }, '×')
-            ), window.React.createElement('div', { style: { whiteSpace: 'pre-line' } }, 'Mouse\nClick node: select card or group\nClick canvas: clear selection\nShift + drag: box select\nCmd + drag: lasso select\nWheel / pinch: zoom\nDrag canvas: pan\n\nKeys\n?: toggle this help\nF: fit view\nE: toggle edges\nI / O: expand or collapse one group depth\nU / P: unfold or collapse all groups\nArrow keys: pan\nShift + arrows: pan faster'));
+            ), window.React.createElement('div', { style: { whiteSpace: 'pre-line' } }, 'Mouse\nClick node: select card or group\nClick canvas: clear selection\nShift + drag: box select\nCmd + drag: lasso select\nWheel / pinch: zoom\nDrag canvas: pan\n\nKeys\n?: toggle this help\nF: fit view\nE: toggle edges\nT: toggle hovered group\nI / O: expand or collapse one group depth\nU / P: unfold or collapse all groups\nArrow keys: pan\nShift + arrows: pan faster'));
             const DragSelectionOverlay = () => {
                 if (!dragSelection) return null;
                 const bounds = flowWrapperRef.current?.getBoundingClientRect?.();
@@ -5032,7 +5074,12 @@ async function renderTasksGraphs(rootElement = document) {
                 onPointerMoveCapture: updateDragSelection,
                 onPointerUpCapture: finishDragSelection,
                 onPointerCancelCapture: finishDragSelection,
-                onPointerLeave: (event) => { finishDragSelection(event); clearGroupHoverTooltip(); },
+                onPointerLeave: (event) => {
+                    finishDragSelection(event);
+                    groupToggleHoverIdRef.current = '';
+                    setTasksGroupToggleHover(flowWrapperRef.current, '');
+                    clearGroupHoverTooltip();
+                },
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none', position: 'relative' }, ...flowPointerHandlers },
