@@ -1,4 +1,6 @@
+import os
 import re
+import time
 from pathlib import Path
 
 from ...helpers import (
@@ -13,7 +15,20 @@ from ...helpers import (
     text_to_anchor,
 )
 
-_INDEX = {"fingerprint": None, "entries": [], "by_name": {}, "by_alias": {}, "headings": {}}
+_INDEX = {"fingerprint": None, "entries": [], "by_name": {}, "by_alias": {}, "by_slug": {}, "by_path": {}, "by_dir": {}, "headings": {}}
+
+# Recomputing the fingerprint walks every content root and stats every .md file.
+# _index() is consulted several times per [[link]], so a document with thousands
+# of wikilinks would otherwise trigger thousands of full-tree walks. Within this
+# window we reuse the already-built index without re-walking; edits show up after
+# at most _INDEX_TTL seconds. Override with VYASA_WIKILINKS_INDEX_TTL.
+try:
+    _INDEX_TTL = float(os.environ.get("VYASA_WIKILINKS_INDEX_TTL", "2.0"))
+except ValueError:
+    _INDEX_TTL = 2.0
+
+_INDEX_CHECKED_AT = 0.0
+_INDEX_GENERATION = -1
 
 
 def _fingerprint():
@@ -33,18 +48,42 @@ def _route_slug_for_path(path: Path, slug: str) -> str:
 
 
 def _index():
+    global _INDEX_CHECKED_AT, _INDEX_GENERATION
+    from ...config import config_generation
+
+    generation = config_generation()
+    now = time.monotonic()
+    # Skip the (expensive) fingerprint walk if we revalidated recently AND the
+    # config hasn't reloaded (a reload may swap the content roots entirely).
+    if (
+        _INDEX["fingerprint"] is not None
+        and generation == _INDEX_GENERATION
+        and (now - _INDEX_CHECKED_AT) < _INDEX_TTL
+    ):
+        return _INDEX
     fp = _fingerprint()
+    _INDEX_CHECKED_AT = now
+    _INDEX_GENERATION = generation
     if _INDEX["fingerprint"] == fp:
         return _INDEX
-    entries, by_name, by_alias = [], {}, {}
+    entries, by_name, by_alias, by_slug, by_path, by_dir = [], {}, {}, {}, {}, {}
     for _, root in get_content_mounts():
         for path in iter_visible_files(root, (".md",), True):
             slug = content_slug_for_path(path)
             if not slug:
                 continue
-            route_slug = _route_slug_for_path(path, slug)
+            is_folder_note = _is_folder_note(path)
+            route_slug = str(Path(slug).parent).replace("\\", "/").strip(".") if is_folder_note else slug
+            resolved = path.resolve()
             entry = {"slug": slug, "route_slug": route_slug, "path": path}
             entries.append(entry)
+            by_slug.setdefault(slug, entry)
+            by_slug.setdefault(route_slug, entry)
+            # by_path/by_dir let relative links resolve via dict lookup instead of
+            # touching the filesystem per [[link]] (the old hot path: 1.3M resolve()).
+            by_path.setdefault(str(resolved), entry)
+            if is_folder_note:
+                by_dir.setdefault(str(resolved.parent), entry)
             by_name.setdefault(path.stem.casefold(), []).append(entry)
             frontmatter, _ = parse_frontmatter(path)
             aliases = frontmatter.get("aliases") or []
@@ -54,56 +93,32 @@ def _index():
                 alias_text = str(alias).strip()
                 if alias_text:
                     by_alias.setdefault(alias_text.casefold(), []).append(entry)
-    _INDEX.update(fingerprint=fp, entries=entries, by_name=by_name, by_alias=by_alias, headings={})
+    _INDEX.update(fingerprint=fp, entries=entries, by_name=by_name, by_alias=by_alias, by_slug=by_slug, by_path=by_path, by_dir=by_dir, headings={})
     return _INDEX
 
 
-def _entry_for_slug(slug: str):
-    info = _index()
-    for entry in info["entries"]:
-        if entry["slug"] == slug or entry["route_slug"] == slug:
-            return entry
-    return None
-
-
 def _existing_note_entry(base: str):
-    exact = content_path_for_slug(base, ".md")
-    if exact and exact.exists():
-        entry = _entry_for_slug(base)
-        if entry:
-            return entry
-    folder = content_path_for_slug(base)
-    if folder and folder.exists() and folder.is_dir():
-        note = find_folder_note_file(folder)
-        if note:
-            slug = content_slug_for_path(note)
-            return _entry_for_slug(slug) if slug else None
-    return None
+    # The index only holds existing notes, so a slug/route-slug hit means the note
+    # exists — no filesystem probing needed (covers both files and folder notes).
+    return _index()["by_slug"].get(base)
 
 
 def _relative_entry(base: str, current_path: str):
-    current = _existing_note_entry(current_path)
+    info = _index()
+    current = info["by_slug"].get(current_path)
     if not current:
         direct = content_path_for_slug(current_path, ".md")
         if direct and direct.exists():
             current = {"path": direct, "slug": current_path, "route_slug": current_path}
     if not current:
         return None
-    parent = current["path"].parent
-    resolved = (parent / base).resolve()
-    slug = content_slug_for_path(resolved)
-    if slug:
-        entry = _entry_for_slug(slug)
-        if entry:
-            return entry
-    if resolved.exists() and resolved.is_dir():
-        note = find_folder_note_file(resolved)
-        if note:
-            note_slug = content_slug_for_path(note)
-            return _entry_for_slug(note_slug) if note_slug else None
-    md_resolved = resolved.with_suffix(".md") if not resolved.suffix else resolved
-    slug = content_slug_for_path(md_resolved)
-    return _entry_for_slug(slug) if slug else None
+    resolved = (current["path"].parent / base).resolve()
+    md_resolved = resolved if resolved.suffix else resolved.with_suffix(".md")
+    return (
+        info["by_path"].get(str(resolved))
+        or info["by_path"].get(str(md_resolved))
+        or info["by_dir"].get(str(resolved))
+    )
 
 
 def _resolve_note(target: str, current_path: str | None):
