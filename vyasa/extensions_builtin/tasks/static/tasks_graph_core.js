@@ -61,15 +61,33 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
 
 export function isTasksGraphNodeSelectable(kind, isExpanded = false) {
     if (kind === 'task') return true;
-    if (kind === 'group') return !isExpanded;
+    if (kind === 'group') return true;
+    if (kind === 'groupTitle') return true;
     return false;
 }
 
 export function tasksGraphNodeHitArea(kind, isExpanded = false) {
     if (kind === 'task') return 'selectable';
     if (kind === 'groupTitle') return 'control';
-    if (kind === 'group') return isExpanded ? 'background' : 'selectable';
+    if (kind === 'group') return 'selectable';
     return 'passive';
+}
+
+export function tasksExpandedRootRect(baseRect, expandedSize = {}) {
+    const x = Number(baseRect?.x) || 0;
+    const y = Number(baseRect?.y) || 0;
+    const baseWidth = Math.max(1, Number(baseRect?.width) || 1);
+    const baseHeight = Math.max(1, Number(baseRect?.height) || 1);
+    const width = Math.max(baseWidth, Number(expandedSize?.width) || baseWidth);
+    const height = Math.max(baseHeight, Number(expandedSize?.height) || baseHeight);
+    return {
+        x,
+        y,
+        width,
+        height,
+        baseWidth,
+        baseHeight,
+    };
 }
 
 function tasksGraphNodeAbsoluteRect(node, byId) {

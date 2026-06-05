@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -193,8 +193,8 @@ test('buildTaskEdgeAnchors prefers top/bottom when node sits above wide group', 
 test('task and collapsed group nodes are selectable in items graph', () => {
     assert.equal(isTasksGraphNodeSelectable('task'), true);
     assert.equal(isTasksGraphNodeSelectable('group', false), true);
-    assert.equal(isTasksGraphNodeSelectable('group', true), false);
-    assert.equal(isTasksGraphNodeSelectable('groupTitle'), false);
+    assert.equal(isTasksGraphNodeSelectable('group', true), true);
+    assert.equal(isTasksGraphNodeSelectable('groupTitle'), true);
 });
 
 test('drag rect selects task nodes and expanded groups', () => {
@@ -243,11 +243,16 @@ test('unspecified projection groups are detectable for reduced opacity', () => {
     assert.equal(isTasksUnspecifiedProjectionGroup({ id: 'city-tokyo', __projection_group__: true, city: 'Tokyo' }), false);
 });
 
-test('group panels use passive hit areas in items graph', () => {
+test('group panels use selectable hit areas in items graph', () => {
     assert.equal(tasksGraphNodeHitArea('task'), 'selectable');
     assert.equal(tasksGraphNodeHitArea('group', false), 'selectable');
-    assert.equal(tasksGraphNodeHitArea('group', true), 'background');
+    assert.equal(tasksGraphNodeHitArea('group', true), 'selectable');
     assert.equal(tasksGraphNodeHitArea('groupTitle'), 'control');
+});
+
+test('expanded root group keeps collapsed top-left anchored', () => {
+    const rect = tasksExpandedRootRect({ x: 100, y: 200, width: 250, height: 80 }, { width: 650, height: 280 });
+    assert.deepEqual(rect, { x: 100, y: 200, width: 650, height: 280, baseWidth: 250, baseHeight: 80 });
 });
 
 test('note special filter uses derived yes/no value', async () => {
