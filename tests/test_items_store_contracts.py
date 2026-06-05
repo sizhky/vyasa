@@ -277,6 +277,29 @@ module:
     assert graph["index_attributes"] == ["module"]
 
 
+def test_items_parser_applies_tab_indented_attrs(tmp_path):
+    (tmp_path / "tabbed.kg.schema").write_text(
+        "@graph id=tabbed title=Tabbed initial_view=by_owner\n\n"
+        "@sources\nnodes=tabbed.kg.nodes\nattrs=tabbed.kg.attrs\nbase:\n\tedges=tabbed.kg.edges\n\n"
+        "@views\nby_owner:\n\tsource=base\n\tgroup_by=owner\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "tabbed.kg.nodes").write_text("n1: First\nn2: Second\n", encoding="utf-8")
+    # Attr value lines indented with tabs (as emitted by the KG authoring tools).
+    (tmp_path / "tabbed.kg.attrs").write_text(
+        "@node_attrs\nowner:\n\tyr: n1\n\tmg: n2\nstatus:\n\tdone: n1\n", encoding="utf-8"
+    )
+    (tmp_path / "tabbed.kg.edges").write_text("", encoding="utf-8")
+
+    graph = read_kg_pack(tmp_path / "tabbed.kg.schema")
+    by_id = {task["id"]: task for task in graph["tasks"]}
+
+    assert by_id["n1"]["owner"] == "yr"
+    assert by_id["n2"]["owner"] == "mg"
+    assert by_id["n1"]["status"] == "done"
+    assert graph["index_attributes"] == ["owner", "status"]
+
+
 def test_items_schema_resolution_handles_route_slug_under_docs_root(tmp_path):
     root = tmp_path / "docs"
     root.mkdir()
