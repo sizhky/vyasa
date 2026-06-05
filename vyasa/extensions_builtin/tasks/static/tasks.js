@@ -2815,6 +2815,9 @@ async function renderTasksGraphs(rootElement = document) {
             const [edgesVisible, setEdgesVisible] = React.useState(() => (
                 typeof projectionPrefs?.edgesVisible === 'boolean' ? projectionPrefs.edgesVisible : true
             ));
+            const [edgeAnimationEnabled, setEdgeAnimationEnabled] = React.useState(() => (
+                typeof projectionPrefs?.edgeAnimationEnabled === 'boolean' ? projectionPrefs.edgeAnimationEnabled : true
+            ));
             const defaultEdgeOpacity = React.useMemo(
                 () => tasksDefaultEdgeOpacity((sourceModel?.dependency_edges || []).length),
                 [sourceModel]
@@ -2898,6 +2901,7 @@ async function renderTasksGraphs(rootElement = document) {
                         : !tasksDefaultFiltersOpen(defaultFiltersOpen)
                 );
                 setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
+                setEdgeAnimationEnabled(typeof nextPrefs?.edgeAnimationEnabled === 'boolean' ? nextPrefs.edgeAnimationEnabled : true);
                 setEdgeOpacity(sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity));
                 setProjectionUnspecifiedContentOpacity(sourcePrefsRef.current?.unspecifiedContentOpacity === undefined ? defaultProjectionUnspecifiedContentOpacity : clampTasksProjectionContentOpacity(sourcePrefsRef.current.unspecifiedContentOpacity));
             }, [activeProjectionId, model, nodeNotes, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
@@ -2963,6 +2967,7 @@ async function renderTasksGraphs(rootElement = document) {
                         colorBy: activeColorBy,
                         filtersCollapsed,
                         edgesVisible,
+                        edgeAnimationEnabled,
                         expandedGroupIds: Array.from(expanded),
                     },
                 };
@@ -2987,7 +2992,7 @@ async function renderTasksGraphs(rootElement = document) {
                     nodeNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [sourceModel, activeFilters, searchQuery, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes]);
+            }, [sourceModel, activeFilters, searchQuery, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeAnimationEnabled, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes]);
             const checkedNodeIdSet = React.useMemo(() => new Set(checkedNodeIdsFromStates(nodeStates)), [nodeStates]);
             const toggleCheckedNode = React.useCallback((nodeId) => {
                 const normalizedId = String(nodeId || '').trim();
@@ -3386,7 +3391,7 @@ async function renderTasksGraphs(rootElement = document) {
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
                             style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity, strokeWidth: hit ? 4.5 : 2.5, strokeLinecap: hit ? 'round' : undefined, '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s' },
-                            animated: hit,
+                            animated: edgeAnimationEnabled && hit,
                         };
                     }) : []);
                     return;
@@ -3435,7 +3440,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 strokeLinecap: hit ? 'round' : undefined,
                                 '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s',
                             },
-                            animated: hit,
+                            animated: edgeAnimationEnabled && hit,
                         };
                     }) : []);
                     return;
@@ -3576,7 +3581,7 @@ async function renderTasksGraphs(rootElement = document) {
                             '--vyasa-edge-flow-duration': (mode === 'focused-in' || mode === 'focused-out') ? '0.72s' : '0.64s',
                             strokeLinecap: highlighted ? 'round' : undefined,
                         },
-                        animated: highlighted,
+                        animated: edgeAnimationEnabled && highlighted,
                     };
                 });
                 if (window.__vyasaTasksDebug.enabled) {
@@ -3622,7 +3627,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdges(edgesVisible ? nextEdges : []);
-            }, [activeFilters, searchMatches, model, activeColorBy, activeColorPalette, expanded, edgesVisible, edgeOpacity]);
+            }, [activeFilters, searchMatches, model, activeColorBy, activeColorPalette, expanded, edgesVisible, edgeAnimationEnabled, edgeOpacity]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -4200,6 +4205,11 @@ async function renderTasksGraphs(rootElement = document) {
                         if (key === 'arrowup') {
                             event.preventDefault();
                             panViewport(reactFlow, 0, 120 * (event.shiftKey ? 2 : 1));
+                            return;
+                        }
+                        if (key === '0') {
+                            event.preventDefault();
+                            setEdgeAnimationEnabled((current) => !current);
                             return;
                         }
                         if (key === 'arrowdown') {
@@ -5100,7 +5110,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, window.React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
                 window.React.createElement('strong', null, 'Graph help'),
                 window.React.createElement('button', { type: 'button', onClick: () => setHelpOpen(false), style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: 1, opacity: 0.7 } }, '×')
-            ), window.React.createElement('div', { style: { whiteSpace: 'pre-line' } }, 'Mouse\nClick node: select card or group\nClick canvas: clear selection\nShift + drag: box select\nCmd + drag: lasso select\nWheel / pinch: zoom\nDrag canvas: pan\n\nKeys\n?: toggle this help\nF: fit view\nE: toggle edges\nT: toggle hovered group\nI / O: expand or collapse one group depth\nU / P: unfold or collapse all groups\nArrow keys: pan\nShift + arrows: pan faster'));
+            ), window.React.createElement('div', { style: { whiteSpace: 'pre-line' } }, 'Mouse\nClick node: select card or group\nClick canvas: clear selection\nShift + drag: box select\nCmd + drag: lasso select\nWheel / pinch: zoom\nDrag canvas: pan\n\nKeys\n?: toggle this help\nF: fit view\nE: toggle edges\n0: toggle edge animation\nT: toggle hovered group\nI / O: expand or collapse one group depth\nU / P: unfold or collapse all groups\nArrow keys: pan\nShift + arrows: pan faster'));
             const DragSelectionOverlay = () => {
                 if (!dragSelection) return null;
                 const bounds = flowWrapperRef.current?.getBoundingClientRect?.();
