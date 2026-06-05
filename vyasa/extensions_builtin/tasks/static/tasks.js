@@ -1,11 +1,10 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
 
 const tasksElk = new ELK();
 let tasksReactFlowReady = null;
 const TASKS_GROUP_PADDING = { top: 68, right: 40, bottom: 40, left: 40 };
 const TASKS_ROOT_SPACING = { node: 44, layer: 96 };
-const TASKS_EXPANSION_SHIFT_RATIO = 0.45;
 const TASKS_ROOT_COLLISION_GAP = 96;
 const TASKS_GROUP_BG_Z = 10;
 const TASKS_EDGE_Z = 5;
@@ -2067,7 +2066,7 @@ async function layoutExpandedGroups(model, expandedSet, jitterConfig = {}, layou
     return layouts;
 }
 
-function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout, groupLayouts, layoutConfig = {}) {
+async function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout, groupLayouts, layoutConfig = {}) {
     const visible = buildVisibleTasksGraph(model, expandedSet);
     logTasksDebugVerbose('visibleGraph', {
         expanded: Array.from(expandedSet),
@@ -2088,14 +2087,7 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
         const baseRect = baseLayout.positions[id];
         if (!baseRect) continue;
         const groupLayout = expandedSet.has(id) ? groupLayouts[id] : null;
-        topLevelRects[id] = groupLayout ? {
-            x: baseRect.x,
-            y: baseRect.y,
-            width: groupLayout.bbox.width,
-            height: groupLayout.bbox.height,
-            baseWidth: baseRect.width,
-            baseHeight: baseRect.height,
-        } : {
+        topLevelRects[id] = groupLayout ? tasksExpandedRootRect(baseRect, groupLayout.bbox) : {
             x: baseRect.x,
             y: baseRect.y,
             width: baseRect.width,
@@ -2104,16 +2096,50 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
             baseHeight: baseRect.height,
         };
     }
+    const layoutTrace = {
+        expandedTopLevelIds,
+        visibleNodeIds: visible.nodes.map((node) => node.id),
+        baseRects: Object.fromEntries(topLevelIds.map((id) => [id, rectSummary(baseLayout.positions[id])]).filter(([, rect]) => rect)),
+        expandedRects: Object.fromEntries(Object.entries(topLevelRects).map(([id, rect]) => [id, rectSummary(rect)])),
+        collisionPasses: [],
+        finalRects: {},
+    };
 
     const nodes = [];
+    let rootPositions = null;
+    if (expandedTopLevelIds.length > 0) {
+        const rootLayout = await tasksElk.layout({
+            id: 'expanded-root',
+            layoutOptions: {
+                'elk.algorithm': 'layered',
+                'elk.direction': layoutConfig.elkDirection || 'DOWN',
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || TASKS_ROOT_SPACING.node}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || TASKS_ROOT_SPACING.layer}`,
+            },
+            children: topLevelIds
+                .filter((id) => topLevelRects[id])
+                .map((id) => ({
+                    id,
+                    width: topLevelRects[id].width,
+                    height: topLevelRects[id].height,
+                })),
+            edges: (baseGraph.edges || []).map((edge, index) => ({ id: `root-${index}`, sources: [edge.source], targets: [edge.target] })),
+        });
+        rootPositions = Object.fromEntries((rootLayout.children || []).map((node) => [node.id, { x: node.x || 0, y: node.y || 0 }]));
+        layoutTrace.rootElk = {
+            width: Math.round(rootLayout.width || 0),
+            height: Math.round(rootLayout.height || 0),
+            positions: Object.fromEntries(Object.entries(rootPositions).map(([id, position]) => [id, rectSummary({ ...position, width: topLevelRects[id]?.width, height: topLevelRects[id]?.height })])),
+        };
+    }
     for (const id of topLevelIds) {
         const visibleNode = visibleNodeMap[id];
         if (!visibleNode) continue;
         const rect = topLevelRects[id];
-        const baseRect = baseLayout.positions[id];
+        const rootPosition = rootPositions?.[id] || rect;
         nodes.push({
             ...visibleNode,
-            position: { x: baseRect.x, y: baseRect.y },
+            position: { x: rootPosition.x, y: rootPosition.y },
             width: rect.width,
             height: rect.height,
             parentId: null,
@@ -2141,32 +2167,15 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
     };
     for (const groupId of expandedTopLevelIds) addExpandedChildren(groupId);
 
-    const unwarpPoint = (point, sourceRect, targetRect) => {
-        const sourceRight = sourceRect.x + sourceRect.width;
-        const sourceBottom = sourceRect.y + sourceRect.height;
-        const dx = Math.max(0, targetRect.width - sourceRect.width) * TASKS_EXPANSION_SHIFT_RATIO;
-        const dy = Math.max(0, targetRect.height - sourceRect.height) * TASKS_EXPANSION_SHIFT_RATIO;
-        let x = point.x;
-        let y = point.y;
-
-        if (point.x >= sourceRight) x += dx;
-        else if (point.x > sourceRect.x) x = sourceRect.x + ((point.x - sourceRect.x) / Math.max(sourceRect.width, 1)) * targetRect.width;
-
-        if (point.y >= sourceBottom) y += dy;
-        else if (point.y > sourceRect.y) y = sourceRect.y + ((point.y - sourceRect.y) / Math.max(sourceRect.height, 1)) * targetRect.height;
-
-        return { x, y };
-    };
-
-    if (expandedTopLevelIds.length > 0) {
+    if (expandedTopLevelIds.length > 0 && !rootPositions) {
         const topLevelState = {};
         for (const id of topLevelIds) {
             const baseRect = baseLayout.positions[id];
             const rect = topLevelRects[id];
             if (!baseRect || !rect) continue;
             topLevelState[id] = {
-                x: baseRect.x || 0,
-                y: baseRect.y || 0,
+                x: rect.x || 0,
+                y: rect.y || 0,
                 width: rect.baseWidth,
                 height: rect.baseHeight,
                 expandedWidth: rect.width,
@@ -2177,28 +2186,6 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
         for (const expandedId of expandedTopLevelIds) {
             const expandedState = topLevelState[expandedId];
             if (!expandedState) continue;
-            const source = {
-                x: expandedState.x,
-                y: expandedState.y,
-                width: expandedState.width,
-                height: expandedState.height,
-            };
-            const target = {
-                x: expandedState.x,
-                y: expandedState.y,
-                width: expandedState.expandedWidth,
-                height: expandedState.expandedHeight,
-            };
-
-            for (const id of topLevelIds) {
-                if (id === expandedId || !topLevelState[id]) continue;
-                const state = topLevelState[id];
-                const center = { x: state.x + state.width / 2, y: state.y + state.height / 2 };
-                const nextCenter = unwarpPoint(center, source, target);
-                state.x = nextCenter.x - state.width / 2;
-                state.y = nextCenter.y - state.height / 2;
-            }
-
             expandedState.width = expandedState.expandedWidth;
             expandedState.height = expandedState.expandedHeight;
         }
@@ -2235,6 +2222,11 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
                 pass,
                 collisionMoves,
                 topLevelState: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
+            });
+            layoutTrace.collisionPasses.push({
+                pass,
+                collisionMoves,
+                state: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
             });
         }
 
@@ -2288,7 +2280,6 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
             if (!state) continue;
             node.position = { x: state.x, y: state.y };
         }
-
         logTasksDebugVerbose('unwarpFinal', {
             topLevelNodes: nodes.filter(n => !n.parentId).map(n => ({
                 id: n.id,
@@ -2299,6 +2290,12 @@ function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout,
             })),
         });
     }
+    layoutTrace.finalRects = Object.fromEntries(nodes.filter((node) => !node.parentId).map((node) => [
+        node.id,
+        rectSummary({ ...node.position, width: node.width, height: node.height }),
+    ]));
+    window.__vyasaTasksDebug.latestLayout = layoutTrace;
+    logTasksDebug('layoutTrace', layoutTrace);
 
     const finalEdges = visible.edges.map((e, i) => ({
         ...e,
@@ -3083,7 +3080,7 @@ async function renderTasksGraphs(rootElement = document) {
                         edges: (rawGraph.edges || []).filter((edge) => rootNodeIds.has(edge.source) && rootNodeIds.has(edge.target)),
                         enforceRootRank: false,
                     };
-                const derived = deriveSquishedExpandedLayout(rootGraph, model, effectiveExpandedSet, baseLayout, groupLayoutsRef.current, layoutConfig);
+                const derived = await deriveSquishedExpandedLayout(rootGraph, model, effectiveExpandedSet, baseLayout, groupLayoutsRef.current, layoutConfig);
                 const derivedById = Object.fromEntries((derived.nodes || []).map((node) => [node.id, node]));
                 const egoSelectedIds = egoMode && Array.isArray(model.ego_selected_ids)
                     ? new Set(model.ego_selected_ids.map((id) => String(id || '').trim()).filter(Boolean))
@@ -4724,6 +4721,7 @@ async function renderTasksGraphs(rootElement = document) {
                             const payload = {
                                 latest: window.__vyasaTasksDebug.latest || {},
                                 latestHighlight: window.__vyasaTasksDebug.latestHighlight || {},
+                                latestLayout: window.__vyasaTasksDebug.latestLayout || {},
                             };
                             logTasksDebug('manualDump', payload);
                             return payload;
