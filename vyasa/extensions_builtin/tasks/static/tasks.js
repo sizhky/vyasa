@@ -23,6 +23,7 @@ const TASKS_GROUP_EXPANDED_BG = 'color-mix(in srgb, var(--vyasa-primary) 7%, tra
 const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 42%, var(--vyasa-primary) 58%)';
 const TASKS_GROUP_TITLE_BG = 'color-mix(in srgb, var(--vyasa-paper) 76%, var(--vyasa-primary) 24%)';
 const TASKS_EDGE_LABEL_BG = 'color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%)';
+const TASKS_EDGE_LABEL_TEXT = 'var(--vyasa-ink)';
 const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 74%, var(--vyasa-primary) 26%)';
 const TASKS_GROUP_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-primary) 10%, transparent)';
 const TASKS_EDGE_FOCUS_OUT_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 42%, #ef4444 58%)';
@@ -192,6 +193,7 @@ window.__vyasaTasksConfig = window.__vyasaTasksConfig || {};
 window.__vyasaTasksDebug = window.__vyasaTasksDebug || { events: [] };
 window.__vyasaTasksDebug.enabled = window.__vyasaTasksDebug.enabled === true || new URLSearchParams(window.location.search).has('tasks_debug');
 window.__vyasaTasksDebug.verbose = window.__vyasaTasksDebug.verbose === true || new URLSearchParams(window.location.search).has('tasks_debug_verbose');
+window.__vyasaTasksDebug.edgeLabelRenderCount = Number(window.__vyasaTasksDebug.edgeLabelRenderCount || 0);
 if (!Array.isArray(window.__vyasaTasksDebug.watch) || window.__vyasaTasksDebug.watch.length === 0) {
     const rawWatch = new URLSearchParams(window.location.search).getAll('tasks_watch');
     window.__vyasaTasksDebug.watch = rawWatch
@@ -1028,6 +1030,16 @@ function parseTasksNumericValue(value) {
     return Number.isFinite(parsed) ? parsed : null;
 }
 
+function isTasksCssColor(value) {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(text)) return true;
+    if (/^(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix)\(/i.test(text)) return true;
+    if (/^(?:transparent|currentColor|inherit)$/i.test(text)) return true;
+    if (/^var\(--[\w-]+\)$/i.test(text)) return true;
+    return typeof CSS !== 'undefined' && typeof CSS.supports === 'function' ? CSS.supports('color', text) : false;
+}
+
 function formatTasksMetricValue(value) {
     if (!Number.isFinite(value)) return '';
     if (Math.abs(value - Math.round(value)) < 0.001) return Math.round(value).toLocaleString('en-US');
@@ -1120,7 +1132,15 @@ function resolveTasksEdgeLabel(edge, model, activeProjection = null) {
 
 function resolveTasksEdgeColor(edge, model, colorByOverride = null, paletteOverride = null) {
     if (!edge) return '';
-    if (typeof edge.color === 'string' && edge.color.trim()) return edge.color.trim();
+    if (typeof edge.color === 'string' && edge.color.trim()) {
+        const inlineColor = edge.color.trim();
+        if (isTasksCssColor(inlineColor)) return inlineColor;
+        logTasksDebugVerbose('edgeColorIgnored', {
+            label: String(edge.label || ''),
+            inlineColor,
+            reason: 'not-css-color',
+        });
+    }
     const colorBy = colorByOverride !== null
         ? String(colorByOverride || '').trim()
         : (typeof model?.edge_color_by === 'string' ? model.edge_color_by.trim() : '');
@@ -3055,7 +3075,7 @@ async function renderTasksGraphs(rootElement = document) {
                             data: { ...(edge.data || {}), edgeColor },
                             markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: edgeColor || 'currentColor' },
                             zIndex: TASKS_EDGE_Z,
-                            labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || 'currentColor', opacity: edgeOpacity },
+                            labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || TASKS_EDGE_LABEL_TEXT, opacity: edgeOpacity },
                             labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
                             style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: edgeColor || 'currentColor' },
                         };
@@ -3262,7 +3282,7 @@ async function renderTasksGraphs(rootElement = document) {
                         labelBgBorderRadius: 3,
                         labelZIndex: TASKS_EDGE_LABEL_Z,
                         labelMaxWidth: layoutConfig.edgeLabelWidth,
-                        labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || 'currentColor', opacity: edgeOpacity * branchOpacity * egoEdgeOpacity },
+                        labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || TASKS_EDGE_LABEL_TEXT, opacity: edgeOpacity * branchOpacity * egoEdgeOpacity },
                         labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
                         style: { strokeWidth: 2.5, opacity: edgeOpacity * branchOpacity * egoEdgeOpacity, stroke: edgeColor || 'currentColor' },
                     };
@@ -3697,6 +3717,24 @@ async function renderTasksGraphs(rootElement = document) {
                 );
                 const svgLabelPaddingX = props.labelBgPadding?.[0] || 0;
                 const svgLabelPaddingY = props.labelBgPadding?.[1] || 0;
+                React.useEffect(() => {
+                    if (!window.__vyasaTasksDebug.verbose || !displayLabel) return;
+                    if (window.__vyasaTasksDebug.edgeLabelRenderCount >= 40) return;
+                    window.__vyasaTasksDebug.edgeLabelRenderCount += 1;
+                    const rootStyle = typeof getComputedStyle === 'function' ? getComputedStyle(document.documentElement) : null;
+                    logTasksDebugVerbose('edgeLabelRender', {
+                        label: fullLabel,
+                        displayLabel,
+                        highlightMode,
+                        prominentLabel,
+                        fill: labelStyle.fill || '',
+                        bgFill: labelBgStyle.fill || '',
+                        labelOpacity: labelStyle.opacity ?? null,
+                        bgOpacity: labelBgStyle.fillOpacity ?? null,
+                        fallbackInk: rootStyle?.getPropertyValue('--vyasa-ink')?.trim() || '',
+                        paper: rootStyle?.getPropertyValue('--vyasa-paper')?.trim() || '',
+                    });
+                }, [displayLabel, fullLabel, highlightMode, prominentLabel, labelStyle.fill, labelStyle.opacity, labelBgStyle.fill, labelBgStyle.fillOpacity]);
                 return React.createElement(React.Fragment, null,
                     React.createElement(rf.BaseEdge, { ...props, path }),
                     displayLabel && !prominentLabel && React.createElement('g', {
@@ -3714,7 +3752,7 @@ async function renderTasksGraphs(rootElement = document) {
                         opacity: labelBgStyle.fillOpacity ?? 1,
                     }),
                     React.createElement('text', {
-                        fill: labelStyle.fill || 'currentColor',
+                        fill: labelStyle.fill || TASKS_EDGE_LABEL_TEXT,
                         opacity: labelStyle.opacity ?? 1,
                         fontSize: tasksCssFontSize(labelStyle.fontSize),
                         fontWeight: labelStyle.fontWeight || 600,
@@ -3756,7 +3794,7 @@ async function renderTasksGraphs(rootElement = document) {
                         React.createElement('div', {
                             style: {
                                 position: 'relative',
-                                color: labelStyle.fill || 'currentColor',
+                                color: labelStyle.fill || TASKS_EDGE_LABEL_TEXT,
                                 fontSize: tasksCssFontSize(labelStyle.fontSize),
                                 fontWeight: labelStyle.fontWeight || 600,
                                 whiteSpace: 'pre-line',
