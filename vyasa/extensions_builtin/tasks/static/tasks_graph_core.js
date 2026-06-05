@@ -60,13 +60,15 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
 }
 
 export function isTasksGraphNodeSelectable(kind, isExpanded = false) {
-    return kind === 'task' || kind === 'group' || kind === 'groupTitle';
+    if (kind === 'task') return true;
+    if (kind === 'group') return !isExpanded;
+    return false;
 }
 
 export function tasksGraphNodeHitArea(kind, isExpanded = false) {
     if (kind === 'task') return 'selectable';
-    if (kind === 'groupTitle') return 'selectable';
-    if (kind === 'group') return 'selectable';
+    if (kind === 'groupTitle') return 'control';
+    if (kind === 'group') return isExpanded ? 'background' : 'selectable';
     return 'passive';
 }
 
