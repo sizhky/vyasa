@@ -138,6 +138,28 @@ function tasksCssFontSize(value, fallback = '11px') {
     return fallback;
 }
 
+async function copyTasksText(text) {
+    const value = String(text || '');
+    if (!value) return false;
+    if (navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(value);
+            return true;
+        } catch (_) {}
+    }
+    if (typeof document === 'undefined') return false;
+    const input = document.createElement('textarea');
+    input.value = value;
+    input.setAttribute('readonly', 'readonly');
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.appendChild(input);
+    input.select();
+    const copied = document.execCommand('copy');
+    document.body.removeChild(input);
+    return copied;
+}
+
 function tasksFilterPanelMaxHeight(wrapper) {
     if (!wrapper) return '100%';
     const bounds = wrapper.getBoundingClientRect();
@@ -2628,7 +2650,7 @@ function tasksHeaderControlsHtml(widgetId, includeFullscreen = false) {
     const fullscreen = includeFullscreen
         ? `<button onclick="openTasksFullscreen('${widgetId}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen">⛶</button>`
         : '';
-    return `${fullscreen}<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">${tasksHeaderButtonHtml(widgetId, 'toggleHelp', '?', 'Show graph shortcuts and gestures')}${tasksHeaderButtonHtml(widgetId, 'openEgo', 'EG', 'Open selected ego graph')}${tasksHeaderButtonHtml(widgetId, 'openEgoNeighbors', 'EG+', 'Open selected ego graph with neighbors')}${tasksHeaderButtonHtml(widgetId, 'fit', 'F', 'Fit view')}${tasksHeaderButtonHtml(widgetId, 'expandDepth', 'I', 'Expand next group depth')}${tasksHeaderButtonHtml(widgetId, 'collapseDepth', 'O', 'Collapse deepest group depth')}${tasksHeaderButtonHtml(widgetId, 'expand', 'U', 'Unfold all groups')}${tasksHeaderButtonHtml(widgetId, 'collapse', 'P', 'Collapse all groups')}${tasksHeaderButtonHtml(widgetId, 'toggleEdges', 'E', 'Toggle edges')}</div>`;
+    return `${fullscreen}<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">${tasksHeaderButtonHtml(widgetId, 'toggleHelp', '?', 'Show graph shortcuts and gestures')}${tasksHeaderButtonHtml(widgetId, 'openEgo', 'EG', 'Open selected ego graph')}${tasksHeaderButtonHtml(widgetId, 'openEgoNeighbors', 'EG+', 'Open selected ego graph with neighbors')}${tasksHeaderButtonHtml(widgetId, 'fit', 'F', 'Fit view')}${tasksHeaderButtonHtml(widgetId, 'toggleFilters', 'S', 'Toggle filters')}${tasksHeaderButtonHtml(widgetId, 'expandDepth', 'I', 'Expand next group depth')}${tasksHeaderButtonHtml(widgetId, 'collapseDepth', 'O', 'Collapse deepest group depth')}${tasksHeaderButtonHtml(widgetId, 'expand', 'U', 'Unfold all groups')}${tasksHeaderButtonHtml(widgetId, 'collapse', 'P', 'Collapse all groups')}${tasksHeaderButtonHtml(widgetId, 'toggleEdges', 'E', 'Toggle edges')}</div>`;
 }
 
 function tasksHoverAttrRows(node, hoverAttrs) {
@@ -4183,6 +4205,11 @@ async function renderTasksGraphs(rootElement = document) {
                             setHelpOpen((current) => !current);
                             return;
                         }
+                        if (key === 's') {
+                            event.preventDefault();
+                            setFiltersCollapsed((current) => !current);
+                            return;
+                        }
                         if (key === 'e') {
                             event.preventDefault();
                             setEdgesVisible((current) => !current);
@@ -4300,11 +4327,35 @@ async function renderTasksGraphs(rootElement = document) {
                 const panelWidth = tasksSelectedPanelWidth(selectedNode, entries);
                 const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));
                 const panelHref = String(selectedNode?.href || '').trim();
+                const copyPanelTitle = async (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    await copyTasksText(selectedNode.label || selectedNode.id);
+                };
                 return React.createElement('div', {
                     style: { width: `min(${panelWidth}px, 100%)`, maxWidth: '100%', minWidth: 'min(220px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto', minHeight: 0, flex: '0 1 auto', overflowY: 'auto', overscrollBehavior: 'contain' },
                 },
-                    React.createElement('div', { style: { position: 'relative', paddingRight: panelLinkKinds.length ? '28px' : '0', marginBottom: '10px' } },
+                    React.createElement('div', { style: { position: 'relative', paddingRight: panelLinkKinds.length ? '56px' : '28px', marginBottom: '10px' } },
                         panelLinkKinds.length ? renderTasksNodeLinkBadge(React, { kinds: panelLinkKinds, right: '0', top: '0' }) : null,
+                        React.createElement('button', {
+                            type: 'button',
+                            title: 'Copy title',
+                            'aria-label': 'Copy title',
+                            'data-vyasa-task-control': 'true',
+                            onClick: copyPanelTitle,
+                            style: {
+                                position: 'absolute',
+                                top: '0',
+                                right: panelLinkKinds.length ? '28px' : '0',
+                                border: 'none',
+                                background: 'none',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                lineHeight: 1,
+                                opacity: 0.58,
+                                padding: '0',
+                            },
+                        }, '⧉'),
                         React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3 } }, selectedNode.label || selectedNode.id),
                         panelHref ? React.createElement('a', {
                             href: panelHref,
@@ -4387,33 +4438,39 @@ async function renderTasksGraphs(rootElement = document) {
                 if (!groupByLevels.length && viewMode !== 'gantt') groupByLevels.push('');
                 const activeCount = Object.values(activeFilters || {}).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : (value ? 1 : 0)), 0) + (activeColorBy ? 1 : 0) + (searchMatches.active ? 1 : 0) + activeGroupByCount;
                 const isOpen = !filtersCollapsed;
+                const filterPanelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`;
                 return React.createElement('aside', {
-                    ref: filterPanelRef,
-                    className: 'vyasa-tasks-filter-card',
                     'aria-hidden': !isOpen,
                     style: {
-                        position: 'absolute',
-                        top: 0,
-                        bottom: 0,
-                        left: 0,
-                        zIndex: 30,
-                        width: `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`,
+                        flex: isOpen ? `0 0 ${filterPanelWidth}` : '0 0 0px',
+                        width: isOpen ? filterPanelWidth : '0px',
+                        minWidth: 0,
                         maxWidth: 'calc(100% - 24px)',
-                        maxHeight: filterPanelMaxHeight,
-                        overflowX: 'hidden',
-                        overflowY: 'auto',
-                        borderRadius: '0 8px 8px 8px',
-                        background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
-                        backdropFilter: 'blur(8px)',
-                        padding: '12px',
-                        boxSizing: 'border-box',
-                        transform: isOpen ? 'translateX(0)' : 'translateX(calc(-100% - 16px))',
-                        opacity: isOpen ? 1 : 0,
-                        visibility: isOpen ? 'visible' : 'hidden',
-                        transition: 'transform 180ms ease',
+                        overflow: 'hidden',
+                        transition: 'width 180ms ease, flex-basis 180ms ease',
                         pointerEvents: isOpen ? 'auto' : 'none',
                     },
                 },
+                    React.createElement('div', {
+                        ref: filterPanelRef,
+                        className: 'vyasa-tasks-filter-card',
+                        style: {
+                            width: filterPanelWidth,
+                            maxWidth: 'calc(100% - 24px)',
+                            maxHeight: filterPanelMaxHeight,
+                            overflowX: 'hidden',
+                            overflowY: 'auto',
+                            borderRadius: '0 8px 8px 8px',
+                            background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
+                            backdropFilter: 'blur(8px)',
+                            padding: '12px',
+                            boxSizing: 'border-box',
+                            transform: isOpen ? 'translateX(0)' : 'translateX(calc(-100% - 16px))',
+                            opacity: isOpen ? 1 : 0,
+                            visibility: isOpen ? 'visible' : 'hidden',
+                            transition: 'transform 180ms ease, opacity 120ms ease',
+                        },
+                    },
                     React.createElement('div', {
                         style: {
                             display: 'flex',
@@ -4661,6 +4718,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 )
                         ))
                     )
+                )
                 );
             };
             const clearSelection = () => {
@@ -5168,7 +5226,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, window.React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
                 window.React.createElement('strong', null, 'Graph help'),
                 window.React.createElement('button', { type: 'button', onClick: () => setHelpOpen(false), style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: 1, opacity: 0.7 } }, '×')
-            ), window.React.createElement('div', { style: { whiteSpace: 'pre-line' } }, 'Mouse\nClick node: select card or group\nClick canvas: clear selection\nShift + drag: box select\nCmd + drag: lasso select\nWheel / pinch: zoom\nDrag canvas: pan\n\nKeys\n?: toggle this help\nF: fit view\nE: toggle edges\n0: toggle edge animation\nT: toggle hovered group\nI / O: expand or collapse one group depth\nU / P: unfold or collapse all groups\nArrow keys: pan\nShift + arrows: pan faster'));
+            ), window.React.createElement('div', { style: { whiteSpace: 'pre-line' } }, 'Mouse\nClick node: select card or group\nClick canvas: clear selection\nShift + drag: box select\nCmd + drag: lasso select\nWheel / pinch: zoom\nDrag canvas: pan\n\nKeys\n?: toggle this help\nF: fit view\nS: toggle filters\nE: toggle edges\n0: toggle edge animation\nT: toggle hovered group\nI / O: expand or collapse one group depth\nU / P: unfold or collapse all groups\nArrow keys: pan\nShift + arrows: pan faster'));
             const DragSelectionOverlay = () => {
                 if (!dragSelection) return null;
                 const bounds = flowWrapperRef.current?.getBoundingClientRect?.();
@@ -5240,7 +5298,9 @@ async function renderTasksGraphs(rootElement = document) {
                 },
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
-                window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none', position: 'relative' }, ...flowPointerHandlers },
+                window.React.createElement('div', { style: { width: '100%', height: '100%', display: 'flex', alignItems: 'stretch', gap: '12px' } },
+                    filterPanelElement,
+                    window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { flex: '1 1 auto', minWidth: 0, height: '100%', outline: 'none', position: 'relative' }, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(rf.Controls),
@@ -5252,25 +5312,26 @@ async function renderTasksGraphs(rootElement = document) {
                     RightRail(),
                     window.React.createElement(EgoNeighborControl),
                     window.React.createElement(HelpPopup),
-                    filterPanelElement,
+                    window.React.createElement(GroupHoverTooltip),
+                    window.React.createElement(DragSelectionOverlay)
+                ))
+            ) : window.React.createElement('div', { style: { width: '100%', height: '100%', display: 'flex', alignItems: 'stretch', gap: '12px' } },
+                filterPanelElement,
+                window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { flex: '1 1 auto', minWidth: 0, height: '100%', outline: 'none', position: 'relative' }, ...flowPointerHandlers },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.Background, backgroundProps),
+                        window.React.createElement(rf.Controls),
+                        window.React.createElement(PanControls),
+                        window.React.createElement(FitViewHotkey),
+                        window.React.createElement(ActionBridge),
+                        window.React.createElement(FitOnNodesReady)
+                    ),
+                    RightRail(),
+                    window.React.createElement(EgoNeighborControl),
+                    window.React.createElement(HelpPopup),
                     window.React.createElement(GroupHoverTooltip),
                     window.React.createElement(DragSelectionOverlay)
                 )
-            ) : window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none', position: 'relative' }, ...flowPointerHandlers },
-                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
-                window.React.createElement(rf.Background, backgroundProps),
-                    window.React.createElement(rf.Controls),
-                    window.React.createElement(PanControls),
-                    window.React.createElement(FitViewHotkey),
-                    window.React.createElement(ActionBridge),
-                    window.React.createElement(FitOnNodesReady)
-                ),
-                RightRail(),
-                window.React.createElement(EgoNeighborControl),
-                window.React.createElement(HelpPopup),
-                filterPanelElement,
-                window.React.createElement(GroupHoverTooltip),
-                window.React.createElement(DragSelectionOverlay)
             );
         };
         if (window.ReactDOM.createRoot) window.ReactDOM.createRoot(mount).render(window.React.createElement(TasksGraphApp)); else window.ReactDOM.render(window.React.createElement(TasksGraphApp), mount);
