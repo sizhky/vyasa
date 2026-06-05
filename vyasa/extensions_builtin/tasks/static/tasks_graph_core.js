@@ -2,6 +2,29 @@ export function clampScale(value, maxScale = 55) {
     return Math.min(Math.max(0.1, value), maxScale);
 }
 
+export function tasksGraphDynamicMinZoom(nodes, viewportRect, options = {}) {
+    const baseMinZoom = Math.max(0.001, Number(options.baseMinZoom) || 0.05);
+    const targetViewportFraction = Math.max(0.05, Math.min(1, Number(options.targetViewportFraction) || 0.5));
+    const viewportWidth = Math.max(1, Number(viewportRect?.width) || 0);
+    const viewportHeight = Math.max(1, Number(viewportRect?.height) || 0);
+    const graphNodes = Array.isArray(nodes) ? nodes.filter(Boolean) : [];
+    if (!graphNodes.length) return baseMinZoom;
+    const byId = Object.fromEntries(graphNodes.map((node) => [node.id, node]));
+    const bounds = graphNodes.reduce((acc, node) => {
+        const box = tasksGraphNodeAbsoluteRect(node, byId);
+        return {
+            left: Math.min(acc.left, box.left),
+            right: Math.max(acc.right, box.right),
+            top: Math.min(acc.top, box.top),
+            bottom: Math.max(acc.bottom, box.bottom),
+        };
+    }, { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity });
+    const graphWidth = Math.max(1, bounds.right - bounds.left);
+    const graphHeight = Math.max(1, bounds.bottom - bounds.top);
+    const fitZoom = Math.min((viewportWidth * targetViewportFraction) / graphWidth, (viewportHeight * targetViewportFraction) / graphHeight);
+    return Math.min(baseMinZoom, Math.max(0.001, fitZoom));
+}
+
 export function nextWheelState(state, rect, point, deltaY, maxScale = 55) {
     const mouseX = point.x - rect.left - rect.width / 2;
     const mouseY = point.y - rect.top - rect.height / 2;

@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
 
 const tasksElk = new ELK();
 let tasksReactFlowReady = null;
@@ -37,6 +37,7 @@ const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;
 const TASKS_EDGE_OPACITY_MIN = 0.05;
 const TASKS_EDGE_OPACITY_MAX = 1;
 const TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT = 0.25;
+const TASKS_GRAPH_MIN_ZOOM = 0.05;
 const TASKS_DONE_ACCENT = '#22c55e';
 const TASKS_CARD_STATE_ATTR = 'card_state';
 const TASKS_HAS_NOTE_ATTR = 'has_note';
@@ -2842,6 +2843,7 @@ async function renderTasksGraphs(rootElement = document) {
             const [noteInputValue, setNoteInputValue] = React.useState('');
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
             const [graphRevision, setGraphRevision] = React.useState(0);
+            const [graphMinZoom, setGraphMinZoom] = React.useState(TASKS_GRAPH_MIN_ZOOM);
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
             const extendLassoPoints = React.useCallback((points, nextPoint) => {
@@ -3719,6 +3721,38 @@ async function renderTasksGraphs(rootElement = document) {
                 });
                 return () => window.cancelAnimationFrame(rafId);
             }, [graphRevision, selectedNodeId, selectedNodeIds]);
+            React.useEffect(() => {
+                let timeoutId = null;
+                const updateMinZoom = () => {
+                    const wrapperEl = flowWrapperRef.current;
+                    const reactFlow = reactFlowApiRef.current;
+                    if (!wrapperEl || !reactFlow) return;
+                    const nextMinZoom = tasksGraphDynamicMinZoom(graphBaseRef.current.nodes, wrapperEl.getBoundingClientRect(), { baseMinZoom: TASKS_GRAPH_MIN_ZOOM, targetViewportFraction: 0.5 });
+                    setGraphMinZoom((prevMinZoom) => {
+                        if (Math.abs(prevMinZoom - nextMinZoom) < 0.0005) return prevMinZoom;
+                        const viewport = reactFlow.getViewport();
+                        const shouldTrackFloor = Number.isFinite(viewport?.zoom) && viewport.zoom <= prevMinZoom + 0.005;
+                        const nextZoom = shouldTrackFloor ? nextMinZoom : (viewport.zoom < nextMinZoom ? nextMinZoom : null);
+                        if (nextZoom !== null) reactFlow.setViewport({ x: viewport.x, y: viewport.y, zoom: nextZoom }, { duration: 120 });
+                        return nextMinZoom;
+                    });
+                };
+                const scheduleUpdate = () => {
+                    if (timeoutId !== null) window.clearTimeout(timeoutId);
+                    timeoutId = window.setTimeout(updateMinZoom, 80);
+                };
+                updateMinZoom();
+                window.addEventListener('resize', scheduleUpdate);
+                window.visualViewport?.addEventListener?.('resize', scheduleUpdate);
+                const observer = typeof ResizeObserver === 'undefined' || !flowWrapperRef.current ? null : new ResizeObserver(scheduleUpdate);
+                if (observer) observer.observe(flowWrapperRef.current);
+                return () => {
+                    if (timeoutId !== null) window.clearTimeout(timeoutId);
+                    window.removeEventListener('resize', scheduleUpdate);
+                    window.visualViewport?.removeEventListener?.('resize', scheduleUpdate);
+                    observer?.disconnect();
+                };
+            }, [graphRevision]);
             const CustomEdge = React.memo((props) => {
                 const viewport = typeof rf.useViewport === 'function' ? rf.useViewport() : { zoom: 1 };
                 const [path, labelX, labelY] = rf.getBezierPath(props);
@@ -5207,7 +5241,7 @@ async function renderTasksGraphs(rootElement = document) {
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none', position: 'relative' }, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
@@ -5223,7 +5257,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(DragSelectionOverlay)
                 )
             ) : window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { width: '100%', height: '100%', outline: 'none', position: 'relative' }, ...flowPointerHandlers },
-                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: 0.05, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                 window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),

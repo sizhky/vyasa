@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -15,6 +15,11 @@ test('nextWheelState zooms around pointer', () => {
     assert.ok(out.scale > 1);
     assert.notEqual(out.translateX, 0);
     assert.notEqual(out.translateY, 0);
+});
+
+test('tasksGraphDynamicMinZoom lowers the floor for oversized graphs only', () => {
+    assert.equal(tasksGraphDynamicMinZoom([{ id: 'a', position: { x: 0, y: 0 }, width: 12000, height: 2400 }], { width: 1000, height: 800 }), 1 / 24);
+    assert.equal(tasksGraphDynamicMinZoom([{ id: 'a', position: { x: 0, y: 0 }, width: 200, height: 120 }], { width: 1000, height: 800 }), 0.05);
 });
 
 test('sizeTaskNode grows height for long labels', () => {
