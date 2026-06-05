@@ -188,6 +188,10 @@ function tasksEdgeOpacityLabel(opacity) {
     return 'Clear';
 }
 
+function tasksIsIconifyImage(url) {
+    return /^https:\/\/api\.iconify\.design\/.+\.svg(?:\?.*)?$/i.test(String(url || '').trim());
+}
+
 window.__vyasaTasksActions = window.__vyasaTasksActions || {};
 window.__vyasaTasksConfig = window.__vyasaTasksConfig || {};
 window.__vyasaTasksDebug = window.__vyasaTasksDebug || { events: [] };
@@ -1427,6 +1431,12 @@ function ensureTasksReactFlow() {
                 }
                 .dark .vyasa-tasks-flow .react-flow__controls button:hover {
                     background: color-mix(in srgb, var(--vyasa-paper) 72%, var(--vyasa-primary) 28%);
+                }
+                .dark .vyasa-tasks-node-image--icon {
+                    filter: brightness(0) invert(1);
+                }
+                .dark .vyasa-tasks-node-image--icon.vyasa-tasks-node-image--dimmed {
+                    filter: brightness(0) invert(1) grayscale(0.4);
                 }
                 .vyasa-tasks-filter-card {
                     border: 4px solid rgb(226 232 240) !important;
@@ -3839,17 +3849,22 @@ async function renderTasksGraphs(rootElement = document) {
                 const linksInteractive = isActiveNode;
                 const linkKinds = Array.from(tasksNodeLinkKinds(data));
                 const nodeImage = normalizeTasksNodeImageUrl(data?.__node_image__);
+                const nodeImageClassName = [
+                    'vyasa-tasks-node-image',
+                    tasksIsIconifyImage(nodeImage) ? 'vyasa-tasks-node-image--icon' : '',
+                    isDimmed ? 'vyasa-tasks-node-image--dimmed' : '',
+                ].filter(Boolean).join(' ');
                 const renderNodeImage = (size = 26, style = {}) => nodeImage ? React.createElement('img', {
                     src: nodeImage,
                     alt: '',
                     loading: 'lazy',
                     draggable: false,
+                    className: nodeImageClassName,
                     style: {
                         width: `${size}px`,
                         height: `${size}px`,
                         objectFit: 'contain',
                         flex: '0 0 auto',
-                        filter: isDimmed ? 'grayscale(0.4)' : undefined,
                         opacity: isDimmed ? 0.58 : 0.96,
                         ...style,
                     },
@@ -5001,6 +5016,7 @@ async function renderTasksGraphs(rootElement = document) {
                             alt: '',
                             loading: 'lazy',
                             draggable: false,
+                            className: tasksIsIconifyImage(image) ? 'vyasa-tasks-node-image vyasa-tasks-node-image--icon' : 'vyasa-tasks-node-image',
                             style: { width: '22px', height: '22px', objectFit: 'contain', flex: '0 0 auto' },
                         }) : null,
                         window.React.createElement('span', { style: { minWidth: 0 } }, groupHoverTooltip.label)
