@@ -2867,6 +2867,7 @@ async function renderTasksGraphs(rootElement = document) {
             const hoverClearTimerRef = React.useRef(null);
             const groupToggleHoverIdRef = React.useRef('');
             const suppressNextGraphClickRef = React.useRef(false);
+            const lastNodeClickRef = React.useRef(null);
             const activeProjection = React.useMemo(() => {
                 const projections = Array.isArray(sourceModel?.view_projections) ? sourceModel.view_projections : [];
                 const id = String(activeProjectionId || '').trim();
@@ -4698,9 +4699,32 @@ async function renderTasksGraphs(rootElement = document) {
                     y: event.clientY - bounds.top + 18,
                 });
             }, [expanded, clearGroupHoverTooltip, activeHoverAttrs]);
+            const selectGroupDescendants = React.useCallback((node) => {
+                const kind = node?.data?.__kind__;
+                if (kind !== 'group' && kind !== 'groupTitle') return false;
+                const groupId = kind === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                if (!groupId || !expanded.has(groupId)) return false;
+                const baseIds = new Set((graphBaseRef.current.nodes || []).map((n) => n.id));
+                if (!baseIds.has(groupId)) return false;
+                const ids = new Set([groupId, ...collectTasksGroupDescendantIds(groupId, model)].filter((id) => baseIds.has(id)));
+                setSelectedNodeId(null);
+                setHoveredNodeId(null);
+                setSelectedNodeIds(ids);
+                return true;
+            }, [expanded, model]);
             const selectGraphNode = React.useCallback((_, node) => {
                 if (suppressNextGraphClickRef.current) {
                     suppressNextGraphClickRef.current = false;
+                    return;
+                }
+                // Detect a double-click ourselves: React Flow re-renders the node on the
+                // first click (selection -> setNodes), which replaces its DOM element and
+                // prevents the browser's native dblclick from ever firing.
+                const last = lastNodeClickRef.current;
+                const now = window.performance ? window.performance.now() : 0;
+                const isDoubleClick = last && last.id === node?.id && (now - last.time) <= 400;
+                lastNodeClickRef.current = isDoubleClick ? null : { id: node?.id, time: now };
+                if (isDoubleClick && selectGroupDescendants(node)) {
                     return;
                 }
                 if (!isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id))) {
@@ -4711,7 +4735,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setSelectedNodeId((current) => current === sourceNodeId ? null : sourceNodeId);
                 setSelectedNodeIds(new Set());
                 setHoveredNodeId(null);
-            }, [expanded]);
+            }, [expanded, selectGroupDescendants]);
             const focusNeighborEdge = React.useCallback((_, node) => {
                 if (!selectedNodeId || !node?.id) return;
                 if (!isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id))) return;
