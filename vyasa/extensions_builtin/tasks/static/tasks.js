@@ -2859,6 +2859,7 @@ async function renderTasksGraphs(rootElement = document) {
             const lastPersistedProjectionIdRef = React.useRef(activeProjectionId);
             const pendingFitActionRef = React.useRef(null);
             const reactFlowApiRef = React.useRef(null);
+            const searchInputRef = React.useRef(null);
             const prevExpandedCountRef = React.useRef(0);
             const hoverClearTimerRef = React.useRef(null);
             const groupToggleHoverIdRef = React.useRef('');
@@ -4465,22 +4466,50 @@ async function renderTasksGraphs(rootElement = document) {
                             React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
                                 React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Search'),
                                 React.createElement('div', { style: { display: 'grid', gap: '6px', minWidth: 0 } },
-                                    React.createElement('input', {
-                                        type: 'text',
-                                        value: searchInputValue,
-                                        placeholder: 'text or /regex/i',
-                                        onChange: (e) => setSearchInputValue(e.target.value),
-                                        style: {
-                                            width: '100%',
-                                            minWidth: 0,
-                                            border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
-                                            borderRadius: '8px',
-                                            padding: '7px 9px',
-                                            background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
-                                            color: 'inherit',
-                                            boxSizing: 'border-box',
-                                        },
-                                    }),
+                                    React.createElement('div', { style: { position: 'relative' } },
+                                        React.createElement('input', {
+                                            ref: searchInputRef,
+                                            type: 'text',
+                                            value: searchInputValue,
+                                            placeholder: 'text or /regex/i',
+                                            onChange: (e) => setSearchInputValue(e.target.value),
+                                            style: {
+                                                width: '100%',
+                                                minWidth: 0,
+                                                border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                                borderRadius: '8px',
+                                                padding: '7px 28px 7px 9px',
+                                                background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                                color: 'inherit',
+                                                boxSizing: 'border-box',
+                                            },
+                                        }),
+                                        searchInputValue
+                                            ? React.createElement('button', {
+                                                type: 'button',
+                                                'aria-label': 'Clear search',
+                                                onClick: () => {
+                                                    setSearchInputValue('');
+                                                    setSearchQuery('');
+                                                    if (searchInputRef.current) searchInputRef.current.focus();
+                                                },
+                                                style: {
+                                                    position: 'absolute',
+                                                    top: '50%',
+                                                    right: '8px',
+                                                    transform: 'translateY(-50%)',
+                                                    border: 'none',
+                                                    background: 'none',
+                                                    padding: 0,
+                                                    cursor: 'pointer',
+                                                    fontSize: '12px',
+                                                    lineHeight: 1,
+                                                    color: 'inherit',
+                                                    opacity: 0.55,
+                                                },
+                                            }, '×')
+                                            : null
+                                    ),
                                     searchMatches.error
                                         ? React.createElement('div', { style: { fontSize: '11px', color: '#fca5a5', lineHeight: 1.3 } }, `Regex error: ${searchMatches.error}`)
                                         : React.createElement('div', { style: { fontSize: '11px', opacity: 0.72, lineHeight: 1.3 } }, searchMatches.active ? `${searchMatches.nodeIds.size} nodes matched` : 'Matches label, text attrs, and matching edge text.')
