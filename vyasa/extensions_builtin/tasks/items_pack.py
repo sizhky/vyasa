@@ -242,13 +242,13 @@ def apply_attrs(path: str | Path, nodes: dict[str, dict], edges: dict[str, dict]
             continue
         if not section:
             continue
-        if not line.startswith(" ") and stripped.endswith(":"):
+        if not line.startswith((" ", "\t")) and stripped.endswith(":"):
             current_key = stripped[:-1].strip()
             index_key = "node" if section == "@node_attrs" else "edge"
             if current_key and current_key not in indexed[index_key]:
                 indexed[index_key].append(current_key)
             continue
-        if current_key and line.startswith(" ") and ":" in stripped:
+        if current_key and line.startswith((" ", "\t")) and ":" in stripped:
             value, ids_text = stripped.split(":", 1)
             for record_id in shlex.split(ids_text):
                 if record_id in target:
