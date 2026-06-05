@@ -144,6 +144,12 @@ function tasksFilterPanelMaxHeight(wrapper) {
     return `${available}px`;
 }
 
+function tasksDefaultFiltersOpen(defaultFiltersOpen) {
+    const wantsOpen = Boolean(defaultFiltersOpen);
+    if (!wantsOpen || typeof window === 'undefined' || typeof window.matchMedia !== 'function') return wantsOpen;
+    return !window.matchMedia('(max-width: 767px)').matches;
+}
+
 function clampTasksEdgeOpacity(value) {
     const parsed = Number.parseFloat(String(value ?? ''));
     if (!Number.isFinite(parsed)) return TASKS_EDGE_OPACITY_MAX;
@@ -2802,11 +2808,10 @@ async function renderTasksGraphs(rootElement = document) {
             const [activeColorBy, setActiveColorBy] = React.useState(() => (
                 resolveTasksPreferredColorBy(model, activeProjectionId, projectionPrefs, nodeNotes)
             ));
-            const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => (
-                typeof projectionPrefs?.filtersCollapsed === 'boolean'
-                    ? projectionPrefs.filtersCollapsed
-                    : !defaultFiltersOpen
-            ));
+            const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => {
+                if (typeof projectionPrefs?.filtersCollapsed === 'boolean') return projectionPrefs.filtersCollapsed;
+                return !tasksDefaultFiltersOpen(defaultFiltersOpen);
+            });
             const [edgesVisible, setEdgesVisible] = React.useState(() => (
                 typeof projectionPrefs?.edgesVisible === 'boolean' ? projectionPrefs.edgesVisible : true
             ));
@@ -2886,7 +2891,11 @@ async function renderTasksGraphs(rootElement = document) {
                 setSearchQuery(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
                 setSearchInputValue(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
                 setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, nextPrefs, nodeNotes));
-                setFiltersCollapsed(typeof nextPrefs?.filtersCollapsed === 'boolean' ? nextPrefs.filtersCollapsed : !defaultFiltersOpen);
+                setFiltersCollapsed(
+                    typeof nextPrefs?.filtersCollapsed === 'boolean'
+                        ? nextPrefs.filtersCollapsed
+                        : !tasksDefaultFiltersOpen(defaultFiltersOpen)
+                );
                 setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
                 setEdgeOpacity(sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity));
                 setProjectionUnspecifiedContentOpacity(sourcePrefsRef.current?.unspecifiedContentOpacity === undefined ? defaultProjectionUnspecifiedContentOpacity : clampTasksProjectionContentOpacity(sourcePrefsRef.current.unspecifiedContentOpacity));
