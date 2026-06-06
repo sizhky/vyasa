@@ -22,7 +22,10 @@ _RENDERABLE_NODE_KEYS = {
 
 
 def _prepare_node_attr_markdown(value) -> str:
-    text = str(value)
+    text = str(value).replace("\\r\\n", "\n").replace("\\n", "\n")
+    stripped = text.strip()
+    if (stripped.startswith('"') and stripped.endswith('"')) or (stripped.startswith("'") and stripped.endswith("'")):
+        text = stripped[1:-1]
     return re.sub(r"(?<!\n)\n(?!\n)", "<br>\n", text)
 
 

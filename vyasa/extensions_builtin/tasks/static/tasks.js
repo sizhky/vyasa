@@ -566,6 +566,15 @@ function escapeTasksHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
+function normalizeTasksAttrText(value) {
+    const text = String(value ?? '').trim();
+    if (!text) return '';
+    if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
+        return text.slice(1, -1);
+    }
+    return text;
+}
+
 function tasksNodeMetaEntries(node) {
     if (!node) return [];
     return Object.entries(node)
@@ -573,7 +582,7 @@ function tasksNodeMetaEntries(node) {
         .map(([key, value]) => ({
             key,
             label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
-            value: String(value),
+            value: normalizeTasksAttrText(value),
             renderedValue: typeof node?.__rendered_attrs__?.[key] === 'string' ? node.__rendered_attrs__[key] : '',
         }));
 }
@@ -2590,7 +2599,7 @@ function tasksFormatHoverValue(attr, value) {
         }
         return String(value);
     }
-    const str = String(value).trim();
+    const str = normalizeTasksAttrText(value);
     if (!str) return '';
     // Try numeric formatting for stringy numbers (the fence parser stores everything as strings).
     if (/^-?\d+(\.\d+)?$/.test(str)) {
@@ -2605,13 +2614,30 @@ function tasksSelectedPanelWidth(node, entries) {
     const rowWidths = (entries || []).map((entry) => {
         const keyWidth = measureTextWidth(entry?.label || '', '700 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif');
         const rawValue = entry?.value || '';
-        const firstLine = String(rawValue).split(/\r?\n/, 1)[0];
-        const valueWidth = Math.min(measureTextWidth(firstLine, '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'), 360);
-        const weight = rawValue.length > 72 ? 0.48 : rawValue.length > 36 ? 0.68 : 0.9;
+        const lines = String(rawValue).split(/\r?\n/).filter(Boolean);
+        const firstLine = lines[0] || '';
+        const widestLine = lines.reduce((widest, line) => (
+            measureTextWidth(line, '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif') > measureTextWidth(widest, '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif')
+                ? line
+                : widest
+        ), firstLine);
+        const contentLine = rawValue.length > 120 ? widestLine : firstLine;
+        const valueWidth = Math.min(measureTextWidth(contentLine, '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'), 520);
+        const weight = rawValue.length > 180 ? 0.82 : rawValue.length > 72 ? 0.6 : rawValue.length > 36 ? 0.72 : 0.9;
         return keyWidth + valueWidth * weight;
     }).sort((left, right) => left - right);
-    const weightedWidth = rowWidths.length ? rowWidths[Math.max(0, Math.floor(rowWidths.length * 0.62) - 1)] : 0;
-    return Math.round(Math.min(560, Math.max(250, titleWidth + 32, weightedWidth + 110)));
+    const weightedWidth = rowWidths.length ? rowWidths[Math.max(0, Math.floor(rowWidths.length * 0.72) - 1)] : 0;
+    return Math.round(Math.min(720, Math.max(280, titleWidth + 44, weightedWidth + 136)));
+}
+
+function tasksIsLongFormEntry(entry) {
+    const rawValue = String(entry?.value || '').trim();
+    if (!rawValue) return false;
+    if (rawValue.includes('\n')) return true;
+    if (rawValue.length > 140) return true;
+    if (/^\s*([-*]|\d+\.)\s/m.test(rawValue)) return true;
+    if (/^\s*```|^\s*>|^\s*#/.test(rawValue)) return true;
+    return false;
 }
 
 function tasksHoverTooltipWidth(label, rows, hoverFontSize, hasImage = false) {
@@ -2659,7 +2685,12 @@ function tasksHoverAttrRows(node, hoverAttrs) {
     for (const attr of hoverAttrs) {
         const value = node[attr];
         if (value === null || value === undefined || String(value).trim() === '') continue;
-        rows.push({ attr, label: tasksNodeMetaLabel(attr), value: tasksFormatHoverValue(attr, value) });
+        rows.push({
+            attr,
+            label: tasksNodeMetaLabel(attr),
+            value: tasksFormatHoverValue(attr, value),
+            renderedValue: typeof node?.__rendered_attrs__?.[attr] === 'string' ? node.__rendered_attrs__[attr] : '',
+        });
     }
     return rows;
 }
@@ -4365,6 +4396,7 @@ async function renderTasksGraphs(rootElement = document) {
                     ),
                     React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: '12px', lineHeight: 1.35 } },
                         ...entries.map((entry, index) => {
+                            const stacked = tasksIsLongFormEntry(entry);
                             return React.createElement('div', {
                                 key: entry.key,
                                 style: {
@@ -4376,14 +4408,16 @@ async function renderTasksGraphs(rootElement = document) {
                                     whiteSpace: 'pre-line',
                                 },
                             },
-                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.72 } }, `${entry.label}: `),
+                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.72, display: stacked ? 'block' : 'inline', marginBottom: stacked ? '4px' : '0' } }, `${entry.label}: `),
                                 entry.renderedValue
                                     ? React.createElement('span', {
                                         className: 'vyasa-task-node-card-value',
+                                        style: stacked ? { display: 'block' } : undefined,
                                         dangerouslySetInnerHTML: { __html: entry.renderedValue },
                                     })
                                     : React.createElement('span', {
                                         className: 'vyasa-task-node-card-value',
+                                        style: stacked ? { display: 'block' } : undefined,
                                     }, entry.value),
                             );
                         }),
@@ -5189,17 +5223,21 @@ async function renderTasksGraphs(rootElement = document) {
                 if (rows.length) {
                     children.push(window.React.createElement('div', {
                         key: '__rows__',
-                        style: { display: 'grid', gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)', columnGap: '10px', rowGap: '2px', fontSize: hoverFontSize, fontWeight: 500, lineHeight: 1.35, alignItems: 'start' },
-                    }, rows.flatMap((row) => [
+                        style: { display: 'grid', gap: '6px', fontSize: hoverFontSize, fontWeight: 500, lineHeight: 1.35, alignItems: 'start' },
+                    }, rows.map((row) => {
+                        const stacked = tasksIsLongFormEntry(row);
+                        return window.React.createElement('div', {
+                            key: row.attr,
+                            style: stacked ? { display: 'grid', gap: '2px', minWidth: 0 } : { display: 'grid', gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)', columnGap: '10px', alignItems: 'start', minWidth: 0 },
+                        },
                         window.React.createElement('span', {
-                            key: `k-${row.attr}`,
-                            style: { color: 'color-mix(in srgb, currentColor 60%, transparent)', whiteSpace: 'nowrap', minWidth: 0 },
+                            style: { color: 'color-mix(in srgb, currentColor 60%, transparent)', whiteSpace: stacked ? 'normal' : 'nowrap', minWidth: 0 },
                         }, row.label),
                         window.React.createElement('span', {
-                            key: `v-${row.attr}`,
                             style: { fontWeight: 650, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 },
-                        }, row.value),
-                    ])));
+                            dangerouslySetInnerHTML: row.renderedValue ? { __html: row.renderedValue } : undefined,
+                        }, row.renderedValue ? undefined : row.value));
+                    })));
                 }
                 return window.React.createElement('div', {
                     style: {
