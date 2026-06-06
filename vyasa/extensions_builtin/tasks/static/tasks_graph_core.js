@@ -82,6 +82,21 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
     };
 }
 
+export function tasksEgoNodeOpacity(node, selectedIds, model, neighborOpacity = 1) {
+    if (!model?.ego_include_neighbors) return 1;
+    const id = String(node?.id || '').trim();
+    const selected = selectedIds instanceof Set ? selectedIds : new Set(selectedIds || []);
+    if (!id || selected.has(id)) return 1;
+    const groupsById = Object.fromEntries((model.groups || []).map((group) => [String(group.id || ''), group]));
+    let parentId = String(node?.group_id || node?.parent_group_id || '').trim();
+    while (parentId) {
+        if (selected.has(parentId)) return 1;
+        parentId = String(groupsById[parentId]?.parent_group_id || '').trim();
+    }
+    if (node?.__kind__ !== 'group') return neighborOpacity;
+    return neighborOpacity;
+}
+
 export function isTasksGraphNodeSelectable(kind, isExpanded = false) {
     if (kind === 'task') return true;
     if (kind === 'group') return true;

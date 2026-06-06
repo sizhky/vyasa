@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
 
 const tasksElk = new ELK();
 let tasksReactFlowReady = null;
@@ -3186,17 +3186,6 @@ async function renderTasksGraphs(rootElement = document) {
                 const egoSelectedIds = egoMode && Array.isArray(model.ego_selected_ids)
                     ? new Set(model.ego_selected_ids.map((id) => String(id || '').trim()).filter(Boolean))
                     : new Set();
-                const egoHighOpacityIds = new Set(egoSelectedIds);
-                if (egoMode && model.ego_include_neighbors) {
-                    const groupIds = new Set((model.groups || []).map((group) => group.id));
-                    const addGroupWithDescendants = (groupId) => {
-                        egoHighOpacityIds.add(groupId);
-                        for (const descendantId of collectTasksGroupDescendantIds(groupId, model)) egoHighOpacityIds.add(descendantId);
-                    };
-                    for (const selectedId of egoSelectedIds) {
-                        if (groupIds.has(selectedId)) addGroupWithDescendants(selectedId);
-                    }
-                }
                 const unspecifiedProjectionGroupIds = new Set(
                     (derived.nodes || [])
                         .filter((node) => isTasksUnspecifiedProjectionGroup(node, TASKS_PROJECTION_UNSPECIFIED_LABEL))
@@ -3272,7 +3261,9 @@ async function renderTasksGraphs(rootElement = document) {
                             ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${groupColor} ${groupBorderMix}%)`
                             : `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`)
                         : TASKS_NODE_BORDER;
-                    const egoNodeOpacity = egoMode && model.ego_include_neighbors && n.__kind__ !== 'group' && !egoHighOpacityIds.has(n.id) ? egoNeighborOpacity : 1;
+                    const egoNodeOpacity = egoMode
+                        ? tasksEgoNodeOpacity(n, egoSelectedIds, model, egoNeighborOpacity)
+                        : 1;
                     const branchOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1) * egoNodeOpacity;
                     const rfNode = {
                         id: n.id,
@@ -3313,7 +3304,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const titleImage = resolveTasksNodeImage(n, model);
                     const titleHeight = sizeTaskNode(n.label || n.id, 'groupTitle', titleWidth, { hasImage: Boolean(titleImage) }).height;
                     const titleOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1)
-                        * (egoMode && model.ego_include_neighbors && !egoHighOpacityIds.has(n.id) ? egoNeighborOpacity : 1);
+                        * (egoMode ? tasksEgoNodeOpacity(n, egoSelectedIds, model, egoNeighborOpacity) : 1);
                     baseNodes.push({
                         id: `${n.id}__title`,
                         type: 'vyasaTask',

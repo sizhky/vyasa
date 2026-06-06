@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -246,6 +246,32 @@ test('unspecified projection groups are detectable for reduced opacity', () => {
         city: 'Unspecified',
     }), true);
     assert.equal(isTasksUnspecifiedProjectionGroup({ id: 'city-tokyo', __projection_group__: true, city: 'Tokyo' }), false);
+});
+
+test('EG+ neighbor opacity applies to unselected group backgrounds', () => {
+    const model = {
+        ego_include_neighbors: true,
+        groups: [
+            { id: 'selected-group' },
+            { id: 'neighbor-group' },
+            { id: 'selected-parent' },
+        ],
+        tasks: [
+            { id: 'selected-task', group_id: 'selected-group' },
+            { id: 'neighbor-task', group_id: 'neighbor-group' },
+            { id: 'child-of-selected-group', group_id: 'selected-parent' },
+        ],
+        group_tree: { null: ['selected-group', 'neighbor-group', 'selected-parent'] },
+        task_children: {
+            'selected-group': ['selected-task'],
+            'neighbor-group': ['neighbor-task'],
+            'selected-parent': ['child-of-selected-group'],
+        },
+    };
+    assert.equal(tasksEgoNodeOpacity({ id: 'selected-group', __kind__: 'group' }, new Set(['selected-task']), model, 0.25), 0.25);
+    assert.equal(tasksEgoNodeOpacity({ id: 'selected-group', __kind__: 'group' }, new Set(['selected-group']), model, 0.25), 1);
+    assert.equal(tasksEgoNodeOpacity({ id: 'neighbor-group', __kind__: 'group' }, new Set(['selected-task']), model, 0.25), 0.25);
+    assert.equal(tasksEgoNodeOpacity({ id: 'child-of-selected-group', __kind__: 'task', group_id: 'selected-parent' }, new Set(['selected-parent']), model, 0.25), 1);
 });
 
 test('group panels use selectable hit areas in items graph', () => {
