@@ -28,7 +28,10 @@ roadmap.kg/chapter-1.kg.edges  # optional story/topology edge source
 ## Schema
 
 ```text
-@graph id=roadmap title=Roadmap initial_view=delivery card_states="Not Done,Done,Deferred/Cancelled"
+@graph id=roadmap title=Roadmap
+initial_view=delivery
+hover_attrs=desc,built,where
+card_states="Not Done,Done,Deferred/Cancelled"
 
 @sources
 nodes=kg.nodes
@@ -66,8 +69,8 @@ dependency:
 	caption="Inspect flow"
 ```
 
-- `@graph` names the graph and picks `initial_view`; there is no generic `Default` tab.
-- Optional `card_states` defines the click-cycle for card completion state. Omit it for default `Not Done,Done`.
+- `@graph` names the graph and can continue on following unindented lines for metadata like `initial_view`, `hover_attrs`, and `card_states`; there is no generic `Default` tab.
+- Optional `card_states` defines the click-cycle for card completion state. Put it on its own line when you want the multiline graph header style.
 - Prefer folder packs and point markdown to `items_schema: roadmap.kg/kg.schema`.
 - Top-level `nodes=` and `attrs=` in `@sources` are common to every source.
 - Source `edges=` can select a story/topology by edge endpoints.
