@@ -6,6 +6,7 @@ demo/sf-trip-palettes.json
 .gemini/
 agents/
 .github/
+tasks-ui/node_modules/
 docs/*
 !docs/refactor/
 docs/refactor/*

@@ -1,8 +1,9 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy } from '/static/extensions/tasks/tasks_graph_core.js';
 
 const tasksElk = new ELK();
 let tasksReactFlowReady = null;
+let tasksQueryBuilderReady = null;
 const TASKS_GROUP_PADDING = { top: 68, right: 40, bottom: 40, left: 40 };
 const TASKS_ROOT_SPACING = { node: 44, layer: 96 };
 const TASKS_ROOT_COLLISION_GAP = 96;
@@ -1200,16 +1201,154 @@ function resolveTasksEdgeColor(edge, model, colorByOverride = null, paletteOverr
     return typeof color === 'string' && color.trim() ? color.trim() : '';
 }
 
-function tasksNodeMatchesFilters(node, filters) {
-    const entries = Object.entries(filters || {}).filter(([, value]) => value);
-    if (!entries.length) return true;
-    return entries.every(([key, value]) => {
-        const nodeValue = key === TASKS_HAS_NOTE_ATTR
-            ? (node?.__has_note__ ? 'yes' : 'no')
-            : node?.[key];
-        if (Array.isArray(value)) return !value.length || value.includes(String(nodeValue || ''));
-        return String(nodeValue || '') === String(value);
+function tasksEmptyFilterQuery() {
+    return { combinator: 'and', rules: [] };
+}
+
+function tasksFilterQueryFromLegacy(filters) {
+    const rules = Object.entries(filters || {})
+        .filter(([, value]) => Array.isArray(value) ? value.length > 0 : Boolean(value))
+        .map(([field, value]) => ({
+            field,
+            operator: Array.isArray(value) ? 'in' : '=',
+            value,
+        }));
+    return { combinator: 'and', rules };
+}
+
+function normalizeTasksFilterQuery(filters) {
+    if (!filters || typeof filters !== 'object') return tasksEmptyFilterQuery();
+    if (Array.isArray(filters.rules)) {
+        return {
+            combinator: filters.combinator === 'or' ? 'or' : 'and',
+            not: Boolean(filters.not),
+            rules: filters.rules,
+        };
+    }
+    return tasksFilterQueryFromLegacy(filters);
+}
+
+function tasksFilterQueryHasRules(query) {
+    const normalized = normalizeTasksFilterQuery(query);
+    return normalized.rules.some((rule) => {
+        if (rule && Array.isArray(rule.rules)) return tasksFilterQueryHasRules(rule);
+        return tasksFilterRuleIsActive(rule);
     });
+}
+
+function tasksCountFilterRules(query) {
+    const normalized = normalizeTasksFilterQuery(query);
+    return normalized.rules.reduce((count, rule) => {
+        if (rule && Array.isArray(rule.rules)) return count + tasksCountFilterRules(rule);
+        return count + (tasksFilterRuleIsActive(rule) ? 1 : 0);
+    }, 0);
+}
+
+function tasksPruneFilterQueryFields(query, validKeys) {
+    const normalized = normalizeTasksFilterQuery(query);
+    return {
+        ...normalized,
+        rules: normalized.rules.flatMap((rule) => {
+            if (rule && Array.isArray(rule.rules)) {
+                const pruned = tasksPruneFilterQueryFields(rule, validKeys);
+                return pruned.rules.length ? [pruned] : [];
+            }
+            return rule?.field && validKeys.has(rule.field) ? [rule] : [];
+        }),
+    };
+}
+
+function toggleTasksFilterQueryValue(query, field, value, enabled) {
+    const normalized = normalizeTasksFilterQuery(query);
+    const root = normalized.combinator === 'and' || !tasksFilterQueryHasRules(normalized)
+        ? normalized
+        : { combinator: 'and', rules: [normalized] };
+    const rules = root.rules.slice();
+    const index = rules.findIndex((rule) => rule && !Array.isArray(rule.rules) && rule.field === field && rule.operator === 'in');
+    const currentValues = index >= 0 ? tasksFilterValueList(rules[index].value) : [];
+    const nextValues = enabled
+        ? Array.from(new Set([...currentValues, String(value)]))
+        : currentValues.filter((entry) => entry !== String(value));
+    if (!nextValues.length) {
+        if (index >= 0) rules.splice(index, 1);
+    } else if (index >= 0) {
+        rules[index] = { ...rules[index], value: nextValues };
+    } else {
+        rules.push({ field, operator: 'in', value: nextValues });
+    }
+    return { ...root, rules };
+}
+
+function tasksFilterQuerySelectedValues(query, field) {
+    const normalized = normalizeTasksFilterQuery(query);
+    const rule = normalized.rules.find((entry) => (
+        entry && !Array.isArray(entry.rules) && entry.field === field && entry.operator === 'in'
+    ));
+    return rule ? tasksFilterValueList(rule.value) : [];
+}
+
+function tasksFilterValueEditorType(operator) {
+    if (operator === 'contains' || operator === 'doesNotContain') return 'text';
+    if (operator === 'in' || operator === 'notIn') return 'multiselect';
+    return 'select';
+}
+
+function tasksFilterRuleIsActive(rule) {
+    if (!rule?.field || !rule?.operator) return false;
+    if (rule.operator === 'in' || rule.operator === 'notIn') return tasksFilterValueList(rule.value).length > 0;
+    return String(rule.value ?? '').trim() !== '';
+}
+
+function tasksFilterValueList(value) {
+    if (Array.isArray(value)) return value.map((entry) => String(entry ?? '')).filter(Boolean);
+    return String(value ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
+}
+
+function tasksGroupIdsContainingSelection(model, selectedIds) {
+    const selected = selectedIds instanceof Set ? selectedIds : new Set(selectedIds || []);
+    if (!selected.size) return new Set();
+    const containers = new Set();
+    for (const group of (model?.groups || [])) {
+        const descendantIds = collectTasksGroupDescendantIds(group.id, model);
+        for (const selectedId of selected) {
+            if (selectedId === group.id || descendantIds.has(selectedId)) {
+                containers.add(group.id);
+                break;
+            }
+        }
+    }
+    return containers;
+}
+
+function tasksNodeFilterValue(node, key) {
+    if (key === TASKS_HAS_NOTE_ATTR) return node?.__has_note__ ? 'yes' : 'no';
+    return String(node?.[key] ?? '');
+}
+
+function tasksNodeMatchesFilterRule(node, rule) {
+    if (!rule?.field || !rule?.operator) return true;
+    const nodeValue = tasksNodeFilterValue(node, rule.field);
+    const values = tasksFilterValueList(rule.value);
+    if (rule.operator === 'in') return values.length ? values.includes(nodeValue) : true;
+    if (rule.operator === 'notIn') return values.length ? !values.includes(nodeValue) : true;
+    if (rule.operator === '!=') return nodeValue !== String(rule.value ?? '');
+    if (rule.operator === 'contains') return nodeValue.toLowerCase().includes(String(rule.value ?? '').toLowerCase());
+    if (rule.operator === 'doesNotContain') return !nodeValue.toLowerCase().includes(String(rule.value ?? '').toLowerCase());
+    return nodeValue === String(rule.value ?? '');
+}
+
+function tasksNodeMatchesFilters(node, filters) {
+    const query = normalizeTasksFilterQuery(filters);
+    if (!tasksFilterQueryHasRules(query)) return true;
+    const activeRules = query.rules.filter((rule) => (
+        rule && Array.isArray(rule.rules) ? tasksFilterQueryHasRules(rule) : tasksFilterRuleIsActive(rule)
+    ));
+    if (!activeRules.length) return true;
+    const results = activeRules.map((rule) => (
+        Array.isArray(rule.rules) ? tasksNodeMatchesFilters(node, rule) : tasksNodeMatchesFilterRule(node, rule)
+    ));
+    const matched = query.combinator === 'or' ? results.some(Boolean) : results.every(Boolean);
+    return query.not ? !matched : matched;
 }
 
 function tasksSearchNormalizeText(value) {
@@ -1539,6 +1678,112 @@ function ensureTasksReactFlow() {
                 .dark .vyasa-tasks-filter-card {
                     border-color: rgb(30 41 59) !important;
                 }
+                .vyasa-tasks-filter-card .queryBuilder {
+                    display: grid;
+                    gap: 8px;
+                    font-size: 12px;
+                    max-width: 100%;
+                    overflow: hidden;
+                }
+                .vyasa-tasks-filter-card .ruleGroup {
+                    border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+                    border-radius: 10px;
+                    background: color-mix(in srgb, var(--vyasa-paper) 96%, transparent);
+                    padding: 8px;
+                    min-width: 0;
+                    max-width: 100%;
+                    box-sizing: border-box;
+                }
+                .vyasa-tasks-filter-card .ruleGroup-header,
+                .vyasa-tasks-filter-card .betweenRules {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                .vyasa-tasks-filter-card .ruleGroup-notToggle {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    line-height: 1;
+                }
+                .vyasa-tasks-filter-card .rule,
+                .vyasa-tasks-filter-card .ruleGroup-header {
+                    gap: 6px;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    min-width: 0;
+                }
+                .vyasa-tasks-filter-card .rule {
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                }
+                .vyasa-tasks-filter-card .rule > * {
+                    min-width: 0;
+                }
+                .vyasa-tasks-filter-card .rule .rule-value,
+                .vyasa-tasks-filter-card .rule .rule-remove {
+                    grid-column: 1 / -1;
+                }
+                .vyasa-tasks-filter-card .rule .rule-remove {
+                    justify-self: start;
+                }
+                .vyasa-tasks-filter-card .vyasa-tasks-query-values {
+                    display: grid;
+                    gap: 4px;
+                    max-height: 130px;
+                    overflow: auto;
+                    padding: 6px 8px;
+                    border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+                    border-radius: 8px;
+                    background: color-mix(in srgb, var(--vyasa-paper) 96%, transparent);
+                }
+                .vyasa-tasks-filter-card .vyasa-tasks-query-value-option {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 7px;
+                    min-width: 0;
+                }
+                .vyasa-tasks-filter-card select,
+                .vyasa-tasks-filter-card input[type="text"],
+                .vyasa-tasks-filter-card .ruleGroup button {
+                    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+                    border-radius: 8px;
+                    background: color-mix(in srgb, var(--vyasa-paper) 96%, transparent);
+                    color: inherit;
+                    padding: 5px 7px;
+                    max-width: 100%;
+                    min-width: 0;
+                    box-sizing: border-box;
+                }
+                .vyasa-tasks-filter-card input[type="checkbox"] {
+                    appearance: none;
+                    width: 16px;
+                    height: 16px;
+                    margin: 0;
+                    border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+                    border-radius: 4px;
+                    background: color-mix(in srgb, var(--vyasa-paper) 96%, transparent);
+                    display: inline-grid;
+                    place-content: center;
+                    flex: 0 0 auto;
+                    vertical-align: middle;
+                }
+                .vyasa-tasks-filter-card input[type="checkbox"]:checked {
+                    border-color: color-mix(in srgb, var(--vyasa-primary) 78%, currentColor 22%);
+                    background: color-mix(in srgb, var(--vyasa-primary) 72%, white 28%);
+                }
+                .vyasa-tasks-filter-card input[type="checkbox"]:checked::before {
+                    content: "";
+                    width: 5px;
+                    height: 9px;
+                    border: solid var(--vyasa-paper);
+                    border-width: 0 2px 2px 0;
+                    transform: rotate(45deg) translateY(-1px);
+                }
+                .vyasa-tasks-filter-card .rule button,
+                .vyasa-tasks-filter-card .ruleGroup button {
+                    cursor: pointer;
+                }
                 .react-flow__edge.animated path {
                     animation: vyasa-edge-dashdraw var(--vyasa-edge-flow-duration, 0.6s) linear infinite;
                 }
@@ -1580,9 +1825,40 @@ function ensureTasksReactFlow() {
                 };
             }
         }
-        return window.React && window.ReactDOM && window.ReactFlow;
+        return window.React && window.ReactDOM && window.ReactFlow
+            ? window.ReactFlow
+            : null;
     })();
     return tasksReactFlowReady;
+}
+
+function ensureTasksQueryBuilder() {
+    if (window.VyasaTasksQueryBuilder?.QueryBuilder) return Promise.resolve(window.VyasaTasksQueryBuilder);
+    if (tasksQueryBuilderReady) return tasksQueryBuilderReady;
+    tasksQueryBuilderReady = (async () => {
+        const cssHref = '/static/extensions/tasks/vendor/react-querybuilder.css';
+        if (!document.querySelector(`link[href="${cssHref}"]`)) {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = cssHref;
+            document.head.appendChild(link);
+        }
+        const src = '/static/extensions/tasks/vendor/react-querybuilder.global.js';
+        if (!document.querySelector(`script[src="${src}"]`)) {
+            await new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = src;
+                s.onload = resolve;
+                s.onerror = (event) => {
+                    console.error('[tasks] script load failed', src, event);
+                    reject(event);
+                };
+                document.head.appendChild(s);
+            });
+        }
+        return window.VyasaTasksQueryBuilder || null;
+    })();
+    return tasksQueryBuilderReady;
 }
 
 function buildVisibleTasksGraph(model, expanded) {
@@ -2970,8 +3246,8 @@ async function renderTasksGraphs(rootElement = document) {
             const [helpOpen, setHelpOpen] = React.useState(false);
             const [activeFilters, setActiveFilters] = React.useState(() => egoMode ? {} : (
                 projectionPrefs?.filters && typeof projectionPrefs.filters === 'object'
-                    ? projectionPrefs.filters
-                    : {}
+                    ? normalizeTasksFilterQuery(projectionPrefs.filters)
+                    : tasksEmptyFilterQuery()
             ));
             const [searchQuery, setSearchQuery] = React.useState(() => egoMode ? '' : (
                 typeof projectionPrefs?.searchQuery === 'string' ? projectionPrefs.searchQuery : ''
@@ -2990,6 +3266,9 @@ async function renderTasksGraphs(rootElement = document) {
                 if (typeof projectionPrefs?.filtersCollapsed === 'boolean') return projectionPrefs.filtersCollapsed;
                 return !tasksDefaultFiltersOpen(defaultFiltersOpen);
             });
+            const [queryBuilderEnabled, setQueryBuilderEnabled] = React.useState(() => (
+                typeof projectionPrefs?.queryBuilderEnabled === 'boolean' ? projectionPrefs.queryBuilderEnabled : true
+            ));
             const [edgesVisible, setEdgesVisible] = React.useState(() => (
                 typeof projectionPrefs?.edgesVisible === 'boolean' ? projectionPrefs.edgesVisible : true
             ));
@@ -3021,6 +3300,7 @@ async function renderTasksGraphs(rootElement = document) {
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [graphMinZoom, setGraphMinZoom] = React.useState(TASKS_GRAPH_MIN_ZOOM);
+            const [queryBuilderReady, setQueryBuilderReady] = React.useState(() => Boolean(window.VyasaTasksQueryBuilder?.QueryBuilder));
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
             const extendLassoPoints = React.useCallback((points, nextPoint) => {
@@ -3074,7 +3354,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, [activeProjectionId, hydrateExpandedSet]);
             React.useEffect(() => {
                 const nextPrefs = readTasksProjectionPrefs({ projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
-                setActiveFilters(egoMode ? {} : (nextPrefs?.filters && typeof nextPrefs.filters === 'object' ? nextPrefs.filters : {}));
+                setActiveFilters(egoMode ? tasksEmptyFilterQuery() : normalizeTasksFilterQuery(nextPrefs?.filters));
                 setSearchQuery(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
                 setSearchInputValue(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
                 setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, nextPrefs, nodeNotes));
@@ -3084,6 +3364,7 @@ async function renderTasksGraphs(rootElement = document) {
                         ? nextPrefs.filtersCollapsed
                         : !tasksDefaultFiltersOpen(defaultFiltersOpen)
                 );
+                setQueryBuilderEnabled(typeof nextPrefs?.queryBuilderEnabled === 'boolean' ? nextPrefs.queryBuilderEnabled : true);
                 setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
                 setEdgeAnimationEnabled(typeof nextPrefs?.edgeAnimationEnabled === 'boolean' ? nextPrefs.edgeAnimationEnabled : true);
                 setEdgeOpacity(sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity));
@@ -3095,10 +3376,41 @@ async function renderTasksGraphs(rootElement = document) {
                 }, 140);
                 return () => window.clearTimeout(timeoutId);
             }, [searchInputValue]);
+            React.useEffect(() => {
+                if (egoMode || filtersCollapsed || !queryBuilderEnabled) return;
+                if (window.VyasaTasksQueryBuilder?.QueryBuilder) {
+                    setQueryBuilderReady(true);
+                    return;
+                }
+                let active = true;
+                ensureTasksQueryBuilder()
+                    .then((bundle) => {
+                        if (active && bundle?.QueryBuilder) setQueryBuilderReady(true);
+                    })
+                    .catch((error) => console.error('[tasks] query builder load failed', error));
+                return () => { active = false; };
+            }, [egoMode, filtersCollapsed, queryBuilderEnabled]);
+            const effectiveFilters = React.useMemo(
+                () => (queryBuilderEnabled ? activeFilters : tasksEmptyFilterQuery()),
+                [queryBuilderEnabled, activeFilters]
+            );
             const searchMatches = React.useMemo(
                 () => tasksCollectSearchMatches(graphBaseRef.current.nodes || [], graphBaseRef.current.edges || [], searchQuery),
                 [graphRevision, searchQuery]
             );
+            const filteredSelectionIds = React.useCallback(() => {
+                const hasFilters = tasksFilterQueryHasRules(effectiveFilters);
+                const hasSearch = searchMatches.active && !searchMatches.error;
+                if (!hasFilters && !hasSearch) return new Set();
+                return new Set((graphBaseRef.current.nodes || [])
+                    .filter((node) => node?.id && node.data?.__kind__ !== 'groupTitle')
+                    .filter((node) => {
+                        const filterHit = hasFilters ? tasksNodeMatchesFilters(node.data, effectiveFilters) : true;
+                        const searchHit = hasSearch ? searchMatches.nodeIds.has(node.id) : true;
+                        return filterHit && searchHit;
+                    })
+                    .map((node) => node.id));
+            }, [effectiveFilters, searchMatches]);
             const currentSelectionIds = React.useCallback(() => {
                 if (selectedNodeId) return new Set([selectedNodeId]);
                 if (selectedNodeIds.size) {
@@ -3109,29 +3421,13 @@ async function renderTasksGraphs(rootElement = document) {
                         return isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id));
                     }));
                 }
-                const entries = Object.entries(activeFilters || {}).filter(([, value]) => Array.isArray(value) ? value.length > 0 : Boolean(value));
-                const hasSearch = searchMatches.active && !searchMatches.error;
-                if (!entries.length && !hasSearch) return new Set();
-                return new Set((graphBaseRef.current.nodes || [])
-                    .filter((node) => node?.id && node.data?.__kind__ !== 'groupTitle')
-                    .filter((node) => {
-                        const filterHit = entries.length ? tasksNodeMatchesFilters(node.data, activeFilters) : true;
-                        const searchHit = hasSearch ? searchMatches.nodeIds.has(node.id) : true;
-                        return filterHit && searchHit;
-                    })
-                    .map((node) => node.id));
-            }, [selectedNodeId, selectedNodeIds, expanded, activeFilters, searchMatches]);
+                return filteredSelectionIds();
+            }, [selectedNodeId, selectedNodeIds, expanded, filteredSelectionIds]);
             React.useEffect(() => {
                 const validFilterKeys = new Set(tasksFilterOptions(model).map((option) => option.key));
                 const validColorKeys = new Set(tasksColorOptions(model, nodeNotes).map((option) => option.key));
                 const defaultColorBy = tasksResolvedProjectionDefaultColorBy(model, nodeNotes);
-                setActiveFilters((current) => Object.fromEntries(
-                    Object.entries(current || {}).filter(([key, value]) => {
-                        if (!validFilterKeys.has(key)) return false;
-                        if (Array.isArray(value)) return value.length > 0;
-                        return Boolean(value);
-                    })
-                ));
+                setActiveFilters((current) => tasksPruneFilterQueryFields(current, validFilterKeys));
                 setActiveColorBy((current) => {
                     if (current && validColorKeys.has(current)) return current;
                     return validColorKeys.has(defaultColorBy) ? defaultColorBy : '';
@@ -3148,6 +3444,7 @@ async function renderTasksGraphs(rootElement = document) {
                     ...storedProjectionPrefsRef.current,
                     [projectionKey]: {
                         filters: activeFilters,
+                        queryBuilderEnabled,
                         searchQuery,
                         colorBy: activeColorBy,
                         secondaryColorBy: activeSecondaryColorBy,
@@ -3178,7 +3475,7 @@ async function renderTasksGraphs(rootElement = document) {
                     nodeNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [sourceModel, activeFilters, searchQuery, activeColorBy, activeSecondaryColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeAnimationEnabled, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes]);
+            }, [sourceModel, activeFilters, queryBuilderEnabled, searchQuery, activeColorBy, activeSecondaryColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeAnimationEnabled, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes]);
             const checkedNodeIdSet = React.useMemo(() => new Set(checkedNodeIdsFromStates(nodeStates)), [nodeStates]);
             const toggleCheckedNode = React.useCallback((nodeId) => {
                 const normalizedId = String(nodeId || '').trim();
@@ -3584,30 +3881,26 @@ async function renderTasksGraphs(rootElement = document) {
                     return;
                 }
                 if (!hasNodeSelection) {
-                    const hasFilters = Object.values(activeFilters).some((value) => Array.isArray(value) ? value.length > 0 : Boolean(value));
+                    const hasFilters = tasksFilterQueryHasRules(effectiveFilters);
                     const hasSearch = searchMatches.active && !searchMatches.error;
                     if (!hasFilters && !hasSearch) {
                         setNodes(baseNodes);
                         setEdges(edgesVisible ? baseEdges : []);
                         return;
                     }
-                    const filterMatches = new Set(baseNodes.filter((node) => tasksNodeMatchesFilters(node.data, activeFilters)).map((node) => node.id));
-                    const searchNodeIds = hasSearch ? searchMatches.nodeIds : null;
-                    const matchingIds = new Set(baseNodes.filter((node) => {
-                        const filterHit = hasFilters ? filterMatches.has(node.id) : true;
-                        const searchHit = hasSearch ? searchNodeIds.has(node.id) : true;
-                        return filterHit && searchHit;
-                    }).map((node) => node.id));
+                    const matchingIds = filteredSelectionIds();
+                    const containerGroupIds = tasksGroupIdsContainingSelection(model, matchingIds);
+                    const visibleSelectionIds = new Set([...matchingIds, ...containerGroupIds]);
                     setNodes(baseNodes.map((node) => ({
                         ...node,
-                        data: { ...node.data, highlightMode: matchingIds.has(node.id) ? 'selected' : 'dim' },
+                        data: { ...node.data, highlightMode: visibleSelectionIds.has(node.id) ? 'selected' : 'dim' },
                         style: {
                             ...node.style,
-                            opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (matchingIds.has(node.id) ? 1 : 0.18),
+                            opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (visibleSelectionIds.has(node.id) ? 1 : 0.18),
                         },
                     })));
                     setEdges(edgesVisible ? baseEdges.map((edge) => {
-                        const hit = (matchingIds.has(edge.source) && matchingIds.has(edge.target)) || searchMatches.edgeIds.has(edge.id);
+                        const hit = (visibleSelectionIds.has(edge.source) && visibleSelectionIds.has(edge.target)) || searchMatches.edgeIds.has(edge.id);
                         const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
                         const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
                         return {
@@ -3815,7 +4108,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdges(edgesVisible ? nextEdges : []);
-            }, [activeFilters, searchMatches, model, activeColorBy, activeColorPalette, activeSecondaryColorBy, activeSecondaryColorPalette, expanded, edgesVisible, edgeAnimationEnabled, edgeOpacity]);
+            }, [effectiveFilters, searchMatches, model, activeColorBy, activeColorPalette, activeSecondaryColorBy, activeSecondaryColorPalette, expanded, edgesVisible, edgeAnimationEnabled, edgeOpacity, filteredSelectionIds]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -3873,13 +4166,13 @@ async function renderTasksGraphs(rootElement = document) {
             }, [graphRevision, expanded]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnFilter()) return;
-                const entries = Object.entries(activeFilters || {}).filter(([, value]) => Array.isArray(value) ? value.length > 0 : Boolean(value));
+                const hasFilters = tasksFilterQueryHasRules(effectiveFilters);
                 const hasSearch = searchMatches.active && !searchMatches.error;
-                if (!entries.length && !hasSearch) return;
+                if (!hasFilters && !hasSearch) return;
                 const reactFlow = reactFlowApiRef.current;
                 const matchedNodes = (graphBaseRef.current.nodes || []).filter((node) => {
                     if (!node?.id || node.data?.__kind__ === 'groupTitle') return false;
-                    const filterHit = entries.length ? tasksNodeMatchesFilters(node.data, activeFilters) : true;
+                    const filterHit = hasFilters ? tasksNodeMatchesFilters(node.data, effectiveFilters) : true;
                     const searchHit = hasSearch ? searchMatches.nodeIds.has(node.id) : true;
                     return filterHit && searchHit;
                 });
@@ -3890,7 +4183,7 @@ async function renderTasksGraphs(rootElement = document) {
                 return () => {
                     if (rafId !== null) window.cancelAnimationFrame(rafId);
                 };
-            }, [graphRevision, activeFilters, searchMatches]);
+            }, [graphRevision, effectiveFilters, searchMatches]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnFilter()) return;
                 if (selectedNodeId || !selectedNodeIds.size) return;
@@ -4614,7 +4907,66 @@ async function renderTasksGraphs(rootElement = document) {
                 const groupByLevels = displayedGroupByHierarchy.filter(Boolean);
                 if (customGroupingActive) groupByLevels.push('');
                 if (!groupByLevels.length && viewMode !== 'gantt') groupByLevels.push('');
-                const activeCount = Object.values(activeFilters || {}).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : (value ? 1 : 0)), 0) + (activeColorBy ? 1 : 0) + (searchMatches.active ? 1 : 0) + activeGroupByCount;
+                const activeCount = (queryBuilderEnabled ? tasksCountFilterRules(activeFilters) : 0) + (activeColorBy ? 1 : 0) + (searchMatches.active ? 1 : 0) + activeGroupByCount;
+                const QueryBuilder = queryBuilderEnabled && queryBuilderReady ? window.VyasaTasksQueryBuilder?.QueryBuilder : null;
+                const queryBuilderFields = options.map((option) => ({
+                    name: option.key,
+                    label: option.label,
+                    valueEditorType: tasksFilterValueEditorType,
+                    values: (option.isBoolean ? ['true', 'false'] : option.values).map((value) => ({ name: value, label: value })),
+                }));
+                const queryBuilderOperators = [
+                    { name: '=', label: 'is' },
+                    { name: '!=', label: 'is not' },
+                    { name: 'in', label: 'is any of' },
+                    { name: 'notIn', label: 'is none of' },
+                    { name: 'contains', label: 'contains' },
+                    { name: 'doesNotContain', label: 'does not contain' },
+                ];
+                const activeColorSelectedValues = new Set(tasksFilterQuerySelectedValues(activeFilters, activeColorBy));
+                const activeSecondarySelectedValues = new Set(tasksFilterQuerySelectedValues(activeFilters, activeSecondaryColorBy));
+                const QueryValueEditor = (props) => {
+                    const values = Array.isArray(props.values) ? props.values : [];
+                    const optionValue = (option) => String(option.value ?? option.name ?? '');
+                    const optionLabel = (option) => String(option.label ?? option.name ?? option.value ?? '');
+                    if (props.operator === 'contains' || props.operator === 'doesNotContain') {
+                        return React.createElement('input', {
+                            type: 'text',
+                            value: Array.isArray(props.value) ? props.value.join(', ') : String(props.value ?? ''),
+                            onChange: (event) => props.handleOnChange(event.target.value),
+                            placeholder: 'Text to match',
+                            className: props.className,
+                        });
+                    }
+                    if (props.operator === 'in' || props.operator === 'notIn') {
+                        const selected = new Set(tasksFilterValueList(props.value));
+                        return React.createElement('div', { className: `${props.className || ''} vyasa-tasks-query-values` },
+                            values.map((option) => {
+                                const value = optionValue(option);
+                                return React.createElement('label', { key: value, className: 'vyasa-tasks-query-value-option' },
+                                    React.createElement('input', {
+                                        type: 'checkbox',
+                                        checked: selected.has(value),
+                                        onChange: (event) => {
+                                            const next = new Set(selected);
+                                            if (event.target.checked) next.add(value); else next.delete(value);
+                                            props.handleOnChange(Array.from(next));
+                                        },
+                                    }),
+                                    React.createElement('span', null, optionLabel(option))
+                                );
+                            })
+                        );
+                    }
+                    return React.createElement('select', {
+                        value: Array.isArray(props.value) ? String(props.value[0] ?? '') : String(props.value ?? ''),
+                        onChange: (event) => props.handleOnChange(event.target.value),
+                        className: props.className,
+                    },
+                        React.createElement('option', { value: '' }, 'Choose value'),
+                        values.map((option) => React.createElement('option', { key: optionValue(option), value: optionValue(option) }, optionLabel(option)))
+                    );
+                };
                 const isOpen = !filtersCollapsed;
                 const filterPanelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`;
                 return React.createElement('aside', {
@@ -4773,7 +5125,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     React.createElement('span', { style: { opacity: 0.8, minWidth: '3.5em', textAlign: 'right' } }, tasksOpacityPctLabel(projectionUnspecifiedContentOpacity))
                                 )
                             ),
-                            React.createElement('button', { type: 'button', onClick: () => { setActiveFilters({}); setSearchInputValue(''); setSearchQuery(''); setActiveColorBy(tasksResolvedProjectionDefaultColorBy(model, nodeNotes)); setGroupByHierarchy([]); setEdgeOpacity(defaultEdgeOpacity); setProjectionUnspecifiedContentOpacity(defaultProjectionUnspecifiedContentOpacity); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline', whiteSpace: 'nowrap' } }, 'Reset')
+                            React.createElement('button', { type: 'button', onClick: () => { setActiveFilters(tasksEmptyFilterQuery()); setSearchInputValue(''); setSearchQuery(''); setActiveColorBy(tasksResolvedProjectionDefaultColorBy(model, nodeNotes)); setGroupByHierarchy([]); setEdgeOpacity(defaultEdgeOpacity); setProjectionUnspecifiedContentOpacity(defaultProjectionUnspecifiedContentOpacity); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline', whiteSpace: 'nowrap' } }, 'Reset')
                         ),
                         React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                             React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
@@ -4908,7 +5260,7 @@ async function renderTasksGraphs(rootElement = document) {
                                         ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
                                             React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '11px', lineHeight: 1.3, opacity: 0.8 } },
                                                 ...activePaletteEntries.map(([value, color]) => {
-                                                    const selected = Array.isArray(activeFilters[activeColorBy]) && activeFilters[activeColorBy].includes(value);
+                                                    const selected = activeColorSelectedValues.has(value);
                                                     return React.createElement('button', {
                                                         key: `${activeColorBy}-${value}-label`,
                                                         type: 'button',
@@ -4984,7 +5336,7 @@ async function renderTasksGraphs(rootElement = document) {
                                             ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
                                                 React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '11px', lineHeight: 1.3, opacity: 0.8 } },
                                                     ...activeSecondaryPaletteEntries.map(([value, color]) => {
-                                                        const selected = Array.isArray(activeFilters[activeSecondaryColorBy]) && activeFilters[activeSecondaryColorBy].includes(value);
+                                                        const selected = activeSecondarySelectedValues.has(value);
                                                         return React.createElement('button', {
                                                             key: `${activeSecondaryColorBy}-${value}-label`,
                                                             type: 'button',
@@ -5015,33 +5367,41 @@ async function renderTasksGraphs(rootElement = document) {
                                 )
                             )
                             : null,
-                        ...options.map((option) => React.createElement('label', { key: option.key, style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'center', marginBottom: '8px', fontSize: '12px' } },
-                            React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, option.label),
-                            option.isBoolean
-                                ? React.createElement('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
-                                    React.createElement('input', {
-                                        type: 'checkbox',
-                                        checked: activeFilters[option.key] === 'true',
-                                        onChange: (e) => setActiveFilters((current) => ({ ...current, [option.key]: e.target.checked ? 'true' : '' })),
-                                    }),
-                                    React.createElement('span', { style: { opacity: 0.8 } }, 'Only true')
-                                )
-                                : React.createElement('div', { style: { display: 'grid', gap: '4px', maxHeight: '120px', overflowY: 'auto', padding: '6px 8px', border: '1px solid color-mix(in srgb, currentColor 12%, transparent)', borderRadius: '8px', background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)' } },
-                                    ...option.values.map((value) => {
-                                        const selected = Array.isArray(activeFilters[option.key]) && activeFilters[option.key].includes(value);
-                                        return React.createElement('label', { key: value, style: { display: 'inline-flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
-                                            React.createElement('input', {
-                                                type: 'checkbox',
-                                                checked: selected,
-                                                onChange: (e) => setActiveFilters((current) => {
-                                                    return toggleMultiValueFilter(current, option.key, value, e.target.checked);
-                                                }),
-                                            }),
-                                            React.createElement('span', { style: { opacity: 0.8 } }, value)
-                                        );
-                                    })
-                                )
-                        ))
+                        React.createElement('div', { style: { marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '12px' } },
+                            React.createElement('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '7px', minWidth: 0 } },
+                                React.createElement('input', {
+                                    type: 'checkbox',
+                                    checked: queryBuilderEnabled,
+                                    onChange: (event) => setQueryBuilderEnabled(event.target.checked),
+                                }),
+                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, 'Query builder')
+                            ),
+                            !queryBuilderEnabled && tasksFilterQueryHasRules(activeFilters)
+                                ? React.createElement('span', { style: { opacity: 0.58 } }, `${tasksCountFilterRules(activeFilters)} saved`)
+                                : null
+                        ),
+                        React.createElement('div', { style: { marginTop: '4px' } },
+                            queryBuilderFields.length
+                                ? !queryBuilderEnabled
+                                    ? React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.35 } }, 'Query builder disabled.')
+                                    : QueryBuilder
+                                    ? React.createElement(QueryBuilder, {
+                                    query: normalizeTasksFilterQuery(activeFilters),
+                                    fields: queryBuilderFields,
+                                    operators: queryBuilderOperators,
+                                    onQueryChange: (query) => setActiveFilters(normalizeTasksFilterQuery(query)),
+                                    showNotToggle: true,
+                                    showCloneButtons: false,
+                                    showCombinatorsBetweenRules: true,
+                                    resetOnFieldChange: true,
+                                    resetOnOperatorChange: true,
+                                    listsAsArrays: true,
+                                    controlElements: { valueEditor: QueryValueEditor },
+                                    controlClassnames: { queryBuilder: 'vyasa-tasks-query-builder' },
+                                })
+                                    : React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.35 } }, 'Loading advanced filters...')
+                                : React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.35 } }, 'No filterable fields in this graph.')
+                        )
                     )
                 )
                 );
@@ -5053,7 +5413,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId(null);
             };
             const toggleFilterValue = React.useCallback((key, value, enabled) => {
-                setActiveFilters((current) => toggleMultiValueFilter(current, key, value, enabled));
+                setActiveFilters((current) => toggleTasksFilterQueryValue(current, key, value, enabled));
             }, []);
             const clearGroupHoverTooltip = React.useCallback(() => {
                 setGroupHoverTooltip(null);
@@ -5378,7 +5738,7 @@ async function renderTasksGraphs(rootElement = document) {
                         : (Array.isArray(sourceModel?.hover_attrs) ? sourceModel.hover_attrs : []),
                     aggregateEdges: def?.aggregate_edges || sourceModel?.aggregate_edges,
                     caption: def?.caption,
-                    where: isActiveLive ? activeFilters : (def?.where || {}),
+                    where: isActiveLive ? effectiveFilters : (def?.where || {}),
                     searchQuery: isActiveLive ? searchQuery : '',
                     edgesHidden: isActiveLive ? !edgesVisible : false,
                     defaultOpenDepth: effectiveDefaultOpenDepth,

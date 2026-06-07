@@ -322,13 +322,16 @@ test('expanded root group keeps collapsed top-left anchored', () => {
 test('note special filter uses derived yes/no value', async () => {
     const fs = await import('node:fs/promises');
     const source = await fs.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const match = source.match(/function tasksNodeMatchesFilters\(node, filters\) \{[\s\S]*?\n\}/);
+    const match = source.match(/function tasksEmptyFilterQuery\(\) \{[\s\S]*?\nfunction tasksSearchNormalizeText/);
     assert.ok(match, 'tasksNodeMatchesFilters should exist');
-    const factory = new Function('TASKS_HAS_NOTE_ATTR', `${match[0]}; return tasksNodeMatchesFilters;`);
+    const helpers = match[0].replace(/\nfunction tasksSearchNormalizeText$/, '');
+    const factory = new Function('TASKS_HAS_NOTE_ATTR', `${helpers}; return tasksNodeMatchesFilters;`);
     const tasksNodeMatchesFilters = factory('has_note');
     assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['yes'] }), true);
     assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['no'] }), false);
     assert.equal(tasksNodeMatchesFilters({ __has_note__: false }, { has_note: ['no'] }), true);
+    assert.equal(tasksNodeMatchesFilters({ kind: 'risk' }, { combinator: 'or', rules: [{ field: 'kind', operator: '=', value: 'claim' }, { field: 'kind', operator: '=', value: 'risk' }] }), true);
+    assert.equal(tasksNodeMatchesFilters({ kind: 'risk' }, { combinator: 'and', not: true, rules: [{ field: 'kind', operator: '=', value: 'risk' }] }), false);
 });
 
 test('toggleMultiValueFilter supports multi-color selection and reset', () => {
