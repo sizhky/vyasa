@@ -401,6 +401,7 @@ function readTasksProjectionPrefs(prefs, projectionId) {
     const key = tasksProjectionPrefsKey(projectionId);
     const scoped = prefs?.projectionPrefs?.[key];
     if (scoped && typeof scoped === 'object') return scoped;
+    if (!String(projectionId || '').trim() && prefs && typeof prefs === 'object') return prefs;
     if (prefs?.projectionPrefs && typeof prefs.projectionPrefs === 'object') return {};
     return prefs && typeof prefs === 'object' ? prefs : {};
 }
@@ -2726,10 +2727,10 @@ function resolveTasksPreferredColorBy(model, projectionId, prefs, nodeNotes = nu
     const saved = typeof prefs?.colorBy === 'string' ? prefs.colorBy.trim() : '';
     const validColorKeys = new Set(tasksColorOptions(model, nodeNotes).map((option) => option.key));
     const defaultColorBy = tasksResolvedProjectionDefaultColorBy(model, nodeNotes);
+    if (saved && validColorKeys.has(saved)) return saved;
     if (!String(projectionId || '').trim() && defaultColorBy && validColorKeys.has(defaultColorBy)) {
         return defaultColorBy;
     }
-    if (saved && validColorKeys.has(saved)) return saved;
     return validColorKeys.has(defaultColorBy) ? defaultColorBy : '';
 }
 

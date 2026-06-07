@@ -288,6 +288,7 @@ def test_tasks_source_uses_projection_scoped_prefs():
 
     assert "function readTasksProjectionPrefs" in source
     assert "projectionPrefs" in source
+    assert "if (saved && validColorKeys.has(saved)) return saved;" in source
     assert "buildTasksViewState" in source
 
 
@@ -506,12 +507,12 @@ def test_tasks_base_view_supports_task_parent_expansion():
 
     assert "function tasksNodeHasChildren(nodeId, model)" in source
     assert "function tasksVisibleGraphStatsLabel(nodes, edges)" in source
-    assert "if (prefs?.projectionPrefs && typeof prefs.projectionPrefs === 'object') return {};" in source
+    assert "if (!String(projectionId || '').trim() && prefs && typeof prefs === 'object') return prefs;" in source
     assert "setExpanded(tasksExpandableNodeIds(model));" in source
     assert "const canExpand = tasksNodeHasChildren(id, model);" in source
     assert "tasksChildTaskIds(nodeId, model).forEach((id) => visibleTasks.add(id));" in source
     assert "graphBaseRef.current.nodes || []" in source
-    assert "edgesVisible ? (graphBaseRef.current.edges || []) : []" in source
+    assert "setEdges(edgesVisible ? baseEdges : []);" in source
 
 
 def test_tasks_edge_zoom_agnostic_label_scale_only_on_hover_focus():
