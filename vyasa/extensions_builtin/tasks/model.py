@@ -998,7 +998,7 @@ def _apply_kg_schema(graph: dict, current_path: str | Path | None) -> None:
         return
     schema_path = _resolve_required_source(current_path, schema_source)
     compiled = read_kg_pack(schema_path)
-    for key in ("id", "title", "default_projection", "view_projections", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "index_attributes", "filter_attributes", "card_states"):
+    for key in ("id", "title", "default_projection", "view_projections", "hover_attrs", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "index_attributes", "filter_attributes", "card_states"):
         if compiled.get(key) and not graph.get(key):
             graph[key] = compiled[key]
     graph["groups"].extend(compiled.get("groups", []))
