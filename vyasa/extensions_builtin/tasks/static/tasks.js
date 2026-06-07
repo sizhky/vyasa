@@ -4729,7 +4729,19 @@ async function renderTasksGraphs(rootElement = document) {
                                     : React.createElement('span', { style: { width: '30px', height: '1px' } })
                             ),
                             activeProjectionOption && activeProjectionOption.caption
-                                ? React.createElement('div', { style: { marginTop: '6px', marginLeft: '92px', fontSize: '11px', lineHeight: 1.35, fontStyle: 'italic', opacity: 0.72 } }, activeProjectionOption.caption)
+                                ? React.createElement('div', {
+                                    style: {
+                                        marginTop: '8px',
+                                        padding: '9px 10px',
+                                        borderRadius: '8px',
+                                        border: '1px solid color-mix(in srgb, currentColor 10%, transparent)',
+                                        background: 'color-mix(in srgb, var(--vyasa-paper) 97%, transparent)',
+                                        fontSize: '11px',
+                                        lineHeight: 1.45,
+                                        opacity: 0.82,
+                                        boxSizing: 'border-box',
+                                    },
+                                }, activeProjectionOption.caption)
                                 : null
                         ) : null,
                         React.createElement('div', { style: { marginBottom: '12px', display: 'flex', alignItems: 'flex-start', gap: '10px' } },
