@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
@@ -200,6 +201,38 @@ test('task and collapsed group nodes are selectable in items graph', () => {
     assert.equal(isTasksGraphNodeSelectable('group', false), true);
     assert.equal(isTasksGraphNodeSelectable('group', true), true);
     assert.equal(isTasksGraphNodeSelectable('groupTitle'), true);
+});
+
+test('collapsed groups average both primary and secondary colors', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function collectTasksGroupDescendants');
+    const end = source.indexOf('window.runTasksHeaderAction');
+    const factory = new Function(
+        "const TASKS_HAS_NOTE_ATTR = 'has_note';\n"
+        + "const TASKS_HAS_NOTE_PALETTE = { yes: '#22c55e', no: 'rgba(220, 38, 38, 0.28)' };\n"
+        + source.slice(start, end)
+        + "\nreturn { resolveTasksCollapsedGroupColor, tasksGroupBackground };"
+    );
+    const { resolveTasksCollapsedGroupColor, tasksGroupBackground } = factory();
+    const model = {
+        groups: [{ id: 'g1' }],
+        tasks: [{ id: 'a', group_id: 'g1', kind: 'alpha', energy: 'hot' }, { id: 'b', group_id: 'g1', kind: 'beta', energy: 'cold' }],
+        task_children: { g1: ['a', 'b'] },
+        group_tree: {},
+        node_color_palettes: { kind: { alpha: '#ff0000', beta: '#0000ff' }, energy: { hot: '#00ff00', cold: '#ff00ff' } },
+    };
+    const group = { id: 'g1', __kind__: 'group' };
+    assert.equal(resolveTasksCollapsedGroupColor(group, model, 'kind', model.node_color_palettes.kind), '#800080');
+    assert.equal(resolveTasksCollapsedGroupColor(group, model, 'energy', model.node_color_palettes.energy), '#808080');
+    assert.equal(
+        tasksGroupBackground('#800080', '#808080', 'fallback', { intensity: 12 }),
+        'linear-gradient(135deg, color-mix(in srgb, var(--vyasa-paper) 88%, #800080 12%) 0 50%, color-mix(in srgb, var(--vyasa-paper) 88%, #808080 12%) 50% 100%)',
+    );
+});
+
+test('collapsed grouped containers prefer child average over grouping dimension tone', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes("? (projectionGroupTone || nodeColor)\n                        : (collapsedGroupColor || projectionGroupTone || nodeColor);"));
 });
 
 test('drag rect selects task nodes and expanded groups', () => {

@@ -1394,6 +1394,23 @@ function tasksNodeBackground(primaryColor, secondaryColor, colorMix, fallback) {
     return primary || fallback;
 }
 
+function tasksGroupBackground(primaryColor, secondaryColor, fallback, options = {}) {
+    const mode = options?.mode === 'transparent' ? 'transparent' : 'paper';
+    const rawIntensity = Number.parseFloat(options?.intensity);
+    const intensity = Math.max(0, Math.min(100, Number.isFinite(rawIntensity) ? rawIntensity : (mode === 'transparent' ? 10 : 12)));
+    const mix = (color) => {
+        if (!color) return '';
+        return mode === 'transparent'
+            ? `color-mix(in srgb, ${color} ${intensity}%, transparent)`
+            : `color-mix(in srgb, var(--vyasa-paper) ${100 - intensity}%, ${color} ${intensity}%)`;
+    };
+    const primary = mix(primaryColor);
+    const secondary = mix(secondaryColor);
+    if (primary && secondary && primaryColor !== secondaryColor) {
+        return `linear-gradient(135deg, ${primary} 0 50%, ${secondary} 50% 100%)`;
+    }
+    return primary || fallback;
+}
 window.runTasksHeaderAction = function(widgetId, action) {
     const actions = window.__vyasaTasksActions?.[widgetId];
     if (!actions || typeof actions[action] !== 'function') return;
@@ -3357,7 +3374,13 @@ async function renderTasksGraphs(rootElement = document) {
                     const collapsedGroupColor = !isExpanded ? resolveTasksCollapsedGroupColor(colorNode, model, activeColorBy, activeColorPalette) : '';
                     const isProjectionGroup = n.__kind__ === 'group' && n.__projection_group__;
                     const projectionGroupTone = isProjectionGroup ? resolveTasksProjectionGroupDimensionColor(n, model) : '';
-                    const groupColor = projectionGroupTone || collapsedGroupColor || nodeColor;
+                    const collapsedGroupSecondaryColor = (!isExpanded && activeSecondaryColorBy)
+                        ? resolveTasksCollapsedGroupColor(colorNode, model, activeSecondaryColorBy, activeSecondaryColorPalette)
+                        : '';
+                    const groupColor = isExpanded
+                        ? (projectionGroupTone || nodeColor)
+                        : (collapsedGroupColor || projectionGroupTone || nodeColor);
+                    const groupSecondaryColor = !isExpanded ? collapsedGroupSecondaryColor : '';
                     const isUnspecifiedProjectionGroup = isTasksUnspecifiedProjectionGroup(n, TASKS_PROJECTION_UNSPECIFIED_LABEL);
                     const groupFillExpanded = isProjectionGroup
                         ? (isUnspecifiedProjectionGroup ? projectionUnspecifiedGroupExpandedOpacity : projectionGroupExpandedOpacity)
@@ -3369,11 +3392,9 @@ async function renderTasksGraphs(rootElement = document) {
                     const cardState = tasksCardStateForNode(sourceModel, nodeStates, n.id, cardStates);
                     const stateAccent = cardState.color || TASKS_DONE_ACCENT;
                     const background = n.__kind__ === 'group'
-                        ? (groupColor
-                            ? (isExpanded
-                                ? `color-mix(in srgb, ${groupColor} ${groupFillExpanded}%, transparent)`
-                                : `color-mix(in srgb, var(--vyasa-paper) ${100 - groupFillCollapsed}%, ${groupColor} ${groupFillCollapsed}%)`)
-                            : (isExpanded ? TASKS_GROUP_EXPANDED_BG : TASKS_GROUP_BG))
+                        ? (isExpanded
+                            ? tasksGroupBackground(groupColor, '', TASKS_GROUP_EXPANDED_BG, { mode: 'transparent', intensity: groupFillExpanded })
+                            : tasksGroupBackground(groupColor, groupSecondaryColor, TASKS_GROUP_BG, { intensity: groupFillCollapsed }))
                         : tasksNodeBackground(nodeColor, secondaryColor, colorMix, TASKS_NODE_BG);
                     const border = groupColor
                         ? (n.__kind__ === 'group'
@@ -3388,7 +3409,7 @@ async function renderTasksGraphs(rootElement = document) {
                         id: n.id,
                         type: 'vyasaTask',
                         position: n.position,
-                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __projection_branch_opacity__: branchOpacity, __secondary_color__: secondaryColor },
+                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __projection_branch_opacity__: branchOpacity, __secondary_color__: n.__kind__ === 'group' ? groupSecondaryColor : secondaryColor },
                         style: {
                             width: n.width,
                             height: n.height,
@@ -3658,6 +3679,9 @@ async function renderTasksGraphs(rootElement = document) {
                     const collapsedGroupColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
                         ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
                         : '';
+                    const groupSecondaryColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
+                        ? (node.data?.__secondary_color__ || '')
+                        : '';
                     const displayColor = collapsedGroupColor || nodeColor;
                     const stateAccent = node.data?.__card_state_color__ || TASKS_DONE_ACCENT;
                     const checkedShadow = node.data?.__checked__
@@ -3679,9 +3703,7 @@ async function renderTasksGraphs(rootElement = document) {
                             background: mode === 'dim'
                                 ? node.style.background
                                 : (node.data?.__kind__ === 'group'
-                                    ? (displayColor
-                                        ? `color-mix(in srgb, ${displayColor} 10%, transparent)`
-                                        : TASKS_GROUP_BG_ACTIVE)
+                                    ? tasksGroupBackground(displayColor, groupSecondaryColor, TASKS_GROUP_BG_ACTIVE, { mode: 'transparent', intensity: 10 })
                                     : tasksNodeBackground(nodeColor, node.data?.__secondary_color__, colorMix, TASKS_NODE_BG_ACTIVE)),
                             opacity: mode === 'dim' ? branchOpacity * 0.22 : 1,
                             boxShadow: (mode === 'selected' || mode === 'selected-focus')
@@ -4576,6 +4598,11 @@ async function renderTasksGraphs(rootElement = document) {
                 const options = tasksFilterOptions(model);
                 const colorOptions = tasksColorOptions(model, nodeNotes);
                 const groupByOptions = tasksGroupByOptions(sourceModel);
+                const activeProjectionOption = projectionOptions.find((projection) => (
+                    viewMode === 'gantt'
+                        ? projection.id === TASKS_GANTT_PROJECTION_ID
+                        : projection.id === activeProjectionId
+                )) || null;
                 const activePaletteEntries = activeColorBy === 'rank' ? [] : tasksColorPaletteEntries(model, activeColorBy, nodeNotes);
                 const activeGradientPalette = isTasksGradientPalette(activeColorPalette);
                 const activeSecondaryPaletteEntries = activeSecondaryColorBy === 'rank' ? [] : tasksColorPaletteEntries(model, activeSecondaryColorBy, nodeNotes);
@@ -4647,6 +4674,64 @@ async function renderTasksGraphs(rootElement = document) {
                             paddingBottom: '2px',
                         },
                     },
+                        projectionOptions.length >= 1 ? React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px minmax(0, 1fr) auto', gap: '8px', alignItems: 'start', fontSize: '12px' } },
+                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'View'),
+                                React.createElement('select', {
+                                    value: viewMode === 'gantt' ? TASKS_GANTT_PROJECTION_ID : activeProjectionId,
+                                    onChange: (event) => {
+                                        const nextProjectionId = event.target.value;
+                                        setSelectedNodeId(null);
+                                        setSelectedNodeIds(new Set());
+                                        setDragSelection(null);
+                                        setHoveredNodeId(null);
+                                        if (nextProjectionId === TASKS_GANTT_PROJECTION_ID) setViewMode('gantt');
+                                        else {
+                                            setActiveProjectionId(nextProjectionId);
+                                            setViewMode('graph');
+                                        }
+                                        pendingFitActionRef.current = 'mode';
+                                    },
+                                    style: {
+                                        width: '100%',
+                                        minWidth: 0,
+                                        border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                        borderRadius: '8px',
+                                        padding: '6px 8px',
+                                        background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                        color: 'inherit',
+                                    },
+                                },
+                                    ...projectionOptions.map((projection) => React.createElement('option', { key: projection.id || '__default__', value: projection.id }, projection.label))
+                                ),
+                                activeProjectionOption && activeProjectionOption.id !== TASKS_GANTT_PROJECTION_ID
+                                    ? React.createElement('button', {
+                                        type: 'button',
+                                        title: 'Copy this view as a kg.schema @views entry',
+                                        onClick: async (event) => {
+                                            const button = event.currentTarget;
+                                            const ok = await copyTasksText(buildProjectionConfigText(activeProjectionOption));
+                                            const prev = button.textContent;
+                                            button.textContent = ok ? '✓' : '✕';
+                                            window.setTimeout(() => { button.textContent = prev; }, 1200);
+                                        },
+                                        style: {
+                                            border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                            borderRadius: '8px',
+                                            padding: '6px 8px',
+                                            background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                            color: 'inherit',
+                                            cursor: 'pointer',
+                                            fontSize: '12px',
+                                            lineHeight: 1,
+                                        },
+                                    }, '⧉')
+                                    : React.createElement('span', { style: { width: '30px', height: '1px' } })
+                            ),
+                            activeProjectionOption && activeProjectionOption.caption
+                                ? React.createElement('div', { style: { marginTop: '6px', marginLeft: '92px', fontSize: '11px', lineHeight: 1.35, fontStyle: 'italic', opacity: 0.72 } }, activeProjectionOption.caption)
+                                : null
+                        ) : null,
                         React.createElement('div', { style: { marginBottom: '12px', display: 'flex', alignItems: 'flex-start', gap: '10px' } },
                             React.createElement('div', { style: { display: 'grid', gap: '8px', flex: 1, minWidth: 0 } },
                                 React.createElement('label', { style: { display: 'grid', gridTemplateColumns: 'max-content minmax(84px, 1fr) max-content', alignItems: 'center', gap: '8px', minWidth: 0, fontSize: '12px' } },
@@ -5261,7 +5346,6 @@ async function renderTasksGraphs(rootElement = document) {
                 return null;
             };
             const flowWrapperClassName = hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '';
-            const projectionGridCols = Math.max(1, Math.ceil(Math.sqrt(projectionOptions.length)));
             const buildProjectionConfigText = (projection) => {
                 const pid = String(projection?.id || '');
                 const def = (Array.isArray(sourceModel?.view_projections) ? sourceModel.view_projections : []).find((p) => p && p.id === pid) || null;
@@ -5288,116 +5372,8 @@ async function renderTasksGraphs(rootElement = document) {
                     defaultOpenDepth: effectiveDefaultOpenDepth,
                 });
             };
-            const ProjectionToggle = () => projectionOptions.length < 1 ? null : window.React.createElement('div', {
-                style: {
-                    display: 'grid',
-                    gridTemplateColumns: `repeat(${projectionGridCols}, minmax(0, 1fr))`,
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    gap: '2px',
-                    padding: '3px',
-                    borderRadius: '10px',
-                    border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)',
-                    background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
-                    boxShadow: '0 10px 24px rgba(0,0,0,0.10)',
-                    pointerEvents: 'auto',
-                },
-            }, projectionOptions.map((projection) => {
-                const isActiveTab = (projection.id === TASKS_GANTT_PROJECTION_ID && viewMode === 'gantt')
-                    || (projection.id !== TASKS_GANTT_PROJECTION_ID && viewMode !== 'gantt' && activeProjectionId === projection.id);
-                const showCopy = projection.id !== TASKS_GANTT_PROJECTION_ID;
-                return window.React.createElement('div', {
-                    key: projection.id || '__default__',
-                    style: { position: 'relative', display: 'flex', minWidth: 0 },
-                    onMouseEnter: (event) => { const icon = event.currentTarget.querySelector('[data-copy-cfg]'); if (icon) icon.style.opacity = '0.85'; },
-                    onMouseLeave: (event) => { const icon = event.currentTarget.querySelector('[data-copy-cfg]'); if (icon) icon.style.opacity = '0'; },
-                },
-                    window.React.createElement('button', {
-                        type: 'button',
-                        onClick: () => {
-                            setSelectedNodeId(null);
-                            setSelectedNodeIds(new Set());
-                            setDragSelection(null);
-                            setHoveredNodeId(null);
-                            if (projection.id === TASKS_GANTT_PROJECTION_ID) setViewMode('gantt');
-                            else {
-                                setActiveProjectionId(projection.id);
-                                setViewMode('graph');
-                            }
-                            pendingFitActionRef.current = 'mode';
-                        },
-                        style: {
-                            flex: '1 1 auto',
-                            width: '100%',
-                            border: 0,
-                            borderRadius: '7px',
-                            minWidth: '0',
-                            padding: showCopy ? '6px 22px 6px 9px' : '6px 9px',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            color: 'inherit',
-                            background: isActiveTab ? 'color-mix(in srgb, var(--vyasa-primary) 18%, transparent)' : 'transparent',
-                        },
-                    }, projection.label),
-                    showCopy ? window.React.createElement('span', {
-                        'data-copy-cfg': '1',
-                        role: 'button',
-                        tabIndex: 0,
-                        title: 'Copy this view as a kg.schema @views entry',
-                        onClick: async (event) => {
-                            event.stopPropagation();
-                            const icon = event.currentTarget;
-                            const ok = await copyTasksText(buildProjectionConfigText(projection));
-                            const prev = icon.textContent;
-                            icon.textContent = ok ? '✓' : '✕';
-                            icon.style.opacity = '0.85';
-                            window.setTimeout(() => { icon.textContent = prev; }, 1200);
-                        },
-                        style: {
-                            position: 'absolute',
-                            top: '50%',
-                            right: '4px',
-                            transform: 'translateY(-50%)',
-                            opacity: 0,
-                            transition: 'opacity 0.12s ease',
-                            cursor: 'pointer',
-                            fontSize: '11px',
-                            lineHeight: 1,
-                            padding: '2px 4px',
-                            borderRadius: '5px',
-                            background: 'color-mix(in srgb, var(--vyasa-paper) 78%, transparent)',
-                            pointerEvents: 'auto',
-                        },
-                    }, '⧉') : null
-                );
-            }));
-            const ProjectionCaption = () => {
-                const active = projectionOptions.find((p) => (
-                    viewMode === 'gantt'
-                        ? p.id === TASKS_GANTT_PROJECTION_ID
-                        : p.id === activeProjectionId
-                ));
-                const caption = active && typeof active.caption === 'string' ? active.caption.trim() : '';
-                if (!caption) return null;
-                return window.React.createElement('div', {
-                    style: {
-                        padding: '6px 10px',
-                        borderRadius: '8px',
-                        border: '1px solid color-mix(in srgb, var(--vyasa-primary) 18%, transparent)',
-                        background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)',
-                        fontSize: '11px',
-                        fontStyle: 'italic',
-                        fontWeight: 500,
-                        lineHeight: 1.35,
-                        color: 'color-mix(in srgb, currentColor 75%, transparent)',
-                        pointerEvents: 'auto',
-                    },
-                }, caption);
-            };
             const RightRail = () => {
-                const hasProjectionMenu = projectionOptions.length >= 1;
-                if (!hasProjectionMenu && !selectedNodeId) return null;
+                if (!selectedNodeId) return null;
                 return window.React.createElement('div', {
                     style: {
                         position: 'absolute',
@@ -5414,8 +5390,6 @@ async function renderTasksGraphs(rootElement = document) {
                         minHeight: 0,
                     },
                 },
-                    ProjectionToggle(),
-                    ProjectionCaption(),
                     SelectedNodePanel()
                 );
             };

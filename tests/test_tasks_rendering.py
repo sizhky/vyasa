@@ -96,6 +96,15 @@ def test_tasks_filter_panel_has_group_by_hierarchy_controls():
     assert "buildTasksGroupedState" in source
 
 
+def test_tasks_filter_panel_uses_projection_dropdown_instead_of_tab_grid():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'View')" in source
+    assert "value: viewMode === 'gantt' ? TASKS_GANTT_PROJECTION_ID : activeProjectionId" in source
+    assert "projectionOptions.map((projection) => React.createElement('option'" in source
+    assert "const ProjectionToggle = () =>" not in source
+
+
 def test_tasks_node_detail_rows_use_inline_label_flow():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
@@ -426,7 +435,8 @@ def test_tasks_projection_groups_use_their_own_dimension_tone():
 
     assert "function resolveTasksProjectionGroupDimensionColor" in source
     assert "const projectionGroupTone = isProjectionGroup ? resolveTasksProjectionGroupDimensionColor(n, model) : '';" in source
-    assert "const groupColor = projectionGroupTone || collapsedGroupColor || nodeColor;" in source
+    assert "? (projectionGroupTone || nodeColor)" in source
+    assert ": (collapsedGroupColor || projectionGroupTone || nodeColor);" in source
 
 
 def test_tasks_edge_labels_use_react_flow_bezier_coordinates():
