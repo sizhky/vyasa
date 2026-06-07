@@ -127,6 +127,9 @@ def read_schema(path: str | Path) -> KgSchema:
             if section == "@graph":
                 schema.graph.update(_assignments(parts[1:]))
             continue
+        if section == "@graph":
+            schema.graph.update(_assignments(shlex.split(line)))
+            continue
         if raw.startswith((" ", "\t")):
             if section == "@sources" and current_source:
                 if line == "attrs:":

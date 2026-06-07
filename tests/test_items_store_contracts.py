@@ -201,6 +201,33 @@ items_schema: roadmap.kg.schema
     assert model["card_states"] == ["Not Done", "Done", "Deferred/Cancelled"]
 
 
+def test_items_parser_reads_multiline_graph_header(tmp_path):
+    (tmp_path / "roadmap.kg.schema").write_text(
+        """@graph id=roadmap title=Roadmap
+initial_view=delivery
+hover_attrs=owner,status
+
+@sources
+nodes=roadmap.kg.nodes
+base:
+    edges=roadmap.kg.edges
+
+@views
+delivery:
+    source=base
+    group_by=owner
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "roadmap.kg.nodes").write_text("n1: Login\n", encoding="utf-8")
+    (tmp_path / "roadmap.kg.edges").write_text("", encoding="utf-8")
+
+    graph = read_kg_pack(tmp_path / "roadmap.kg.schema")
+
+    assert graph["default_projection"] == "delivery"
+    assert graph["hover_attrs"] == ["owner", "status"]
+
+
 def test_kg_palette_design_palette_feeds_color_and_image_modes(tmp_path):
     (tmp_path / "roadmap.kg.schema").write_text(
         "@graph id=roadmap initial_view=base\n@sources\nnodes=roadmap.kg.nodes\npalette=roadmap.kg.palette\n@views\nbase:\n    source=base\n",
