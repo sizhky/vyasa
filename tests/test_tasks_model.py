@@ -561,6 +561,24 @@ a -> b | relation: visits | kind: jump
     assert city["aggregate_edges"] == {"when_collapsed": False, "by": "kind"}
 
 
+def test_items_graph_hover_attrs_fall_back_to_default_and_inherit_projection():
+    model = parse_tasks_text(
+        """```items
+---
+hover_attrs: [city, mood]
+view_projections:
+  - id: city
+    groups_from: city
+---
+Places:
+  - a :: A | city: Tokyo | mood: Bright
+```"""
+    )
+
+    assert model["hover_attrs"] == ["city", "mood"]
+    assert model["projection_models"]["city"]["model"]["hover_attrs"] == ["city", "mood"]
+
+
 def test_items_parser_reads_base_view_label():
     model = parse_tasks_text(
         """```items

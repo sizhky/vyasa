@@ -53,7 +53,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                 continue
             key = line[:key_index].strip()
             value = line[key_index + 1:].strip()
-            if key in {"id", "title", "default_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "default_open_depth"}:
+            if key in {"id", "title", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "default_open_depth"}:
                 config[key] = _read_string(value)
                 cursor += 1
                 continue
@@ -658,7 +658,7 @@ def _parse_items_graph(body: str) -> dict:
         if indent == 0 and _find_unquoted(line, ":") > 0 and _find_unquoted(line, "->") < 0:
             key, value = line.split(":", 1)
             key = key.strip()
-            if key in {"id", "title", "default_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema"}:
+            if key in {"id", "title", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema"}:
                 graph[key] = _read_string(value.strip())
                 index += 1
                 continue
@@ -998,7 +998,7 @@ def _apply_kg_schema(graph: dict, current_path: str | Path | None) -> None:
         return
     schema_path = _resolve_required_source(current_path, schema_source)
     compiled = read_kg_pack(schema_path)
-    for key in ("id", "title", "default_projection", "view_projections", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "index_attributes", "filter_attributes", "card_states"):
+    for key in ("id", "title", "default_projection", "view_projections", "hover_attrs", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "index_attributes", "filter_attributes", "card_states"):
         if compiled.get(key) and not graph.get(key):
             graph[key] = compiled[key]
     graph["groups"].extend(compiled.get("groups", []))
@@ -1024,6 +1024,10 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         graph["title"] = config["title"]
     if "default_color_by" in config and "default_color_by" not in graph:
         graph["default_color_by"] = config["default_color_by"]
+    if "default_secondary_color_by" in config and "default_secondary_color_by" not in graph:
+        graph["default_secondary_color_by"] = config["default_secondary_color_by"]
+    if "secondary_color_by" in config and "secondary_color_by" not in graph:
+        graph["secondary_color_by"] = config["secondary_color_by"]
     if "default_image_by" in config and "default_image_by" not in graph:
         graph["default_image_by"] = config["default_image_by"]
     if "image_by" in config and "image_by" not in graph:
@@ -1124,6 +1128,7 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "frozen": graph.get("frozen", {}),
         "color_by": graph.get("color_by", ""),
         "default_color_by": graph.get("default_color_by", ""),
+        "default_secondary_color_by": graph.get("default_secondary_color_by", "") or graph.get("secondary_color_by", ""),
         "image_by": graph.get("image_by", ""),
         "default_image_by": graph.get("default_image_by", ""),
         "default_design_palette": graph.get("default_design_palette", ""),

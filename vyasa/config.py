@@ -54,6 +54,8 @@ class VyasaConfig:
             config_path: Optional path to .vyasa file. If not provided, will search
                         in current directory and VYASA_ROOT.
         """
+        global _config_generation
+        _config_generation += 1
         self._config = {}
         self._loaded_config_path: Optional[Path] = None
         self._explicit_config_path = config_path is not None
@@ -420,6 +422,16 @@ class VyasaConfig:
 
 # Global config instance
 _config: Optional[VyasaConfig] = None
+
+# Bumped every time a VyasaConfig is constructed (lazy init or reload_config).
+# Lets caches that depend on config/content-roots invalidate immediately on
+# reload instead of waiting out a time-based throttle.
+_config_generation = 0
+
+
+def config_generation() -> int:
+    """Monotonic counter that changes whenever configuration is (re)loaded."""
+    return _config_generation
 
 
 def get_config() -> VyasaConfig:

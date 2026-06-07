@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -15,6 +15,11 @@ test('nextWheelState zooms around pointer', () => {
     assert.ok(out.scale > 1);
     assert.notEqual(out.translateX, 0);
     assert.notEqual(out.translateY, 0);
+});
+
+test('tasksGraphDynamicMinZoom lowers the floor for oversized graphs only', () => {
+    assert.equal(tasksGraphDynamicMinZoom([{ id: 'a', position: { x: 0, y: 0 }, width: 12000, height: 2400 }], { width: 1000, height: 800 }), 1 / 24);
+    assert.equal(tasksGraphDynamicMinZoom([{ id: 'a', position: { x: 0, y: 0 }, width: 200, height: 120 }], { width: 1000, height: 800 }), 0.05);
 });
 
 test('sizeTaskNode grows height for long labels', () => {
@@ -241,6 +246,32 @@ test('unspecified projection groups are detectable for reduced opacity', () => {
         city: 'Unspecified',
     }), true);
     assert.equal(isTasksUnspecifiedProjectionGroup({ id: 'city-tokyo', __projection_group__: true, city: 'Tokyo' }), false);
+});
+
+test('EG+ neighbor opacity applies to unselected group backgrounds', () => {
+    const model = {
+        ego_include_neighbors: true,
+        groups: [
+            { id: 'selected-group' },
+            { id: 'neighbor-group' },
+            { id: 'selected-parent' },
+        ],
+        tasks: [
+            { id: 'selected-task', group_id: 'selected-group' },
+            { id: 'neighbor-task', group_id: 'neighbor-group' },
+            { id: 'child-of-selected-group', group_id: 'selected-parent' },
+        ],
+        group_tree: { null: ['selected-group', 'neighbor-group', 'selected-parent'] },
+        task_children: {
+            'selected-group': ['selected-task'],
+            'neighbor-group': ['neighbor-task'],
+            'selected-parent': ['child-of-selected-group'],
+        },
+    };
+    assert.equal(tasksEgoNodeOpacity({ id: 'selected-group', __kind__: 'group' }, new Set(['selected-task']), model, 0.25), 0.25);
+    assert.equal(tasksEgoNodeOpacity({ id: 'selected-group', __kind__: 'group' }, new Set(['selected-group']), model, 0.25), 1);
+    assert.equal(tasksEgoNodeOpacity({ id: 'neighbor-group', __kind__: 'group' }, new Set(['selected-task']), model, 0.25), 0.25);
+    assert.equal(tasksEgoNodeOpacity({ id: 'child-of-selected-group', __kind__: 'task', group_id: 'selected-parent' }, new Set(['selected-parent']), model, 0.25), 1);
 });
 
 test('group panels use selectable hit areas in items graph', () => {
@@ -522,4 +553,92 @@ test('disconnected group children use packed layout for downward direction too',
     ], 'RIGHT', { gap: 30, padX: 40, padTop: 68, padBottom: 40 });
     assert.deepEqual(down.positions, right.positions);
     assert.deepEqual(down.bbox, right.bbox);
+});
+
+test('split-fill background composes a diagonal gradient from two colors', async () => {
+    const fs = await import('node:fs/promises');
+    const source = await fs.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const mixMatch = source.match(/function tasksMixedFill\(color, colorMix\) \{[\s\S]*?\n\}/);
+    const bgMatch = source.match(/function tasksNodeBackground\(primaryColor, secondaryColor, colorMix, fallback\) \{[\s\S]*?\n\}/);
+    assert.ok(mixMatch, 'tasksMixedFill should exist');
+    assert.ok(bgMatch, 'tasksNodeBackground should exist');
+    const factory = new Function(`${mixMatch[0]}; ${bgMatch[0]}; return tasksNodeBackground;`);
+    const tasksNodeBackground = factory();
+    const noMix = { enabled: false };
+
+    // Two distinct colors -> diagonal split gradient.
+    assert.equal(
+        tasksNodeBackground('#111111', '#222222', noMix, 'FALLBACK'),
+        'linear-gradient(135deg, #111111 0 50%, #222222 50% 100%)',
+    );
+    // No secondary -> solid primary.
+    assert.equal(tasksNodeBackground('#111111', '', noMix, 'FALLBACK'), '#111111');
+    // Identical halves -> solid primary, no pointless gradient.
+    assert.equal(tasksNodeBackground('#111111', '#111111', noMix, 'FALLBACK'), '#111111');
+    // No primary -> fallback regardless of secondary.
+    assert.equal(tasksNodeBackground('', '#222222', noMix, 'FALLBACK'), 'FALLBACK');
+    assert.equal(tasksNodeBackground('', '', noMix, 'FALLBACK'), 'FALLBACK');
+
+    // color-mix wrapping applied to both halves when enabled.
+    const mix = { enabled: true, paper: 78, intensity: 22 };
+    assert.equal(
+        tasksNodeBackground('#111111', '#222222', mix, 'FALLBACK'),
+        'linear-gradient(135deg, color-mix(in srgb, var(--vyasa-paper) 78%, #111111 22%) 0 50%, color-mix(in srgb, var(--vyasa-paper) 78%, #222222 22%) 50% 100%)',
+    );
+});
+
+test('buildTasksProjectionConfigText emits a paste-ready kg.schema @views entry', async () => {
+    const fs = await import('node:fs/promises');
+    const source = await fs.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const listMatch = source.match(/function tasksConfigListValue\(values\) \{[\s\S]*?\n\}/);
+    const quoteMatch = source.match(/function tasksQuoteSchemaValue\(value\) \{[\s\S]*?\n\}/);
+    const buildMatch = source.match(/function buildTasksProjectionConfigText\(config\) \{[\s\S]*?\n\}/);
+    assert.ok(listMatch && quoteMatch && buildMatch, 'serializer functions should exist');
+    const factory = new Function(`${listMatch[0]}; ${quoteMatch[0]}; ${buildMatch[0]}; return buildTasksProjectionConfigText;`);
+    const build = factory();
+
+    // Single-value filter maps to a where= line; caption with spaces is quoted.
+    const single = build({
+        id: 'geography',
+        groupBy: ['region', 'city'],
+        colorBy: 'region',
+        edgeColorBy: 'kind',
+        hoverAttrs: ['city', 'cost_yen'],
+        caption: 'The map view',
+        where: { kind: ['sight'] },
+        defaultOpenDepth: -1,
+    });
+    assert.ok(single.startsWith('# Paste under your @views section in kg.schema:\n'), 'has leading comment');
+    assert.ok(single.includes('\ngeography:\n'), 'has view id line');
+    assert.ok(single.includes('\n\tgroup_by=region,city'), 'group_by list');
+    assert.ok(single.includes('\n\tcolor_by=region'), 'color_by');
+    assert.ok(single.includes('\n\thover_attrs=city,cost_yen'), 'hover_attrs list');
+    assert.ok(single.includes('\n\twhere=kind=sight'), 'single filter -> where');
+    assert.ok(single.includes('\n\tcaption="The map view"'), 'caption quoted');
+    assert.ok(single.includes('\n\tdefault_open_depth=-1'), 'open depth');
+
+    // Multi-value / multi-attr filters, secondary color, search, hidden edges -> # notes, no where=.
+    const noted = build({
+        id: 'multi',
+        groupBy: ['region'],
+        colorBy: 'region',
+        secondaryColorBy: 'energy',
+        where: { kind: ['sight', 'restaurant'], region: ['kansai'] },
+        searchQuery: 'temple',
+        edgesHidden: true,
+    });
+    assert.ok(!noted.includes('where='), 'multi filters do not emit a where= line');
+    assert.ok(noted.includes('# active filters'), 'multi filters noted');
+    assert.ok(noted.includes('#   kind = sight | restaurant'), 'multi values listed');
+    assert.ok(noted.includes('#   region = kansai'), 'second attr listed');
+    assert.ok(noted.includes('\n\tsecondary_color_by=energy'), 'secondary color emitted as a real field');
+    assert.ok(!noted.includes('# split'), 'secondary color is no longer a UI-only note');
+    assert.ok(noted.includes('# search query: temple'), 'search noted');
+    assert.ok(noted.includes('# edges hidden'), 'hidden edges noted');
+
+    // Empty-ish config falls back to a placeholder id and omits empty fields.
+    const minimal = build({ groupBy: [], where: {} });
+    assert.ok(minimal.includes('\nnew-view:'), 'placeholder id');
+    assert.ok(!minimal.includes('group_by='), 'no empty group_by');
+    assert.ok(!minimal.includes('color_by='), 'no empty color_by');
 });
