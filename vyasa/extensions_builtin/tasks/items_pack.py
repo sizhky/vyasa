@@ -17,6 +17,7 @@ class KgView:
     where: dict[str, str] = field(default_factory=dict)
     group_by: list[str] = field(default_factory=list)
     color_by: str = ""
+    secondary_color_by: str = ""
     edge_color_by: str = ""
     edge_label_from: str = ""
     hover_attrs: list[str] | None = None
@@ -294,7 +295,7 @@ def _read_view(line: str) -> KgView:
 
 def _update_view(view: KgView, payload: dict[str, str]) -> None:
     group_by = _list_value(payload.get("group_by", ""))
-    consumed = {"source", "where", "group_by", "color_by", "edge_color_by", "edge_label_from", "hover_attrs", "aggregate_edges", "caption"}
+    consumed = {"source", "where", "group_by", "color_by", "secondary_color_by", "edge_color_by", "edge_label_from", "hover_attrs", "aggregate_edges", "caption"}
     if "source" in payload:
         view.source = payload["source"]
     if "where" in payload:
@@ -303,6 +304,8 @@ def _update_view(view: KgView, payload: dict[str, str]) -> None:
         view.group_by = group_by
     if "color_by" in payload:
         view.color_by = payload["color_by"]
+    if "secondary_color_by" in payload:
+        view.secondary_color_by = payload["secondary_color_by"]
     if "edge_color_by" in payload:
         view.edge_color_by = payload["edge_color_by"]
     if "edge_label_from" in payload:
@@ -325,6 +328,7 @@ def _projection(view: KgView) -> dict[str, Any]:
         "source": view.source,
         "groups_from": view.group_by,
         "default_color_by": view.color_by,
+        "default_secondary_color_by": view.secondary_color_by,
         "where": view.where,
         "edge_color_by": view.edge_color_by,
         "edge_label_from": view.edge_label_from,
