@@ -109,6 +109,7 @@ def test_tasks_filter_panel_uses_projection_dropdown_instead_of_tab_grid():
     assert "projectionOptions.map((projection) => React.createElement('option'" in source
     assert "TASKS_ADD_VIEW_OPTION_ID" in source
     assert "onPaste: handleDefaultViewPaste" in source
+    assert "target.addEventListener('paste', handleDefaultViewPaste, true)" in source
     assert "saveTasksTempView" in source
     assert "const ProjectionToggle = () =>" not in source
 

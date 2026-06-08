@@ -3680,6 +3680,12 @@ async function renderTasksGraphs(rootElement = document) {
                 event.preventDefault();
                 applyProjectionConfigToSidebar(cfg);
             }, [activeProjectionId, viewMode, applyProjectionConfigToSidebar]);
+            React.useEffect(() => {
+                const target = flowWrapperRef.current;
+                if (!target) return;
+                target.addEventListener('paste', handleDefaultViewPaste, true);
+                return () => target.removeEventListener('paste', handleDefaultViewPaste, true);
+            }, [handleDefaultViewPaste]);
             const handleAddView = React.useCallback(async () => {
                 const schemaPath = String(sourceModel?.kg_schema || '').trim();
                 if (!schemaPath) {
