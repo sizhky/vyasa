@@ -40,7 +40,8 @@ def test_tasks_filter_source_hides_rank():
     filter_source = source.split("function tasksFilterOptions", 1)[1].split("function tasksColorOptions", 1)[0]
     color_source = source.split("function tasksColorOptions", 1)[1].split("function tasksGroupByOptions", 1)[0]
 
-    assert "TASKS_DERIVED_METRIC_KEYS" in filter_source
+    assert "tasksIsHiddenNodeMetaKey(key)" in filter_source
+    assert "TASKS_DERIVED_METRIC_KEYS.has(normalized)" in source
     assert "TASKS_DERIVED_METRIC_KEYS" not in color_source
 
 
@@ -54,12 +55,15 @@ def test_tasks_groups_remain_selectable_when_expanded():
     core_source = Path("vyasa/extensions_builtin/tasks/static/tasks_graph_core.js").read_text()
     graph_source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "return kind === 'task' || kind === 'group' || kind === 'groupTitle';" in core_source
+    assert "if (kind === 'task') return true;" in core_source
+    assert "if (kind === 'group') return true;" in core_source
+    assert "if (kind === 'groupTitle') return true;" in core_source
     assert "if (kind === 'group') return 'selectable';" in core_source
     assert "const descendantIds = collectTasksGroupDescendantIds(nodeId, model);" in graph_source
     assert "const directEndpointIds = new Set([nodeId, ...descendantIds]);" in graph_source
     assert "for (const endpointId of Array.from(directEndpointIds))" in graph_source
-    assert "const egoHighOpacityIds = new Set(egoSelectedIds);" in graph_source
+    assert "const egoNodeOpacity = egoMode" in graph_source
+    assert "tasksEgoNodeOpacity(n, egoSelectedIds, model, egoNeighborOpacity)" in graph_source
     assert "const titleOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1)" in graph_source
     assert "addGroupWithDescendants(edge.target)" not in graph_source
 
@@ -69,7 +73,7 @@ def test_tasks_expanded_group_title_bar_selects_source_group():
     graph_source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "kind === 'groupTitle'" in core_source
-    assert "if (kind === 'groupTitle') return 'selectable';" in core_source
+    assert "if (kind === 'groupTitle') return 'control';" in core_source
     assert "selectable: isTasksGraphNodeSelectable('groupTitle')" in graph_source
     assert "const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;" in graph_source
     assert "const mode = directEndpointIds.has(sourceNodeId)" in graph_source
@@ -89,11 +93,21 @@ def test_tasks_filter_panel_has_group_by_hierarchy_controls():
     assert "TASKS_DERIVED_METRIC_KEYS" in source
     assert "['rank', 'connectivity']" in source
     assert "groupByHierarchy" in source
-    assert "const groupByLevels = [...groupByHierarchy.filter(Boolean), ''];" in source
+    assert "const groupByLevels = displayedGroupByHierarchy.filter(Boolean);" in source
+    assert "if (customGroupingActive) groupByLevels.push('');" in source
     assert "model.active_projection === '__custom_group_by__'" in source
     assert "default_open_depth: -1" in source
     assert "Group by" in source
     assert "buildTasksGroupedState" in source
+
+
+def test_tasks_filter_panel_uses_projection_dropdown_instead_of_tab_grid():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'View')" in source
+    assert "value: viewMode === 'gantt' ? TASKS_GANTT_PROJECTION_ID : activeProjectionId" in source
+    assert "projectionOptions.map((projection) => React.createElement('option'" in source
+    assert "const ProjectionToggle = () =>" not in source
 
 
 def test_tasks_node_detail_rows_use_inline_label_flow():
@@ -273,6 +287,43 @@ def test_tasks_source_lazy_loads_react_flow_only_when_widgets_exist():
     assert "const wrappers = Array.from(rootElement.querySelectorAll('.tasks-container[data-tasks-widget=\"true\"]'));" in source
     assert "if (!wrappers.length) return;" in source
     assert "const rf = await ensureTasksReactFlow();" in source
+    assert "function ensureTasksQueryBuilder()" in source
+    react_flow_loader = source[source.index("function ensureTasksReactFlow()"):source.index("function ensureTasksQueryBuilder()")]
+    assert "react-querybuilder" not in react_flow_loader
+
+
+def test_tasks_query_builder_assets_stay_extension_local_and_lazy():
+    init_source = Path("vyasa/extensions_builtin/tasks/__init__.py").read_text()
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    package_source = Path("tasks-ui/package.json").read_text()
+
+    assert 'css=("/static/extensions/tasks/tasks.css",)' in init_source
+    assert "react-querybuilder" not in package_source
+    assert "/static/extensions/tasks/vendor/react-querybuilder.css" in source
+    assert "/static/extensions/tasks/vendor/react-querybuilder.global.js" in source
+    assert "ensureTasksQueryBuilder()" in source
+    assert Path("vyasa/extensions_builtin/tasks/static/vendor/react-querybuilder.LICENSE.md").exists()
+
+
+def test_tasks_query_builder_can_be_disabled_per_projection():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "queryBuilderEnabled" in source
+    assert "const effectiveFilters = React.useMemo" in source
+    assert "queryBuilderEnabled ? activeFilters : tasksEmptyFilterQuery()" in source
+    assert "if (egoMode || filtersCollapsed || !queryBuilderEnabled) return;" in source
+    assert "where: isActiveLive ? effectiveFilters : (def?.where || {})" in source
+    assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, 'Query builder')" in source
+
+
+def test_tasks_query_builder_controls_use_filter_panel_css():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert ".vyasa-tasks-filter-card .betweenRules" in source
+    assert ".vyasa-tasks-filter-card .ruleGroup-notToggle" in source
+    assert ".vyasa-tasks-filter-card select" in source
+    assert ".vyasa-tasks-filter-card input[type=\"checkbox\"]" in source
+    assert "appearance: none;" in source
 
 
 def test_tasks_source_retries_mount_after_swap_when_widget_size_is_zero():
@@ -374,7 +425,8 @@ def test_tasks_selected_panel_shows_open_decision_for_open_items():
 
     assert "function tasksOpenDecisionEntry(node)" in source
     assert "node?.__checked__ === true" in source
-    assert "String(node?.open_decision || node?.decision || 'What is the open decision?').trim()" in source
+    assert "const raw = node?.open_decision ?? node?.decision ?? '';" in source
+    assert "if (!value) return null;" in source
     assert "const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;" in source
 
 
@@ -426,7 +478,8 @@ def test_tasks_projection_groups_use_their_own_dimension_tone():
 
     assert "function resolveTasksProjectionGroupDimensionColor" in source
     assert "const projectionGroupTone = isProjectionGroup ? resolveTasksProjectionGroupDimensionColor(n, model) : '';" in source
-    assert "const groupColor = projectionGroupTone || collapsedGroupColor || nodeColor;" in source
+    assert "? (projectionGroupTone || nodeColor)" in source
+    assert ": (collapsedGroupColor || projectionGroupTone || nodeColor);" in source
 
 
 def test_tasks_edge_labels_use_react_flow_bezier_coordinates():
@@ -441,7 +494,7 @@ def test_tasks_selected_panel_uses_measured_adaptive_width():
 
     assert "function tasksSelectedPanelWidth" in source
     assert "measureTextWidth(node?.label || node?.id || ''" in source
-    assert "Math.min(560, Math.max(250" in source
+    assert "Math.min(720, Math.max(280" in source
     assert "width: `min(${panelWidth}px, 100%)`" in source
 
 
@@ -471,11 +524,12 @@ def test_tasks_fullscreen_reuses_canvas_background_contract():
     assert "function tasksBackgroundProps(widgetId)" in source
     assert "id: `${key}-bg`" in source
     assert "window.React.createElement(rf.Background, backgroundProps)" in source
-    assert "fullscreenWrapper.className = `${wrapper.className} w-full h-full`" in source
+    assert "fullscreenWrapper.className = 'tasks-container relative';" in source
     assert "tasksHeaderControlsHtml(fullscreenId, false)" in source
     assert "runTasksHeaderAction('${fullscreenId}', 'toggleFilters')" in source
     assert "modal.className = 'fixed inset-0 z-[10000] bg-black/88 backdrop-blur-sm';" in source
-    assert "flow.style.height = 'calc(100% - 41px)';" in source
+    assert "flow.style.flex = '1 1 auto';" in source
+    assert "flow.style.minHeight = '0';" in source
 
 
 def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():
