@@ -59,6 +59,30 @@ test('Knowledge Graph search matches notes from only the supplied graph', () => 
     assert.deepEqual(Array.from(search(nodes, [], 'other phrase', { 'other-node': 'other phrase' }).nodeIds), []);
 });
 
+test('projection reset defaults include all authored sidebar parameters', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function tasksProjectionSchemaPrefs');
+    const end = source.indexOf('function readTasksProjectionPrefsForModel');
+    const factory = new Function(
+        'const normalizeTasksFilterQuery = value => value;\n'
+        + 'const clampTasksEdgeOpacity = value => Number(value);\n'
+        + 'const clampTasksProjectionContentOpacity = value => Number(value);\n'
+        + source.slice(start, end)
+        + '\nreturn tasksProjectionSchemaPrefs;'
+    );
+    const defaults = factory()({ view_projections: [{
+        id: 'focus', filter_query: { combinator: 'and', rules: [] }, query_builder_enabled: false,
+        search: 'missing', default_color_by: 'phase', default_secondary_color_by: 'owner',
+        filters_collapsed: false, edges_visible: false, edge_animation_enabled: false,
+        edge_opacity: 0.4, projection_unspecified_content_opacity: 0.3,
+    }] }, 'focus');
+    assert.deepEqual(defaults, {
+        filters: { combinator: 'and', rules: [] }, queryBuilderEnabled: false, searchQuery: 'missing',
+        colorBy: 'phase', secondaryColorBy: 'owner', filtersCollapsed: false, edgesVisible: false,
+        edgeAnimationEnabled: false, edgeOpacity: 0.4, unspecifiedContentOpacity: 0.3,
+    });
+});
+
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
     assert.equal(clampScale(9, 3), 3);

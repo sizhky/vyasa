@@ -542,6 +542,8 @@ function tasksProjectionSchemaPrefs(model, projectionId) {
     }
     if (typeof projection.query_builder_enabled === 'boolean') prefs.queryBuilderEnabled = projection.query_builder_enabled;
     if (typeof projection.search === 'string') prefs.searchQuery = projection.search;
+    if (typeof projection.default_color_by === 'string') prefs.colorBy = projection.default_color_by;
+    if (typeof projection.default_secondary_color_by === 'string') prefs.secondaryColorBy = projection.default_secondary_color_by;
     if (typeof projection.filters_collapsed === 'boolean') prefs.filtersCollapsed = projection.filters_collapsed;
     if (typeof projection.edges_visible === 'boolean') prefs.edgesVisible = projection.edges_visible;
     if (typeof projection.edge_animation_enabled === 'boolean') prefs.edgeAnimationEnabled = projection.edge_animation_enabled;
@@ -3854,6 +3856,31 @@ async function renderTasksGraphs(rootElement = document) {
                     window.alert(error instanceof Error ? error.message : String(error));
                 }
             }, [sourceModel]);
+            const resetProjectionControls = React.useCallback(() => {
+                const defaults = tasksProjectionSchemaPrefs(sourceModel, activeProjectionId);
+                const defaultSearch = typeof defaults.searchQuery === 'string' ? defaults.searchQuery : '';
+                setActiveFilters(normalizeTasksFilterQuery(defaults.filters));
+                setQueryBuilderEnabled(typeof defaults.queryBuilderEnabled === 'boolean' ? defaults.queryBuilderEnabled : true);
+                setSearchInputValue(defaultSearch);
+                setSearchQuery(defaultSearch);
+                setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, defaults, nodeNotes));
+                setActiveSecondaryColorBy(resolveTasksPreferredSecondaryColorBy(model, defaults, nodeNotes));
+                setGroupByHierarchy([]);
+                setExpanded(hydrateExpandedSet(defaults));
+                setFiltersCollapsed(
+                    typeof defaults.filtersCollapsed === 'boolean'
+                        ? defaults.filtersCollapsed
+                        : !tasksDefaultFiltersOpen(defaultFiltersOpen)
+                );
+                setEdgesVisible(typeof defaults.edgesVisible === 'boolean' ? defaults.edgesVisible : true);
+                setEdgeAnimationEnabled(typeof defaults.edgeAnimationEnabled === 'boolean' ? defaults.edgeAnimationEnabled : true);
+                setEdgeOpacity(defaults.edgeOpacity !== undefined ? defaults.edgeOpacity : defaultEdgeOpacity);
+                setProjectionUnspecifiedContentOpacity(
+                    defaults.unspecifiedContentOpacity !== undefined
+                        ? defaults.unspecifiedContentOpacity
+                        : defaultProjectionUnspecifiedContentOpacity
+                );
+            }, [sourceModel, activeProjectionId, model, nodeNotes, hydrateExpandedSet, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
             React.useEffect(() => {
                 setNoteInputValue(nodeNotes[String(selectedNodeId || '')] || '');
             }, [selectedNodeId, nodeNotes]);
@@ -5474,7 +5501,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     React.createElement('span', { style: { opacity: 0.8, minWidth: '3.5em', textAlign: 'right' } }, tasksOpacityPctLabel(projectionUnspecifiedContentOpacity))
                                 )
                             ),
-                            React.createElement('button', { type: 'button', onClick: () => { setActiveFilters(tasksEmptyFilterQuery()); setSearchInputValue(''); setSearchQuery(''); setActiveColorBy(tasksResolvedProjectionDefaultColorBy(model, nodeNotes)); setGroupByHierarchy([]); setEdgeOpacity(defaultEdgeOpacity); setProjectionUnspecifiedContentOpacity(defaultProjectionUnspecifiedContentOpacity); }, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline', whiteSpace: 'nowrap' } }, 'Reset')
+                            React.createElement('button', { type: 'button', onClick: resetProjectionControls, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline', whiteSpace: 'nowrap' } }, 'Reset')
                         ),
                         React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                             React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },

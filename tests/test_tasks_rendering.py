@@ -455,7 +455,18 @@ def test_tasks_source_uses_base_view_label_for_default_projection_tab():
 def test_tasks_source_uses_reset_button_label():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "'Reset'" in source
+    assert "function tasksProjectionSchemaPrefs(model, projectionId)" in source
+    assert "prefs.colorBy = projection.default_color_by" in source
+    assert "prefs.secondaryColorBy = projection.default_secondary_color_by" in source
+    assert "const resetProjectionControls = React.useCallback(() => {" in source
+    assert "setActiveFilters(normalizeTasksFilterQuery(defaults.filters))" in source
+    assert "setQueryBuilderEnabled(typeof defaults.queryBuilderEnabled === 'boolean'" in source
+    assert "setSearchInputValue(defaultSearch)" in source
+    assert "setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, defaults, nodeNotes))" in source
+    assert "setActiveSecondaryColorBy(resolveTasksPreferredSecondaryColorBy(model, defaults, nodeNotes))" in source
+    assert "setEdgesVisible(typeof defaults.edgesVisible === 'boolean'" in source
+    assert "setEdgeAnimationEnabled(typeof defaults.edgeAnimationEnabled === 'boolean'" in source
+    assert "onClick: resetProjectionControls" in source
 
 
 def test_tasks_source_supports_continuous_gradient_palettes():
