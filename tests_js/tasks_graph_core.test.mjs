@@ -626,11 +626,14 @@ test('split-fill background composes a diagonal gradient from two colors', async
 test('buildTasksProjectionConfigText emits a paste-ready kg.schema @views entry', async () => {
     const fs = await import('node:fs/promises');
     const source = await fs.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const listMatch = source.match(/function tasksConfigListValue\(values\) \{[\s\S]*?\n\}/);
-    const quoteMatch = source.match(/function tasksQuoteSchemaValue\(value\) \{[\s\S]*?\n\}/);
-    const buildMatch = source.match(/function buildTasksProjectionConfigText\(config\) \{[\s\S]*?\n\}/);
-    assert.ok(listMatch && quoteMatch && buildMatch, 'serializer functions should exist');
-    const factory = new Function(`${listMatch[0]}; ${quoteMatch[0]}; ${buildMatch[0]}; return buildTasksProjectionConfigText;`);
+    const start = source.indexOf('function tasksEmptyFilterQuery()');
+    const end = source.indexOf('function selectTasksProjectionState(');
+    assert.ok(start > 0 && end > start, 'serializer functions should exist');
+    const constants = 'const TASKS_EDGE_OPACITY_MIN = 0.05; const TASKS_EDGE_OPACITY_MAX = 1; const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;';
+    const clampEdge = source.match(/function clampTasksEdgeOpacity\(value\) \{[\s\S]*?\n\}/)?.[0];
+    const clampContent = source.match(/function clampTasksProjectionContentOpacity\(value\) \{[\s\S]*?\n\}/)?.[0];
+    assert.ok(clampEdge && clampContent, 'serializer clamp helpers should exist');
+    const factory = new Function(`${constants}; ${clampEdge}; ${clampContent}; ${source.slice(start, end)}; return buildTasksProjectionConfigText;`);
     const build = factory();
 
     // Single-value filter maps to a where= line; caption with spaces is quoted.
@@ -653,24 +656,38 @@ test('buildTasksProjectionConfigText emits a paste-ready kg.schema @views entry'
     assert.ok(single.includes('\n\tcaption="The map view"'), 'caption quoted');
     assert.ok(single.includes('\n\tdefault_open_depth=-1'), 'open depth');
 
-    // Multi-value / multi-attr filters, secondary color, search, hidden edges -> # notes, no where=.
+    // Full query-builder state is serialized as schema, including muted rules and global disable.
     const noted = build({
         id: 'multi',
         groupBy: ['region'],
         colorBy: 'region',
         secondaryColorBy: 'energy',
-        where: { kind: ['sight', 'restaurant'], region: ['kansai'] },
+        filterQuery: {
+            combinator: 'or',
+            muted: true,
+            rules: [
+                { field: 'kind', operator: 'in', value: ['sight', 'restaurant'], muted: true },
+                { combinator: 'and', rules: [{ field: 'region', operator: '=', value: 'kansai' }], muted: true },
+            ],
+        },
+        queryBuilderEnabled: false,
         searchQuery: 'temple',
-        edgesHidden: true,
+        filtersCollapsed: false,
+        edgesVisible: false,
+        edgeAnimationEnabled: false,
+        edgeOpacity: 0.37,
+        projectionUnspecifiedContentOpacity: 0.44,
     });
-    assert.ok(!noted.includes('where='), 'multi filters do not emit a where= line');
-    assert.ok(noted.includes('# active filters'), 'multi filters noted');
-    assert.ok(noted.includes('#   kind = sight | restaurant'), 'multi values listed');
-    assert.ok(noted.includes('#   region = kansai'), 'second attr listed');
+    assert.ok(noted.includes('\n\tfilter_query="{\\"combinator\\":\\"or\\",'), 'full query emitted as json');
+    assert.ok(noted.includes('\\"muted\\":true'), 'muted state preserved');
+    assert.ok(noted.includes('\n\tquery_builder_enabled=false'), 'global query builder disable emitted');
+    assert.ok(noted.includes('\n\tsearch=temple'), 'search emitted as schema');
+    assert.ok(noted.includes('\n\tfilters_collapsed=false'), 'filter drawer state emitted');
+    assert.ok(noted.includes('\n\tedges_visible=false'), 'edge visibility emitted');
+    assert.ok(noted.includes('\n\tedge_animation_enabled=false'), 'edge animation emitted');
+    assert.ok(noted.includes('\n\tedge_opacity=0.37'), 'edge opacity emitted');
+    assert.ok(noted.includes('\n\tprojection_unspecified_content_opacity=0.44'), 'unspecified intensity emitted');
     assert.ok(noted.includes('\n\tsecondary_color_by=energy'), 'secondary color emitted as a real field');
-    assert.ok(!noted.includes('# split'), 'secondary color is no longer a UI-only note');
-    assert.ok(noted.includes('# search query: temple'), 'search noted');
-    assert.ok(noted.includes('# edges hidden'), 'hidden edges noted');
 
     // Empty-ish config falls back to a placeholder id and omits empty fields.
     const minimal = build({ groupBy: [], where: {} });

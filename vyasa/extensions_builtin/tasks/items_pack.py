@@ -22,6 +22,14 @@ class KgView:
     edge_label_from: str = ""
     hover_attrs: list[str] | None = None
     aggregate_edges: dict[str, str | bool] = field(default_factory=dict)
+    filter_query: dict[str, Any] = field(default_factory=dict)
+    query_builder_enabled: bool | None = None
+    search: str = ""
+    filters_collapsed: bool | None = None
+    edges_visible: bool | None = None
+    edge_animation_enabled: bool | None = None
+    edge_opacity: str = ""
+    projection_unspecified_content_opacity: str = ""
     display: dict[str, str | bool] = field(default_factory=dict)
     caption: str = ""
 
@@ -295,7 +303,13 @@ def _read_view(line: str) -> KgView:
 
 def _update_view(view: KgView, payload: dict[str, str]) -> None:
     group_by = _list_value(payload.get("group_by", ""))
-    consumed = {"source", "where", "group_by", "color_by", "secondary_color_by", "edge_color_by", "edge_label_from", "hover_attrs", "aggregate_edges", "caption"}
+    consumed = {
+        "source", "where", "group_by", "color_by", "secondary_color_by",
+        "edge_color_by", "edge_label_from", "hover_attrs", "aggregate_edges",
+        "filter_query", "query_builder_enabled", "search", "filters_collapsed",
+        "edges_visible", "edge_animation_enabled", "edge_opacity",
+        "projection_unspecified_content_opacity", "caption",
+    }
     if "source" in payload:
         view.source = payload["source"]
     if "where" in payload:
@@ -314,6 +328,26 @@ def _update_view(view: KgView, payload: dict[str, str]) -> None:
         view.hover_attrs = _list_value(payload["hover_attrs"])
     if "aggregate_edges" in payload:
         view.aggregate_edges = _aggregate_edges_value(payload["aggregate_edges"])
+    if "filter_query" in payload:
+        view.filter_query = _json_object_value(payload["filter_query"])
+    if "query_builder_enabled" in payload:
+        value = _typed_scalar(payload["query_builder_enabled"])
+        view.query_builder_enabled = value if isinstance(value, bool) else None
+    if "search" in payload:
+        view.search = payload["search"]
+    if "filters_collapsed" in payload:
+        value = _typed_scalar(payload["filters_collapsed"])
+        view.filters_collapsed = value if isinstance(value, bool) else None
+    if "edges_visible" in payload:
+        value = _typed_scalar(payload["edges_visible"])
+        view.edges_visible = value if isinstance(value, bool) else None
+    if "edge_animation_enabled" in payload:
+        value = _typed_scalar(payload["edge_animation_enabled"])
+        view.edge_animation_enabled = value if isinstance(value, bool) else None
+    if "edge_opacity" in payload:
+        view.edge_opacity = payload["edge_opacity"]
+    if "projection_unspecified_content_opacity" in payload:
+        view.projection_unspecified_content_opacity = payload["projection_unspecified_content_opacity"]
     if "caption" in payload:
         view.caption = payload["caption"]
     for key, value in payload.items():
@@ -334,10 +368,18 @@ def _projection(view: KgView) -> dict[str, Any]:
         "edge_label_from": view.edge_label_from,
         "hover_attrs": view.hover_attrs,
         "aggregate_edges": view.aggregate_edges,
+        "filter_query": view.filter_query,
+        "query_builder_enabled": view.query_builder_enabled,
+        "search": view.search,
+        "filters_collapsed": view.filters_collapsed,
+        "edges_visible": view.edges_visible,
+        "edge_animation_enabled": view.edge_animation_enabled,
+        "edge_opacity": view.edge_opacity,
+        "projection_unspecified_content_opacity": view.projection_unspecified_content_opacity,
         **view.display,
         "caption": view.caption,
     }
-    return {key: value for key, value in projection.items() if value not in ("", [], ())}
+    return {key: value for key, value in projection.items() if value not in ("", [], (), None)}
 
 
 def _assignments(parts: list[str]) -> dict[str, str]:
@@ -474,6 +516,14 @@ def _aggregate_edges_value(value: str) -> dict[str, str | bool]:
         text = raw_value.strip().lower()
         out[key.strip()] = text in {"1", "true", "yes", "on"} if text in {"1", "true", "yes", "on", "0", "false", "no", "off"} else raw_value.strip()
     return {key: value for key, value in out.items() if key}
+
+
+def _json_object_value(value: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(str(value or "").strip())
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _typed_scalar(value: str) -> str | bool:

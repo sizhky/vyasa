@@ -80,6 +80,31 @@ def _normalize_aggregate_edges(value) -> dict:
     return {key: item for key, item in out.items() if key}
 
 
+def _normalize_filter_query(value) -> dict:
+    if not isinstance(value, dict):
+        return {}
+    rules = value.get("rules")
+    if not isinstance(rules, list):
+        return {}
+    out = {
+        "combinator": "or" if value.get("combinator") == "or" else "and",
+        "rules": rules,
+    }
+    if value.get("not"):
+        out["not"] = True
+    if value.get("muted"):
+        out["muted"] = True
+    return out
+
+
+def _normalize_bool_or_none(value):
+    return value if isinstance(value, bool) else None
+
+
+def _normalize_string(value) -> str:
+    return str(value or "").strip()
+
+
 def _projection_group_label(attr: str, value: str) -> str:
     attr_label = str(attr or "").strip().replace("_", " ").title()
     value_label = str(value or "").strip()
@@ -107,12 +132,20 @@ def normalize_projections(value) -> list[dict]:
         seen.add(projection_id)
         default_label = " / ".join(attr.replace("_", " ").title() for attr in groups_from)
         hover_attrs = _normalize_hover_attrs(raw.get("hover_attrs"))
-        projections.append({
+        projection = {
             "id": projection_id,
             "label": str(raw.get("label") or default_label).strip(),
             "caption": str(raw.get("caption") or "").strip(),
             "source": str(raw.get("source") or "base").strip(),
             "where": _normalize_where(raw.get("where")),
+            "filter_query": _normalize_filter_query(raw.get("filter_query")),
+            "query_builder_enabled": _normalize_bool_or_none(raw.get("query_builder_enabled")),
+            "search": _normalize_string(raw.get("search")),
+            "filters_collapsed": _normalize_bool_or_none(raw.get("filters_collapsed")),
+            "edges_visible": _normalize_bool_or_none(raw.get("edges_visible")),
+            "edge_animation_enabled": _normalize_bool_or_none(raw.get("edge_animation_enabled")),
+            "edge_opacity": _normalize_string(raw.get("edge_opacity")),
+            "projection_unspecified_content_opacity": _normalize_string(raw.get("projection_unspecified_content_opacity")),
             "groups_from": groups_from,
             "default_color_by": str(raw.get("default_color_by") or groups_from[-1]).strip(),
             "default_secondary_color_by": str(raw.get("default_secondary_color_by") or raw.get("secondary_color_by") or "").strip(),
@@ -122,7 +155,8 @@ def normalize_projections(value) -> list[dict]:
             "hover_attrs": hover_attrs,
             "aggregate_edges": _normalize_aggregate_edges(raw.get("aggregate_edges")),
             **{key: raw[key] for key in PROJECTION_DISPLAY_KEYS if key in raw},
-        })
+        }
+        projections.append({key: item for key, item in projection.items() if item not in ("", [], (), {}, None)})
     return projections
 
 

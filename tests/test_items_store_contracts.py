@@ -166,6 +166,14 @@ ownership:
     edge_label_from=relation
     hover_attrs=owner,status
     aggregate_edges="when_collapsed=true by=relation"
+    filter_query='{"combinator":"or","rules":[{"field":"status","operator":"=","value":"todo","muted":true}],"not":true}'
+    query_builder_enabled=false
+    search="login"
+    filters_collapsed=false
+    edges_visible=false
+    edge_animation_enabled=false
+    edge_opacity=0.37
+    projection_unspecified_content_opacity=0.44
 """,
         encoding="utf-8",
     )
@@ -191,6 +199,14 @@ items_schema: roadmap.kg.schema
     assert model["view_projections"][1]["edge_color_by"] == "relation"
     assert model["view_projections"][1]["hover_attrs"] == ["owner", "status"]
     assert model["view_projections"][1]["aggregate_edges"] == {"when_collapsed": True, "by": "relation"}
+    assert model["view_projections"][1]["filter_query"]["rules"][0]["muted"] is True
+    assert model["view_projections"][1]["query_builder_enabled"] is False
+    assert model["view_projections"][1]["search"] == "login"
+    assert model["view_projections"][1]["filters_collapsed"] is False
+    assert model["view_projections"][1]["edges_visible"] is False
+    assert model["view_projections"][1]["edge_animation_enabled"] is False
+    assert model["view_projections"][1]["edge_opacity"] == "0.37"
+    assert model["view_projections"][1]["projection_unspecified_content_opacity"] == "0.44"
     assert model["projection_models"]["ownership"]["model"]["edge_color_by"] == "relation"
     assert model["projection_models"]["ownership"]["model"]["hover_attrs"] == ["owner", "status"]
     assert model["index_attributes"] == ["status", "owner"]

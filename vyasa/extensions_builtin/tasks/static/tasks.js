@@ -400,12 +400,39 @@ function tasksProjectionPrefsKey(projectionId) {
 }
 
 function readTasksProjectionPrefs(prefs, projectionId) {
+    return readTasksProjectionPrefsForModel(null, prefs, projectionId);
+}
+
+function tasksProjectionSchemaPrefs(model, projectionId) {
+    const id = String(projectionId || '').trim();
+    if (!id) return {};
+    const projection = (Array.isArray(model?.view_projections) ? model.view_projections : [])
+        .find((entry) => entry && entry.id === id);
+    if (!projection) return {};
+    const prefs = {};
+    if (projection.filter_query && typeof projection.filter_query === 'object') {
+        prefs.filters = normalizeTasksFilterQuery(projection.filter_query);
+    }
+    if (typeof projection.query_builder_enabled === 'boolean') prefs.queryBuilderEnabled = projection.query_builder_enabled;
+    if (typeof projection.search === 'string') prefs.searchQuery = projection.search;
+    if (typeof projection.filters_collapsed === 'boolean') prefs.filtersCollapsed = projection.filters_collapsed;
+    if (typeof projection.edges_visible === 'boolean') prefs.edgesVisible = projection.edges_visible;
+    if (typeof projection.edge_animation_enabled === 'boolean') prefs.edgeAnimationEnabled = projection.edge_animation_enabled;
+    if (projection.edge_opacity !== undefined && projection.edge_opacity !== '') prefs.edgeOpacity = clampTasksEdgeOpacity(projection.edge_opacity);
+    if (projection.projection_unspecified_content_opacity !== undefined && projection.projection_unspecified_content_opacity !== '') {
+        prefs.unspecifiedContentOpacity = clampTasksProjectionContentOpacity(projection.projection_unspecified_content_opacity);
+    }
+    return prefs;
+}
+
+function readTasksProjectionPrefsForModel(model, prefs, projectionId) {
+    const schemaPrefs = tasksProjectionSchemaPrefs(model, projectionId);
     const key = tasksProjectionPrefsKey(projectionId);
     const scoped = prefs?.projectionPrefs?.[key];
-    if (scoped && typeof scoped === 'object') return scoped;
-    if (!String(projectionId || '').trim() && prefs && typeof prefs === 'object') return prefs;
-    if (prefs?.projectionPrefs && typeof prefs.projectionPrefs === 'object') return {};
-    return prefs && typeof prefs === 'object' ? prefs : {};
+    if (scoped && typeof scoped === 'object') return { ...schemaPrefs, ...scoped };
+    if (!String(projectionId || '').trim() && prefs && typeof prefs === 'object') return { ...schemaPrefs, ...prefs };
+    if (prefs?.projectionPrefs && typeof prefs.projectionPrefs === 'object') return schemaPrefs;
+    return prefs && typeof prefs === 'object' ? { ...schemaPrefs, ...prefs } : schemaPrefs;
 }
 
 function normalizeTasksCheckedNodeIds(value) {
@@ -1220,17 +1247,20 @@ function tasksFilterQueryFromLegacy(filters) {
 function normalizeTasksFilterQuery(filters) {
     if (!filters || typeof filters !== 'object') return tasksEmptyFilterQuery();
     if (Array.isArray(filters.rules)) {
-        return {
+        const normalized = {
             combinator: filters.combinator === 'or' ? 'or' : 'and',
             not: Boolean(filters.not),
             rules: filters.rules,
         };
+        if (filters.muted) normalized.muted = true;
+        return normalized;
     }
     return tasksFilterQueryFromLegacy(filters);
 }
 
 function tasksFilterQueryHasRules(query) {
     const normalized = normalizeTasksFilterQuery(query);
+    if (normalized.muted) return false;
     return normalized.rules.some((rule) => {
         if (rule?.muted) return false;
         if (rule && Array.isArray(rule.rules)) return tasksFilterQueryHasRules(rule);
@@ -1238,8 +1268,17 @@ function tasksFilterQueryHasRules(query) {
     });
 }
 
+function tasksFilterQueryHasAnyRules(query) {
+    const normalized = normalizeTasksFilterQuery(query);
+    return normalized.rules.some((rule) => {
+        if (rule && Array.isArray(rule.rules)) return true;
+        return Boolean(rule && typeof rule === 'object');
+    });
+}
+
 function tasksCountFilterRules(query) {
     const normalized = normalizeTasksFilterQuery(query);
+    if (normalized.muted) return 0;
     return normalized.rules.reduce((count, rule) => {
         if (rule?.muted) return count;
         if (rule && Array.isArray(rule.rules)) return count + tasksCountFilterRules(rule);
@@ -3110,6 +3149,23 @@ function buildTasksProjectionConfigText(config) {
         if (cfg.aggregateEdges.by) parts.push(`by=${cfg.aggregateEdges.by}`);
         if (parts.length) lines.push(`\taggregate_edges="${parts.join(' ')}"`);
     }
+    const filterQuery = normalizeTasksFilterQuery(cfg.filterQuery);
+    if (tasksFilterQueryHasAnyRules(filterQuery)) {
+        lines.push(`\tfilter_query=${tasksQuoteSchemaValue(JSON.stringify(filterQuery))}`);
+    }
+    if (typeof cfg.queryBuilderEnabled === 'boolean') {
+        lines.push(`\tquery_builder_enabled=${cfg.queryBuilderEnabled ? 'true' : 'false'}`);
+    }
+    add('search', cfg.searchQuery);
+    if (typeof cfg.filtersCollapsed === 'boolean') lines.push(`\tfilters_collapsed=${cfg.filtersCollapsed ? 'true' : 'false'}`);
+    if (typeof cfg.edgesVisible === 'boolean') lines.push(`\tedges_visible=${cfg.edgesVisible ? 'true' : 'false'}`);
+    if (typeof cfg.edgeAnimationEnabled === 'boolean') lines.push(`\tedge_animation_enabled=${cfg.edgeAnimationEnabled ? 'true' : 'false'}`);
+    if (cfg.edgeOpacity !== undefined && cfg.edgeOpacity !== null && cfg.edgeOpacity !== '' && !Number.isNaN(Number(cfg.edgeOpacity))) {
+        lines.push(`\tedge_opacity=${clampTasksEdgeOpacity(cfg.edgeOpacity)}`);
+    }
+    if (cfg.projectionUnspecifiedContentOpacity !== undefined && cfg.projectionUnspecifiedContentOpacity !== null && cfg.projectionUnspecifiedContentOpacity !== '' && !Number.isNaN(Number(cfg.projectionUnspecifiedContentOpacity))) {
+        lines.push(`\tprojection_unspecified_content_opacity=${clampTasksProjectionContentOpacity(cfg.projectionUnspecifiedContentOpacity)}`);
+    }
     const filterEntries = Object.entries(cfg.where || {})
         .map(([attr, value]) => {
             if (value === 'true') return [attr, ['true']];
@@ -3127,8 +3183,6 @@ function buildTasksProjectionConfigText(config) {
     if (cfg.defaultOpenDepth !== undefined && cfg.defaultOpenDepth !== null && cfg.defaultOpenDepth !== '' && !Number.isNaN(Number(cfg.defaultOpenDepth))) {
         lines.push(`\tdefault_open_depth=${cfg.defaultOpenDepth}`);
     }
-    if (cfg.searchQuery) notes.push(`search query: ${cfg.searchQuery} (UI-only)`);
-    if (cfg.edgesHidden) notes.push('edges hidden in this view (UI toggle — no kg.schema field)');
     let out = `# Paste under your @views section in kg.schema:\n${lines.join('\n')}`;
     if (notes.length) out += `\n${notes.map((note) => `# ${note}`).join('\n')}`;
     return out;
@@ -3231,8 +3285,8 @@ async function renderTasksGraphs(rootElement = document) {
             const flowWrapperRef = React.useRef(null);
             const filterPanelRef = React.useRef(null);
             const projectionPrefs = React.useMemo(
-                () => readTasksProjectionPrefs({ projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId),
-                [activeProjectionId]
+                () => readTasksProjectionPrefsForModel(sourceModel, { projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId),
+                [sourceModel, activeProjectionId]
             );
             const hydrateExpandedSet = React.useCallback((prefs) => {
                 const validIds = tasksExpandableNodeIds(model);
@@ -3284,10 +3338,13 @@ async function renderTasksGraphs(rootElement = document) {
                 [sourceModel]
             );
             const [edgeOpacity, setEdgeOpacity] = React.useState(() => (
-                sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity)
+                projectionPrefs?.edgeOpacity !== undefined ? projectionPrefs.edgeOpacity
+                    : (sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity))
             ));
             const [projectionUnspecifiedContentOpacity, setProjectionUnspecifiedContentOpacity] = React.useState(() => (
-                sourcePrefsRef.current?.unspecifiedContentOpacity === undefined
+                projectionPrefs?.unspecifiedContentOpacity !== undefined
+                    ? projectionPrefs.unspecifiedContentOpacity
+                    : sourcePrefsRef.current?.unspecifiedContentOpacity === undefined
                     ? defaultProjectionUnspecifiedContentOpacity
                     : clampTasksProjectionContentOpacity(sourcePrefsRef.current.unspecifiedContentOpacity)
             ));
@@ -3346,7 +3403,7 @@ async function renderTasksGraphs(rootElement = document) {
                 baseLayoutRef.current = null;
                 groupLayoutsRef.current = {};
                 graphBaseRef.current = { nodes: [], edges: [] };
-                const nextPrefs = readTasksProjectionPrefs({ projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
+                const nextPrefs = readTasksProjectionPrefsForModel(sourceModel, { projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
                 setExpanded(egoMode ? tasksExpandableNodeIds(model) : hydrateExpandedSet(nextPrefs));
                 setSelectedNodeId(null);
                 setSelectedNodeIds(new Set());
@@ -3355,9 +3412,9 @@ async function renderTasksGraphs(rootElement = document) {
                 groupToggleHoverIdRef.current = '';
                 setTasksGroupToggleHover(flowWrapperRef.current, '');
                 pendingFitActionRef.current = 'mode';
-            }, [activeProjectionId, hydrateExpandedSet]);
+            }, [sourceModel, activeProjectionId, hydrateExpandedSet]);
             React.useEffect(() => {
-                const nextPrefs = readTasksProjectionPrefs({ projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
+                const nextPrefs = readTasksProjectionPrefsForModel(sourceModel, { projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
                 setActiveFilters(egoMode ? tasksEmptyFilterQuery() : normalizeTasksFilterQuery(nextPrefs?.filters));
                 setSearchQuery(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
                 setSearchInputValue(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
@@ -3371,9 +3428,13 @@ async function renderTasksGraphs(rootElement = document) {
                 setQueryBuilderEnabled(typeof nextPrefs?.queryBuilderEnabled === 'boolean' ? nextPrefs.queryBuilderEnabled : true);
                 setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
                 setEdgeAnimationEnabled(typeof nextPrefs?.edgeAnimationEnabled === 'boolean' ? nextPrefs.edgeAnimationEnabled : true);
-                setEdgeOpacity(sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity));
-                setProjectionUnspecifiedContentOpacity(sourcePrefsRef.current?.unspecifiedContentOpacity === undefined ? defaultProjectionUnspecifiedContentOpacity : clampTasksProjectionContentOpacity(sourcePrefsRef.current.unspecifiedContentOpacity));
-            }, [activeProjectionId, model, nodeNotes, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
+                setEdgeOpacity(nextPrefs?.edgeOpacity !== undefined ? nextPrefs.edgeOpacity : (
+                    sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity)
+                ));
+                setProjectionUnspecifiedContentOpacity(nextPrefs?.unspecifiedContentOpacity !== undefined ? nextPrefs.unspecifiedContentOpacity : (
+                    sourcePrefsRef.current?.unspecifiedContentOpacity === undefined ? defaultProjectionUnspecifiedContentOpacity : clampTasksProjectionContentOpacity(sourcePrefsRef.current.unspecifiedContentOpacity)
+                ));
+            }, [sourceModel, activeProjectionId, model, nodeNotes, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
             React.useEffect(() => {
                 const timeoutId = window.setTimeout(() => {
                     setSearchQuery(searchInputValue);
@@ -3455,6 +3516,8 @@ async function renderTasksGraphs(rootElement = document) {
                         filtersCollapsed,
                         edgesVisible,
                         edgeAnimationEnabled,
+                        edgeOpacity,
+                        unspecifiedContentOpacity: projectionUnspecifiedContentOpacity,
                         expandedGroupIds: Array.from(expanded),
                     },
                 };
@@ -5736,9 +5799,15 @@ async function renderTasksGraphs(rootElement = document) {
                         : (Array.isArray(sourceModel?.hover_attrs) ? sourceModel.hover_attrs : []),
                     aggregateEdges: def?.aggregate_edges || sourceModel?.aggregate_edges,
                     caption: def?.caption,
-                    where: isActiveLive ? effectiveFilters : (def?.where || {}),
-                    searchQuery: isActiveLive ? searchQuery : '',
-                    edgesHidden: isActiveLive ? !edgesVisible : false,
+                    where: def?.where || {},
+                    filterQuery: isActiveLive ? activeFilters : (def?.filter_query || {}),
+                    queryBuilderEnabled: isActiveLive ? queryBuilderEnabled : def?.query_builder_enabled,
+                    searchQuery: isActiveLive ? searchQuery : (def?.search || ''),
+                    filtersCollapsed: isActiveLive ? filtersCollapsed : def?.filters_collapsed,
+                    edgesVisible: isActiveLive ? edgesVisible : def?.edges_visible,
+                    edgeAnimationEnabled: isActiveLive ? edgeAnimationEnabled : def?.edge_animation_enabled,
+                    edgeOpacity: isActiveLive ? edgeOpacity : def?.edge_opacity,
+                    projectionUnspecifiedContentOpacity: isActiveLive ? projectionUnspecifiedContentOpacity : def?.projection_unspecified_content_opacity,
                     defaultOpenDepth: effectiveDefaultOpenDepth,
                 });
             };
