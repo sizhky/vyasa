@@ -52,6 +52,7 @@ const TASKS_SPECIAL_NODE_ATTRS = new Set([
     '__card_state_color__',
     '__has_note__',
     '__node_image__',
+    '__secondary_color__',
 ]);
 const TASKS_INTERNAL_NODE_META_KEYS = new Set([
     'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
@@ -1231,6 +1232,7 @@ function normalizeTasksFilterQuery(filters) {
 function tasksFilterQueryHasRules(query) {
     const normalized = normalizeTasksFilterQuery(query);
     return normalized.rules.some((rule) => {
+        if (rule?.muted) return false;
         if (rule && Array.isArray(rule.rules)) return tasksFilterQueryHasRules(rule);
         return tasksFilterRuleIsActive(rule);
     });
@@ -1239,6 +1241,7 @@ function tasksFilterQueryHasRules(query) {
 function tasksCountFilterRules(query) {
     const normalized = normalizeTasksFilterQuery(query);
     return normalized.rules.reduce((count, rule) => {
+        if (rule?.muted) return count;
         if (rule && Array.isArray(rule.rules)) return count + tasksCountFilterRules(rule);
         return count + (tasksFilterRuleIsActive(rule) ? 1 : 0);
     }, 0);
@@ -1341,7 +1344,7 @@ function tasksNodeMatchesFilters(node, filters) {
     const query = normalizeTasksFilterQuery(filters);
     if (!tasksFilterQueryHasRules(query)) return true;
     const activeRules = query.rules.filter((rule) => (
-        rule && Array.isArray(rule.rules) ? tasksFilterQueryHasRules(rule) : tasksFilterRuleIsActive(rule)
+        !rule?.muted && (rule && Array.isArray(rule.rules) ? tasksFilterQueryHasRules(rule) : tasksFilterRuleIsActive(rule))
     ));
     if (!activeRules.length) return true;
     const results = activeRules.map((rule) => (
@@ -1388,7 +1391,7 @@ function tasksCollectSearchMatches(nodes, edges, query) {
     for (const node of (nodes || [])) {
         const data = node?.data || {};
         if (data.__kind__ === 'groupTitle') continue;
-        const values = [data.label];
+        const values = [node?.id, data.id, data.label];
         for (const [key, value] of Object.entries(data)) {
             if (tasksIsHiddenNodeMetaKey(key)) continue;
             if (value === null || value === undefined || typeof value === 'object' || typeof value === 'function') continue;
@@ -2941,25 +2944,29 @@ function tasksFormatHoverValue(attr, value) {
     return str;
 }
 
-function tasksSelectedPanelWidth(node, entries) {
-    const titleWidth = measureTextWidth(node?.label || node?.id || '', '700 14px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif');
-    const rowWidths = (entries || []).map((entry) => {
-        const keyWidth = measureTextWidth(entry?.label || '', '700 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif');
-        const rawValue = entry?.value || '';
-        const lines = String(rawValue).split(/\r?\n/).filter(Boolean);
+function tasksDetailPanelWidth(options = {}) {
+    const title = options.title || '';
+    const nodeId = options.nodeId || '';
+    const entries = Array.isArray(options.entries) ? options.entries : [];
+    const titleFont = options.titleFont || '700 14px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const bodyFont = options.bodyFont || '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const keyFont = options.keyFont || '700 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const titleWidth = measureTextWidth(title, titleFont);
+    const idWidth = nodeId ? measureTextWidth(nodeId, bodyFont) + 20 : 0;
+    const rowWidths = entries.map((entry) => {
+        const keyWidth = measureTextWidth(entry?.label || '', keyFont);
+        const rawValue = String(entry?.value || '');
+        const lines = rawValue.split(/\r?\n/).filter(Boolean);
         const firstLine = lines[0] || '';
-        const widestLine = lines.reduce((widest, line) => (
-            measureTextWidth(line, '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif') > measureTextWidth(widest, '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif')
-                ? line
-                : widest
-        ), firstLine);
+        const widestLine = lines.reduce((widest, line) => measureTextWidth(line, bodyFont) > measureTextWidth(widest, bodyFont) ? line : widest, firstLine);
         const contentLine = rawValue.length > 120 ? widestLine : firstLine;
-        const valueWidth = Math.min(measureTextWidth(contentLine, '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'), 520);
+        const valueWidth = Math.min(measureTextWidth(contentLine, bodyFont), 520);
         const weight = rawValue.length > 180 ? 0.82 : rawValue.length > 72 ? 0.6 : rawValue.length > 36 ? 0.72 : 0.9;
         return keyWidth + valueWidth * weight;
     }).sort((left, right) => left - right);
     const weightedWidth = rowWidths.length ? rowWidths[Math.max(0, Math.floor(rowWidths.length * 0.72) - 1)] : 0;
-    return Math.round(Math.min(720, Math.max(280, titleWidth + 44, weightedWidth + 136)));
+    const imageReserve = options.hasImage ? 34 : 0;
+    return Math.round(Math.min(options.maxWidth || 720, Math.max(options.minWidth || 280, titleWidth + idWidth + imageReserve + 44, weightedWidth + 136)));
 }
 
 function tasksIsLongFormEntry(entry) {
@@ -2972,22 +2979,19 @@ function tasksIsLongFormEntry(entry) {
     return false;
 }
 
-function tasksHoverTooltipWidth(label, rows, hoverFontSize, hasImage = false) {
-    const titleFont = `700 calc(${hoverFontSize} * 1.12) ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-    const bodyFont = `500 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-    const keyFont = `700 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-    const titleWidth = measureTextWidth(label || '', titleFont);
-    const rowWidths = (rows || []).map((row) => {
-        const keyWidth = measureTextWidth(row?.label || '', keyFont);
-        const rawValue = String(row?.value || '');
-        const firstLine = rawValue.split(/\r?\n/, 1)[0];
-        const valueWidth = Math.min(measureTextWidth(firstLine, bodyFont), 420);
-        const weight = rawValue.length > 96 ? 0.46 : rawValue.length > 48 ? 0.66 : 0.88;
-        return keyWidth + valueWidth * weight;
-    }).sort((left, right) => left - right);
-    const weightedWidth = rowWidths.length ? rowWidths[Math.max(0, Math.floor(rowWidths.length * 0.62) - 1)] : 0;
-    const imageReserve = hasImage ? 34 : 0;
-    return Math.round(Math.min(560, Math.max(220, titleWidth + imageReserve + 34, weightedWidth + 116)));
+function renderTasksDetailEntries(React, entries, options = {}) {
+    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '12px', lineHeight: options.lineHeight || 1.35 } },
+        ...(entries || []).map((entry, index) => {
+            const stacked = tasksIsLongFormEntry(entry);
+            return React.createElement('div', {
+                key: entry.key || entry.attr || `${index}`,
+                style: { paddingTop: index === 0 ? '0' : '8px', marginTop: index === 0 ? '0' : '8px', borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)', overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'pre-line' },
+            },
+            React.createElement('span', { style: { fontWeight: 700, opacity: 0.72, display: stacked ? 'block' : 'inline', marginBottom: stacked ? '4px' : '0' } }, `${entry.label}: `),
+            entry.renderedValue
+                ? React.createElement('span', { className: 'vyasa-task-node-card-value', style: stacked ? { display: 'block' } : undefined, dangerouslySetInnerHTML: { __html: entry.renderedValue } })
+                : React.createElement('span', { className: 'vyasa-task-node-card-value', style: stacked ? { display: 'block' } : undefined }, entry.value));
+        }));
 }
 
 function tasksBackgroundProps(widgetId) {
@@ -4783,9 +4787,10 @@ async function renderTasksGraphs(rootElement = document) {
                     ? tasksGroupDetailEntries(sourceNodeId, model)
                     : tasksNodeMetaEntries(selectedNode);
                 if (!selectedNode) return null;
+                const panelNodeId = sourceNodeId || selectedNode.id || '';
                 const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
                 const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;
-                const panelWidth = tasksSelectedPanelWidth(selectedNode, entries);
+                const panelWidth = tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries });
                 const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));
                 const panelHref = String(selectedNode?.href || '').trim();
                 const copyPanelTitle = async (event) => {
@@ -4817,40 +4822,18 @@ async function renderTasksGraphs(rootElement = document) {
                                 padding: '0',
                             },
                         }, '⧉'),
-                        React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3 } }, selectedNode.label || selectedNode.id),
+                        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: panelNodeId ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)', columnGap: '12px', alignItems: 'start' } },
+                            React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' } }, selectedNode.label || selectedNode.id),
+                            panelNodeId ? React.createElement('div', { style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, textAlign: 'right' } }, panelNodeId) : null,
+                        ),
                         panelHref ? React.createElement('a', {
                             href: panelHref,
                             onClick: (event) => openTasksNodeHref(panelHref, event),
                             style: { display: 'inline-block', marginTop: '6px', fontSize: '12px', lineHeight: 1.3, textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit', overflowWrap: 'anywhere', wordBreak: 'break-word' },
                         }, panelHref) : null,
                     ),
+                    renderTasksDetailEntries(React, entries),
                     React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: '12px', lineHeight: 1.35 } },
-                        ...entries.map((entry, index) => {
-                            const stacked = tasksIsLongFormEntry(entry);
-                            return React.createElement('div', {
-                                key: entry.key,
-                                style: {
-                                    paddingTop: index === 0 ? '0' : '8px',
-                                    marginTop: index === 0 ? '0' : '8px',
-                                    borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)',
-                                    overflowWrap: 'anywhere',
-                                    wordBreak: 'break-word',
-                                    whiteSpace: 'pre-line',
-                                },
-                            },
-                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.72, display: stacked ? 'block' : 'inline', marginBottom: stacked ? '4px' : '0' } }, `${entry.label}: `),
-                                entry.renderedValue
-                                    ? React.createElement('span', {
-                                        className: 'vyasa-task-node-card-value',
-                                        style: stacked ? { display: 'block' } : undefined,
-                                        dangerouslySetInnerHTML: { __html: entry.renderedValue },
-                                    })
-                                    : React.createElement('span', {
-                                        className: 'vyasa-task-node-card-value',
-                                        style: stacked ? { display: 'block' } : undefined,
-                                    }, entry.value),
-                            );
-                        }),
                         React.createElement('label', {
                             style: {
                                 display: 'flex',
@@ -4967,6 +4950,18 @@ async function renderTasksGraphs(rootElement = document) {
                         values.map((option) => React.createElement('option', { key: optionValue(option), value: optionValue(option) }, optionLabel(option)))
                     );
                 };
+                const QueryMuteToggle = (props) => React.createElement('label', {
+                    className: props.className,
+                    title: props.title,
+                    style: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', opacity: props.disabled ? 0.5 : 0.82, cursor: props.disabled ? 'not-allowed' : 'pointer' },
+                },
+                React.createElement('input', {
+                    type: 'checkbox',
+                    checked: !props.ruleOrGroup?.muted,
+                    disabled: props.disabled,
+                    onChange: (event) => props.handleOnClick?.(event),
+                }),
+                React.createElement('span', null, 'Enabled'));
                 const isOpen = !filtersCollapsed;
                 const filterPanelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`;
                 return React.createElement('aside', {
@@ -5214,7 +5209,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     ),
                                     searchMatches.error
                                         ? React.createElement('div', { style: { fontSize: '11px', color: '#fca5a5', lineHeight: 1.3 } }, `Regex error: ${searchMatches.error}`)
-                                        : React.createElement('div', { style: { fontSize: '11px', opacity: 0.72, lineHeight: 1.3 } }, searchMatches.active ? `${searchMatches.nodeIds.size} nodes matched` : 'Matches label, text attrs, and matching edge text.')
+                                        : React.createElement('div', { style: { fontSize: '11px', opacity: 0.72, lineHeight: 1.3 } }, searchMatches.active ? `${searchMatches.nodeIds.size} nodes matched` : 'Matches node id, label, text attrs, and matching edge text.')
                                 )
                             )
                         ),
@@ -5392,11 +5387,12 @@ async function renderTasksGraphs(rootElement = document) {
                                     onQueryChange: (query) => setActiveFilters(normalizeTasksFilterQuery(query)),
                                     showNotToggle: true,
                                     showCloneButtons: false,
+                                    showMuteButtons: true,
                                     showCombinatorsBetweenRules: true,
                                     resetOnFieldChange: true,
                                     resetOnOperatorChange: true,
                                     listsAsArrays: true,
-                                    controlElements: { valueEditor: QueryValueEditor },
+                                    controlElements: { valueEditor: QueryValueEditor, muteRuleAction: QueryMuteToggle, muteGroupAction: QueryMuteToggle },
                                     controlClassnames: { queryBuilder: 'vyasa-tasks-query-builder' },
                                 })
                                     : React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.35 } }, 'Loading advanced filters...')
@@ -5462,6 +5458,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const rows = tasksHoverAttrRows(nodeData, activeHoverAttrs);
                 const label = nodeData.label || hit.node.id;
+                const nodeId = nodeData.__kind__ === 'groupTitle' ? (nodeData.sourceGroupId || hit.node.id) : hit.node.id;
                 const image = normalizeTasksNodeImageUrl(nodeData.__node_image__);
                 if (!label && !rows.length) {
                     clearGroupHoverTooltip();
@@ -5470,6 +5467,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const bounds = wrapper.getBoundingClientRect();
                 setGroupHoverTooltip({
                     label,
+                    nodeId,
                     image,
                     rows,
                     x: event.clientX - bounds.left + 12,
@@ -5804,7 +5802,15 @@ async function renderTasksGraphs(rootElement = document) {
                 if (!groupHoverTooltip) return null;
                 const rows = Array.isArray(groupHoverTooltip.rows) ? groupHoverTooltip.rows : [];
                 const image = normalizeTasksNodeImageUrl(groupHoverTooltip.image);
-                const panelWidth = tasksHoverTooltipWidth(groupHoverTooltip.label || '', rows, hoverFontSize, Boolean(image));
+                const panelWidth = tasksDetailPanelWidth({
+                    title: groupHoverTooltip.label || '',
+                    nodeId: groupHoverTooltip.nodeId || '',
+                    entries: rows,
+                    titleFont: `700 calc(${hoverFontSize} * 1.12) ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
+                    bodyFont: `500 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
+                    keyFont: `700 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
+                    hasImage: Boolean(image),
+                });
                 const wrapperWidth = Math.max(240, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().width || 0));
                 const wrapperHeight = Math.max(160, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().height || 0));
                 const maxWidth = Math.max(220, Math.min(panelWidth, wrapperWidth - 24));
@@ -5813,7 +5819,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const children = [
                     window.React.createElement('div', {
                         key: '__label__',
-                        style: { display: 'flex', alignItems: 'center', gap: '7px', fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, marginBottom: rows.length ? '4px' : 0, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 },
+                        style: { display: 'flex', alignItems: 'center', gap: '7px', justifyContent: 'space-between', fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, marginBottom: rows.length ? '4px' : 0, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 },
                     },
                         image ? window.React.createElement('img', {
                             src: image,
@@ -5823,28 +5829,13 @@ async function renderTasksGraphs(rootElement = document) {
                             className: tasksIsIconifyImage(image) ? 'vyasa-tasks-node-image vyasa-tasks-node-image--icon' : 'vyasa-tasks-node-image',
                             style: { width: '22px', height: '22px', objectFit: 'contain', flex: '0 0 auto' },
                         }) : null,
-                        window.React.createElement('span', { style: { minWidth: 0 } }, groupHoverTooltip.label)
+                        window.React.createElement('span', { style: { flex: '1 1 auto', minWidth: 0 } }, groupHoverTooltip.label),
+                        groupHoverTooltip.nodeId ? window.React.createElement('span', {
+                            style: { flex: '0 0 auto', marginLeft: '12px', fontSize: hoverFontSize, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, textAlign: 'right' },
+                        }, groupHoverTooltip.nodeId) : null
                     ),
                 ];
-                if (rows.length) {
-                    children.push(window.React.createElement('div', {
-                        key: '__rows__',
-                        style: { display: 'grid', gap: '6px', fontSize: hoverFontSize, fontWeight: 500, lineHeight: 1.35, alignItems: 'start' },
-                    }, rows.map((row) => {
-                        const stacked = tasksIsLongFormEntry(row);
-                        return window.React.createElement('div', {
-                            key: row.attr,
-                            style: stacked ? { display: 'grid', gap: '2px', minWidth: 0 } : { display: 'grid', gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)', columnGap: '10px', alignItems: 'start', minWidth: 0 },
-                        },
-                        window.React.createElement('span', {
-                            style: { color: 'color-mix(in srgb, currentColor 60%, transparent)', whiteSpace: stacked ? 'normal' : 'nowrap', minWidth: 0 },
-                        }, row.label),
-                        window.React.createElement('span', {
-                            style: { fontWeight: 650, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 },
-                            dangerouslySetInnerHTML: row.renderedValue ? { __html: row.renderedValue } : undefined,
-                        }, row.renderedValue ? undefined : row.value));
-                    })));
-                }
+                if (rows.length) children.push(renderTasksDetailEntries(window.React, rows, { fontSize: hoverFontSize, lineHeight: 1.35 }));
                 return window.React.createElement('div', {
                     style: {
                         position: 'absolute',
@@ -5852,16 +5843,16 @@ async function renderTasksGraphs(rootElement = document) {
                         top: clampedTop,
                         zIndex: 2400,
                         pointerEvents: 'none',
-                        padding: rows.length ? '6px 9px' : '4px 7px',
-                        borderRadius: '6px',
-                        background: 'color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%)',
-                        border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)',
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
-                        width: rows.length ? 'min(280px, max-content)' : 'max-content',
-                        maxWidth: '280px',
-                        maxInlineSize: `${maxWidth}px`,
-                        minWidth: rows.length ? '220px' : 'auto',
+                        width: `${maxWidth}px`,
+                        maxWidth: '100%',
+                        minWidth: 'min(220px, 100%)',
                         boxSizing: 'border-box',
+                        borderRadius: '12px',
+                        border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)',
+                        background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
+                        boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
+                        backdropFilter: 'blur(8px)',
+                        padding: '12px',
                     },
                 }, ...children);
             };
