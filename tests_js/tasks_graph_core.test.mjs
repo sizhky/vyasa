@@ -698,4 +698,24 @@ test('buildTasksProjectionConfigText emits a paste-ready kg.schema @views entry'
     const parsed = parse('default:\n\twhere=status=todo\n\tsearch=login');
     assert.deepEqual(parsed.filterQuery.rules, [{ field: 'status', operator: '=', value: 'todo' }]);
     assert.equal(parsed.searchQuery, 'login');
+
+    const exactPaste = parse(`# Paste under your @views section in kg.schema:
+yolo:
+\tgroup_by=lane
+\tcolor_by=built
+\tsecondary_color_by=evaluated
+\tfilter_query="{\\"combinator\\":\\"and\\",\\"rules\\":[{\\"field\\":\\"built\\",\\"operator\\":\\"=\\",\\"value\\":\\"yes\\"}]}"
+\tquery_builder_enabled=true
+\tfilters_collapsed=false
+\tedges_visible=true
+\tedge_animation_enabled=true
+\tedge_opacity=0.5050762722761054
+\tprojection_unspecified_content_opacity=0.82
+\tdefault_open_depth=-1`);
+    assert.deepEqual(exactPaste.groupBy, ['lane']);
+    assert.equal(exactPaste.colorBy, 'built');
+    assert.equal(exactPaste.secondaryColorBy, 'evaluated');
+    assert.equal(exactPaste.filterQuery.rules[0].field, 'built');
+    assert.equal(exactPaste.queryBuilderEnabled, true);
+    assert.equal(exactPaste.filtersCollapsed, false);
 });

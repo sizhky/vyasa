@@ -155,7 +155,7 @@ def read_schema(path: str | Path) -> KgSchema:
                 payload = _assignments(shlex.split(line))
                 schema.sources.setdefault(current_source, {}).update(payload)
             elif section == "@views" and current_view:
-                payload = _assignments(shlex.split(line))
+                payload = _view_assignment(line)
                 _update_view(current_view, payload)
             continue
         if section == "@sources":
@@ -187,7 +187,7 @@ def _read_tmp_view_sidecars(schema: KgSchema, schema_path: Path) -> None:
             line = raw.strip()
             if raw.startswith((" ", "\t")):
                 if current_view:
-                    _update_view(current_view, _assignments(shlex.split(line)))
+                    _update_view(current_view, _view_assignment(line))
                 continue
             current_view = _read_view(line)
             if current_view.id in existing:
@@ -420,6 +420,17 @@ def _assignments(parts: list[str]) -> dict[str, str]:
         for key in keys.split(","):
             payload[key.strip()] = value.strip()
     return payload
+
+
+def _view_assignment(line: str) -> dict[str, str]:
+    if "=" not in line:
+        return {}
+    keys, raw_value = line.split("=", 1)
+    value = raw_value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    value = value.replace('\\"', '"').replace("\\'", "'").replace("\\\\", "\\")
+    return {key.strip(): value for key in keys.split(",") if key.strip()}
 
 
 def _split_inline_assignment(text: str) -> tuple[str, str]:

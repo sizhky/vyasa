@@ -264,6 +264,19 @@ def test_kg_pack_reads_tmp_view_sidecars(tmp_path):
     assert graph["view_projections"][1]["filter_query"]["rules"][0]["muted"] is True
 
 
+def test_kg_view_sidecar_accepts_raw_json_filter_query_quotes(tmp_path):
+    (tmp_path / "kg.schema").write_text("@graph id=roadmap\n@sources\nnodes=kg.nodes\n@views\nbase:\n    source=base\n", encoding="utf-8")
+    (tmp_path / "kg.nodes").write_text("n1: Login\n", encoding="utf-8")
+    (tmp_path / "tmp.RawJson.view").write_text(
+        'tmp.RawJson:\n\tlabel="Raw JSON"\n\tfilter_query="{"combinator":"and","rules":[{"field":"built","operator":"=","value":"yes"}]}"\n',
+        encoding="utf-8",
+    )
+
+    graph = read_kg_pack(tmp_path / "kg.schema")
+
+    assert graph["view_projections"][1]["filter_query"]["rules"][0]["field"] == "built"
+
+
 def test_kg_palette_design_palette_feeds_color_and_image_modes(tmp_path):
     (tmp_path / "roadmap.kg.schema").write_text(
         "@graph id=roadmap initial_view=base\n@sources\nnodes=roadmap.kg.nodes\npalette=roadmap.kg.palette\n@views\nbase:\n    source=base\n",
