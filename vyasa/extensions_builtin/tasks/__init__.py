@@ -1,9 +1,11 @@
 from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase, request_asset_bundle
+from .api import register_tasks_routes
 from .render import render_tasks_block
 
 
 class TasksExtension(VyasaExtensionBase):
     def register(self, app) -> None:
+        app.routes.add("/api/tasks", register_tasks_routes)
         app.assets.bundle(AssetBundle(
             "tasks.runtime",
             css=("/static/extensions/tasks/tasks.css",),
@@ -25,8 +27,9 @@ EXTENSION = TasksExtension(
     ExtensionMeta(
         "tasks",
         "render",
-        ("cap:markdown:fence:items", "cap:markdown:fence:tasks", "bundle:tasks.runtime"),
+        ("cap:markdown:fence:items", "cap:markdown:fence:tasks", "bundle:tasks.runtime", "cap:route:tasks"),
         requires=("cap:markdown_pipeline",),
+        route_prefixes=("/api/tasks",),
         scope_disable=True,
     )
 )

@@ -107,6 +107,10 @@ def test_tasks_filter_panel_uses_projection_dropdown_instead_of_tab_grid():
     assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'View')" in source
     assert "value: viewMode === 'gantt' ? TASKS_GANTT_PROJECTION_ID : activeProjectionId" in source
     assert "projectionOptions.map((projection) => React.createElement('option'" in source
+    assert "TASKS_ADD_VIEW_OPTION_ID" in source
+    assert "onPaste: handleDefaultViewPaste" in source
+    assert "target.addEventListener('paste', handleDefaultViewPaste, true)" in source
+    assert "saveTasksTempView" in source
     assert "const ProjectionToggle = () =>" not in source
 
 
@@ -312,7 +316,7 @@ def test_tasks_query_builder_can_be_disabled_per_projection():
     assert "const effectiveFilters = React.useMemo" in source
     assert "queryBuilderEnabled ? activeFilters : tasksEmptyFilterQuery()" in source
     assert "if (egoMode || filtersCollapsed || !queryBuilderEnabled) return;" in source
-    assert "where: isActiveLive ? effectiveFilters : (def?.where || {})" in source
+    assert "filterQuery: isActiveLive ? activeFilters : (def?.filter_query || {})" in source
     assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, 'Query builder')" in source
 
 
@@ -561,7 +565,7 @@ def test_tasks_base_view_supports_task_parent_expansion():
 
     assert "function tasksNodeHasChildren(nodeId, model)" in source
     assert "function tasksVisibleGraphStatsLabel(nodes, edges)" in source
-    assert "if (!String(projectionId || '').trim() && prefs && typeof prefs === 'object') return prefs;" in source
+    assert "if (!String(projectionId || '').trim() && prefs && typeof prefs === 'object') return { ...schemaPrefs, ...prefs };" in source
     assert "setExpanded(tasksExpandableNodeIds(model));" in source
     assert "const canExpand = tasksNodeHasChildren(id, model);" in source
     assert "tasksChildTaskIds(nodeId, model).forEach((id) => visibleTasks.add(id));" in source

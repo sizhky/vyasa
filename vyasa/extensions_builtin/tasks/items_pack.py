@@ -22,6 +22,14 @@ class KgView:
     edge_label_from: str = ""
     hover_attrs: list[str] | None = None
     aggregate_edges: dict[str, str | bool] = field(default_factory=dict)
+    filter_query: dict[str, Any] = field(default_factory=dict)
+    query_builder_enabled: bool | None = None
+    search: str = ""
+    filters_collapsed: bool | None = None
+    edges_visible: bool | None = None
+    edge_animation_enabled: bool | None = None
+    edge_opacity: str = ""
+    projection_unspecified_content_opacity: str = ""
     display: dict[str, str | bool] = field(default_factory=dict)
     caption: str = ""
 
@@ -110,12 +118,13 @@ def _write_kg_cache(schema_path: Path, cache_name: str, graph: dict[str, Any]) -
 
 
 def read_schema(path: str | Path) -> KgSchema:
+    path = Path(path)
     schema = KgSchema()
     section = ""
     current_source = ""
     current_source_attrs = False
     current_view: KgView | None = None
-    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+    for raw in path.read_text(encoding="utf-8").splitlines():
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         line = raw.strip()
@@ -146,7 +155,7 @@ def read_schema(path: str | Path) -> KgSchema:
                 payload = _assignments(shlex.split(line))
                 schema.sources.setdefault(current_source, {}).update(payload)
             elif section == "@views" and current_view:
-                payload = _assignments(shlex.split(line))
+                payload = _view_assignment(line)
                 _update_view(current_view, payload)
             continue
         if section == "@sources":
@@ -159,9 +168,37 @@ def read_schema(path: str | Path) -> KgSchema:
         elif section == "@views":
             current_view = _read_view(line)
             schema.views.append(current_view)
+    _read_tmp_view_sidecars(schema, path)
     if "base" not in schema.sources:
         schema.sources["base"] = {}
     return schema
+
+
+def _read_tmp_view_sidecars(schema: KgSchema, schema_path: Path) -> None:
+    view_dir = _tmp_view_sidecar_dir(schema_path)
+    if not view_dir.is_dir():
+        return
+    existing = {view.id: index for index, view in enumerate(schema.views)}
+    for view_path in sorted(view_dir.glob("tmp.*.view")):
+        current_view: KgView | None = None
+        for raw in view_path.read_text(encoding="utf-8").splitlines():
+            if not raw.strip() or raw.lstrip().startswith("#"):
+                continue
+            line = raw.strip()
+            if raw.startswith((" ", "\t")):
+                if current_view:
+                    _update_view(current_view, _view_assignment(line))
+                continue
+            current_view = _read_view(line)
+            if current_view.id in existing:
+                schema.views[existing[current_view.id]] = current_view
+            else:
+                existing[current_view.id] = len(schema.views)
+                schema.views.append(current_view)
+
+
+def _tmp_view_sidecar_dir(schema_path: Path) -> Path:
+    return schema_path.parent if schema_path.name == "kg.schema" else schema_path.with_suffix("")
 
 
 def read_nodes(path: str | Path) -> list[dict[str, str]]:
@@ -295,7 +332,13 @@ def _read_view(line: str) -> KgView:
 
 def _update_view(view: KgView, payload: dict[str, str]) -> None:
     group_by = _list_value(payload.get("group_by", ""))
-    consumed = {"source", "where", "group_by", "color_by", "secondary_color_by", "edge_color_by", "edge_label_from", "hover_attrs", "aggregate_edges", "caption"}
+    consumed = {
+        "source", "where", "group_by", "color_by", "secondary_color_by",
+        "edge_color_by", "edge_label_from", "hover_attrs", "aggregate_edges",
+        "filter_query", "query_builder_enabled", "search", "filters_collapsed",
+        "edges_visible", "edge_animation_enabled", "edge_opacity",
+        "projection_unspecified_content_opacity", "caption",
+    }
     if "source" in payload:
         view.source = payload["source"]
     if "where" in payload:
@@ -314,6 +357,26 @@ def _update_view(view: KgView, payload: dict[str, str]) -> None:
         view.hover_attrs = _list_value(payload["hover_attrs"])
     if "aggregate_edges" in payload:
         view.aggregate_edges = _aggregate_edges_value(payload["aggregate_edges"])
+    if "filter_query" in payload:
+        view.filter_query = _json_object_value(payload["filter_query"])
+    if "query_builder_enabled" in payload:
+        value = _typed_scalar(payload["query_builder_enabled"])
+        view.query_builder_enabled = value if isinstance(value, bool) else None
+    if "search" in payload:
+        view.search = payload["search"]
+    if "filters_collapsed" in payload:
+        value = _typed_scalar(payload["filters_collapsed"])
+        view.filters_collapsed = value if isinstance(value, bool) else None
+    if "edges_visible" in payload:
+        value = _typed_scalar(payload["edges_visible"])
+        view.edges_visible = value if isinstance(value, bool) else None
+    if "edge_animation_enabled" in payload:
+        value = _typed_scalar(payload["edge_animation_enabled"])
+        view.edge_animation_enabled = value if isinstance(value, bool) else None
+    if "edge_opacity" in payload:
+        view.edge_opacity = payload["edge_opacity"]
+    if "projection_unspecified_content_opacity" in payload:
+        view.projection_unspecified_content_opacity = payload["projection_unspecified_content_opacity"]
     if "caption" in payload:
         view.caption = payload["caption"]
     for key, value in payload.items():
@@ -334,10 +397,18 @@ def _projection(view: KgView) -> dict[str, Any]:
         "edge_label_from": view.edge_label_from,
         "hover_attrs": view.hover_attrs,
         "aggregate_edges": view.aggregate_edges,
+        "filter_query": view.filter_query,
+        "query_builder_enabled": view.query_builder_enabled,
+        "search": view.search,
+        "filters_collapsed": view.filters_collapsed,
+        "edges_visible": view.edges_visible,
+        "edge_animation_enabled": view.edge_animation_enabled,
+        "edge_opacity": view.edge_opacity,
+        "projection_unspecified_content_opacity": view.projection_unspecified_content_opacity,
         **view.display,
         "caption": view.caption,
     }
-    return {key: value for key, value in projection.items() if value not in ("", [], ())}
+    return {key: value for key, value in projection.items() if value not in ("", [], (), None)}
 
 
 def _assignments(parts: list[str]) -> dict[str, str]:
@@ -349,6 +420,17 @@ def _assignments(parts: list[str]) -> dict[str, str]:
         for key in keys.split(","):
             payload[key.strip()] = value.strip()
     return payload
+
+
+def _view_assignment(line: str) -> dict[str, str]:
+    if "=" not in line:
+        return {}
+    keys, raw_value = line.split("=", 1)
+    value = raw_value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    value = value.replace('\\"', '"').replace("\\'", "'").replace("\\\\", "\\")
+    return {key.strip(): value for key in keys.split(",") if key.strip()}
 
 
 def _split_inline_assignment(text: str) -> tuple[str, str]:
@@ -474,6 +556,14 @@ def _aggregate_edges_value(value: str) -> dict[str, str | bool]:
         text = raw_value.strip().lower()
         out[key.strip()] = text in {"1", "true", "yes", "on"} if text in {"1", "true", "yes", "on", "0", "false", "no", "off"} else raw_value.strip()
     return {key: value for key, value in out.items() if key}
+
+
+def _json_object_value(value: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(str(value or "").strip())
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _typed_scalar(value: str) -> str | bool:

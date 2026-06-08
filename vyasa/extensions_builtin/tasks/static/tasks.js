@@ -52,6 +52,7 @@ const TASKS_SPECIAL_NODE_ATTRS = new Set([
     '__card_state_color__',
     '__has_note__',
     '__node_image__',
+    '__secondary_color__',
 ]);
 const TASKS_INTERNAL_NODE_META_KEYS = new Set([
     'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
@@ -159,6 +160,55 @@ async function copyTasksText(text) {
     const copied = document.execCommand('copy');
     document.body.removeChild(input);
     return copied;
+}
+
+async function readTasksClipboardText() {
+    try {
+        return navigator.clipboard?.readText ? await navigator.clipboard.readText() : '';
+    } catch {
+        return '';
+    }
+}
+
+function promptTasksViewInput(defaultContent = '') {
+    if (typeof document === 'undefined') return Promise.resolve(null);
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.38);display:grid;place-items:center;padding:18px;';
+        overlay.innerHTML = `<form style="width:min(720px,100%);display:grid;gap:10px;padding:14px;border-radius:12px;background:var(--vyasa-paper,#fff);color:var(--vyasa-ink,#0f172a);box-shadow:0 18px 60px rgba(0,0,0,.28)">
+            <strong style="font-size:13px">Add Knowledge Graph view</strong>
+            <input name="title" required placeholder="View name" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid currentColor;border-radius:8px;background:transparent;color:inherit">
+            <textarea name="content" required placeholder="Paste copied kg.schema view here" style="width:100%;height:260px;box-sizing:border-box;padding:8px;border:1px solid currentColor;border-radius:8px;background:transparent;color:inherit;font:12px/1.4 ui-monospace,Menlo,monospace"></textarea>
+            <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" data-cancel>Cancel</button><button type="submit">Add view</button></div>
+        </form>`;
+        document.body.appendChild(overlay);
+        const form = overlay.querySelector('form');
+        const title = form.elements.title;
+        const content = form.elements.content;
+        content.value = defaultContent || '';
+        title.focus();
+        const finish = (value) => {
+            overlay.remove();
+            resolve(value);
+        };
+        overlay.querySelector('[data-cancel]').addEventListener('click', () => finish(null));
+        overlay.addEventListener('click', (event) => { if (event.target === overlay) finish(null); });
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            finish({ title: title.value.trim(), content: content.value.trim() });
+        });
+    });
+}
+
+async function saveTasksTempView({ schemaPath, currentPath, title, content }) {
+    const response = await fetch('/api/tasks/views', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schema_path: schemaPath, current_path: currentPath, title, content }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
 }
 
 function tasksFilterPanelMaxHeight(wrapper) {
@@ -308,6 +358,7 @@ function logTasksColorDebug(model, nodes, activeColorBy, activeColorPalette, col
 
 const TASKS_PREFS_INDEX_KEY = 'vyasa:tasks:prefs:__index__';
 const TASKS_PREFS_MAX_ENTRIES = 200;
+const TASKS_ADD_VIEW_OPTION_ID = '__vyasa_add_view__';
 
 function tasksPrefsKey(model) {
     const persistenceId = String(model?.persistence_id || '').trim();
@@ -399,12 +450,39 @@ function tasksProjectionPrefsKey(projectionId) {
 }
 
 function readTasksProjectionPrefs(prefs, projectionId) {
+    return readTasksProjectionPrefsForModel(null, prefs, projectionId);
+}
+
+function tasksProjectionSchemaPrefs(model, projectionId) {
+    const id = String(projectionId || '').trim();
+    if (!id) return {};
+    const projection = (Array.isArray(model?.view_projections) ? model.view_projections : [])
+        .find((entry) => entry && entry.id === id);
+    if (!projection) return {};
+    const prefs = {};
+    if (projection.filter_query && typeof projection.filter_query === 'object') {
+        prefs.filters = normalizeTasksFilterQuery(projection.filter_query);
+    }
+    if (typeof projection.query_builder_enabled === 'boolean') prefs.queryBuilderEnabled = projection.query_builder_enabled;
+    if (typeof projection.search === 'string') prefs.searchQuery = projection.search;
+    if (typeof projection.filters_collapsed === 'boolean') prefs.filtersCollapsed = projection.filters_collapsed;
+    if (typeof projection.edges_visible === 'boolean') prefs.edgesVisible = projection.edges_visible;
+    if (typeof projection.edge_animation_enabled === 'boolean') prefs.edgeAnimationEnabled = projection.edge_animation_enabled;
+    if (projection.edge_opacity !== undefined && projection.edge_opacity !== '') prefs.edgeOpacity = clampTasksEdgeOpacity(projection.edge_opacity);
+    if (projection.projection_unspecified_content_opacity !== undefined && projection.projection_unspecified_content_opacity !== '') {
+        prefs.unspecifiedContentOpacity = clampTasksProjectionContentOpacity(projection.projection_unspecified_content_opacity);
+    }
+    return prefs;
+}
+
+function readTasksProjectionPrefsForModel(model, prefs, projectionId) {
+    const schemaPrefs = tasksProjectionSchemaPrefs(model, projectionId);
     const key = tasksProjectionPrefsKey(projectionId);
     const scoped = prefs?.projectionPrefs?.[key];
-    if (scoped && typeof scoped === 'object') return scoped;
-    if (!String(projectionId || '').trim() && prefs && typeof prefs === 'object') return prefs;
-    if (prefs?.projectionPrefs && typeof prefs.projectionPrefs === 'object') return {};
-    return prefs && typeof prefs === 'object' ? prefs : {};
+    if (scoped && typeof scoped === 'object') return { ...schemaPrefs, ...scoped };
+    if (!String(projectionId || '').trim() && prefs && typeof prefs === 'object') return { ...schemaPrefs, ...prefs };
+    if (prefs?.projectionPrefs && typeof prefs.projectionPrefs === 'object') return schemaPrefs;
+    return prefs && typeof prefs === 'object' ? { ...schemaPrefs, ...prefs } : schemaPrefs;
 }
 
 function normalizeTasksCheckedNodeIds(value) {
@@ -1219,26 +1297,40 @@ function tasksFilterQueryFromLegacy(filters) {
 function normalizeTasksFilterQuery(filters) {
     if (!filters || typeof filters !== 'object') return tasksEmptyFilterQuery();
     if (Array.isArray(filters.rules)) {
-        return {
+        const normalized = {
             combinator: filters.combinator === 'or' ? 'or' : 'and',
             not: Boolean(filters.not),
             rules: filters.rules,
         };
+        if (filters.muted) normalized.muted = true;
+        return normalized;
     }
     return tasksFilterQueryFromLegacy(filters);
 }
 
 function tasksFilterQueryHasRules(query) {
     const normalized = normalizeTasksFilterQuery(query);
+    if (normalized.muted) return false;
     return normalized.rules.some((rule) => {
+        if (rule?.muted) return false;
         if (rule && Array.isArray(rule.rules)) return tasksFilterQueryHasRules(rule);
         return tasksFilterRuleIsActive(rule);
     });
 }
 
+function tasksFilterQueryHasAnyRules(query) {
+    const normalized = normalizeTasksFilterQuery(query);
+    return normalized.rules.some((rule) => {
+        if (rule && Array.isArray(rule.rules)) return true;
+        return Boolean(rule && typeof rule === 'object');
+    });
+}
+
 function tasksCountFilterRules(query) {
     const normalized = normalizeTasksFilterQuery(query);
+    if (normalized.muted) return 0;
     return normalized.rules.reduce((count, rule) => {
+        if (rule?.muted) return count;
         if (rule && Array.isArray(rule.rules)) return count + tasksCountFilterRules(rule);
         return count + (tasksFilterRuleIsActive(rule) ? 1 : 0);
     }, 0);
@@ -1341,7 +1433,7 @@ function tasksNodeMatchesFilters(node, filters) {
     const query = normalizeTasksFilterQuery(filters);
     if (!tasksFilterQueryHasRules(query)) return true;
     const activeRules = query.rules.filter((rule) => (
-        rule && Array.isArray(rule.rules) ? tasksFilterQueryHasRules(rule) : tasksFilterRuleIsActive(rule)
+        !rule?.muted && (rule && Array.isArray(rule.rules) ? tasksFilterQueryHasRules(rule) : tasksFilterRuleIsActive(rule))
     ));
     if (!activeRules.length) return true;
     const results = activeRules.map((rule) => (
@@ -1388,7 +1480,7 @@ function tasksCollectSearchMatches(nodes, edges, query) {
     for (const node of (nodes || [])) {
         const data = node?.data || {};
         if (data.__kind__ === 'groupTitle') continue;
-        const values = [data.label];
+        const values = [node?.id, data.id, data.label];
         for (const [key, value] of Object.entries(data)) {
             if (tasksIsHiddenNodeMetaKey(key)) continue;
             if (value === null || value === undefined || typeof value === 'object' || typeof value === 'function') continue;
@@ -2941,25 +3033,29 @@ function tasksFormatHoverValue(attr, value) {
     return str;
 }
 
-function tasksSelectedPanelWidth(node, entries) {
-    const titleWidth = measureTextWidth(node?.label || node?.id || '', '700 14px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif');
-    const rowWidths = (entries || []).map((entry) => {
-        const keyWidth = measureTextWidth(entry?.label || '', '700 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif');
-        const rawValue = entry?.value || '';
-        const lines = String(rawValue).split(/\r?\n/).filter(Boolean);
+function tasksDetailPanelWidth(options = {}) {
+    const title = options.title || '';
+    const nodeId = options.nodeId || '';
+    const entries = Array.isArray(options.entries) ? options.entries : [];
+    const titleFont = options.titleFont || '700 14px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const bodyFont = options.bodyFont || '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const keyFont = options.keyFont || '700 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const titleWidth = measureTextWidth(title, titleFont);
+    const idWidth = nodeId ? measureTextWidth(nodeId, bodyFont) + 20 : 0;
+    const rowWidths = entries.map((entry) => {
+        const keyWidth = measureTextWidth(entry?.label || '', keyFont);
+        const rawValue = String(entry?.value || '');
+        const lines = rawValue.split(/\r?\n/).filter(Boolean);
         const firstLine = lines[0] || '';
-        const widestLine = lines.reduce((widest, line) => (
-            measureTextWidth(line, '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif') > measureTextWidth(widest, '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif')
-                ? line
-                : widest
-        ), firstLine);
+        const widestLine = lines.reduce((widest, line) => measureTextWidth(line, bodyFont) > measureTextWidth(widest, bodyFont) ? line : widest, firstLine);
         const contentLine = rawValue.length > 120 ? widestLine : firstLine;
-        const valueWidth = Math.min(measureTextWidth(contentLine, '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'), 520);
+        const valueWidth = Math.min(measureTextWidth(contentLine, bodyFont), 520);
         const weight = rawValue.length > 180 ? 0.82 : rawValue.length > 72 ? 0.6 : rawValue.length > 36 ? 0.72 : 0.9;
         return keyWidth + valueWidth * weight;
     }).sort((left, right) => left - right);
     const weightedWidth = rowWidths.length ? rowWidths[Math.max(0, Math.floor(rowWidths.length * 0.72) - 1)] : 0;
-    return Math.round(Math.min(720, Math.max(280, titleWidth + 44, weightedWidth + 136)));
+    const imageReserve = options.hasImage ? 34 : 0;
+    return Math.round(Math.min(options.maxWidth || 720, Math.max(options.minWidth || 280, titleWidth + idWidth + imageReserve + 44, weightedWidth + 136)));
 }
 
 function tasksIsLongFormEntry(entry) {
@@ -2972,22 +3068,19 @@ function tasksIsLongFormEntry(entry) {
     return false;
 }
 
-function tasksHoverTooltipWidth(label, rows, hoverFontSize, hasImage = false) {
-    const titleFont = `700 calc(${hoverFontSize} * 1.12) ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-    const bodyFont = `500 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-    const keyFont = `700 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-    const titleWidth = measureTextWidth(label || '', titleFont);
-    const rowWidths = (rows || []).map((row) => {
-        const keyWidth = measureTextWidth(row?.label || '', keyFont);
-        const rawValue = String(row?.value || '');
-        const firstLine = rawValue.split(/\r?\n/, 1)[0];
-        const valueWidth = Math.min(measureTextWidth(firstLine, bodyFont), 420);
-        const weight = rawValue.length > 96 ? 0.46 : rawValue.length > 48 ? 0.66 : 0.88;
-        return keyWidth + valueWidth * weight;
-    }).sort((left, right) => left - right);
-    const weightedWidth = rowWidths.length ? rowWidths[Math.max(0, Math.floor(rowWidths.length * 0.62) - 1)] : 0;
-    const imageReserve = hasImage ? 34 : 0;
-    return Math.round(Math.min(560, Math.max(220, titleWidth + imageReserve + 34, weightedWidth + 116)));
+function renderTasksDetailEntries(React, entries, options = {}) {
+    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '12px', lineHeight: options.lineHeight || 1.35 } },
+        ...(entries || []).map((entry, index) => {
+            const stacked = tasksIsLongFormEntry(entry);
+            return React.createElement('div', {
+                key: entry.key || entry.attr || `${index}`,
+                style: { paddingTop: index === 0 ? '0' : '8px', marginTop: index === 0 ? '0' : '8px', borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)', overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'pre-line' },
+            },
+            React.createElement('span', { style: { fontWeight: 700, opacity: 0.72, display: stacked ? 'block' : 'inline', marginBottom: stacked ? '4px' : '0' } }, `${entry.label}: `),
+            entry.renderedValue
+                ? React.createElement('span', { className: 'vyasa-task-node-card-value', style: stacked ? { display: 'block' } : undefined, dangerouslySetInnerHTML: { __html: entry.renderedValue } })
+                : React.createElement('span', { className: 'vyasa-task-node-card-value', style: stacked ? { display: 'block' } : undefined }, entry.value));
+        }));
 }
 
 function tasksBackgroundProps(widgetId) {
@@ -3106,6 +3199,23 @@ function buildTasksProjectionConfigText(config) {
         if (cfg.aggregateEdges.by) parts.push(`by=${cfg.aggregateEdges.by}`);
         if (parts.length) lines.push(`\taggregate_edges="${parts.join(' ')}"`);
     }
+    const filterQuery = normalizeTasksFilterQuery(cfg.filterQuery);
+    if (tasksFilterQueryHasAnyRules(filterQuery)) {
+        lines.push(`\tfilter_query=${tasksQuoteSchemaValue(JSON.stringify(filterQuery))}`);
+    }
+    if (typeof cfg.queryBuilderEnabled === 'boolean') {
+        lines.push(`\tquery_builder_enabled=${cfg.queryBuilderEnabled ? 'true' : 'false'}`);
+    }
+    add('search', cfg.searchQuery);
+    if (typeof cfg.filtersCollapsed === 'boolean') lines.push(`\tfilters_collapsed=${cfg.filtersCollapsed ? 'true' : 'false'}`);
+    if (typeof cfg.edgesVisible === 'boolean') lines.push(`\tedges_visible=${cfg.edgesVisible ? 'true' : 'false'}`);
+    if (typeof cfg.edgeAnimationEnabled === 'boolean') lines.push(`\tedge_animation_enabled=${cfg.edgeAnimationEnabled ? 'true' : 'false'}`);
+    if (cfg.edgeOpacity !== undefined && cfg.edgeOpacity !== null && cfg.edgeOpacity !== '' && !Number.isNaN(Number(cfg.edgeOpacity))) {
+        lines.push(`\tedge_opacity=${clampTasksEdgeOpacity(cfg.edgeOpacity)}`);
+    }
+    if (cfg.projectionUnspecifiedContentOpacity !== undefined && cfg.projectionUnspecifiedContentOpacity !== null && cfg.projectionUnspecifiedContentOpacity !== '' && !Number.isNaN(Number(cfg.projectionUnspecifiedContentOpacity))) {
+        lines.push(`\tprojection_unspecified_content_opacity=${clampTasksProjectionContentOpacity(cfg.projectionUnspecifiedContentOpacity)}`);
+    }
     const filterEntries = Object.entries(cfg.where || {})
         .map(([attr, value]) => {
             if (value === 'true') return [attr, ['true']];
@@ -3123,11 +3233,62 @@ function buildTasksProjectionConfigText(config) {
     if (cfg.defaultOpenDepth !== undefined && cfg.defaultOpenDepth !== null && cfg.defaultOpenDepth !== '' && !Number.isNaN(Number(cfg.defaultOpenDepth))) {
         lines.push(`\tdefault_open_depth=${cfg.defaultOpenDepth}`);
     }
-    if (cfg.searchQuery) notes.push(`search query: ${cfg.searchQuery} (UI-only)`);
-    if (cfg.edgesHidden) notes.push('edges hidden in this view (UI toggle — no kg.schema field)');
     let out = `# Paste under your @views section in kg.schema:\n${lines.join('\n')}`;
     if (notes.length) out += `\n${notes.map((note) => `# ${note}`).join('\n')}`;
     return out;
+}
+
+function tasksUnquoteSchemaValue(value) {
+    const text = String(value ?? '').trim();
+    if (text.length >= 2 && ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'")))) {
+        try {
+            return JSON.parse(text.startsWith('"') ? text : `"${text.slice(1, -1).replace(/"/g, '\\"')}"`);
+        } catch {
+            return text.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+        }
+    }
+    return text;
+}
+
+function parseTasksProjectionConfigText(text) {
+    const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith('#'));
+    const start = lines.findIndex((line) => line.endsWith(':') && !line.includes('='));
+    const body = start >= 0 ? lines.slice(start + 1) : lines;
+    const cfg = {};
+    for (const line of body) {
+        const eq = line.indexOf('=');
+        if (eq <= 0) continue;
+        const key = line.slice(0, eq).trim();
+        const value = tasksUnquoteSchemaValue(line.slice(eq + 1));
+        if (key === 'filter_query') {
+            try { cfg.filterQuery = normalizeTasksFilterQuery(JSON.parse(value)); } catch { /* ignore bad paste */ }
+        } else if (key === 'query_builder_enabled') cfg.queryBuilderEnabled = value === 'true';
+        else if (key === 'search') cfg.searchQuery = value;
+        else if (key === 'filters_collapsed') cfg.filtersCollapsed = value === 'true';
+        else if (key === 'edges_visible') cfg.edgesVisible = value !== 'false';
+        else if (key === 'edge_animation_enabled') cfg.edgeAnimationEnabled = value !== 'false';
+        else if (key === 'edge_opacity') cfg.edgeOpacity = value;
+        else if (key === 'projection_unspecified_content_opacity') cfg.projectionUnspecifiedContentOpacity = value;
+        else if (key === 'color_by') cfg.colorBy = value;
+        else if (key === 'secondary_color_by') cfg.secondaryColorBy = value;
+        else if (key === 'group_by') cfg.groupBy = value.split(',').map((item) => item.trim()).filter(Boolean);
+        else if (key === 'where' && !cfg.filterQuery) {
+            const splitAt = value.indexOf('=');
+            if (splitAt > 0) {
+                cfg.filterQuery = normalizeTasksFilterQuery({
+                    combinator: 'and',
+                    rules: [{ field: value.slice(0, splitAt).trim(), operator: '=', value: value.slice(splitAt + 1).trim() }],
+                });
+            }
+        }
+    }
+    return cfg;
+}
+
+function tasksProjectionConfigHasSidebarState(cfg) {
+    return Boolean(cfg && Object.keys(cfg).length);
 }
 
 function selectTasksProjectionState(sourceModel, sourceGraph, projectionId) {
@@ -3163,8 +3324,8 @@ async function renderTasksGraphs(rootElement = document) {
             needsRetry = true;
             continue;
         }
-        const sourceModel = JSON.parse(wrapper.dataset.tasksPayload || '{"groups":[],"tasks":[],"group_tree":{},"task_children":{},"dependency_edges":[]}');
-        const sourceGraph = normalizeTasksGraphNodes(JSON.parse(wrapper.dataset.tasksGraph || '{"nodes":[],"edges":[]}'), sourceModel);
+        const initialSourceModel = JSON.parse(wrapper.dataset.tasksPayload || '{"groups":[],"tasks":[],"group_tree":{},"task_children":{},"dependency_edges":[]}');
+        const initialSourceGraph = normalizeTasksGraphNodes(JSON.parse(wrapper.dataset.tasksGraph || '{"nodes":[],"edges":[]}'), initialSourceModel);
         const widgetId = wrapper.id;
         const defaultOpenDepth = Number.parseInt(wrapper.dataset.tasksDefaultOpenDepth || '0', 10);
         const ganttEnabled = String(wrapper.dataset.tasksGantt || '').trim().toLowerCase() === 'true';
@@ -3175,9 +3336,11 @@ async function renderTasksGraphs(rootElement = document) {
             const React = window.React;
             const Handle = rf.Handle;
             const Position = rf.Position;
+            const [sourceModel, setSourceModel] = React.useState(() => initialSourceModel);
+            const [sourceGraph, setSourceGraph] = React.useState(() => initialSourceGraph);
             const sourcePrefsRef = React.useRef(null);
             if (sourcePrefsRef.current === null) sourcePrefsRef.current = readTasksPrefs(sourceModel);
-            const projectionOptions = React.useMemo(() => egoMode ? [] : tasksProjectionOptions(sourceModel, ganttEnabled), []);
+            const projectionOptions = React.useMemo(() => egoMode ? [] : tasksProjectionOptions(sourceModel, ganttEnabled), [egoMode, sourceModel, ganttEnabled]);
             const storedProjectionPrefsRef = React.useRef(sourcePrefsRef.current?.projectionPrefs && typeof sourcePrefsRef.current.projectionPrefs === 'object'
                 ? sourcePrefsRef.current.projectionPrefs
                 : {});
@@ -3187,7 +3350,7 @@ async function renderTasksGraphs(rootElement = document) {
                 if (projectionOptions.some((option) => option.id === saved)) return saved;
                 const configured = String(sourceModel?.default_projection || '').trim();
                 return projectionOptions.some((option) => option.id === configured) ? configured : '';
-            }, [projectionOptions]);
+            }, [sourceModel, projectionOptions]);
             const initialGraphProjectionId = initialProjectionId === TASKS_GANTT_PROJECTION_ID ? '' : initialProjectionId;
             const [activeProjectionId, setActiveProjectionId] = React.useState(initialGraphProjectionId);
             const [viewMode, setViewMode] = React.useState(defaultViewMode);
@@ -3196,7 +3359,7 @@ async function renderTasksGraphs(rootElement = document) {
             ));
             const projectionState = React.useMemo(
                 () => buildTasksViewState(sourceModel, sourceGraph, activeProjectionId, viewMode, groupByHierarchy),
-                [activeProjectionId, viewMode, groupByHierarchy]
+                [sourceModel, sourceGraph, activeProjectionId, viewMode, groupByHierarchy]
             );
             const model = projectionState.model;
             const effectiveDefaultOpenDepth = Number.parseInt(tasksModelSetting(model, 'default_open_depth', `${defaultOpenDepth}`), 10);
@@ -3227,8 +3390,8 @@ async function renderTasksGraphs(rootElement = document) {
             const flowWrapperRef = React.useRef(null);
             const filterPanelRef = React.useRef(null);
             const projectionPrefs = React.useMemo(
-                () => readTasksProjectionPrefs({ projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId),
-                [activeProjectionId]
+                () => readTasksProjectionPrefsForModel(sourceModel, { projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId),
+                [sourceModel, activeProjectionId]
             );
             const hydrateExpandedSet = React.useCallback((prefs) => {
                 const validIds = tasksExpandableNodeIds(model);
@@ -3280,10 +3443,13 @@ async function renderTasksGraphs(rootElement = document) {
                 [sourceModel]
             );
             const [edgeOpacity, setEdgeOpacity] = React.useState(() => (
-                sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity)
+                projectionPrefs?.edgeOpacity !== undefined ? projectionPrefs.edgeOpacity
+                    : (sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity))
             ));
             const [projectionUnspecifiedContentOpacity, setProjectionUnspecifiedContentOpacity] = React.useState(() => (
-                sourcePrefsRef.current?.unspecifiedContentOpacity === undefined
+                projectionPrefs?.unspecifiedContentOpacity !== undefined
+                    ? projectionPrefs.unspecifiedContentOpacity
+                    : sourcePrefsRef.current?.unspecifiedContentOpacity === undefined
                     ? defaultProjectionUnspecifiedContentOpacity
                     : clampTasksProjectionContentOpacity(sourcePrefsRef.current.unspecifiedContentOpacity)
             ));
@@ -3342,7 +3508,7 @@ async function renderTasksGraphs(rootElement = document) {
                 baseLayoutRef.current = null;
                 groupLayoutsRef.current = {};
                 graphBaseRef.current = { nodes: [], edges: [] };
-                const nextPrefs = readTasksProjectionPrefs({ projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
+                const nextPrefs = readTasksProjectionPrefsForModel(sourceModel, { projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
                 setExpanded(egoMode ? tasksExpandableNodeIds(model) : hydrateExpandedSet(nextPrefs));
                 setSelectedNodeId(null);
                 setSelectedNodeIds(new Set());
@@ -3351,9 +3517,9 @@ async function renderTasksGraphs(rootElement = document) {
                 groupToggleHoverIdRef.current = '';
                 setTasksGroupToggleHover(flowWrapperRef.current, '');
                 pendingFitActionRef.current = 'mode';
-            }, [activeProjectionId, hydrateExpandedSet]);
+            }, [sourceModel, activeProjectionId, hydrateExpandedSet]);
             React.useEffect(() => {
-                const nextPrefs = readTasksProjectionPrefs({ projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
+                const nextPrefs = readTasksProjectionPrefsForModel(sourceModel, { projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
                 setActiveFilters(egoMode ? tasksEmptyFilterQuery() : normalizeTasksFilterQuery(nextPrefs?.filters));
                 setSearchQuery(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
                 setSearchInputValue(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
@@ -3367,9 +3533,13 @@ async function renderTasksGraphs(rootElement = document) {
                 setQueryBuilderEnabled(typeof nextPrefs?.queryBuilderEnabled === 'boolean' ? nextPrefs.queryBuilderEnabled : true);
                 setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
                 setEdgeAnimationEnabled(typeof nextPrefs?.edgeAnimationEnabled === 'boolean' ? nextPrefs.edgeAnimationEnabled : true);
-                setEdgeOpacity(sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity));
-                setProjectionUnspecifiedContentOpacity(sourcePrefsRef.current?.unspecifiedContentOpacity === undefined ? defaultProjectionUnspecifiedContentOpacity : clampTasksProjectionContentOpacity(sourcePrefsRef.current.unspecifiedContentOpacity));
-            }, [activeProjectionId, model, nodeNotes, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
+                setEdgeOpacity(nextPrefs?.edgeOpacity !== undefined ? nextPrefs.edgeOpacity : (
+                    sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity)
+                ));
+                setProjectionUnspecifiedContentOpacity(nextPrefs?.unspecifiedContentOpacity !== undefined ? nextPrefs.unspecifiedContentOpacity : (
+                    sourcePrefsRef.current?.unspecifiedContentOpacity === undefined ? defaultProjectionUnspecifiedContentOpacity : clampTasksProjectionContentOpacity(sourcePrefsRef.current.unspecifiedContentOpacity)
+                ));
+            }, [sourceModel, activeProjectionId, model, nodeNotes, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
             React.useEffect(() => {
                 const timeoutId = window.setTimeout(() => {
                     setSearchQuery(searchInputValue);
@@ -3451,6 +3621,8 @@ async function renderTasksGraphs(rootElement = document) {
                         filtersCollapsed,
                         edgesVisible,
                         edgeAnimationEnabled,
+                        edgeOpacity,
+                        unspecifiedContentOpacity: projectionUnspecifiedContentOpacity,
                         expandedGroupIds: Array.from(expanded),
                     },
                 };
@@ -3476,6 +3648,75 @@ async function renderTasksGraphs(rootElement = document) {
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
             }, [sourceModel, activeFilters, queryBuilderEnabled, searchQuery, activeColorBy, activeSecondaryColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeAnimationEnabled, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes]);
+            const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
+                if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
+                if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
+                if (typeof cfg.queryBuilderEnabled === 'boolean') setQueryBuilderEnabled(cfg.queryBuilderEnabled);
+                if (typeof cfg.searchQuery === 'string') {
+                    setSearchQuery(cfg.searchQuery);
+                    setSearchInputValue(cfg.searchQuery);
+                }
+                if (typeof cfg.filtersCollapsed === 'boolean') setFiltersCollapsed(cfg.filtersCollapsed);
+                if (typeof cfg.edgesVisible === 'boolean') setEdgesVisible(cfg.edgesVisible);
+                if (typeof cfg.edgeAnimationEnabled === 'boolean') setEdgeAnimationEnabled(cfg.edgeAnimationEnabled);
+                if (cfg.edgeOpacity !== undefined) setEdgeOpacity(clampTasksEdgeOpacity(cfg.edgeOpacity));
+                if (cfg.projectionUnspecifiedContentOpacity !== undefined) {
+                    setProjectionUnspecifiedContentOpacity(clampTasksProjectionContentOpacity(cfg.projectionUnspecifiedContentOpacity));
+                }
+                const validColorKeys = new Set(tasksColorOptions(model, nodeNotes).map((option) => option.key));
+                if (cfg.colorBy !== undefined && validColorKeys.has(cfg.colorBy)) setActiveColorBy(cfg.colorBy);
+                if (cfg.secondaryColorBy !== undefined) setActiveSecondaryColorBy(validColorKeys.has(cfg.secondaryColorBy) ? cfg.secondaryColorBy : '');
+                if (!String(activeProjectionId || '').trim() && Array.isArray(cfg.groupBy)) {
+                    setGroupByHierarchy(cfg.groupBy);
+                    pendingFitActionRef.current = 'mode';
+                }
+                return true;
+            }, [model, nodeNotes, activeProjectionId]);
+            const handleDefaultViewPaste = React.useCallback((event) => {
+                if (viewMode === 'gantt' || String(activeProjectionId || '').trim()) return;
+                const text = event.clipboardData?.getData('text/plain') || '';
+                const cfg = parseTasksProjectionConfigText(text);
+                if (!tasksProjectionConfigHasSidebarState(cfg)) return;
+                event.preventDefault();
+                applyProjectionConfigToSidebar(cfg);
+            }, [activeProjectionId, viewMode, applyProjectionConfigToSidebar]);
+            React.useEffect(() => {
+                const target = flowWrapperRef.current;
+                if (!target) return;
+                target.addEventListener('paste', handleDefaultViewPaste, true);
+                return () => target.removeEventListener('paste', handleDefaultViewPaste, true);
+            }, [handleDefaultViewPaste]);
+            const handleAddView = React.useCallback(async () => {
+                const schemaPath = String(sourceModel?.kg_schema || '').trim();
+                if (!schemaPath) {
+                    window.alert('This Knowledge Graph has no kg.schema path.');
+                    return;
+                }
+                const input = await promptTasksViewInput(await readTasksClipboardText());
+                if (!input?.title || !input?.content) return;
+                try {
+                    const payload = await saveTasksTempView({
+                        schemaPath,
+                        currentPath: sourceModel?.document_path || '',
+                        title: input.title,
+                        content: input.content,
+                    });
+                    const nextModel = {
+                        ...(payload.model || {}),
+                        document_path: sourceModel.document_path,
+                        storage_id: sourceModel.storage_id,
+                        persistence_id: sourceModel.persistence_id || payload.model?.persistence_id || '',
+                    };
+                    const nextGraph = normalizeTasksGraphNodes(payload.graph || buildTasksCollapsedGraph(nextModel), nextModel);
+                    setSourceModel(nextModel);
+                    setSourceGraph(nextGraph);
+                    setActiveProjectionId(String(payload.projection_id || ''));
+                    setViewMode('graph');
+                    pendingFitActionRef.current = 'mode';
+                } catch (error) {
+                    window.alert(error instanceof Error ? error.message : String(error));
+                }
+            }, [sourceModel]);
             const checkedNodeIdSet = React.useMemo(() => new Set(checkedNodeIdsFromStates(nodeStates)), [nodeStates]);
             const toggleCheckedNode = React.useCallback((nodeId) => {
                 const normalizedId = String(nodeId || '').trim();
@@ -4783,9 +5024,10 @@ async function renderTasksGraphs(rootElement = document) {
                     ? tasksGroupDetailEntries(sourceNodeId, model)
                     : tasksNodeMetaEntries(selectedNode);
                 if (!selectedNode) return null;
+                const panelNodeId = sourceNodeId || selectedNode.id || '';
                 const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
                 const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;
-                const panelWidth = tasksSelectedPanelWidth(selectedNode, entries);
+                const panelWidth = tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries });
                 const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));
                 const panelHref = String(selectedNode?.href || '').trim();
                 const copyPanelTitle = async (event) => {
@@ -4817,40 +5059,18 @@ async function renderTasksGraphs(rootElement = document) {
                                 padding: '0',
                             },
                         }, '⧉'),
-                        React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3 } }, selectedNode.label || selectedNode.id),
+                        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: panelNodeId ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)', columnGap: '12px', alignItems: 'start' } },
+                            React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' } }, selectedNode.label || selectedNode.id),
+                            panelNodeId ? React.createElement('div', { style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, textAlign: 'right' } }, panelNodeId) : null,
+                        ),
                         panelHref ? React.createElement('a', {
                             href: panelHref,
                             onClick: (event) => openTasksNodeHref(panelHref, event),
                             style: { display: 'inline-block', marginTop: '6px', fontSize: '12px', lineHeight: 1.3, textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit', overflowWrap: 'anywhere', wordBreak: 'break-word' },
                         }, panelHref) : null,
                     ),
+                    renderTasksDetailEntries(React, entries),
                     React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: '12px', lineHeight: 1.35 } },
-                        ...entries.map((entry, index) => {
-                            const stacked = tasksIsLongFormEntry(entry);
-                            return React.createElement('div', {
-                                key: entry.key,
-                                style: {
-                                    paddingTop: index === 0 ? '0' : '8px',
-                                    marginTop: index === 0 ? '0' : '8px',
-                                    borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)',
-                                    overflowWrap: 'anywhere',
-                                    wordBreak: 'break-word',
-                                    whiteSpace: 'pre-line',
-                                },
-                            },
-                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.72, display: stacked ? 'block' : 'inline', marginBottom: stacked ? '4px' : '0' } }, `${entry.label}: `),
-                                entry.renderedValue
-                                    ? React.createElement('span', {
-                                        className: 'vyasa-task-node-card-value',
-                                        style: stacked ? { display: 'block' } : undefined,
-                                        dangerouslySetInnerHTML: { __html: entry.renderedValue },
-                                    })
-                                    : React.createElement('span', {
-                                        className: 'vyasa-task-node-card-value',
-                                        style: stacked ? { display: 'block' } : undefined,
-                                    }, entry.value),
-                            );
-                        }),
                         React.createElement('label', {
                             style: {
                                 display: 'flex',
@@ -4967,6 +5187,18 @@ async function renderTasksGraphs(rootElement = document) {
                         values.map((option) => React.createElement('option', { key: optionValue(option), value: optionValue(option) }, optionLabel(option)))
                     );
                 };
+                const QueryMuteToggle = (props) => React.createElement('label', {
+                    className: props.className,
+                    title: props.title,
+                    style: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', opacity: props.disabled ? 0.5 : 0.82, cursor: props.disabled ? 'not-allowed' : 'pointer' },
+                },
+                React.createElement('input', {
+                    type: 'checkbox',
+                    checked: !props.ruleOrGroup?.muted,
+                    disabled: props.disabled,
+                    onChange: (event) => props.handleOnClick?.(event),
+                }),
+                React.createElement('span', null, 'Enabled'));
                 const isOpen = !filtersCollapsed;
                 const filterPanelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`;
                 return React.createElement('aside', {
@@ -5031,8 +5263,13 @@ async function renderTasksGraphs(rootElement = document) {
                                 React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'View'),
                                 React.createElement('select', {
                                     value: viewMode === 'gantt' ? TASKS_GANTT_PROJECTION_ID : activeProjectionId,
-                                    onChange: (event) => {
+                                    onPaste: handleDefaultViewPaste,
+                                    onChange: async (event) => {
                                         const nextProjectionId = event.target.value;
+                                        if (nextProjectionId === TASKS_ADD_VIEW_OPTION_ID) {
+                                            await handleAddView();
+                                            return;
+                                        }
                                         setSelectedNodeId(null);
                                         setSelectedNodeIds(new Set());
                                         setDragSelection(null);
@@ -5055,6 +5292,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     },
                                 },
                                     ...projectionOptions.map((projection) => React.createElement('option', { key: projection.id || '__default__', value: projection.id }, projection.label))
+                                    , React.createElement('option', { key: TASKS_ADD_VIEW_OPTION_ID, value: TASKS_ADD_VIEW_OPTION_ID }, '+ Add view...')
                                 ),
                                 activeProjectionOption && activeProjectionOption.id !== TASKS_GANTT_PROJECTION_ID
                                     ? React.createElement('button', {
@@ -5214,7 +5452,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     ),
                                     searchMatches.error
                                         ? React.createElement('div', { style: { fontSize: '11px', color: '#fca5a5', lineHeight: 1.3 } }, `Regex error: ${searchMatches.error}`)
-                                        : React.createElement('div', { style: { fontSize: '11px', opacity: 0.72, lineHeight: 1.3 } }, searchMatches.active ? `${searchMatches.nodeIds.size} nodes matched` : 'Matches label, text attrs, and matching edge text.')
+                                        : React.createElement('div', { style: { fontSize: '11px', opacity: 0.72, lineHeight: 1.3 } }, searchMatches.active ? `${searchMatches.nodeIds.size} nodes matched` : 'Matches node id, label, text attrs, and matching edge text.')
                                 )
                             )
                         ),
@@ -5392,11 +5630,12 @@ async function renderTasksGraphs(rootElement = document) {
                                     onQueryChange: (query) => setActiveFilters(normalizeTasksFilterQuery(query)),
                                     showNotToggle: true,
                                     showCloneButtons: false,
+                                    showMuteButtons: true,
                                     showCombinatorsBetweenRules: true,
                                     resetOnFieldChange: true,
                                     resetOnOperatorChange: true,
                                     listsAsArrays: true,
-                                    controlElements: { valueEditor: QueryValueEditor },
+                                    controlElements: { valueEditor: QueryValueEditor, muteRuleAction: QueryMuteToggle, muteGroupAction: QueryMuteToggle },
                                     controlClassnames: { queryBuilder: 'vyasa-tasks-query-builder' },
                                 })
                                     : React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.35 } }, 'Loading advanced filters...')
@@ -5462,6 +5701,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const rows = tasksHoverAttrRows(nodeData, activeHoverAttrs);
                 const label = nodeData.label || hit.node.id;
+                const nodeId = nodeData.__kind__ === 'groupTitle' ? (nodeData.sourceGroupId || hit.node.id) : hit.node.id;
                 const image = normalizeTasksNodeImageUrl(nodeData.__node_image__);
                 if (!label && !rows.length) {
                     clearGroupHoverTooltip();
@@ -5470,6 +5710,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const bounds = wrapper.getBoundingClientRect();
                 setGroupHoverTooltip({
                     label,
+                    nodeId,
                     image,
                     rows,
                     x: event.clientX - bounds.left + 12,
@@ -5738,9 +5979,15 @@ async function renderTasksGraphs(rootElement = document) {
                         : (Array.isArray(sourceModel?.hover_attrs) ? sourceModel.hover_attrs : []),
                     aggregateEdges: def?.aggregate_edges || sourceModel?.aggregate_edges,
                     caption: def?.caption,
-                    where: isActiveLive ? effectiveFilters : (def?.where || {}),
-                    searchQuery: isActiveLive ? searchQuery : '',
-                    edgesHidden: isActiveLive ? !edgesVisible : false,
+                    where: def?.where || {},
+                    filterQuery: isActiveLive ? activeFilters : (def?.filter_query || {}),
+                    queryBuilderEnabled: isActiveLive ? queryBuilderEnabled : def?.query_builder_enabled,
+                    searchQuery: isActiveLive ? searchQuery : (def?.search || ''),
+                    filtersCollapsed: isActiveLive ? filtersCollapsed : def?.filters_collapsed,
+                    edgesVisible: isActiveLive ? edgesVisible : def?.edges_visible,
+                    edgeAnimationEnabled: isActiveLive ? edgeAnimationEnabled : def?.edge_animation_enabled,
+                    edgeOpacity: isActiveLive ? edgeOpacity : def?.edge_opacity,
+                    projectionUnspecifiedContentOpacity: isActiveLive ? projectionUnspecifiedContentOpacity : def?.projection_unspecified_content_opacity,
                     defaultOpenDepth: effectiveDefaultOpenDepth,
                 });
             };
@@ -5804,7 +6051,15 @@ async function renderTasksGraphs(rootElement = document) {
                 if (!groupHoverTooltip) return null;
                 const rows = Array.isArray(groupHoverTooltip.rows) ? groupHoverTooltip.rows : [];
                 const image = normalizeTasksNodeImageUrl(groupHoverTooltip.image);
-                const panelWidth = tasksHoverTooltipWidth(groupHoverTooltip.label || '', rows, hoverFontSize, Boolean(image));
+                const panelWidth = tasksDetailPanelWidth({
+                    title: groupHoverTooltip.label || '',
+                    nodeId: groupHoverTooltip.nodeId || '',
+                    entries: rows,
+                    titleFont: `700 calc(${hoverFontSize} * 1.12) ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
+                    bodyFont: `500 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
+                    keyFont: `700 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
+                    hasImage: Boolean(image),
+                });
                 const wrapperWidth = Math.max(240, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().width || 0));
                 const wrapperHeight = Math.max(160, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().height || 0));
                 const maxWidth = Math.max(220, Math.min(panelWidth, wrapperWidth - 24));
@@ -5813,7 +6068,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const children = [
                     window.React.createElement('div', {
                         key: '__label__',
-                        style: { display: 'flex', alignItems: 'center', gap: '7px', fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, marginBottom: rows.length ? '4px' : 0, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 },
+                        style: { display: 'flex', alignItems: 'center', gap: '7px', justifyContent: 'space-between', fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, marginBottom: rows.length ? '4px' : 0, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 },
                     },
                         image ? window.React.createElement('img', {
                             src: image,
@@ -5823,28 +6078,13 @@ async function renderTasksGraphs(rootElement = document) {
                             className: tasksIsIconifyImage(image) ? 'vyasa-tasks-node-image vyasa-tasks-node-image--icon' : 'vyasa-tasks-node-image',
                             style: { width: '22px', height: '22px', objectFit: 'contain', flex: '0 0 auto' },
                         }) : null,
-                        window.React.createElement('span', { style: { minWidth: 0 } }, groupHoverTooltip.label)
+                        window.React.createElement('span', { style: { flex: '1 1 auto', minWidth: 0 } }, groupHoverTooltip.label),
+                        groupHoverTooltip.nodeId ? window.React.createElement('span', {
+                            style: { flex: '0 0 auto', marginLeft: '12px', fontSize: hoverFontSize, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, textAlign: 'right' },
+                        }, groupHoverTooltip.nodeId) : null
                     ),
                 ];
-                if (rows.length) {
-                    children.push(window.React.createElement('div', {
-                        key: '__rows__',
-                        style: { display: 'grid', gap: '6px', fontSize: hoverFontSize, fontWeight: 500, lineHeight: 1.35, alignItems: 'start' },
-                    }, rows.map((row) => {
-                        const stacked = tasksIsLongFormEntry(row);
-                        return window.React.createElement('div', {
-                            key: row.attr,
-                            style: stacked ? { display: 'grid', gap: '2px', minWidth: 0 } : { display: 'grid', gridTemplateColumns: 'minmax(0, auto) minmax(0, 1fr)', columnGap: '10px', alignItems: 'start', minWidth: 0 },
-                        },
-                        window.React.createElement('span', {
-                            style: { color: 'color-mix(in srgb, currentColor 60%, transparent)', whiteSpace: stacked ? 'normal' : 'nowrap', minWidth: 0 },
-                        }, row.label),
-                        window.React.createElement('span', {
-                            style: { fontWeight: 650, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 },
-                            dangerouslySetInnerHTML: row.renderedValue ? { __html: row.renderedValue } : undefined,
-                        }, row.renderedValue ? undefined : row.value));
-                    })));
-                }
+                if (rows.length) children.push(renderTasksDetailEntries(window.React, rows, { fontSize: hoverFontSize, lineHeight: 1.35 }));
                 return window.React.createElement('div', {
                     style: {
                         position: 'absolute',
@@ -5852,16 +6092,16 @@ async function renderTasksGraphs(rootElement = document) {
                         top: clampedTop,
                         zIndex: 2400,
                         pointerEvents: 'none',
-                        padding: rows.length ? '6px 9px' : '4px 7px',
-                        borderRadius: '6px',
-                        background: 'color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%)',
-                        border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)',
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
-                        width: rows.length ? 'min(280px, max-content)' : 'max-content',
-                        maxWidth: '280px',
-                        maxInlineSize: `${maxWidth}px`,
-                        minWidth: rows.length ? '220px' : 'auto',
+                        width: `${maxWidth}px`,
+                        maxWidth: '100%',
+                        minWidth: 'min(220px, 100%)',
                         boxSizing: 'border-box',
+                        borderRadius: '12px',
+                        border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)',
+                        background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
+                        boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
+                        backdropFilter: 'blur(8px)',
+                        padding: '12px',
                     },
                 }, ...children);
             };

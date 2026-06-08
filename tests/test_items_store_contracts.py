@@ -14,6 +14,7 @@ from vyasa.extensions_builtin.tasks.items_store_contracts import (
     ValidationFinding,
 )
 from vyasa.extensions_builtin.tasks.items_pack import read_edges, read_kg_pack
+from vyasa.extensions_builtin.tasks.api import _view_sidecar_text
 from vyasa.extensions_builtin.tasks.model import _resolve_tasks_source_path, parse_tasks_text
 from vyasa.config import reload_config
 
@@ -166,6 +167,14 @@ ownership:
     edge_label_from=relation
     hover_attrs=owner,status
     aggregate_edges="when_collapsed=true by=relation"
+    filter_query='{"combinator":"or","rules":[{"field":"status","operator":"=","value":"todo","muted":true}],"not":true}'
+    query_builder_enabled=false
+    search="login"
+    filters_collapsed=false
+    edges_visible=false
+    edge_animation_enabled=false
+    edge_opacity=0.37
+    projection_unspecified_content_opacity=0.44
 """,
         encoding="utf-8",
     )
@@ -191,6 +200,14 @@ items_schema: roadmap.kg.schema
     assert model["view_projections"][1]["edge_color_by"] == "relation"
     assert model["view_projections"][1]["hover_attrs"] == ["owner", "status"]
     assert model["view_projections"][1]["aggregate_edges"] == {"when_collapsed": True, "by": "relation"}
+    assert model["view_projections"][1]["filter_query"]["rules"][0]["muted"] is True
+    assert model["view_projections"][1]["query_builder_enabled"] is False
+    assert model["view_projections"][1]["search"] == "login"
+    assert model["view_projections"][1]["filters_collapsed"] is False
+    assert model["view_projections"][1]["edges_visible"] is False
+    assert model["view_projections"][1]["edge_animation_enabled"] is False
+    assert model["view_projections"][1]["edge_opacity"] == "0.37"
+    assert model["view_projections"][1]["projection_unspecified_content_opacity"] == "0.44"
     assert model["projection_models"]["ownership"]["model"]["edge_color_by"] == "relation"
     assert model["projection_models"]["ownership"]["model"]["hover_attrs"] == ["owner", "status"]
     assert model["index_attributes"] == ["status", "owner"]
@@ -226,6 +243,38 @@ delivery:
 
     assert graph["default_projection"] == "delivery"
     assert graph["hover_attrs"] == ["owner", "status"]
+
+
+def test_kg_pack_reads_tmp_view_sidecars(tmp_path):
+    (tmp_path / "roadmap.kg.schema").write_text(
+        "@graph id=roadmap\n@sources\nnodes=roadmap.kg.nodes\n@views\nbase:\n    source=base\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "roadmap.kg.nodes").write_text("n1: Login\n", encoding="utf-8")
+    view_id, text = _view_sidecar_text("Todo Now", "old:\n\tgroup_by=status\n\tfilter_query='{\"combinator\":\"and\",\"rules\":[{\"field\":\"status\",\"operator\":\"=\",\"value\":\"todo\",\"muted\":true}]}'\n")
+    view_dir = tmp_path / "roadmap.kg"
+    view_dir.mkdir()
+    (view_dir / f"{view_id}.view").write_text(text, encoding="utf-8")
+
+    graph = read_kg_pack(tmp_path / "roadmap.kg.schema")
+
+    assert view_id.startswith("tmp.")
+    assert graph["view_projections"][1]["id"] == view_id
+    assert graph["view_projections"][1]["label"] == "Todo Now"
+    assert graph["view_projections"][1]["filter_query"]["rules"][0]["muted"] is True
+
+
+def test_kg_view_sidecar_accepts_raw_json_filter_query_quotes(tmp_path):
+    (tmp_path / "kg.schema").write_text("@graph id=roadmap\n@sources\nnodes=kg.nodes\n@views\nbase:\n    source=base\n", encoding="utf-8")
+    (tmp_path / "kg.nodes").write_text("n1: Login\n", encoding="utf-8")
+    (tmp_path / "tmp.RawJson.view").write_text(
+        'tmp.RawJson:\n\tlabel="Raw JSON"\n\tfilter_query="{"combinator":"and","rules":[{"field":"built","operator":"=","value":"yes"}]}"\n',
+        encoding="utf-8",
+    )
+
+    graph = read_kg_pack(tmp_path / "kg.schema")
+
+    assert graph["view_projections"][1]["filter_query"]["rules"][0]["field"] == "built"
 
 
 def test_kg_palette_design_palette_feeds_color_and_image_modes(tmp_path):
