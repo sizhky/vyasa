@@ -68,6 +68,11 @@ Do not add version 1 compatibility unless explicitly requested.
 Reset restores the active projection's authored sidebar state, including filter query, query-builder enablement, search, primary and secondary color modes, filter drawer, edge visibility and animation, expansion, and opacity controls.
 For the base view, Reset restores base defaults rather than projection values.
 
+Color-swatch filters are browser preference state separate from QueryBuilder filters.
+Never inject a swatch selection into the QueryBuilder rule tree.
+Selected values within one swatch dimension are OR; primary and secondary swatch dimensions are AND; the complete swatch result is AND with the QueryBuilder result and search.
+Changing color dimensions prunes hidden stale swatch filters, and Reset clears swatch selections.
+
 Graph layout attrs `graph_x` and `graph_y` are renderer-owned; avoid user guidance unless debugging persistence.
 
 Group-local layout direction is supported with `direction: lr` or `layout_direction: lr` on the group line.
