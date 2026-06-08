@@ -455,7 +455,36 @@ def test_tasks_source_uses_base_view_label_for_default_projection_tab():
 def test_tasks_source_uses_reset_button_label():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "'Reset'" in source
+    assert "function tasksProjectionSchemaPrefs(model, projectionId)" in source
+    assert "prefs.colorBy = projection.default_color_by" in source
+    assert "prefs.secondaryColorBy = projection.default_secondary_color_by" in source
+    assert "const resetProjectionControls = React.useCallback(() => {" in source
+    assert "setActiveFilters(normalizeTasksFilterQuery(defaults.filters))" in source
+    assert "setQueryBuilderEnabled(typeof defaults.queryBuilderEnabled === 'boolean'" in source
+    assert "setSearchInputValue(defaultSearch)" in source
+    assert "setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, defaults, nodeNotes))" in source
+    assert "setActiveSecondaryColorBy(resolveTasksPreferredSecondaryColorBy(model, defaults, nodeNotes))" in source
+    assert "setEdgesVisible(typeof defaults.edgesVisible === 'boolean'" in source
+    assert "setEdgeAnimationEnabled(typeof defaults.edgeAnimationEnabled === 'boolean'" in source
+    assert "onClick: resetProjectionControls" in source
+
+
+def test_tasks_color_swatch_filter_is_independent_and_ands_with_query_filter():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    callback = source.split("const toggleFilterValue = React.useCallback", 1)[1].split("}, []);", 1)[0]
+
+    assert "setActiveSwatchFilters((current) => toggleTasksFilterQueryValue(current, key, value, enabled))" in callback
+    assert "setQueryBuilderEnabled(true)" not in callback
+    assert "function tasksNodeMatchesAllFilters(node, queryFilters, swatchFilters)" in source
+    assert "tasksNodeMatchesFilters(node, queryFilters) && tasksNodeMatchesFilters(node, swatchFilters)" in source
+    assert "tasksFilterQuerySelectedValues(activeSwatchFilters, activeColorBy)" in source
+    assert "tasksFilterQuerySelectedValues(activeSwatchFilters, activeSecondaryColorBy)" in source
+    assert "swatchFilters: activeSwatchFilters" in source
+    assert "setActiveSwatchFilters(tasksEmptyFilterQuery())" in source
+    assert "query: normalizeTasksFilterQuery(activeFilters)" in source
+    assert "onQueryChange: (query) => setActiveFilters(normalizeTasksFilterQuery(query))" in source
+    assert "const activeSwatchKeys = new Set([activeColorBy, activeSecondaryColorBy].filter(Boolean))" in source
+    assert "tasksPruneFilterQueryFields(current, activeSwatchKeys)" in source
 
 
 def test_tasks_source_supports_continuous_gradient_palettes():
@@ -541,7 +570,9 @@ def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():
 
     assert "function tasksSearchNormalizeText(value)" in source
     assert "function tasksSearchSpec(query)" in source
-    assert "function tasksCollectSearchMatches(nodes, edges, query)" in source
+    assert "function tasksCollectSearchMatches(nodes, edges, query, nodeNotes = {})" in source
+    assert "nodeNotes[String(node?.id || '')]" in source
+    assert "tasksCollectSearchMatches(graphBaseRef.current.nodes || [], graphBaseRef.current.edges || [], searchQuery, nodeNotes)" in source
     assert "const [searchInputValue, setSearchInputValue] = React.useState" in source
     assert "window.setTimeout(() => {" in source
     assert "}, 140);" in source
@@ -549,6 +580,25 @@ def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():
     assert "setSearchQuery('')" in source
     assert "const hasSearch = searchMatches.active && !searchMatches.error;" in source
     assert "const filterPanelElement = FilterPanel();" in source
+
+
+def test_tasks_notes_support_graph_scoped_text_download_and_upload():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "collectTasksStoredNotes(storage, storageKey, nodeTitles)" in source
+    assert "String(node.label || node.title || node.id)" in source
+    assert "importTasksStoredNotes(storage, storageKey, backup)" in source
+    assert "filename: `vyasa-kg-notes-${graphName}.txt`" in source
+    assert "showTasksToast(`Downloaded ${filename}`)" in source
+    assert "buildTasksNodeNotesBackup(sourceModel, latestNodeNotes()).text" in source
+    assert "showTasksToast('Copied notes')" in source
+    assert "toast.id = 'vyasa-tasks-toast'" in source
+    assert "input.accept = '.txt,text/plain,application/json'" in source
+    assert "onClick: handleExportNodeNotes" in source
+    assert "onClick: handleImportNodeNotes" in source
+    assert "{ 'uk-icon': 'download', 'aria-hidden': 'true' }" in source
+    assert "{ 'uk-icon': 'copy', 'aria-hidden': 'true' }" in source
+    assert "{ 'uk-icon': 'upload', 'aria-hidden': 'true' }" in source
 
 
 def test_tasks_search_normalizes_whitespace_and_wrapping_quotes():

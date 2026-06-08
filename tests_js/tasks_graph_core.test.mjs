@@ -4,7 +4,84 @@ import fs from 'node:fs';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+
+function fakeStorage(initial = {}) {
+    const values = new Map(Object.entries(initial));
+    return {
+        get length() { return values.size; },
+        key(index) { return Array.from(values.keys())[index] ?? null; },
+        getItem(key) { return values.get(key) ?? null; },
+        setItem(key, value) { values.set(key, value); },
+    };
+}
+
+test('Knowledge Graph notes backup round-trips one graph preference record', () => {
+    const graphKey = 'vyasa:tasks:prefs:doc::graph-a';
+    const storage = fakeStorage({
+        [graphKey]: JSON.stringify({ nodeNotes: { a: 'first note' }, projectionId: 'main' }),
+        'vyasa:tasks:prefs:doc::graph-b': JSON.stringify({ nodeNotes: { b: 'second note' } }),
+    });
+    const backup = collectTasksStoredNotes(storage, graphKey, { a: 'Alpha title' });
+    assert.deepEqual(backup, {
+        format: 'vyasa-kg-notes',
+        version: 2,
+        notes: { a: { title: 'Alpha title', note: 'first note' } },
+    });
+
+    const target = fakeStorage({
+        [graphKey]: JSON.stringify({ nodeNotes: { existing: 'keep me' }, projectionId: 'main' }),
+    });
+    const staleTitleBackup = structuredClone(backup);
+    staleTitleBackup.notes.a.title = 'Old title that no longer matches';
+    assert.equal(importTasksStoredNotes(target, graphKey, staleTitleBackup), 1);
+    const restored = JSON.parse(target.getItem(graphKey));
+    assert.deepEqual(restored.nodeNotes, { existing: 'keep me', a: 'first note' });
+    assert.equal(restored.projectionId, 'main');
+    assert.throws(
+        () => importTasksStoredNotes(target, graphKey, { format: 'vyasa-kg-notes', version: 1, nodeNotes: { a: 'old' } }),
+        /Invalid Vyasa Knowledge Graph notes backup/
+    );
+});
+
+test('Knowledge Graph search matches notes from only the supplied graph', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function tasksSearchNormalizeText');
+    const end = source.indexOf('function resolveTasksProjectionGroupOwnColor');
+    const factory = new Function(
+        'const tasksIsHiddenNodeMetaKey = () => false;\n'
+        + source.slice(start, end)
+        + '\nreturn tasksCollectSearchMatches;'
+    );
+    const search = factory();
+    const nodes = [{ id: 'current-node', data: { id: 'current-node', label: 'Current' } }];
+    assert.deepEqual(Array.from(search(nodes, [], 'private phrase', { 'current-node': 'private phrase' }).nodeIds), ['current-node']);
+    assert.deepEqual(Array.from(search(nodes, [], 'other phrase', { 'other-node': 'other phrase' }).nodeIds), []);
+});
+
+test('projection reset defaults include all authored sidebar parameters', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function tasksProjectionSchemaPrefs');
+    const end = source.indexOf('function readTasksProjectionPrefsForModel');
+    const factory = new Function(
+        'const normalizeTasksFilterQuery = value => value;\n'
+        + 'const clampTasksEdgeOpacity = value => Number(value);\n'
+        + 'const clampTasksProjectionContentOpacity = value => Number(value);\n'
+        + source.slice(start, end)
+        + '\nreturn tasksProjectionSchemaPrefs;'
+    );
+    const defaults = factory()({ view_projections: [{
+        id: 'focus', filter_query: { combinator: 'and', rules: [] }, query_builder_enabled: false,
+        search: 'missing', default_color_by: 'phase', default_secondary_color_by: 'owner',
+        filters_collapsed: false, edges_visible: false, edge_animation_enabled: false,
+        edge_opacity: 0.4, projection_unspecified_content_opacity: 0.3,
+    }] }, 'focus');
+    assert.deepEqual(defaults, {
+        filters: { combinator: 'and', rules: [] }, queryBuilderEnabled: false, searchQuery: 'missing',
+        colorBy: 'phase', secondaryColorBy: 'owner', filtersCollapsed: false, edgesVisible: false,
+        edgeAnimationEnabled: false, edgeOpacity: 0.4, unspecifiedContentOpacity: 0.3,
+    });
+});
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);
@@ -325,13 +402,18 @@ test('note special filter uses derived yes/no value', async () => {
     const match = source.match(/function tasksEmptyFilterQuery\(\) \{[\s\S]*?\nfunction tasksSearchNormalizeText/);
     assert.ok(match, 'tasksNodeMatchesFilters should exist');
     const helpers = match[0].replace(/\nfunction tasksSearchNormalizeText$/, '');
-    const factory = new Function('TASKS_HAS_NOTE_ATTR', `${helpers}; return tasksNodeMatchesFilters;`);
-    const tasksNodeMatchesFilters = factory('has_note');
+    const factory = new Function('TASKS_HAS_NOTE_ATTR', `${helpers}; return { tasksNodeMatchesFilters, tasksNodeMatchesAllFilters };`);
+    const { tasksNodeMatchesFilters, tasksNodeMatchesAllFilters } = factory('has_note');
     assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['yes'] }), true);
     assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['no'] }), false);
     assert.equal(tasksNodeMatchesFilters({ __has_note__: false }, { has_note: ['no'] }), true);
     assert.equal(tasksNodeMatchesFilters({ kind: 'risk' }, { combinator: 'or', rules: [{ field: 'kind', operator: '=', value: 'claim' }, { field: 'kind', operator: '=', value: 'risk' }] }), true);
     assert.equal(tasksNodeMatchesFilters({ kind: 'risk' }, { combinator: 'and', not: true, rules: [{ field: 'kind', operator: '=', value: 'risk' }] }), false);
+    const query = { combinator: 'and', rules: [{ field: 'status', operator: '=', value: 'open' }] };
+    const swatches = { combinator: 'and', rules: [{ field: 'kind', operator: 'in', value: ['risk', 'claim'] }] };
+    assert.equal(tasksNodeMatchesAllFilters({ status: 'open', kind: 'risk' }, query, swatches), true);
+    assert.equal(tasksNodeMatchesAllFilters({ status: 'closed', kind: 'risk' }, query, swatches), false);
+    assert.equal(tasksNodeMatchesAllFilters({ status: 'open', kind: 'decision' }, query, swatches), false);
 });
 
 test('toggleMultiValueFilter supports multi-color selection and reset', () => {

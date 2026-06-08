@@ -256,6 +256,38 @@ export function normalizeTasksNodeImageUrl(value) {
     return '';
 }
 
+function normalizeStoredNodeNotes(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value)
+        .map(([nodeId, note]) => [String(nodeId || '').trim(), String(note || '')])
+        .filter(([nodeId, note]) => nodeId && note.trim()));
+}
+
+export function collectTasksStoredNotes(storage, storageKey, nodeTitles = {}) {
+    const prefs = JSON.parse(storage.getItem(storageKey) || '{}');
+    const nodeNotes = normalizeStoredNodeNotes(prefs?.nodeNotes);
+    const notes = Object.fromEntries(Object.entries(nodeNotes).map(([nodeId, note]) => [
+        nodeId,
+        { title: String(nodeTitles[nodeId] || nodeId), note },
+    ]));
+    return { format: 'vyasa-kg-notes', version: 2, notes };
+}
+
+export function importTasksStoredNotes(storage, storageKey, backup) {
+    if (backup?.format !== 'vyasa-kg-notes' || backup?.version !== 2
+        || !backup.notes || typeof backup.notes !== 'object' || Array.isArray(backup.notes)) {
+        throw new Error('Invalid Vyasa Knowledge Graph notes backup.');
+    }
+    const imported = Object.fromEntries(
+        Object.entries(backup.notes).map(([nodeId, entry]) => [nodeId, entry?.note])
+    );
+    const current = JSON.parse(storage.getItem(storageKey) || '{}');
+    const nodeNotes = normalizeStoredNodeNotes(imported);
+    current.nodeNotes = { ...normalizeStoredNodeNotes(current.nodeNotes), ...nodeNotes };
+    storage.setItem(storageKey, JSON.stringify(current));
+    return Object.keys(nodeNotes).length;
+}
+
 export function resolveTasksNodeImage(node, model, imageByOverride = null, paletteOverride = null) {
     if (!node) return '';
     const ownImage = normalizeTasksNodeImageUrl(node.image);
