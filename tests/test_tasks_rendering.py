@@ -541,7 +541,9 @@ def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():
 
     assert "function tasksSearchNormalizeText(value)" in source
     assert "function tasksSearchSpec(query)" in source
-    assert "function tasksCollectSearchMatches(nodes, edges, query)" in source
+    assert "function tasksCollectSearchMatches(nodes, edges, query, nodeNotes = {})" in source
+    assert "nodeNotes[String(node?.id || '')]" in source
+    assert "tasksCollectSearchMatches(graphBaseRef.current.nodes || [], graphBaseRef.current.edges || [], searchQuery, nodeNotes)" in source
     assert "const [searchInputValue, setSearchInputValue] = React.useState" in source
     assert "window.setTimeout(() => {" in source
     assert "}, 140);" in source
@@ -549,6 +551,25 @@ def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():
     assert "setSearchQuery('')" in source
     assert "const hasSearch = searchMatches.active && !searchMatches.error;" in source
     assert "const filterPanelElement = FilterPanel();" in source
+
+
+def test_tasks_notes_support_graph_scoped_text_download_and_upload():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "collectTasksStoredNotes(storage, storageKey, nodeTitles)" in source
+    assert "String(node.label || node.title || node.id)" in source
+    assert "importTasksStoredNotes(storage, storageKey, backup)" in source
+    assert "filename: `vyasa-kg-notes-${graphName}.txt`" in source
+    assert "showTasksToast(`Downloaded ${filename}`)" in source
+    assert "buildTasksNodeNotesBackup(sourceModel, latestNodeNotes()).text" in source
+    assert "showTasksToast('Copied notes')" in source
+    assert "toast.id = 'vyasa-tasks-toast'" in source
+    assert "input.accept = '.txt,text/plain,application/json'" in source
+    assert "onClick: handleExportNodeNotes" in source
+    assert "onClick: handleImportNodeNotes" in source
+    assert "{ 'uk-icon': 'download', 'aria-hidden': 'true' }" in source
+    assert "{ 'uk-icon': 'copy', 'aria-hidden': 'true' }" in source
+    assert "{ 'uk-icon': 'upload', 'aria-hidden': 'true' }" in source
 
 
 def test_tasks_search_normalizes_whitespace_and_wrapping_quotes():

@@ -4,7 +4,60 @@ import fs from 'node:fs';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+
+function fakeStorage(initial = {}) {
+    const values = new Map(Object.entries(initial));
+    return {
+        get length() { return values.size; },
+        key(index) { return Array.from(values.keys())[index] ?? null; },
+        getItem(key) { return values.get(key) ?? null; },
+        setItem(key, value) { values.set(key, value); },
+    };
+}
+
+test('Knowledge Graph notes backup round-trips one graph preference record', () => {
+    const graphKey = 'vyasa:tasks:prefs:doc::graph-a';
+    const storage = fakeStorage({
+        [graphKey]: JSON.stringify({ nodeNotes: { a: 'first note' }, projectionId: 'main' }),
+        'vyasa:tasks:prefs:doc::graph-b': JSON.stringify({ nodeNotes: { b: 'second note' } }),
+    });
+    const backup = collectTasksStoredNotes(storage, graphKey, { a: 'Alpha title' });
+    assert.deepEqual(backup, {
+        format: 'vyasa-kg-notes',
+        version: 2,
+        notes: { a: { title: 'Alpha title', note: 'first note' } },
+    });
+
+    const target = fakeStorage({
+        [graphKey]: JSON.stringify({ nodeNotes: { existing: 'keep me' }, projectionId: 'main' }),
+    });
+    const staleTitleBackup = structuredClone(backup);
+    staleTitleBackup.notes.a.title = 'Old title that no longer matches';
+    assert.equal(importTasksStoredNotes(target, graphKey, staleTitleBackup), 1);
+    const restored = JSON.parse(target.getItem(graphKey));
+    assert.deepEqual(restored.nodeNotes, { existing: 'keep me', a: 'first note' });
+    assert.equal(restored.projectionId, 'main');
+    assert.throws(
+        () => importTasksStoredNotes(target, graphKey, { format: 'vyasa-kg-notes', version: 1, nodeNotes: { a: 'old' } }),
+        /Invalid Vyasa Knowledge Graph notes backup/
+    );
+});
+
+test('Knowledge Graph search matches notes from only the supplied graph', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function tasksSearchNormalizeText');
+    const end = source.indexOf('function resolveTasksProjectionGroupOwnColor');
+    const factory = new Function(
+        'const tasksIsHiddenNodeMetaKey = () => false;\n'
+        + source.slice(start, end)
+        + '\nreturn tasksCollectSearchMatches;'
+    );
+    const search = factory();
+    const nodes = [{ id: 'current-node', data: { id: 'current-node', label: 'Current' } }];
+    assert.deepEqual(Array.from(search(nodes, [], 'private phrase', { 'current-node': 'private phrase' }).nodeIds), ['current-node']);
+    assert.deepEqual(Array.from(search(nodes, [], 'other phrase', { 'other-node': 'other phrase' }).nodeIds), []);
+});
 
 test('clampScale keeps zoom in sane bounds', () => {
     assert.equal(clampScale(0.001, 3), 0.1);

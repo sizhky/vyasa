@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy } from '/static/extensions/tasks/tasks_graph_core.js';
 
 const tasksElk = new ELK();
 let tasksReactFlowReady = null;
@@ -385,6 +385,83 @@ function tasksGetStorage() {
     } catch {
         return null;
     }
+}
+
+function showTasksToast(message) {
+    let toast = document.getElementById('vyasa-tasks-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'vyasa-tasks-toast';
+        toast.className = 'fixed top-6 right-6 z-[10000] text-xs bg-slate-900 text-white px-3 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.remove('opacity-0');
+    toast.classList.add('opacity-100');
+    window.clearTimeout(showTasksToast.timeoutId);
+    showTasksToast.timeoutId = window.setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+    }, 1800);
+}
+
+function buildTasksNodeNotesBackup(model, nodeNotes) {
+    const storage = tasksGetStorage();
+    const storageKey = tasksPrefsKey(model);
+    if (!storage || !storageKey) throw new Error('Browser storage is unavailable for this Knowledge Graph.');
+    const prefs = JSON.parse(storage.getItem(storageKey) || '{}');
+    prefs.nodeNotes = normalizeTasksNodeNotes(nodeNotes);
+    storage.setItem(storageKey, JSON.stringify(prefs));
+    const nodeTitles = Object.fromEntries(
+        [...(model?.groups || []), ...(model?.tasks || [])]
+            .filter((node) => node?.id)
+            .map((node) => [String(node.id), String(node.label || node.title || node.id)])
+    );
+    const backup = collectTasksStoredNotes(storage, storageKey, nodeTitles);
+    const graphName = String(model?.persistence_id || model?.graph_id || 'graph')
+        .trim().replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'graph';
+    return {
+        filename: `vyasa-kg-notes-${graphName}.txt`,
+        text: `${JSON.stringify(backup, null, 2)}\n`,
+    };
+}
+
+function downloadTasksNodeNotes(model, nodeNotes) {
+    const { filename, text } = buildTasksNodeNotesBackup(model, nodeNotes);
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(href);
+    return filename;
+}
+
+function uploadTasksNodeNotes(model) {
+    return new Promise((resolve, reject) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.txt,text/plain,application/json';
+        input.addEventListener('change', async () => {
+            const file = input.files?.[0];
+            if (!file) return resolve(null);
+            try {
+                const storage = tasksGetStorage();
+                const storageKey = tasksPrefsKey(model);
+                if (!storage || !storageKey) throw new Error('Browser storage is unavailable for this Knowledge Graph.');
+                const backup = JSON.parse(await file.text());
+                importTasksStoredNotes(storage, storageKey, backup);
+                touchTasksPrefsIndex(storage, storageKey);
+                resolve(normalizeTasksNodeNotes(readTasksPrefs(model).nodeNotes));
+            } catch (error) {
+                reject(error);
+            }
+        }, { once: true });
+        input.click();
+    });
 }
 
 function readTasksPrefsIndex(storage) {
@@ -1471,7 +1548,7 @@ function tasksSearchMatchesText(value, spec) {
     return spec.matcher instanceof RegExp ? spec.matcher.test(text) : text.toLowerCase().includes(spec.matcher);
 }
 
-function tasksCollectSearchMatches(nodes, edges, query) {
+function tasksCollectSearchMatches(nodes, edges, query, nodeNotes = {}) {
     const spec = tasksSearchSpec(query);
     const nodeIds = new Set();
     const edgeIds = new Set();
@@ -1480,7 +1557,7 @@ function tasksCollectSearchMatches(nodes, edges, query) {
     for (const node of (nodes || [])) {
         const data = node?.data || {};
         if (data.__kind__ === 'groupTitle') continue;
-        const values = [node?.id, data.id, data.label];
+        const values = [node?.id, data.id, data.label, nodeNotes[String(node?.id || '')]];
         for (const [key, value] of Object.entries(data)) {
             if (tasksIsHiddenNodeMetaKey(key)) continue;
             if (value === null || value === undefined || typeof value === 'object' || typeof value === 'function') continue;
@@ -3565,8 +3642,8 @@ async function renderTasksGraphs(rootElement = document) {
                 [queryBuilderEnabled, activeFilters]
             );
             const searchMatches = React.useMemo(
-                () => tasksCollectSearchMatches(graphBaseRef.current.nodes || [], graphBaseRef.current.edges || [], searchQuery),
-                [graphRevision, searchQuery]
+                () => tasksCollectSearchMatches(graphBaseRef.current.nodes || [], graphBaseRef.current.edges || [], searchQuery, nodeNotes),
+                [graphRevision, searchQuery, nodeNotes]
             );
             const filteredSelectionIds = React.useCallback(() => {
                 const hasFilters = tasksFilterQueryHasRules(effectiveFilters);
@@ -3743,9 +3820,43 @@ async function renderTasksGraphs(rootElement = document) {
                     return next;
                 });
             }, []);
+            const latestNodeNotes = React.useCallback(() => {
+                const latest = { ...nodeNotes };
+                const selectedId = String(selectedNodeId || '');
+                if (selectedId) {
+                    if (noteInputValue.trim()) latest[selectedId] = noteInputValue;
+                    else delete latest[selectedId];
+                }
+                return latest;
+            }, [nodeNotes, selectedNodeId, noteInputValue]);
+            const handleExportNodeNotes = React.useCallback(() => {
+                try {
+                    const filename = downloadTasksNodeNotes(sourceModel, latestNodeNotes());
+                    showTasksToast(`Downloaded ${filename}`);
+                } catch (error) {
+                    window.alert(error instanceof Error ? error.message : String(error));
+                }
+            }, [sourceModel, latestNodeNotes]);
+            const handleCopyNodeNotes = React.useCallback(async () => {
+                try {
+                    const copied = await copyTasksText(buildTasksNodeNotesBackup(sourceModel, latestNodeNotes()).text);
+                    if (!copied) throw new Error('Could not copy Knowledge Graph notes.');
+                    showTasksToast('Copied notes');
+                } catch (error) {
+                    window.alert(error instanceof Error ? error.message : String(error));
+                }
+            }, [sourceModel, latestNodeNotes]);
+            const handleImportNodeNotes = React.useCallback(async () => {
+                try {
+                    const importedNotes = await uploadTasksNodeNotes(sourceModel);
+                    if (importedNotes) setNodeNotes(importedNotes);
+                } catch (error) {
+                    window.alert(error instanceof Error ? error.message : String(error));
+                }
+            }, [sourceModel]);
             React.useEffect(() => {
                 setNoteInputValue(nodeNotes[String(selectedNodeId || '')] || '');
-            }, [selectedNodeId]);
+            }, [selectedNodeId, nodeNotes]);
             React.useEffect(() => {
                 if (!selectedNodeId) return undefined;
                 const timeoutId = window.setTimeout(() => {
@@ -5399,6 +5510,35 @@ async function renderTasksGraphs(rootElement = document) {
                                     activeProjectionId || viewMode === 'gantt'
                                         ? React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.3 } }, 'Custom grouping applies to Default view.')
                                         : null
+                                )
+                            )
+                        ),
+                        React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'center', fontSize: '12px' } },
+                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Notes'),
+                                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+                                    React.createElement('button', {
+                                        type: 'button',
+                                        title: 'Export notes',
+                                        'aria-label': 'Export notes',
+                                        onClick: handleExportNodeNotes,
+                                        style: { display: 'inline-flex', border: 'none', background: 'none', color: 'inherit', padding: '2px', cursor: 'pointer' },
+                                    }, React.createElement('span', { 'uk-icon': 'download', 'aria-hidden': 'true' })),
+                                    React.createElement('button', {
+                                        type: 'button',
+                                        title: 'Copy notes',
+                                        'aria-label': 'Copy notes',
+                                        onClick: handleCopyNodeNotes,
+                                        style: { display: 'inline-flex', border: 'none', background: 'none', color: 'inherit', padding: '2px', cursor: 'pointer' },
+                                    }, React.createElement('span', { 'uk-icon': 'copy', 'aria-hidden': 'true' })),
+                                    React.createElement('button', {
+                                        type: 'button',
+                                        title: 'Import notes',
+                                        'aria-label': 'Import notes',
+                                        onClick: handleImportNodeNotes,
+                                        style: { display: 'inline-flex', border: 'none', background: 'none', color: 'inherit', padding: '2px', cursor: 'pointer' },
+                                    }, React.createElement('span', { 'uk-icon': 'upload', 'aria-hidden': 'true' })),
+                                    React.createElement('span', { style: { marginLeft: 'auto', opacity: 0.65, fontSize: '11px' } }, `${Object.keys(nodeNotes).length} saved`)
                                 )
                             )
                         ),
