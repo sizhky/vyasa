@@ -211,6 +211,7 @@ def test_route_extensions_register_declared_routes_and_storage():
 
     prefixes = {entry["prefix"] for entry in runtime.route_handlers}
     assert "/slides" in prefixes
+    assert "/api/tasks" in prefixes
     assert "/api/annotations" in prefixes
     assert "/api/bookmarks" in prefixes
     assert "annotations" in runtime.storage_namespaces

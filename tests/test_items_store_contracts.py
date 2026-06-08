@@ -14,6 +14,7 @@ from vyasa.extensions_builtin.tasks.items_store_contracts import (
     ValidationFinding,
 )
 from vyasa.extensions_builtin.tasks.items_pack import read_edges, read_kg_pack
+from vyasa.extensions_builtin.tasks.api import _view_sidecar_text
 from vyasa.extensions_builtin.tasks.model import _resolve_tasks_source_path, parse_tasks_text
 from vyasa.config import reload_config
 
@@ -242,6 +243,25 @@ delivery:
 
     assert graph["default_projection"] == "delivery"
     assert graph["hover_attrs"] == ["owner", "status"]
+
+
+def test_kg_pack_reads_tmp_view_sidecars(tmp_path):
+    (tmp_path / "roadmap.kg.schema").write_text(
+        "@graph id=roadmap\n@sources\nnodes=roadmap.kg.nodes\n@views\nbase:\n    source=base\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "roadmap.kg.nodes").write_text("n1: Login\n", encoding="utf-8")
+    view_id, text = _view_sidecar_text("Todo Now", "old:\n\tgroup_by=status\n\tfilter_query='{\"combinator\":\"and\",\"rules\":[{\"field\":\"status\",\"operator\":\"=\",\"value\":\"todo\",\"muted\":true}]}'\n")
+    view_dir = tmp_path / "roadmap.kg"
+    view_dir.mkdir()
+    (view_dir / f"{view_id}.view").write_text(text, encoding="utf-8")
+
+    graph = read_kg_pack(tmp_path / "roadmap.kg.schema")
+
+    assert view_id.startswith("tmp.")
+    assert graph["view_projections"][1]["id"] == view_id
+    assert graph["view_projections"][1]["label"] == "Todo Now"
+    assert graph["view_projections"][1]["filter_query"]["rules"][0]["muted"] is True
 
 
 def test_kg_palette_design_palette_feeds_color_and_image_modes(tmp_path):

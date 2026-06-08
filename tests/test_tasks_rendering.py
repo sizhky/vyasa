@@ -107,6 +107,9 @@ def test_tasks_filter_panel_uses_projection_dropdown_instead_of_tab_grid():
     assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'View')" in source
     assert "value: viewMode === 'gantt' ? TASKS_GANTT_PROJECTION_ID : activeProjectionId" in source
     assert "projectionOptions.map((projection) => React.createElement('option'" in source
+    assert "TASKS_ADD_VIEW_OPTION_ID" in source
+    assert "onPaste: handleDefaultViewPaste" in source
+    assert "saveTasksTempView" in source
     assert "const ProjectionToggle = () =>" not in source
 
 

@@ -118,12 +118,13 @@ def _write_kg_cache(schema_path: Path, cache_name: str, graph: dict[str, Any]) -
 
 
 def read_schema(path: str | Path) -> KgSchema:
+    path = Path(path)
     schema = KgSchema()
     section = ""
     current_source = ""
     current_source_attrs = False
     current_view: KgView | None = None
-    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+    for raw in path.read_text(encoding="utf-8").splitlines():
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         line = raw.strip()
@@ -167,9 +168,37 @@ def read_schema(path: str | Path) -> KgSchema:
         elif section == "@views":
             current_view = _read_view(line)
             schema.views.append(current_view)
+    _read_tmp_view_sidecars(schema, path)
     if "base" not in schema.sources:
         schema.sources["base"] = {}
     return schema
+
+
+def _read_tmp_view_sidecars(schema: KgSchema, schema_path: Path) -> None:
+    view_dir = _tmp_view_sidecar_dir(schema_path)
+    if not view_dir.is_dir():
+        return
+    existing = {view.id: index for index, view in enumerate(schema.views)}
+    for view_path in sorted(view_dir.glob("tmp.*.view")):
+        current_view: KgView | None = None
+        for raw in view_path.read_text(encoding="utf-8").splitlines():
+            if not raw.strip() or raw.lstrip().startswith("#"):
+                continue
+            line = raw.strip()
+            if raw.startswith((" ", "\t")):
+                if current_view:
+                    _update_view(current_view, _assignments(shlex.split(line)))
+                continue
+            current_view = _read_view(line)
+            if current_view.id in existing:
+                schema.views[existing[current_view.id]] = current_view
+            else:
+                existing[current_view.id] = len(schema.views)
+                schema.views.append(current_view)
+
+
+def _tmp_view_sidecar_dir(schema_path: Path) -> Path:
+    return schema_path.parent if schema_path.name == "kg.schema" else schema_path.with_suffix("")
 
 
 def read_nodes(path: str | Path) -> list[dict[str, str]]:

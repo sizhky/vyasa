@@ -633,8 +633,8 @@ test('buildTasksProjectionConfigText emits a paste-ready kg.schema @views entry'
     const clampEdge = source.match(/function clampTasksEdgeOpacity\(value\) \{[\s\S]*?\n\}/)?.[0];
     const clampContent = source.match(/function clampTasksProjectionContentOpacity\(value\) \{[\s\S]*?\n\}/)?.[0];
     assert.ok(clampEdge && clampContent, 'serializer clamp helpers should exist');
-    const factory = new Function(`${constants}; ${clampEdge}; ${clampContent}; ${source.slice(start, end)}; return buildTasksProjectionConfigText;`);
-    const build = factory();
+    const factory = new Function(`${constants}; ${clampEdge}; ${clampContent}; ${source.slice(start, end)}; return { buildTasksProjectionConfigText, parseTasksProjectionConfigText };`);
+    const { buildTasksProjectionConfigText: build, parseTasksProjectionConfigText: parse } = factory();
 
     // Single-value filter maps to a where= line; caption with spaces is quoted.
     const single = build({
@@ -694,4 +694,8 @@ test('buildTasksProjectionConfigText emits a paste-ready kg.schema @views entry'
     assert.ok(minimal.includes('\nnew-view:'), 'placeholder id');
     assert.ok(!minimal.includes('group_by='), 'no empty group_by');
     assert.ok(!minimal.includes('color_by='), 'no empty color_by');
+
+    const parsed = parse('default:\n\twhere=status=todo\n\tsearch=login');
+    assert.deepEqual(parsed.filterQuery.rules, [{ field: 'status', operator: '=', value: 'todo' }]);
+    assert.equal(parsed.searchQuery, 'login');
 });
