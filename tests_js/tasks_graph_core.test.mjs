@@ -402,13 +402,18 @@ test('note special filter uses derived yes/no value', async () => {
     const match = source.match(/function tasksEmptyFilterQuery\(\) \{[\s\S]*?\nfunction tasksSearchNormalizeText/);
     assert.ok(match, 'tasksNodeMatchesFilters should exist');
     const helpers = match[0].replace(/\nfunction tasksSearchNormalizeText$/, '');
-    const factory = new Function('TASKS_HAS_NOTE_ATTR', `${helpers}; return tasksNodeMatchesFilters;`);
-    const tasksNodeMatchesFilters = factory('has_note');
+    const factory = new Function('TASKS_HAS_NOTE_ATTR', `${helpers}; return { tasksNodeMatchesFilters, tasksNodeMatchesAllFilters };`);
+    const { tasksNodeMatchesFilters, tasksNodeMatchesAllFilters } = factory('has_note');
     assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['yes'] }), true);
     assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['no'] }), false);
     assert.equal(tasksNodeMatchesFilters({ __has_note__: false }, { has_note: ['no'] }), true);
     assert.equal(tasksNodeMatchesFilters({ kind: 'risk' }, { combinator: 'or', rules: [{ field: 'kind', operator: '=', value: 'claim' }, { field: 'kind', operator: '=', value: 'risk' }] }), true);
     assert.equal(tasksNodeMatchesFilters({ kind: 'risk' }, { combinator: 'and', not: true, rules: [{ field: 'kind', operator: '=', value: 'risk' }] }), false);
+    const query = { combinator: 'and', rules: [{ field: 'status', operator: '=', value: 'open' }] };
+    const swatches = { combinator: 'and', rules: [{ field: 'kind', operator: 'in', value: ['risk', 'claim'] }] };
+    assert.equal(tasksNodeMatchesAllFilters({ status: 'open', kind: 'risk' }, query, swatches), true);
+    assert.equal(tasksNodeMatchesAllFilters({ status: 'closed', kind: 'risk' }, query, swatches), false);
+    assert.equal(tasksNodeMatchesAllFilters({ status: 'open', kind: 'decision' }, query, swatches), false);
 });
 
 test('toggleMultiValueFilter supports multi-color selection and reset', () => {

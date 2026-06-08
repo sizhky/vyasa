@@ -469,6 +469,24 @@ def test_tasks_source_uses_reset_button_label():
     assert "onClick: resetProjectionControls" in source
 
 
+def test_tasks_color_swatch_filter_is_independent_and_ands_with_query_filter():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    callback = source.split("const toggleFilterValue = React.useCallback", 1)[1].split("}, []);", 1)[0]
+
+    assert "setActiveSwatchFilters((current) => toggleTasksFilterQueryValue(current, key, value, enabled))" in callback
+    assert "setQueryBuilderEnabled(true)" not in callback
+    assert "function tasksNodeMatchesAllFilters(node, queryFilters, swatchFilters)" in source
+    assert "tasksNodeMatchesFilters(node, queryFilters) && tasksNodeMatchesFilters(node, swatchFilters)" in source
+    assert "tasksFilterQuerySelectedValues(activeSwatchFilters, activeColorBy)" in source
+    assert "tasksFilterQuerySelectedValues(activeSwatchFilters, activeSecondaryColorBy)" in source
+    assert "swatchFilters: activeSwatchFilters" in source
+    assert "setActiveSwatchFilters(tasksEmptyFilterQuery())" in source
+    assert "query: normalizeTasksFilterQuery(activeFilters)" in source
+    assert "onQueryChange: (query) => setActiveFilters(normalizeTasksFilterQuery(query))" in source
+    assert "const activeSwatchKeys = new Set([activeColorBy, activeSecondaryColorBy].filter(Boolean))" in source
+    assert "tasksPruneFilterQueryFields(current, activeSwatchKeys)" in source
+
+
 def test_tasks_source_supports_continuous_gradient_palettes():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 

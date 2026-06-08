@@ -1522,6 +1522,10 @@ function tasksNodeMatchesFilters(node, filters) {
     return query.not ? !matched : matched;
 }
 
+function tasksNodeMatchesAllFilters(node, queryFilters, swatchFilters) {
+    return tasksNodeMatchesFilters(node, queryFilters) && tasksNodeMatchesFilters(node, swatchFilters);
+}
+
 function tasksSearchNormalizeText(value) {
     return String(value ?? '').replace(/\s+/g, ' ').trim();
 }
@@ -3491,6 +3495,11 @@ async function renderTasksGraphs(rootElement = document) {
                     ? normalizeTasksFilterQuery(projectionPrefs.filters)
                     : tasksEmptyFilterQuery()
             ));
+            const [activeSwatchFilters, setActiveSwatchFilters] = React.useState(() => egoMode ? {} : (
+                projectionPrefs?.swatchFilters && typeof projectionPrefs.swatchFilters === 'object'
+                    ? normalizeTasksFilterQuery(projectionPrefs.swatchFilters)
+                    : tasksEmptyFilterQuery()
+            ));
             const [searchQuery, setSearchQuery] = React.useState(() => egoMode ? '' : (
                 typeof projectionPrefs?.searchQuery === 'string' ? projectionPrefs.searchQuery : ''
             ));
@@ -3600,6 +3609,7 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 const nextPrefs = readTasksProjectionPrefsForModel(sourceModel, { projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
                 setActiveFilters(egoMode ? tasksEmptyFilterQuery() : normalizeTasksFilterQuery(nextPrefs?.filters));
+                setActiveSwatchFilters(egoMode ? tasksEmptyFilterQuery() : normalizeTasksFilterQuery(nextPrefs?.swatchFilters));
                 setSearchQuery(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
                 setSearchInputValue(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
                 setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, nextPrefs, nodeNotes));
@@ -3639,7 +3649,7 @@ async function renderTasksGraphs(rootElement = document) {
                     .catch((error) => console.error('[tasks] query builder load failed', error));
                 return () => { active = false; };
             }, [egoMode, filtersCollapsed, queryBuilderEnabled]);
-            const effectiveFilters = React.useMemo(
+            const effectiveQueryFilters = React.useMemo(
                 () => (queryBuilderEnabled ? activeFilters : tasksEmptyFilterQuery()),
                 [queryBuilderEnabled, activeFilters]
             );
@@ -3648,18 +3658,18 @@ async function renderTasksGraphs(rootElement = document) {
                 [graphRevision, searchQuery, nodeNotes]
             );
             const filteredSelectionIds = React.useCallback(() => {
-                const hasFilters = tasksFilterQueryHasRules(effectiveFilters);
+                const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters);
                 const hasSearch = searchMatches.active && !searchMatches.error;
                 if (!hasFilters && !hasSearch) return new Set();
                 return new Set((graphBaseRef.current.nodes || [])
                     .filter((node) => node?.id && node.data?.__kind__ !== 'groupTitle')
                     .filter((node) => {
-                        const filterHit = hasFilters ? tasksNodeMatchesFilters(node.data, effectiveFilters) : true;
+                        const filterHit = hasFilters ? tasksNodeMatchesAllFilters(node.data, effectiveQueryFilters, activeSwatchFilters) : true;
                         const searchHit = hasSearch ? searchMatches.nodeIds.has(node.id) : true;
                         return filterHit && searchHit;
                     })
                     .map((node) => node.id));
-            }, [effectiveFilters, searchMatches]);
+            }, [effectiveQueryFilters, activeSwatchFilters, searchMatches]);
             const currentSelectionIds = React.useCallback(() => {
                 if (selectedNodeId) return new Set([selectedNodeId]);
                 if (selectedNodeIds.size) {
@@ -3677,12 +3687,17 @@ async function renderTasksGraphs(rootElement = document) {
                 const validColorKeys = new Set(tasksColorOptions(model, nodeNotes).map((option) => option.key));
                 const defaultColorBy = tasksResolvedProjectionDefaultColorBy(model, nodeNotes);
                 setActiveFilters((current) => tasksPruneFilterQueryFields(current, validFilterKeys));
+                setActiveSwatchFilters((current) => tasksPruneFilterQueryFields(current, validFilterKeys));
                 setActiveColorBy((current) => {
                     if (current && validColorKeys.has(current)) return current;
                     return validColorKeys.has(defaultColorBy) ? defaultColorBy : '';
                 });
                 setActiveSecondaryColorBy((current) => (current && validColorKeys.has(current) ? current : ''));
             }, [model, nodeNotes]);
+            React.useEffect(() => {
+                const activeSwatchKeys = new Set([activeColorBy, activeSecondaryColorBy].filter(Boolean));
+                setActiveSwatchFilters((current) => tasksPruneFilterQueryFields(current, activeSwatchKeys));
+            }, [activeColorBy, activeSecondaryColorBy]);
             React.useEffect(() => {
                 if (lastPersistedProjectionIdRef.current !== activeProjectionId) {
                     lastPersistedProjectionIdRef.current = activeProjectionId;
@@ -3693,6 +3708,7 @@ async function renderTasksGraphs(rootElement = document) {
                     ...storedProjectionPrefsRef.current,
                     [projectionKey]: {
                         filters: activeFilters,
+                        swatchFilters: activeSwatchFilters,
                         queryBuilderEnabled,
                         searchQuery,
                         colorBy: activeColorBy,
@@ -3726,7 +3742,7 @@ async function renderTasksGraphs(rootElement = document) {
                     nodeNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [sourceModel, activeFilters, queryBuilderEnabled, searchQuery, activeColorBy, activeSecondaryColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeAnimationEnabled, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes]);
+            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchQuery, activeColorBy, activeSecondaryColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeAnimationEnabled, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
@@ -3860,6 +3876,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const defaults = tasksProjectionSchemaPrefs(sourceModel, activeProjectionId);
                 const defaultSearch = typeof defaults.searchQuery === 'string' ? defaults.searchQuery : '';
                 setActiveFilters(normalizeTasksFilterQuery(defaults.filters));
+                setActiveSwatchFilters(tasksEmptyFilterQuery());
                 setQueryBuilderEnabled(typeof defaults.queryBuilderEnabled === 'boolean' ? defaults.queryBuilderEnabled : true);
                 setSearchInputValue(defaultSearch);
                 setSearchQuery(defaultSearch);
@@ -4260,7 +4277,7 @@ async function renderTasksGraphs(rootElement = document) {
                     return;
                 }
                 if (!hasNodeSelection) {
-                    const hasFilters = tasksFilterQueryHasRules(effectiveFilters);
+                    const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters);
                     const hasSearch = searchMatches.active && !searchMatches.error;
                     if (!hasFilters && !hasSearch) {
                         setNodes(baseNodes);
@@ -4487,7 +4504,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdges(edgesVisible ? nextEdges : []);
-            }, [effectiveFilters, searchMatches, model, activeColorBy, activeColorPalette, activeSecondaryColorBy, activeSecondaryColorPalette, expanded, edgesVisible, edgeAnimationEnabled, edgeOpacity, filteredSelectionIds]);
+            }, [effectiveQueryFilters, activeSwatchFilters, searchMatches, model, activeColorBy, activeColorPalette, activeSecondaryColorBy, activeSecondaryColorPalette, expanded, edgesVisible, edgeAnimationEnabled, edgeOpacity, filteredSelectionIds]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -4545,13 +4562,13 @@ async function renderTasksGraphs(rootElement = document) {
             }, [graphRevision, expanded]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnFilter()) return;
-                const hasFilters = tasksFilterQueryHasRules(effectiveFilters);
+                const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters);
                 const hasSearch = searchMatches.active && !searchMatches.error;
                 if (!hasFilters && !hasSearch) return;
                 const reactFlow = reactFlowApiRef.current;
                 const matchedNodes = (graphBaseRef.current.nodes || []).filter((node) => {
                     if (!node?.id || node.data?.__kind__ === 'groupTitle') return false;
-                    const filterHit = hasFilters ? tasksNodeMatchesFilters(node.data, effectiveFilters) : true;
+                    const filterHit = hasFilters ? tasksNodeMatchesAllFilters(node.data, effectiveQueryFilters, activeSwatchFilters) : true;
                     const searchHit = hasSearch ? searchMatches.nodeIds.has(node.id) : true;
                     return filterHit && searchHit;
                 });
@@ -4562,7 +4579,7 @@ async function renderTasksGraphs(rootElement = document) {
                 return () => {
                     if (rafId !== null) window.cancelAnimationFrame(rafId);
                 };
-            }, [graphRevision, effectiveFilters, searchMatches]);
+            }, [graphRevision, effectiveQueryFilters, activeSwatchFilters, searchMatches]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnFilter()) return;
                 if (selectedNodeId || !selectedNodeIds.size) return;
@@ -5265,7 +5282,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const groupByLevels = displayedGroupByHierarchy.filter(Boolean);
                 if (customGroupingActive) groupByLevels.push('');
                 if (!groupByLevels.length && viewMode !== 'gantt') groupByLevels.push('');
-                const activeCount = (queryBuilderEnabled ? tasksCountFilterRules(activeFilters) : 0) + (activeColorBy ? 1 : 0) + (searchMatches.active ? 1 : 0) + activeGroupByCount;
+                const activeCount = (queryBuilderEnabled ? tasksCountFilterRules(activeFilters) : 0) + tasksCountFilterRules(activeSwatchFilters) + (activeColorBy ? 1 : 0) + (searchMatches.active ? 1 : 0) + activeGroupByCount;
                 const QueryBuilder = queryBuilderEnabled && queryBuilderReady ? window.VyasaTasksQueryBuilder?.QueryBuilder : null;
                 const queryBuilderFields = options.map((option) => ({
                     name: option.key,
@@ -5281,8 +5298,8 @@ async function renderTasksGraphs(rootElement = document) {
                     { name: 'contains', label: 'contains' },
                     { name: 'doesNotContain', label: 'does not contain' },
                 ];
-                const activeColorSelectedValues = new Set(tasksFilterQuerySelectedValues(activeFilters, activeColorBy));
-                const activeSecondarySelectedValues = new Set(tasksFilterQuerySelectedValues(activeFilters, activeSecondaryColorBy));
+                const activeColorSelectedValues = new Set(tasksFilterQuerySelectedValues(activeSwatchFilters, activeColorBy));
+                const activeSecondarySelectedValues = new Set(tasksFilterQuerySelectedValues(activeSwatchFilters, activeSecondaryColorBy));
                 const QueryValueEditor = (props) => {
                     const values = Array.isArray(props.values) ? props.values : [];
                     const optionValue = (option) => String(option.value ?? option.name ?? '');
@@ -5819,7 +5836,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId(null);
             };
             const toggleFilterValue = React.useCallback((key, value, enabled) => {
-                setActiveFilters((current) => toggleTasksFilterQueryValue(current, key, value, enabled));
+                setActiveSwatchFilters((current) => toggleTasksFilterQueryValue(current, key, value, enabled));
             }, []);
             const clearGroupHoverTooltip = React.useCallback(() => {
                 setGroupHoverTooltip(null);
