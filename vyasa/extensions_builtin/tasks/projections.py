@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import re
 from collections import defaultdict
+from itertools import product
 
 from .layout import build_collapsed_graph
 
@@ -178,11 +179,13 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
         if node_id
     }
 
-    def value_path(task: dict) -> tuple[str, ...]:
-        return tuple(
-            (str(task.get(attr) or "").strip() or TASKS_PROJECTION_UNSPECIFIED_LABEL)
-            for attr in group_attrs
-        )
+    def values(task: dict, attr: str) -> list[str]:
+        raw = task.get(attr)
+        items = raw if isinstance(raw, list) else [raw]
+        return [str(item).strip() for item in items if str(item or "").strip()] or [TASKS_PROJECTION_UNSPECIFIED_LABEL]
+
+    def value_paths(task: dict) -> list[tuple[str, ...]]:
+        return list(product(*(values(task, attr) for attr in group_attrs)))
 
     # Bottom-up: only paths that have at least one task get materialized.
     groups: list[dict] = []
@@ -190,44 +193,63 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
     group_tree: dict = defaultdict(list)
     task_children: dict = defaultdict(list)
     tasks: list[dict] = []
+    projected_ids: dict[str, list[str]] = defaultdict(list)
 
     for task in base_model.get("tasks", []):
         if endpoint_node_ids and task.get("id") not in endpoint_node_ids:
             continue
-        if where and any(str(task.get(key) or "").strip() != value for key, value in where.items()):
+        if where and any(value not in values(task, key) for key, value in where.items()):
             continue
-        if source_attr_filters and any(str(task.get(key) or "").strip() not in values for key, values in source_attr_filters.items()):
+        if source_attr_filters and any(not set(values(task, key)).intersection(allowed) for key, allowed in source_attr_filters.items()):
             continue
-        path = value_path(task)
-        # Ensure ancestor groups exist for every prefix of the path.
-        for depth in range(1, len(path) + 1):
-            prefix = path[:depth]
-            if prefix in groups_by_path:
-                continue
-            attr = group_attrs[depth - 1]
-            value = prefix[-1]
-            slug_parts = [projection["id"]] + [
-                f"{group_attrs[i]}-{prefix[i]}" for i in range(depth)
-            ]
-            group_id = _slugify("__".join(slug_parts))
-            parent_path = prefix[:-1]
-            parent_id = groups_by_path[parent_path]["id"] if parent_path else None
-            group = {
-                "id": group_id,
-                "label": _projection_group_label(attr, value),
-                "parent_group_id": parent_id,
-                "__projection_group__": True,
-                "projection": projection["id"],
-                attr: value,
-            }
-            groups.append(group)
-            groups_by_path[prefix] = group
-            group_tree[parent_id].append(group_id)
-        leaf_group = groups_by_path[path]
-        task_copy = copy.deepcopy(task)
-        task_copy["group_id"] = leaf_group["id"]
-        tasks.append(task_copy)
-        task_children[leaf_group["id"]].append(task_copy["id"])
+        paths = value_paths(task)
+        for path in paths:
+            # Ensure ancestor groups exist for every prefix of the path.
+            for depth in range(1, len(path) + 1):
+                prefix = path[:depth]
+                if prefix in groups_by_path:
+                    continue
+                attr = group_attrs[depth - 1]
+                value = prefix[-1]
+                slug_parts = [projection["id"]] + [
+                    f"{group_attrs[i]}-{prefix[i]}" for i in range(depth)
+                ]
+                group_id = _slugify("__".join(slug_parts))
+                parent_path = prefix[:-1]
+                parent_id = groups_by_path[parent_path]["id"] if parent_path else None
+                group = {
+                    "id": group_id,
+                    "label": _projection_group_label(attr, value),
+                    "parent_group_id": parent_id,
+                    "__projection_group__": True,
+                    "projection": projection["id"],
+                    attr: value,
+                }
+                groups.append(group)
+                groups_by_path[prefix] = group
+                group_tree[parent_id].append(group_id)
+            leaf_group = groups_by_path[path]
+            task_copy = copy.deepcopy(task)
+            source_id = task_copy["id"]
+            task_copy["id"] = source_id if len(paths) == 1 else _slugify(f"{source_id}__{projection['id']}__{'__'.join(path)}")
+            task_copy["__source_node_id"] = source_id
+            task_copy["group_id"] = leaf_group["id"]
+            tasks.append(task_copy)
+            projected_ids[source_id].append(task_copy["id"])
+            task_children[leaf_group["id"]].append(task_copy["id"])
+
+    projection_edges = []
+    base_edges = source_scoped_edges if edge_source_scoped else base_model.get("dependency_edges", [])
+    for edge in base_edges:
+        pairs = product(projected_ids.get(edge.get("source"), []), projected_ids.get(edge.get("target"), []))
+        for source_id, target_id in pairs:
+            edge_copy = copy.deepcopy(edge)
+            if source_id != edge.get("source") or target_id != edge.get("target"):
+                edge_copy["__source_edge_id"] = edge_copy["id"]
+                edge_copy["id"] = _slugify(f"{edge_copy['id']}__{source_id}__{target_id}")
+            edge_copy["source"] = source_id
+            edge_copy["target"] = target_id
+            projection_edges.append(edge_copy)
 
     projection_model = {
         **base_model,
@@ -242,11 +264,7 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
         **{key: projection[key] for key in PROJECTION_DISPLAY_KEYS if key in projection},
         "groups": groups,
         "tasks": tasks,
-        "dependency_edges": [
-            copy.deepcopy(edge)
-            for edge in (source_scoped_edges if edge_source_scoped else base_model.get("dependency_edges", []))
-            if edge.get("source") in {task["id"] for task in tasks} and edge.get("target") in {task["id"] for task in tasks}
-        ],
+        "dependency_edges": projection_edges,
         "group_tree": dict(group_tree),
         "task_children": dict(task_children),
         "document_order": [group["id"] for group in groups] + [task["id"] for task in tasks],

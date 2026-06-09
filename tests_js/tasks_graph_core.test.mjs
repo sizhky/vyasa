@@ -50,13 +50,16 @@ test('Knowledge Graph search matches notes from only the supplied graph', () => 
     const end = source.indexOf('function resolveTasksProjectionGroupOwnColor');
     const factory = new Function(
         'const tasksIsHiddenNodeMetaKey = () => false;\n'
+        + 'const tasksAttrValues = value => (Array.isArray(value) ? value : [value]).map(entry => String(entry ?? "").trim()).filter(Boolean);\n'
+        + 'const tasksLogicalNodeId = (node, fallback = "") => String(node?.__source_node_id || fallback || node?.id || "").trim();\n'
         + source.slice(start, end)
         + '\nreturn tasksCollectSearchMatches;'
     );
     const search = factory();
-    const nodes = [{ id: 'current-node', data: { id: 'current-node', label: 'Current' } }];
+    const nodes = [{ id: 'current-node', data: { id: 'current-node', label: 'Current', owner: ['Yeshwanth', 'Satyasri'] } }];
     assert.deepEqual(Array.from(search(nodes, [], 'private phrase', { 'current-node': 'private phrase' }).nodeIds), ['current-node']);
     assert.deepEqual(Array.from(search(nodes, [], 'other phrase', { 'other-node': 'other phrase' }).nodeIds), []);
+    assert.deepEqual(Array.from(search(nodes, [], 'Satyasri').nodeIds), ['current-node']);
 });
 
 test('projection reset defaults include all authored sidebar parameters', () => {
@@ -287,6 +290,7 @@ test('collapsed groups average both primary and secondary colors', () => {
     const factory = new Function(
         "const TASKS_HAS_NOTE_ATTR = 'has_note';\n"
         + "const TASKS_HAS_NOTE_PALETTE = { yes: '#22c55e', no: 'rgba(220, 38, 38, 0.28)' };\n"
+        + "const tasksAttrValues = value => (Array.isArray(value) ? value : [value]).map(entry => String(entry ?? '').trim()).filter(Boolean);\n"
         + source.slice(start, end)
         + "\nreturn { resolveTasksCollapsedGroupColor, tasksGroupBackground };"
     );
@@ -299,11 +303,11 @@ test('collapsed groups average both primary and secondary colors', () => {
         node_color_palettes: { kind: { alpha: '#ff0000', beta: '#0000ff' }, energy: { hot: '#00ff00', cold: '#ff00ff' } },
     };
     const group = { id: 'g1', __kind__: 'group' };
-    assert.equal(resolveTasksCollapsedGroupColor(group, model, 'kind', model.node_color_palettes.kind), '#800080');
-    assert.equal(resolveTasksCollapsedGroupColor(group, model, 'energy', model.node_color_palettes.energy), '#808080');
+    assert.equal(resolveTasksCollapsedGroupColor(group, model, 'kind', model.node_color_palettes.kind), '#8c53a2');
+    assert.equal(resolveTasksCollapsedGroupColor(group, model, 'energy', model.node_color_palettes.energy), '#c6b4b4');
     assert.equal(
-        tasksGroupBackground('#800080', '#808080', 'fallback', { intensity: 12 }),
-        'linear-gradient(135deg, color-mix(in srgb, var(--vyasa-paper) 88%, #800080 12%) 0 50%, color-mix(in srgb, var(--vyasa-paper) 88%, #808080 12%) 50% 100%)',
+        tasksGroupBackground('#8c53a2', '#c6b4b4', 'fallback', { intensity: 12 }),
+        'linear-gradient(135deg, color-mix(in srgb, var(--vyasa-paper) 88%, #8c53a2 12%) 0 50%, color-mix(in srgb, var(--vyasa-paper) 88%, #c6b4b4 12%) 50% 100%)',
     );
 });
 
@@ -402,7 +406,12 @@ test('note special filter uses derived yes/no value', async () => {
     const match = source.match(/function tasksEmptyFilterQuery\(\) \{[\s\S]*?\nfunction tasksSearchNormalizeText/);
     assert.ok(match, 'tasksNodeMatchesFilters should exist');
     const helpers = match[0].replace(/\nfunction tasksSearchNormalizeText$/, '');
-    const factory = new Function('TASKS_HAS_NOTE_ATTR', `${helpers}; return { tasksNodeMatchesFilters, tasksNodeMatchesAllFilters };`);
+    const factory = new Function(
+        'TASKS_HAS_NOTE_ATTR',
+        'const normalizeTasksAttrText = value => String(value ?? "").trim();\n'
+        + 'const tasksAttrValues = value => (Array.isArray(value) ? value : [value]).map(normalizeTasksAttrText).filter(Boolean);\n'
+        + `${helpers}; return { tasksNodeMatchesFilters, tasksNodeMatchesAllFilters };`
+    );
     const { tasksNodeMatchesFilters, tasksNodeMatchesAllFilters } = factory('has_note');
     assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['yes'] }), true);
     assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['no'] }), false);
@@ -414,6 +423,31 @@ test('note special filter uses derived yes/no value', async () => {
     assert.equal(tasksNodeMatchesAllFilters({ status: 'open', kind: 'risk' }, query, swatches), true);
     assert.equal(tasksNodeMatchesAllFilters({ status: 'closed', kind: 'risk' }, query, swatches), false);
     assert.equal(tasksNodeMatchesAllFilters({ status: 'open', kind: 'decision' }, query, swatches), false);
+    assert.equal(tasksNodeMatchesFilters({ owner: ['Yeshwanth', 'Satyasri'] }, { owner: ['Yeshwanth'] }), true);
+    assert.equal(tasksNodeMatchesFilters({ owner: ['Yeshwanth', 'Satyasri'] }, { owner: ['Naveen'] }), false);
+});
+
+test('composite palette colors mix once in OKLab', async () => {
+    const source = await fs.promises.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function parseTasksHexColor');
+    const end = source.indexOf('function parseTasksNumericValue');
+    const factory = new Function(`${source.slice(start, end)}; return averageTasksHexColors;`);
+    const mix = factory();
+    assert.equal(mix(['#2563eb']), '#2563eb');
+    assert.match(mix(['#2563eb', '#7c3aed']), /^#[0-9a-f]{6}$/);
+    assert.equal(mix(['#2563eb', '#7c3aed']), mix(['#7c3aed', '#2563eb']));
+});
+
+test('composite palette sweep cycles actual member colors', async () => {
+    const source = await fs.promises.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function tasksMixedFill');
+    const end = source.indexOf('function tasksNodeBackground');
+    const factory = new Function(
+        'const tasksAttrValues = value => Array.isArray(value) ? value : [value];\n'
+        + `${source.slice(start, end)}; return tasksCompositeSweep;`
+    );
+    const sweep = factory()({ owner: ['Yeshwanth', 'Satyasri'] }, 'owner', { Yeshwanth: '#2563eb', Satyasri: '#7c3aed' }, '', {}, { enabled: false });
+    assert.equal(sweep, 'linear-gradient(90deg, #2563eb 0%, #7c3aed 50%, #2563eb 100%)');
 });
 
 test('toggleMultiValueFilter supports multi-color selection and reset', () => {
@@ -677,7 +711,7 @@ test('split-fill background composes a diagonal gradient from two colors', async
     const fs = await import('node:fs/promises');
     const source = await fs.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
     const mixMatch = source.match(/function tasksMixedFill\(color, colorMix\) \{[\s\S]*?\n\}/);
-    const bgMatch = source.match(/function tasksNodeBackground\(primaryColor, secondaryColor, colorMix, fallback\) \{[\s\S]*?\n\}/);
+    const bgMatch = source.match(/function tasksNodeBackground\(primaryColor, secondaryColor, colorMix, fallback, composite = false\) \{[\s\S]*?\n\}/);
     assert.ok(mixMatch, 'tasksMixedFill should exist');
     assert.ok(bgMatch, 'tasksNodeBackground should exist');
     const factory = new Function(`${mixMatch[0]}; ${bgMatch[0]}; return tasksNodeBackground;`);
@@ -696,6 +730,10 @@ test('split-fill background composes a diagonal gradient from two colors', async
     // No primary -> fallback regardless of secondary.
     assert.equal(tasksNodeBackground('', '#222222', noMix, 'FALLBACK'), 'FALLBACK');
     assert.equal(tasksNodeBackground('', '', noMix, 'FALLBACK'), 'FALLBACK');
+    assert.equal(
+        tasksNodeBackground('#111111', '', noMix, 'FALLBACK', true),
+        '#111111',
+    );
 
     // color-mix wrapping applied to both halves when enabled.
     const mix = { enabled: true, paper: 78, intensity: 22 };

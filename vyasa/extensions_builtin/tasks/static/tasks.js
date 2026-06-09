@@ -53,6 +53,8 @@ const TASKS_SPECIAL_NODE_ATTRS = new Set([
     '__has_note__',
     '__node_image__',
     '__secondary_color__',
+    '__composite_color__',
+    '__composite_sweep__',
 ]);
 const TASKS_INTERNAL_NODE_META_KEYS = new Set([
     'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
@@ -60,6 +62,7 @@ const TASKS_INTERNAL_NODE_META_KEYS = new Set([
     '__rendered_attrs__', 'width', 'height', 'position', 'parentid',
     'parent_id', 'color', 'href', 'image', 'image_by', 'collapsed', 'child_group_ids',
     'child_task_ids', '__projection_group__', 'projection', '__kg_sources',
+    '__source_node_id', '__source_edge_id',
     'active_projection', 'graph_x', 'graph_y', '__gantt', '__projection_branch_opacity__',
 ]);
 const TASKS_GANTT_UNIT_WIDTH = 340;
@@ -726,6 +729,7 @@ function escapeTasksHtml(value) {
 }
 
 function normalizeTasksAttrText(value) {
+    if (Array.isArray(value)) return value.map(normalizeTasksAttrText).filter(Boolean).join(', ');
     const text = String(value ?? '').trim();
     if (!text) return '';
     if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
@@ -734,10 +738,22 @@ function normalizeTasksAttrText(value) {
     return text;
 }
 
+function tasksAttrValues(value) {
+    const values = Array.isArray(value) ? value : [value];
+    return Array.from(new Set(values
+        .filter((entry) => typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean')
+        .map((entry) => normalizeTasksAttrText(entry))
+        .filter(Boolean)));
+}
+
+function tasksLogicalNodeId(node, fallback = '') {
+    return String(node?.__source_node_id || fallback || node?.id || '').trim();
+}
+
 function tasksNodeMetaEntries(node) {
     if (!node) return [];
     return Object.entries(node)
-        .filter(([key, value]) => !tasksIsHiddenNodeMetaKey(key) && value !== null && value !== undefined && value !== '' && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))
+        .filter(([key, value]) => !tasksIsHiddenNodeMetaKey(key) && tasksAttrValues(value).length)
         .map(([key, value]) => ({
             key,
             label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
@@ -915,10 +931,11 @@ function tasksFilterOptions(model) {
         for (const [key, value] of Object.entries(node)) {
             if (tasksIsHiddenNodeMetaKey(key) || value === null || value === undefined || value === '') continue;
             if (continuousColorKeys.has(String(key))) continue;
-            if (!(typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) continue;
+            const values = tasksAttrValues(value);
+            if (!values.length) continue;
             if (!buckets.has(key)) buckets.set(key, { values: new Set(), kinds: new Set() });
-            buckets.get(key).values.add(String(value));
-            buckets.get(key).kinds.add(typeof value);
+            values.forEach((entry) => buckets.get(key).values.add(entry));
+            buckets.get(key).kinds.add(Array.isArray(value) ? 'string' : typeof value);
         }
     };
     (model.groups || []).forEach(visit);
@@ -1197,7 +1214,8 @@ function normalizeTasksGradientValue(value, domain, wrap) {
 }
 
 function parseTasksHexColor(color) {
-    const value = String(color || '').trim().replace(/^#/, '');
+    let value = String(color || '').trim().replace(/^#/, '');
+    if (/^[0-9a-f]{3}$/i.test(value)) value = value.split('').map((part) => part + part).join('');
     if (!/^[0-9a-f]{6}$/i.test(value)) return null;
     return {
         r: Number.parseInt(value.slice(0, 2), 16),
@@ -1219,8 +1237,39 @@ function interpolateTasksHexColor(startColor, endColor, ratio) {
 function averageTasksHexColors(colors) {
     const parsed = (colors || []).map(parseTasksHexColor).filter(Boolean);
     if (!parsed.length) return '';
-    const average = (key) => Math.round(parsed.reduce((sum, color) => sum + color[key], 0) / parsed.length);
-    return `#${['r', 'g', 'b'].map((key) => average(key).toString(16).padStart(2, '0')).join('')}`;
+    const linear = (part) => {
+        const value = part / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    };
+    const labs = parsed.map(({ r, g, b }) => {
+        const [lr, lg, lb] = [linear(r), linear(g), linear(b)];
+        const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
+        const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
+        const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+        return {
+            L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+            a: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+            b: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+        };
+    });
+    const average = (key) => labs.reduce((sum, color) => sum + color[key], 0) / labs.length;
+    const L = average('L');
+    const a = average('a');
+    const b = average('b');
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+    const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+    const encode = (value) => {
+        const bounded = Math.max(0, Math.min(1, value));
+        const encoded = bounded <= 0.0031308 ? 12.92 * bounded : 1.055 * bounded ** (1 / 2.4) - 0.055;
+        return Math.round(encoded * 255);
+    };
+    const rgb = [
+        encode(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+        encode(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+        encode(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
+    ];
+    return `#${rgb.map((part) => part.toString(16).padStart(2, '0')).join('')}`;
 }
 
 function parseTasksNumericValue(value) {
@@ -1288,9 +1337,7 @@ function tasksColorPaletteEntries(model, colorBy, nodeNotes = null) {
     if (key === TASKS_HAS_NOTE_ATTR) return tasksHasAnyNodeNote(nodeNotes) ? Object.entries(palette) : [];
     const presentValues = new Set(
         [...(model?.groups || []), ...(model?.tasks || [])]
-            .map((node) => node?.[key])
-            .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
-            .map((value) => String(value))
+            .flatMap((node) => tasksAttrValues(node?.[key]))
     );
     return Object.entries(palette)
         .filter(([value]) => presentValues.has(String(value)))
@@ -1322,10 +1369,8 @@ function resolveTasksEdgeLabel(edge, model, activeProjection = null) {
     const defaultAttr = typeof model?.edge_label_from === 'string' ? model.edge_label_from.trim() : '';
     const requestedAttr = projectionAttr || defaultAttr;
     if (requestedAttr) {
-        const value = edge[requestedAttr];
-        if (value !== null && value !== undefined && String(value).trim()) {
-            return String(value).trim();
-        }
+        const values = tasksAttrValues(edge[requestedAttr]);
+        if (values.length) return values.join(', ');
     }
     // 4. Empty — user said this is fine.
     return '';
@@ -1349,13 +1394,10 @@ function resolveTasksEdgeColor(edge, model, colorByOverride = null, paletteOverr
     const palette = paletteOverride && typeof paletteOverride === 'object'
         ? paletteOverride
         : tasksEdgeColorPaletteFor(model, colorBy);
-    const value = edge[colorBy];
-    const paletteKey = value === null || value === undefined || String(value).trim() === ''
-        ? (typeof edge.label === 'string' ? edge.label.trim() : '')
-        : String(value);
-    if (!paletteKey) return '';
-    const color = palette[paletteKey];
-    return typeof color === 'string' && color.trim() ? color.trim() : '';
+    const values = tasksAttrValues(edge[colorBy]);
+    const paletteKeys = values.length ? values : tasksAttrValues(edge.label);
+    const colors = paletteKeys.map((value) => palette[value]).filter((color) => typeof color === 'string' && color.trim());
+    return averageTasksHexColors(colors) || colors[0]?.trim() || '';
 }
 
 function tasksEmptyFilterQuery() {
@@ -1492,20 +1534,21 @@ function tasksGroupIdsContainingSelection(model, selectedIds) {
 }
 
 function tasksNodeFilterValue(node, key) {
-    if (key === TASKS_HAS_NOTE_ATTR) return node?.__has_note__ ? 'yes' : 'no';
-    return String(node?.[key] ?? '');
+    if (key === TASKS_HAS_NOTE_ATTR) return [node?.__has_note__ ? 'yes' : 'no'];
+    return tasksAttrValues(node?.[key]);
 }
 
 function tasksNodeMatchesFilterRule(node, rule) {
     if (!rule?.field || !rule?.operator) return true;
-    const nodeValue = tasksNodeFilterValue(node, rule.field);
+    const nodeValues = tasksNodeFilterValue(node, rule.field);
     const values = tasksFilterValueList(rule.value);
-    if (rule.operator === 'in') return values.length ? values.includes(nodeValue) : true;
-    if (rule.operator === 'notIn') return values.length ? !values.includes(nodeValue) : true;
-    if (rule.operator === '!=') return nodeValue !== String(rule.value ?? '');
-    if (rule.operator === 'contains') return nodeValue.toLowerCase().includes(String(rule.value ?? '').toLowerCase());
-    if (rule.operator === 'doesNotContain') return !nodeValue.toLowerCase().includes(String(rule.value ?? '').toLowerCase());
-    return nodeValue === String(rule.value ?? '');
+    if (rule.operator === 'in') return values.length ? values.some((value) => nodeValues.includes(value)) : true;
+    if (rule.operator === 'notIn') return values.length ? values.every((value) => !nodeValues.includes(value)) : true;
+    const target = String(rule.value ?? '');
+    if (rule.operator === '!=') return !nodeValues.includes(target);
+    if (rule.operator === 'contains') return nodeValues.some((value) => value.toLowerCase().includes(target.toLowerCase()));
+    if (rule.operator === 'doesNotContain') return nodeValues.every((value) => !value.toLowerCase().includes(target.toLowerCase()));
+    return nodeValues.includes(target);
 }
 
 function tasksNodeMatchesFilters(node, filters) {
@@ -1563,11 +1606,12 @@ function tasksCollectSearchMatches(nodes, edges, query, nodeNotes = {}) {
     for (const node of (nodes || [])) {
         const data = node?.data || {};
         if (data.__kind__ === 'groupTitle') continue;
-        const values = [node?.id, data.id, data.label, nodeNotes[String(node?.id || '')]];
+        const logicalNodeId = tasksLogicalNodeId(data, node?.id);
+        const values = [node?.id, data.id, data.label, nodeNotes[logicalNodeId]];
         for (const [key, value] of Object.entries(data)) {
             if (tasksIsHiddenNodeMetaKey(key)) continue;
-            if (value === null || value === undefined || typeof value === 'object' || typeof value === 'function') continue;
-            values.push(value);
+            if (value === null || value === undefined || typeof value === 'function') continue;
+            values.push(...tasksAttrValues(value));
         }
         if (values.some((value) => tasksSearchMatchesText(value, spec))) nodeIds.add(node.id);
     }
@@ -1575,8 +1619,8 @@ function tasksCollectSearchMatches(nodes, edges, query, nodeNotes = {}) {
         const values = [];
         for (const [key, value] of Object.entries(edge || {})) {
             if (hiddenEdgeKeys.has(String(key).toLowerCase())) continue;
-            if (value === null || value === undefined || typeof value === 'object' || typeof value === 'function') continue;
-            values.push(value);
+            if (value === null || value === undefined || typeof value === 'function') continue;
+            values.push(...tasksAttrValues(value));
         }
         if (!values.some((value) => tasksSearchMatchesText(value, spec))) continue;
         edgeIds.add(edge.id);
@@ -1638,11 +1682,14 @@ function resolveTasksNodeOwnColor(node, model, colorByOverride = null, paletteOv
             const value = node?.__has_note__ ? 'yes' : 'no';
             return TASKS_HAS_NOTE_PALETTE[value] || '';
         }
-        const value = node[colorBy];
-        if (value !== null && value !== undefined && String(value).trim()) {
-            if (isTasksGradientPalette(palette)) return resolveTasksGradientColor(palette, value);
-            const color = palette[String(value)];
-            if (typeof color === 'string' && color.trim()) return color.trim();
+        const values = tasksAttrValues(node[colorBy]);
+        if (values.length) {
+            if (isTasksGradientPalette(palette)) {
+                const numeric = values.map(parseTasksNumericValue).filter((value) => value !== null);
+                return numeric.length ? resolveTasksGradientColor(palette, numeric.reduce((sum, value) => sum + value, 0) / numeric.length) : '';
+            }
+            const colors = values.map((value) => palette[value]).filter((color) => typeof color === 'string' && color.trim());
+            return averageTasksHexColors(colors) || colors[0]?.trim() || '';
         }
         return '';
     }
@@ -1699,13 +1746,38 @@ function tasksMixedFill(color, colorMix) {
         : color;
 }
 
-function tasksNodeBackground(primaryColor, secondaryColor, colorMix, fallback) {
+function tasksCompositeSweep(node, colorBy, palette, secondaryColorBy, secondaryPalette, colorMix) {
+    const colors = [
+        ...tasksAttrValues(node?.[colorBy]).map((value) => palette?.[value]),
+        ...tasksAttrValues(node?.[secondaryColorBy]).map((value) => secondaryPalette?.[value]),
+    ].filter((color) => typeof color === 'string' && color.trim());
+    const unique = Array.from(new Set(colors));
+    if (unique.length < 2) return '';
+    const mixed = unique.map((color) => tasksMixedFill(color, colorMix));
+    const stops = [...mixed, mixed[0]].map((color, index, all) => (
+        `${color} ${Math.round((index / (all.length - 1)) * 100)}%`
+    ));
+    return `linear-gradient(90deg, ${stops.join(', ')})`;
+}
+
+function tasksNodeBackground(primaryColor, secondaryColor, colorMix, fallback, composite = false) {
     const primary = tasksMixedFill(primaryColor, colorMix);
     const secondary = tasksMixedFill(secondaryColor, colorMix);
+    let fill = primary || fallback;
     if (primary && secondary && primaryColor !== secondaryColor) {
-        return `linear-gradient(135deg, ${primary} 0 50%, ${secondary} 50% 100%)`;
+        fill = `linear-gradient(135deg, ${primary} 0 50%, ${secondary} 50% 100%)`;
     }
-    return primary || fallback;
+    return fill;
+}
+
+function tasksCompositeAnimationStyle(node, active) {
+    const sweep = node?.data?.__composite_sweep__;
+    if (!active || !sweep) return {};
+    return {
+        background: sweep,
+        backgroundSize: '300% 100%',
+        animation: 'var(--vyasa-composite-animation, vyasa-composite-color-sweep 5s ease-in-out infinite alternate)',
+    };
 }
 
 function tasksGroupBackground(primaryColor, secondaryColor, fallback, options = {}) {
@@ -1972,6 +2044,13 @@ function ensureTasksReactFlow() {
                     to {
                         stroke-dashoffset: 0;
                     }
+                }
+                @keyframes vyasa-composite-color-sweep {
+                    0%, 14% { background-position: 0% 50%; }
+                    86%, 100% { background-position: 100% 50%; }
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .react-flow__node { --vyasa-composite-animation: none; }
                 }
             `;
             document.head.appendChild(style);
@@ -3813,6 +3892,10 @@ async function renderTasksGraphs(rootElement = document) {
                 }
             }, [sourceModel]);
             const checkedNodeIdSet = React.useMemo(() => new Set(checkedNodeIdsFromStates(nodeStates)), [nodeStates]);
+            const selectedLogicalNodeId = React.useMemo(() => {
+                const selected = (graphBaseRef.current.nodes || []).find((node) => node.id === selectedNodeId)?.data;
+                return tasksLogicalNodeId(selected, selectedNodeId);
+            }, [selectedNodeId, graphRevision]);
             const toggleCheckedNode = React.useCallback((nodeId) => {
                 const normalizedId = String(nodeId || '').trim();
                 if (!normalizedId) return;
@@ -3840,13 +3923,13 @@ async function renderTasksGraphs(rootElement = document) {
             }, []);
             const latestNodeNotes = React.useCallback(() => {
                 const latest = { ...nodeNotes };
-                const selectedId = String(selectedNodeId || '');
+                const selectedId = selectedLogicalNodeId;
                 if (selectedId) {
                     if (noteInputValue.trim()) latest[selectedId] = noteInputValue;
                     else delete latest[selectedId];
                 }
                 return latest;
-            }, [nodeNotes, selectedNodeId, noteInputValue]);
+            }, [nodeNotes, selectedLogicalNodeId, noteInputValue]);
             const handleExportNodeNotes = React.useCallback(() => {
                 try {
                     const filename = downloadTasksNodeNotes(sourceModel, latestNodeNotes());
@@ -3899,15 +3982,15 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             }, [sourceModel, activeProjectionId, model, nodeNotes, hydrateExpandedSet, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
             React.useEffect(() => {
-                setNoteInputValue(nodeNotes[String(selectedNodeId || '')] || '');
-            }, [selectedNodeId, nodeNotes]);
+                setNoteInputValue(nodeNotes[selectedLogicalNodeId] || '');
+            }, [selectedLogicalNodeId, nodeNotes]);
             React.useEffect(() => {
-                if (!selectedNodeId) return undefined;
+                if (!selectedLogicalNodeId) return undefined;
                 const timeoutId = window.setTimeout(() => {
-                    updateNodeNote(selectedNodeId, noteInputValue);
+                    updateNodeNote(selectedLogicalNodeId, noteInputValue);
                 }, 180);
                 return () => window.clearTimeout(timeoutId);
-            }, [selectedNodeId, noteInputValue, updateNodeNote]);
+            }, [selectedLogicalNodeId, noteInputValue, updateNodeNote]);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
                 const viewport = reactFlow.getViewport();
                 return reactFlow.setViewport(
@@ -3937,25 +4020,33 @@ async function renderTasksGraphs(rootElement = document) {
                                 selectable: false,
                             };
                         }
-                        const isChecked = checkedNodeIdSet.has(String(node.id || ''));
-                        const hasNote = Boolean((nodeNotes[String(node.id || '')] || '').trim());
+                        const logicalNodeId = tasksLogicalNodeId(node, node.id);
+                        const isChecked = checkedNodeIdSet.has(logicalNodeId);
+                        const hasNote = Boolean((nodeNotes[logicalNodeId] || '').trim());
                         const colorNode = { ...node, __has_note__: hasNote };
                         const nodeColor = resolveTasksNodeColor(colorNode, model, activeColorBy, activeColorPalette);
                         const secondaryColor = activeSecondaryColorBy
                             ? resolveTasksNodeColor(colorNode, model, activeSecondaryColorBy, activeSecondaryColorPalette)
                             : '';
-                        const cardState = tasksCardStateForNode(sourceModel, nodeStates, node.id, cardStates);
+                        const compositeColor = tasksAttrValues(colorNode[activeColorBy]).length > 1
+                            || tasksAttrValues(colorNode[activeSecondaryColorBy]).length > 1;
+                        const compositeSweep = tasksCompositeSweep(
+                            colorNode, activeColorBy, activeColorPalette,
+                            activeSecondaryColorBy, activeSecondaryColorPalette, colorMix
+                        );
+                        const cardState = tasksCardStateForNode(sourceModel, nodeStates, logicalNodeId, cardStates);
                         const stateAccent = cardState.color || TASKS_DONE_ACCENT;
                         return {
                             id: node.id,
                             type: 'vyasaTask',
                             position: node.position,
-                            data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote },
+                            data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __composite_color__: compositeColor, __composite_sweep__: compositeSweep },
                             style: {
                                 width: node.width,
                                 height: node.height,
                                 zIndex: TASKS_TASK_Z,
-                                background: tasksNodeBackground(nodeColor, secondaryColor, colorMix, TASKS_NODE_BG),
+                                background: tasksNodeBackground(nodeColor, secondaryColor, colorMix, TASKS_NODE_BG, compositeColor),
+                                ...tasksCompositeAnimationStyle({ data: { __composite_sweep__: compositeSweep } }, compositeColor),
                                 border: isChecked
                                     ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
                                     : (nodeColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 28%, ${nodeColor} 72%)` : TASKS_NODE_BORDER),
@@ -4056,12 +4147,23 @@ async function renderTasksGraphs(rootElement = document) {
                     const nodeZ = n.__kind__ !== 'group'
                         ? TASKS_TASK_Z + depth
                         : ((isExpanded ? TASKS_GROUP_BG_Z : TASKS_GROUP_Z) + depth);
-                    const isChecked = checkedNodeIdSet.has(String(n.id || ''));
-                    const hasNote = Boolean((nodeNotes[String(n.id || '')] || '').trim());
+                    const logicalNodeId = tasksLogicalNodeId(n, n.id);
+                    const isChecked = checkedNodeIdSet.has(logicalNodeId);
+                    const hasNote = Boolean((nodeNotes[logicalNodeId] || '').trim());
                     const colorNode = { ...n, __has_note__: hasNote };
                     const nodeColor = resolveTasksNodeColor(colorNode, model, activeColorBy, activeColorPalette);
                     const secondaryColor = (activeSecondaryColorBy && n.__kind__ !== 'group')
                         ? resolveTasksNodeColor(colorNode, model, activeSecondaryColorBy, activeSecondaryColorPalette)
+                        : '';
+                    const compositeColor = n.__kind__ !== 'group' && (
+                        tasksAttrValues(colorNode[activeColorBy]).length > 1
+                        || tasksAttrValues(colorNode[activeSecondaryColorBy]).length > 1
+                    );
+                    const compositeSweep = n.__kind__ !== 'group'
+                        ? tasksCompositeSweep(
+                            colorNode, activeColorBy, activeColorPalette,
+                            activeSecondaryColorBy, activeSecondaryColorPalette, colorMix
+                        )
                         : '';
                     const nodeImage = resolveTasksNodeImage(n, model);
                     const collapsedGroupColor = !isExpanded ? resolveTasksCollapsedGroupColor(colorNode, model, activeColorBy, activeColorPalette) : '';
@@ -4082,13 +4184,13 @@ async function renderTasksGraphs(rootElement = document) {
                         ? (isUnspecifiedProjectionGroup ? projectionUnspecifiedGroupOpacity : projectionGroupOpacity)
                         : 14;
                     const groupBorderMix = isProjectionGroup ? 28 : 70;
-                    const cardState = tasksCardStateForNode(sourceModel, nodeStates, n.id, cardStates);
+                    const cardState = tasksCardStateForNode(sourceModel, nodeStates, logicalNodeId, cardStates);
                     const stateAccent = cardState.color || TASKS_DONE_ACCENT;
                     const background = n.__kind__ === 'group'
                         ? (isExpanded
                             ? tasksGroupBackground(groupColor, '', TASKS_GROUP_EXPANDED_BG, { mode: 'transparent', intensity: groupFillExpanded })
                             : tasksGroupBackground(groupColor, groupSecondaryColor, TASKS_GROUP_BG, { intensity: groupFillCollapsed }))
-                        : tasksNodeBackground(nodeColor, secondaryColor, colorMix, TASKS_NODE_BG);
+                        : tasksNodeBackground(nodeColor, secondaryColor, colorMix, TASKS_NODE_BG, compositeColor);
                     const border = groupColor
                         ? (n.__kind__ === 'group'
                             ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${groupColor} ${groupBorderMix}%)`
@@ -4102,12 +4204,13 @@ async function renderTasksGraphs(rootElement = document) {
                         id: n.id,
                         type: 'vyasaTask',
                         position: n.position,
-                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __projection_branch_opacity__: branchOpacity, __secondary_color__: n.__kind__ === 'group' ? groupSecondaryColor : secondaryColor },
+                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __projection_branch_opacity__: branchOpacity, __secondary_color__: n.__kind__ === 'group' ? groupSecondaryColor : secondaryColor, __composite_color__: compositeColor, __composite_sweep__: compositeSweep },
                         style: {
                             width: n.width,
                             height: n.height,
                             zIndex: nodeZ,
                             background,
+                            ...tasksCompositeAnimationStyle({ data: { __composite_sweep__: compositeSweep } }, compositeColor),
                             border: isChecked
                                 ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
                                 : border,
@@ -4254,6 +4357,7 @@ async function renderTasksGraphs(rootElement = document) {
                             data: { ...node.data, highlightMode: selected ? 'selected' : 'dim' },
                             style: {
                             ...node.style,
+                                ...tasksCompositeAnimationStyle(node, selected),
                                 opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (selected ? 1 : 0.18),
                                 boxShadow: selected
                                     ? `0 0 0 2px color-mix(in srgb, ${displayColor} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor} 34%, transparent)`
@@ -4292,6 +4396,7 @@ async function renderTasksGraphs(rootElement = document) {
                         data: { ...node.data, highlightMode: visibleSelectionIds.has(node.id) ? 'selected' : 'dim' },
                         style: {
                             ...node.style,
+                            ...tasksCompositeAnimationStyle(node, visibleSelectionIds.has(node.id)),
                             opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (visibleSelectionIds.has(node.id) ? 1 : 0.18),
                         },
                     })));
@@ -4383,6 +4488,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const zIndex = mode === 'selected' || mode === 'selected-focus' || mode === 'neighbor-focus'
                         ? baseZIndex + TASKS_SELECTED_Z_BOOST
                         : (mode === 'neighbor' ? baseZIndex + TASKS_NEIGHBOR_Z_BOOST : baseZIndex);
+                    const animateComposite = mode === 'selected' || mode === 'selected-focus' || mode === 'neighbor-focus';
                     return {
                         ...node,
                         data: { ...node.data, highlightMode: mode },
@@ -4393,7 +4499,8 @@ async function renderTasksGraphs(rootElement = document) {
                                 ? node.style.background
                                 : (node.data?.__kind__ === 'group'
                                     ? tasksGroupBackground(displayColor, groupSecondaryColor, TASKS_GROUP_BG_ACTIVE, { mode: 'transparent', intensity: 10 })
-                                    : tasksNodeBackground(nodeColor, node.data?.__secondary_color__, colorMix, TASKS_NODE_BG_ACTIVE)),
+                                    : tasksNodeBackground(nodeColor, node.data?.__secondary_color__, colorMix, TASKS_NODE_BG_ACTIVE, node.data?.__composite_color__)),
+                            ...tasksCompositeAnimationStyle(node, animateComposite),
                             opacity: mode === 'dim' ? branchOpacity * 0.22 : 1,
                             boxShadow: (mode === 'selected' || mode === 'selected-focus')
                                 ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
@@ -4765,6 +4872,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const highlightMode = data?.highlightMode || 'none';
                 const isDimmed = highlightMode === 'dim';
                 const sourceNodeId = data?.__kind__ === 'groupTitle' ? data?.sourceGroupId : id;
+                const logicalNodeId = tasksLogicalNodeId(data, sourceNodeId);
                 const isChecked = data?.__checked__ === true;
                 const taskStateLabel = String(data?.__card_state__ || (isChecked ? TASKS_DEFAULT_CARD_STATES[1] : TASKS_DEFAULT_CARD_STATES[0]));
                 const taskStateColor = data?.__card_state_color__ || TASKS_DONE_ACCENT;
@@ -4923,12 +5031,12 @@ async function renderTasksGraphs(rootElement = document) {
                     checked: isChecked,
                     onMouseDown: (event) => event.stopPropagation(),
                     onPointerDown: (event) => event.stopPropagation(),
-                    onChange: () => toggleCheckedNode(sourceNodeId),
+                    onChange: () => toggleCheckedNode(logicalNodeId),
                     style: { margin: 0, width: '10px', height: '10px', accentColor: taskStateColor, cursor: 'pointer' },
                 }) : React.createElement('button', {
                     type: 'button',
                     title: `State: ${taskStateLabel}`,
-                    onClick: () => toggleCheckedNode(sourceNodeId),
+                    onClick: () => toggleCheckedNode(logicalNodeId),
                     style: { border: 'none', background: 'transparent', padding: 0, width: '10px', height: '10px', cursor: 'pointer' },
                 })) : null;
                 const noteBadge = data?.__has_note__
@@ -5174,7 +5282,9 @@ async function renderTasksGraphs(rootElement = document) {
             };
             const SelectedNodePanel = () => {
                 const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === selectedNodeId)?.data || null;
-                const sourceNodeId = selectedNode?.__kind__ === 'groupTitle' ? selectedNode.sourceGroupId : selectedNode?.id;
+                const sourceNodeId = selectedNode?.__kind__ === 'groupTitle'
+                    ? selectedNode.sourceGroupId
+                    : tasksLogicalNodeId(selectedNode, selectedNode?.id);
                 const baseEntries = selectedNode?.__kind__ === 'group'
                     ? tasksGroupDetailEntries(sourceNodeId, model)
                     : tasksNodeMetaEntries(selectedNode);
@@ -5934,8 +6044,9 @@ async function renderTasksGraphs(rootElement = document) {
                     return;
                 }
                 const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                // Keep any drag/double-click multi-selection intact so an empty-pane
+                // click can restore it (paneClick) instead of clearing everything.
                 setSelectedNodeId((current) => current === sourceNodeId ? null : sourceNodeId);
-                setSelectedNodeIds(new Set());
                 setHoveredNodeId(null);
             }, [expanded, selectGroupDescendants]);
             const focusNeighborEdge = React.useCallback((_, node) => {

@@ -294,7 +294,15 @@ def apply_attrs(path: str | Path, nodes: dict[str, dict], edges: dict[str, dict]
             value, ids_text = stripped.split(":", 1)
             for record_id in shlex.split(ids_text):
                 if record_id in target:
-                    target[record_id][current_key] = value.strip()
+                    attr_value = value.strip()
+                    existing = target[record_id].get(current_key)
+                    if existing is None:
+                        target[record_id][current_key] = attr_value
+                    elif isinstance(existing, list):
+                        if attr_value not in existing:
+                            existing.append(attr_value)
+                    elif existing != attr_value:
+                        target[record_id][current_key] = [existing, attr_value]
                     if section == "@node_attrs" and current_key == "inherit":
                         target[record_id]["__inherit_keys__"] = _list_value(value.strip())
     return indexed

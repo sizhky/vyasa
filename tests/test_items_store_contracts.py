@@ -454,6 +454,43 @@ items_schema: roadmap.kg.schema
     assert [edge["id"] for edge in chapter["dependency_edges"]] == ["e1"]
 
 
+def test_kg_pack_composite_attrs_preserve_membership_and_projection_aliases(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        """@graph id=owners initial_view=owners
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+base:
+    edges=kg.edges
+@views
+owners:
+    group_by=owner
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text("n1: Shared\nn2: Solo\n", encoding="utf-8")
+    (tmp_path / "kg.edges").write_text("e1: n1 -> n2\n", encoding="utf-8")
+    (tmp_path / "kg.attrs").write_text(
+        "@node_attrs\nowner:\n  Yeshwanth: n1 n2\n  Satyasri: n1\n",
+        encoding="utf-8",
+    )
+
+    model = parse_tasks_text(
+        "```items\n---\nitems_schema: kg.schema\n---\n```",
+        current_path=tmp_path / "graph.md",
+    )
+
+    assert model["tasks"][0]["owner"] == ["Yeshwanth", "Satyasri"]
+    owners = model["projection_models"]["owners"]["model"]
+    assert [group["label"] for group in owners["groups"]] == [
+        "Owner > Yeshwanth",
+        "Owner > Satyasri",
+    ]
+    assert len(owners["tasks"]) == 3
+    assert len(owners["dependency_edges"]) == 2
+    assert {task["__source_node_id"] for task in owners["tasks"]} == {"n1", "n2"}
+
+
 def test_kg_pack_projection_can_use_derived_color_modes(tmp_path):
     (tmp_path / "roadmap.kg.schema").write_text(
         """@graph id=roadmap title=Roadmap initial_view=flow
