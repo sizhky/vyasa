@@ -5934,8 +5934,9 @@ async function renderTasksGraphs(rootElement = document) {
                     return;
                 }
                 const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                // Keep any drag/double-click multi-selection intact so an empty-pane
+                // click can restore it (paneClick) instead of clearing everything.
                 setSelectedNodeId((current) => current === sourceNodeId ? null : sourceNodeId);
-                setSelectedNodeIds(new Set());
                 setHoveredNodeId(null);
             }, [expanded, selectGroupDescendants]);
             const focusNeighborEdge = React.useCallback((_, node) => {
