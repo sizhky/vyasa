@@ -30,6 +30,19 @@ COPY_RAW_PAYLOAD_JS = (
     "if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>fallback());}"
     "else{fallback();}})(this)"
 )
+COPY_TEXT_PAYLOAD_JS = (
+    "(function(btn,event){const toast=document.getElementById('%s');"
+    "const encoded=event&&event.shiftKey?btn.dataset.copyAlternatePayload:btn.dataset.copyPayload;"
+    "if(!encoded){return;}const binary=atob(encoded);"
+    "const bytes=Uint8Array.from(binary,(char)=>char.charCodeAt(0));"
+    "const text=new TextDecoder().decode(bytes);"
+    "const done=()=>{if(!toast){return;}toast.classList.remove('opacity-0');toast.classList.add('opacity-100');"
+    "setTimeout(()=>{toast.classList.remove('opacity-100');toast.classList.add('opacity-0');},1400);};"
+    "const fallback=()=>{const el=document.createElement('textarea');el.value=text;el.setAttribute('readonly','');"
+    "el.style.position='absolute';el.style.left='-9999px';document.body.appendChild(el);el.select();document.execCommand('copy');document.body.removeChild(el);done();};"
+    "if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(()=>fallback());}"
+    "else{fallback();}})(this,event)"
+)
 ACTION_ICONS = {
     "clipboard": '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-page-action-icon"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3"/></svg>',
     "file-edit": '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-page-action-icon"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m12 18 5-5 2 2-5 5h-2z"/></svg>',
@@ -127,15 +140,22 @@ def copy_raw_button(label: str, raw_content: str, toast_id: str):
     )
 
 
-def copy_text_button(label: str, text: str, target_id: str, toast_id: str):
+def copy_text_button(label: str, text: str, target_id: str, toast_id: str, *, alternate_text: str | None = None):
+    payload_attrs = _copy_payload_attrs(text)
+    if alternate_text is not None:
+        payload_attrs["data_copy_alternate_payload"] = base64.b64encode(alternate_text.encode("utf-8")).decode("ascii")
+        payload_attrs["data_tooltip"] = "Click: relative path. Shift-click: absolute path."
     return (
         Button(
             action_icon("file-edit"),
             Span(label, cls="text-sm font-medium"),
+            Span(". Shift-click copies absolute path.", cls="sr-only") if alternate_text is not None else None,
             type="button",
-            title=f"Copy {label.lower()}",
-            onclick=COPY_RAW_JS % (target_id, toast_id),
-            cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+            onclick=COPY_TEXT_PAYLOAD_JS % toast_id,
+            cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm"
+            + (" vyasa-page-action-tooltip" if alternate_text is not None else ""),
+            aria_label=f"{label}. Shift-click copies absolute path." if alternate_text is not None else None,
+            **payload_attrs,
         ),
         Div(f"Copied {label.lower()}!", id=toast_id, cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"),
         Textarea(text, id=target_id, cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"),

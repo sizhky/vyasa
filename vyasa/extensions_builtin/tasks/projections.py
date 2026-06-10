@@ -113,7 +113,7 @@ def _projection_group_label(attr: str, value: str) -> str:
         return value_label
     if not value_label:
         return attr_label
-    return f"{attr_label} > {value_label}"
+    return f"{attr_label} ›› {value_label}"
 
 
 def normalize_projections(value) -> list[dict]:

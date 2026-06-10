@@ -1062,7 +1062,7 @@ function buildTasksGroupedState(sourceModel, groupByHierarchy) {
             const groupId = tasksSlug(['custom', ...prefix.map((part, index) => `${attrs[index]}-${part}`)].join('__'));
             const group = {
                 id: groupId,
-                label: tasksNodeMetaLabel(attr) + ' > ' + value,
+                label: tasksNodeMetaLabel(attr) + ' ›› ' + value,
                 parent_group_id: parentId,
                 __projection_group__: true,
                 projection: '__custom_group_by__',
