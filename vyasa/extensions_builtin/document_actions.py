@@ -41,7 +41,7 @@ def _copy_relative_path_action(context):
     if not context.relative_file_path:
         return None
     button, toast, target = copy_text_button(
-        "Copy Relative Path",
+        "Copy Path",
         context.relative_file_path,
         "relative-path-clipboard",
         "relative-path-toast",
