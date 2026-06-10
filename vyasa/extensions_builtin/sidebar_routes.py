@@ -9,6 +9,7 @@ from ..content_tree import ContentTree
 from ..tree_rendering import _folder_summary, _decorate_row
 from ..nav_views import FILE_ROW_CLASSES, NavigationRow, navigation_row_view
 from ..runtime_services import get_runtime_services
+from ..helpers import document_icon_for_path
 
 
 class SidebarRoutesExtension(VyasaExtensionBase):
@@ -92,7 +93,7 @@ def _build_branch_sidebar_items(path: str, folder, row_decorators=()):
             items.append(Li(Details(summary, Ul(cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true"), cls="my-1"))
             continue
         href = f"/posts/{quote(full_slug, safe='/')}"
-        icon = "file-text" if entry.kind == "markdown" else ("file" if entry.kind == "pdf" else "table")
+        icon = document_icon_for_path(entry.path)
         link = navigation_row_view(NavigationRow(slug=full_slug, title=entry.title, label=entry.title, href=href, icon=icon, kind=entry.kind), cls=FILE_ROW_CLASSES)
         items.append(Li(_decorate_row(link, full_slug, entry.title, row_decorators)))
     return items

@@ -1,4 +1,5 @@
 from vyasa.config import reload_config
+import vyasa.core as core
 from vyasa.content_tree import CallableVisibility, ContentTree
 from vyasa.extensions import build_extension_runtime, get_extension_runtime, set_extension_runtime
 
@@ -54,6 +55,34 @@ def test_content_tree_resolves_document_before_same_name_folder(tmp_path):
     assert resolved is not None
     assert resolved.kind == "markdown"
     assert resolved.path == (root / "docs" / "architecture.md").resolve()
+
+
+def test_content_tree_discovers_html_documents(tmp_path):
+    page = tmp_path / "dashboard.html"
+    page.write_text("<h1>Dashboard</h1>", encoding="utf-8")
+
+    tree = ContentTree(root=tmp_path)
+    resolved = tree.resolve_document("dashboard")
+
+    assert [(entry.slug, entry.kind) for entry in tree.list_entries()] == [("dashboard", "html")]
+    assert resolved is not None
+    assert resolved.kind == "html"
+    assert resolved.path == page.resolve()
+
+
+def test_sidebar_navigation_uses_enabled_document_suffixes(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setattr(core, "enabled_document_suffixes", lambda: (".md", ".html"))
+    monkeypatch.setattr(
+        core,
+        "get_tree_entries",
+        lambda folder, root, show_hidden, excluded_dirs, suffixes: captured.setdefault("suffixes", suffixes) or [],
+    )
+    core._nav_entries_cache.clear()
+
+    core._get_nav_entries(tmp_path, tmp_path, False, set())
+
+    assert captured["suffixes"] == (".md", ".html")
 
 
 def test_content_tree_visibility_filters_file_entries(tmp_path):

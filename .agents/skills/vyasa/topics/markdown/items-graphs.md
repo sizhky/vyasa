@@ -1,6 +1,6 @@
 # Items Graphs
 
-Default to KG Pack sidecars for new Knowledge Graphs. Use legacy inline syntax only when reading or editing an existing document that already has groups, nodes, edges, and attrs inside the fenced block; see `items-graphs-legacy.md` only for that case.
+Default to KG Pack sidecars for new Knowledge Graphs. Use lite inline syntax when the graph is small and does not need sidecars, or when reading or editing an existing document that already has groups, nodes, edges, and attrs inside the fenced block; see `items-graphs-lite.md` for that case.
 
 ## Fence
 

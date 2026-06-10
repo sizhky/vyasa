@@ -26,6 +26,7 @@ from .helpers import (
     expand_markdown_includes_for_reading,
     get_content_mounts,
     document_kind_for_suffix,
+    enabled_document_suffixes,
     iter_visible_files,
     preview_markdown,
     should_exclude_dir,
@@ -956,7 +957,7 @@ def _get_nav_entries(
     cached = _nav_entries_cache.get(key)
     if cached and cached[0] == mtime:
         return cached[1]
-    ordered = get_tree_entries(folder, root, show_hidden, excluded_dirs, (".md", ".pdf", ".tree"))
+    ordered = get_tree_entries(folder, root, show_hidden, excluded_dirs, enabled_document_suffixes())
     _nav_entries_cache[key] = (mtime, ordered)
     return ordered
 

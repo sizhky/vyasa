@@ -187,6 +187,7 @@ def enabled_document_types() -> tuple[dict[str, str], ...]:
 
         runtime = get_extension_runtime()
         extra_types = runtime.document_types.values() if runtime is not None else (
+            DocumentType(".html", "html", "code"),
             DocumentType(".pdf", "pdf", "file"),
             DocumentType(".tree", "tree", "table"),
         )
@@ -197,6 +198,7 @@ def enabled_document_types() -> tuple[dict[str, str], ...]:
     except Exception:
         types.extend(
             (
+                {"suffix": ".html", "kind": "html", "icon": "code"},
                 {"suffix": ".pdf", "kind": "pdf", "icon": "file"},
                 {"suffix": ".tree", "kind": "tree", "icon": "table"},
             )
