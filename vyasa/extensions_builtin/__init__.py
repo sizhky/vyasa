@@ -16,6 +16,7 @@ def load_builtin_extensions():
     from . import document_actions
     from . import filesystem
     from . import filesystem_routes
+    from . import html_viewer
     from . import code_tools
     from . import link_preview
     from . import mermaid
@@ -44,6 +45,7 @@ def load_builtin_extensions():
         cytograph.EXTENSION,
         cryptograph.EXTENSION,
         tasks.EXTENSION,
+        html_viewer.EXTENSION,
         pdf_viewer.EXTENSION,
         tree_table.EXTENSION,
         document_actions.EXTENSION,

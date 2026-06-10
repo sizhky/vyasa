@@ -8,7 +8,7 @@ Read only the drawer needed:
 - `topics/markdown/toc-headings-math.md`
 - `topics/markdown/callouts.md`
 - `topics/markdown/items-graphs.md`
-- `topics/markdown/items-graphs-legacy.md` only for existing inline `items` / `tasks` docs.
+- `topics/markdown/items-graphs-lite.md` for small inline `items` / `tasks` docs that do not need sidecars.
 - `topics/markdown/items-behavior.md`
 - `topics/story-telling-with-graphs/SKILL.md`
 - `topics/markdown/code-includes-links.md`
@@ -17,5 +17,5 @@ Read only the drawer needed:
 Rules:
 
 - Prefer existing Obsidian-compatible syntax where supported.
-- For new `items` / `tasks` Knowledge Graphs, default to KG Pack sidecars. Use legacy inline graph syntax only when the existing document already uses it.
+- For new `items` / `tasks` Knowledge Graphs, default to KG Pack sidecars. Use lite inline graph syntax when the graph is small and does not need sidecars, or when the existing document already uses inline syntax.
 - Do not invent parser syntax until existing drawers prove no fit.

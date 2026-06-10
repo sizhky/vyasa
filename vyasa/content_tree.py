@@ -23,7 +23,7 @@ from .helpers import (
     should_exclude_dir,
     slug_to_title,
 )
-ContentKind = Literal["folder", "markdown", "pdf", "tree"]
+ContentKind = Literal["folder", "markdown", "html", "pdf", "tree"]
 
 
 class VisibilityPolicy(Protocol):
