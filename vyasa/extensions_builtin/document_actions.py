@@ -45,6 +45,7 @@ def _copy_relative_path_action(context):
         context.relative_file_path,
         "relative-path-clipboard",
         "relative-path-toast",
+        alternate_text=context.file_path,
     )
     return DocumentActionItem(
         id="documents.copy_relative_path",

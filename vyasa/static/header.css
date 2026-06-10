@@ -795,6 +795,30 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .vyasa-fold-all-button:active {
     transform: translateY(1px);
 }
+.vyasa-page-action-tooltip {
+    position: relative;
+}
+.vyasa-page-action-tooltip::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 0.5rem);
+    transform: translateX(-50%);
+    opacity: 0;
+    pointer-events: none;
+    white-space: nowrap;
+    padding: 0.25rem 0.45rem;
+    border-radius: 0.4rem;
+    background: color-mix(in srgb, var(--vyasa-paper-raised) 84%, var(--vyasa-primary) 16%);
+    color: var(--vyasa-ink) !important;
+    box-shadow: 0 10px 24px -18px rgba(15, 23, 42, 0.32);
+    font: 500 0.72rem/1.2 var(--vyasa-font-ui);
+    z-index: 20;
+}
+.vyasa-page-action-tooltip:hover::after,
+.vyasa-page-action-tooltip:focus-visible::after {
+    opacity: 1;
+}
 
 .vyasa-inline-action-demo {
     position: relative;
