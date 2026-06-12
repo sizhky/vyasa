@@ -26,6 +26,14 @@
         return franken;
     }
 
+    try {
+        ['posts', 'toc'].forEach((kind) => {
+            if (localStorage.getItem(`vyasa-${kind}-sidebar-hidden`) === '1') {
+                document.documentElement.setAttribute(`data-vyasa-hide-${kind}-sidebar`, '');
+            }
+        });
+    } catch (_) {}
+
     const prefersDark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
     let franken = { mode: prefersDark ? 'dark' : 'light' };
     try {
