@@ -79,8 +79,12 @@ def render_card(path, slug, root, *, resolve_title, abbreviations):
     preview = from_md(preview_markdown(render_content), current_path=slug)
     href = content_url_for_slug(slug)
     return Div(
-        A(Span(title, cls="block line-clamp-3 overflow-hidden"), Span(f"{read_time}-min read", cls="block mt-1 text-xs font-normal text-slate-500 dark:text-slate-400"), href=href, cls="vyasa-blog-card-title absolute top-6 block text-right text-xl font-bold leading-tight hover:underline"),
-        Div(Div(preview, cls="prose prose-slate dark:prose-invert max-w-none"), A("continue reading...", href=href, cls="inline-flex mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200 hover:underline"), cls="vyasa-blog-card min-w-0 w-full"),
+        Div(
+            A(Span(title, cls="block line-clamp-3 overflow-hidden"), Span(f"{read_time}-min read", cls="block mt-1 text-xs font-normal text-slate-500 dark:text-slate-400"), href=href, cls="vyasa-blog-card-title block text-xl font-bold leading-tight hover:underline"),
+            Div(preview, cls="prose prose-slate dark:prose-invert max-w-none"),
+            A("continue reading...", href=href, cls="inline-flex mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200 hover:underline"),
+            cls="vyasa-blog-card min-w-0 w-full",
+        ),
         cls="relative flex w-full items-start",
     )
 

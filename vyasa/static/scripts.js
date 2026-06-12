@@ -968,7 +968,7 @@ function initSidebarResizers(root = document) {
     const clamp = (v) => Math.max(224, Math.min(720, Math.round(v)));
     const bind = (selector, kind, sign) => {
         const sidebar = root.querySelector?.(selector) || document.querySelector(selector);
-        if (!sidebar || sidebar.dataset.resizerBound === 'true') return;
+        if (!sidebar || !sidebar.classList.contains('vyasa-sidebar') || sidebar.dataset.resizerBound === 'true') return;
         if (saved[kind]) page.style.setProperty(`--vyasa-${kind}-sidebar-width`, `${clamp(saved[kind])}px`);
         const handle = document.createElement('button');
         handle.type = 'button'; handle.className = 'vyasa-sidebar-resizer'; handle.ariaLabel = `Resize ${kind} sidebar`;
