@@ -212,6 +212,8 @@ summary {
 #main-content .sidenote {
     font-family: var(--vyasa-font-body);
 }
+/* Off-canvas slide-in panels (translate-x-full) must not widen the page */
+html { overflow-x: clip; }
 .vyasa-content-grid { overflow: visible; }
 .vyasa-posts-sidebar {
     width: var(--vyasa-posts-sidebar-width, var(--vyasa-sidebar-width, 22rem));
