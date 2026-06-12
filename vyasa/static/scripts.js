@@ -1212,14 +1212,23 @@ document.body.addEventListener('htmx:afterSwap', async function(event) {
     window.__vyasaInitCodeTools?.(event.target || document);
 });
 
-// Mobile menu toggle functionality
+// Sidebar/panel toggle functionality (docked sidebars on desktop, slide-in panels below xl)
 function initMobileMenus() {
     const getPostsPanel = () => document.getElementById('mobile-posts-panel');
     const getTocPanel = () => document.getElementById('mobile-toc-panel');
     const postsPanel = getPostsPanel();
     const tocPanel = getTocPanel();
+    const isDockedMode = () => window.matchMedia('(min-width: 1280px)').matches;
+
+    const toggleDockedSidebar = (id) => {
+        const sidebar = document.getElementById(id);
+        if (!sidebar) return false;
+        sidebar.classList.toggle('vyasa-sidebar-hidden');
+        return true;
+    };
 
     const togglePostsPanel = () => {
+        if (isDockedMode() && toggleDockedSidebar('posts-sidebar')) return;
         const postsPanel = getPostsPanel();
         const tocPanel = getTocPanel();
         if (!postsPanel) return;
@@ -1242,6 +1251,7 @@ function initMobileMenus() {
     };
 
     const toggleTocPanel = () => {
+        if (isDockedMode() && toggleDockedSidebar('toc-sidebar')) return;
         const tocPanel = getTocPanel();
         const postsPanel = getPostsPanel();
         if (!tocPanel) return;
@@ -1310,11 +1320,6 @@ function initMobileMenus() {
 
 // Keyboard shortcuts for toggling sidebars
 function initKeyboardShortcuts() {
-    // Prewarm the selectors to avoid lazy compilation delays
-    const postsSidebars = document.querySelectorAll('details[data-sidebar="posts"]');
-    const tocSidebar = document.querySelector('#toc-sidebar details');
-    const isMobileSidebarMode = () => window.matchMedia('(max-width: 1279px)').matches;
-    
     document.addEventListener('keydown', (e) => {
         // Skip if user is typing in an input field
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
@@ -1325,27 +1330,13 @@ function initKeyboardShortcuts() {
         // Z: Toggle posts panel
         if (e.key === 'z' || e.key === 'Z') {
             e.preventDefault();
-            if (isMobileSidebarMode()) {
-                window.__vyasaTogglePostsPanel?.();
-                return;
-            }
-            const postsSidebars = document.querySelectorAll('details[data-sidebar="posts"]');
-            postsSidebars.forEach(sidebar => {
-                sidebar.open = !sidebar.open;
-            });
+            window.__vyasaTogglePostsPanel?.();
         }
-        
+
         // X: Toggle TOC panel
         if (e.key === 'x' || e.key === 'X') {
             e.preventDefault();
-            if (isMobileSidebarMode()) {
-                window.__vyasaToggleTocPanel?.();
-                return;
-            }
-            const tocSidebar = document.querySelector('#toc-sidebar details');
-            if (tocSidebar) {
-                tocSidebar.open = !tocSidebar.open;
-            }
+            window.__vyasaToggleTocPanel?.();
         }
 
         if (e.key === 'c' || e.key === 'C') {
@@ -1772,8 +1763,17 @@ function syncThemePresetDebug(root = document) {
     }
 }
 
+// Keep --vyasa-navbar-height in sync so docked sidebars sit flush under the navbar
+function syncNavbarHeightVar() {
+    const navbar = document.getElementById('site-navbar');
+    if (!navbar) return;
+    document.documentElement.style.setProperty('--vyasa-navbar-height', `${navbar.offsetHeight}px`);
+}
+window.addEventListener('resize', syncNavbarHeightVar);
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    syncNavbarHeightVar();
     ensureFragmentStylesheets(document);
     initHeadingFolds(document);
     syncHeadingActionStates(document);

@@ -6,6 +6,7 @@ from fasthtml.common import Link
 from fasthtml.common import A, Aside, Button, Div, Footer, Main, NotStr, P, Span, Title
 from monsterui.all import UkIcon
 from .extensions import get_extension_runtime
+from .sidebar_helpers import docked_sidebar_classes
 from .page_frame import PageFrame, PageFrameDeps
 from .runtime_context import traced
 
@@ -299,21 +300,18 @@ def _collect_toc_panels(*, toc_content, show_toc, current_path, build_sidebar_to
             if panels := provider(context):
                 desktop, mobile = panels
                 return desktop, mobile, toc_items
-    sidebars_open = context["sidebars_open"]
-    desktop_cls = "vyasa-sidebar vyasa-toc-sidebar hidden xl:block w-[var(--vyasa-toc-sidebar-width,var(--vyasa-sidebar-width,22rem))] shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]"
-    if desktop_margin_top:
-        desktop_cls += " mt-4"
+    desktop_cls = docked_sidebar_classes("toc")
     desktop_attrs = {"id": "toc-sidebar"}
     if oob:
         desktop_attrs["hx_swap_oob"] = "true"
     desktop = Aside(
-        build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(),
+        build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, shortcut_key="X") if toc_items else Div(),
         cls=desktop_cls,
         **desktop_attrs,
     )
     mobile_attrs = {
         "id": "mobile-toc-panel",
-        "cls": "vyasa-mobile-panel fixed inset-0 bg-white dark:bg-slate-950 z-[9999] xl:hidden transform translate-x-full transition-transform duration-300",
+        "cls": "vyasa-mobile-panel fixed inset-y-0 right-0 w-full sm:w-96 sm:border-l border-slate-200 dark:border-slate-800 sm:shadow-2xl bg-white dark:bg-slate-950 z-[9999] xl:hidden transform translate-x-full transition-transform duration-300",
         "aria_hidden": "true",
     }
     if oob:
@@ -321,7 +319,7 @@ def _collect_toc_panels(*, toc_content, show_toc, current_path, build_sidebar_to
     mobile = Div(
         Div(Button(UkIcon("x", cls="w-5 h-5"), id="close-mobile-toc", cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto", type="button"), cls="vyasa-mobile-panel-header flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"),
         Div(
-            build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
+            build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
             cls="vyasa-mobile-panel-body p-4 overflow-y-auto",
         ),
         **mobile_attrs,
@@ -387,9 +385,10 @@ def _render_full_layout(content, title, show_sidebar, toc_content, current_path,
         custom_css_links = _collect_scoped_css_links(current_path, section_class, get_root_folder, get_sidebar_custom_css_links)
         main_content_container = Main(*content, cls=f"vyasa-main-shell {'vyasa-zen-present' if slide_mode else ''} flex-1 min-w-0 {main_spacing_cls} space-y-8 {section_class}".strip(), id="main-content", hx_boost="true", hx_target="#main-content", hx_swap="outerHTML show:window:top settle:0.1s", **_collect_main_attrs(current_path, auth, get_config, slide_mode=slide_mode))
         roles_key = tuple(get_roles_from_auth(auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list) or [])
-        mobile_posts_panel = Div(Div(Button(UkIcon("x", cls="w-5 h-5"), id="close-mobile-posts", cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto", type="button"), cls="vyasa-mobile-panel-header flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"), Div(NotStr(cached_posts_sidebar_html(posts_sidebar_fingerprint(), roles_key, get_config().get_show_hidden(), current_path or "")), cls="vyasa-mobile-panel-body p-4 overflow-y-auto"), id="mobile-posts-panel", cls="vyasa-mobile-panel fixed inset-0 bg-white dark:bg-slate-950 z-[9999] xl:hidden transform -translate-x-full transition-transform duration-300", aria_hidden="true")
+        mobile_posts_panel = Div(Div(Button(UkIcon("x", cls="w-5 h-5"), id="close-mobile-posts", cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto", type="button"), cls="vyasa-mobile-panel-header flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"), Div(NotStr(cached_posts_sidebar_html(posts_sidebar_fingerprint(), roles_key, get_config().get_show_hidden(), current_path or "")), cls="vyasa-mobile-panel-body p-4 overflow-y-auto"), id="mobile-posts-panel", cls="vyasa-mobile-panel fixed inset-y-0 left-0 w-full sm:w-96 sm:border-r border-slate-200 dark:border-slate-800 sm:shadow-2xl bg-white dark:bg-slate-950 z-[9999] xl:hidden transform -translate-x-full transition-transform duration-300", aria_hidden="true")
         nav_posts_items = get_posts(list(roles_key) if roles_key else [], current_path=current_path or "") if nav_posts_menu else None
-        content_with_sidebars = Div(cls=f"vyasa-content-grid layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 flex gap-6 flex-1 {'min-h-0' if no_scroll else ''}".strip(), id="content-with-sidebars", **style_attr(layout_max_style))((Aside(Div(UkIcon("loader", cls="w-5 h-5 animate-spin"), Span("Loading posts…", cls="ml-2 text-sm"), cls="flex items-center justify-center h-32 text-slate-400"), cls="vyasa-sidebar vyasa-posts-sidebar hidden xl:block w-[var(--vyasa-posts-sidebar-width,var(--vyasa-sidebar-width,22rem))] shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]", id="posts-sidebar", hx_get=f"/_sidebar/posts?current_path={quote(current_path or '', safe='')}", hx_trigger="load", hx_swap="outerHTML") if not nav_posts_menu else None), main_content_container, toc_sidebar if toc_sidebar else None)
+        main_column = Div(main_content_container, cls=f"layout-container {layout_fluid_class} w-full {layout_max_class} mx-auto px-4 flex flex-1 min-w-0 {'min-h-0' if no_scroll else ''}".strip(), **style_attr(layout_max_style))
+        content_with_sidebars = Div(cls=f"vyasa-content-grid w-full flex flex-1 {'min-h-0' if no_scroll else ''}".strip(), id="content-with-sidebars")((Aside(Div(UkIcon("loader", cls="w-5 h-5 animate-spin"), Span("Loading posts…", cls="ml-2 text-sm"), cls="flex items-center justify-center h-32 text-slate-400"), cls=docked_sidebar_classes("posts"), id="posts-sidebar", hx_get=f"/_sidebar/posts?current_path={quote(current_path or '', safe='')}", hx_trigger="load", hx_swap="outerHTML") if not nav_posts_menu else None), main_column, toc_sidebar if toc_sidebar else None)
         mobile_extra_controls = _collect_navbar_mobile_actions(current_path, show_toc, slide_mode)
         body_content = Div(id="page-container", cls=page_container_cls, data_posts_hover_expand="1", **style_attr(page_style))(*body_fragments, Div(navbar(show_mobile_menus=True, htmx_nav=htmx_nav, posts_menu_items=nav_posts_items, compact_mode=nav_posts_menu, updated_label=current_updated_label, mobile_extra_controls=mobile_extra_controls), cls=f"vyasa-navbar-shell w-full sticky top-0 z-[1300] {navbar_margin_cls}".strip(), id="site-navbar"), mobile_posts_panel, mobile_toc_panel if mobile_toc_panel else None, content_with_sidebars, footer_node("w-full mt-auto".strip(), {}) if show_footer else None)
     else:

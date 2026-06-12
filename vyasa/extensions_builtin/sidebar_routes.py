@@ -8,6 +8,7 @@ from ..extensions import ExtensionMeta, VyasaExtensionBase
 from ..content_tree import ContentTree
 from ..tree_rendering import _folder_summary, _decorate_row
 from ..nav_views import FILE_ROW_CLASSES, NavigationRow, navigation_row_view
+from ..sidebar_helpers import docked_sidebar_classes
 from ..runtime_services import get_runtime_services
 from ..helpers import document_icon_for_path
 
@@ -32,7 +33,7 @@ def _register_sidebar_routes(rt, runtime) -> None:
         )
         return Aside(
             NotStr(html),
-            cls="vyasa-sidebar vyasa-posts-sidebar hidden xl:block w-[var(--vyasa-posts-sidebar-width,var(--vyasa-sidebar-width,26rem))] shrink-0 sticky top-24 self-start mt-4 max-h-[calc(100vh-10rem)] overflow-x-auto overflow-y-hidden z-[1000]",
+            cls=docked_sidebar_classes("posts"),
             id="posts-sidebar",
         )
 

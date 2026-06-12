@@ -725,14 +725,13 @@ def _render_posts_search_results(query, roles=None):
 @traced("sidebar")
 @lru_cache(maxsize=16)
 def _cached_posts_sidebar_html(fingerprint, roles_key, show_hidden, current_path=""):
-    sidebars_open = get_config().get_sidebars_open()
     posts_items = get_posts(list(roles_key) if roles_key else [], current_path=current_path)
     extra_sections = _sidebar_section_nodes()
     sidebar = build_collapsible_sidebar(
         "menu",
         "Library",
         [],
-        is_open=sidebars_open,
+        is_open=True,
         data_sidebar="posts",
         shortcut_key="Z",
         extra_content=[

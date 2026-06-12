@@ -51,6 +51,16 @@ def _scope_css(css_text, scope):
     return "\n".join(out)
 
 
+def docked_sidebar_classes(kind):
+    side = "vyasa-posts-sidebar border-r" if kind == "posts" else "vyasa-toc-sidebar border-l"
+    width = f"w-[var(--vyasa-{kind}-sidebar-width,var(--vyasa-sidebar-width,22rem))]"
+    return (
+        "vyasa-sidebar vyasa-sidebar-docked hidden xl:flex flex-col shrink-0 self-start "
+        "sticky top-[var(--vyasa-navbar-height,3.75rem)] h-[calc(100vh-var(--vyasa-navbar-height,3.75rem))] "
+        f"z-[1000] border-slate-200 dark:border-slate-800 {side} {width}"
+    )
+
+
 def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=None, shortcut_key=None, extra_content=None, scroll_target="container"):
     sidebar_kind = (data_sidebar or title or "sidebar").strip().lower().replace(" ", "-")
     summary_content = [Span(UkIcon(icon, cls="w-5 h-5 block"), cls="flex items-center justify-center w-5 h-5 shrink-0 leading-none"), Span(title, cls="flex-1 leading-none")]

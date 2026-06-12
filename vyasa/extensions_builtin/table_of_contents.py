@@ -4,6 +4,7 @@ from fasthtml.common import A, Aside, Button, Div, P, Span, Ul, to_xml
 from monsterui.all import UkIcon
 
 from ..extensions import ExtensionMeta, VyasaExtensionBase
+from ..sidebar_helpers import docked_sidebar_classes
 
 
 class TableOfContentsExtension(VyasaExtensionBase):
@@ -31,21 +32,18 @@ def _toc_panels(context):
             "</div></details></aside>"
         )
     build_collapsible_sidebar = context["build_collapsible_sidebar"]
-    sidebars_open = context["sidebars_open"]
-    desktop_cls = "vyasa-sidebar vyasa-toc-sidebar hidden xl:block w-[var(--vyasa-toc-sidebar-width,var(--vyasa-sidebar-width,22rem))] shrink-0 sticky top-24 self-start max-h-[calc(100vh-10rem)] overflow-hidden z-[1000]"
-    if context.get("desktop_margin_top"):
-        desktop_cls += " mt-4"
+    desktop_cls = docked_sidebar_classes("toc")
     desktop_attrs = {"id": "toc-sidebar"}
     if context.get("oob"):
         desktop_attrs["hx_swap_oob"] = "true"
     desktop = Aside(
-        build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(),
+        build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, shortcut_key="X") if toc_items else Div(),
         cls=desktop_cls,
         **desktop_attrs,
     )
     mobile_attrs = {
         "id": "mobile-toc-panel",
-        "cls": "vyasa-mobile-panel fixed inset-0 bg-white dark:bg-slate-950 z-[9999] xl:hidden transform translate-x-full transition-transform duration-300",
+        "cls": "vyasa-mobile-panel fixed inset-y-0 right-0 w-full sm:w-96 sm:border-l border-slate-200 dark:border-slate-800 sm:shadow-2xl bg-white dark:bg-slate-950 z-[9999] xl:hidden transform translate-x-full transition-transform duration-300",
         "aria_hidden": "true",
     }
     if context.get("oob"):
@@ -56,7 +54,7 @@ def _toc_panels(context):
             cls="vyasa-mobile-panel-header flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800",
         ),
         Div(
-            build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=sidebars_open, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
+            build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
             cls="vyasa-mobile-panel-body p-4 overflow-y-auto",
         ),
         **mobile_attrs,
@@ -67,7 +65,7 @@ def _toc_panels(context):
 def _mobile_toc_toggle(context):
     if not context.get("show_toc", True):
         return None
-    return Button(UkIcon("list", cls="w-5 h-5"), title="Toggle table of contents", id="mobile-toc-toggle", cls="p-2 hover:bg-slate-800 rounded transition-colors", type="button", onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()")
+    return Button(UkIcon("panel-right", cls="w-5 h-5"), title="Toggle table of contents", cls="p-2 hover:bg-slate-800 rounded transition-colors", type="button", onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()")
 
 
 EXTENSION = TableOfContentsExtension(
