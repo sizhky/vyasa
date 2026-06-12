@@ -221,6 +221,44 @@ summary {
     width: var(--vyasa-toc-sidebar-width, var(--vyasa-sidebar-width, 22rem));
     margin-left: min(0px, calc(var(--vyasa-sidebar-width, 22rem) - var(--vyasa-toc-sidebar-width, var(--vyasa-sidebar-width, 22rem))));
 }
+.vyasa-sidebar-docked {
+    background: var(--vyasa-paper);
+}
+.vyasa-sidebar-docked > .vyasa-sidebar-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+/* Chrome 131+ wraps details children in ::details-content; without this the
+   sidebar body has no bounded height and the column can't scroll */
+.vyasa-sidebar-docked > .vyasa-sidebar-card::details-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.vyasa-sidebar-docked .vyasa-sidebar-toggle,
+.vyasa-sidebar-docked .vyasa-sidebar-body {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    border-radius: 0;
+}
+.vyasa-sidebar-docked .vyasa-sidebar-toggle {
+    margin: 0 !important;
+    border-bottom: 1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent);
+}
+.vyasa-sidebar-docked .vyasa-sidebar-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none !important;
+    overflow-y: auto;
+}
+.vyasa-sidebar-docked.vyasa-sidebar-hidden {
+    display: none !important;
+}
 .vyasa-sidebar-resizer {
     position: absolute; top: 0; bottom: 0; width: 12px; z-index: 20; cursor: col-resize; touch-action: none;
 }
