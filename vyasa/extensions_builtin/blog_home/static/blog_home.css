@@ -1,6 +1,7 @@
+/* Title sits inside the card; docked sidebars removed the left gutter
+   the old hanging-title layout depended on */
 .vyasa-blog-card-title {
-    right: calc(100% + 1rem);
-    width: clamp(14rem, calc((100vw - 100% - var(--vyasa-sidebar-width, 22rem) - 8rem) * 0.95), 30rem);
+    margin-bottom: 0.75rem;
 }
 .vyasa-blog-card {
     padding: 1.25rem;
@@ -11,12 +12,4 @@
 }
 .dark .vyasa-blog-card {
     background: color-mix(in srgb, var(--vyasa-paper-low) 86%, black 14%);
-}
-@media (max-width: 1279px) {
-    .vyasa-blog-card-title {
-        position: static !important;
-        width: 100%;
-        margin-bottom: 0.75rem;
-        text-align: left;
-    }
 }

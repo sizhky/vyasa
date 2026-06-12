@@ -305,10 +305,10 @@ def _collect_toc_panels(*, toc_content, show_toc, current_path, build_sidebar_to
     if oob:
         desktop_attrs["hx_swap_oob"] = "true"
     desktop = Aside(
-        build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, shortcut_key="X") if toc_items else Div(),
+        build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, shortcut_key="X"),
         cls=desktop_cls,
         **desktop_attrs,
-    )
+    ) if toc_items else Div(**desktop_attrs)
     mobile_attrs = {
         "id": "mobile-toc-panel",
         "cls": "vyasa-mobile-panel fixed inset-y-0 right-0 w-full sm:w-96 sm:border-l border-slate-200 dark:border-slate-800 sm:shadow-2xl bg-white dark:bg-slate-950 z-[9999] xl:hidden transform translate-x-full transition-transform duration-300",
