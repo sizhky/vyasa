@@ -1220,15 +1220,21 @@ function initMobileMenus() {
     const tocPanel = getTocPanel();
     const isDockedMode = () => window.matchMedia('(min-width: 1280px)').matches;
 
-    const toggleDockedSidebar = (id) => {
-        const sidebar = document.getElementById(id);
+    const toggleDockedSidebar = (kind) => {
+        const sidebar = document.getElementById(`${kind}-sidebar`);
         if (!sidebar) return false;
-        sidebar.classList.toggle('vyasa-sidebar-hidden');
+        const attr = `data-vyasa-hide-${kind}-sidebar`;
+        const hidden = !document.documentElement.hasAttribute(attr);
+        document.documentElement.toggleAttribute(attr, hidden);
+        try {
+            if (hidden) localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '1');
+            else localStorage.removeItem(`vyasa-${kind}-sidebar-hidden`);
+        } catch (_) {}
         return true;
     };
 
     const togglePostsPanel = () => {
-        if (isDockedMode() && toggleDockedSidebar('posts-sidebar')) return;
+        if (isDockedMode() && toggleDockedSidebar('posts')) return;
         const postsPanel = getPostsPanel();
         const tocPanel = getTocPanel();
         if (!postsPanel) return;
@@ -1251,7 +1257,7 @@ function initMobileMenus() {
     };
 
     const toggleTocPanel = () => {
-        if (isDockedMode() && toggleDockedSidebar('toc-sidebar')) return;
+        if (isDockedMode() && toggleDockedSidebar('toc')) return;
         const tocPanel = getTocPanel();
         const postsPanel = getPostsPanel();
         if (!tocPanel) return;

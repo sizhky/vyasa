@@ -256,7 +256,9 @@ summary {
     max-height: none !important;
     overflow-y: auto;
 }
-.vyasa-sidebar-docked.vyasa-sidebar-hidden {
+.vyasa-sidebar-docked.vyasa-sidebar-hidden,
+html[data-vyasa-hide-posts-sidebar] #posts-sidebar,
+html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     display: none !important;
 }
 .vyasa-sidebar-resizer {
