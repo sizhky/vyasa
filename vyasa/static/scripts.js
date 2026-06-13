@@ -766,6 +766,17 @@ document.addEventListener('toggle', (event) => {
     details.classList.toggle('is-open', details.open);
 }, true);
 
+function syncFoldAllButton(button, allOpen) {
+    const label = allOpen ? 'Fold all' : 'Unfold all';
+    button.classList.add('vyasa-page-action-tooltip');
+    button.dataset.vyasaFoldAll = allOpen ? 'open' : 'closed';
+    button.dataset.tooltip = `${label} sections (C)`;
+    button.setAttribute('aria-label', `${label} sections (C)`);
+    button.innerHTML = allOpen
+        ? '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 10 3 3 3-3"/></svg><span>Fold all</span>'
+        : '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 14 3-3 3 3"/></svg><span>Unfold all</span>';
+}
+
 document.addEventListener('click', (event) => {
     const sidebarLocate = event.target.closest('[data-sidebar-locate-current="true"]');
     if (sidebarLocate) {
@@ -787,10 +798,7 @@ document.addEventListener('click', (event) => {
         const folds = Array.from(main?.querySelectorAll('.vyasa-heading-fold') || []);
         const shouldOpen = toggle.dataset.vyasaFoldAll !== 'open';
         folds.forEach((fold) => { fold.open = shouldOpen; });
-        toggle.dataset.vyasaFoldAll = shouldOpen ? 'open' : 'closed';
-        toggle.innerHTML = shouldOpen
-            ? '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 10 3 3 3-3"/></svg><span>Fold all</span>'
-            : '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 14 3-3 3 3"/></svg><span>Unfold all</span>';
+        syncFoldAllButton(toggle, shouldOpen);
         syncHeadingActionStates(document);
         return;
     }
@@ -921,14 +929,12 @@ function initHeadingFolds(root = document) {
     const existingControl = actions?.querySelector?.('[data-vyasa-fold-all]');
     if (createdFold && existingControl) {
         existingControl.hidden = false;
-        existingControl.dataset.vyasaFoldAll = 'open';
-        existingControl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 10 3 3 3-3"/></svg><span>Fold all</span>';
+        syncFoldAllButton(existingControl, true);
     } else if (createdFold && actions && !main.querySelector('[data-vyasa-fold-all]')) {
         const control = document.createElement('button');
         control.type = 'button';
         control.className = 'vyasa-fold-all-button';
-        control.dataset.vyasaFoldAll = 'open';
-        control.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 10 3 3 3-3"/></svg><span>Fold all</span>';
+        syncFoldAllButton(control, true);
         const copyButton = Array.from(actions.querySelectorAll('button')).find((button) => button.textContent?.includes('Copy Markdown'));
         actions.insertBefore(control, copyButton);
     } else if (existingControl) {

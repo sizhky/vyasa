@@ -129,13 +129,15 @@ def _copy_payload_attrs(text: str):
 
 
 def copy_raw_button(label: str, raw_content: str, toast_id: str):
+    tooltip = f"Copy raw {label.removeprefix('Copy ').lower()}"
     return Button(
         action_icon("clipboard"),
         Span(label, cls="text-sm font-medium"),
         type="button",
-        title=f"Copy raw {label.removeprefix('Copy ').lower()}",
         onclick=COPY_RAW_PAYLOAD_JS % toast_id,
-        cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+        cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+        data_tooltip=tooltip,
+        aria_label=tooltip,
         **_copy_payload_attrs(raw_content),
     )
 
@@ -169,7 +171,9 @@ def fold_all_button():
         type="button",
         hidden=True,
         data_vyasa_fold_all="open",
-        cls="vyasa-fold-all-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+        data_tooltip="Fold all sections (C)",
+        aria_label="Fold all sections (C)",
+        cls="vyasa-fold-all-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
     )
 
 
@@ -179,7 +183,9 @@ def present_button(slug: str):
         "Present",
         href=content_url_for_slug(slug, prefix="/slides", suffix="/slide-1"),
         hx_boost="false",
-        cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+        data_tooltip="Present document",
+        aria_label="Present document",
+        cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
     )
 
 
