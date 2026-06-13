@@ -45,7 +45,8 @@ def test_extensions_default_preset_when_section_omitted(tmp_path, monkeypatch):
     assert plan.preset == "default"
     assert plan.selected_by_category["layout"] == ("default_layout",)
     assert plan.selected_by_category["render"] == ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "html_viewer", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
-    assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "annotations", "bookmarks", "filesystem_routes")
+    assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "bookmarks", "filesystem_routes")
+    assert "annotations" not in plan.enabled_ids
     assert plan.enabled_ids[-1] == "filesystem"
 
 
@@ -206,16 +207,24 @@ def test_config_resolve_extensions_reads_extensions_section(tmp_path, monkeypatc
     assert set(CORE_CAPABILITIES) == {"cap:markdown_pipeline"}
 
 
-def test_route_extensions_register_declared_routes_and_storage():
+def test_default_route_extensions_exclude_annotations():
     runtime = build_extension_runtime({})
 
     prefixes = {entry["prefix"] for entry in runtime.route_handlers}
     assert "/slides" in prefixes
     assert "/api/tasks" in prefixes
-    assert "/api/annotations" in prefixes
     assert "/api/bookmarks" in prefixes
-    assert "annotations" in runtime.storage_namespaces
+    assert "/api/annotations" not in prefixes
+    assert "annotations" not in runtime.storage_namespaces
     assert "bookmarks" in runtime.storage_namespaces
+
+
+def test_annotations_extension_is_opt_in():
+    runtime = build_extension_runtime({"routes_add": ["annotations"]})
+
+    prefixes = {entry["prefix"] for entry in runtime.route_handlers}
+    assert "/api/annotations" in prefixes
+    assert "annotations" in runtime.storage_namespaces
 
 
 def test_bookmarks_register_row_action_intent_not_html_decorator():
