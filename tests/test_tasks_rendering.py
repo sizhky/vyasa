@@ -551,6 +551,14 @@ def test_tasks_ego_views_keep_drag_selection_enabled():
     assert "if (egoMode) return;" not in start_drag_selection
 
 
+def test_tasks_g_shortcuts_open_ego_views():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "if (key === 'g' && !egoMode)" in source
+    assert "openEgo?.(event.shiftKey)" in source
+    assert "G: open EG\\nShift + G: open EG+" in source
+
+
 def test_tasks_fullscreen_reuses_canvas_background_contract():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
