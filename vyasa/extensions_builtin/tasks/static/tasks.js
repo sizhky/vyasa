@@ -3498,6 +3498,9 @@ async function renderTasksGraphs(rootElement = document) {
             const React = window.React;
             const Handle = rf.Handle;
             const Position = rf.Position;
+            const markWidgetActive = React.useCallback(() => {
+                window.__vyasaTasksActiveWidgetId = widgetId;
+            }, []);
             const [sourceModel, setSourceModel] = React.useState(() => initialSourceModel);
             const [sourceGraph, setSourceGraph] = React.useState(() => initialSourceGraph);
             const sourcePrefsRef = React.useRef(null);
@@ -5149,12 +5152,12 @@ async function renderTasksGraphs(rootElement = document) {
                     const onKeyDown = (event) => {
                         if (event.defaultPrevented || event.repeat) return;
                         if (event.metaKey || event.ctrlKey || event.altKey) return;
-                        const wrapper = flowWrapperRef.current;
+                        const flowWrapper = flowWrapperRef.current;
                         const target = event.target instanceof Element ? event.target : null;
                         if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName))) return;
                         const key = event.key.toLowerCase();
-                        const graphFocused = wrapper && (wrapper.contains(document.activeElement) || wrapper.contains(event.target));
-                        if (!graphFocused && !(key === 't' && groupToggleHoverIdRef.current)) return;
+                        const widgetFocused = wrapper.contains(document.activeElement) || wrapper.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
+                        if (!widgetFocused && !(key === 't' && groupToggleHoverIdRef.current)) return;
                         if (key === 'f' && event.shiftKey) {
                             event.preventDefault();
                             window.openTasksFullscreen?.(widgetId);
@@ -6239,6 +6242,7 @@ async function renderTasksGraphs(rootElement = document) {
                         toggleHelp: () => setHelpOpen((current) => !current),
                     };
                     return () => {
+                        if (window.__vyasaTasksActiveWidgetId === widgetId) delete window.__vyasaTasksActiveWidgetId;
                         delete window.__vyasaTasksActions[widgetId];
                     };
                 }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, activeColorBy]);
@@ -6468,7 +6472,10 @@ async function renderTasksGraphs(rootElement = document) {
                 clearSelection();
             };
             const flowPointerHandlers = {
-                onPointerDown: () => flowWrapperRef.current?.focus({ preventScroll: true }),
+                onPointerDown: () => {
+                    markWidgetActive();
+                    flowWrapperRef.current?.focus({ preventScroll: true });
+                },
                 onPointerDownCapture: startDragSelection,
                 onPointerMove: updateGroupHoverTooltip,
                 onPointerMoveCapture: updateDragSelection,
@@ -6482,7 +6489,7 @@ async function renderTasksGraphs(rootElement = document) {
                 },
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
-                window.React.createElement('div', { style: { width: '100%', height: '100%', display: 'flex', alignItems: 'stretch', gap: '12px' } },
+                window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', display: 'flex', alignItems: 'stretch', gap: '12px' } },
                     filterPanelElement,
                     window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { flex: '1 1 auto', minWidth: 0, height: '100%', outline: 'none', position: 'relative' }, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
@@ -6499,7 +6506,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(GroupHoverTooltip),
                     window.React.createElement(DragSelectionOverlay)
                 ))
-            ) : window.React.createElement('div', { style: { width: '100%', height: '100%', display: 'flex', alignItems: 'stretch', gap: '12px' } },
+            ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', display: 'flex', alignItems: 'stretch', gap: '12px' } },
                 filterPanelElement,
                 window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { flex: '1 1 auto', minWidth: 0, height: '100%', outline: 'none', position: 'relative' }, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },

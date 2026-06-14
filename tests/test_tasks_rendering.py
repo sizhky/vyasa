@@ -559,6 +559,8 @@ def test_tasks_g_shortcuts_open_ego_views():
 
     assert "if (key === 'g' && !egoMode)" in source
     assert "openEgo?.(event.shiftKey)" in source
+    assert "window.__vyasaTasksActiveWidgetId = widgetId;" in source
+    assert "window.__vyasaTasksActiveWidgetId === widgetId" in source
     assert "G: open EG\\nShift + G: open EG+" in source
 
 
