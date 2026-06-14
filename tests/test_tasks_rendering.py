@@ -367,6 +367,9 @@ def test_tasks_source_renders_hover_checkbox_and_done_badge():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "type: 'checkbox'" in source
+    assert "const showCheckbox = hoveredNodeId === sourceNodeId || selectedNodeId === sourceNodeId;" in source
+    assert "if (!selectedNodeId) {" in source
+    assert "setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);" in source
     assert "const doneBadge = isChecked ?" in source
     assert "taskStateLabel" in source
 
@@ -450,6 +453,11 @@ def test_tasks_source_logs_node_href_navigation_flow():
     assert "logTasksDebug('nodeHrefOpen:htmxSwap'" in source
     assert "logTasksDebug('htmx:beforeRequest'" in source
     assert "logTasksDebug('htmx:responseError'" in source
+    assert "logTasksDebug('shortcutKeydown'" in source
+    assert "logTasksDebug('selectionClear'" in source
+    assert "logTasksDebug('selectionStateCommit'" in source
+    assert "logTasksDebug('selectionSetNode'" in source
+    assert "logTasksDebug('openEgoAction'" in source
 
 
 def test_tasks_source_uses_base_view_label_for_default_projection_tab():
@@ -569,10 +577,10 @@ def test_tasks_g_shortcuts_open_ego_views():
     assert "setSelectedNodeId(sourceNodeId);" in source
     assert "window.__vyasaTasksActiveWidgetId = widgetId;" in source
     assert "window.__vyasaTasksActiveWidgetId === widgetId" in source
+    assert "markWidgetActive();" in source
     assert "G: open EG\\nShift + G: open EG+" in source
-    assert "if (event.key === 'Escape')" in source
-    assert "if (selectedNodeIdRef.current || selectedNodeIdsRef.current.size)" in source
-    assert "clearSelection();" in source
+    assert "if (event.key === 'Escape' && widgetFocused)" in source
+    assert "clearSelection('escape');" in source
 
 
 def test_tasks_fullscreen_reuses_canvas_background_contract():
@@ -587,6 +595,9 @@ def test_tasks_fullscreen_reuses_canvas_background_contract():
     assert "modal.className = 'fixed inset-0 z-[10000] bg-black/88 backdrop-blur-sm';" in source
     assert "flow.style.flex = '1 1 auto';" in source
     assert "flow.style.minHeight = '0';" in source
+    assert "closeBtn.title = 'Close (Shift+Esc)';" in source
+    assert "if (e.key === 'Escape' && e.shiftKey && document.getElementById('tasks-fullscreen-modal'))" in source
+    assert "if (event.key !== 'Escape' || !event.shiftKey) return;" in source
 
 
 def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():

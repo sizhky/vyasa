@@ -330,6 +330,14 @@ function logTasksDebugVerbose(label, payload = {}) {
     return logTasksDebug(label, payload);
 }
 
+function tasksSelectionDebugPayload(selectedNodeId, selectedNodeIds, hoveredNodeId = '') {
+    return {
+        selectedNodeId: String(selectedNodeId || ''),
+        selectedNodeIds: Array.from(selectedNodeIds || []).map((id) => String(id || '')).filter(Boolean),
+        hoveredNodeId: String(hoveredNodeId || ''),
+    };
+}
+
 function logTasksColorDebug(model, nodes, activeColorBy, activeColorPalette, colorMix) {
     if (!window.__vyasaTasksDebug.enabled) return;
     const candidates = (nodes || [])
@@ -3602,6 +3610,13 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 selectedNodeIdsRef.current = new Set(selectedNodeIds);
             }, [selectedNodeIds]);
+            React.useEffect(() => {
+                logTasksDebug('selectionStateCommit', {
+                    widgetId,
+                    activeWidgetId: String(window.__vyasaTasksActiveWidgetId || ''),
+                    ...tasksSelectionDebugPayload(selectedNodeId, selectedNodeIds, hoveredNodeId),
+                });
+            }, [widgetId, selectedNodeId, selectedNodeIds, hoveredNodeId]);
             const [searchQuery, setSearchQuery] = React.useState(() => egoMode ? '' : (
                 typeof projectionPrefs?.searchQuery === 'string' ? projectionPrefs.searchQuery : ''
             ));
@@ -4651,12 +4666,24 @@ async function renderTasksGraphs(rootElement = document) {
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
+                    logTasksDebug('selectionPrunedMissingNode', {
+                        widgetId,
+                        missingNodeId: selectedNodeId,
+                        baseNodeIds: Array.from(baseNodeIds),
+                        ...tasksSelectionDebugPayload(selectedNodeId, selectedNodeIds, hoveredNodeId),
+                    });
                     setSelectedNodeId(null);
                     return;
                 }
                 if (selectedNodeIds.size) {
                     const validSelectedIds = Array.from(selectedNodeIds).filter((nodeId) => baseNodeIds.has(nodeId));
                     if (validSelectedIds.length !== selectedNodeIds.size) {
+                        logTasksDebug('selectionPrunedMulti', {
+                            widgetId,
+                            before: Array.from(selectedNodeIds),
+                            after: validSelectedIds,
+                            baseNodeIds: Array.from(baseNodeIds),
+                        });
                         setSelectedNodeIds(new Set(validSelectedIds));
                         return;
                     }
@@ -4912,7 +4939,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const isChecked = data?.__checked__ === true;
                 const taskStateLabel = String(data?.__card_state__ || (isChecked ? TASKS_DEFAULT_CARD_STATES[1] : TASKS_DEFAULT_CARD_STATES[0]));
                 const taskStateColor = data?.__card_state_color__ || TASKS_DONE_ACCENT;
-                const showCheckbox = selectedNodeId === sourceNodeId;
+                const showCheckbox = hoveredNodeId === sourceNodeId || selectedNodeId === sourceNodeId;
                 const isActiveNode = !selectedNodeId || selectedNodeId === sourceNodeId;
                 const linksInteractive = isActiveNode;
                 const linkKinds = Array.from(tasksNodeLinkKinds(data));
@@ -5187,9 +5214,36 @@ async function renderTasksGraphs(rootElement = document) {
                         if (event.metaKey || event.ctrlKey || event.altKey) return;
                         const flowWrapper = flowWrapperRef.current;
                         const target = event.target instanceof Element ? event.target : null;
-                        if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName))) return;
                         const key = event.key.toLowerCase();
                         const widgetFocused = wrapper.contains(document.activeElement) || wrapper.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
+                        if ((event.key === 'Escape' || key === 'g') && window.__vyasaTasksDebug.enabled) {
+                            logTasksDebug('shortcutKeydown', {
+                                widgetId,
+                                key: event.key,
+                                shiftKey: event.shiftKey,
+                                widgetFocused,
+                                activeWidgetId: String(window.__vyasaTasksActiveWidgetId || ''),
+                                activeElementTag: document.activeElement?.tagName || '',
+                                targetTag: target?.tagName || '',
+                                helpOpen,
+                                ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeId),
+                            });
+                        }
+                        if (event.key === 'Escape' && widgetFocused) {
+                            if (helpOpen) {
+                                event.preventDefault();
+                                logTasksDebug('shortcutEscapeHelpClose', {
+                                    widgetId,
+                                    ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeId),
+                                });
+                                setHelpOpen(false);
+                                return;
+                            }
+                            event.preventDefault();
+                            clearSelection('escape');
+                            return;
+                        }
+                        if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName))) return;
                         if (!widgetFocused && !(key === 't' && groupToggleHoverIdRef.current)) return;
                         if (key === 'f' && event.shiftKey) {
                             event.preventDefault();
@@ -5208,6 +5262,11 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'g' && !egoMode) {
                             event.preventDefault();
+                            logTasksDebug('shortcutOpenEgo', {
+                                widgetId,
+                                includeNeighbors: event.shiftKey,
+                                ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeId),
+                            });
                             window.__vyasaTasksActions?.[widgetId]?.openEgo?.(event.shiftKey);
                             return;
                         }
@@ -5294,18 +5353,6 @@ async function renderTasksGraphs(rootElement = document) {
                             event.preventDefault();
                             panViewport(reactFlow, -120 * (event.shiftKey ? 2 : 1), 0);
                             return;
-                        }
-                        if (event.key === 'Escape') {
-                            if (helpOpen) {
-                                event.preventDefault();
-                                setHelpOpen(false);
-                                return;
-                            }
-                            if (selectedNodeIdRef.current || selectedNodeIdsRef.current.size) {
-                                event.preventDefault();
-                                clearSelection();
-                                return;
-                            }
                         }
                     };
                     document.addEventListener('keydown', onKeyDown);
@@ -5994,7 +6041,12 @@ async function renderTasksGraphs(rootElement = document) {
                 )
                 );
             };
-            const clearSelection = () => {
+            const clearSelection = (reason = 'manual') => {
+                logTasksDebug('selectionClear', {
+                    widgetId,
+                    reason,
+                    ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeId),
+                });
                 selectedNodeIdRef.current = null;
                 selectedNodeIdsRef.current = new Set();
                 setSelectedNodeId(null);
@@ -6076,6 +6128,12 @@ async function renderTasksGraphs(rootElement = document) {
                 const baseIds = new Set((graphBaseRef.current.nodes || []).map((n) => n.id));
                 if (!baseIds.has(groupId)) return false;
                 const ids = new Set([groupId, ...collectTasksGroupDescendantIds(groupId, model)].filter((id) => baseIds.has(id)));
+                logTasksDebug('selectionSetGroupDescendants', {
+                    widgetId,
+                    groupId,
+                    selectedIds: Array.from(ids),
+                });
+                markWidgetActive();
                 selectedNodeIdRef.current = null;
                 selectedNodeIdsRef.current = ids;
                 setSelectedNodeId(null);
@@ -6099,10 +6157,18 @@ async function renderTasksGraphs(rootElement = document) {
                     return;
                 }
                 if (!isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id))) {
-                    clearSelection();
+                    clearSelection('nodeClickNonSelectable');
                     return;
                 }
                 const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                logTasksDebug('selectionSetNode', {
+                    widgetId,
+                    sourceNodeId,
+                    nodeId: node.id,
+                    kind: node.data?.__kind__ || '',
+                    ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeId),
+                });
+                markWidgetActive();
                 selectedNodeIdRef.current = sourceNodeId;
                 selectedNodeIdsRef.current = new Set();
                 setSelectedNodeId(sourceNodeId);
@@ -6110,10 +6176,18 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId(null);
             }, [expanded, selectGroupDescendants]);
             const focusNeighborEdge = React.useCallback((_, node) => {
-                if (!selectedNodeId || !node?.id) return;
+                if (!node?.id) return;
                 if (!isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id))) return;
-                const baseEdges = graphBaseRef.current.edges || [];
                 const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                if (!selectedNodeId) {
+                    if (hoverClearTimerRef.current) {
+                        window.clearTimeout(hoverClearTimerRef.current);
+                        hoverClearTimerRef.current = null;
+                    }
+                    setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);
+                    return;
+                }
+                const baseEdges = graphBaseRef.current.edges || [];
                 const isNeighbor = baseEdges.some((edge) =>
                     (edge.source === selectedNodeId && edge.target === sourceNodeId) ||
                     (edge.source === sourceNodeId && edge.target === selectedNodeId)
@@ -6183,6 +6257,12 @@ async function renderTasksGraphs(rootElement = document) {
                             x2: dragSelection.currentFlow.x,
                             y2: dragSelection.currentFlow.y,
                         });
+                    logTasksDebug('selectionSetDrag', {
+                        widgetId,
+                        mode: dragSelection.mode,
+                        selectedIds: selected,
+                    });
+                    markWidgetActive();
                     selectedNodeIdRef.current = null;
                     selectedNodeIdsRef.current = new Set(selected);
                     setSelectedNodeIds(new Set(selected));
@@ -6244,6 +6324,7 @@ async function renderTasksGraphs(rootElement = document) {
                             });
                         },
                         select: (nodeId) => {
+                            markWidgetActive();
                             selectedNodeIdRef.current = nodeId;
                             selectedNodeIdsRef.current = new Set();
                             setSelectedNodeId(nodeId);
@@ -6252,6 +6333,12 @@ async function renderTasksGraphs(rootElement = document) {
                         },
                         openEgo: (includeNeighbors = false) => {
                             const egoSelection = currentSelectionIds();
+                            logTasksDebug('openEgoAction', {
+                                widgetId,
+                                includeNeighbors,
+                                selection: Array.from(egoSelection),
+                                ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeId),
+                            });
                             const egoState = buildTasksEgoState(model, rawGraph, egoSelection, includeNeighbors, activeColorBy);
                             if (!egoState) return;
                             openTasksEgoModal(wrapper, {
@@ -6298,7 +6385,6 @@ async function renderTasksGraphs(rootElement = document) {
                         toggleHelp: () => setHelpOpen((current) => !current),
                     };
                     return () => {
-                        if (window.__vyasaTasksActiveWidgetId === widgetId) delete window.__vyasaTasksActiveWidgetId;
                         delete window.__vyasaTasksActions[widgetId];
                     };
                 }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, activeColorBy]);
@@ -6525,7 +6611,7 @@ async function renderTasksGraphs(rootElement = document) {
                     setHoveredNodeId(null);
                     return;
                 }
-                clearSelection();
+                clearSelection('paneClick');
             };
             const flowPointerHandlers = {
                 onPointerDown: () => {
@@ -6772,7 +6858,7 @@ async function openTasksGraphModal(wrapper, options = {}) {
         : tasksHeaderControlsHtml(fullscreenId, false);
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
-    closeBtn.title = 'Close (Esc)';
+    closeBtn.title = 'Close (Shift+Esc)';
     closeBtn.className = 'rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300';
     closeBtn.textContent = 'X';
     closeBtn.onclick = () => document.body.removeChild(modal);
@@ -6820,7 +6906,7 @@ async function openTasksGraphModal(wrapper, options = {}) {
     document.body.appendChild(modal);
 
     const escHandler = (e) => {
-        if (e.key === 'Escape' && document.getElementById('tasks-fullscreen-modal')) {
+        if (e.key === 'Escape' && e.shiftKey && document.getElementById('tasks-fullscreen-modal')) {
             document.body.removeChild(modal);
             document.removeEventListener('keydown', escHandler);
         }
@@ -6846,7 +6932,7 @@ function setTasksMaximized(wrapper, on) {
         wrapper.__tasksPrevBodyOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         const escHandler = (event) => {
-            if (event.key !== 'Escape') return;
+            if (event.key !== 'Escape' || !event.shiftKey) return;
             event.preventDefault();
             event.stopPropagation();
             setTasksMaximized(wrapper, false);
