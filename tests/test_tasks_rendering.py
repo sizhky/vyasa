@@ -124,7 +124,7 @@ def test_tasks_node_detail_rows_use_inline_label_flow():
     assert "whiteSpace: 'pre-line'" in source
     assert "gridTemplateColumns: stacked ?" not in source
     assert ".vyasa-task-node-card-value > p:first-child { display: inline; }" in css
-    assert ".vyasa-task-node-card-value { min-width: 0; max-width: 100%; }" in css
+    assert ".vyasa-task-node-card-value { min-width: 0; max-width: 100%; white-space: normal; }" in css
     assert ".vyasa-task-node-card-value li > p { margin: 0; }" in css
     assert ".vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }" in css
 
@@ -792,6 +792,26 @@ def test_tasks_block_serializes_rendered_attr_html_for_node_card():
     assert "<strong>Bold</strong>" in task["__rendered_attrs__"]["summary"]
     assert "<br" in task["__rendered_attrs__"]["summary"]
     assert 'href="/posts/docs/feed/guide#spec"' in task["__rendered_attrs__"]["summary"]
+
+
+def test_tasks_block_renders_markdown_lists_without_trailing_breaks():
+    md = dedent("""\
+    ```items
+    Foundation:
+      - t1 :: Define graph payload | summary: "**Raw input**\\n\\n- First point\\n- Second point\\n- Third point"
+    ```
+    """)
+
+    rendered = to_xml(from_md(md, current_path="docs/feed/personalization"))
+    match = re.search(r"""data-tasks-payload=(["'])(.*?)\1""", rendered)
+
+    assert match is not None
+    payload = json.loads(html.unescape(match.group(2)))
+    summary_html = payload["tasks"][0]["__rendered_attrs__"]["summary"]
+    assert "<ul>" in summary_html
+    assert "<li>First point</li>" in summary_html
+    assert "<li>Second point</li>" in summary_html
+    assert "<li>Third point</li>" in summary_html
 
 
 def test_tasks_block_serializes_document_path_and_stable_storage_id():

@@ -21,12 +21,39 @@ _RENDERABLE_NODE_KEYS = {
 }
 
 
+_MARKDOWN_BLOCK_LINE_RE = re.compile(
+    r"^\s*(?:[-+*]\s+|\d+\.\s+|>\s+|#{1,6}\s+|```|~~~|\|{1,2}|(?: {4}|\t)\S)"
+)
+
+
+def _starts_markdown_block(line: str) -> bool:
+    return bool(_MARKDOWN_BLOCK_LINE_RE.match(line))
+
+
 def _prepare_node_attr_markdown(value) -> str:
     text = str(value).replace("\\r\\n", "\n").replace("\\n", "\n")
     stripped = text.strip()
     if (stripped.startswith('"') and stripped.endswith('"')) or (stripped.startswith("'") and stripped.endswith("'")):
         text = stripped[1:-1]
-    return re.sub(r"(?<!\n)\n(?!\n)", "<br>\n", text)
+    lines = text.split("\n")
+    rendered_lines: list[str] = []
+    in_fence = False
+    for index, line in enumerate(lines):
+        stripped_line = line.lstrip()
+        if stripped_line.startswith(("```", "~~~")):
+            in_fence = not in_fence
+            rendered_lines.append(line)
+            continue
+        rendered_lines.append(line)
+        if index == len(lines) - 1 or in_fence:
+            continue
+        next_line = lines[index + 1]
+        if not line.strip() or not next_line.strip():
+            continue
+        if _starts_markdown_block(line) or _starts_markdown_block(next_line):
+            continue
+        rendered_lines.append("<br>")
+    return "\n".join(rendered_lines)
 
 
 def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
