@@ -74,6 +74,10 @@ def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
                 )
             if rendered_attrs:
                 node["__rendered_attrs__"] = rendered_attrs
+    for entry in (model.get("projection_models") or {}).values():
+        projection_model = entry.get("model") if isinstance(entry, dict) else None
+        if isinstance(projection_model, dict):
+            _attach_rendered_node_attrs(projection_model, current_path)
 
 
 def _should_open_filters_by_default(width_value) -> bool:

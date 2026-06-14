@@ -816,6 +816,51 @@ def test_tasks_block_renders_markdown_lists_without_trailing_breaks():
     assert "<li>Third point</li>" in summary_html
 
 
+def test_tasks_block_serializes_rendered_attr_html_for_projection_models(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        """@graph id=prep initial_view=arc
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+base:
+    edges=kg.edges
+@views
+arc:
+    source=base
+    group_by=owner
+    caption="Arc"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text(
+        """t1: Adversarial evasion
+\tdesc=|
+\t\tAttackers actively mutate behavior to slip past static models. Examples:
+\t\t- **Polymorphic malware** rewrites its own bytes each infection so no two copies hash alike.
+\t\t- **DGA domains** generate thousands of random C2 hostnames; blocklists can't keep up.
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.edges").write_text("", encoding="utf-8")
+    (tmp_path / "kg.attrs").write_text("@node_attrs\nowner:\n  blue: t1\n", encoding="utf-8")
+
+    md = f"""```items
+---
+items_schema: {tmp_path / "kg.schema"}
+---
+```"""
+
+    rendered = to_xml(from_md(md, current_path=tmp_path / "graph.md"))
+    match = re.search(r"""data-tasks-payload=(["'])(.*?)\1""", rendered)
+
+    assert match is not None
+    payload = json.loads(html.unescape(match.group(2)))
+    desc_html = payload["projection_models"]["arc"]["model"]["tasks"][0]["__rendered_attrs__"]["desc"]
+    assert "<ul>" in desc_html
+    assert "<strong>Polymorphic malware</strong>" in desc_html
+    assert "<strong>DGA domains</strong>" in desc_html
+
+
 def test_tasks_block_serializes_document_path_and_stable_storage_id():
     md = """```items
 Foundation:
