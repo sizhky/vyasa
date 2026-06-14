@@ -13,7 +13,7 @@ from vyasa.extensions_builtin.tasks.items_store_contracts import (
     ValidationCode,
     ValidationFinding,
 )
-from vyasa.extensions_builtin.tasks.items_pack import read_edges, read_kg_pack
+from vyasa.extensions_builtin.tasks.items_pack import read_edges, read_kg_pack, read_nodes
 from vyasa.extensions_builtin.tasks.api import _view_sidecar_text
 from vyasa.extensions_builtin.tasks.model import _resolve_tasks_source_path, parse_tasks_text
 from vyasa.config import reload_config
@@ -621,6 +621,26 @@ def test_kg_pack_nodes_support_nested_children_and_inherit_whitelist(tmp_path):
     assert all(task["city"] == "Hyderabad" for task in graph["tasks"])
     assert "type" not in graph["tasks"][0]
     assert graph["tasks"][1]["type"] == "car"
+
+
+def test_kg_pack_nodes_support_multiline_inline_attributes(tmp_path):
+    nodes_path = tmp_path / "kg.nodes"
+    nodes_path.write_text(
+        """n1: Recommendation
+\tsummary=|
+\t\t**Why it works**
+
+\t\t- Preserves clusters
+\t\t- Avoids centroid blur
+\tn2: Candidate
+""",
+        encoding="utf-8",
+    )
+
+    nodes = read_nodes(nodes_path)
+
+    assert nodes[0]["summary"] == "**Why it works**\n\n- Preserves clusters\n- Avoids centroid blur"
+    assert nodes[1]["id"] == "n2"
 
 
 def test_kg_pack_nodes_reject_duplicate_child_with_conflicting_label(tmp_path):

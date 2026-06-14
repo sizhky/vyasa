@@ -5,6 +5,7 @@ from pathlib import Path
 import json
 import shlex
 import re
+import textwrap
 from typing import Any
 
 NODE_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
@@ -205,7 +206,13 @@ def read_nodes(path: str | Path) -> list[dict[str, str]]:
     nodes_by_id: dict[str, dict[str, Any]] = {}
     stack: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
-    for raw in _record_raw_lines(path):
+    raw_lines = Path(path).read_text(encoding="utf-8").splitlines()
+    line_index = 0
+    while line_index < len(raw_lines):
+        raw = raw_lines[line_index]
+        line_index += 1
+        if not raw.strip() or raw.lstrip().startswith(("#", "@")):
+            continue
         indent = _indent_width(raw)
         line = raw.strip()
         if _looks_like_node_line(line):
@@ -232,6 +239,15 @@ def read_nodes(path: str | Path) -> list[dict[str, str]]:
             key, value = _split_inline_assignment(line)
             if not key:
                 continue
+            if value == "|":
+                block_lines = []
+                while line_index < len(raw_lines):
+                    block_line = raw_lines[line_index]
+                    if block_line.strip() and _indent_width(block_line) <= indent:
+                        break
+                    block_lines.append(block_line)
+                    line_index += 1
+                value = textwrap.dedent("\n".join(block_lines)).strip("\n")
             current[key] = value
             if key == "inherit":
                 current["__inherit_keys__"] = _list_value(value)

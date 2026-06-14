@@ -124,6 +124,8 @@ def test_tasks_node_detail_rows_use_inline_label_flow():
     assert "whiteSpace: 'pre-line'" in source
     assert "gridTemplateColumns: stacked ?" not in source
     assert ".vyasa-task-node-card-value > p:first-child { display: inline; }" in css
+    assert ".vyasa-task-node-card-value { min-width: 0; max-width: 100%; }" in css
+    assert ".vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }" in css
 
 
 def test_tasks_node_metadata_hides_internal_keys():

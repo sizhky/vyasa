@@ -95,9 +95,18 @@ b1: Apartment Building
 		species=dog
 c1: Honda City
 	type=car
+n1: Post matching
+	summary=|
+		**Why it works**
+
+		- Preserves separate interest clusters
+		- Avoids centroid blur
 ```
 
 - Preferred format: `<id>: <label>` followed by indented `key=value` lines for unique attrs.
+- For multiline mini-Markdown, write `key=|`, then indent every content line one level deeper than the attribute.
+- Blank lines, lists, links, emphasis, and other supported Markdown survive into the rendered node card.
+- The block ends at the next nonblank line whose indentation is equal to or shallower than the `key=|` line.
 - Indented `<id>: <label>` lines are child nodes. Indented `key=value` lines are attrs.
 - A node with child nodes becomes a real group/container node; leaf nodes remain task/card nodes.
 - Node ids are global. Edges still reference ids, not paths.
