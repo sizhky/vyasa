@@ -5295,10 +5295,17 @@ async function renderTasksGraphs(rootElement = document) {
                             panViewport(reactFlow, -120 * (event.shiftKey ? 2 : 1), 0);
                             return;
                         }
-                        if (event.key === 'Escape' && helpOpen) {
-                            event.preventDefault();
-                            setHelpOpen(false);
-                            return;
+                        if (event.key === 'Escape') {
+                            if (helpOpen) {
+                                event.preventDefault();
+                                setHelpOpen(false);
+                                return;
+                            }
+                            if (selectedNodeIdRef.current || selectedNodeIdsRef.current.size) {
+                                event.preventDefault();
+                                clearSelection();
+                                return;
+                            }
                         }
                     };
                     document.addEventListener('keydown', onKeyDown);

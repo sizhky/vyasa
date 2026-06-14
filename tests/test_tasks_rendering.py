@@ -570,6 +570,9 @@ def test_tasks_g_shortcuts_open_ego_views():
     assert "window.__vyasaTasksActiveWidgetId = widgetId;" in source
     assert "window.__vyasaTasksActiveWidgetId === widgetId" in source
     assert "G: open EG\\nShift + G: open EG+" in source
+    assert "if (event.key === 'Escape')" in source
+    assert "if (selectedNodeIdRef.current || selectedNodeIdsRef.current.size)" in source
+    assert "clearSelection();" in source
 
 
 def test_tasks_fullscreen_reuses_canvas_background_contract():
