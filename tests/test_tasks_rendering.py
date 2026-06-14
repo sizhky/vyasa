@@ -563,6 +563,10 @@ def test_tasks_g_shortcuts_open_ego_views():
 
     assert "if (key === 'g' && !egoMode)" in source
     assert "openEgo?.(event.shiftKey)" in source
+    assert "const selectedNodeIdRef = React.useRef(null);" in source
+    assert "selectedNodeIdRef.current = sourceNodeId;" in source
+    assert "selectedNodeIdsRef.current = new Set();" in source
+    assert "setSelectedNodeId(sourceNodeId);" in source
     assert "window.__vyasaTasksActiveWidgetId = widgetId;" in source
     assert "window.__vyasaTasksActiveWidgetId === widgetId" in source
     assert "G: open EG\\nShift + G: open EG+" in source

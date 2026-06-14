@@ -3580,6 +3580,8 @@ async function renderTasksGraphs(rootElement = document) {
             const [expanded, setExpanded] = React.useState(() => egoMode ? tasksExpandableNodeIds(model) : hydrateExpandedSet(projectionPrefs));
             const [selectedNodeId, setSelectedNodeId] = React.useState(null);
             const [selectedNodeIds, setSelectedNodeIds] = React.useState(() => new Set());
+            const selectedNodeIdRef = React.useRef(null);
+            const selectedNodeIdsRef = React.useRef(new Set());
             const [dragSelection, setDragSelection] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
@@ -3594,6 +3596,12 @@ async function renderTasksGraphs(rootElement = document) {
                     ? normalizeTasksFilterQuery(projectionPrefs.swatchFilters)
                     : tasksEmptyFilterQuery()
             ));
+            React.useEffect(() => {
+                selectedNodeIdRef.current = selectedNodeId;
+            }, [selectedNodeId]);
+            React.useEffect(() => {
+                selectedNodeIdsRef.current = new Set(selectedNodeIds);
+            }, [selectedNodeIds]);
             const [searchQuery, setSearchQuery] = React.useState(() => egoMode ? '' : (
                 typeof projectionPrefs?.searchQuery === 'string' ? projectionPrefs.searchQuery : ''
             ));
@@ -3766,17 +3774,17 @@ async function renderTasksGraphs(rootElement = document) {
                     .map((node) => node.id));
             }, [effectiveQueryFilters, activeSwatchFilters, searchMatches]);
             const currentSelectionIds = React.useCallback(() => {
-                if (selectedNodeId) return new Set([selectedNodeId]);
-                if (selectedNodeIds.size) {
+                if (selectedNodeIdRef.current) return new Set([selectedNodeIdRef.current]);
+                if (selectedNodeIdsRef.current.size) {
                     const baseById = Object.fromEntries((graphBaseRef.current.nodes || []).map((node) => [node.id, node]));
-                    return new Set(Array.from(selectedNodeIds).filter((nodeId) => {
+                    return new Set(Array.from(selectedNodeIdsRef.current).filter((nodeId) => {
                         const node = baseById[nodeId];
                         if (!node || node.data?.__kind__ === 'groupTitle') return false;
                         return isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id));
                     }));
                 }
                 return filteredSelectionIds();
-            }, [selectedNodeId, selectedNodeIds, expanded, filteredSelectionIds]);
+            }, [expanded, filteredSelectionIds]);
             React.useEffect(() => {
                 const validFilterKeys = new Set(tasksFilterOptions(model).map((option) => option.key));
                 const validColorKeys = new Set(tasksColorOptions(model, nodeNotes).map((option) => option.key));
@@ -5980,6 +5988,8 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             };
             const clearSelection = () => {
+                selectedNodeIdRef.current = null;
+                selectedNodeIdsRef.current = new Set();
                 setSelectedNodeId(null);
                 setSelectedNodeIds(new Set());
                 setDragSelection(null);
@@ -6059,6 +6069,8 @@ async function renderTasksGraphs(rootElement = document) {
                 const baseIds = new Set((graphBaseRef.current.nodes || []).map((n) => n.id));
                 if (!baseIds.has(groupId)) return false;
                 const ids = new Set([groupId, ...collectTasksGroupDescendantIds(groupId, model)].filter((id) => baseIds.has(id)));
+                selectedNodeIdRef.current = null;
+                selectedNodeIdsRef.current = ids;
                 setSelectedNodeId(null);
                 setHoveredNodeId(null);
                 setSelectedNodeIds(ids);
@@ -6084,9 +6096,10 @@ async function renderTasksGraphs(rootElement = document) {
                     return;
                 }
                 const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
-                // Keep any drag/double-click multi-selection intact so an empty-pane
-                // click can restore it (paneClick) instead of clearing everything.
-                setSelectedNodeId((current) => current === sourceNodeId ? null : sourceNodeId);
+                selectedNodeIdRef.current = sourceNodeId;
+                selectedNodeIdsRef.current = new Set();
+                setSelectedNodeId(sourceNodeId);
+                setSelectedNodeIds(new Set());
                 setHoveredNodeId(null);
             }, [expanded, selectGroupDescendants]);
             const focusNeighborEdge = React.useCallback((_, node) => {
@@ -6163,6 +6176,8 @@ async function renderTasksGraphs(rootElement = document) {
                             x2: dragSelection.currentFlow.x,
                             y2: dragSelection.currentFlow.y,
                         });
+                    selectedNodeIdRef.current = null;
+                    selectedNodeIdsRef.current = new Set(selected);
                     setSelectedNodeIds(new Set(selected));
                     suppressNextGraphClickRef.current = true;
                     window.setTimeout(() => {
@@ -6222,7 +6237,9 @@ async function renderTasksGraphs(rootElement = document) {
                             });
                         },
                         select: (nodeId) => {
-                            setSelectedNodeId((current) => current === nodeId ? null : nodeId);
+                            selectedNodeIdRef.current = nodeId;
+                            selectedNodeIdsRef.current = new Set();
+                            setSelectedNodeId(nodeId);
                             setSelectedNodeIds(new Set());
                             logTasksDebug('manualSelect', { nodeId });
                         },
