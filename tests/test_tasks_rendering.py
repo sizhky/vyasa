@@ -403,9 +403,13 @@ def test_tasks_source_supports_local_card_notes():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "function normalizeTasksNodeNotes" in source
+    assert "function tasksNoteEditorMetrics" in source
     assert "nodeNotes" in source
+    assert "const noteTextareaRef = React.useRef(null);" in source
     assert "setNoteInputValue(event.target.value)" in source
-    assert "updateNodeNote(selectedNodeId, noteInputValue)" in source
+    assert "textarea.style.height = 'auto';" in source
+    assert "textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'" in source
+    assert "updateNodeNote(selectedLogicalNodeId, noteInputValue)" in source
     assert "placeholder: 'Notes'" in source
     assert "SelectedNodePanel()" in source
     assert "__has_note__" in source

@@ -3220,6 +3220,18 @@ function tasksDetailPanelWidth(options = {}) {
     return Math.round(Math.min(options.maxWidth || 720, Math.max(options.minWidth || 280, titleWidth + idWidth + imageReserve + 44, weightedWidth + 136)));
 }
 
+function tasksNoteEditorMetrics(note, font = '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif') {
+    const text = String(note || '').replace(/\r\n/g, '\n');
+    const lines = text.split('\n');
+    const widestLine = lines.reduce((widest, line) => (
+        measureTextWidth(line, font) > measureTextWidth(widest, font) ? line : widest
+    ), '');
+    return {
+        width: Math.round(Math.min(640, Math.max(360, measureTextWidth(widestLine || 'Notes', font) + 92))),
+        lines: Math.max(4, lines.length),
+    };
+}
+
 function tasksIsLongFormEntry(entry) {
     const rawValue = String(entry?.value || '').trim();
     if (!rawValue) return false;
@@ -3639,6 +3651,7 @@ async function renderTasksGraphs(rootElement = document) {
             const [queryBuilderReady, setQueryBuilderReady] = React.useState(() => Boolean(window.VyasaTasksQueryBuilder?.QueryBuilder));
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
+            const noteTextareaRef = React.useRef(null);
             const extendLassoPoints = React.useCallback((points, nextPoint) => {
                 const current = Array.isArray(points) ? points : [];
                 const last = current[current.length - 1];
@@ -3994,6 +4007,18 @@ async function renderTasksGraphs(rootElement = document) {
                 }, 180);
                 return () => window.clearTimeout(timeoutId);
             }, [selectedLogicalNodeId, noteInputValue, updateNodeNote]);
+            React.useLayoutEffect(() => {
+                const textarea = noteTextareaRef.current;
+                if (!textarea) return;
+                textarea.style.height = 'auto';
+                const computed = window.getComputedStyle(textarea);
+                const lineHeight = Number.parseFloat(computed.lineHeight) || 16;
+                const padding = Number.parseFloat(computed.paddingTop || '0') + Number.parseFloat(computed.paddingBottom || '0');
+                const border = Number.parseFloat(computed.borderTopWidth || '0') + Number.parseFloat(computed.borderBottomWidth || '0');
+                const maxHeight = Math.ceil(lineHeight * 15 + padding + border);
+                textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+                textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+            }, [noteInputValue, selectedLogicalNodeId, selectedNodeId]);
             const panViewport = React.useCallback((reactFlow, dx, dy, duration = 120) => {
                 const viewport = reactFlow.getViewport();
                 return reactFlow.setViewport(
@@ -5300,7 +5325,11 @@ async function renderTasksGraphs(rootElement = document) {
                 const panelNodeId = sourceNodeId || selectedNode.id || '';
                 const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
                 const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;
-                const panelWidth = tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries });
+                const noteMetrics = tasksNoteEditorMetrics(noteInputValue);
+                const panelWidth = Math.max(
+                    tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries }),
+                    noteMetrics.width
+                );
                 const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));
                 const panelHref = String(selectedNode?.href || '').trim();
                 const copyPanelTitle = async (event) => {
@@ -5356,15 +5385,18 @@ async function renderTasksGraphs(rootElement = document) {
                         },
                             React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Notes'),
                             React.createElement('textarea', {
+                                ref: noteTextareaRef,
                                 'data-vyasa-task-control': 'true',
                                 value: noteInputValue,
                                 placeholder: 'Notes',
-                                rows: 4,
+                                rows: Math.min(15, noteMetrics.lines),
                                 onChange: (event) => setNoteInputValue(event.target.value),
                                 style: {
                                     width: '100%',
                                     minHeight: '76px',
-                                    resize: 'vertical',
+                                    maxHeight: 'calc(1.35em * 15 + 16px)',
+                                    resize: 'none',
+                                    overflowY: 'hidden',
                                     border: '1px solid color-mix(in srgb, var(--vyasa-ink) 18%, transparent)',
                                     borderRadius: '8px',
                                     background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)',
