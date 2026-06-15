@@ -82,18 +82,16 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
     };
 }
 
-export function tasksEgoNodeOpacity(node, selectedIds, model, neighborOpacity = 1) {
+export function tasksEgoNodeOpacity(node, selectedIds, model, neighborOpacity = 1, groupsById = null) {
     if (!model?.ego_include_neighbors) return 1;
     const id = String(node?.id || '').trim();
-    const selected = selectedIds instanceof Set ? selectedIds : new Set(selectedIds || []);
-    if (!id || selected.has(id)) return 1;
-    const groupsById = Object.fromEntries((model.groups || []).map((group) => [String(group.id || ''), group]));
+    if (!id || selectedIds.has(id)) return 1;
+    const groups = groupsById ?? Object.fromEntries((model.groups || []).map((group) => [String(group.id || ''), group]));
     let parentId = String(node?.group_id || node?.parent_group_id || '').trim();
     while (parentId) {
-        if (selected.has(parentId)) return 1;
-        parentId = String(groupsById[parentId]?.parent_group_id || '').trim();
+        if (selectedIds.has(parentId)) return 1;
+        parentId = String(groups[parentId]?.parent_group_id || '').trim();
     }
-    if (node?.__kind__ !== 'group') return neighborOpacity;
     return neighborOpacity;
 }
 
@@ -263,29 +261,49 @@ function normalizeStoredNodeNotes(value) {
         .filter(([nodeId, note]) => nodeId && note.trim()));
 }
 
+function normalizeStoredNodeStates(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value)
+        .map(([nodeId, state]) => [String(nodeId || '').trim(), String(state || '').trim()])
+        .filter(([nodeId, state]) => nodeId && state));
+}
+
 export function collectTasksStoredNotes(storage, storageKey, nodeTitles = {}) {
     const prefs = JSON.parse(storage.getItem(storageKey) || '{}');
     const nodeNotes = normalizeStoredNodeNotes(prefs?.nodeNotes);
+    const nodeStates = normalizeStoredNodeStates(prefs?.nodeStates);
     const notes = Object.fromEntries(Object.entries(nodeNotes).map(([nodeId, note]) => [
         nodeId,
         { title: String(nodeTitles[nodeId] || nodeId), note },
     ]));
-    return { format: 'vyasa-kg-notes', version: 2, notes };
+    const states = Object.fromEntries(Object.entries(nodeStates).map(([nodeId, state]) => [
+        nodeId,
+        { title: String(nodeTitles[nodeId] || nodeId), state },
+    ]));
+    return { format: 'vyasa-kg-notes', version: 3, notes, states };
 }
 
 export function importTasksStoredNotes(storage, storageKey, backup) {
-    if (backup?.format !== 'vyasa-kg-notes' || backup?.version !== 2
-        || !backup.notes || typeof backup.notes !== 'object' || Array.isArray(backup.notes)) {
+    const isV2 = backup?.format === 'vyasa-kg-notes' && backup?.version === 2;
+    const isV3 = backup?.format === 'vyasa-kg-notes' && backup?.version === 3;
+    if ((!isV2 && !isV3)
+        || !backup.notes || typeof backup.notes !== 'object' || Array.isArray(backup.notes)
+        || (isV3 && backup.states !== undefined && (typeof backup.states !== 'object' || Array.isArray(backup.states)))) {
         throw new Error('Invalid Vyasa Knowledge Graph notes backup.');
     }
     const imported = Object.fromEntries(
         Object.entries(backup.notes).map(([nodeId, entry]) => [nodeId, entry?.note])
     );
+    const importedStates = isV3
+        ? Object.fromEntries(Object.entries(backup.states || {}).map(([nodeId, entry]) => [nodeId, entry?.state]))
+        : {};
     const current = JSON.parse(storage.getItem(storageKey) || '{}');
     const nodeNotes = normalizeStoredNodeNotes(imported);
+    const nodeStates = normalizeStoredNodeStates(importedStates);
     current.nodeNotes = { ...normalizeStoredNodeNotes(current.nodeNotes), ...nodeNotes };
+    current.nodeStates = { ...normalizeStoredNodeStates(current.nodeStates), ...nodeStates };
     storage.setItem(storageKey, JSON.stringify(current));
-    return Object.keys(nodeNotes).length;
+    return Object.keys(nodeNotes).length + Object.keys(nodeStates).length;
 }
 
 export function resolveTasksNodeImage(node, model, imageByOverride = null, paletteOverride = null) {

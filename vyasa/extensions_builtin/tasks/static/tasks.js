@@ -416,12 +416,13 @@ function showTasksToast(message) {
     }, 1800);
 }
 
-function buildTasksNodeNotesBackup(model, nodeNotes) {
+function buildTasksNodeNotesBackup(model, nodeNotes, nodeStates) {
     const storage = tasksGetStorage();
     const storageKey = tasksPrefsKey(model);
     if (!storage || !storageKey) throw new Error('Browser storage is unavailable for this Knowledge Graph.');
     const prefs = JSON.parse(storage.getItem(storageKey) || '{}');
     prefs.nodeNotes = normalizeTasksNodeNotes(nodeNotes);
+    prefs.nodeStates = normalizeTasksNodeStates(nodeStates, normalizeTasksCardStates(model));
     storage.setItem(storageKey, JSON.stringify(prefs));
     const nodeTitles = Object.fromEntries(
         [...(model?.groups || []), ...(model?.tasks || [])]
@@ -437,8 +438,8 @@ function buildTasksNodeNotesBackup(model, nodeNotes) {
     };
 }
 
-function downloadTasksNodeNotes(model, nodeNotes) {
-    const { filename, text } = buildTasksNodeNotesBackup(model, nodeNotes);
+function downloadTasksNodeNotes(model, nodeNotes, nodeStates) {
+    const { filename, text } = buildTasksNodeNotesBackup(model, nodeNotes, nodeStates);
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const href = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -451,7 +452,7 @@ function downloadTasksNodeNotes(model, nodeNotes) {
     return filename;
 }
 
-function uploadTasksNodeNotes(model) {
+function uploadTasksNodeNotes(model, cardStates) {
     return new Promise((resolve, reject) => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -466,7 +467,11 @@ function uploadTasksNodeNotes(model) {
                 const backup = JSON.parse(await file.text());
                 importTasksStoredNotes(storage, storageKey, backup);
                 touchTasksPrefsIndex(storage, storageKey);
-                resolve(normalizeTasksNodeNotes(readTasksPrefs(model).nodeNotes));
+                const prefs = readTasksPrefs(model);
+                resolve({
+                    nodeNotes: normalizeTasksNodeNotes(prefs.nodeNotes),
+                    nodeStates: normalizeTasksNodeStates(prefs.nodeStates, cardStates),
+                });
             } catch (error) {
                 reject(error);
             }
@@ -3668,6 +3673,8 @@ async function renderTasksGraphs(rootElement = document) {
                 return Object.fromEntries(checkedIds.map((nodeId) => [nodeId, cardStates[1] || TASKS_DEFAULT_CARD_STATES[1]]));
             });
             const [noteInputValue, setNoteInputValue] = React.useState('');
+            const [clearedNote, setClearedNote] = React.useState(null);
+            const [allClearedNotes, setAllClearedNotes] = React.useState(null);
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
             const [graphRevision, setGraphRevision] = React.useState(0);
             const [graphMinZoom, setGraphMinZoom] = React.useState(TASKS_GRAPH_MIN_ZOOM);
@@ -3692,6 +3699,8 @@ async function renderTasksGraphs(rootElement = document) {
             const backgroundProps = React.useMemo(() => tasksBackgroundProps(widgetId), []);
             const lastPersistedProjectionIdRef = React.useRef(activeProjectionId);
             const pendingFitActionRef = React.useRef(null);
+            const lastLayoutRevisionKeyRef = React.useRef('');
+            const lastGraphRevisionCauseRef = React.useRef('layout');
             const reactFlowApiRef = React.useRef(null);
             const searchInputRef = React.useRef(null);
             const prevExpandedCountRef = React.useRef(0);
@@ -3971,29 +3980,46 @@ async function renderTasksGraphs(rootElement = document) {
             }, [nodeNotes, selectedLogicalNodeId, noteInputValue]);
             const handleExportNodeNotes = React.useCallback(() => {
                 try {
-                    const filename = downloadTasksNodeNotes(sourceModel, latestNodeNotes());
+                    const filename = downloadTasksNodeNotes(sourceModel, latestNodeNotes(), nodeStates);
                     showTasksToast(`Downloaded ${filename}`);
                 } catch (error) {
                     window.alert(error instanceof Error ? error.message : String(error));
                 }
-            }, [sourceModel, latestNodeNotes]);
+            }, [sourceModel, latestNodeNotes, nodeStates]);
             const handleCopyNodeNotes = React.useCallback(async () => {
                 try {
-                    const copied = await copyTasksText(buildTasksNodeNotesBackup(sourceModel, latestNodeNotes()).text);
+                    const copied = await copyTasksText(buildTasksNodeNotesBackup(sourceModel, latestNodeNotes(), nodeStates).text);
                     if (!copied) throw new Error('Could not copy Knowledge Graph notes.');
                     showTasksToast('Copied notes');
                 } catch (error) {
                     window.alert(error instanceof Error ? error.message : String(error));
                 }
-            }, [sourceModel, latestNodeNotes]);
+            }, [sourceModel, latestNodeNotes, nodeStates]);
             const handleImportNodeNotes = React.useCallback(async () => {
                 try {
-                    const importedNotes = await uploadTasksNodeNotes(sourceModel);
-                    if (importedNotes) setNodeNotes(importedNotes);
+                    const imported = await uploadTasksNodeNotes(sourceModel, cardStates);
+                    if (imported) {
+                        setNodeNotes(imported.nodeNotes);
+                        setNodeStates(imported.nodeStates);
+                    }
                 } catch (error) {
                     window.alert(error instanceof Error ? error.message : String(error));
                 }
-            }, [sourceModel]);
+            }, [sourceModel, cardStates]);
+            const handleClearAllNotes = React.useCallback(() => {
+                const snapshot = latestNodeNotes();
+                if (!Object.keys(snapshot).length) return;
+                setAllClearedNotes(snapshot);
+                setNodeNotes({});
+                setNoteInputValue('');
+                setClearedNote(null);
+            }, [latestNodeNotes]);
+            const handleUndoClearAllNotes = React.useCallback(() => {
+                if (!allClearedNotes) return;
+                setNodeNotes(allClearedNotes);
+                if (selectedLogicalNodeId && allClearedNotes[selectedLogicalNodeId]) setNoteInputValue(allClearedNotes[selectedLogicalNodeId]);
+                setAllClearedNotes(null);
+            }, [allClearedNotes, selectedLogicalNodeId]);
             const resetProjectionControls = React.useCallback(() => {
                 const defaults = tasksProjectionSchemaPrefs(sourceModel, activeProjectionId);
                 const defaultSearch = typeof defaults.searchQuery === 'string' ? defaults.searchQuery : '';
@@ -4022,6 +4048,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, [sourceModel, activeProjectionId, model, nodeNotes, hydrateExpandedSet, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
             React.useEffect(() => {
                 setNoteInputValue(nodeNotes[selectedLogicalNodeId] || '');
+                setClearedNote(null);
             }, [selectedLogicalNodeId, nodeNotes]);
             React.useEffect(() => {
                 if (!selectedLogicalNodeId) return undefined;
@@ -4054,6 +4081,10 @@ async function renderTasksGraphs(rootElement = document) {
                 return baseLayoutRef.current;
             }, [rawGraph, model, jitterConfig, layoutConfig]);
             const rebuildLayout = React.useCallback(async (expandedSet, mode = viewMode) => {
+                const revisionKey = `${mode}|${String(model?.graph_id || '')}|${Array.from(expandedSet || []).sort().join(',')}`;
+                const revisionCause = lastLayoutRevisionKeyRef.current === revisionKey ? 'visual' : 'layout';
+                lastLayoutRevisionKeyRef.current = revisionKey;
+                lastGraphRevisionCauseRef.current = revisionCause;
                 logTasksColorDebug(model, rawGraph.nodes, activeColorBy, activeColorPalette, colorMix);
                 if (mode === 'gantt') {
                     const edgeColorPalette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
@@ -4191,6 +4222,9 @@ async function renderTasksGraphs(rootElement = document) {
                 const unspecifiedProjectionBranchIds = new Set(
                     (derived.nodes || []).filter(isInUnspecifiedProjectionBranch).map((node) => node.id)
                 );
+                const egoGroupsById = egoMode && model.ego_include_neighbors
+                    ? Object.fromEntries((model.groups || []).map((g) => [String(g.id || ''), g]))
+                    : null;
                 const baseNodes = derived.nodes.map((n) => {
                     const isExpanded = n.__kind__ === 'group' && effectiveExpandedSet.has(n.id);
                     const hitArea = tasksGraphNodeHitArea(n.__kind__, isExpanded);
@@ -4248,7 +4282,7 @@ async function renderTasksGraphs(rootElement = document) {
                             : `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`)
                         : TASKS_NODE_BORDER;
                     const egoNodeOpacity = egoMode
-                        ? tasksEgoNodeOpacity(n, egoSelectedIds, model, egoNeighborOpacity)
+                        ? tasksEgoNodeOpacity(n, egoSelectedIds, model, egoNeighborOpacity, egoGroupsById)
                         : 1;
                     const branchOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1) * egoNodeOpacity;
                     const rfNode = {
@@ -4291,7 +4325,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const titleImage = resolveTasksNodeImage(n, model);
                     const titleHeight = sizeTaskNode(n.label || n.id, 'groupTitle', titleWidth, { hasImage: Boolean(titleImage) }).height;
                     const titleOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1)
-                        * (egoMode ? tasksEgoNodeOpacity(n, egoSelectedIds, model, egoNeighborOpacity) : 1);
+                        * (egoMode ? tasksEgoNodeOpacity(n, egoSelectedIds, model, egoNeighborOpacity, egoGroupsById) : 1);
                     baseNodes.push({
                         id: `${n.id}__title`,
                         type: 'vyasaTask',
@@ -4711,6 +4745,7 @@ async function renderTasksGraphs(rootElement = document) {
                 prevExpandedCountRef.current = nextCount;
             }, [expanded]);
             React.useEffect(() => {
+                if (lastGraphRevisionCauseRef.current === 'visual') return;
                 const fitAction = pendingFitActionRef.current;
                 if (!fitAction) return;
                 if (!shouldAutoFitTasksOnExpand() && fitAction !== 'shortcut') return;
@@ -4731,6 +4766,7 @@ async function renderTasksGraphs(rootElement = document) {
                 };
             }, [graphRevision, expanded]);
             React.useEffect(() => {
+                if (lastGraphRevisionCauseRef.current === 'visual') return;
                 if (!shouldAutoFitTasksOnFilter()) return;
                 const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters);
                 const hasSearch = searchMatches.active && !searchMatches.error;
@@ -4751,6 +4787,7 @@ async function renderTasksGraphs(rootElement = document) {
                 };
             }, [graphRevision, effectiveQueryFilters, activeSwatchFilters, searchMatches]);
             React.useEffect(() => {
+                if (lastGraphRevisionCauseRef.current === 'visual') return;
                 if (!shouldAutoFitTasksOnFilter()) return;
                 if (selectedNodeId || !selectedNodeIds.size) return;
                 const reactFlow = reactFlowApiRef.current;
@@ -5216,12 +5253,14 @@ async function renderTasksGraphs(rootElement = document) {
                         const target = event.target instanceof Element ? event.target : null;
                         const key = event.key.toLowerCase();
                         const widgetFocused = wrapper.contains(document.activeElement) || wrapper.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
+                        const egoModalOpen = Boolean(document.querySelector('#tasks-fullscreen-modal [data-tasks-ego="true"]'));
                         if ((event.key === 'Escape' || key === 'g') && window.__vyasaTasksDebug.enabled) {
                             logTasksDebug('shortcutKeydown', {
                                 widgetId,
                                 key: event.key,
                                 shiftKey: event.shiftKey,
                                 widgetFocused,
+                                egoModalOpen,
                                 activeWidgetId: String(window.__vyasaTasksActiveWidgetId || ''),
                                 activeElementTag: document.activeElement?.tagName || '',
                                 targetTag: target?.tagName || '',
@@ -5229,7 +5268,17 @@ async function renderTasksGraphs(rootElement = document) {
                                 ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeId),
                             });
                         }
-                        if (event.key === 'Escape' && widgetFocused) {
+                        if (event.key === 'Escape' && !event.shiftKey && egoMode && widgetFocused) {
+                            event.preventDefault();
+                            clearSelection('escape');
+                            return;
+                        }
+                        if (event.key === 'Escape' && !event.shiftKey && egoModalOpen) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            return;
+                        }
+                        if (event.key === 'Escape' && !event.shiftKey && widgetFocused) {
                             if (helpOpen) {
                                 event.preventDefault();
                                 logTasksDebug('shortcutEscapeHelpClose', {
@@ -5445,7 +5494,23 @@ async function renderTasksGraphs(rootElement = document) {
                                 borderTop: entries.length ? '1px dashed color-mix(in srgb, currentColor 18%, transparent)' : 'none',
                             },
                         },
-                            React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Notes'),
+                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.7, flex: '1 1 auto' } }, 'Notes'),
+                                clearedNote ? React.createElement('button', {
+                                    type: 'button',
+                                    'data-vyasa-task-control': 'true',
+                                    onClick: (e) => { e.preventDefault(); setNoteInputValue(clearedNote); updateNodeNote(panelNodeId, clearedNote); setClearedNote(null); window.clearTimeout(clearedNoteTimerRef.current); },
+                                    style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--vyasa-primary)', fontWeight: 600, padding: '0', lineHeight: 1, opacity: 0.85 },
+                                }, 'Undo') : null,
+                                noteInputValue.trim() ? React.createElement('button', {
+                                    type: 'button',
+                                    title: 'Clear note',
+                                    'aria-label': 'Clear note',
+                                    'data-vyasa-task-control': 'true',
+                                    onClick: (e) => { e.preventDefault(); const prev = noteInputValue; setNoteInputValue(''); updateNodeNote(panelNodeId, ''); setClearedNote(prev); },
+                                    style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: 'inherit', padding: '0', lineHeight: 1, opacity: 0.45, display: 'flex', alignItems: 'center' },
+                                }, '×') : null,
+                            ),
                             React.createElement('textarea', {
                                 ref: noteTextareaRef,
                                 'data-vyasa-task-control': 'true',
@@ -5626,7 +5691,7 @@ async function renderTasksGraphs(rootElement = document) {
                         },
                     },
                         projectionOptions.length >= 1 ? React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px minmax(0, 1fr) auto', gap: '8px', alignItems: 'start', fontSize: '12px' } },
+                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr) auto', gap: '8px', alignItems: 'start', fontSize: '12px' } },
                                 React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'View'),
                                 React.createElement('select', {
                                     value: viewMode === 'gantt' ? TASKS_GANTT_PROJECTION_ID : activeProjectionId,
@@ -5733,7 +5798,7 @@ async function renderTasksGraphs(rootElement = document) {
                             React.createElement('button', { type: 'button', onClick: resetProjectionControls, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline', whiteSpace: 'nowrap' } }, 'Reset')
                         ),
                         React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
+                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
                                 React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Group by'),
                                 React.createElement('div', { style: { display: 'grid', gap: '6px', minWidth: 0 } },
                                     groupByLevels.map((selectedKey, level) => React.createElement('select', {
@@ -5770,7 +5835,7 @@ async function renderTasksGraphs(rootElement = document) {
                             )
                         ),
                         React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'center', fontSize: '12px' } },
+                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '8px', alignItems: 'center', fontSize: '12px' } },
                                 React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Notes'),
                                 React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
                                     React.createElement('button', {
@@ -5794,12 +5859,24 @@ async function renderTasksGraphs(rootElement = document) {
                                         onClick: handleImportNodeNotes,
                                         style: { display: 'inline-flex', border: 'none', background: 'none', color: 'inherit', padding: '2px', cursor: 'pointer' },
                                     }, React.createElement('span', { 'uk-icon': 'upload', 'aria-hidden': 'true' })),
+                                    allClearedNotes ? React.createElement('button', {
+                                        type: 'button',
+                                        onClick: handleUndoClearAllNotes,
+                                        style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--vyasa-primary)', fontWeight: 600, padding: '2px', lineHeight: 1 },
+                                    }, 'Undo') : null,
+                                    Object.keys(nodeNotes).length ? React.createElement('button', {
+                                        type: 'button',
+                                        title: 'Clear all notes',
+                                        'aria-label': 'Clear all notes',
+                                        onClick: handleClearAllNotes,
+                                        style: { display: 'inline-flex', border: 'none', background: 'none', color: 'inherit', padding: '2px', cursor: 'pointer', fontSize: '13px', opacity: 0.45, lineHeight: 1 },
+                                    }, '×') : null,
                                     React.createElement('span', { style: { marginLeft: 'auto', opacity: 0.65, fontSize: '11px' } }, `${Object.keys(nodeNotes).length} saved`)
                                 )
                             )
                         ),
                         React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
+                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
                                 React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Search'),
                                 React.createElement('div', { style: { display: 'grid', gap: '6px', minWidth: 0 } },
                                     React.createElement('div', { style: { position: 'relative' } },
@@ -5853,7 +5930,7 @@ async function renderTasksGraphs(rootElement = document) {
                             )
                         ),
                         React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
+                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
                                 React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Color by'),
                                 React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px 12px' } },
                                     [
@@ -5926,7 +6003,7 @@ async function renderTasksGraphs(rootElement = document) {
                         ),
                         activeColorBy
                             ? React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                                React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '84px 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
+                                React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
                                     React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Secondary color by'),
                                     React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px 12px' } },
                                         [
@@ -6795,11 +6872,46 @@ async function openTasksGraphModal(wrapper, options = {}) {
     const originalGraph = options.graph || wrapper.getAttribute('data-tasks-graph');
     if (!originalPayload || !originalGraph) return;
     const existing = document.getElementById('tasks-fullscreen-modal');
-    if (existing) existing.remove();
+    const closeTasksGraphModal = (modal) => {
+        if (!modal) return;
+        if (modal.__tasksEscHandler) {
+            document.removeEventListener('keydown', modal.__tasksEscHandler, true);
+            modal.__tasksEscHandler = null;
+        }
+        if (modal.__tasksSuspendedMaximizeWrapper?.__tasksMaximizeEsc) {
+            document.addEventListener('keydown', modal.__tasksSuspendedMaximizeWrapper.__tasksMaximizeEsc, true);
+        }
+        const suspended = modal.__tasksSuspendedModal;
+        if (modal.isConnected) modal.remove();
+        if (suspended) {
+            suspended.style.display = '';
+            suspended.removeAttribute('data-tasks-suspended');
+            if (suspended.__tasksEscHandler) {
+                document.addEventListener('keydown', suspended.__tasksEscHandler, true);
+            }
+        }
+    };
+    let suspendedModal = null;
+    if (existing) {
+        suspendedModal = existing;
+        if (suspendedModal.__tasksEscHandler) {
+            document.removeEventListener('keydown', suspendedModal.__tasksEscHandler, true);
+        }
+        suspendedModal.style.display = 'none';
+        suspendedModal.setAttribute('data-tasks-suspended', 'true');
+    }
+    const suspendedMaximizeWrapper = wrapper.getAttribute('data-tasks-maximized') === 'true' && wrapper.__tasksMaximizeEsc
+        ? wrapper
+        : null;
+    if (suspendedMaximizeWrapper) {
+        document.removeEventListener('keydown', suspendedMaximizeWrapper.__tasksMaximizeEsc, true);
+    }
     const id = wrapper.id || 'tasks';
     const modalWrapperId = options.wrapperId || `${id}-fullscreen`;
     const modal = document.createElement('div');
     modal.id = 'tasks-fullscreen-modal';
+    modal.__tasksSuspendedModal = suspendedModal;
+    modal.__tasksSuspendedMaximizeWrapper = suspendedMaximizeWrapper;
     modal.className = 'fixed inset-0 z-[10000] bg-black/88 backdrop-blur-sm';
     modal.style.animation = 'fadeIn 0.2s ease-in';
 
@@ -6861,7 +6973,7 @@ async function openTasksGraphModal(wrapper, options = {}) {
     closeBtn.title = 'Close (Shift+Esc)';
     closeBtn.className = 'rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300';
     closeBtn.textContent = 'X';
-    closeBtn.onclick = () => document.body.removeChild(modal);
+    closeBtn.onclick = () => closeTasksGraphModal(modal);
     topRightControls.appendChild(closeBtn);
     const headerTitle = document.createElement('div');
     headerTitle.className = 'min-w-0 flex-1';
@@ -6906,17 +7018,19 @@ async function openTasksGraphModal(wrapper, options = {}) {
     document.body.appendChild(modal);
 
     const escHandler = (e) => {
-        if (e.key === 'Escape' && e.shiftKey && document.getElementById('tasks-fullscreen-modal')) {
-            document.body.removeChild(modal);
-            document.removeEventListener('keydown', escHandler);
-        }
+        if (e.key !== 'Escape' || !e.shiftKey) return;
+        if (document.getElementById('tasks-fullscreen-modal') !== modal) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation?.();
+        closeTasksGraphModal(modal);
     };
-    document.addEventListener('keydown', escHandler);
+    modal.__tasksEscHandler = escHandler;
+    document.addEventListener('keydown', escHandler, true);
 
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
-            document.body.removeChild(modal);
-            document.removeEventListener('keydown', escHandler);
+            closeTasksGraphModal(modal);
         }
     });
 
@@ -6935,6 +7049,7 @@ function setTasksMaximized(wrapper, on) {
             if (event.key !== 'Escape' || !event.shiftKey) return;
             event.preventDefault();
             event.stopPropagation();
+            event.stopImmediatePropagation?.();
             setTasksMaximized(wrapper, false);
         };
         wrapper.__tasksMaximizeEsc = escHandler;

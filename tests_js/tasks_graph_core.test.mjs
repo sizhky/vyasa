@@ -19,24 +19,26 @@ function fakeStorage(initial = {}) {
 test('Knowledge Graph notes backup round-trips one graph preference record', () => {
     const graphKey = 'vyasa:tasks:prefs:doc::graph-a';
     const storage = fakeStorage({
-        [graphKey]: JSON.stringify({ nodeNotes: { a: 'first note' }, projectionId: 'main' }),
+        [graphKey]: JSON.stringify({ nodeNotes: { a: 'first note' }, nodeStates: { a: 'Done' }, projectionId: 'main' }),
         'vyasa:tasks:prefs:doc::graph-b': JSON.stringify({ nodeNotes: { b: 'second note' } }),
     });
     const backup = collectTasksStoredNotes(storage, graphKey, { a: 'Alpha title' });
     assert.deepEqual(backup, {
         format: 'vyasa-kg-notes',
-        version: 2,
+        version: 3,
         notes: { a: { title: 'Alpha title', note: 'first note' } },
+        states: { a: { title: 'Alpha title', state: 'Done' } },
     });
 
     const target = fakeStorage({
-        [graphKey]: JSON.stringify({ nodeNotes: { existing: 'keep me' }, projectionId: 'main' }),
+        [graphKey]: JSON.stringify({ nodeNotes: { existing: 'keep me' }, nodeStates: { existing: 'Review' }, projectionId: 'main' }),
     });
     const staleTitleBackup = structuredClone(backup);
     staleTitleBackup.notes.a.title = 'Old title that no longer matches';
-    assert.equal(importTasksStoredNotes(target, graphKey, staleTitleBackup), 1);
+    assert.equal(importTasksStoredNotes(target, graphKey, staleTitleBackup), 2);
     const restored = JSON.parse(target.getItem(graphKey));
     assert.deepEqual(restored.nodeNotes, { existing: 'keep me', a: 'first note' });
+    assert.deepEqual(restored.nodeStates, { existing: 'Review', a: 'Done' });
     assert.equal(restored.projectionId, 'main');
     assert.throws(
         () => importTasksStoredNotes(target, graphKey, { format: 'vyasa-kg-notes', version: 1, nodeNotes: { a: 'old' } }),

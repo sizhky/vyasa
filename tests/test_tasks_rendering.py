@@ -360,7 +360,10 @@ def test_tasks_source_persists_checked_nodes_per_graph():
     assert "writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));" in source
     assert "checkedNodeIds" in source
     assert "nodeStates" in source
-    assert "toggleCheckedNode(sourceNodeId)" in source
+    assert "toggleCheckedNode(logicalNodeId)" in source
+    assert "const lastGraphRevisionCauseRef = React.useRef('layout');" in source
+    assert "const revisionCause = lastLayoutRevisionKeyRef.current === revisionKey ? 'visual' : 'layout';" in source
+    assert "if (lastGraphRevisionCauseRef.current === 'visual') return;" in source
 
 
 def test_tasks_source_renders_hover_checkbox_and_done_badge():
@@ -579,7 +582,10 @@ def test_tasks_g_shortcuts_open_ego_views():
     assert "window.__vyasaTasksActiveWidgetId === widgetId" in source
     assert "markWidgetActive();" in source
     assert "G: open EG\\nShift + G: open EG+" in source
-    assert "if (event.key === 'Escape' && widgetFocused)" in source
+    assert "const egoModalOpen = Boolean(document.querySelector('#tasks-fullscreen-modal [data-tasks-ego=\"true\"]'));" in source
+    assert "if (event.key === 'Escape' && !event.shiftKey && egoMode && widgetFocused)" in source
+    assert "if (event.key === 'Escape' && !event.shiftKey && egoModalOpen)" in source
+    assert "if (event.key === 'Escape' && !event.shiftKey && widgetFocused)" in source
     assert "clearSelection('escape');" in source
 
 
@@ -596,7 +602,14 @@ def test_tasks_fullscreen_reuses_canvas_background_contract():
     assert "flow.style.flex = '1 1 auto';" in source
     assert "flow.style.minHeight = '0';" in source
     assert "closeBtn.title = 'Close (Shift+Esc)';" in source
-    assert "if (e.key === 'Escape' && e.shiftKey && document.getElementById('tasks-fullscreen-modal'))" in source
+    assert "modal.__tasksSuspendedModal = suspendedModal;" in source
+    assert "const suspendedMaximizeWrapper = wrapper.getAttribute('data-tasks-maximized') === 'true' && wrapper.__tasksMaximizeEsc" in source
+    assert "modal.__tasksSuspendedMaximizeWrapper = suspendedMaximizeWrapper;" in source
+    assert "suspendedModal.style.display = 'none';" in source
+    assert "closeTasksGraphModal(modal);" in source
+    assert "if (document.getElementById('tasks-fullscreen-modal') !== modal) return;" in source
+    assert "e.stopImmediatePropagation?.();" in source
+    assert "event.stopImmediatePropagation?.();" in source
     assert "if (event.key !== 'Escape' || !event.shiftKey) return;" in source
 
 
@@ -623,12 +636,15 @@ def test_tasks_notes_support_graph_scoped_text_download_and_upload():
     assert "collectTasksStoredNotes(storage, storageKey, nodeTitles)" in source
     assert "String(node.label || node.title || node.id)" in source
     assert "importTasksStoredNotes(storage, storageKey, backup)" in source
+    assert "prefs.nodeStates = normalizeTasksNodeStates(nodeStates, normalizeTasksCardStates(model));" in source
     assert "filename: `vyasa-kg-notes-${graphName}.txt`" in source
     assert "showTasksToast(`Downloaded ${filename}`)" in source
-    assert "buildTasksNodeNotesBackup(sourceModel, latestNodeNotes()).text" in source
+    assert "buildTasksNodeNotesBackup(sourceModel, latestNodeNotes(), nodeStates).text" in source
     assert "showTasksToast('Copied notes')" in source
     assert "toast.id = 'vyasa-tasks-toast'" in source
     assert "input.accept = '.txt,text/plain,application/json'" in source
+    assert "nodeStates: normalizeTasksNodeStates(prefs.nodeStates, cardStates)" in source
+    assert "setNodeStates(imported.nodeStates);" in source
     assert "onClick: handleExportNodeNotes" in source
     assert "onClick: handleImportNodeNotes" in source
     assert "{ 'uk-icon': 'download', 'aria-hidden': 'true' }" in source
