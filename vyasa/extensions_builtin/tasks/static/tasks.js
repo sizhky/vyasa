@@ -3226,7 +3226,7 @@ function tasksDetailPanelWidth(options = {}) {
         const contentLine = rawValue.length > 120 ? widestLine : firstLine;
         const valueWidth = Math.min(measureTextWidth(contentLine, bodyFont), 520);
         const weight = rawValue.length > 180 ? 0.82 : rawValue.length > 72 ? 0.6 : rawValue.length > 36 ? 0.72 : 0.9;
-        return keyWidth + valueWidth * weight;
+        return Math.max(keyWidth, valueWidth * weight);
     }).sort((left, right) => left - right);
     const weightedWidth = rowWidths.length ? rowWidths[Math.max(0, Math.floor(rowWidths.length * 0.72) - 1)] : 0;
     const imageReserve = options.hasImage ? 34 : 0;
@@ -3245,28 +3245,17 @@ function tasksNoteEditorMetrics(note, font = '500 12px ui-sans-serif, system-ui,
     };
 }
 
-function tasksIsLongFormEntry(entry) {
-    const rawValue = String(entry?.value || '').trim();
-    if (!rawValue) return false;
-    if (rawValue.includes('\n')) return true;
-    if (rawValue.length > 140) return true;
-    if (/^\s*([-*]|\d+\.)\s/m.test(rawValue)) return true;
-    if (/^\s*```|^\s*>|^\s*#/.test(rawValue)) return true;
-    return false;
-}
-
 function renderTasksDetailEntries(React, entries, options = {}) {
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '12px', lineHeight: options.lineHeight || 1.35 } },
         ...(entries || []).map((entry, index) => {
-            const stacked = tasksIsLongFormEntry(entry);
             return React.createElement('div', {
                 key: entry.key || entry.attr || `${index}`,
                 style: { paddingTop: index === 0 ? '0' : '8px', marginTop: index === 0 ? '0' : '8px', borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)', overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'pre-line' },
             },
-            React.createElement('span', { style: { fontWeight: 700, opacity: 0.72, display: stacked ? 'block' : 'inline', marginBottom: stacked ? '4px' : '0' } }, `${entry.label}: `),
+            React.createElement('span', { style: { fontWeight: 700, opacity: 0.72, display: 'block', marginBottom: '4px' } }, `${entry.label}:`),
             entry.renderedValue
-                ? React.createElement('span', { className: 'vyasa-task-node-card-value', style: stacked ? { display: 'block' } : undefined, dangerouslySetInnerHTML: { __html: entry.renderedValue } })
-                : React.createElement('span', { className: 'vyasa-task-node-card-value', style: stacked ? { display: 'block' } : undefined }, entry.value));
+                ? React.createElement('span', { className: 'vyasa-task-node-card-value', dangerouslySetInnerHTML: { __html: entry.renderedValue } })
+                : React.createElement('span', { className: 'vyasa-task-node-card-value' }, entry.value));
         }));
 }
 
@@ -6238,6 +6227,10 @@ async function renderTasksGraphs(rootElement = document) {
                     return;
                 }
                 const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                if (selectedNodeIdRef.current === sourceNodeId && selectedNodeIdsRef.current.size === 0) {
+                    clearSelection('nodeClickToggle');
+                    return;
+                }
                 logTasksDebug('selectionSetNode', {
                     widgetId,
                     sourceNodeId,

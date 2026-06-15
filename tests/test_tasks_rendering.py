@@ -114,17 +114,18 @@ def test_tasks_filter_panel_uses_projection_dropdown_instead_of_tab_grid():
     assert "const ProjectionToggle = () =>" not in source
 
 
-def test_tasks_node_detail_rows_use_inline_label_flow():
+def test_tasks_node_detail_rows_always_stack_values_below_labels():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
-    assert "`${entry.label}: `" in source
-    assert "React.createElement('span', { style: { fontWeight: 700" in source
+    assert "`${entry.label}:`" in source
+    assert "display: 'block', marginBottom: '4px'" in source
+    assert "return Math.max(keyWidth, valueWidth * weight);" in source
     assert "overflowWrap: 'anywhere'" in source
     assert "whiteSpace: 'pre-line'" in source
-    assert "gridTemplateColumns: stacked ?" not in source
-    assert ".vyasa-task-node-card-value > p:first-child { display: inline; }" in css
-    assert ".vyasa-task-node-card-value { min-width: 0; max-width: 100%; white-space: normal; }" in css
+    assert "tasksIsLongFormEntry" not in source
+    assert ".vyasa-task-node-card-value > p:first-child { display: inline; }" not in css
+    assert ".vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }" in css
     assert ".vyasa-task-node-card-value li > p { margin: 0; }" in css
     assert ".vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }" in css
 
@@ -587,6 +588,13 @@ def test_tasks_g_shortcuts_open_ego_views():
     assert "if (event.key === 'Escape' && !event.shiftKey && egoModalOpen)" in source
     assert "if (event.key === 'Escape' && !event.shiftKey && widgetFocused)" in source
     assert "clearSelection('escape');" in source
+
+
+def test_tasks_clicking_selected_node_toggles_selection_off():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "selectedNodeIdRef.current === sourceNodeId && selectedNodeIdsRef.current.size === 0" in source
+    assert "clearSelection('nodeClickToggle');" in source
 
 
 def test_tasks_fullscreen_reuses_canvas_background_contract():
