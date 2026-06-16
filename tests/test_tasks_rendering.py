@@ -506,6 +506,21 @@ def test_tasks_color_swatch_filter_is_independent_and_ands_with_query_filter():
     assert "tasksPruneFilterQueryFields(current, activeSwatchKeys)" in source
 
 
+def test_tasks_query_builder_supports_inline_text_attrs_and_exists_operator():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    core = Path("vyasa/extensions_builtin/tasks/static/tasks_graph_core.js").read_text()
+
+    assert "const TASKS_FILTER_TEXT_VALUE_LIMIT" in source
+    assert "isText: !indexedKeys.has(key)" in source
+    assert "{ name: 'notnull', label: 'attribute exists' }" in source
+    assert "{ name: 'matchesRegex', label: 'regex matches' }" in source
+    assert "props.operator === 'matchesRegex'" in source
+    assert "function tasksNodeFilterAttributeExists(node, key)" in source
+    assert "if (rule.operator === 'notnull') return tasksNodeFilterAttributeExists(node, rule.field)" in source
+    assert "if (rule.operator === 'matchesRegex')" in source
+    assert ": null;" in core
+
+
 def test_tasks_source_supports_continuous_gradient_palettes():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 

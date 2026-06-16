@@ -42,6 +42,8 @@ const TASKS_GRAPH_MIN_ZOOM = 0.05;
 const TASKS_DONE_ACCENT = '#22c55e';
 const TASKS_CARD_STATE_ATTR = 'card_state';
 const TASKS_HAS_NOTE_ATTR = 'has_note';
+const TASKS_FILTER_TEXT_VALUE_LIMIT = 24;
+const TASKS_FILTER_TEXT_VALUE_LENGTH = 48;
 const TASKS_HAS_NOTE_PALETTE = { yes: '#22c55e', no: 'rgba(220, 38, 38, 0.28)' };
 const TASKS_DEFAULT_CARD_STATES = ['Not Done', 'Done'];
 const TASKS_SPECIAL_NODE_ATTRS = new Set([
@@ -932,6 +934,10 @@ function tasksGroupDetailEntries(nodeId, model) {
 
 function tasksFilterOptions(model) {
     if (!model) return [];
+    const indexedKeys = new Set([
+        ...(Array.isArray(model?.index_attributes) ? model.index_attributes : []),
+        ...(Array.isArray(model?.filter_attributes) ? model.filter_attributes : []),
+    ].map((key) => String(key || '').trim()).filter(Boolean));
     const continuousColorKeys = new Set(
         Object.entries(model?.node_color_palettes && typeof model.node_color_palettes === 'object' ? model.node_color_palettes : {})
             .filter(([, palette]) => isTasksGradientPalette(palette))
@@ -961,6 +967,9 @@ function tasksFilterOptions(model) {
             label: tasksNodeMetaLabel(key),
             values: Array.from(bucket.values).sort((a, b) => a.localeCompare(b)),
             isBoolean: bucket.kinds.size === 1 && bucket.kinds.has('boolean'),
+            isText: !indexedKeys.has(key)
+                || bucket.values.size > TASKS_FILTER_TEXT_VALUE_LIMIT
+                || Array.from(bucket.values).some((value) => String(value).length > TASKS_FILTER_TEXT_VALUE_LENGTH),
         }))
         .sort((a, b) => a.label.localeCompare(b.label));
 }
@@ -1514,13 +1523,15 @@ function tasksFilterQuerySelectedValues(query, field) {
 }
 
 function tasksFilterValueEditorType(operator) {
-    if (operator === 'contains' || operator === 'doesNotContain') return 'text';
+    if (operator === 'notnull' || operator === 'null') return 'none';
+    if (operator === 'contains' || operator === 'doesNotContain' || operator === 'matchesRegex') return 'text';
     if (operator === 'in' || operator === 'notIn') return 'multiselect';
     return 'select';
 }
 
 function tasksFilterRuleIsActive(rule) {
     if (!rule?.field || !rule?.operator) return false;
+    if (rule.operator === 'notnull' || rule.operator === 'null') return true;
     if (rule.operator === 'in' || rule.operator === 'notIn') return tasksFilterValueList(rule.value).length > 0;
     return String(rule.value ?? '').trim() !== '';
 }
@@ -1551,16 +1562,31 @@ function tasksNodeFilterValue(node, key) {
     return tasksAttrValues(node?.[key]);
 }
 
+function tasksNodeFilterAttributeExists(node, key) {
+    if (!node || !key || !(key in node)) return false;
+    return tasksAttrValues(node[key]).length > 0;
+}
+
 function tasksNodeMatchesFilterRule(node, rule) {
     if (!rule?.field || !rule?.operator) return true;
     const nodeValues = tasksNodeFilterValue(node, rule.field);
     const values = tasksFilterValueList(rule.value);
+    if (rule.operator === 'notnull') return tasksNodeFilterAttributeExists(node, rule.field);
+    if (rule.operator === 'null') return !tasksNodeFilterAttributeExists(node, rule.field);
     if (rule.operator === 'in') return values.length ? values.some((value) => nodeValues.includes(value)) : true;
     if (rule.operator === 'notIn') return values.length ? values.every((value) => !nodeValues.includes(value)) : true;
     const target = String(rule.value ?? '');
     if (rule.operator === '!=') return !nodeValues.includes(target);
     if (rule.operator === 'contains') return nodeValues.some((value) => value.toLowerCase().includes(target.toLowerCase()));
     if (rule.operator === 'doesNotContain') return nodeValues.every((value) => !value.toLowerCase().includes(target.toLowerCase()));
+    if (rule.operator === 'matchesRegex') {
+        try {
+            const regex = new RegExp(target);
+            return nodeValues.some((value) => regex.test(value));
+        } catch {
+            return false;
+        }
+    }
     return nodeValues.includes(target);
 }
 
@@ -5550,32 +5576,45 @@ async function renderTasksGraphs(rootElement = document) {
                 if (!groupByLevels.length && viewMode !== 'gantt') groupByLevels.push('');
                 const activeCount = (queryBuilderEnabled ? tasksCountFilterRules(activeFilters) : 0) + tasksCountFilterRules(activeSwatchFilters) + (activeColorBy ? 1 : 0) + (searchMatches.active ? 1 : 0) + activeGroupByCount;
                 const QueryBuilder = queryBuilderEnabled && queryBuilderReady ? window.VyasaTasksQueryBuilder?.QueryBuilder : null;
+                const textQueryBuilderOperators = [
+                    { name: 'notnull', label: 'attribute exists' },
+                    { name: 'contains', label: 'has string' },
+                    { name: 'doesNotContain', label: 'does not have string' },
+                    { name: 'matchesRegex', label: 'regex matches' },
+                    { name: '=', label: 'is exactly' },
+                    { name: '!=', label: 'is not exactly' },
+                ];
+                const enumQueryBuilderOperators = [
+                    { name: 'notnull', label: 'attribute exists' },
+                    { name: '=', label: 'is' },
+                    { name: '!=', label: 'is not' },
+                    { name: 'in', label: 'is any of' },
+                    { name: 'notIn', label: 'is none of' },
+                    { name: 'contains', label: 'has string' },
+                    { name: 'doesNotContain', label: 'does not have string' },
+                    { name: 'matchesRegex', label: 'regex matches' },
+                ];
                 const queryBuilderFields = options.map((option) => ({
                     name: option.key,
                     label: option.label,
                     valueEditorType: tasksFilterValueEditorType,
                     values: (option.isBoolean ? ['true', 'false'] : option.values).map((value) => ({ name: value, label: value })),
+                    operators: option.isText ? textQueryBuilderOperators : enumQueryBuilderOperators,
                 }));
-                const queryBuilderOperators = [
-                    { name: '=', label: 'is' },
-                    { name: '!=', label: 'is not' },
-                    { name: 'in', label: 'is any of' },
-                    { name: 'notIn', label: 'is none of' },
-                    { name: 'contains', label: 'contains' },
-                    { name: 'doesNotContain', label: 'does not contain' },
-                ];
+                const queryBuilderOperators = enumQueryBuilderOperators;
                 const activeColorSelectedValues = new Set(tasksFilterQuerySelectedValues(activeSwatchFilters, activeColorBy));
                 const activeSecondarySelectedValues = new Set(tasksFilterQuerySelectedValues(activeSwatchFilters, activeSecondaryColorBy));
                 const QueryValueEditor = (props) => {
                     const values = Array.isArray(props.values) ? props.values : [];
                     const optionValue = (option) => String(option.value ?? option.name ?? '');
                     const optionLabel = (option) => String(option.label ?? option.name ?? option.value ?? '');
-                    if (props.operator === 'contains' || props.operator === 'doesNotContain') {
+                    if (props.operator === 'notnull' || props.operator === 'null') return null;
+                    if (props.operator === 'contains' || props.operator === 'doesNotContain' || props.operator === 'matchesRegex') {
                         return React.createElement('input', {
                             type: 'text',
                             value: Array.isArray(props.value) ? props.value.join(', ') : String(props.value ?? ''),
                             onChange: (event) => props.handleOnChange(event.target.value),
-                            placeholder: 'Text to match',
+                            placeholder: props.operator === 'matchesRegex' ? 'Regex' : 'Text to match',
                             className: props.className,
                         });
                     }
