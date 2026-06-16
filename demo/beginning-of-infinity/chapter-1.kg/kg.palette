@@ -1,0 +1,29 @@
+{
+  "node_color_palettes": {
+    "kind": {
+      "appearance": "#475569",
+      "misconception": "#dc2626",
+      "mechanism": "#2563eb",
+      "norm": "#0f766e",
+      "outcome": "#7c3aed"
+    },
+    "stage": {
+      "appearance_vs_reality": "#475569",
+      "false_sources": "#b91c1c",
+      "correction_loop": "#ca8a04",
+      "explanation_quality": "#2563eb",
+      "infinite_reach": "#7c3aed"
+    }
+  },
+  "edge_color_palettes": {
+    "relation": {
+      "produces": "#2563eb",
+      "enables": "#16a34a",
+      "shapes": "#7c3aed",
+      "exposes": "#ca8a04",
+      "reduces": "#dc2626",
+      "can-cause": "#f97316",
+      "becomes": "#0f766e"
+    }
+  }
+}

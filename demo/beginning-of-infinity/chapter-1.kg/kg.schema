@@ -1,0 +1,29 @@
+@graph id=beginning-of-infinity-chapter-1 title="The Reach of Explanations" initial_view=arc
+hover_attrs=summary,kind,stage
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+base:
+	edges=kg.edges
+palette=kg.palette
+
+@relations
+produces label=produces
+enables label=enables
+shapes label=shapes
+exposes label=exposes
+reduces label=reduces
+can-cause label="can cause"
+becomes label=becomes
+
+@views
+arc:
+	source=base
+	group_by,color_by=stage
+	hover_attrs=summary,kind,stage
+	edge_color_by=relation
+	edge_label_from=label
+	aggregate_edges="when_collapsed=true by=relation"
+	default_open_depth=-1
+	caption="Science starts with deceptive appearances, rejects authority and induction, then grows through conjecture, criticism, and hard-to-vary explanations with reach."
