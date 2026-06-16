@@ -426,6 +426,15 @@ def test_tasks_source_supports_local_card_notes():
     assert "tasksHasAnyNodeNote(nodeNotes)" in source
 
 
+def test_tasks_node_card_width_ignores_note_text_length():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    panel_source = source.split("const SelectedNodePanel = () => {", 1)[1].split("const FilterPanel = () => {", 1)[0]
+
+    assert "const noteMetrics = tasksNoteEditorMetrics(noteInputValue);" in panel_source
+    assert "const panelWidth = tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries });" in panel_source
+    assert "noteMetrics.width" not in panel_source
+
+
 def test_tasks_selected_panel_shows_href_as_detail_instead_of_title_link():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 

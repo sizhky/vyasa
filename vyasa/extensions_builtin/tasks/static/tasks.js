@@ -5452,10 +5452,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
                 const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;
                 const noteMetrics = tasksNoteEditorMetrics(noteInputValue);
-                const panelWidth = Math.max(
-                    tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries }),
-                    noteMetrics.width
-                );
+                const panelWidth = tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries });
                 const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));
                 const panelHref = String(selectedNode?.href || '').trim();
                 const copyPanelTitle = async (event) => {
