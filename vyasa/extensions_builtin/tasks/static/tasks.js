@@ -434,7 +434,7 @@ function buildTasksNodeNotesBackup(model, nodeNotes, nodeStates) {
         .trim().replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'graph';
     return {
         filename: `vyasa-kg-notes-${graphName}.txt`,
-        text: `${JSON.stringify(backup, null, 2)}\n`,
+        text: backup,
     };
 }
 
@@ -464,7 +464,7 @@ function uploadTasksNodeNotes(model, cardStates) {
                 const storage = tasksGetStorage();
                 const storageKey = tasksPrefsKey(model);
                 if (!storage || !storageKey) throw new Error('Browser storage is unavailable for this Knowledge Graph.');
-                const backup = JSON.parse(await file.text());
+                const backup = await file.text();
                 importTasksStoredNotes(storage, storageKey, backup);
                 touchTasksPrefsIndex(storage, storageKey);
                 const prefs = readTasksPrefs(model);

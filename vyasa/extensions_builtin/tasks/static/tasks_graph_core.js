@@ -272,37 +272,43 @@ export function collectTasksStoredNotes(storage, storageKey, nodeTitles = {}) {
     const prefs = JSON.parse(storage.getItem(storageKey) || '{}');
     const nodeNotes = normalizeStoredNodeNotes(prefs?.nodeNotes);
     const nodeStates = normalizeStoredNodeStates(prefs?.nodeStates);
-    const notes = Object.fromEntries(Object.entries(nodeNotes).map(([nodeId, note]) => [
-        nodeId,
-        { title: String(nodeTitles[nodeId] || nodeId), note },
-    ]));
-    const states = Object.fromEntries(Object.entries(nodeStates).map(([nodeId, state]) => [
-        nodeId,
-        { title: String(nodeTitles[nodeId] || nodeId), state },
-    ]));
-    return { format: 'vyasa-kg-notes', version: 3, notes, states };
+    const nodeIds = Array.from(new Set([...Object.keys(nodeNotes), ...Object.keys(nodeStates)]));
+    const stanzas = nodeIds.map((nodeId) => {
+        const state = nodeStates[nodeId] ? ` [${nodeStates[nodeId]}]` : '';
+        const title = String(nodeTitles[nodeId] || '').trim();
+        const header = `@ ${nodeId}${state}${title && title !== nodeId ? ` ${title}` : ''}`;
+        const note = nodeNotes[nodeId];
+        return note ? `${header}\n${note.split('\n').map((line) => `  ${line}`).join('\n')}` : header;
+    });
+    return `!vyasa-notes 4\n${stanzas.length ? `\n${stanzas.join('\n\n')}\n` : ''}`;
 }
 
 export function importTasksStoredNotes(storage, storageKey, backup) {
-    const isV2 = backup?.format === 'vyasa-kg-notes' && backup?.version === 2;
-    const isV3 = backup?.format === 'vyasa-kg-notes' && backup?.version === 3;
-    if ((!isV2 && !isV3)
-        || !backup.notes || typeof backup.notes !== 'object' || Array.isArray(backup.notes)
-        || (isV3 && backup.states !== undefined && (typeof backup.states !== 'object' || Array.isArray(backup.states)))) {
+    const lines = String(backup || '').replace(/\r\n?/g, '\n').split('\n');
+    if (lines.shift()?.trim() !== '!vyasa-notes 4') {
         throw new Error('Invalid Vyasa Knowledge Graph notes backup.');
     }
-    const imported = Object.fromEntries(
-        Object.entries(backup.notes).map(([nodeId, entry]) => [nodeId, entry?.note])
-    );
-    const importedStates = isV3
-        ? Object.fromEntries(Object.entries(backup.states || {}).map(([nodeId, entry]) => [nodeId, entry?.state]))
-        : {};
-    const current = JSON.parse(storage.getItem(storageKey) || '{}');
+    const imported = {};
+    const importedStates = {};
+    let current = null;
+    for (const line of lines) {
+        const header = line.match(/^@\s+(\S+)(?:\s+\[([^\]]+)\])?(?:\s+.*)?$/);
+        if (header) {
+            current = header[1];
+            if (header[2]?.trim()) importedStates[current] = header[2].trim();
+        } else if (!line.trim() || line.startsWith('  ')) {
+            if (current !== null) imported[current] = `${imported[current] ? `${imported[current]}\n` : ''}${line.slice(0, 2) === '  ' ? line.slice(2) : ''}`;
+        } else {
+            throw new Error('Invalid Vyasa Knowledge Graph notes backup.');
+        }
+    }
+    for (const nodeId of Object.keys(imported)) imported[nodeId] = imported[nodeId].replace(/\n+$/, '');
+    const currentPrefs = JSON.parse(storage.getItem(storageKey) || '{}');
     const nodeNotes = normalizeStoredNodeNotes(imported);
     const nodeStates = normalizeStoredNodeStates(importedStates);
-    current.nodeNotes = { ...normalizeStoredNodeNotes(current.nodeNotes), ...nodeNotes };
-    current.nodeStates = { ...normalizeStoredNodeStates(current.nodeStates), ...nodeStates };
-    storage.setItem(storageKey, JSON.stringify(current));
+    currentPrefs.nodeNotes = { ...normalizeStoredNodeNotes(currentPrefs.nodeNotes), ...nodeNotes };
+    currentPrefs.nodeStates = { ...normalizeStoredNodeStates(currentPrefs.nodeStates), ...nodeStates };
+    storage.setItem(storageKey, JSON.stringify(currentPrefs));
     return Object.keys(nodeNotes).length + Object.keys(nodeStates).length;
 }
 
