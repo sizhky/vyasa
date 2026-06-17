@@ -285,6 +285,15 @@ test('task and collapsed group nodes are selectable in items graph', () => {
     assert.equal(isTasksGraphNodeSelectable('groupTitle'), true);
 });
 
+test('edge toggle header button warns when edges are hidden', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes('data-vyasa-tasks-action="${action}"'), 'header buttons carry action data');
+    assert.ok(source.includes('syncTasksEdgeToggleButtons(widgetId, edgesVisible)'), 'edge button follows visibility state');
+    assert.ok(source.includes('button[onclick*="toggleEdges"]'), 'sync handles old header buttons without data attrs');
+    assert.ok(source.includes('data-vyasa-edges-off'), 'hidden edge state is marked on the E button');
+    assert.ok(source.includes('vyasa-edges-off-pulse'), 'hidden edge state pulses visibly');
+});
+
 test('collapsed groups average both primary and secondary colors', () => {
     const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
     const start = source.indexOf('function collectTasksGroupDescendants');
@@ -565,6 +574,44 @@ test('selected edge labels stay below nodes unless edge is focused', () => {
     assert.equal(tasksEdgeLabelZForMode('dim', 6, 999, 1400), 6);
     assert.equal(tasksEdgeLabelZForMode('focused-in', 6, 999, 1400), 1400);
     assert.equal(tasksEdgeLabelZForMode('focused-out', 6, 999, 1400), 1400);
+});
+
+test('non-animated selected edges keep uniform stroke width before taper', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const helper = source.match(/function tasksEdgeStrokeWidthForMode\(mode, animated\) \{[\s\S]*?\n\}/)?.[0];
+    assert.ok(helper, 'edge stroke helper should exist');
+    const strokeWidth = new Function(`${helper}; return tasksEdgeStrokeWidthForMode;`)();
+    assert.equal(strokeWidth('focused-out', false), 3.5);
+    assert.equal(strokeWidth('focused-in', false), 3.5);
+    assert.equal(strokeWidth('selected-out', false), 3.5);
+    assert.equal(strokeWidth('selected-in', false), 3.5);
+    assert.equal(strokeWidth('selected', false), 3.5);
+    assert.equal(strokeWidth('dim', false), 1.25);
+    assert.equal(strokeWidth('focused-in', true), 5);
+});
+
+test('tapered edge path builds a closed bezier ribbon', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function tasksTaperedBezierPath');
+    const end = source.indexOf('function tasksIsIconifyImage');
+    assert.ok(start > 0 && end > start, 'taper helper should exist');
+    const tapered = new Function(`${source.slice(start, end)}; return tasksTaperedBezierPath;`)();
+    const path = tapered('M 0 0 C 20 0 80 100 100 100', 6, 2);
+    assert.ok(path.startsWith('M 0 3'), 'source starts wide');
+    assert.ok(path.includes('L 100 99'), 'target closes narrow');
+    assert.ok(path.endsWith('Z'), 'path is closed');
+    assert.ok(source.includes("'selected', 'selected-in'"), 'plain selected edges should taper too');
+});
+
+test('tapered edge arrowhead builds a target triangle', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function tasksTaperedBezierPath');
+    const end = source.indexOf('function tasksIsIconifyImage');
+    const helpers = new Function(`${source.slice(start, end)}; return { tasksTaperedArrowHeadPath };`)();
+    const path = helpers.tasksTaperedArrowHeadPath('M 0 0 C 20 0 80 100 100 100', 10);
+    assert.ok(path.startsWith('M 100 100'), 'arrow tip sits on edge target');
+    assert.ok(path.includes('L '), 'arrow has base corners');
+    assert.ok(path.endsWith('Z'), 'arrow is closed');
 });
 
 test('palette legend only shows values present in graph', () => {

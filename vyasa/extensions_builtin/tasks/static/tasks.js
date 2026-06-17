@@ -291,6 +291,58 @@ function tasksEdgeOpacityLabel(opacity) {
     return 'Clear';
 }
 
+function tasksEdgeStrokeWidthForMode(mode, animated) {
+    if (animated) return (mode === 'focused-in' || mode === 'focused-out') ? 5 : (mode === 'selected' ? 3.5 : 2.5);
+    if (mode === 'focused-in' || mode === 'focused-out' || mode === 'selected-in' || mode === 'selected-out' || mode === 'selected') return 3.5;
+    return 1.25;
+}
+
+function tasksTaperedBezierPath(bezierPath, sourceWidth, targetWidth) {
+    const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
+    if (nums.length < 8) return '';
+    const [x0, y0, x1, y1, x2, y2, x3, y3] = nums;
+    const normal = (ax, ay, bx, by) => {
+        const dx = bx - ax;
+        const dy = by - ay;
+        const len = Math.hypot(dx, dy) || 1;
+        return { x: -dy / len, y: dx / len };
+    };
+    const n0 = normal(x0, y0, x1, y1);
+    const n3 = normal(x2, y2, x3, y3);
+    const w0 = Math.max(0.5, Number(sourceWidth) || 1) / 2;
+    const w3 = Math.max(0.5, Number(targetWidth) || 1) / 2;
+    return [
+        `M ${x0 + n0.x * w0} ${y0 + n0.y * w0}`,
+        `C ${x1 + n0.x * w0} ${y1 + n0.y * w0} ${x2 + n3.x * w3} ${y2 + n3.y * w3} ${x3 + n3.x * w3} ${y3 + n3.y * w3}`,
+        `L ${x3 - n3.x * w3} ${y3 - n3.y * w3}`,
+        `C ${x2 - n3.x * w3} ${y2 - n3.y * w3} ${x1 - n0.x * w0} ${y1 - n0.y * w0} ${x0 - n0.x * w0} ${y0 - n0.y * w0}`,
+        'Z',
+    ].join(' ');
+}
+
+function tasksTaperedArrowHeadPath(bezierPath, size) {
+    const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
+    if (nums.length < 8) return '';
+    const [, , , , x2, y2, x3, y3] = nums;
+    const dx = x3 - x2;
+    const dy = y3 - y2;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+    const nx = -uy;
+    const ny = ux;
+    const arrowLength = Math.max(6, Number(size) || 10);
+    const arrowWidth = arrowLength * 1.18;
+    const baseX = x3 - ux * arrowLength;
+    const baseY = y3 - uy * arrowLength;
+    return [
+        `M ${x3} ${y3}`,
+        `L ${baseX + nx * arrowWidth / 2} ${baseY + ny * arrowWidth / 2}`,
+        `L ${baseX - nx * arrowWidth / 2} ${baseY - ny * arrowWidth / 2}`,
+        'Z',
+    ].join(' ');
+}
+
 function tasksIsIconifyImage(url) {
     return /^https:\/\/api\.iconify\.design\/.+\.svg(?:\?.*)?$/i.test(String(url || '').trim());
 }
@@ -1876,6 +1928,25 @@ window.runTasksHeaderAction = function(widgetId, action) {
     actions[action]();
 };
 
+function syncTasksEdgeToggleButtons(widgetId, edgesVisible) {
+    const id = String(widgetId || '');
+    document.querySelectorAll('button[data-vyasa-tasks-action="toggleEdges"], button[onclick*="toggleEdges"]').forEach((button) => {
+        const buttonWidgetId = button.getAttribute('data-vyasa-tasks-widget-id') || '';
+        const onclick = button.getAttribute('onclick') || '';
+        if (buttonWidgetId && buttonWidgetId !== id) return;
+        if (!buttonWidgetId && !onclick.includes(`'${id}'`)) return;
+        button.setAttribute('data-vyasa-tasks-widget-id', id);
+        button.setAttribute('data-vyasa-tasks-action', 'toggleEdges');
+        if (edgesVisible) {
+            button.removeAttribute('data-vyasa-edges-off');
+            button.title = 'Toggle edges';
+        } else {
+            button.setAttribute('data-vyasa-edges-off', 'true');
+            button.title = 'Edges are hidden (E)';
+        }
+    });
+}
+
 function ensureTasksReactFlow() {
     if (tasksReactFlowReady) return tasksReactFlowReady;
     tasksReactFlowReady = (async () => {
@@ -1919,6 +1990,18 @@ function ensureTasksReactFlow() {
                 }
                 .react-flow__edgelabel-renderer {
                     pointer-events: none;
+                }
+                button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
+                    color: #fecaca !important;
+                    border-color: #ef4444 !important;
+                    background: #991b1b !important;
+                    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.45), 0 0 18px rgba(239, 68, 68, 0.72) !important;
+                    transform: scale(1.18);
+                    animation: vyasa-edges-off-pulse 0.65s ease-in-out infinite alternate !important;
+                }
+                @keyframes vyasa-edges-off-pulse {
+                    from { transform: scale(1.08); background: #7f1d1d; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35), 0 0 10px rgba(239, 68, 68, 0.42); }
+                    to { transform: scale(1.28); background: #dc2626; box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.78), 0 0 34px rgba(239, 68, 68, 1); }
                 }
                 .vyasa-tasks-flow .react-flow__edge,
                 .vyasa-tasks-flow .react-flow__edge path,
@@ -3333,7 +3416,7 @@ function tasksBackgroundProps(widgetId) {
 }
 
 function tasksHeaderButtonHtml(widgetId, action, label, title) {
-    return `<button type="button" title="${title}" onclick="runTasksHeaderAction('${widgetId}', '${action}')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">${label}</button>`;
+    return `<button type="button" title="${title}" data-vyasa-tasks-widget-id="${widgetId}" data-vyasa-tasks-action="${action}" onclick="runTasksHeaderAction('${widgetId}', '${action}')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">${label}</button>`;
 }
 
 function tasksHeaderControlsHtml(widgetId, includeFullscreen = false) {
@@ -3733,6 +3816,9 @@ async function renderTasksGraphs(rootElement = document) {
                 '--vyasa-edge-animation-steps': String(edgeAnimationTickSteps),
                 '--vyasa-edge-animation-duration': `${edgeAnimationTickDuration}s`,
             }), [edgeAnimationTickSteps, edgeAnimationTickDuration]);
+            React.useEffect(() => {
+                syncTasksEdgeToggleButtons(widgetId, edgesVisible);
+            }, [widgetId, edgesVisible]);
             const defaultEdgeOpacity = React.useMemo(
                 () => tasksDefaultEdgeOpacity((sourceModel?.dependency_edges || []).length),
                 [sourceModel]
@@ -4748,9 +4834,12 @@ async function renderTasksGraphs(rootElement = document) {
                     const dashCycle = dashArray
                         ? dashArray.split(/\s+/).map(Number).filter(Number.isFinite).slice(0, 2).reduce((sum, value) => sum + value, 0)
                         : undefined;
+                    const strokeMode = !edgeAnimationEnabled && mode === 'selected'
+                        ? (edge.source === nodeId ? 'selected-out' : (edge.target === nodeId ? 'selected-in' : mode))
+                        : mode;
                     return {
                         ...edge,
-                        data: { ...edge.data, highlightMode: mode },
+                        data: { ...edge.data, highlightMode: mode, strokeMode },
                         zIndex: mode === 'focused-in' || mode === 'focused-out' ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
                         labelZIndex: tasksEdgeLabelZForMode(mode, TASKS_EDGE_LABEL_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_FOCUS_Z),
                         labelStyle: {
@@ -4782,7 +4871,7 @@ async function renderTasksGraphs(rootElement = document) {
                             opacity: activeOpacity * ((mode === 'focused-in' || mode === 'focused-out')
                                 ? tasksProminentEdgeOpacity()
                                 : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.08, edgeOpacity))),
-                            strokeWidth: (mode === 'focused-in' || mode === 'focused-out') ? 5 : (mode === 'selected' ? 3.5 : 2.5),
+                            strokeWidth: tasksEdgeStrokeWidthForMode(strokeMode, edgeAnimationEnabled),
                             strokeDasharray: dashArray,
                             '--vyasa-edge-dash-cycle': dashCycle,
                             '--vyasa-edge-flow-duration': (mode === 'focused-in' || mode === 'focused-out') ? '0.72s' : '0.64s',
@@ -4979,6 +5068,14 @@ async function renderTasksGraphs(rootElement = document) {
                 const fullLabel = String(props.label || '').replace(/\\n/g, '\n');
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
+                const strokeMode = props.data?.strokeMode || highlightMode;
+                const useTaper = !props.animated && ['focused-in', 'focused-out', 'selected', 'selected-in', 'selected-out'].includes(strokeMode);
+                const taperPath = useTaper
+                    ? tasksTaperedBezierPath(path, (Number(props.style?.strokeWidth) || 4) * 1.85, Math.max(1, (Number(props.style?.strokeWidth) || 4) * 0.26))
+                    : '';
+                const taperArrowPath = taperPath
+                    ? tasksTaperedArrowHeadPath(path, Math.max(8, (Number(props.style?.strokeWidth) || 4) * 2.4))
+                    : '';
                 const showFullLabel = highlightMode !== 'dim' && highlightMode !== 'none';
                 const prominentLabel = highlightMode === 'focused-in' || highlightMode === 'focused-out';
                 const labelScale = prominentLabel && Number.isFinite(viewport?.zoom) && viewport.zoom > 0 ? 1 / viewport.zoom : 1;
@@ -5016,7 +5113,26 @@ async function renderTasksGraphs(rootElement = document) {
                     });
                 }, [displayLabel, fullLabel, highlightMode, prominentLabel, labelStyle.fill, labelStyle.opacity, labelBgStyle.fill, labelBgStyle.fillOpacity]);
                 return React.createElement(React.Fragment, null,
-                    React.createElement(rf.BaseEdge, { ...props, path }),
+                    taperPath && React.createElement('path', {
+                        d: taperPath,
+                        fill: props.style?.stroke || 'currentColor',
+                        opacity: props.style?.opacity ?? 1,
+                        pointerEvents: 'none',
+                    }),
+                    taperArrowPath && React.createElement('path', {
+                        d: taperArrowPath,
+                        fill: props.style?.stroke || 'currentColor',
+                        opacity: props.style?.opacity ?? 1,
+                        pointerEvents: 'none',
+                    }),
+                    React.createElement(rf.BaseEdge, {
+                        ...props,
+                        path,
+                        markerEnd: taperPath ? undefined : props.markerEnd,
+                        style: taperPath
+                            ? { ...(props.style || {}), strokeWidth: 0.1 }
+                            : props.style,
+                    }),
                     displayLabel && !prominentLabel && React.createElement('g', {
                         transform: `translate(${labelX}, ${labelY})`,
                         pointerEvents: 'none',
