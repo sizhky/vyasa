@@ -12,6 +12,13 @@
 .vyasa-task-node-card-value li > p { margin: 0; }
 .vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }
 .vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }
+.vyasa-task-slide-description { display: block; min-width: 0; max-width: 100%; white-space: normal; }
+.vyasa-task-slide-description > :first-child { margin-top: 0 !important; }
+.vyasa-task-slide-description > :last-child { margin-bottom: 0 !important; }
+.vyasa-task-slide-description ul { list-style: disc; padding-left: 1.25rem; margin: 0.2rem 0 0.6rem; }
+.vyasa-task-slide-description ol { list-style: decimal; padding-left: 1.35rem; margin: 0.2rem 0 0.6rem; }
+.vyasa-task-slide-description li { margin: 0.18rem 0; }
+.vyasa-task-slide-description li > p { margin: 0; }
 .vyasa-task-pill { display: inline-flex; width: max-content; margin-bottom: 0.14rem; padding: 0; border: 0; background: transparent; color: var(--vyasa-ink-soft); font: 600 0.63rem/1 var(--vyasa-font-ui); letter-spacing: 0.11em; text-transform: uppercase; opacity: 0.54; }
 .vyasa-task-copy { color: var(--vyasa-ink); font-size: 0.92rem; line-height: 1.34; font-style: normal; font-weight: 560; text-wrap: pretty; }
 .vyasa-task-card.is-done .vyasa-task-copy { text-decoration: line-through; text-decoration-thickness: 1.5px; text-decoration-color: color-mix(in srgb, var(--vyasa-callout-accent) 58%, currentColor); opacity: 0.72; }

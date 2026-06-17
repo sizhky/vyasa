@@ -1003,6 +1003,23 @@ intro: Intro
     assert "<li>Second point</li>" in desc_html
 
 
+def test_slide_description_markdown_has_list_styling_contract():
+    graph_source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+
+    assert "className: 'vyasa-task-slide-description'" in graph_source
+    assert ".vyasa-task-slide-description ul { list-style: disc;" in css_source
+    assert ".vyasa-task-slide-description ol { list-style: decimal;" in css_source
+
+
+def test_slide_notes_panel_uses_stable_render_helper():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("const existing = document.getElementById", 1)[0]
+
+    assert "SlideShow()," in render_source
+    assert "window.React.createElement(SlideShow)" not in render_source
+
+
 def test_tasks_block_serializes_document_path_and_stable_storage_id():
     md = """```items
 Foundation:
