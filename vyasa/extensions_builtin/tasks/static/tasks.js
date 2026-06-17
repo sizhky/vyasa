@@ -6771,20 +6771,20 @@ async function renderTasksGraphs(rootElement = document) {
                         window.React.createElement('strong', { style: { fontSize: '16px' } }, slide.title || `Slide ${slideIndex + 1}`),
                         window.React.createElement('button', { type: 'button', onClick: close, style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', lineHeight: 1, opacity: 0.6 } }, '×')
                     ),
-                    window.React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto' } },
+                    window.React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' } },
                         slide.caption ? window.React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, opacity: 0.85, marginBottom: '10px' } }, slide.caption) : null,
                         slide.desc ? window.React.createElement('div', { style: { fontSize: '13.5px', lineHeight: 1.55, opacity: 0.92, marginBottom: '12px' } }, slide.desc) : null,
-                        window.React.createElement('label', { style: { display: 'grid', gap: '6px' } },
-                            window.React.createElement('span', { style: { fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.62 } }, 'Slide note'),
+                        window.React.createElement('label', { style: { display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '6px', marginTop: 'auto', paddingTop: '12px', minHeight: '50%' } },
+                            window.React.createElement('span', { style: { fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.62 } }, 'Notes'),
                             window.React.createElement('textarea', {
                                 value: slideNoteInputValue,
                                 onChange: (event) => setSlideNoteInputValue(event.target.value),
-                                placeholder: 'Local slide note',
-                                style: { width: '100%', minHeight: '110px', resize: 'vertical', boxSizing: 'border-box', borderRadius: '10px', border: '1px solid color-mix(in srgb, currentColor 14%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 97%, transparent)', color: 'inherit', padding: '10px 11px', fontSize: '12.5px', lineHeight: 1.5 },
+                                placeholder: 'Capture presenter cues, follow-ups, or context for this slide.',
+                                style: { width: '100%', height: '100%', minHeight: '0', resize: 'vertical', boxSizing: 'border-box', borderRadius: '10px', border: '1px solid color-mix(in srgb, currentColor 14%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 97%, transparent)', color: 'inherit', padding: '10px 11px', fontSize: '12.5px', lineHeight: 1.5 },
                             })
                         )
                     ),
-                    window.React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid color-mix(in srgb, var(--vyasa-primary) 14%, transparent)' } },
+                    window.React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid color-mix(in srgb, var(--vyasa-primary) 14%, transparent)' } },
                         window.React.createElement('button', { type: 'button', onClick: () => go(-1), disabled: slideIndex <= 0, style: navBtn(slideIndex <= 0) }, '‹ Prev'),
                         window.React.createElement('span', { style: { fontSize: '11px', opacity: 0.6 } }, `${slideIndex + 1} / ${slides.length}`),
                         window.React.createElement('button', { type: 'button', onClick: () => go(1), disabled: slideIndex >= slides.length - 1, style: navBtn(slideIndex >= slides.length - 1) }, 'Next ›')

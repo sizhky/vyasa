@@ -688,6 +688,17 @@ def test_tasks_notes_support_graph_scoped_text_download_and_upload():
     assert "{ 'uk-icon': 'upload', 'aria-hidden': 'true' }" in source
 
 
+def test_tasks_slide_notes_anchor_to_slide_card_bottom():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "overflowY: 'auto', display: 'flex', flexDirection: 'column'" in source
+    assert "gridTemplateRows: 'auto minmax(0, 1fr)', gap: '6px', marginTop: 'auto', paddingTop: '12px', minHeight: '50%'" in source
+    assert "} }, 'Notes')" in source
+    assert "placeholder: 'Capture presenter cues, follow-ups, or context for this slide.'" in source
+    assert "height: '100%', minHeight: '0', resize: 'vertical'" in source
+    assert "marginTop: '8px', paddingTop: '8px'" in source
+
+
 def test_tasks_search_normalizes_whitespace_and_wrapping_quotes():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
