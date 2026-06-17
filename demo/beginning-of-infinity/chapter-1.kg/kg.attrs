@@ -1,17 +1,9 @@
 @node_attrs
 kind:
-  appearance: n1 n2 n11
-  misconception: n4 n5 n6 n15 n17
-  mechanism: n3 n8 n9 n12 n13 n14 n18 n19 n22
-  norm: n10 n16 n20
-  outcome: n7 n21 n23 n24 n25
-stage:
-  appearance_vs_reality: n1 n2 n3 n11
-  false_sources: n4 n5 n6 n7 n15
-  correction_loop: n8 n9 n10 n12 n13 n14 n16
-  explanation_quality: n17 n18 n19 n20 n22
-  infinite_reach: n21 n23 n24 n25
-
-@edge_attrs
-confidence:
-  high: e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 e13 e14 e15 e16 e17 e18 e19 e20 e21 e22 e23 e24 e25
+  appearance: n1 n24
+  reality: n2
+  question: n4
+  misconception: n5 n6 n7 n8 n11 n20 n23 n25
+  correction: n9 n10 n13 n14 n15
+  method: n3 n12 n16 n17 n19 n21 n22 n26
+  payoff: n18 n27 n28 n29 n30

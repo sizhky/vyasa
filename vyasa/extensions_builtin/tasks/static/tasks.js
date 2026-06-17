@@ -3614,6 +3614,24 @@ async function renderTasksGraphs(rootElement = document) {
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
             const [helpOpen, setHelpOpen] = React.useState(false);
+            const slides = React.useMemo(() => {
+                const list = (Array.isArray(sourceModel?.slides) && sourceModel.slides.length) ? sourceModel.slides : (Array.isArray(model?.slides) ? model.slides : []);
+                return list.filter((slide) => slide && Array.isArray(slide.nodes) && slide.nodes.length);
+            }, [sourceModel, model]);
+            const [slideIndex, setSlideIndex] = React.useState(-1);
+            React.useEffect(() => {
+                const slide = slideIndex >= 0 ? slides[slideIndex] : null;
+                if (!slide) return;
+                const ids = new Set((slide.nodes || []).map((id) => String(id || '').trim()).filter(Boolean));
+                setSelectedNodeId(null);
+                setSelectedNodeIds(new Set(ids));
+                const timer = window.setTimeout(() => {
+                    const reactFlow = reactFlowApiRef.current;
+                    const matched = (graphBaseRef.current.nodes || []).filter((node) => node?.id && ids.has(node.id));
+                    if (reactFlow && matched.length) reactFlow.fitView({ nodes: matched, duration: 400, padding: 0.3, includeHiddenNodes: true });
+                }, 80);
+                return () => window.clearTimeout(timer);
+            }, [slideIndex, slides]);
             const [activeFilters, setActiveFilters] = React.useState(() => egoMode ? {} : (
                 projectionPrefs?.filters && typeof projectionPrefs.filters === 'object'
                     ? normalizeTasksFilterQuery(projectionPrefs.filters)
@@ -6663,6 +6681,38 @@ async function renderTasksGraphs(rootElement = document) {
                 window.React.createElement('strong', null, 'Graph help'),
                 window.React.createElement('button', { type: 'button', onClick: () => setHelpOpen(false), style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: 1, opacity: 0.7 } }, '×')
             ), window.React.createElement('div', { style: { whiteSpace: 'pre-line' } }, 'Mouse\nClick node: select card or group\nClick canvas: clear selection\nShift + drag: box select\nCmd + drag: lasso select\nWheel / pinch: zoom\nDrag canvas: pan\n\nKeys\n?: toggle this help\nF: fit view\nShift + F: toggle fullscreen\nG: open EG\nShift + G: open EG+\nS: toggle filters\nE: toggle edges\n0: toggle edge animation\nT: toggle hovered group\nI / O: expand or collapse one group depth\nU / P: unfold or collapse all groups\nArrow keys: pan\nShift + arrows: pan faster'));
+            const SlideLauncher = () => {
+                if (!slides.length || slideIndex >= 0) return null;
+                return window.React.createElement('button', {
+                    type: 'button', onClick: () => setSlideIndex(0),
+                    style: { position: 'absolute', left: '12px', top: '12px', zIndex: 36, padding: '7px 13px', borderRadius: '9px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 8px 20px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', cursor: 'pointer', fontSize: '12px', fontWeight: 600 },
+                }, '▶ Slides');
+            };
+            const SlideShow = () => {
+                if (!slides.length || slideIndex < 0) return null;
+                const navBtn = (disabled) => ({ border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 88%, transparent)', borderRadius: '7px', padding: '5px 11px', fontSize: '12px', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1 });
+                const slide = slides[slideIndex] || {};
+                const close = () => { setSlideIndex(-1); setSelectedNodeId(null); setSelectedNodeIds(new Set()); };
+                const go = (delta) => setSlideIndex((index) => Math.min(slides.length - 1, Math.max(0, index + delta)));
+                const panelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`;
+                return window.React.createElement('aside', {
+                    style: { flex: `0 0 ${panelWidth}`, width: panelWidth, minWidth: 0, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: '16px', borderRadius: '14px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 26%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 95%, transparent)', boxShadow: '0 14px 36px rgba(0,0,0,0.16)', pointerEvents: 'auto' },
+                },
+                    window.React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' } },
+                        window.React.createElement('strong', { style: { fontSize: '16px' } }, slide.title || `Slide ${slideIndex + 1}`),
+                        window.React.createElement('button', { type: 'button', onClick: close, style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', lineHeight: 1, opacity: 0.6 } }, '×')
+                    ),
+                    window.React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto' } },
+                        slide.caption ? window.React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, opacity: 0.85, marginBottom: '10px' } }, slide.caption) : null,
+                        slide.desc ? window.React.createElement('div', { style: { fontSize: '13.5px', lineHeight: 1.55, opacity: 0.92 } }, slide.desc) : null
+                    ),
+                    window.React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid color-mix(in srgb, var(--vyasa-primary) 14%, transparent)' } },
+                        window.React.createElement('button', { type: 'button', onClick: () => go(-1), disabled: slideIndex <= 0, style: navBtn(slideIndex <= 0) }, '‹ Prev'),
+                        window.React.createElement('span', { style: { fontSize: '11px', opacity: 0.6 } }, `${slideIndex + 1} / ${slides.length}`),
+                        window.React.createElement('button', { type: 'button', onClick: () => go(1), disabled: slideIndex >= slides.length - 1, style: navBtn(slideIndex >= slides.length - 1) }, 'Next ›')
+                    )
+                );
+            };
             const DragSelectionOverlay = () => {
                 if (!dragSelection) return null;
                 const bounds = flowWrapperRef.current?.getBoundingClientRect?.();
@@ -6712,6 +6762,12 @@ async function renderTasksGraphs(rootElement = document) {
                     suppressNextGraphClickRef.current = false;
                     return;
                 }
+                if (slideIndex >= 0 && slides[slideIndex]) {
+                    setSelectedNodeId(null);
+                    setHoveredNodeId(null);
+                    setSelectedNodeIds(new Set((slides[slideIndex].nodes || []).map((id) => String(id || '').trim()).filter(Boolean)));
+                    return;
+                }
                 if (selectedNodeId && selectedNodeIds.size) {
                     setSelectedNodeId(null);
                     setHoveredNodeId(null);
@@ -6739,11 +6795,13 @@ async function renderTasksGraphs(rootElement = document) {
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', display: 'flex', alignItems: 'stretch', gap: '12px' } },
                     filterPanelElement,
+                    window.React.createElement(SlideShow),
                     window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { flex: '1 1 auto', minWidth: 0, height: '100%', outline: 'none', position: 'relative' }, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
+                    window.React.createElement(SlideLauncher),
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge),
                     window.React.createElement(FitOnNodesReady)
@@ -6761,6 +6819,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(rf.Background, backgroundProps),
                         window.React.createElement(rf.Controls),
                         window.React.createElement(PanControls),
+                    window.React.createElement(SlideLauncher),
                         window.React.createElement(FitViewHotkey),
                         window.React.createElement(ActionBridge),
                         window.React.createElement(FitOnNodesReady)

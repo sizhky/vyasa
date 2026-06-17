@@ -41,6 +41,7 @@ class KgSchema:
     sources: dict[str, dict[str, Any]] = field(default_factory=dict)
     relations: dict[str, dict[str, str]] = field(default_factory=dict)
     views: list[KgView] = field(default_factory=list)
+    slides: list[dict[str, Any]] = field(default_factory=list)
     palette: str = ""
     cache: str = ""
     nodes: str = ""
@@ -57,6 +58,7 @@ def read_kg_pack(schema_path: str | Path) -> dict[str, Any]:
         "tasks": [],
         "dependency_edges": [],
         "view_projections": [_projection(view) for view in schema.views],
+        "slides": schema.slides,
         "default_projection": schema.graph.get("initial_view", schema.views[0].id if schema.views else ""),
         "hover_attrs": _list_value(schema.graph.get("hover_attrs", "")),
         "card_states": _list_value(schema.graph.get("card_states", "")),
@@ -125,6 +127,7 @@ def read_schema(path: str | Path) -> KgSchema:
     current_source = ""
     current_source_attrs = False
     current_view: KgView | None = None
+    current_slide: dict[str, Any] | None = None
     for raw in path.read_text(encoding="utf-8").splitlines():
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
@@ -135,6 +138,7 @@ def read_schema(path: str | Path) -> KgSchema:
             current_source = ""
             current_source_attrs = False
             current_view = None
+            current_slide = None
             if section == "@graph":
                 schema.graph.update(_assignments(parts[1:]))
             continue
@@ -158,6 +162,9 @@ def read_schema(path: str | Path) -> KgSchema:
             elif section == "@views" and current_view:
                 payload = _view_assignment(line)
                 _update_view(current_view, payload)
+            elif section == "@slides" and current_slide is not None:
+                for key, value in _view_assignment(line).items():
+                    current_slide[key] = _list_value(value) if key == "nodes" else value
             continue
         if section == "@sources":
             current_source = _read_source_line(schema, line)
@@ -169,6 +176,10 @@ def read_schema(path: str | Path) -> KgSchema:
         elif section == "@views":
             current_view = _read_view(line)
             schema.views.append(current_view)
+        elif section == "@slides":
+            sid, _, title = line.partition(":")
+            current_slide = {"id": sid.strip(), "title": title.strip(), "nodes": []}
+            schema.slides.append(current_slide)
     _read_tmp_view_sidecars(schema, path)
     if "base" not in schema.sources:
         schema.sources["base"] = {}

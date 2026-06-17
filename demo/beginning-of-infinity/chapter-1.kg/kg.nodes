@@ -1,50 +1,60 @@
-n1: naked-eye appearances
-	summary=What the senses give directly: dots, streaks, sunrise, seasons, and other local appearances that do not explain themselves.
-n2: hidden cosmic reality
-	summary=The real structure behind appearances: stars, galaxies, transmutation, deep time, and laws that no one observes directly.
+n1: deceptive appearances
+	summary=To the naked eye the universe is a few thousand dots and hazy streaks; a conjuring trick looks like magic. Appearances are not self-explanatory.
+n2: hidden reality
+	summary=Behind the dots, nuclear furnaces millions of kilometres wide and light years away. Behind winter, the geometry of a tilted, orbiting planet. None of it is ever directly observed.
 n3: explanatory theory
-	summary=A claim about what exists and how it behaves, used to make sense of appearances rather than copy them.
-n4: empiricism
-	summary=The false view that knowledge is derived from sensory experience, as if nature writes theories into the mind.
-n5: sensory authority
-	summary=Experience treated as a source of justification, replacing older authorities while keeping the same authority-shaped mistake.
-n6: inductivism
-	summary=The false view that repeated experiences can be generalized into scientific theories or reliable predictions.
-n7: logical gap
-	summary=No deduction from statements about experiences can reach truths about unseen reality, distant places, or future cases.
-n8: conjecture
-	summary=The creative origin of theories: minds rearrange and improve existing ideas before criticism and testing select among them.
-n9: criticism
-	summary=The error-correction pressure that asks whether an idea solves the problem without smuggling in arbitrary details.
-n10: fallibilism
-	summary=The stance that no source makes knowledge certain, so progress depends on expecting error and trying to correct it.
-n11: theory-laden observation
-	summary=Observation already contains interpretation; even recognizing repetition or evidence depends on prior explanatory ideas.
-n12: problem
-	summary=A conflict between ideas, expectations, or appearances that calls for a better explanation.
-n13: background knowledge
-	summary=Familiar explanatory assumptions that make rules of thumb look simple while quietly doing much of the work.
-n14: rule of thumb
-	summary=A narrow predictive habit that works in familiar cases but lacks reach without an explanation of why it works.
-n15: instrumentalism
-	summary=The false view that science only predicts observations and should not describe the reality causing them.
-n16: realism
-	summary=The view that physical reality exists and can be understood through rational inquiry and explanatory theories.
-n17: bad explanation
-	summary=An explanation easy to vary while still fitting the same appearances; it can absorb failure without real progress.
-n18: good explanation
-	summary=An explanation hard to vary because each detail does functional work; changing it breaks the account.
+	summary=A claim about what is really out there and how it behaves, a statement of the reality that accounts for the appearance. Not a summary of observations.
+n4: the knowledge problem
+	summary=How can theories that begin as local guesswork inside one brain, tested only locally, contain accurate knowledge of a reality we have never experienced?
+n5: empiricism
+	summary=The misconception that we derive knowledge from the senses. Locke's mind as 'white paper', nature as a 'Book' to be read. The discoverer as passive recipient, not creator.
+n6: sensory authority
+	summary=Experience installed as the authoritative source of theories, replacing holy books and priests while keeping the same authority-shaped mistake.
+n7: inductivism
+	summary=The misconception that repeating an experience under similar circumstances lets you generalize it into a theory or a reliable prediction.
+n8: the principle of induction
+	summary=The future will resemble the past; the unseen resembles the seen. No one has ever stated a version usable to obtain a theory from experience.
+n9: the logical gap
+	summary=No deduction from statements about experiences can reach a conclusion about anything other than those experiences. You cannot deduce Mars from a map of Earth.
+n10: the deceptiveness of the senses
+	summary=For millennia the rotating 'celestial sphere' was directly observed and repeatedly confirmed, yet it does not exist. The senses say nothing; only our fallible interpretations do.
+n11: justificationism
+	summary=The older, deeper disease, that knowledge needs authority to be genuine, justified true belief. It turns 'how do we know?' into 'by what authority do we claim?'.
+n12: conjecture
+	summary=The real source of all theories. Minds rearrange, combine and alter existing ideas to improve them. Discovering an explanation is an act of creativity, not derivation.
+n13: criticism
+	summary=Error-correction. Exposing an idea to objections and tests, asking whether it solves the problem without smuggling in arbitrary detail.
+n14: theory-laden observation
+	summary=There is no raw data. Nerve signals are crackles inside the brain; we project a blue sky up there. Every observation is already interpretation, and so is fallible.
+n15: fallibilism
+	summary=There are no authoritative sources and no reliable way to justify ideas as true. Not despair but the engine, expecting even your best ideas to contain error and trying to correct it.
+n16: rejection of authority
+	summary=Nullius in verba, take no one's word for it. A necessary condition for progress, but on its own not enough; usually new authorities simply replace the old.
+n17: tradition of criticism
+	summary=A rare kind of tradition whose point is to change ideas rather than preserve them, carrying them forward by exposing them to criticism. This is what actually made the difference.
+n18: the Enlightenment
+	summary=The rebellion against authority in knowledge that built institutions of criticism and began creating knowledge at a noticeable, accelerating rate.
 n19: testability
-	summary=A valuable check when paired with good explanations, but not enough when theories are arbitrary or easily adjustable.
-n20: tradition of criticism
-	summary=A culture of carrying ideas forward by exposing them to objections instead of protecting them as authority.
-n21: Enlightenment
-	summary=The wider shift toward rejecting authority, seeking good explanations, and building institutions around criticism and progress.
-n22: axis-tilt explanation
-	summary=The seasons explained by Earth's tilted rotation relative to its orbit, where geometry and heat each matter.
-n23: seasonal reach
-	summary=The axis-tilt explanation applies beyond its original evidence: hemispheres, tropics, polar days, and other planets.
-n24: knowledge growth
-	summary=Sustained progress produced when conjectures meet criticism and good explanations replace static or parochial ideas.
-n25: beginning of infinity
-	summary=The open-ended possibility created by explanations with reach, especially under a tradition that keeps correcting errors.
+	summary=A theory must make predictions that could be contradicted by some observation, Popper's criterion of demarcation. Necessary, but the prophet and the gambler are testable too.
+n20: bad explanation
+	summary=An explanation easy to vary while still fitting the appearances. Its details are barely connected to the phenomenon, so it can absorb any result and explains nothing.
+n21: good explanation
+	summary=An explanation hard to vary, because every detail does functional work; change a detail and the account breaks. This, not testability, was the decisive factor.
+n22: realism
+	summary=The common-sense and true doctrine that the physical world really exists and is accessible to reason, so that explanations of it can exist too.
+n23: instrumentalism
+	summary=The misconception that science can only predict observations, never describe the reality behind them. It denies that explanation exists at all.
+n24: the seasons
+	summary=Why is there winter? The phenomenon that both the Greek myths and modern physics set out to explain.
+n25: the Persephone myth
+	summary=Demeter grieves while Persephone visits Hades, so the world goes cold. Testable, yet you can swap Freyr, swap the magic seed, even flip it to escape-and-revenge, and it fits just as well.
+n26: the axis-tilt theory
+	summary=Earth's axis is tilted relative to its orbit, so each hemisphere leans toward the sun for half the year. Every detail does work; you cannot swap the moon for the sun or add a god's feelings.
+n27: reach
+	summary=The ability of some explanations to solve problems far beyond the ones they were created to solve. Not extrapolation, but fixed by the content of the explanation itself.
+n28: out-of-phase seasons
+	summary=From scraps of one hemisphere's evidence, axis-tilt predicts six-month polar days, no seasons at the tropics, and southern seasons exactly out of phase, places its makers never saw.
+n29: knowledge growth
+	summary=Sustained, accelerating creation of knowledge with ever-increasing reach, what began, uniquely in history, with the Enlightenment.
+n30: the beginning of infinity
+	summary=The open-ended possibility opened by explanations with reach under a tradition of criticism, an unlimited potential to create further knowledge.
