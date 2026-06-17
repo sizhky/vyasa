@@ -21,12 +21,39 @@ _RENDERABLE_NODE_KEYS = {
 }
 
 
+_MARKDOWN_BLOCK_LINE_RE = re.compile(
+    r"^\s*(?:[-+*]\s+|\d+\.\s+|>\s+|#{1,6}\s+|```|~~~|\|{1,2}|(?: {4}|\t)\S)"
+)
+
+
+def _starts_markdown_block(line: str) -> bool:
+    return bool(_MARKDOWN_BLOCK_LINE_RE.match(line))
+
+
 def _prepare_node_attr_markdown(value) -> str:
     text = str(value).replace("\\r\\n", "\n").replace("\\n", "\n")
     stripped = text.strip()
     if (stripped.startswith('"') and stripped.endswith('"')) or (stripped.startswith("'") and stripped.endswith("'")):
         text = stripped[1:-1]
-    return re.sub(r"(?<!\n)\n(?!\n)", "<br>\n", text)
+    lines = text.split("\n")
+    rendered_lines: list[str] = []
+    in_fence = False
+    for index, line in enumerate(lines):
+        stripped_line = line.lstrip()
+        if stripped_line.startswith(("```", "~~~")):
+            in_fence = not in_fence
+            rendered_lines.append(line)
+            continue
+        rendered_lines.append(line)
+        if index == len(lines) - 1 or in_fence:
+            continue
+        next_line = lines[index + 1]
+        if not line.strip() or not next_line.strip():
+            continue
+        if _starts_markdown_block(line) or _starts_markdown_block(next_line):
+            continue
+        rendered_lines.append("<br>")
+    return "\n".join(rendered_lines)
 
 
 def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
@@ -47,6 +74,24 @@ def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
                 )
             if rendered_attrs:
                 node["__rendered_attrs__"] = rendered_attrs
+    for entry in (model.get("projection_models") or {}).values():
+        projection_model = entry.get("model") if isinstance(entry, dict) else None
+        if isinstance(projection_model, dict):
+            _attach_rendered_node_attrs(projection_model, current_path)
+
+
+def _attach_rendered_slide_attrs(model: dict, current_path: str | None) -> None:
+    for slide in model.get("slides", []):
+        rendered_attrs = {}
+        for key in ("desc", "description"):
+            value = slide.get(key)
+            if isinstance(value, str) and value.strip():
+                rendered_attrs[key] = _render_markdown_fragment(
+                    _prepare_node_attr_markdown(value),
+                    current_path=current_path,
+                )
+        if rendered_attrs:
+            slide["__rendered_attrs__"] = rendered_attrs
 
 
 def _should_open_filters_by_default(width_value) -> bool:
@@ -103,6 +148,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         apply_edge_label_fallbacks(model)
         normalize_items_model_hrefs(model, current_path)
         _attach_rendered_node_attrs(model, current_path)
+        _attach_rendered_slide_attrs(model, current_path)
         graph = build_collapsed_graph(model)
     except Exception:
         model = {
@@ -178,8 +224,8 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">'
         f'<button type="button" title="Show graph shortcuts and gestures" onclick="runTasksHeaderAction(\'{widget_id}\', \'toggleHelp\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">?</button>'
         f'<button type="button" title="Fit view" onclick="runTasksHeaderAction(\'{widget_id}\', \'fit\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">F</button>'
-        f'<button type="button" title="Open selected ego graph" onclick="runTasksHeaderAction(\'{widget_id}\', \'openEgo\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">EG</button>'
-        f'<button type="button" title="Open selected ego graph with neighbors" onclick="runTasksHeaderAction(\'{widget_id}\', \'openEgoNeighbors\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">EG+</button>'
+        f'<button type="button" title="Open selected ego graph (G)" onclick="runTasksHeaderAction(\'{widget_id}\', \'openEgo\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">EG</button>'
+        f'<button type="button" title="Open selected ego graph with neighbors (Shift+G)" onclick="runTasksHeaderAction(\'{widget_id}\', \'openEgoNeighbors\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">EG+</button>'
         f'<button type="button" title="Expand next group depth" onclick="runTasksHeaderAction(\'{widget_id}\', \'expandDepth\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">I</button>'
         f'<button type="button" title="Collapse deepest group depth" onclick="runTasksHeaderAction(\'{widget_id}\', \'collapseDepth\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">O</button>'
         f'<button type="button" title="Unfold all groups" onclick="runTasksHeaderAction(\'{widget_id}\', \'expand\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">U</button>'

@@ -1,0 +1,24 @@
+{
+  "node_color_palettes": {
+    "kind": {
+      "appearance": "#475569",
+      "reality": "#1d4ed8",
+      "question": "#f59e0b",
+      "misconception": "#dc2626",
+      "correction": "#0d9488",
+      "method": "#16a34a",
+      "payoff": "#eab308"
+    }
+  },
+  "edge_color_palettes": {
+    "relation": {
+      "produces": "#2563eb",
+      "explains": "#6366f1",
+      "enables": "#16a34a",
+      "refutes": "#0d9488",
+      "blocks": "#dc2626",
+      "becomes": "#7c3aed",
+      "reaches": "#eab308"
+    }
+  }
+}

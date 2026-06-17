@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 
 function fakeStorage(initial = {}) {
     const values = new Map(Object.entries(initial));
@@ -19,27 +19,24 @@ function fakeStorage(initial = {}) {
 test('Knowledge Graph notes backup round-trips one graph preference record', () => {
     const graphKey = 'vyasa:tasks:prefs:doc::graph-a';
     const storage = fakeStorage({
-        [graphKey]: JSON.stringify({ nodeNotes: { a: 'first note' }, projectionId: 'main' }),
+        [graphKey]: JSON.stringify({ nodeNotes: { a: 'first note' }, slideNotes: { intro: 'slide note' }, nodeStates: { a: 'Done' }, projectionId: 'main' }),
         'vyasa:tasks:prefs:doc::graph-b': JSON.stringify({ nodeNotes: { b: 'second note' } }),
     });
-    const backup = collectTasksStoredNotes(storage, graphKey, { a: 'Alpha title' });
-    assert.deepEqual(backup, {
-        format: 'vyasa-kg-notes',
-        version: 2,
-        notes: { a: { title: 'Alpha title', note: 'first note' } },
-    });
+    const backup = collectTasksStoredNotes(storage, graphKey, { a: 'Alpha title' }, { intro: 'Intro slide' });
+    assert.equal(backup, '!vyasa-notes 4\n\n@ node a [Done] Alpha title\n  first note\n\n@ slide intro Intro slide\n  slide note\n');
 
     const target = fakeStorage({
-        [graphKey]: JSON.stringify({ nodeNotes: { existing: 'keep me' }, projectionId: 'main' }),
+        [graphKey]: JSON.stringify({ nodeNotes: { existing: 'keep me' }, nodeStates: { existing: 'Review' }, projectionId: 'main' }),
     });
-    const staleTitleBackup = structuredClone(backup);
-    staleTitleBackup.notes.a.title = 'Old title that no longer matches';
-    assert.equal(importTasksStoredNotes(target, graphKey, staleTitleBackup), 1);
+    const staleTitleBackup = backup.replace('Alpha title', 'Old title that no longer matches');
+    assert.equal(importTasksStoredNotes(target, graphKey, staleTitleBackup), 3);
     const restored = JSON.parse(target.getItem(graphKey));
     assert.deepEqual(restored.nodeNotes, { existing: 'keep me', a: 'first note' });
+    assert.deepEqual(restored.slideNotes, { intro: 'slide note' });
+    assert.deepEqual(restored.nodeStates, { existing: 'Review', a: 'Done' });
     assert.equal(restored.projectionId, 'main');
     assert.throws(
-        () => importTasksStoredNotes(target, graphKey, { format: 'vyasa-kg-notes', version: 1, nodeNotes: { a: 'old' } }),
+        () => importTasksStoredNotes(target, graphKey, '!vyasa-notes 3'),
         /Invalid Vyasa Knowledge Graph notes backup/
     );
 });
@@ -70,6 +67,9 @@ test('projection reset defaults include all authored sidebar parameters', () => 
         'const normalizeTasksFilterQuery = value => value;\n'
         + 'const clampTasksEdgeOpacity = value => Number(value);\n'
         + 'const clampTasksProjectionContentOpacity = value => Number(value);\n'
+        + 'const normalizeTasksEdgeAnimationMode = (mode, enabled = true) => mode || (enabled === false ? "none" : "smooth");\n'
+        + 'const clampTasksEdgeAnimationSteps = value => Number(value);\n'
+        + 'const clampTasksEdgeAnimationDuration = value => Number(value);\n'
         + source.slice(start, end)
         + '\nreturn tasksProjectionSchemaPrefs;'
     );
@@ -77,12 +77,14 @@ test('projection reset defaults include all authored sidebar parameters', () => 
         id: 'focus', filter_query: { combinator: 'and', rules: [] }, query_builder_enabled: false,
         search: 'missing', default_color_by: 'phase', default_secondary_color_by: 'owner',
         filters_collapsed: false, edges_visible: false, edge_animation_enabled: false,
+        edge_animation_mode: 'tick', edge_animation_tick_steps: 8, edge_animation_tick_duration: 1.6,
         edge_opacity: 0.4, projection_unspecified_content_opacity: 0.3,
     }] }, 'focus');
     assert.deepEqual(defaults, {
         filters: { combinator: 'and', rules: [] }, queryBuilderEnabled: false, searchQuery: 'missing',
         colorBy: 'phase', secondaryColorBy: 'owner', filtersCollapsed: false, edgesVisible: false,
-        edgeAnimationEnabled: false, edgeOpacity: 0.4, unspecifiedContentOpacity: 0.3,
+        edgeAnimationEnabled: false, edgeAnimationMode: 'tick', edgeAnimationTickSteps: 8, edgeAnimationTickDuration: 1.6,
+        edgeOpacity: 0.4, unspecifiedContentOpacity: 0.3,
     });
 });
 
@@ -283,6 +285,15 @@ test('task and collapsed group nodes are selectable in items graph', () => {
     assert.equal(isTasksGraphNodeSelectable('groupTitle'), true);
 });
 
+test('edge toggle header button warns when edges are hidden', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes('data-vyasa-tasks-action="${action}"'), 'header buttons carry action data');
+    assert.ok(source.includes('syncTasksEdgeToggleButtons(widgetId, edgesVisible)'), 'edge button follows visibility state');
+    assert.ok(source.includes('button[onclick*="toggleEdges"]'), 'sync handles old header buttons without data attrs');
+    assert.ok(source.includes('data-vyasa-edges-off'), 'hidden edge state is marked on the E button');
+    assert.ok(source.includes('vyasa-edges-off-pulse'), 'hidden edge state pulses visibly');
+});
+
 test('collapsed groups average both primary and secondary colors', () => {
     const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
     const start = source.indexOf('function collectTasksGroupDescendants');
@@ -393,6 +404,13 @@ test('group panels use selectable hit areas in items graph', () => {
     assert.equal(tasksGraphNodeHitArea('group', false), 'selectable');
     assert.equal(tasksGraphNodeHitArea('group', true), 'selectable');
     assert.equal(tasksGraphNodeHitArea('groupTitle'), 'control');
+});
+
+test('dimmed Knowledge Graph nodes do not accept hover behavior', () => {
+    assert.equal(tasksGraphNodeAllowsHover({ data: { highlightMode: 'selected' } }), true);
+    assert.equal(tasksGraphNodeAllowsHover({ data: { highlightMode: 'neighbor' } }), true);
+    assert.equal(tasksGraphNodeAllowsHover({ data: { highlightMode: 'dim' } }), false);
+    assert.equal(tasksGraphNodeAllowsHover({ data: {} }), true);
 });
 
 test('expanded root group keeps collapsed top-left anchored', () => {
@@ -556,6 +574,44 @@ test('selected edge labels stay below nodes unless edge is focused', () => {
     assert.equal(tasksEdgeLabelZForMode('dim', 6, 999, 1400), 6);
     assert.equal(tasksEdgeLabelZForMode('focused-in', 6, 999, 1400), 1400);
     assert.equal(tasksEdgeLabelZForMode('focused-out', 6, 999, 1400), 1400);
+});
+
+test('non-animated selected edges keep uniform stroke width before taper', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const helper = source.match(/function tasksEdgeStrokeWidthForMode\(mode, animated\) \{[\s\S]*?\n\}/)?.[0];
+    assert.ok(helper, 'edge stroke helper should exist');
+    const strokeWidth = new Function(`${helper}; return tasksEdgeStrokeWidthForMode;`)();
+    assert.equal(strokeWidth('focused-out', false), 3.5);
+    assert.equal(strokeWidth('focused-in', false), 3.5);
+    assert.equal(strokeWidth('selected-out', false), 3.5);
+    assert.equal(strokeWidth('selected-in', false), 3.5);
+    assert.equal(strokeWidth('selected', false), 3.5);
+    assert.equal(strokeWidth('dim', false), 1.25);
+    assert.equal(strokeWidth('focused-in', true), 5);
+});
+
+test('tapered edge path builds a closed bezier ribbon', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function tasksTaperedBezierPath');
+    const end = source.indexOf('function tasksIsIconifyImage');
+    assert.ok(start > 0 && end > start, 'taper helper should exist');
+    const tapered = new Function(`${source.slice(start, end)}; return tasksTaperedBezierPath;`)();
+    const path = tapered('M 0 0 C 20 0 80 100 100 100', 6, 2);
+    assert.ok(path.startsWith('M 0 3'), 'source starts wide');
+    assert.ok(path.includes('L 100 99'), 'target closes narrow');
+    assert.ok(path.endsWith('Z'), 'path is closed');
+    assert.ok(source.includes("'selected', 'selected-in'"), 'plain selected edges should taper too');
+});
+
+test('tapered edge arrowhead builds a target triangle', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function tasksTaperedBezierPath');
+    const end = source.indexOf('function tasksIsIconifyImage');
+    const helpers = new Function(`${source.slice(start, end)}; return { tasksTaperedArrowHeadPath };`)();
+    const path = helpers.tasksTaperedArrowHeadPath('M 0 0 C 20 0 80 100 100 100', 10);
+    assert.ok(path.startsWith('M 100 100'), 'arrow tip sits on edge target');
+    assert.ok(path.includes('L '), 'arrow has base corners');
+    assert.ok(path.endsWith('Z'), 'arrow is closed');
 });
 
 test('palette legend only shows values present in graph', () => {
@@ -753,7 +809,8 @@ test('buildTasksProjectionConfigText emits a paste-ready kg.schema @views entry'
     const clampEdge = source.match(/function clampTasksEdgeOpacity\(value\) \{[\s\S]*?\n\}/)?.[0];
     const clampContent = source.match(/function clampTasksProjectionContentOpacity\(value\) \{[\s\S]*?\n\}/)?.[0];
     assert.ok(clampEdge && clampContent, 'serializer clamp helpers should exist');
-    const factory = new Function(`${constants}; ${clampEdge}; ${clampContent}; ${source.slice(start, end)}; return { buildTasksProjectionConfigText, parseTasksProjectionConfigText };`);
+    const animationHelpers = 'const normalizeTasksEdgeAnimationMode = (mode, enabled = true) => mode || (enabled === false ? "none" : "smooth"); const clampTasksEdgeAnimationSteps = value => Number(value); const clampTasksEdgeAnimationDuration = value => Number(value);';
+    const factory = new Function(`${constants}; ${clampEdge}; ${clampContent}; ${animationHelpers}; ${source.slice(start, end)}; return { buildTasksProjectionConfigText, parseTasksProjectionConfigText };`);
     const { buildTasksProjectionConfigText: build, parseTasksProjectionConfigText: parse } = factory();
 
     // Single-value filter maps to a where= line; caption with spaces is quoted.
@@ -795,6 +852,9 @@ test('buildTasksProjectionConfigText emits a paste-ready kg.schema @views entry'
         filtersCollapsed: false,
         edgesVisible: false,
         edgeAnimationEnabled: false,
+        edgeAnimationMode: 'tick',
+        edgeAnimationTickSteps: 10,
+        edgeAnimationTickDuration: 1.4,
         edgeOpacity: 0.37,
         projectionUnspecifiedContentOpacity: 0.44,
     });
@@ -805,6 +865,9 @@ test('buildTasksProjectionConfigText emits a paste-ready kg.schema @views entry'
     assert.ok(noted.includes('\n\tfilters_collapsed=false'), 'filter drawer state emitted');
     assert.ok(noted.includes('\n\tedges_visible=false'), 'edge visibility emitted');
     assert.ok(noted.includes('\n\tedge_animation_enabled=false'), 'edge animation emitted');
+    assert.ok(noted.includes('\n\tedge_animation_mode=tick'), 'edge animation mode emitted');
+    assert.ok(noted.includes('\n\tedge_animation_tick_steps=10'), 'edge animation steps emitted');
+    assert.ok(noted.includes('\n\tedge_animation_tick_duration=1.4'), 'edge animation duration emitted');
     assert.ok(noted.includes('\n\tedge_opacity=0.37'), 'edge opacity emitted');
     assert.ok(noted.includes('\n\tprojection_unspecified_content_opacity=0.44'), 'unspecified intensity emitted');
     assert.ok(noted.includes('\n\tsecondary_color_by=energy'), 'secondary color emitted as a real field');
@@ -826,10 +889,13 @@ yolo:
 \tsecondary_color_by=evaluated
 \tfilter_query="{\\"combinator\\":\\"and\\",\\"rules\\":[{\\"field\\":\\"built\\",\\"operator\\":\\"=\\",\\"value\\":\\"yes\\"}]}"
 \tquery_builder_enabled=true
-\tfilters_collapsed=false
-\tedges_visible=true
-\tedge_animation_enabled=true
-\tedge_opacity=0.5050762722761054
+	\tfilters_collapsed=false
+	\tedges_visible=true
+	\tedge_animation_enabled=true
+	\tedge_animation_mode=smooth
+	\tedge_animation_tick_steps=14
+	\tedge_animation_tick_duration=1.8
+	\tedge_opacity=0.5050762722761054
 \tprojection_unspecified_content_opacity=0.82
 \tdefault_open_depth=-1`);
     assert.deepEqual(exactPaste.groupBy, ['lane']);
@@ -838,4 +904,7 @@ yolo:
     assert.equal(exactPaste.filterQuery.rules[0].field, 'built');
     assert.equal(exactPaste.queryBuilderEnabled, true);
     assert.equal(exactPaste.filtersCollapsed, false);
+    assert.equal(exactPaste.edgeAnimationMode, 'smooth');
+    assert.equal(exactPaste.edgeAnimationTickSteps, 14);
+    assert.equal(exactPaste.edgeAnimationTickDuration, 1.8);
 });

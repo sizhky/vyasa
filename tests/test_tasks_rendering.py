@@ -6,6 +6,7 @@ import re
 from textwrap import dedent
 
 from vyasa.extensions_builtin.markdown.renderer import from_md
+from vyasa.extensions_builtin.tasks.api import _compile_schema_payload
 
 
 def test_tasks_block_renders_widget_payload_without_summary():
@@ -114,16 +115,20 @@ def test_tasks_filter_panel_uses_projection_dropdown_instead_of_tab_grid():
     assert "const ProjectionToggle = () =>" not in source
 
 
-def test_tasks_node_detail_rows_use_inline_label_flow():
+def test_tasks_node_detail_rows_always_stack_values_below_labels():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
-    assert "`${entry.label}: `" in source
-    assert "React.createElement('span', { style: { fontWeight: 700" in source
+    assert "`${entry.label}:`" in source
+    assert "display: 'block', marginBottom: '4px'" in source
+    assert "return Math.max(keyWidth, valueWidth * weight);" in source
     assert "overflowWrap: 'anywhere'" in source
     assert "whiteSpace: 'pre-line'" in source
-    assert "gridTemplateColumns: stacked ?" not in source
-    assert ".vyasa-task-node-card-value > p:first-child { display: inline; }" in css
+    assert "tasksIsLongFormEntry" not in source
+    assert ".vyasa-task-node-card-value > p:first-child { display: inline; }" not in css
+    assert ".vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }" in css
+    assert ".vyasa-task-node-card-value li > p { margin: 0; }" in css
+    assert ".vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }" in css
 
 
 def test_tasks_node_metadata_hides_internal_keys():
@@ -357,13 +362,19 @@ def test_tasks_source_persists_checked_nodes_per_graph():
     assert "writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));" in source
     assert "checkedNodeIds" in source
     assert "nodeStates" in source
-    assert "toggleCheckedNode(sourceNodeId)" in source
+    assert "toggleCheckedNode(logicalNodeId)" in source
+    assert "const lastGraphRevisionCauseRef = React.useRef('layout');" in source
+    assert "const revisionCause = lastLayoutRevisionKeyRef.current === revisionKey ? 'visual' : 'layout';" in source
+    assert "if (lastGraphRevisionCauseRef.current === 'visual') return;" in source
 
 
 def test_tasks_source_renders_hover_checkbox_and_done_badge():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "type: 'checkbox'" in source
+    assert "const showCheckbox = hoveredNodeId === sourceNodeId || selectedNodeId === sourceNodeId;" in source
+    assert "if (!selectedNodeId) {" in source
+    assert "setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);" in source
     assert "const doneBadge = isChecked ?" in source
     assert "taskStateLabel" in source
 
@@ -400,9 +411,13 @@ def test_tasks_source_supports_local_card_notes():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "function normalizeTasksNodeNotes" in source
+    assert "function tasksNoteEditorMetrics" in source
     assert "nodeNotes" in source
+    assert "const noteTextareaRef = React.useRef(null);" in source
     assert "setNoteInputValue(event.target.value)" in source
-    assert "updateNodeNote(selectedNodeId, noteInputValue)" in source
+    assert "textarea.style.height = 'auto';" in source
+    assert "textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'" in source
+    assert "updateNodeNote(selectedLogicalNodeId, noteInputValue)" in source
     assert "placeholder: 'Notes'" in source
     assert "SelectedNodePanel()" in source
     assert "__has_note__" in source
@@ -410,6 +425,15 @@ def test_tasks_source_supports_local_card_notes():
     assert "kinds: ['note']" in source
     assert "TASKS_HAS_NOTE_PALETTE = { yes: '#22c55e', no: 'rgba(220, 38, 38, 0.28)' }" in source
     assert "tasksHasAnyNodeNote(nodeNotes)" in source
+
+
+def test_tasks_node_card_width_ignores_note_text_length():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    panel_source = source.split("const SelectedNodePanel = () => {", 1)[1].split("const FilterPanel = () => {", 1)[0]
+
+    assert "const noteMetrics = tasksNoteEditorMetrics(noteInputValue);" in panel_source
+    assert "const panelWidth = tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries });" in panel_source
+    assert "noteMetrics.width" not in panel_source
 
 
 def test_tasks_selected_panel_shows_href_as_detail_instead_of_title_link():
@@ -443,6 +467,11 @@ def test_tasks_source_logs_node_href_navigation_flow():
     assert "logTasksDebug('nodeHrefOpen:htmxSwap'" in source
     assert "logTasksDebug('htmx:beforeRequest'" in source
     assert "logTasksDebug('htmx:responseError'" in source
+    assert "logTasksDebug('shortcutKeydown'" in source
+    assert "logTasksDebug('selectionClear'" in source
+    assert "logTasksDebug('selectionStateCommit'" in source
+    assert "logTasksDebug('selectionSetNode'" in source
+    assert "logTasksDebug('openEgoAction'" in source
 
 
 def test_tasks_source_uses_base_view_label_for_default_projection_tab():
@@ -485,6 +514,21 @@ def test_tasks_color_swatch_filter_is_independent_and_ands_with_query_filter():
     assert "onQueryChange: (query) => setActiveFilters(normalizeTasksFilterQuery(query))" in source
     assert "const activeSwatchKeys = new Set([activeColorBy, activeSecondaryColorBy].filter(Boolean))" in source
     assert "tasksPruneFilterQueryFields(current, activeSwatchKeys)" in source
+
+
+def test_tasks_query_builder_supports_inline_text_attrs_and_exists_operator():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    core = Path("vyasa/extensions_builtin/tasks/static/tasks_graph_core.js").read_text()
+
+    assert "const TASKS_FILTER_TEXT_VALUE_LIMIT" in source
+    assert "isText: !indexedKeys.has(key)" in source
+    assert "{ name: 'notnull', label: 'attribute exists' }" in source
+    assert "{ name: 'matchesRegex', label: 'regex matches' }" in source
+    assert "props.operator === 'matchesRegex'" in source
+    assert "function tasksNodeFilterAttributeExists(node, key)" in source
+    assert "if (rule.operator === 'notnull') return tasksNodeFilterAttributeExists(node, rule.field)" in source
+    assert "if (rule.operator === 'matchesRegex')" in source
+    assert ": null;" in core
 
 
 def test_tasks_source_supports_continuous_gradient_palettes():
@@ -551,6 +595,33 @@ def test_tasks_ego_views_keep_drag_selection_enabled():
     assert "if (egoMode) return;" not in start_drag_selection
 
 
+def test_tasks_g_shortcuts_open_ego_views():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "if (key === 'g' && !egoMode)" in source
+    assert "openEgo?.(event.shiftKey)" in source
+    assert "const selectedNodeIdRef = React.useRef(null);" in source
+    assert "selectedNodeIdRef.current = sourceNodeId;" in source
+    assert "selectedNodeIdsRef.current = new Set();" in source
+    assert "setSelectedNodeId(sourceNodeId);" in source
+    assert "window.__vyasaTasksActiveWidgetId = widgetId;" in source
+    assert "window.__vyasaTasksActiveWidgetId === widgetId" in source
+    assert "markWidgetActive();" in source
+    assert "G: open EG\\nShift + G: open EG+" in source
+    assert "const egoModalOpen = Boolean(document.querySelector('#tasks-fullscreen-modal [data-tasks-ego=\"true\"]'));" in source
+    assert "if (event.key === 'Escape' && !event.shiftKey && egoMode && widgetFocused)" in source
+    assert "if (event.key === 'Escape' && !event.shiftKey && egoModalOpen)" in source
+    assert "if (event.key === 'Escape' && !event.shiftKey && widgetFocused)" in source
+    assert "clearSelection('escape');" in source
+
+
+def test_tasks_clicking_selected_node_toggles_selection_off():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "selectedNodeIdRef.current === sourceNodeId && selectedNodeIdsRef.current.size === 0" in source
+    assert "clearSelection('nodeClickToggle');" in source
+
+
 def test_tasks_fullscreen_reuses_canvas_background_contract():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
@@ -563,6 +634,16 @@ def test_tasks_fullscreen_reuses_canvas_background_contract():
     assert "modal.className = 'fixed inset-0 z-[10000] bg-black/88 backdrop-blur-sm';" in source
     assert "flow.style.flex = '1 1 auto';" in source
     assert "flow.style.minHeight = '0';" in source
+    assert "closeBtn.title = 'Close (Shift+Esc)';" in source
+    assert "modal.__tasksSuspendedModal = suspendedModal;" in source
+    assert "const suspendedMaximizeWrapper = wrapper.getAttribute('data-tasks-maximized') === 'true' && wrapper.__tasksMaximizeEsc" in source
+    assert "modal.__tasksSuspendedMaximizeWrapper = suspendedMaximizeWrapper;" in source
+    assert "suspendedModal.style.display = 'none';" in source
+    assert "closeTasksGraphModal(modal);" in source
+    assert "if (document.getElementById('tasks-fullscreen-modal') !== modal) return;" in source
+    assert "e.stopImmediatePropagation?.();" in source
+    assert "event.stopImmediatePropagation?.();" in source
+    assert "if (event.key !== 'Escape' || !event.shiftKey) return;" in source
 
 
 def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():
@@ -585,20 +666,38 @@ def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():
 def test_tasks_notes_support_graph_scoped_text_download_and_upload():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "collectTasksStoredNotes(storage, storageKey, nodeTitles)" in source
+    assert "collectTasksStoredNotes(storage, storageKey, nodeTitles, slideTitles)" in source
+    assert "prefs.slideNotes = normalizeTasksNodeNotes(slideNotes);" in source
+    assert "slideNotes: normalizeTasksNodeNotes(prefs.slideNotes)" in source
     assert "String(node.label || node.title || node.id)" in source
     assert "importTasksStoredNotes(storage, storageKey, backup)" in source
+    assert "prefs.nodeStates = normalizeTasksNodeStates(nodeStates, normalizeTasksCardStates(model));" in source
     assert "filename: `vyasa-kg-notes-${graphName}.txt`" in source
     assert "showTasksToast(`Downloaded ${filename}`)" in source
-    assert "buildTasksNodeNotesBackup(sourceModel, latestNodeNotes()).text" in source
+    assert "buildTasksNodeNotesBackup(sourceModel, latestNodeNotes(), nodeStates, latestSlideNotes()).text" in source
     assert "showTasksToast('Copied notes')" in source
     assert "toast.id = 'vyasa-tasks-toast'" in source
     assert "input.accept = '.txt,text/plain,application/json'" in source
+    assert "nodeStates: normalizeTasksNodeStates(prefs.nodeStates, cardStates)" in source
+    assert "setSlideNotes(imported.slideNotes);" in source
+    assert "Object.keys(nodeNotes).length + Object.keys(slideNotes).length" in source
+    assert "setNodeStates(imported.nodeStates);" in source
     assert "onClick: handleExportNodeNotes" in source
     assert "onClick: handleImportNodeNotes" in source
     assert "{ 'uk-icon': 'download', 'aria-hidden': 'true' }" in source
     assert "{ 'uk-icon': 'copy', 'aria-hidden': 'true' }" in source
     assert "{ 'uk-icon': 'upload', 'aria-hidden': 'true' }" in source
+
+
+def test_tasks_slide_notes_anchor_to_slide_card_bottom():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "overflowY: 'auto', display: 'flex', flexDirection: 'column'" in source
+    assert "gridTemplateRows: 'auto minmax(0, 1fr)', gap: '6px', marginTop: 'auto', paddingTop: '12px', minHeight: '50%'" in source
+    assert "} }, 'Notes')" in source
+    assert "placeholder: 'Capture presenter cues, follow-ups, or context for this slide.'" in source
+    assert "height: '100%', minHeight: '0', resize: 'vertical'" in source
+    assert "marginTop: '8px', paddingTop: '8px'" in source
 
 
 def test_tasks_search_normalizes_whitespace_and_wrapping_quotes():
@@ -781,6 +880,144 @@ def test_tasks_block_serializes_rendered_attr_html_for_node_card():
     assert "<strong>Bold</strong>" in task["__rendered_attrs__"]["summary"]
     assert "<br" in task["__rendered_attrs__"]["summary"]
     assert 'href="/posts/docs/feed/guide#spec"' in task["__rendered_attrs__"]["summary"]
+
+
+def test_tasks_block_renders_markdown_lists_without_trailing_breaks():
+    md = dedent("""\
+    ```items
+    Foundation:
+      - t1 :: Define graph payload | summary: "**Raw input**\\n\\n- First point\\n- Second point\\n- Third point"
+    ```
+    """)
+
+    rendered = to_xml(from_md(md, current_path="docs/feed/personalization"))
+    match = re.search(r"""data-tasks-payload=(["'])(.*?)\1""", rendered)
+
+    assert match is not None
+    payload = json.loads(html.unescape(match.group(2)))
+    summary_html = payload["tasks"][0]["__rendered_attrs__"]["summary"]
+    assert "<ul>" in summary_html
+    assert "<li>First point</li>" in summary_html
+    assert "<li>Second point</li>" in summary_html
+    assert "<li>Third point</li>" in summary_html
+
+
+def test_tasks_block_serializes_rendered_attr_html_for_projection_models(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        """@graph id=prep initial_view=arc
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+base:
+    edges=kg.edges
+@views
+arc:
+    source=base
+    group_by=owner
+    caption="Arc"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text(
+        """t1: Adversarial evasion
+\tdesc=|
+\t\tAttackers actively mutate behavior to slip past static models. Examples:
+\t\t- **Polymorphic malware** rewrites its own bytes each infection so no two copies hash alike.
+\t\t- **DGA domains** generate thousands of random C2 hostnames; blocklists can't keep up.
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.edges").write_text("", encoding="utf-8")
+    (tmp_path / "kg.attrs").write_text("@node_attrs\nowner:\n  blue: t1\n", encoding="utf-8")
+
+    md = f"""```items
+---
+items_schema: {tmp_path / "kg.schema"}
+---
+```"""
+
+    rendered = to_xml(from_md(md, current_path=tmp_path / "graph.md"))
+    match = re.search(r"""data-tasks-payload=(["'])(.*?)\1""", rendered)
+
+    assert match is not None
+    payload = json.loads(html.unescape(match.group(2)))
+    desc_html = payload["projection_models"]["arc"]["model"]["tasks"][0]["__rendered_attrs__"]["desc"]
+    assert "<ul>" in desc_html
+    assert "<strong>Polymorphic malware</strong>" in desc_html
+    assert "<strong>DGA domains</strong>" in desc_html
+
+
+def test_tasks_block_serializes_rendered_slide_description_markdown(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        """@graph id=deck
+@sources
+nodes=kg.nodes
+@slides
+intro: Intro
+\tnodes=t1
+\tdesc=|
+\t\t**Presenter frame**
+
+\t\t- First point
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text("t1: Start\n", encoding="utf-8")
+
+    md = f"""```items
+---
+items_schema: {tmp_path / "kg.schema"}
+---
+```"""
+
+    rendered = to_xml(from_md(md, current_path=tmp_path / "graph.md"))
+    match = re.search(r"""data-tasks-payload=(["'])(.*?)\1""", rendered)
+
+    assert match is not None
+    payload = json.loads(html.unescape(match.group(2)))
+    desc_html = payload["slides"][0]["__rendered_attrs__"]["desc"]
+    assert "<strong>Presenter frame</strong>" in desc_html
+    assert "<li>First point</li>" in desc_html
+
+
+def test_tasks_api_payload_serializes_rendered_slide_description_markdown(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        """@graph id=deck
+@sources
+nodes=kg.nodes
+@slides
+intro: Intro
+\tnodes=t1
+\tdesc=|
+\t\t- First point
+\t\t- Second point
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text("t1: Start\n", encoding="utf-8")
+
+    model, _graph = _compile_schema_payload(tmp_path / "kg.schema", str(tmp_path / "graph.md"))
+
+    desc_html = model["slides"][0]["__rendered_attrs__"]["desc"]
+    assert "<li>First point</li>" in desc_html
+    assert "<li>Second point</li>" in desc_html
+
+
+def test_slide_description_markdown_has_list_styling_contract():
+    graph_source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+
+    assert "className: 'vyasa-task-slide-description'" in graph_source
+    assert ".vyasa-task-slide-description ul { list-style: disc;" in css_source
+    assert ".vyasa-task-slide-description ol { list-style: decimal;" in css_source
+
+
+def test_slide_notes_panel_uses_stable_render_helper():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("const existing = document.getElementById", 1)[0]
+
+    assert "SlideShow()," in render_source
+    assert "window.React.createElement(SlideShow)" not in render_source
 
 
 def test_tasks_block_serializes_document_path_and_stable_storage_id():

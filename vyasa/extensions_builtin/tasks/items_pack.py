@@ -5,6 +5,7 @@ from pathlib import Path
 import json
 import shlex
 import re
+import textwrap
 from typing import Any
 
 NODE_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
@@ -28,6 +29,9 @@ class KgView:
     filters_collapsed: bool | None = None
     edges_visible: bool | None = None
     edge_animation_enabled: bool | None = None
+    edge_animation_mode: str = ""
+    edge_animation_tick_steps: str = ""
+    edge_animation_tick_duration: str = ""
     edge_opacity: str = ""
     projection_unspecified_content_opacity: str = ""
     display: dict[str, str | bool] = field(default_factory=dict)
@@ -40,6 +44,7 @@ class KgSchema:
     sources: dict[str, dict[str, Any]] = field(default_factory=dict)
     relations: dict[str, dict[str, str]] = field(default_factory=dict)
     views: list[KgView] = field(default_factory=list)
+    slides: list[dict[str, Any]] = field(default_factory=list)
     palette: str = ""
     cache: str = ""
     nodes: str = ""
@@ -56,6 +61,7 @@ def read_kg_pack(schema_path: str | Path) -> dict[str, Any]:
         "tasks": [],
         "dependency_edges": [],
         "view_projections": [_projection(view) for view in schema.views],
+        "slides": schema.slides,
         "default_projection": schema.graph.get("initial_view", schema.views[0].id if schema.views else ""),
         "hover_attrs": _list_value(schema.graph.get("hover_attrs", "")),
         "card_states": _list_value(schema.graph.get("card_states", "")),
@@ -124,7 +130,12 @@ def read_schema(path: str | Path) -> KgSchema:
     current_source = ""
     current_source_attrs = False
     current_view: KgView | None = None
-    for raw in path.read_text(encoding="utf-8").splitlines():
+    current_slide: dict[str, Any] | None = None
+    raw_lines = path.read_text(encoding="utf-8").splitlines()
+    raw_index = 0
+    while raw_index < len(raw_lines):
+        raw = raw_lines[raw_index]
+        raw_index += 1
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         line = raw.strip()
@@ -134,6 +145,7 @@ def read_schema(path: str | Path) -> KgSchema:
             current_source = ""
             current_source_attrs = False
             current_view = None
+            current_slide = None
             if section == "@graph":
                 schema.graph.update(_assignments(parts[1:]))
             continue
@@ -157,6 +169,14 @@ def read_schema(path: str | Path) -> KgSchema:
             elif section == "@views" and current_view:
                 payload = _view_assignment(line)
                 _update_view(current_view, payload)
+            elif section == "@slides" and current_slide is not None:
+                slide_indent = _indent_width(raw)
+                payload = _view_assignment(line)
+                for key, value in payload.items():
+                    if value == "|":
+                        value, skip_count = _read_indented_multiline(raw_lines, raw_index, slide_indent)
+                        raw_index += skip_count
+                    current_slide[key] = _list_value(value) if key == "nodes" else value
             continue
         if section == "@sources":
             current_source = _read_source_line(schema, line)
@@ -168,6 +188,10 @@ def read_schema(path: str | Path) -> KgSchema:
         elif section == "@views":
             current_view = _read_view(line)
             schema.views.append(current_view)
+        elif section == "@slides":
+            sid, _, title = line.partition(":")
+            current_slide = {"id": sid.strip(), "title": title.strip(), "nodes": []}
+            schema.slides.append(current_slide)
     _read_tmp_view_sidecars(schema, path)
     if "base" not in schema.sources:
         schema.sources["base"] = {}
@@ -205,7 +229,13 @@ def read_nodes(path: str | Path) -> list[dict[str, str]]:
     nodes_by_id: dict[str, dict[str, Any]] = {}
     stack: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
-    for raw in _record_raw_lines(path):
+    raw_lines = Path(path).read_text(encoding="utf-8").splitlines()
+    line_index = 0
+    while line_index < len(raw_lines):
+        raw = raw_lines[line_index]
+        line_index += 1
+        if not raw.strip() or raw.lstrip().startswith(("#", "@")):
+            continue
         indent = _indent_width(raw)
         line = raw.strip()
         if _looks_like_node_line(line):
@@ -232,6 +262,9 @@ def read_nodes(path: str | Path) -> list[dict[str, str]]:
             key, value = _split_inline_assignment(line)
             if not key:
                 continue
+            if value == "|":
+                value, skip_count = _read_indented_multiline(raw_lines, line_index, indent)
+                line_index += skip_count
             current[key] = value
             if key == "inherit":
                 current["__inherit_keys__"] = _list_value(value)
@@ -239,6 +272,18 @@ def read_nodes(path: str | Path) -> list[dict[str, str]]:
         if ":" in line:
             raise ValueError(f"{path}: invalid node line {line!r}; node children must use '<id>: <label>' with a valid id")
     return list(nodes_by_id.values())
+
+
+def _read_indented_multiline(raw_lines: list[str], start_index: int, parent_indent: int) -> tuple[str, int]:
+    block_lines = []
+    line_index = start_index
+    while line_index < len(raw_lines):
+        block_line = raw_lines[line_index]
+        if block_line.strip() and _indent_width(block_line) <= parent_indent:
+            break
+        block_lines.append(block_line)
+        line_index += 1
+    return textwrap.dedent("\n".join(block_lines)).strip("\n"), line_index - start_index
 
 
 def read_edges(path: str | Path, relations: dict[str, dict[str, str]] | None = None) -> list[dict[str, str]]:
@@ -344,7 +389,8 @@ def _update_view(view: KgView, payload: dict[str, str]) -> None:
         "source", "where", "group_by", "color_by", "secondary_color_by",
         "edge_color_by", "edge_label_from", "hover_attrs", "aggregate_edges",
         "filter_query", "query_builder_enabled", "search", "filters_collapsed",
-        "edges_visible", "edge_animation_enabled", "edge_opacity",
+        "edges_visible", "edge_animation_enabled", "edge_animation_mode",
+        "edge_animation_tick_steps", "edge_animation_tick_duration", "edge_opacity",
         "projection_unspecified_content_opacity", "caption",
     }
     if "source" in payload:
@@ -381,6 +427,12 @@ def _update_view(view: KgView, payload: dict[str, str]) -> None:
     if "edge_animation_enabled" in payload:
         value = _typed_scalar(payload["edge_animation_enabled"])
         view.edge_animation_enabled = value if isinstance(value, bool) else None
+    if "edge_animation_mode" in payload:
+        view.edge_animation_mode = payload["edge_animation_mode"]
+    if "edge_animation_tick_steps" in payload:
+        view.edge_animation_tick_steps = payload["edge_animation_tick_steps"]
+    if "edge_animation_tick_duration" in payload:
+        view.edge_animation_tick_duration = payload["edge_animation_tick_duration"]
     if "edge_opacity" in payload:
         view.edge_opacity = payload["edge_opacity"]
     if "projection_unspecified_content_opacity" in payload:
@@ -411,6 +463,9 @@ def _projection(view: KgView) -> dict[str, Any]:
         "filters_collapsed": view.filters_collapsed,
         "edges_visible": view.edges_visible,
         "edge_animation_enabled": view.edge_animation_enabled,
+        "edge_animation_mode": view.edge_animation_mode,
+        "edge_animation_tick_steps": view.edge_animation_tick_steps,
+        "edge_animation_tick_duration": view.edge_animation_tick_duration,
         "edge_opacity": view.edge_opacity,
         "projection_unspecified_content_opacity": view.projection_unspecified_content_opacity,
         **view.display,

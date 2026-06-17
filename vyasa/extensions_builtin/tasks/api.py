@@ -9,6 +9,7 @@ from starlette.responses import Response
 from .layout import build_collapsed_graph
 from .items_pack import _tmp_view_sidecar_dir
 from .model import parse_tasks_text
+from .render import _attach_rendered_node_attrs, _attach_rendered_slide_attrs
 
 ALNUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
@@ -62,6 +63,8 @@ def _safe_schema_path(runtime, raw_path: str) -> Path:
 def _compile_schema_payload(schema_path: Path, current_path: str = "") -> tuple[dict, dict]:
     source = f"```items\n---\nitems_schema: {schema_path}\n---\n```"
     model = parse_tasks_text(source, current_path=current_path or schema_path)
+    _attach_rendered_node_attrs(model, current_path or str(schema_path))
+    _attach_rendered_slide_attrs(model, current_path or str(schema_path))
     return model, build_collapsed_graph(model)
 
 

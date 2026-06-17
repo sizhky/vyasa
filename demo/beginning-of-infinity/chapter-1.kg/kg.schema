@@ -1,0 +1,56 @@
+@graph id=beginning-of-infinity-chapter-1 title="The Reach of Explanations"
+default_color_by=kind
+edge_color_by=relation
+edge_label_from=label
+hover_attrs=summary,kind
+default_open_depth=-1
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+base:
+	edges=kg.edges
+palette=kg.palette
+
+@relations
+produces label=produces
+explains label=explains
+enables label=enables
+refutes label=refutes
+blocks label=blocks
+becomes label=becomes
+reaches label=reaches
+
+@slides
+s1: Dots, or furnaces?
+	nodes=n1,n2,n3,n4
+	caption="Appearances are not self-explanatory."
+	desc="To the eye, the night sky is a few thousand dots. Behind them, a hidden reality of nuclear furnaces light years away produces those very appearances, and an explanatory theory is the only thing that reaches from one to the other. That gap is the knowledge problem: how can local guesswork ever know the unseen?"
+s2: The tempting wrong answer
+	nodes=n4,n5,n6,n7
+	caption="Just derive theory from the senses."
+	desc="The obvious answer to the problem is empiricism, reading knowledge straight off experience. To make that work, empiricism installs sensory authority and invokes inductivism: repeat an experience often enough and generalize it into a law."
+s3: The road collapses
+	nodes=n5,n7,n9,n10,n11
+	caption="Nothing can be derived from experience."
+	desc="The logical gap refutes inductivism and empiricism alike, for no deduction from what we saw can reach the unseen. The deceptiveness of the senses, the 'celestial sphere' everyone observed and that does not exist, finishes them off. Underneath sits justificationism: the demand that knowledge rest on some authority."
+s4: Guessed, not derived
+	nodes=n11,n15,n12,n3,n14
+	caption="Conjecture is the real source."
+	desc="Trade the demand for authority for fallibilism, which expects error and corrects it. Then the truth shows: conjecture, not derivation, produces every explanatory theory, and all observation was theory-laden anyway. Discovering an explanation is an act of creation."
+s5: Criticism, not rebellion
+	nodes=n12,n13,n17,n18
+	caption="A tradition whose point is to change."
+	desc="Conjecture is only half the engine; criticism is the other. Merely rejecting authority was never enough, since new authorities kept replacing the old. What was new is that criticism became a tradition of criticism, and that enabled the Enlightenment."
+s6: Testable is not enough
+	nodes=n18,n19,n24,n25
+	caption="The Persephone myth is testable too."
+	desc="The tradition produced testability. But testability cannot be the key, because the Persephone myth explains the seasons and is perfectly testable: winter from Demeter's grief would have to fall everywhere at once. The prophet and the gambler are testable too."
+s7: Two myths, or one true cause
+	nodes=n24,n25,n20,n26,n21
+	caption="Hard to vary is the real test."
+	desc="Persephone is easy to vary: swap the god, the magic seed, even flip it to escape-and-revenge, and it still fits the seasons, so it is a bad explanation that explains nothing. The axis-tilt theory's every detail does work; you cannot swap the moon for the sun, so it is a good explanation, hard to vary."
+s8: Reach, the beginning of infinity
+	nodes=n26,n28,n27,n29,n30
+	caption="It reaches places no one had seen."
+	desc="From scraps of one hemisphere's evidence, axis-tilt reaches out-of-phase southern seasons and six-month polar days, predictions its makers never witnessed. That reach, sustained by a tradition of criticism, becomes endless knowledge growth: the beginning of infinity."

@@ -22,11 +22,16 @@ theme_primary = "#2f6fed"
 table_col_max_width = "45vw"
 sidebars_open = true
 
+[extensions]
+routes_add = ["annotations"]
+
 [annotations]
 enabled = true
 ```
 
 Root-level `.vyasa` is for app behavior: title, content root, theme tokens, auth, RBAC, and sidebar defaults. Folder-level `.vyasa` is for navigation shape: `order`, `sort`, `folders_first`, and any local layout override that should travel with that subtree rather than the whole site.
+
+Annotations are opt-in. Add the `annotations` route extension and enable its behavior as shown above; `[annotations] enabled = true` alone does not load the plugin.
 
 The homepage card feed also respects `home_sort = "name_asc"` or `home_sort = "name_desc"` from the root `.vyasa` file when no root page exists. Leave it unset to keep the default newest-created-first ordering. Folder `sort` accepts `name_asc`, `name_desc`, `mtime_asc`, `mtime_desc`, `created_asc`, and `created_desc`.
 The root `ignore = [...]` list also hides matching files from the homepage card feed, so you can keep drafts and repo clutter out of the landing page without deleting them.

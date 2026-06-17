@@ -72,10 +72,26 @@ def test_bookmark_js_uses_tree_row_shell_contract():
 
 
 def test_document_action_buttons_render_inline_icons():
-    html = to_xml(fold_all_button()) + to_xml(present_button("guide/page"))
+    html = (
+        to_xml(fold_all_button())
+        + to_xml(present_button("guide/page"))
+        + to_xml(copy_raw_button("Copy Markdown", "# Heading", "raw-md-toast"))
+    )
 
     assert "vyasa-page-action-icon" in html
     assert "<uk-icon" not in html
+    assert html.count("vyasa-page-action-tooltip") == 3
+    assert 'data-tooltip="Fold all sections (C)"' in html
+    assert 'data-tooltip="Present document"' in html
+    assert 'data-tooltip="Copy raw markdown"' in html
+
+
+def test_fold_all_script_keeps_tooltip_in_sync_with_button_state():
+    source = Path("vyasa/static/scripts.js").read_text()
+
+    assert "function syncFoldAllButton(button, allOpen)" in source
+    assert "button.dataset.tooltip = `${label} sections (C)`;" in source
+    assert "syncFoldAllButton(toggle, shouldOpen);" in source
 
 
 def test_copy_markdown_button_keeps_raw_content_out_of_searchable_dom():

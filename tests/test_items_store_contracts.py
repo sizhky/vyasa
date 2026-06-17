@@ -13,7 +13,7 @@ from vyasa.extensions_builtin.tasks.items_store_contracts import (
     ValidationCode,
     ValidationFinding,
 )
-from vyasa.extensions_builtin.tasks.items_pack import read_edges, read_kg_pack
+from vyasa.extensions_builtin.tasks.items_pack import read_edges, read_kg_pack, read_nodes
 from vyasa.extensions_builtin.tasks.api import _view_sidecar_text
 from vyasa.extensions_builtin.tasks.model import _resolve_tasks_source_path, parse_tasks_text
 from vyasa.config import reload_config
@@ -173,6 +173,9 @@ ownership:
     filters_collapsed=false
     edges_visible=false
     edge_animation_enabled=false
+    edge_animation_mode=tick
+    edge_animation_tick_steps=10
+    edge_animation_tick_duration=1.4
     edge_opacity=0.37
     projection_unspecified_content_opacity=0.44
 """,
@@ -206,6 +209,9 @@ items_schema: roadmap.kg.schema
     assert model["view_projections"][1]["filters_collapsed"] is False
     assert model["view_projections"][1]["edges_visible"] is False
     assert model["view_projections"][1]["edge_animation_enabled"] is False
+    assert model["view_projections"][1]["edge_animation_mode"] == "tick"
+    assert model["view_projections"][1]["edge_animation_tick_steps"] == "10"
+    assert model["view_projections"][1]["edge_animation_tick_duration"] == "1.4"
     assert model["view_projections"][1]["edge_opacity"] == "0.37"
     assert model["view_projections"][1]["projection_unspecified_content_opacity"] == "0.44"
     assert model["projection_models"]["ownership"]["model"]["edge_color_by"] == "relation"
@@ -621,6 +627,48 @@ def test_kg_pack_nodes_support_nested_children_and_inherit_whitelist(tmp_path):
     assert all(task["city"] == "Hyderabad" for task in graph["tasks"])
     assert "type" not in graph["tasks"][0]
     assert graph["tasks"][1]["type"] == "car"
+
+
+def test_kg_pack_nodes_support_multiline_inline_attributes(tmp_path):
+    nodes_path = tmp_path / "kg.nodes"
+    nodes_path.write_text(
+        """n1: Recommendation
+\tsummary=|
+\t\t**Why it works**
+
+\t\t- Preserves clusters
+\t\t- Avoids centroid blur
+\tn2: Candidate
+""",
+        encoding="utf-8",
+    )
+
+    nodes = read_nodes(nodes_path)
+
+    assert nodes[0]["summary"] == "**Why it works**\n\n- Preserves clusters\n- Avoids centroid blur"
+    assert nodes[1]["id"] == "n2"
+
+
+def test_kg_pack_slides_support_multiline_description_attrs(tmp_path):
+    schema_path = tmp_path / "kg.schema"
+    schema_path.write_text(
+        """@graph id=deck
+@slides
+intro: Intro
+\tnodes=n1,n2
+\tdesc=|
+\t\t**Why this slide matters**
+
+\t\t- Shows the first arc
+\t\t- Names the follow-up
+""",
+        encoding="utf-8",
+    )
+
+    graph = read_kg_pack(schema_path)
+
+    assert graph["slides"][0]["nodes"] == ["n1", "n2"]
+    assert graph["slides"][0]["desc"] == "**Why this slide matters**\n\n- Shows the first arc\n- Names the follow-up"
 
 
 def test_kg_pack_nodes_reject_duplicate_child_with_conflicting_label(tmp_path):

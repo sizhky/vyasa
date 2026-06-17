@@ -44,10 +44,16 @@ def test_bundle_asset_nodes_emit_css_and_js_once():
 
 
 def test_runtime_and_static_request_same_page_bundles():
-    runtime = build_extension_runtime({})
+    default_runtime = build_extension_runtime({})
+    annotations_runtime = build_extension_runtime({"routes_add": ["annotations"]})
     previous = get_extension_runtime()
-    set_extension_runtime(runtime)
     try:
+        set_extension_runtime(default_runtime)
+        default_bundles = requested_page_bundles(
+            current_path="docs/page",
+            annotations_enabled=True,
+        )
+        set_extension_runtime(annotations_runtime)
         runtime_bundles = requested_page_bundles(
             show_sidebar=True,
             current_path="docs/page",
@@ -63,6 +69,7 @@ def test_runtime_and_static_request_same_page_bundles():
     finally:
         set_extension_runtime(previous)
 
+    assert "annotations.runtime" not in default_bundles
     assert runtime_bundles == static_bundles
     assert "annotations.runtime" in static_bundles
 
