@@ -643,6 +643,28 @@ def test_kg_pack_nodes_support_multiline_inline_attributes(tmp_path):
     assert nodes[1]["id"] == "n2"
 
 
+def test_kg_pack_slides_support_multiline_description_attrs(tmp_path):
+    schema_path = tmp_path / "kg.schema"
+    schema_path.write_text(
+        """@graph id=deck
+@slides
+intro: Intro
+\tnodes=n1,n2
+\tdesc=|
+\t\t**Why this slide matters**
+
+\t\t- Shows the first arc
+\t\t- Names the follow-up
+""",
+        encoding="utf-8",
+    )
+
+    graph = read_kg_pack(schema_path)
+
+    assert graph["slides"][0]["nodes"] == ["n1", "n2"]
+    assert graph["slides"][0]["desc"] == "**Why this slide matters**\n\n- Shows the first arc\n- Names the follow-up"
+
+
 def test_kg_pack_nodes_reject_duplicate_child_with_conflicting_label(tmp_path):
     nodes_path = tmp_path / "bad.kg.nodes"
     nodes_path.write_text("b1: Building\n    p1: Person\np1: Parking\n", encoding="utf-8")

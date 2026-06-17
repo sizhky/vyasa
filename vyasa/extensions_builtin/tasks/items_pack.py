@@ -128,7 +128,11 @@ def read_schema(path: str | Path) -> KgSchema:
     current_source_attrs = False
     current_view: KgView | None = None
     current_slide: dict[str, Any] | None = None
-    for raw in path.read_text(encoding="utf-8").splitlines():
+    raw_lines = path.read_text(encoding="utf-8").splitlines()
+    raw_index = 0
+    while raw_index < len(raw_lines):
+        raw = raw_lines[raw_index]
+        raw_index += 1
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         line = raw.strip()
@@ -163,7 +167,12 @@ def read_schema(path: str | Path) -> KgSchema:
                 payload = _view_assignment(line)
                 _update_view(current_view, payload)
             elif section == "@slides" and current_slide is not None:
-                for key, value in _view_assignment(line).items():
+                slide_indent = _indent_width(raw)
+                payload = _view_assignment(line)
+                for key, value in payload.items():
+                    if value == "|":
+                        value, skip_count = _read_indented_multiline(raw_lines, raw_index, slide_indent)
+                        raw_index += skip_count
                     current_slide[key] = _list_value(value) if key == "nodes" else value
             continue
         if section == "@sources":
@@ -251,14 +260,8 @@ def read_nodes(path: str | Path) -> list[dict[str, str]]:
             if not key:
                 continue
             if value == "|":
-                block_lines = []
-                while line_index < len(raw_lines):
-                    block_line = raw_lines[line_index]
-                    if block_line.strip() and _indent_width(block_line) <= indent:
-                        break
-                    block_lines.append(block_line)
-                    line_index += 1
-                value = textwrap.dedent("\n".join(block_lines)).strip("\n")
+                value, skip_count = _read_indented_multiline(raw_lines, line_index, indent)
+                line_index += skip_count
             current[key] = value
             if key == "inherit":
                 current["__inherit_keys__"] = _list_value(value)
@@ -266,6 +269,18 @@ def read_nodes(path: str | Path) -> list[dict[str, str]]:
         if ":" in line:
             raise ValueError(f"{path}: invalid node line {line!r}; node children must use '<id>: <label>' with a valid id")
     return list(nodes_by_id.values())
+
+
+def _read_indented_multiline(raw_lines: list[str], start_index: int, parent_indent: int) -> tuple[str, int]:
+    block_lines = []
+    line_index = start_index
+    while line_index < len(raw_lines):
+        block_line = raw_lines[line_index]
+        if block_line.strip() and _indent_width(block_line) <= parent_indent:
+            break
+        block_lines.append(block_line)
+        line_index += 1
+    return textwrap.dedent("\n".join(block_lines)).strip("\n"), line_index - start_index
 
 
 def read_edges(path: str | Path, relations: dict[str, dict[str, str]] | None = None) -> list[dict[str, str]]:

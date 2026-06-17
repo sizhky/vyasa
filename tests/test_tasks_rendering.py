@@ -6,6 +6,7 @@ import re
 from textwrap import dedent
 
 from vyasa.extensions_builtin.markdown.renderer import from_md
+from vyasa.extensions_builtin.tasks.api import _compile_schema_payload
 
 
 def test_tasks_block_renders_widget_payload_without_summary():
@@ -944,6 +945,62 @@ items_schema: {tmp_path / "kg.schema"}
     assert "<ul>" in desc_html
     assert "<strong>Polymorphic malware</strong>" in desc_html
     assert "<strong>DGA domains</strong>" in desc_html
+
+
+def test_tasks_block_serializes_rendered_slide_description_markdown(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        """@graph id=deck
+@sources
+nodes=kg.nodes
+@slides
+intro: Intro
+\tnodes=t1
+\tdesc=|
+\t\t**Presenter frame**
+
+\t\t- First point
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text("t1: Start\n", encoding="utf-8")
+
+    md = f"""```items
+---
+items_schema: {tmp_path / "kg.schema"}
+---
+```"""
+
+    rendered = to_xml(from_md(md, current_path=tmp_path / "graph.md"))
+    match = re.search(r"""data-tasks-payload=(["'])(.*?)\1""", rendered)
+
+    assert match is not None
+    payload = json.loads(html.unescape(match.group(2)))
+    desc_html = payload["slides"][0]["__rendered_attrs__"]["desc"]
+    assert "<strong>Presenter frame</strong>" in desc_html
+    assert "<li>First point</li>" in desc_html
+
+
+def test_tasks_api_payload_serializes_rendered_slide_description_markdown(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        """@graph id=deck
+@sources
+nodes=kg.nodes
+@slides
+intro: Intro
+\tnodes=t1
+\tdesc=|
+\t\t- First point
+\t\t- Second point
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text("t1: Start\n", encoding="utf-8")
+
+    model, _graph = _compile_schema_payload(tmp_path / "kg.schema", str(tmp_path / "graph.md"))
+
+    desc_html = model["slides"][0]["__rendered_attrs__"]["desc"]
+    assert "<li>First point</li>" in desc_html
+    assert "<li>Second point</li>" in desc_html
 
 
 def test_tasks_block_serializes_document_path_and_stable_storage_id():

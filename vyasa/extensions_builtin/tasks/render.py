@@ -80,6 +80,20 @@ def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
             _attach_rendered_node_attrs(projection_model, current_path)
 
 
+def _attach_rendered_slide_attrs(model: dict, current_path: str | None) -> None:
+    for slide in model.get("slides", []):
+        rendered_attrs = {}
+        for key in ("desc", "description"):
+            value = slide.get(key)
+            if isinstance(value, str) and value.strip():
+                rendered_attrs[key] = _render_markdown_fragment(
+                    _prepare_node_attr_markdown(value),
+                    current_path=current_path,
+                )
+        if rendered_attrs:
+            slide["__rendered_attrs__"] = rendered_attrs
+
+
 def _should_open_filters_by_default(width_value) -> bool:
     width_text = str(width_value or "").strip().lower()
     match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)vw", width_text)
@@ -134,6 +148,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         apply_edge_label_fallbacks(model)
         normalize_items_model_hrefs(model, current_path)
         _attach_rendered_node_attrs(model, current_path)
+        _attach_rendered_slide_attrs(model, current_path)
         graph = build_collapsed_graph(model)
     except Exception:
         model = {

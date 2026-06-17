@@ -6761,6 +6761,8 @@ async function renderTasksGraphs(rootElement = document) {
                 if (!slides.length || slideIndex < 0) return null;
                 const navBtn = (disabled) => ({ border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 88%, transparent)', borderRadius: '7px', padding: '5px 11px', fontSize: '12px', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1 });
                 const slide = slides[slideIndex] || {};
+                const slideDescriptionHtml = slide.__rendered_attrs__?.desc || slide.__rendered_attrs__?.description || '';
+                const slideDescriptionText = slide.desc || slide.description || '';
                 const close = () => { setSlideIndex(-1); setSelectedNodeId(null); setSelectedNodeIds(new Set()); };
                 const go = (delta) => setSlideIndex((index) => Math.min(slides.length - 1, Math.max(0, index + delta)));
                 const panelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`;
@@ -6773,7 +6775,9 @@ async function renderTasksGraphs(rootElement = document) {
                     ),
                     window.React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' } },
                         slide.caption ? window.React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, opacity: 0.85, marginBottom: '10px' } }, slide.caption) : null,
-                        slide.desc ? window.React.createElement('div', { style: { fontSize: '13.5px', lineHeight: 1.55, opacity: 0.92, marginBottom: '12px' } }, slide.desc) : null,
+                        slideDescriptionHtml
+                            ? window.React.createElement('div', { style: { fontSize: '13.5px', lineHeight: 1.55, opacity: 0.92, marginBottom: '12px' }, dangerouslySetInnerHTML: { __html: slideDescriptionHtml } })
+                            : (slideDescriptionText ? window.React.createElement('div', { style: { fontSize: '13.5px', lineHeight: 1.55, opacity: 0.92, marginBottom: '12px' } }, slideDescriptionText) : null),
                         window.React.createElement('label', { style: { display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: '6px', marginTop: 'auto', paddingTop: '12px', minHeight: '50%' } },
                             window.React.createElement('span', { style: { fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.62 } }, 'Notes'),
                             window.React.createElement('textarea', {

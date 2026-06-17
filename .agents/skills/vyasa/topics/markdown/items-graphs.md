@@ -81,6 +81,24 @@ dependency:
 - `group_by,color_by=status` expands to `group_by=status color_by=status`; `X,Y,Z=value` is valid for simple scalar values.
 - Projection display controls may live on views: `hover_attrs`, `edge_color_by`, `edge_label_from`, `aggregate_edges`, `default_open_depth`, and spacing/layout keys.
 
+## Slides
+
+`@slides` entries can carry `nodes`, `caption`, and `desc` / `description`.
+Use the same multiline mini-Markdown form as node attrs for longer slide descriptions:
+
+```text
+@slides
+intro: Why this graph matters
+	nodes=n1,n2
+	desc=|
+		**Presenter frame**
+
+		- First point to land
+		- Follow-up question
+```
+
+Slide descriptions render Markdown in the KG slide card.
+
 ## Nodes
 
 `roadmap.kg.nodes` is markerless because the filename already declares record kind:
