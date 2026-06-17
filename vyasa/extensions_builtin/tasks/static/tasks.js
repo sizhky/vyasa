@@ -5334,7 +5334,13 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'f') {
                             event.preventDefault();
-                            reactFlow.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true });
+                            const selectedIds = new Set([selectedNodeIdRef.current, ...selectedNodeIdsRef.current].filter(Boolean));
+                            const matched = selectedIds.size
+                                ? (graphBaseRef.current.nodes || []).filter((node) => node?.id && node.data?.__kind__ !== 'groupTitle' && selectedIds.has(node.id))
+                                : [];
+                            reactFlow.fitView(matched.length
+                                ? { nodes: matched, duration: 200, padding: 0.25, includeHiddenNodes: true }
+                                : { duration: 200, padding: 0.2, includeHiddenNodes: true });
                             return;
                         }
                         if (event.key === '?' || (event.key === '/' && event.shiftKey)) {
@@ -6696,7 +6702,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const go = (delta) => setSlideIndex((index) => Math.min(slides.length - 1, Math.max(0, index + delta)));
                 const panelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`;
                 return window.React.createElement('aside', {
-                    style: { flex: `0 0 ${panelWidth}`, width: panelWidth, minWidth: 0, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: '16px', borderRadius: '14px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 26%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 95%, transparent)', boxShadow: '0 14px 36px rgba(0,0,0,0.16)', pointerEvents: 'auto' },
+                    style: { flex: `0 0 ${panelWidth}`, width: panelWidth, minWidth: 0, height: '100%', marginLeft: '-12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: '16px', borderRadius: '14px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 26%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 95%, transparent)', boxShadow: '0 14px 36px rgba(0,0,0,0.16)', pointerEvents: 'auto' },
                 },
                     window.React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' } },
                         window.React.createElement('strong', { style: { fontSize: '16px' } }, slide.title || `Slide ${slideIndex + 1}`),
