@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy } from '/static/extensions/tasks/tasks_graph_core.js';
 
 const tasksElk = new ELK();
 let tasksReactFlowReady = null;
@@ -6284,6 +6284,11 @@ async function renderTasksGraphs(rootElement = document) {
                     groupToggleHoverIdRef.current = hoverGroupId || '';
                     setTasksGroupToggleHover(wrapper, hoverGroupId);
                 }
+                const liveNode = nodes.find((node) => node.id === hit.node.id) || hit.node;
+                if (!tasksGraphNodeAllowsHover(liveNode)) {
+                    clearGroupHoverTooltip();
+                    return;
+                }
                 const rows = tasksHoverAttrRows(nodeData, activeHoverAttrs);
                 const label = nodeData.label || hit.node.id;
                 const nodeId = nodeData.__kind__ === 'groupTitle' ? (nodeData.sourceGroupId || hit.node.id) : hit.node.id;
@@ -6301,7 +6306,7 @@ async function renderTasksGraphs(rootElement = document) {
                     x: event.clientX - bounds.left + 12,
                     y: event.clientY - bounds.top + 18,
                 });
-            }, [expanded, clearGroupHoverTooltip, activeHoverAttrs]);
+            }, [expanded, clearGroupHoverTooltip, activeHoverAttrs, nodes]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -6363,6 +6368,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, [expanded, selectGroupDescendants]);
             const focusNeighborEdge = React.useCallback((_, node) => {
                 if (!node?.id) return;
+                if (!tasksGraphNodeAllowsHover(node)) return;
                 if (!isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id))) return;
                 const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
                 if (!selectedNodeId) {
@@ -6386,6 +6392,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);
             }, [expanded, selectedNodeId]);
             const clearNeighborEdgeFocus = React.useCallback((_, node) => {
+                if (!tasksGraphNodeAllowsHover(node)) return;
                 if (!isTasksGraphNodeSelectable(node?.data?.__kind__, expanded.has(node?.id))) return;
                 clearGroupHoverTooltip();
                 if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);

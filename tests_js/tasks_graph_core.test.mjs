@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 
 function fakeStorage(initial = {}) {
     const values = new Map(Object.entries(initial));
@@ -390,6 +390,13 @@ test('group panels use selectable hit areas in items graph', () => {
     assert.equal(tasksGraphNodeHitArea('group', false), 'selectable');
     assert.equal(tasksGraphNodeHitArea('group', true), 'selectable');
     assert.equal(tasksGraphNodeHitArea('groupTitle'), 'control');
+});
+
+test('dimmed Knowledge Graph nodes do not accept hover behavior', () => {
+    assert.equal(tasksGraphNodeAllowsHover({ data: { highlightMode: 'selected' } }), true);
+    assert.equal(tasksGraphNodeAllowsHover({ data: { highlightMode: 'neighbor' } }), true);
+    assert.equal(tasksGraphNodeAllowsHover({ data: { highlightMode: 'dim' } }), false);
+    assert.equal(tasksGraphNodeAllowsHover({ data: {} }), true);
 });
 
 test('expanded root group keeps collapsed top-left anchored', () => {
