@@ -19,29 +19,24 @@ function fakeStorage(initial = {}) {
 test('Knowledge Graph notes backup round-trips one graph preference record', () => {
     const graphKey = 'vyasa:tasks:prefs:doc::graph-a';
     const storage = fakeStorage({
-        [graphKey]: JSON.stringify({ nodeNotes: { a: 'first note' }, nodeStates: { a: 'Done' }, projectionId: 'main' }),
+        [graphKey]: JSON.stringify({ nodeNotes: { a: 'first note' }, slideNotes: { intro: 'slide note' }, nodeStates: { a: 'Done' }, projectionId: 'main' }),
         'vyasa:tasks:prefs:doc::graph-b': JSON.stringify({ nodeNotes: { b: 'second note' } }),
     });
-    const backup = collectTasksStoredNotes(storage, graphKey, { a: 'Alpha title' });
-    assert.deepEqual(backup, {
-        format: 'vyasa-kg-notes',
-        version: 3,
-        notes: { a: { title: 'Alpha title', note: 'first note' } },
-        states: { a: { title: 'Alpha title', state: 'Done' } },
-    });
+    const backup = collectTasksStoredNotes(storage, graphKey, { a: 'Alpha title' }, { intro: 'Intro slide' });
+    assert.equal(backup, '!vyasa-notes 4\n\n@ node a [Done] Alpha title\n  first note\n\n@ slide intro Intro slide\n  slide note\n');
 
     const target = fakeStorage({
         [graphKey]: JSON.stringify({ nodeNotes: { existing: 'keep me' }, nodeStates: { existing: 'Review' }, projectionId: 'main' }),
     });
-    const staleTitleBackup = structuredClone(backup);
-    staleTitleBackup.notes.a.title = 'Old title that no longer matches';
-    assert.equal(importTasksStoredNotes(target, graphKey, staleTitleBackup), 2);
+    const staleTitleBackup = backup.replace('Alpha title', 'Old title that no longer matches');
+    assert.equal(importTasksStoredNotes(target, graphKey, staleTitleBackup), 3);
     const restored = JSON.parse(target.getItem(graphKey));
     assert.deepEqual(restored.nodeNotes, { existing: 'keep me', a: 'first note' });
+    assert.deepEqual(restored.slideNotes, { intro: 'slide note' });
     assert.deepEqual(restored.nodeStates, { existing: 'Review', a: 'Done' });
     assert.equal(restored.projectionId, 'main');
     assert.throws(
-        () => importTasksStoredNotes(target, graphKey, { format: 'vyasa-kg-notes', version: 1, nodeNotes: { a: 'old' } }),
+        () => importTasksStoredNotes(target, graphKey, '!vyasa-notes 3'),
         /Invalid Vyasa Knowledge Graph notes backup/
     );
 });

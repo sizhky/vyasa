@@ -268,18 +268,33 @@ function normalizeStoredNodeStates(value) {
         .filter(([nodeId, state]) => nodeId && state));
 }
 
-export function collectTasksStoredNotes(storage, storageKey, nodeTitles = {}) {
+function normalizeStoredSlideNotes(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value)
+        .map(([slideId, note]) => [String(slideId || '').trim(), String(note || '')])
+        .filter(([slideId, note]) => slideId && note.trim()));
+}
+
+export function collectTasksStoredNotes(storage, storageKey, nodeTitles = {}, slideTitles = {}) {
     const prefs = JSON.parse(storage.getItem(storageKey) || '{}');
     const nodeNotes = normalizeStoredNodeNotes(prefs?.nodeNotes);
+    const slideNotes = normalizeStoredSlideNotes(prefs?.slideNotes);
     const nodeStates = normalizeStoredNodeStates(prefs?.nodeStates);
     const nodeIds = Array.from(new Set([...Object.keys(nodeNotes), ...Object.keys(nodeStates)]));
-    const stanzas = nodeIds.map((nodeId) => {
+    const slideIds = Object.keys(slideNotes);
+    const nodeStanzas = nodeIds.map((nodeId) => {
         const state = nodeStates[nodeId] ? ` [${nodeStates[nodeId]}]` : '';
         const title = String(nodeTitles[nodeId] || '').trim();
-        const header = `@ ${nodeId}${state}${title && title !== nodeId ? ` ${title}` : ''}`;
+        const header = `@ node ${nodeId}${state}${title && title !== nodeId ? ` ${title}` : ''}`;
         const note = nodeNotes[nodeId];
         return note ? `${header}\n${note.split('\n').map((line) => `  ${line}`).join('\n')}` : header;
     });
+    const slideStanzas = slideIds.map((slideId) => {
+        const title = String(slideTitles[slideId] || '').trim();
+        const header = `@ slide ${slideId}${title && title !== slideId ? ` ${title}` : ''}`;
+        return `${header}\n${slideNotes[slideId].split('\n').map((line) => `  ${line}`).join('\n')}`;
+    });
+    const stanzas = [...nodeStanzas, ...slideStanzas];
     return `!vyasa-notes 4\n${stanzas.length ? `\n${stanzas.join('\n\n')}\n` : ''}`;
 }
 
@@ -289,27 +304,36 @@ export function importTasksStoredNotes(storage, storageKey, backup) {
         throw new Error('Invalid Vyasa Knowledge Graph notes backup.');
     }
     const imported = {};
+    const importedSlides = {};
     const importedStates = {};
     let current = null;
+    let currentKind = 'node';
     for (const line of lines) {
-        const header = line.match(/^@\s+(\S+)(?:\s+\[([^\]]+)\])?(?:\s+.*)?$/);
+        const header = line.match(/^@\s+(?:(node|slide)\s+)?(\S+)(?:\s+\[([^\]]+)\])?(?:\s+.*)?$/);
         if (header) {
-            current = header[1];
-            if (header[2]?.trim()) importedStates[current] = header[2].trim();
+            currentKind = header[1] === 'slide' ? 'slide' : 'node';
+            current = header[2];
+            if (currentKind === 'node' && header[3]?.trim()) importedStates[current] = header[3].trim();
         } else if (!line.trim() || line.startsWith('  ')) {
-            if (current !== null) imported[current] = `${imported[current] ? `${imported[current]}\n` : ''}${line.slice(0, 2) === '  ' ? line.slice(2) : ''}`;
+            if (current !== null) {
+                const bucket = currentKind === 'slide' ? importedSlides : imported;
+                bucket[current] = `${bucket[current] ? `${bucket[current]}\n` : ''}${line.slice(0, 2) === '  ' ? line.slice(2) : ''}`;
+            }
         } else {
             throw new Error('Invalid Vyasa Knowledge Graph notes backup.');
         }
     }
     for (const nodeId of Object.keys(imported)) imported[nodeId] = imported[nodeId].replace(/\n+$/, '');
+    for (const slideId of Object.keys(importedSlides)) importedSlides[slideId] = importedSlides[slideId].replace(/\n+$/, '');
     const currentPrefs = JSON.parse(storage.getItem(storageKey) || '{}');
     const nodeNotes = normalizeStoredNodeNotes(imported);
+    const slideNotes = normalizeStoredSlideNotes(importedSlides);
     const nodeStates = normalizeStoredNodeStates(importedStates);
     currentPrefs.nodeNotes = { ...normalizeStoredNodeNotes(currentPrefs.nodeNotes), ...nodeNotes };
+    currentPrefs.slideNotes = { ...normalizeStoredSlideNotes(currentPrefs.slideNotes), ...slideNotes };
     currentPrefs.nodeStates = { ...normalizeStoredNodeStates(currentPrefs.nodeStates), ...nodeStates };
     storage.setItem(storageKey, JSON.stringify(currentPrefs));
-    return Object.keys(nodeNotes).length + Object.keys(nodeStates).length;
+    return Object.keys(nodeNotes).length + Object.keys(slideNotes).length + Object.keys(nodeStates).length;
 }
 
 export function resolveTasksNodeImage(node, model, imageByOverride = null, paletteOverride = null) {

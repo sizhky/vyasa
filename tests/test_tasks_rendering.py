@@ -665,17 +665,21 @@ def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():
 def test_tasks_notes_support_graph_scoped_text_download_and_upload():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "collectTasksStoredNotes(storage, storageKey, nodeTitles)" in source
+    assert "collectTasksStoredNotes(storage, storageKey, nodeTitles, slideTitles)" in source
+    assert "prefs.slideNotes = normalizeTasksNodeNotes(slideNotes);" in source
+    assert "slideNotes: normalizeTasksNodeNotes(prefs.slideNotes)" in source
     assert "String(node.label || node.title || node.id)" in source
     assert "importTasksStoredNotes(storage, storageKey, backup)" in source
     assert "prefs.nodeStates = normalizeTasksNodeStates(nodeStates, normalizeTasksCardStates(model));" in source
     assert "filename: `vyasa-kg-notes-${graphName}.txt`" in source
     assert "showTasksToast(`Downloaded ${filename}`)" in source
-    assert "buildTasksNodeNotesBackup(sourceModel, latestNodeNotes(), nodeStates).text" in source
+    assert "buildTasksNodeNotesBackup(sourceModel, latestNodeNotes(), nodeStates, latestSlideNotes()).text" in source
     assert "showTasksToast('Copied notes')" in source
     assert "toast.id = 'vyasa-tasks-toast'" in source
     assert "input.accept = '.txt,text/plain,application/json'" in source
     assert "nodeStates: normalizeTasksNodeStates(prefs.nodeStates, cardStates)" in source
+    assert "setSlideNotes(imported.slideNotes);" in source
+    assert "Object.keys(nodeNotes).length + Object.keys(slideNotes).length" in source
     assert "setNodeStates(imported.nodeStates);" in source
     assert "onClick: handleExportNodeNotes" in source
     assert "onClick: handleImportNodeNotes" in source

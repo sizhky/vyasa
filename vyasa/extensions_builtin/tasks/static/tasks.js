@@ -418,12 +418,13 @@ function showTasksToast(message) {
     }, 1800);
 }
 
-function buildTasksNodeNotesBackup(model, nodeNotes, nodeStates) {
+function buildTasksNodeNotesBackup(model, nodeNotes, nodeStates, slideNotes = {}) {
     const storage = tasksGetStorage();
     const storageKey = tasksPrefsKey(model);
     if (!storage || !storageKey) throw new Error('Browser storage is unavailable for this Knowledge Graph.');
     const prefs = JSON.parse(storage.getItem(storageKey) || '{}');
     prefs.nodeNotes = normalizeTasksNodeNotes(nodeNotes);
+    prefs.slideNotes = normalizeTasksNodeNotes(slideNotes);
     prefs.nodeStates = normalizeTasksNodeStates(nodeStates, normalizeTasksCardStates(model));
     storage.setItem(storageKey, JSON.stringify(prefs));
     const nodeTitles = Object.fromEntries(
@@ -431,7 +432,12 @@ function buildTasksNodeNotesBackup(model, nodeNotes, nodeStates) {
             .filter((node) => node?.id)
             .map((node) => [String(node.id), String(node.label || node.title || node.id)])
     );
-    const backup = collectTasksStoredNotes(storage, storageKey, nodeTitles);
+    const slideTitles = Object.fromEntries(
+        (Array.isArray(model?.slides) ? model.slides : [])
+            .filter((slide) => slide?.id)
+            .map((slide) => [String(slide.id), String(slide.title || slide.caption || slide.id)])
+    );
+    const backup = collectTasksStoredNotes(storage, storageKey, nodeTitles, slideTitles);
     const graphName = String(model?.persistence_id || model?.graph_id || 'graph')
         .trim().replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'graph';
     return {
@@ -440,8 +446,8 @@ function buildTasksNodeNotesBackup(model, nodeNotes, nodeStates) {
     };
 }
 
-function downloadTasksNodeNotes(model, nodeNotes, nodeStates) {
-    const { filename, text } = buildTasksNodeNotesBackup(model, nodeNotes, nodeStates);
+function downloadTasksNodeNotes(model, nodeNotes, nodeStates, slideNotes = {}) {
+    const { filename, text } = buildTasksNodeNotesBackup(model, nodeNotes, nodeStates, slideNotes);
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const href = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -472,6 +478,7 @@ function uploadTasksNodeNotes(model, cardStates) {
                 const prefs = readTasksPrefs(model);
                 resolve({
                     nodeNotes: normalizeTasksNodeNotes(prefs.nodeNotes),
+                    slideNotes: normalizeTasksNodeNotes(prefs.slideNotes),
                     nodeStates: normalizeTasksNodeStates(prefs.nodeStates, cardStates),
                 });
             } catch (error) {
@@ -609,6 +616,10 @@ function normalizeTasksNodeNotes(value) {
         .filter(([nodeId, note]) => nodeId && note.trim()));
 }
 
+function normalizeTasksSlideNotes(value) {
+    return normalizeTasksNodeNotes(value);
+}
+
 function tasksHasAnyNodeNote(nodeNotes) {
     return Object.values(nodeNotes || {}).some((note) => String(note || '').trim());
 }
@@ -669,6 +680,7 @@ function writeTasksPrefs(model, prefs) {
         ? prefs.nodeStates
         : {};
     const nodeNotes = normalizeTasksNodeNotes(prefs?.nodeNotes);
+    const slideNotes = normalizeTasksSlideNotes(prefs?.slideNotes);
     const payload = JSON.stringify({
         version: 1,
         projectionId,
@@ -678,6 +690,7 @@ function writeTasksPrefs(model, prefs) {
         projectionPrefs,
         nodeStates,
         nodeNotes,
+        slideNotes,
     });
     const attempt = () => {
         storage.setItem(key, payload);
@@ -3662,6 +3675,7 @@ async function renderTasksGraphs(rootElement = document) {
                 typeof projectionPrefs?.searchQuery === 'string' ? projectionPrefs.searchQuery : ''
             ));
             const [nodeNotes, setNodeNotes] = React.useState(() => normalizeTasksNodeNotes(sourcePrefsRef.current?.nodeNotes));
+            const [slideNotes, setSlideNotes] = React.useState(() => normalizeTasksSlideNotes(sourcePrefsRef.current?.slideNotes));
             const [activeColorBy, setActiveColorBy] = React.useState(() => (
                 resolveTasksPreferredColorBy(model, activeProjectionId, projectionPrefs, nodeNotes)
             ));
@@ -3706,6 +3720,7 @@ async function renderTasksGraphs(rootElement = document) {
                 return Object.fromEntries(checkedIds.map((nodeId) => [nodeId, cardStates[1] || TASKS_DEFAULT_CARD_STATES[1]]));
             });
             const [noteInputValue, setNoteInputValue] = React.useState('');
+            const [slideNoteInputValue, setSlideNoteInputValue] = React.useState('');
             const [clearedNote, setClearedNote] = React.useState(null);
             const [allClearedNotes, setAllClearedNotes] = React.useState(null);
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
@@ -3890,6 +3905,7 @@ async function renderTasksGraphs(rootElement = document) {
                     projectionPrefs: nextProjectionPrefs,
                     nodeStates,
                     nodeNotes,
+                    slideNotes,
                 };
                 storedProjectionPrefsRef.current = nextProjectionPrefs;
                 writeTasksPrefs(sourceModel, {
@@ -3900,9 +3916,10 @@ async function renderTasksGraphs(rootElement = document) {
                     projectionPrefs: nextProjectionPrefs,
                     nodeStates,
                     nodeNotes,
+                    slideNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchQuery, activeColorBy, activeSecondaryColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeAnimationEnabled, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes]);
+            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchQuery, activeColorBy, activeSecondaryColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeAnimationEnabled, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
@@ -3977,6 +3994,10 @@ async function renderTasksGraphs(rootElement = document) {
                 const selected = (graphBaseRef.current.nodes || []).find((node) => node.id === selectedNodeId)?.data;
                 return tasksLogicalNodeId(selected, selectedNodeId);
             }, [selectedNodeId, graphRevision]);
+            const activeSlideId = React.useMemo(() => {
+                const slide = slideIndex >= 0 ? slides[slideIndex] : null;
+                return String(slide?.id || '').trim();
+            }, [slideIndex, slides]);
             const toggleCheckedNode = React.useCallback((nodeId) => {
                 const normalizedId = String(nodeId || '').trim();
                 if (!normalizedId) return;
@@ -4002,6 +4023,17 @@ async function renderTasksGraphs(rootElement = document) {
                     return next;
                 });
             }, []);
+            const updateSlideNote = React.useCallback((slideId, note) => {
+                const normalizedId = String(slideId || '').trim();
+                if (!normalizedId) return;
+                setSlideNotes((current) => {
+                    const next = { ...(current || {}) };
+                    const text = String(note || '');
+                    if (text.trim()) next[normalizedId] = text;
+                    else delete next[normalizedId];
+                    return next;
+                });
+            }, []);
             const latestNodeNotes = React.useCallback(() => {
                 const latest = { ...nodeNotes };
                 const selectedId = selectedLogicalNodeId;
@@ -4011,28 +4043,37 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 return latest;
             }, [nodeNotes, selectedLogicalNodeId, noteInputValue]);
+            const latestSlideNotes = React.useCallback(() => {
+                const latest = { ...slideNotes };
+                if (activeSlideId) {
+                    if (slideNoteInputValue.trim()) latest[activeSlideId] = slideNoteInputValue;
+                    else delete latest[activeSlideId];
+                }
+                return latest;
+            }, [slideNotes, activeSlideId, slideNoteInputValue]);
             const handleExportNodeNotes = React.useCallback(() => {
                 try {
-                    const filename = downloadTasksNodeNotes(sourceModel, latestNodeNotes(), nodeStates);
+                    const filename = downloadTasksNodeNotes(sourceModel, latestNodeNotes(), nodeStates, latestSlideNotes());
                     showTasksToast(`Downloaded ${filename}`);
                 } catch (error) {
                     window.alert(error instanceof Error ? error.message : String(error));
                 }
-            }, [sourceModel, latestNodeNotes, nodeStates]);
+            }, [sourceModel, latestNodeNotes, nodeStates, latestSlideNotes]);
             const handleCopyNodeNotes = React.useCallback(async () => {
                 try {
-                    const copied = await copyTasksText(buildTasksNodeNotesBackup(sourceModel, latestNodeNotes(), nodeStates).text);
+                    const copied = await copyTasksText(buildTasksNodeNotesBackup(sourceModel, latestNodeNotes(), nodeStates, latestSlideNotes()).text);
                     if (!copied) throw new Error('Could not copy Knowledge Graph notes.');
                     showTasksToast('Copied notes');
                 } catch (error) {
                     window.alert(error instanceof Error ? error.message : String(error));
                 }
-            }, [sourceModel, latestNodeNotes, nodeStates]);
+            }, [sourceModel, latestNodeNotes, nodeStates, latestSlideNotes]);
             const handleImportNodeNotes = React.useCallback(async () => {
                 try {
                     const imported = await uploadTasksNodeNotes(sourceModel, cardStates);
                     if (imported) {
                         setNodeNotes(imported.nodeNotes);
+                        setSlideNotes(imported.slideNotes);
                         setNodeStates(imported.nodeStates);
                     }
                 } catch (error) {
@@ -4040,19 +4081,24 @@ async function renderTasksGraphs(rootElement = document) {
                 }
             }, [sourceModel, cardStates]);
             const handleClearAllNotes = React.useCallback(() => {
-                const snapshot = latestNodeNotes();
-                if (!Object.keys(snapshot).length) return;
-                setAllClearedNotes(snapshot);
+                const nodeSnapshot = latestNodeNotes();
+                const slideSnapshot = latestSlideNotes();
+                if (!Object.keys(nodeSnapshot).length && !Object.keys(slideSnapshot).length) return;
+                setAllClearedNotes({ nodeNotes: nodeSnapshot, slideNotes: slideSnapshot });
                 setNodeNotes({});
+                setSlideNotes({});
                 setNoteInputValue('');
+                setSlideNoteInputValue('');
                 setClearedNote(null);
-            }, [latestNodeNotes]);
+            }, [latestNodeNotes, latestSlideNotes]);
             const handleUndoClearAllNotes = React.useCallback(() => {
                 if (!allClearedNotes) return;
-                setNodeNotes(allClearedNotes);
-                if (selectedLogicalNodeId && allClearedNotes[selectedLogicalNodeId]) setNoteInputValue(allClearedNotes[selectedLogicalNodeId]);
+                setNodeNotes(allClearedNotes.nodeNotes || {});
+                setSlideNotes(allClearedNotes.slideNotes || {});
+                if (selectedLogicalNodeId && allClearedNotes.nodeNotes?.[selectedLogicalNodeId]) setNoteInputValue(allClearedNotes.nodeNotes[selectedLogicalNodeId]);
+                if (activeSlideId && allClearedNotes.slideNotes?.[activeSlideId]) setSlideNoteInputValue(allClearedNotes.slideNotes[activeSlideId]);
                 setAllClearedNotes(null);
-            }, [allClearedNotes, selectedLogicalNodeId]);
+            }, [allClearedNotes, selectedLogicalNodeId, activeSlideId]);
             const resetProjectionControls = React.useCallback(() => {
                 const defaults = tasksProjectionSchemaPrefs(sourceModel, activeProjectionId);
                 const defaultSearch = typeof defaults.searchQuery === 'string' ? defaults.searchQuery : '';
@@ -4084,12 +4130,22 @@ async function renderTasksGraphs(rootElement = document) {
                 setClearedNote(null);
             }, [selectedLogicalNodeId, nodeNotes]);
             React.useEffect(() => {
+                setSlideNoteInputValue(slideNotes[activeSlideId] || '');
+            }, [activeSlideId, slideNotes]);
+            React.useEffect(() => {
                 if (!selectedLogicalNodeId) return undefined;
                 const timeoutId = window.setTimeout(() => {
                     updateNodeNote(selectedLogicalNodeId, noteInputValue);
                 }, 180);
                 return () => window.clearTimeout(timeoutId);
             }, [selectedLogicalNodeId, noteInputValue, updateNodeNote]);
+            React.useEffect(() => {
+                if (!activeSlideId) return undefined;
+                const timeoutId = window.setTimeout(() => {
+                    updateSlideNote(activeSlideId, slideNoteInputValue);
+                }, 180);
+                return () => window.clearTimeout(timeoutId);
+            }, [activeSlideId, slideNoteInputValue, updateSlideNote]);
             React.useLayoutEffect(() => {
                 const textarea = noteTextareaRef.current;
                 if (!textarea) return;
@@ -5913,14 +5969,14 @@ async function renderTasksGraphs(rootElement = document) {
                                         onClick: handleUndoClearAllNotes,
                                         style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--vyasa-primary)', fontWeight: 600, padding: '2px', lineHeight: 1 },
                                     }, 'Undo') : null,
-                                    Object.keys(nodeNotes).length ? React.createElement('button', {
+                                    (Object.keys(nodeNotes).length || Object.keys(slideNotes).length) ? React.createElement('button', {
                                         type: 'button',
                                         title: 'Clear all notes',
                                         'aria-label': 'Clear all notes',
                                         onClick: handleClearAllNotes,
                                         style: { display: 'inline-flex', border: 'none', background: 'none', color: 'inherit', padding: '2px', cursor: 'pointer', fontSize: '13px', opacity: 0.45, lineHeight: 1 },
                                     }, '×') : null,
-                                    React.createElement('span', { style: { marginLeft: 'auto', opacity: 0.65, fontSize: '11px' } }, `${Object.keys(nodeNotes).length} saved`)
+                                    React.createElement('span', { style: { marginLeft: 'auto', opacity: 0.65, fontSize: '11px' } }, `${Object.keys(nodeNotes).length + Object.keys(slideNotes).length} saved`)
                                 )
                             )
                         ),
@@ -6710,7 +6766,16 @@ async function renderTasksGraphs(rootElement = document) {
                     ),
                     window.React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto' } },
                         slide.caption ? window.React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, opacity: 0.85, marginBottom: '10px' } }, slide.caption) : null,
-                        slide.desc ? window.React.createElement('div', { style: { fontSize: '13.5px', lineHeight: 1.55, opacity: 0.92 } }, slide.desc) : null
+                        slide.desc ? window.React.createElement('div', { style: { fontSize: '13.5px', lineHeight: 1.55, opacity: 0.92, marginBottom: '12px' } }, slide.desc) : null,
+                        window.React.createElement('label', { style: { display: 'grid', gap: '6px' } },
+                            window.React.createElement('span', { style: { fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.62 } }, 'Slide note'),
+                            window.React.createElement('textarea', {
+                                value: slideNoteInputValue,
+                                onChange: (event) => setSlideNoteInputValue(event.target.value),
+                                placeholder: 'Local slide note',
+                                style: { width: '100%', minHeight: '110px', resize: 'vertical', boxSizing: 'border-box', borderRadius: '10px', border: '1px solid color-mix(in srgb, currentColor 14%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 97%, transparent)', color: 'inherit', padding: '10px 11px', fontSize: '12.5px', lineHeight: 1.5 },
+                            })
+                        )
                     ),
                     window.React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid color-mix(in srgb, var(--vyasa-primary) 14%, transparent)' } },
                         window.React.createElement('button', { type: 'button', onClick: () => go(-1), disabled: slideIndex <= 0, style: navBtn(slideIndex <= 0) }, '‹ Prev'),
