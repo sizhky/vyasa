@@ -29,6 +29,9 @@ class KgView:
     filters_collapsed: bool | None = None
     edges_visible: bool | None = None
     edge_animation_enabled: bool | None = None
+    edge_animation_mode: str = ""
+    edge_animation_tick_steps: str = ""
+    edge_animation_tick_duration: str = ""
     edge_opacity: str = ""
     projection_unspecified_content_opacity: str = ""
     display: dict[str, str | bool] = field(default_factory=dict)
@@ -386,7 +389,8 @@ def _update_view(view: KgView, payload: dict[str, str]) -> None:
         "source", "where", "group_by", "color_by", "secondary_color_by",
         "edge_color_by", "edge_label_from", "hover_attrs", "aggregate_edges",
         "filter_query", "query_builder_enabled", "search", "filters_collapsed",
-        "edges_visible", "edge_animation_enabled", "edge_opacity",
+        "edges_visible", "edge_animation_enabled", "edge_animation_mode",
+        "edge_animation_tick_steps", "edge_animation_tick_duration", "edge_opacity",
         "projection_unspecified_content_opacity", "caption",
     }
     if "source" in payload:
@@ -423,6 +427,12 @@ def _update_view(view: KgView, payload: dict[str, str]) -> None:
     if "edge_animation_enabled" in payload:
         value = _typed_scalar(payload["edge_animation_enabled"])
         view.edge_animation_enabled = value if isinstance(value, bool) else None
+    if "edge_animation_mode" in payload:
+        view.edge_animation_mode = payload["edge_animation_mode"]
+    if "edge_animation_tick_steps" in payload:
+        view.edge_animation_tick_steps = payload["edge_animation_tick_steps"]
+    if "edge_animation_tick_duration" in payload:
+        view.edge_animation_tick_duration = payload["edge_animation_tick_duration"]
     if "edge_opacity" in payload:
         view.edge_opacity = payload["edge_opacity"]
     if "projection_unspecified_content_opacity" in payload:
@@ -453,6 +463,9 @@ def _projection(view: KgView) -> dict[str, Any]:
         "filters_collapsed": view.filters_collapsed,
         "edges_visible": view.edges_visible,
         "edge_animation_enabled": view.edge_animation_enabled,
+        "edge_animation_mode": view.edge_animation_mode,
+        "edge_animation_tick_steps": view.edge_animation_tick_steps,
+        "edge_animation_tick_duration": view.edge_animation_tick_duration,
         "edge_opacity": view.edge_opacity,
         "projection_unspecified_content_opacity": view.projection_unspecified_content_opacity,
         **view.display,

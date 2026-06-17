@@ -173,6 +173,9 @@ ownership:
     filters_collapsed=false
     edges_visible=false
     edge_animation_enabled=false
+    edge_animation_mode=tick
+    edge_animation_tick_steps=10
+    edge_animation_tick_duration=1.4
     edge_opacity=0.37
     projection_unspecified_content_opacity=0.44
 """,
@@ -206,6 +209,9 @@ items_schema: roadmap.kg.schema
     assert model["view_projections"][1]["filters_collapsed"] is False
     assert model["view_projections"][1]["edges_visible"] is False
     assert model["view_projections"][1]["edge_animation_enabled"] is False
+    assert model["view_projections"][1]["edge_animation_mode"] == "tick"
+    assert model["view_projections"][1]["edge_animation_tick_steps"] == "10"
+    assert model["view_projections"][1]["edge_animation_tick_duration"] == "1.4"
     assert model["view_projections"][1]["edge_opacity"] == "0.37"
     assert model["view_projections"][1]["projection_unspecified_content_opacity"] == "0.44"
     assert model["projection_models"]["ownership"]["model"]["edge_color_by"] == "relation"
