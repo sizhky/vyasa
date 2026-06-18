@@ -1225,6 +1225,14 @@ function initMobileMenus() {
     const postsPanel = getPostsPanel();
     const tocPanel = getTocPanel();
     const isDockedMode = () => window.matchMedia('(min-width: 1280px)').matches;
+    const pulseNavbarToggle = (kind) => {
+        document.querySelectorAll(`[data-vyasa-sidebar-toggle="${kind}"]`).forEach((button) => {
+            button.classList.remove('vyasa-sidebar-toggle-pulse');
+            void button.offsetWidth;
+            button.classList.add('vyasa-sidebar-toggle-pulse');
+            window.setTimeout(() => button.classList.remove('vyasa-sidebar-toggle-pulse'), 1600);
+        });
+    };
 
     const toggleDockedSidebar = (kind) => {
         const sidebar = document.getElementById(`${kind}-sidebar`);
@@ -1232,6 +1240,7 @@ function initMobileMenus() {
         const attr = `data-vyasa-hide-${kind}-sidebar`;
         const hidden = !document.documentElement.hasAttribute(attr);
         document.documentElement.toggleAttribute(attr, hidden);
+        if (hidden) pulseNavbarToggle(kind);
         try {
             if (hidden) localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '1');
             else localStorage.removeItem(`vyasa-${kind}-sidebar-hidden`);
@@ -1301,6 +1310,13 @@ function initMobileMenus() {
                 const tocPanel = document.getElementById('mobile-toc-panel');
                 tocPanel?.classList.remove('translate-x-0');
                 tocPanel?.classList.add('translate-x-full');
+                return;
+            }
+            const dockedSummary = event.target.closest('.vyasa-sidebar-docked > details[data-sidebar] > summary.vyasa-sidebar-toggle');
+            if (dockedSummary) {
+                event.preventDefault();
+                const kind = dockedSummary.parentElement?.dataset.sidebar;
+                if (kind) toggleDockedSidebar(kind);
             }
         });
         window.__vyasaMobileMenusBound = true;

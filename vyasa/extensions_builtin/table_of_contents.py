@@ -37,7 +37,7 @@ def _toc_panels(context):
     if context.get("oob"):
         desktop_attrs["hx_swap_oob"] = "true"
     desktop = Aside(
-        build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, shortcut_key="X"),
+        build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, data_sidebar="toc", shortcut_key="X"),
         cls=desktop_cls,
         **desktop_attrs,
     ) if toc_items else Div(**desktop_attrs)
@@ -54,7 +54,7 @@ def _toc_panels(context):
             cls="vyasa-mobile-panel-header flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800",
         ),
         Div(
-            build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
+            build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, data_sidebar="toc", shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
             cls="vyasa-mobile-panel-body p-4 overflow-y-auto",
         ),
         **mobile_attrs,
@@ -65,7 +65,7 @@ def _toc_panels(context):
 def _mobile_toc_toggle(context):
     if not context.get("show_toc", True):
         return None
-    return Button(UkIcon("panel-right", cls="w-5 h-5"), title="Toggle table of contents", cls="p-2 hover:bg-slate-800 rounded transition-colors", type="button", onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()")
+    return Button(UkIcon("panel-right", cls="w-5 h-5"), title="Toggle table of contents", cls="p-2 hover:bg-slate-800 rounded transition-colors", type="button", onclick="window.__vyasaToggleTocPanel && window.__vyasaToggleTocPanel()", data_vyasa_sidebar_toggle="toc")
 
 
 EXTENSION = TableOfContentsExtension(
