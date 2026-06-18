@@ -1243,7 +1243,7 @@ function initMobileMenus() {
         if (hidden) pulseNavbarToggle(kind);
         try {
             if (hidden) localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '1');
-            else localStorage.removeItem(`vyasa-${kind}-sidebar-hidden`);
+            else localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '0');
         } catch (_) {}
         return true;
     };
