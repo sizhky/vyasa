@@ -12,9 +12,9 @@ from monsterui.all import *
 from .helpers import (
     _effective_abbreviations, _effective_ignore_list,
     _effective_include_list, _should_include_folder, _strip_inline_markdown,
-    _unique_anchor, content_url_for_slug, document_icon_for_path, document_title_for_path, enabled_document_suffixes, enabled_document_types, estimate_read_time_minutes, expand_markdown_includes_for_reading, find_folder_note_file,
+    _unique_anchor, content_slug_for_path, content_url_for_slug, document_icon_for_path, document_title_for_path, enabled_document_suffixes, enabled_document_types, estimate_read_time_minutes, expand_markdown_includes_for_reading, find_folder_note_file,
     format_last_modified_label,
-    get_adjacent_posts, get_post_title, parse_frontmatter, resolve_markdown_title, slug_to_title,
+    get_adjacent_posts, get_post_title, is_document_path, is_inside_document_directory, parse_frontmatter, resolve_markdown_title, slug_to_title,
     text_to_anchor,
 )
 from .extensions_builtin.markdown.renderer import from_md
@@ -416,7 +416,17 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
         return items
     
     for item in entries:
-        if item.is_dir():
+        if is_document_path(item):
+            slug = content_slug_for_path(item) or str(item.relative_to(root_folder))
+            title = document_title_for_path(item, abbreviations=abbreviations)
+            icon = document_icon_for_path(item)
+            items.append(Li(A(
+                Span(cls="w-4 mr-2 shrink-0"),
+                Span(UkIcon(icon, cls="text-slate-400 w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
+                Span(title, cls="truncate min-w-0", title=title),
+                href=content_url_for_slug(slug, suffix=".html"),
+                cls="flex items-center py-1 px-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 transition-colors min-w-0")))
+        elif item.is_dir():
             if not show_hidden and item.name.startswith('.'): 
                 continue
             sub_items = build_post_tree_static(item, root_folder, show_hidden=show_hidden)
@@ -561,6 +571,8 @@ def build_static_site(input_dir=None, output_dir=None):
         for doc_file in root_folder.rglob(f"*{suffix}"):
             try:
                 relative_path = doc_file.relative_to(root_folder)
+                if is_inside_document_directory(doc_file) or not is_document_path(doc_file):
+                    continue
                 if not show_hidden and any(part.startswith('.') for part in relative_path.parts):
                     continue
                 path_parts = relative_path.parts[:-1]
@@ -628,7 +640,7 @@ def build_static_site(input_dir=None, output_dir=None):
         extra_head_html = bundle_asset_html(
             requested_page_bundles(
                 show_sidebar=True,
-                current_path=str(relative_path.with_suffix("")),
+                current_path=content_slug_for_path(doc_file) or str(relative_path.with_suffix("")),
                 annotations_enabled=config.get_annotations_enabled(),
                 mode="static",
             )
@@ -640,7 +652,7 @@ def build_static_site(input_dir=None, output_dir=None):
             nav_tree=nav_tree,
             favicon_href=favicon_href,
             toc_items=toc_items,
-            current_path=str(relative_path.with_suffix('')),
+            current_path=content_slug_for_path(doc_file) or str(relative_path.with_suffix('')),
             updated_label=format_last_modified_label(doc_file),
             extra_head_html=extra_head_html,
         )
@@ -651,7 +663,8 @@ def build_static_site(input_dir=None, output_dir=None):
             output_path = output_dir / 'index.html'
         else:
             # Other files go in posts/ directory
-            output_path = output_dir / 'posts' / relative_path.with_suffix('.html')
+            doc_slug = content_slug_for_path(doc_file) or relative_path.with_suffix("").as_posix()
+            output_path = output_dir / 'posts' / f"{doc_slug}.html"
         
         # Create directory and write file
         output_path.parent.mkdir(parents=True, exist_ok=True)

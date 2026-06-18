@@ -850,8 +850,9 @@ def default_page_frame(
     no_scroll=False,
     slide_mode=False,
     current_updated_label=None,
+    extra_head_nodes=(),
 ):
-    extra_head_nodes = bundle_asset_nodes(
+    page_head_nodes = bundle_asset_nodes(
         requested_page_bundles(
             show_sidebar=show_sidebar,
             current_path=current_path,
@@ -874,7 +875,7 @@ def default_page_frame(
         no_scroll=no_scroll,
         slide_mode=slide_mode,
         current_updated_label=current_updated_label,
-        extra_head_nodes=extra_head_nodes,
+        extra_head_nodes=(*page_head_nodes, *tuple(extra_head_nodes or ())),
     )
 
 
@@ -902,6 +903,7 @@ def layout(
     no_scroll=False,
     slide_mode=False,
     current_updated_label=None,
+    extra_head_nodes=(),
 ):
     runtime = get_extension_runtime()
     provider = runtime.layout_renderer if runtime else None
@@ -922,6 +924,7 @@ def layout(
             no_scroll=no_scroll,
             slide_mode=slide_mode,
             current_updated_label=current_updated_label,
+            extra_head_nodes=extra_head_nodes,
         )
     return _default_layout(
         *content,
@@ -939,6 +942,7 @@ def layout(
         no_scroll=no_scroll,
         slide_mode=slide_mode,
         current_updated_label=current_updated_label,
+        extra_head_nodes=extra_head_nodes,
     )
 
 

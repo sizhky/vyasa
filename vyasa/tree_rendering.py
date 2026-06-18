@@ -3,7 +3,7 @@ from urllib.parse import quote
 
 from fasthtml.common import A, Details, Li, Span, Summary, Ul
 from monsterui.all import UkIcon
-from .helpers import content_slug_for_path, content_url_for_slug, document_icon_for_path, document_title_for_path, enabled_document_suffixes
+from .helpers import content_slug_for_path, content_url_for_slug, document_icon_for_path, document_title_for_path, enabled_document_suffixes, is_document_path
 from .nav_views import FOLDER_ROW_CLASSES, FILE_ROW_CLASSES, NavigationRow, navigation_row_view
 from .runtime_context import traced
 
@@ -32,7 +32,7 @@ def folder_has_visible_descendant(folder, roles, depth, *, root, show_hidden, ex
     if (folder / ".vyasa").exists():
         return True
     for item in get_nav_entries(folder, root, show_hidden, excluded_dirs):
-        if item.is_dir():
+        if item.is_dir() and not is_document_path(item):
             if depth > 0 and folder_has_visible_descendant(item, roles, depth - 1, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, is_allowed_fn=is_allowed_fn, rbac_rules=rbac_rules):
                 return True
             continue
@@ -55,7 +55,7 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
         return items
     folder_note_file = find_folder_note_file_fn(folder) if suppress_note_file else None
     for item in entries:
-        if item.is_dir():
+        if item.is_dir() and not is_document_path(item):
             if should_exclude_dir_fn(item.name, excluded_dirs) or (not show_hidden and item.name.startswith(".")):
                 continue
             folder_title = slug_to_title_fn(item.name, abbreviations=abbreviations)

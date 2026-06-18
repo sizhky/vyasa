@@ -66,6 +66,7 @@ class DocumentPage:
     show_toc: bool = True
     full_width: bool = False
     no_scroll: bool = False
+    extra_head_nodes: tuple[Any, ...] = ()
 
     def render(self, layout, *, htmx, blog_title: str, auth):
         return layout(
@@ -80,6 +81,7 @@ class DocumentPage:
             full_width=self.full_width,
             no_scroll=self.no_scroll,
             current_updated_label=format_last_modified_label(self.file_path) if self.file_path else None,
+            extra_head_nodes=self.extra_head_nodes,
         )
 
 

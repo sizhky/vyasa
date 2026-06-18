@@ -7,6 +7,7 @@ from vyasa.build import build_post_tree_static, build_static_site
 from vyasa.content_tree import ContentTree
 from vyasa.extensions import build_extension_runtime, get_extension_runtime, set_extension_runtime
 from vyasa.extensions_builtin.html_viewer import render_html_document
+from vyasa.extensions_builtin.tasks import render_kg_document
 from vyasa.tree_tables import parse_tree_table, render_tree_table_html
 
 
@@ -66,6 +67,28 @@ def test_html_document_runtime_uses_raw_html_route(tmp_path):
 
     assert 'src="/posts/dashboard.html"' in html
     assert 'sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"' in html
+
+
+def test_kg_document_runtime_includes_tasks_assets(tmp_path):
+    pack = tmp_path / "kickoff.kg"
+    pack.mkdir()
+    (pack / "kg.schema").write_text("@graph id=kickoff title=Kickoff\n@sources\nnodes=kg.nodes\n", encoding="utf-8")
+    (pack / "kg.nodes").write_text("n1: Start\n", encoding="utf-8")
+    runtime = build_extension_runtime({})
+    previous = get_extension_runtime()
+    set_extension_runtime(runtime)
+    try:
+        context = SimpleNamespace(
+            path="kickoff.kg", breadcrumbs=None, document=SimpleNamespace(path=pack),
+            layout=lambda body, **kwargs: (*kwargs.get("extra_head_nodes", ()), body),
+            htmx=False, blog_title="Site", auth=None,
+        )
+        html = to_xml(render_kg_document(context))
+    finally:
+        set_extension_runtime(previous)
+
+    assert "tasks.js" in html
+    assert "data-tasks-widget=\"true\"" in html
 
 
 def test_build_post_tree_static_includes_tree_files(tmp_path):
@@ -143,6 +166,24 @@ def test_static_build_wraps_html_document_without_overwriting_source(tmp_path, m
     assert "Dashboard (HTML)" in rendered
     assert "srcdoc=" in rendered
     assert "&lt;h1&gt;Dashboard&lt;/h1&gt;" in rendered
+
+
+def test_static_build_renders_kg_pack_document(tmp_path, monkeypatch):
+    root = tmp_path / "site"
+    output = tmp_path / "dist"
+    pack = root / "roadmap.kg"
+    pack.mkdir(parents=True)
+    (pack / "kg.schema").write_text("@graph id=roadmap title=Roadmap\n@sources\nnodes=kg.nodes\n", encoding="utf-8")
+    (pack / "kg.nodes").write_text("n1: Start\n", encoding="utf-8")
+    monkeypatch.setenv("VYASA_ROOT", str(root))
+
+    build_static_site(input_dir=root, output_dir=output)
+
+    rendered = (output / "posts" / "roadmap.kg.html").read_text(encoding="utf-8")
+    assert "Roadmap" in rendered
+    assert "data-tasks-widget=\"true\"" in rendered
+    assert "tasks.js" in rendered
+    assert "roadmap.kg.html" in rendered
 
 
 def test_static_build_copies_raw_and_download_files_through_filesystem_routes(tmp_path, monkeypatch):

@@ -114,13 +114,16 @@ def test_extension_cannot_register_undeclared_document_type(tmp_path):
         raise AssertionError("expected document type guard validation failure")
 
 
-def test_pdf_and_tree_extensions_register_document_type_renderers():
+def test_document_extensions_register_document_type_renderers():
     runtime = build_extension_runtime({})
 
+    assert runtime.document_types[".kg"] == DocumentType(".kg", "kg", "network")
     assert runtime.document_types[".pdf"] == DocumentType(".pdf", "pdf", "file")
     assert runtime.document_types[".tree"] == DocumentType(".tree", "tree", "table")
+    assert "kg" in runtime.document_renderers
     assert "pdf" in runtime.document_renderers
     assert "tree" in runtime.document_renderers
+    assert "kg" in runtime.static_document_renderers
     assert "pdf" in runtime.static_document_renderers
     assert "tree" in runtime.static_document_renderers
 
