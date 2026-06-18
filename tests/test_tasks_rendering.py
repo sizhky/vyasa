@@ -532,6 +532,15 @@ def test_tasks_color_swatch_filter_is_independent_and_ands_with_query_filter():
     assert "tasksPruneFilterQueryFields(current, activeSwatchKeys)" in source
 
 
+def test_tasks_color_picker_choices_wrap_inline():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const colorChoiceListStyle = { display: 'flex', flexWrap: 'wrap'" in source
+    assert "const colorChoiceStyle = { display: 'inline-flex', alignItems: 'center'" in source
+    assert "React.createElement('div', { style: colorChoiceListStyle }" in source
+    assert "React.createElement('label', { key: option.key || '__none__', style: colorChoiceStyle }" in source
+
+
 def test_tasks_query_builder_supports_inline_text_attrs_and_exists_operator():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     core = Path("vyasa/extensions_builtin/tasks/static/tasks_graph_core.js").read_text()
@@ -1048,7 +1057,7 @@ def test_context_graphs_have_day_switch_contract():
     assert "React.createElement('span', { style: filterKeyStyle }, 'Context')" in source
     assert source.index("'Context'") < source.index("'View'")
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
-    assert "React.createElement('div', { style: filterChoiceListStyle }," in source
+    assert "React.createElement('div', { style: colorChoiceListStyle }," in source
     assert "sourceModel?.kg_context?.caption ? React.createElement('div', {" in source
     assert "React.createElement('span', { style: filterKeyStyle }, 'Intensity')" in source
     assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Edge Intensity')" in source

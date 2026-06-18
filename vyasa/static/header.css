@@ -264,6 +264,36 @@ html[data-vyasa-hide-posts-sidebar] #posts-sidebar,
 html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     display: none !important;
 }
+[data-vyasa-sidebar-toggle].vyasa-sidebar-toggle-pulse {
+    animation: vyasa-sidebar-toggle-pulse 1.9s ease-out;
+}
+@keyframes vyasa-sidebar-toggle-pulse {
+    0% {
+        transform: translateY(0) scale(1);
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--vyasa-primary) 70%, transparent), 0 0 0 0 color-mix(in srgb, white 90%, transparent);
+        filter: brightness(1);
+    }
+    16% {
+        transform: translateY(-2px) scale(1.18);
+        box-shadow: 0 0 0 0.45rem color-mix(in srgb, white 36%, transparent), 0 0 2.2rem 0.55rem color-mix(in srgb, var(--vyasa-primary) 78%, transparent);
+        filter: brightness(1.55);
+    }
+    36% {
+        transform: translateY(0) scale(0.98);
+        box-shadow: 0 0 0 0.8rem color-mix(in srgb, var(--vyasa-primary) 24%, transparent), 0 0 3rem 0.8rem color-mix(in srgb, var(--vyasa-primary) 60%, transparent);
+        filter: brightness(1.35);
+    }
+    62% {
+        transform: translateY(-1px) scale(1.12);
+        box-shadow: 0 0 0 0.55rem color-mix(in srgb, white 26%, transparent), 0 0 2.4rem 0.6rem color-mix(in srgb, var(--vyasa-primary) 50%, transparent);
+        filter: brightness(1.45);
+    }
+    100% {
+        transform: translateY(0) scale(1);
+        box-shadow: 0 0 0 0 transparent, 0 0 0 0 transparent;
+        filter: brightness(1);
+    }
+}
 .vyasa-sidebar-resizer {
     position: absolute; top: 0; bottom: 0; width: 12px; z-index: 20; cursor: col-resize; touch-action: none;
 }

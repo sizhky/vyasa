@@ -305,7 +305,7 @@ def _collect_toc_panels(*, toc_content, show_toc, current_path, build_sidebar_to
     if oob:
         desktop_attrs["hx_swap_oob"] = "true"
     desktop = Aside(
-        build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, shortcut_key="X"),
+        build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, data_sidebar="toc", shortcut_key="X"),
         cls=desktop_cls,
         **desktop_attrs,
     ) if toc_items else Div(**desktop_attrs)
@@ -319,7 +319,7 @@ def _collect_toc_panels(*, toc_content, show_toc, current_path, build_sidebar_to
     mobile = Div(
         Div(Button(UkIcon("x", cls="w-5 h-5"), id="close-mobile-toc", cls="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors ml-auto", type="button"), cls="vyasa-mobile-panel-header flex justify-end p-2 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800"),
         Div(
-            build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
+            build_collapsible_sidebar("list", "Table of Contents", toc_items, is_open=True, data_sidebar="toc", shortcut_key="X") if toc_items else Div(P("No table of contents available.", cls="text-slate-500 dark:text-slate-400 text-sm p-4")),
             cls="vyasa-mobile-panel-body p-4 overflow-y-auto",
         ),
         **mobile_attrs,

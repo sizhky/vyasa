@@ -3,7 +3,7 @@ pool=kg.nodes               # identity pool: id + label (+ immutable summary)
 attrs=kg.attrs              # immutable attrs only: kind, owner, dept
 palette=kg.palette
 contexts=*.context          # auto-discover, lazy-load, order by @context seq
-default_context=latest      # show highest seq on open
+default_context=day1      # show highest seq on open
 hover_attrs=summary,owner,dept,status
 default_open_depth=-1
 

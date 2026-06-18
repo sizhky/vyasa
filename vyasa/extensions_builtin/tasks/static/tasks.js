@@ -5868,6 +5868,8 @@ async function renderTasksGraphs(rootElement = document) {
                 const filterValueStackStyle = { display: 'grid', gap: '6px', minWidth: 0 };
                 const filterChoiceListStyle = { display: 'grid', gap: '8px', minWidth: 0 };
                 const filterChoiceStyle = { display: 'grid', gridTemplateColumns: '16px minmax(0, 1fr)', alignItems: 'center', columnGap: '10px', minWidth: 0 };
+                const colorChoiceListStyle = { display: 'flex', flexWrap: 'wrap', gap: '8px 14px', minWidth: 0 };
+                const colorChoiceStyle = { display: 'inline-flex', alignItems: 'center', gap: '7px', minWidth: 0, maxWidth: '100%' };
                 const textQueryBuilderOperators = [
                     { name: 'notnull', label: 'attribute exists' },
                     { name: 'contains', label: 'has string' },
@@ -6244,11 +6246,11 @@ async function renderTasksGraphs(rootElement = document) {
                         React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                             React.createElement('span', { style: filterKeyStyle }, 'Color by'),
                             React.createElement('div', { style: filterValueStackStyle },
-                                    React.createElement('div', { style: filterChoiceListStyle },
+                                    React.createElement('div', { style: colorChoiceListStyle },
                                         [
                                             { key: '', label: 'None' },
                                             ...colorOptions.map((option) => ({ key: option.key, label: option.label })),
-                                        ].map((option) => React.createElement('label', { key: option.key || '__none__', style: filterChoiceStyle },
+                                        ].map((option) => React.createElement('label', { key: option.key || '__none__', style: colorChoiceStyle },
                                         React.createElement('input', {
                                             type: 'radio',
                                             name: `${widgetId}-color-by`,
@@ -6317,13 +6319,13 @@ async function renderTasksGraphs(rootElement = document) {
                             ? React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                                 React.createElement('span', { style: filterKeyStyle }, 'Secondary color by'),
                                 React.createElement('div', { style: filterValueStackStyle },
-                                        React.createElement('div', { style: filterChoiceListStyle },
+                                        React.createElement('div', { style: colorChoiceListStyle },
                                             [
                                                 { key: '', label: 'None' },
                                                 ...colorOptions
                                                     .filter((option) => option.key !== activeColorBy)
                                                     .map((option) => ({ key: option.key, label: option.label })),
-                                            ].map((option) => React.createElement('label', { key: option.key || '__none__', style: filterChoiceStyle },
+                                            ].map((option) => React.createElement('label', { key: option.key || '__none__', style: colorChoiceStyle },
                                             React.createElement('input', {
                                                 type: 'radio',
                                                 name: `${widgetId}-secondary-color-by`,

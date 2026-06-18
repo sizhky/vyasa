@@ -1219,7 +1219,7 @@ wheels = [
 
 [[package]]
 name = "vyasa"
-version = "0.6.54"
+version = "0.6.55"
 source = { editable = "." }
 dependencies = [
     { name = "fastsql" },
