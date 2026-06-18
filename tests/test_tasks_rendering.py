@@ -1036,6 +1036,17 @@ def test_slide_notes_panel_uses_stable_render_helper():
     assert "window.React.createElement(SlideShow)" not in render_source
 
 
+def test_context_graphs_have_day_switch_contract():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "async function loadTasksContext" in source
+    assert "fetch('/api/tasks/context'" in source
+    assert "const contextOptions = React.useMemo" in source
+    assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Context')" in source
+    assert source.index("'Context'") < source.index("'View'")
+    assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
+
+
 def test_tasks_block_serializes_document_path_and_stable_storage_id():
     md = """```items
 Foundation:

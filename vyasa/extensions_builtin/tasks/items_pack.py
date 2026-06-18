@@ -62,13 +62,14 @@ class KgContext:
     palette: str = ""
     node_attrs: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     edges: list[dict[str, str]] = field(default_factory=list)
+    slides: list[dict[str, Any]] = field(default_factory=list)
 
 
-def read_kg_pack(schema_path: str | Path) -> dict[str, Any]:
+def read_kg_pack(schema_path: str | Path, context_id: str = "") -> dict[str, Any]:
     schema_path = Path(schema_path)
     schema = read_schema(schema_path)
     if schema.graph.get("contexts"):
-        return _read_context_kg_pack(schema_path, schema)
+        return _read_context_kg_pack(schema_path, schema, context_id)
     graph = {
         "id": schema.graph.get("id", ""),
         "title": schema.graph.get("title", ""),
@@ -122,9 +123,9 @@ def read_kg_pack(schema_path: str | Path) -> dict[str, Any]:
     return graph
 
 
-def _read_context_kg_pack(schema_path: Path, schema: KgSchema) -> dict[str, Any]:
+def _read_context_kg_pack(schema_path: Path, schema: KgSchema, context_id: str = "") -> dict[str, Any]:
     contexts = _discover_contexts(schema_path, schema.graph.get("contexts", ""))
-    active = _default_context(contexts, schema.graph.get("default_context", "latest"))
+    active = _default_context(contexts, context_id or schema.graph.get("default_context", "latest"))
     nodes_by_id = {node["id"]: node for node in read_nodes(_resolve(schema_path, schema.nodes))}
     edges_by_id = {edge["id"]: edge for edge in active.edges}
     index_attributes: list[str] = []
@@ -141,7 +142,7 @@ def _read_context_kg_pack(schema_path: Path, schema: KgSchema) -> dict[str, Any]
         "tasks": [node for node_id, node in nodes_by_id.items() if node_id in present],
         "dependency_edges": active.edges,
         "view_projections": [_projection(view) for view in schema.views],
-        "slides": schema.slides,
+        "slides": active.slides or schema.slides,
         "default_projection": schema.graph.get("initial_view", schema.views[0].id if schema.views else ""),
         "hover_attrs": _list_value(schema.graph.get("hover_attrs", "")),
         "card_states": _list_value(schema.graph.get("card_states", "")),
@@ -173,6 +174,7 @@ def _default_context(contexts: list[KgContext], default_id: str) -> KgContext:
 def _read_context(path: Path) -> KgContext:
     context = KgContext(id="", seq=0)
     section = ""
+    current_slide: dict[str, Any] | None = None
     raw_lines = path.read_text(encoding="utf-8").splitlines()
     index = 0
     while index < len(raw_lines):
@@ -190,7 +192,12 @@ def _read_context(path: Path) -> KgContext:
             continue
         if line.startswith("@"):
             section = line
+            current_slide = None
             continue
+        if raw.startswith((" ", "\t")):
+            if section == "@slides" and current_slide is not None:
+                index += _read_slide_attr(raw_lines, index - 1, current_slide)
+                continue
         if section == "@context":
             payload = _assignments(shlex.split(line))
             if payload.get("caption") == "|":
@@ -205,7 +212,23 @@ def _read_context(path: Path) -> KgContext:
             edge = _read_context_edge(line, context.id, len(context.edges) + 1)
             if edge:
                 context.edges.append(edge)
+        elif section == "@slides":
+            sid, _, title = line.partition(":")
+            current_slide = {"id": sid.strip(), "title": title.strip(), "nodes": []}
+            context.slides.append(current_slide)
     return context
+
+
+def _read_slide_attr(raw_lines: list[str], raw_index: int, slide: dict[str, Any]) -> int:
+    raw = raw_lines[raw_index]
+    slide_indent = _indent_width(raw)
+    payload = _view_assignment(raw.strip())
+    consumed = 0
+    for key, value in payload.items():
+        if value == "|":
+            value, consumed = _read_indented_multiline(raw_lines, raw_index + 1, slide_indent)
+        slide[key] = _list_value(value) if key == "nodes" else value
+    return consumed
 
 
 def _read_context_attr_line(context: KgContext, raw: str) -> None:
@@ -327,13 +350,7 @@ def read_schema(path: str | Path) -> KgSchema:
                 payload = _view_assignment(line)
                 _update_view(current_view, payload)
             elif section == "@slides" and current_slide is not None:
-                slide_indent = _indent_width(raw)
-                payload = _view_assignment(line)
-                for key, value in payload.items():
-                    if value == "|":
-                        value, skip_count = _read_indented_multiline(raw_lines, raw_index, slide_indent)
-                        raw_index += skip_count
-                    current_slide[key] = _list_value(value) if key == "nodes" else value
+                raw_index += _read_slide_attr(raw_lines, raw_index - 1, current_slide)
             continue
         if section == "@sources":
             current_source = _read_source_line(schema, line)

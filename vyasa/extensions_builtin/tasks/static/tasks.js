@@ -216,6 +216,17 @@ async function saveTasksTempView({ schemaPath, currentPath, title, content }) {
     return response.json();
 }
 
+async function loadTasksContext({ schemaPath, currentPath, contextId }) {
+    const response = await fetch('/api/tasks/context', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schema_path: schemaPath, current_path: currentPath, context_id: contextId }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+}
+
 function tasksFilterPanelMaxHeight(wrapper) {
     if (!wrapper) return '100%';
     const bounds = wrapper.getBoundingClientRect();
@@ -3672,6 +3683,11 @@ async function renderTasksGraphs(rootElement = document) {
             const sourcePrefsRef = React.useRef(null);
             if (sourcePrefsRef.current === null) sourcePrefsRef.current = readTasksPrefs(sourceModel);
             const projectionOptions = React.useMemo(() => egoMode ? [] : tasksProjectionOptions(sourceModel, ganttEnabled), [egoMode, sourceModel, ganttEnabled]);
+            const contextOptions = React.useMemo(() => (
+                Array.isArray(sourceModel?.kg_contexts) ? sourceModel.kg_contexts.filter((item) => item && item.id) : []
+            ), [sourceModel]);
+            const activeContextId = String(sourceModel?.kg_context?.id || '').trim();
+            const [contextLoading, setContextLoading] = React.useState(false);
             const storedProjectionPrefsRef = React.useRef(sourcePrefsRef.current?.projectionPrefs && typeof sourcePrefsRef.current.projectionPrefs === 'object'
                 ? sourcePrefsRef.current.projectionPrefs
                 : {});
@@ -4089,6 +4105,43 @@ async function renderTasksGraphs(rootElement = document) {
                 target.addEventListener('paste', handleDefaultViewPaste, true);
                 return () => target.removeEventListener('paste', handleDefaultViewPaste, true);
             }, [handleDefaultViewPaste]);
+            const applyLoadedSource = React.useCallback((payload, projectionId = null) => {
+                const nextModel = {
+                    ...(payload.model || {}),
+                    document_path: sourceModel.document_path,
+                    storage_id: sourceModel.storage_id,
+                    persistence_id: sourceModel.persistence_id || payload.model?.persistence_id || '',
+                };
+                const nextGraph = normalizeTasksGraphNodes(payload.graph || buildTasksCollapsedGraph(nextModel), nextModel);
+                setSourceModel(nextModel);
+                setSourceGraph(nextGraph);
+                const wanted = projectionId === null ? activeProjectionId : String(projectionId || '');
+                const available = tasksProjectionOptions(nextModel, ganttEnabled).some((option) => option.id === wanted);
+                setActiveProjectionId(available ? wanted : String(nextModel?.default_projection || ''));
+                setViewMode('graph');
+                setSelectedNodeId(null);
+                setSelectedNodeIds(new Set());
+                setDragSelection(null);
+                setHoveredNodeId(null);
+                pendingFitActionRef.current = 'mode';
+            }, [sourceModel, activeProjectionId, ganttEnabled]);
+            const handleSwitchContext = React.useCallback(async (contextId) => {
+                const schemaPath = String(sourceModel?.kg_schema || '').trim();
+                if (!schemaPath || !contextId || contextId === activeContextId) return;
+                setContextLoading(true);
+                try {
+                    const payload = await loadTasksContext({
+                        schemaPath,
+                        currentPath: sourceModel?.document_path || '',
+                        contextId,
+                    });
+                    applyLoadedSource(payload);
+                } catch (error) {
+                    window.alert(error instanceof Error ? error.message : String(error));
+                } finally {
+                    setContextLoading(false);
+                }
+            }, [sourceModel, activeContextId, applyLoadedSource]);
             const handleAddView = React.useCallback(async () => {
                 const schemaPath = String(sourceModel?.kg_schema || '').trim();
                 if (!schemaPath) {
@@ -4104,22 +4157,11 @@ async function renderTasksGraphs(rootElement = document) {
                         title: input.title,
                         content: input.content,
                     });
-                    const nextModel = {
-                        ...(payload.model || {}),
-                        document_path: sourceModel.document_path,
-                        storage_id: sourceModel.storage_id,
-                        persistence_id: sourceModel.persistence_id || payload.model?.persistence_id || '',
-                    };
-                    const nextGraph = normalizeTasksGraphNodes(payload.graph || buildTasksCollapsedGraph(nextModel), nextModel);
-                    setSourceModel(nextModel);
-                    setSourceGraph(nextGraph);
-                    setActiveProjectionId(String(payload.projection_id || ''));
-                    setViewMode('graph');
-                    pendingFitActionRef.current = 'mode';
+                    applyLoadedSource(payload, payload.projection_id || '');
                 } catch (error) {
                     window.alert(error instanceof Error ? error.message : String(error));
                 }
-            }, [sourceModel]);
+            }, [sourceModel, applyLoadedSource]);
             const checkedNodeIdSet = React.useMemo(() => new Set(checkedNodeIdsFromStates(nodeStates)), [nodeStates]);
             const selectedLogicalNodeId = React.useMemo(() => {
                 const selected = (graphBaseRef.current.nodes || []).find((node) => node.id === selectedNodeId)?.data;
@@ -5961,6 +6003,39 @@ async function renderTasksGraphs(rootElement = document) {
                             paddingBottom: '2px',
                         },
                     },
+                        contextOptions.length > 1 ? React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                            React.createElement('label', { style: { display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr)', gap: '8px', alignItems: 'start', fontSize: '12px' } },
+                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Context'),
+                                React.createElement('select', {
+                                    value: activeContextId,
+                                    disabled: contextLoading,
+                                    onChange: (event) => handleSwitchContext(event.target.value),
+                                    style: {
+                                        width: '100%',
+                                        minWidth: 0,
+                                        border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                        borderRadius: '8px',
+                                        padding: '6px 8px',
+                                        background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                        color: 'inherit',
+                                    },
+                                },
+                                    ...contextOptions.map((context) => React.createElement('option', { key: context.id, value: context.id }, context.label || context.caption || context.id))
+                                )
+                            ),
+                            sourceModel?.kg_context?.caption ? React.createElement('div', {
+                                style: {
+                                    marginTop: '8px',
+                                    padding: '9px 10px',
+                                    borderRadius: '8px',
+                                    border: '1px solid color-mix(in srgb, currentColor 10%, transparent)',
+                                    background: 'color-mix(in srgb, var(--vyasa-paper) 97%, transparent)',
+                                    fontSize: '11px',
+                                    lineHeight: 1.45,
+                                    opacity: 0.82,
+                                },
+                            }, sourceModel.kg_context.caption) : null
+                        ) : null,
                         projectionOptions.length >= 1 ? React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                             React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr) auto', gap: '8px', alignItems: 'start', fontSize: '12px' } },
                                 React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'View'),

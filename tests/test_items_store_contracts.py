@@ -601,6 +601,72 @@ mia:
     assert [task["id"] for task in model["projection_models"]["mia"]["model"]["tasks"]] == ["a1"]
 
 
+def test_context_kg_pack_can_load_explicit_context(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        """@graph id=bird
+pool=kg.nodes
+contexts=*.context
+default_context=latest
+@views
+state:
+    group_by=kind
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text("a1: First\nb1: Second\n", encoding="utf-8")
+    (tmp_path / "day1.context").write_text("@context id=day1 seq=1 label=Day1\n@edges\n    a1 -> b1 about\n", encoding="utf-8")
+    (tmp_path / "day2.context").write_text("@context id=day2 seq=2 label=Day2\n@edges\n    b1 -> a1 about\n", encoding="utf-8")
+
+    model = parse_tasks_text(
+        "```items\n---\nitems_schema: kg.schema\nkg_context_id: day1\n---\n```",
+        current_path=tmp_path / "graph.md",
+    )
+
+    assert model["kg_context"]["id"] == "day1"
+    assert model["dependency_edges"][0]["id"] == "day1-e1"
+
+
+def test_context_kg_pack_uses_active_context_slides(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        """@graph id=bird
+pool=kg.nodes
+contexts=*.context
+default_context=latest
+@slides
+schema: Schema slide
+    nodes=a1
+@views
+state:
+    group_by=kind
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text("a1: First\nb1: Second\n", encoding="utf-8")
+    (tmp_path / "day1.context").write_text(
+        """@context id=day1 seq=1 label=Day1
+@edges
+    a1 -> b1 about
+@slides
+intro: Day one
+    nodes=a1,b1
+    desc=|
+        **Start**
+
+        - First context slide
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "day2.context").write_text("@context id=day2 seq=2 label=Day2\n@edges\n    b1 -> a1 about\n", encoding="utf-8")
+
+    day1 = parse_tasks_text("```items\n---\nitems_schema: kg.schema\nkg_context_id: day1\n---\n```", current_path=tmp_path / "graph.md")
+    day2 = parse_tasks_text("```items\n---\nitems_schema: kg.schema\nkg_context_id: day2\n---\n```", current_path=tmp_path / "graph.md")
+
+    assert day1["slides"][0]["id"] == "intro"
+    assert day1["slides"][0]["nodes"] == ["a1", "b1"]
+    assert day1["slides"][0]["desc"] == "**Start**\n\n- First context slide"
+    assert day2["slides"][0]["id"] == "schema"
+
+
 def test_kg_pack_source_attr_groups_scope_projection_nodes(tmp_path):
     (tmp_path / "roadmap.kg.schema").write_text(
         """@graph id=roadmap title=Roadmap initial_view=chapter
