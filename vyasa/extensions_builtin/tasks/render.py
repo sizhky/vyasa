@@ -180,6 +180,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     default_view = str(config.get("default_view") or config.get("view") or "graph").strip().lower()
     default_view = "gantt" if gantt_enabled and default_view == "gantt" else "graph"
     width = config.get("width") or "95vw"
+    standalone = str(config.get("standalone") or "").strip().lower() in {"1", "true", "yes", "on"}
     open_filters_by_default = _should_open_filters_by_default(width)
     min_height = config.get("min_height") or ("420px" if fence_name != "tasks" else "")
     flow_height = html.escape(str(config.get("height") or "70vh"))
@@ -208,7 +209,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         if key in config:
             optional_layout_attrs.append(f'{data_name}="{html.escape(str(config[key]))}"')
     optional_layout_attrs_str = (" " + " ".join(optional_layout_attrs)) if optional_layout_attrs else ""
-    breakout = str(width).lower() in {"100%", "100vw"} or "vw" in str(width).lower()
+    breakout = not standalone and (str(width).lower() in {"100%", "100vw"} or "vw" in str(width).lower())
     container_style_parts = [f"width: {width};"]
     if min_height:
         container_style_parts.append(f"min-height: {min_height};")
@@ -216,7 +217,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         container_style_parts.append("position: relative; left: 50%; transform: translateX(-50%);")
     container_style = " ".join(container_style_parts)
     return (
-        f'<div class="tasks-container relative my-6 rounded-xl border-4 border-slate-200 dark:border-slate-800" '
+        f'<div class="tasks-container relative {"overflow-hidden" if standalone else "my-6 rounded-xl border-4 border-slate-200 dark:border-slate-800"}" '
         f'style="{container_style}" '
         f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-gantt="{str(gantt_enabled).lower()}" data-tasks-default-view="{html.escape(default_view)}" data-tasks-open-filters-default="{str(open_filters_by_default).lower()}" data-tasks-node-card-width="{node_card_width}" data-tasks-hover-font-size="{hover_font_size}" data-tasks-color-mix="{color_mix}" data-tasks-color-mix-intensity="{color_mix_intensity}" data-tasks-projection-group-opacity="{projection_group_opacity}" data-tasks-projection-unspecified-group-opacity="{projection_unspecified_group_opacity}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
         f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'

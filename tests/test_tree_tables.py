@@ -89,6 +89,8 @@ def test_kg_document_runtime_includes_tasks_assets(tmp_path):
 
     assert "tasks.js" in html
     assert "data-tasks-widget=\"true\"" in html
+    assert "width: 100%;" in html
+    assert "my-6 rounded-xl border-4" not in html
 
 
 def test_build_post_tree_static_includes_tree_files(tmp_path):
