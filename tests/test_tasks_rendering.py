@@ -494,8 +494,24 @@ def test_tasks_source_uses_reset_button_label():
     assert "setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, defaults, nodeNotes))" in source
     assert "setActiveSecondaryColorBy(resolveTasksPreferredSecondaryColorBy(model, defaults, nodeNotes))" in source
     assert "setEdgesVisible(typeof defaults.edgesVisible === 'boolean'" in source
-    assert "setEdgeAnimationEnabled(typeof defaults.edgeAnimationEnabled === 'boolean'" in source
+    assert "setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(defaults.edgeAnimationMode, defaults.edgeAnimationEnabled))" in source
     assert "onClick: resetProjectionControls" in source
+
+
+def test_tasks_edge_animation_defaults_off_and_zero_cycles_smooth_then_tick():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function normalizeTasksEdgeAnimationMode(mode, enabledFallback = undefined)" in source
+    assert "return enabledFallback === true ? 'smooth' : 'none';" in source
+    assert "return ({ smooth: 'tick', tick: 'none', none: 'smooth' })" in source
+    assert "0: edge animation none / smooth / tick" in source
+
+
+def test_tasks_projection_copy_preserves_edge_animation_mode():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "edgeAnimationMode: isActiveLive ? edgeAnimationMode : def?.edge_animation_mode" in source
+    assert "if (cfg.edgeAnimationMode) lines.push(`\\tedge_animation_mode=${normalizeTasksEdgeAnimationMode(cfg.edgeAnimationMode, cfg.edgeAnimationEnabled)}`);" in source
 
 
 def test_tasks_color_swatch_filter_is_independent_and_ands_with_query_filter():
@@ -1018,6 +1034,27 @@ def test_slide_notes_panel_uses_stable_render_helper():
 
     assert "SlideShow()," in render_source
     assert "window.React.createElement(SlideShow)" not in render_source
+
+
+def test_context_graphs_have_day_switch_contract():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "async function loadTasksContext" in source
+    assert "fetch('/api/tasks/context'" in source
+    assert "const filterSectionStyle = { display: 'grid', gap: '8px', fontSize: '12px' };" in source
+    assert "const filterInlineControlStyle = { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto'" in source
+    assert "const filterChoiceListStyle = { display: 'grid', gap: '8px', minWidth: 0 };" in source
+    assert "const contextOptions = React.useMemo" in source
+    assert "React.createElement('span', { style: filterKeyStyle }, 'Context')" in source
+    assert source.index("'Context'") < source.index("'View'")
+    assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
+    assert "React.createElement('div', { style: filterChoiceListStyle }," in source
+    assert "sourceModel?.kg_context?.caption ? React.createElement('div', {" in source
+    assert "React.createElement('span', { style: filterKeyStyle }, 'Intensity')" in source
+    assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Edge Intensity')" in source
+    assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Null Intensity')" in source
+    assert "if (options?.resetSlideIndex) setSlideIndex((index) => index >= 0 ? 0 : -1);" in source
+    assert "applyLoadedSource(payload, null, { resetSlideIndex: true });" in source
 
 
 def test_tasks_block_serializes_document_path_and_stable_storage_id():

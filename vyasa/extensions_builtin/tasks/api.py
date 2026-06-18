@@ -60,8 +60,9 @@ def _safe_schema_path(runtime, raw_path: str) -> Path:
     return schema_path
 
 
-def _compile_schema_payload(schema_path: Path, current_path: str = "") -> tuple[dict, dict]:
-    source = f"```items\n---\nitems_schema: {schema_path}\n---\n```"
+def _compile_schema_payload(schema_path: Path, current_path: str = "", context_id: str = "") -> tuple[dict, dict]:
+    context_line = f"kg_context_id: {context_id}\n" if context_id else ""
+    source = f"```items\n---\nitems_schema: {schema_path}\n{context_line}---\n```"
     model = parse_tasks_text(source, current_path=current_path or schema_path)
     _attach_rendered_node_attrs(model, current_path or str(schema_path))
     _attach_rendered_slide_attrs(model, current_path or str(schema_path))
@@ -91,6 +92,26 @@ def register_tasks_routes(rt, runtime) -> None:
             return Response(str(exc), status_code=500)
         return Response(
             json.dumps({"ok": True, "projection_id": view_id, "file": view_path.name, "model": model, "graph": graph}),
+            media_type="application/json",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @rt("/api/tasks/context", methods=["POST"])
+    async def switch_context(request):
+        try:
+            payload = json.loads((await request.body()).decode("utf-8"))
+            schema_path = _safe_schema_path(runtime, str(payload.get("schema_path") or ""))
+            context_id = str(payload.get("context_id") or "").strip()
+            if not context_id:
+                return Response("Missing context id", status_code=400)
+            model, graph = _compile_schema_payload(schema_path, str(payload.get("current_path") or ""), context_id)
+        except ValueError as exc:
+            return Response(str(exc), status_code=400)
+        except Exception as exc:
+            runtime.logger.exception("[tasks] failed to switch context")
+            return Response(str(exc), status_code=500)
+        return Response(
+            json.dumps({"ok": True, "context_id": context_id, "model": model, "graph": graph}),
             media_type="application/json",
             headers={"Cache-Control": "no-store"},
         )

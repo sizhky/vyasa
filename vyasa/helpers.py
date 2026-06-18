@@ -170,7 +170,7 @@ def content_slug_for_path(path: Path, strip_suffix: bool = True) -> str | None:
             rel = resolved.relative_to(root.resolve())
         except ValueError:
             continue
-        if strip_suffix:
+        if strip_suffix and not (resolved.is_dir() and rel.suffix.lower() == ".kg"):
             rel = rel.with_suffix("")
         return (Path(alias) / rel).as_posix() if alias else rel.as_posix()
     return None
@@ -227,6 +227,18 @@ def document_title_for_path(path: Path, abbreviations=None) -> str:
         return get_post_title(path, abbreviations=abbreviations)
     title = slug_to_title(path.stem, abbreviations=abbreviations)
     return f"{title} (PDF)" if kind == "pdf" else title
+
+def is_document_path(path: Path, allowed_suffixes: tuple[str, ...] | None = None) -> bool:
+    suffixes = allowed_suffixes or enabled_document_suffixes()
+    suffix = path.suffix.lower()
+    if suffix not in suffixes:
+        return False
+    if path.is_dir():
+        return suffix == ".kg" and (path / "kg.schema").is_file()
+    return path.is_file()
+
+def is_inside_document_directory(path: Path) -> bool:
+    return any(parent.suffix.lower() == ".kg" and (parent / "kg.schema").is_file() for parent in path.parents)
 
 def _strip_inline_markdown(text: str) -> str:
     cleaned = text or ""
@@ -814,7 +826,9 @@ def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
     abbreviations = _effective_abbreviations(root)
 
     for path in sorted(root.rglob("*")):
-        if not path.is_file():
+        if is_inside_document_directory(path):
+            continue
+        if not is_document_path(path):
             continue
         rel_parts = path.parts[root_parts:]
         if not rel_parts:
@@ -825,7 +839,7 @@ def list_vyasa_posts(root: Path, include_hidden: bool = False) -> list[dict]:
             continue
 
         rel = Path(*rel_parts)
-        slug = rel.with_suffix("").as_posix()
+        slug = content_slug_for_path(path) or rel.with_suffix("").as_posix()
         title = document_title_for_path(path, abbreviations=abbreviations)
         kind = "md" if path.suffix.lower() == ".md" else document_kind_for_suffix(path.suffix)
 
@@ -852,6 +866,13 @@ def list_vyasa_entries(root: Path, relative: str = ".", include_hidden: bool = F
     entries: list[dict] = []
     for item in sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
         if not include_hidden and item.name.startswith("."):
+            continue
+        if is_document_path(item):
+            rel = item.relative_to(root)
+            slug = content_slug_for_path(item) or rel.with_suffix("").as_posix()
+            title = document_title_for_path(item, abbreviations=abbreviations)
+            kind = document_kind_for_suffix(item.suffix)
+            entries.append({"type": kind, "path": slug, "title": title})
             continue
         if item.is_dir():
             entries.append({"type": "folder", "path": item.relative_to(root).as_posix()})

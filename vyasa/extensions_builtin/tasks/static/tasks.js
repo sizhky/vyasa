@@ -216,6 +216,17 @@ async function saveTasksTempView({ schemaPath, currentPath, title, content }) {
     return response.json();
 }
 
+async function loadTasksContext({ schemaPath, currentPath, contextId }) {
+    const response = await fetch('/api/tasks/context', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schema_path: schemaPath, current_path: currentPath, context_id: contextId }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+}
+
 function tasksFilterPanelMaxHeight(wrapper) {
     if (!wrapper) return '100%';
     const bounds = wrapper.getBoundingClientRect();
@@ -262,10 +273,10 @@ function tasksApplyEdgeOpacity(alpha, opacity) {
     return Number((normalized * clampTasksEdgeOpacity(opacity)).toFixed(4));
 }
 
-function normalizeTasksEdgeAnimationMode(mode, enabledFallback = true) {
+function normalizeTasksEdgeAnimationMode(mode, enabledFallback = undefined) {
     const text = String(mode || '').trim().toLowerCase();
     if (text === 'none' || text === 'tick' || text === 'smooth') return text;
-    return enabledFallback === false ? 'none' : 'smooth';
+    return enabledFallback === true ? 'smooth' : 'none';
 }
 
 function nextTasksEdgeAnimationMode(mode) {
@@ -3672,6 +3683,11 @@ async function renderTasksGraphs(rootElement = document) {
             const sourcePrefsRef = React.useRef(null);
             if (sourcePrefsRef.current === null) sourcePrefsRef.current = readTasksPrefs(sourceModel);
             const projectionOptions = React.useMemo(() => egoMode ? [] : tasksProjectionOptions(sourceModel, ganttEnabled), [egoMode, sourceModel, ganttEnabled]);
+            const contextOptions = React.useMemo(() => (
+                Array.isArray(sourceModel?.kg_contexts) ? sourceModel.kg_contexts.filter((item) => item && item.id) : []
+            ), [sourceModel]);
+            const activeContextId = String(sourceModel?.kg_context?.id || '').trim();
+            const [contextLoading, setContextLoading] = React.useState(false);
             const storedProjectionPrefsRef = React.useRef(sourcePrefsRef.current?.projectionPrefs && typeof sourcePrefsRef.current.projectionPrefs === 'object'
                 ? sourcePrefsRef.current.projectionPrefs
                 : {});
@@ -4089,6 +4105,44 @@ async function renderTasksGraphs(rootElement = document) {
                 target.addEventListener('paste', handleDefaultViewPaste, true);
                 return () => target.removeEventListener('paste', handleDefaultViewPaste, true);
             }, [handleDefaultViewPaste]);
+            const applyLoadedSource = React.useCallback((payload, projectionId = null, options = null) => {
+                const nextModel = {
+                    ...(payload.model || {}),
+                    document_path: sourceModel.document_path,
+                    storage_id: sourceModel.storage_id,
+                    persistence_id: sourceModel.persistence_id || payload.model?.persistence_id || '',
+                };
+                const nextGraph = normalizeTasksGraphNodes(payload.graph || buildTasksCollapsedGraph(nextModel), nextModel);
+                setSourceModel(nextModel);
+                setSourceGraph(nextGraph);
+                const wanted = projectionId === null ? activeProjectionId : String(projectionId || '');
+                const available = tasksProjectionOptions(nextModel, ganttEnabled).some((option) => option.id === wanted);
+                setActiveProjectionId(available ? wanted : String(nextModel?.default_projection || ''));
+                setViewMode('graph');
+                setSelectedNodeId(null);
+                setSelectedNodeIds(new Set());
+                setDragSelection(null);
+                setHoveredNodeId(null);
+                if (options?.resetSlideIndex) setSlideIndex((index) => index >= 0 ? 0 : -1);
+                pendingFitActionRef.current = 'mode';
+            }, [sourceModel, activeProjectionId, ganttEnabled]);
+            const handleSwitchContext = React.useCallback(async (contextId) => {
+                const schemaPath = String(sourceModel?.kg_schema || '').trim();
+                if (!schemaPath || !contextId || contextId === activeContextId) return;
+                setContextLoading(true);
+                try {
+                    const payload = await loadTasksContext({
+                        schemaPath,
+                        currentPath: sourceModel?.document_path || '',
+                        contextId,
+                    });
+                    applyLoadedSource(payload, null, { resetSlideIndex: true });
+                } catch (error) {
+                    window.alert(error instanceof Error ? error.message : String(error));
+                } finally {
+                    setContextLoading(false);
+                }
+            }, [sourceModel, activeContextId, applyLoadedSource]);
             const handleAddView = React.useCallback(async () => {
                 const schemaPath = String(sourceModel?.kg_schema || '').trim();
                 if (!schemaPath) {
@@ -4104,22 +4158,11 @@ async function renderTasksGraphs(rootElement = document) {
                         title: input.title,
                         content: input.content,
                     });
-                    const nextModel = {
-                        ...(payload.model || {}),
-                        document_path: sourceModel.document_path,
-                        storage_id: sourceModel.storage_id,
-                        persistence_id: sourceModel.persistence_id || payload.model?.persistence_id || '',
-                    };
-                    const nextGraph = normalizeTasksGraphNodes(payload.graph || buildTasksCollapsedGraph(nextModel), nextModel);
-                    setSourceModel(nextModel);
-                    setSourceGraph(nextGraph);
-                    setActiveProjectionId(String(payload.projection_id || ''));
-                    setViewMode('graph');
-                    pendingFitActionRef.current = 'mode';
+                    applyLoadedSource(payload, payload.projection_id || '');
                 } catch (error) {
                     window.alert(error instanceof Error ? error.message : String(error));
                 }
-            }, [sourceModel]);
+            }, [sourceModel, applyLoadedSource]);
             const checkedNodeIdSet = React.useMemo(() => new Set(checkedNodeIdsFromStates(nodeStates)), [nodeStates]);
             const selectedLogicalNodeId = React.useMemo(() => {
                 const selected = (graphBaseRef.current.nodes || []).find((node) => node.id === selectedNodeId)?.data;
@@ -5819,6 +5862,12 @@ async function renderTasksGraphs(rootElement = document) {
                 if (!groupByLevels.length && viewMode !== 'gantt') groupByLevels.push('');
                 const activeCount = (queryBuilderEnabled ? tasksCountFilterRules(activeFilters) : 0) + tasksCountFilterRules(activeSwatchFilters) + (activeColorBy ? 1 : 0) + (searchMatches.active ? 1 : 0) + activeGroupByCount;
                 const QueryBuilder = queryBuilderEnabled && queryBuilderReady ? window.VyasaTasksQueryBuilder?.QueryBuilder : null;
+                const filterSectionStyle = { display: 'grid', gap: '8px', fontSize: '12px' };
+                const filterInlineControlStyle = { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '12px', alignItems: 'start', minWidth: 0 };
+                const filterKeyStyle = { fontWeight: 700, opacity: 0.7, lineHeight: 1.35 };
+                const filterValueStackStyle = { display: 'grid', gap: '6px', minWidth: 0 };
+                const filterChoiceListStyle = { display: 'grid', gap: '8px', minWidth: 0 };
+                const filterChoiceStyle = { display: 'grid', gridTemplateColumns: '16px minmax(0, 1fr)', alignItems: 'center', columnGap: '10px', minWidth: 0 };
                 const textQueryBuilderOperators = [
                     { name: 'notnull', label: 'attribute exists' },
                     { name: 'contains', label: 'has string' },
@@ -5961,9 +6010,39 @@ async function renderTasksGraphs(rootElement = document) {
                             paddingBottom: '2px',
                         },
                     },
-                        projectionOptions.length >= 1 ? React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr) auto', gap: '8px', alignItems: 'start', fontSize: '12px' } },
-                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'View'),
+                        contextOptions.length > 1 ? React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                            React.createElement('span', { style: filterKeyStyle }, 'Context'),
+                            React.createElement('select', {
+                                    value: activeContextId,
+                                    disabled: contextLoading,
+                                    onChange: (event) => handleSwitchContext(event.target.value),
+                                    style: {
+                                        width: '100%',
+                                        minWidth: 0,
+                                        border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                        borderRadius: '8px',
+                                        padding: '6px 8px',
+                                        background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                        color: 'inherit',
+                                    },
+                                },
+                                    ...contextOptions.map((context) => React.createElement('option', { key: context.id, value: context.id }, context.label || context.caption || context.id))
+                                ),
+                            sourceModel?.kg_context?.caption ? React.createElement('div', {
+                                style: {
+                                    padding: '9px 10px',
+                                    borderRadius: '8px',
+                                    border: '1px solid color-mix(in srgb, currentColor 10%, transparent)',
+                                    background: 'color-mix(in srgb, var(--vyasa-paper) 97%, transparent)',
+                                    fontSize: '11px',
+                                    lineHeight: 1.45,
+                                    opacity: 0.82,
+                                },
+                            }, sourceModel.kg_context.caption) : null
+                        ) : null,
+                        projectionOptions.length >= 1 ? React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                            React.createElement('span', { style: filterKeyStyle }, 'View'),
+                            React.createElement('div', { style: filterInlineControlStyle },
                                 React.createElement('select', {
                                     value: viewMode === 'gantt' ? TASKS_GANTT_PROJECTION_ID : activeProjectionId,
                                     onPaste: handleDefaultViewPaste,
@@ -6024,7 +6103,6 @@ async function renderTasksGraphs(rootElement = document) {
                             activeProjectionOption && activeProjectionOption.caption
                                 ? React.createElement('div', {
                                     style: {
-                                        marginTop: '8px',
                                         padding: '9px 10px',
                                         borderRadius: '8px',
                                         border: '1px solid color-mix(in srgb, currentColor 10%, transparent)',
@@ -6037,41 +6115,9 @@ async function renderTasksGraphs(rootElement = document) {
                                 }, activeProjectionOption.caption)
                                 : null
                         ) : null,
-                        React.createElement('div', { style: { marginBottom: '12px', display: 'flex', alignItems: 'flex-start', gap: '10px' } },
-                            React.createElement('div', { style: { display: 'grid', gap: '8px', flex: 1, minWidth: 0 } },
-                                React.createElement('label', { style: { display: 'grid', gridTemplateColumns: 'max-content minmax(84px, 1fr) max-content', alignItems: 'center', gap: '8px', minWidth: 0, fontSize: '12px' } },
-                                    React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Edge Intensity'),
-                                    React.createElement('input', {
-                                        type: 'range',
-                                        min: TASKS_EDGE_OPACITY_MIN,
-                                        max: TASKS_EDGE_OPACITY_MAX,
-                                        step: 'any',
-                                        value: edgeOpacity,
-                                        onChange: (e) => setEdgeOpacity(clampTasksEdgeOpacity(e.target.value)),
-                                        style: { width: '100%', minWidth: 0, margin: 0 },
-                                    }),
-                                    React.createElement('span', { style: { opacity: 0.8, minWidth: '3.5em', textAlign: 'right' } }, tasksEdgeOpacityLabel(edgeOpacity))
-                                ),
-                                React.createElement('label', { style: { display: 'grid', gridTemplateColumns: 'max-content minmax(84px, 1fr) max-content', alignItems: 'center', gap: '8px', minWidth: 0, fontSize: '12px' } },
-                                    React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Ø Intensity'),
-                                    React.createElement('input', {
-                                        type: 'range',
-                                        min: 0.02,
-                                        max: 1,
-                                        step: 0.01,
-                                        value: projectionUnspecifiedContentOpacity,
-                                        onChange: (e) => setProjectionUnspecifiedContentOpacity(clampTasksProjectionContentOpacity(e.target.value)),
-                                        style: { width: '100%', minWidth: 0, margin: 0 },
-                                    }),
-                                    React.createElement('span', { style: { opacity: 0.8, minWidth: '3.5em', textAlign: 'right' } }, tasksOpacityPctLabel(projectionUnspecifiedContentOpacity))
-                                )
-                            ),
-                            React.createElement('button', { type: 'button', onClick: resetProjectionControls, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline', whiteSpace: 'nowrap' } }, 'Reset')
-                        ),
-                        React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
-                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Group by'),
-                                React.createElement('div', { style: { display: 'grid', gap: '6px', minWidth: 0 } },
+                        React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                            React.createElement('span', { style: filterKeyStyle }, 'Group by'),
+                            React.createElement('div', { style: filterValueStackStyle },
                                     groupByLevels.map((selectedKey, level) => React.createElement('select', {
                                         key: `group-by-${level}`,
                                         value: selectedKey,
@@ -6102,13 +6148,11 @@ async function renderTasksGraphs(rootElement = document) {
                                     activeProjectionId || viewMode === 'gantt'
                                         ? React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.3 } }, 'Custom grouping applies to Default view.')
                                         : null
-                                )
                             )
                         ),
-                        React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '8px', alignItems: 'center', fontSize: '12px' } },
-                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Notes'),
-                                React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+                        React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                            React.createElement('span', { style: filterKeyStyle }, 'Notes'),
+                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' } },
                                     React.createElement('button', {
                                         type: 'button',
                                         title: 'Export notes',
@@ -6143,13 +6187,11 @@ async function renderTasksGraphs(rootElement = document) {
                                         style: { display: 'inline-flex', border: 'none', background: 'none', color: 'inherit', padding: '2px', cursor: 'pointer', fontSize: '13px', opacity: 0.45, lineHeight: 1 },
                                     }, '×') : null,
                                     React.createElement('span', { style: { marginLeft: 'auto', opacity: 0.65, fontSize: '11px' } }, `${Object.keys(nodeNotes).length + Object.keys(slideNotes).length} saved`)
-                                )
                             )
                         ),
-                        React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
-                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Search'),
-                                React.createElement('div', { style: { display: 'grid', gap: '6px', minWidth: 0 } },
+                        React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                            React.createElement('span', { style: filterKeyStyle }, 'Search'),
+                            React.createElement('div', { style: filterValueStackStyle },
                                     React.createElement('div', { style: { position: 'relative' } },
                                         React.createElement('input', {
                                             ref: searchInputRef,
@@ -6197,17 +6239,16 @@ async function renderTasksGraphs(rootElement = document) {
                                     searchMatches.error
                                         ? React.createElement('div', { style: { fontSize: '11px', color: '#fca5a5', lineHeight: 1.3 } }, `Regex error: ${searchMatches.error}`)
                                         : React.createElement('div', { style: { fontSize: '11px', opacity: 0.72, lineHeight: 1.3 } }, searchMatches.active ? `${searchMatches.nodeIds.size} nodes matched` : 'Matches node id, label, text attrs, and matching edge text.')
-                                )
                             )
                         ),
-                        React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
-                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Color by'),
-                                React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px 12px' } },
-                                    [
-                                        { key: '', label: 'None' },
-                                        ...colorOptions.map((option) => ({ key: option.key, label: option.label })),
-                                    ].map((option) => React.createElement('label', { key: option.key || '__none__', style: { display: 'inline-flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
+                        React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                            React.createElement('span', { style: filterKeyStyle }, 'Color by'),
+                            React.createElement('div', { style: filterValueStackStyle },
+                                    React.createElement('div', { style: filterChoiceListStyle },
+                                        [
+                                            { key: '', label: 'None' },
+                                            ...colorOptions.map((option) => ({ key: option.key, label: option.label })),
+                                        ].map((option) => React.createElement('label', { key: option.key || '__none__', style: filterChoiceStyle },
                                         React.createElement('input', {
                                             type: 'radio',
                                             name: `${widgetId}-color-by`,
@@ -6215,7 +6256,8 @@ async function renderTasksGraphs(rootElement = document) {
                                             onChange: () => setActiveColorBy(option.key),
                                         }),
                                         React.createElement('span', { style: { opacity: 0.85 } }, option.label)
-                                    )),
+                                        ))
+                                    ),
                                     activeGradientPalette
                                         ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
                                             React.createElement('div', { style: { display: 'grid', gap: '6px', fontSize: '11px', lineHeight: 1.3, opacity: 0.85 } },
@@ -6269,20 +6311,19 @@ async function renderTasksGraphs(rootElement = document) {
                                             )
                                         )
                                         : null
-                                )
                             )
                         ),
                         activeColorBy
-                            ? React.createElement('div', { style: { marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                                React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '8px', alignItems: 'start', fontSize: '12px' } },
-                                    React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Secondary color by'),
-                                    React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px 12px' } },
-                                        [
-                                            { key: '', label: 'None' },
-                                            ...colorOptions
-                                                .filter((option) => option.key !== activeColorBy)
-                                                .map((option) => ({ key: option.key, label: option.label })),
-                                        ].map((option) => React.createElement('label', { key: option.key || '__none__', style: { display: 'inline-flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
+                            ? React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                                React.createElement('span', { style: filterKeyStyle }, 'Secondary color by'),
+                                React.createElement('div', { style: filterValueStackStyle },
+                                        React.createElement('div', { style: filterChoiceListStyle },
+                                            [
+                                                { key: '', label: 'None' },
+                                                ...colorOptions
+                                                    .filter((option) => option.key !== activeColorBy)
+                                                    .map((option) => ({ key: option.key, label: option.label })),
+                                            ].map((option) => React.createElement('label', { key: option.key || '__none__', style: filterChoiceStyle },
                                             React.createElement('input', {
                                                 type: 'radio',
                                                 name: `${widgetId}-secondary-color-by`,
@@ -6290,8 +6331,9 @@ async function renderTasksGraphs(rootElement = document) {
                                                 onChange: () => setActiveSecondaryColorBy(option.key),
                                             }),
                                             React.createElement('span', { style: { opacity: 0.85 } }, option.label)
-                                        )),
-                                        React.createElement('div', { style: { flexBasis: '100%', marginTop: '2px', fontSize: '11px', opacity: 0.6, lineHeight: 1.3 } }, 'Adds a second color as a diagonal split on each node.'),
+                                            ))
+                                        ),
+                                        React.createElement('div', { style: { marginTop: '2px', fontSize: '11px', opacity: 0.6, lineHeight: 1.3 } }, 'Adds a second color as a diagonal split on each node.'),
                                         activeSecondaryColorBy && activeSecondaryGradientPalette
                                             ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
                                                 React.createElement('div', { style: { display: 'grid', gap: '6px', fontSize: '11px', lineHeight: 1.3, opacity: 0.85 } },
@@ -6346,7 +6388,6 @@ async function renderTasksGraphs(rootElement = document) {
                                             )
                                             : null
                                     )
-                                )
                             )
                             : null,
                         React.createElement('div', { style: { marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '12px' } },
@@ -6384,6 +6425,42 @@ async function renderTasksGraphs(rootElement = document) {
                                 })
                                     : React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.35 } }, 'Loading advanced filters...')
                                 : React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.35 } }, 'No filterable fields in this graph.')
+                        ),
+                        React.createElement('div', { style: { ...filterSectionStyle, marginTop: '12px', paddingTop: '10px', borderTop: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' } },
+                                React.createElement('span', { style: filterKeyStyle }, 'Intensity'),
+                                React.createElement('button', { type: 'button', onClick: resetProjectionControls, style: { border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline', whiteSpace: 'nowrap' } }, 'Reset')
+                            ),
+                            React.createElement('label', { style: { display: 'grid', gap: '6px', minWidth: 0, fontSize: '12px' } },
+                                React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' } },
+                                    React.createElement('span', { style: { opacity: 0.82 } }, 'Edge Intensity'),
+                                    React.createElement('span', { style: { opacity: 0.8, minWidth: '3.5em', textAlign: 'right' } }, tasksEdgeOpacityLabel(edgeOpacity))
+                                ),
+                                React.createElement('input', {
+                                    type: 'range',
+                                    min: TASKS_EDGE_OPACITY_MIN,
+                                    max: TASKS_EDGE_OPACITY_MAX,
+                                    step: 'any',
+                                    value: edgeOpacity,
+                                    onChange: (e) => setEdgeOpacity(clampTasksEdgeOpacity(e.target.value)),
+                                    style: { width: '100%', minWidth: 0, margin: 0 },
+                                })
+                            ),
+                            React.createElement('label', { style: { display: 'grid', gap: '6px', minWidth: 0, fontSize: '12px' } },
+                                React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' } },
+                                    React.createElement('span', { style: { opacity: 0.82 } }, 'Null Intensity'),
+                                    React.createElement('span', { style: { opacity: 0.8, minWidth: '3.5em', textAlign: 'right' } }, tasksOpacityPctLabel(projectionUnspecifiedContentOpacity))
+                                ),
+                                React.createElement('input', {
+                                    type: 'range',
+                                    min: 0.02,
+                                    max: 1,
+                                    step: 0.01,
+                                    value: projectionUnspecifiedContentOpacity,
+                                    onChange: (e) => setProjectionUnspecifiedContentOpacity(clampTasksProjectionContentOpacity(e.target.value)),
+                                    style: { width: '100%', minWidth: 0, margin: 0 },
+                                })
+                            )
                         )
                     )
                 )
@@ -6791,6 +6868,7 @@ async function renderTasksGraphs(rootElement = document) {
                     filtersCollapsed: isActiveLive ? filtersCollapsed : def?.filters_collapsed,
                     edgesVisible: isActiveLive ? edgesVisible : def?.edges_visible,
                     edgeAnimationEnabled: isActiveLive ? edgeAnimationEnabled : def?.edge_animation_enabled,
+                    edgeAnimationMode: isActiveLive ? edgeAnimationMode : def?.edge_animation_mode,
                     edgeOpacity: isActiveLive ? edgeOpacity : def?.edge_opacity,
                     projectionUnspecifiedContentOpacity: isActiveLive ? projectionUnspecifiedContentOpacity : def?.projection_unspecified_content_opacity,
                     defaultOpenDepth: effectiveDefaultOpenDepth,
@@ -6915,7 +6993,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, window.React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
                 window.React.createElement('strong', null, 'Graph help'),
                 window.React.createElement('button', { type: 'button', onClick: () => setHelpOpen(false), style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: 1, opacity: 0.7 } }, '×')
-            ), window.React.createElement('div', { style: { whiteSpace: 'pre-line' } }, 'Mouse\nClick node: select card or group\nClick canvas: clear selection\nShift + drag: box select\nCmd + drag: lasso select\nWheel / pinch: zoom\nDrag canvas: pan\n\nKeys\n?: toggle this help\nF: fit view\nShift + F: toggle fullscreen\nG: open EG\nShift + G: open EG+\nS: toggle filters\nE: toggle edges\n0: edge animation smooth / tick / none\nT: toggle hovered group\nI / O: expand or collapse one group depth\nU / P: unfold or collapse all groups\nArrow keys: pan\nShift + arrows: pan faster'));
+            ), window.React.createElement('div', { style: { whiteSpace: 'pre-line' } }, 'Mouse\nClick node: select card or group\nClick canvas: clear selection\nShift + drag: box select\nCmd + drag: lasso select\nWheel / pinch: zoom\nDrag canvas: pan\n\nKeys\n?: toggle this help\nF: fit view\nShift + F: toggle fullscreen\nG: open EG\nShift + G: open EG+\nS: toggle filters\nE: toggle edges\n0: edge animation none / smooth / tick\nT: toggle hovered group\nI / O: expand or collapse one group depth\nU / P: unfold or collapse all groups\nArrow keys: pan\nShift + arrows: pan faster'));
             const SlideLauncher = () => {
                 if (!slides.length || slideIndex >= 0) return null;
                 return window.React.createElement('button', {

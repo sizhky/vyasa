@@ -1,0 +1,35 @@
+@context id=day2 seq=2 label="Tuesday — Cutting"
+caption=|
+	Wood and tools done. Added a slanted roof (backs up the rain rule).
+	Aria will cut panels. New question: how big the entrance hole?
+
+@slides
+wins: First wins
+	nodes=a1,a2
+	desc=|
+		Mia's wood and Leo's tools are both in — the first two jobs are **done**.
+roof: A design call
+	nodes=slantroof,weatherproof
+	desc=|
+		They add a **slanted roof** so rain runs off instead of pooling — it backs up the survive-the-rain rule.
+cut: New hands, new unknown
+	nodes=a3,q2
+	desc=|
+		Aria signs up to **cut the panels**. And a fresh question appears: **how big should the entrance hole be?**
+
+# inherits kg.attrs (kind/owner/dept); overrides only what moved today
+@attrs
+status:
+  done: a1 a2
+
+@edges
+	forsparrows -> bh about
+	intree -> bh about
+	weatherproof -> bh constrains
+	slantroof -> bh about
+	slantroof -> weatherproof reinforces
+	q1 -> bh about
+	q2 -> bh about
+	a1 -> bh addresses
+	a2 -> bh addresses
+	a3 -> bh addresses

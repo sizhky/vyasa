@@ -1,0 +1,20 @@
+# Immutable node attributes — never change across contexts.
+# Mutable state (presence, status, edges) lives in the *.context files.
+@node_attrs
+kind:
+  entity: bh
+  decision: forsparrows intree slantroof forbluebirds hole15 onfence paintblue
+  constraint: weatherproof tooheavy
+  question: q1 q2 q3
+  action: a1 a2 a3 a4 a5 a6
+  deliverable: d_panels d_box d_house
+
+owner:
+  Mia: a1 a5 d_house paintblue
+  Leo: a2 a4 d_box slantroof
+  Aria: a3 a6 d_panels onfence
+
+# department — coarser than owner; a property of the work, so a kid can span teams
+dept:
+  Woodwork: a1 a2 a3 a4 d_panels d_box
+  Finishing: a5 a6 d_house

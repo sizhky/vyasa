@@ -1,0 +1,37 @@
+@context id=day5 seq=5 label="Friday — Finished"
+caption=|
+	Painted blue and mounted on the fence post — finished. The birdhouse is done.
+	One open question remains: will the birds actually come?
+
+@slides
+finish: The finish
+	nodes=a5,a6
+	desc=|
+		Mia paints it **blue**; Aria mounts it on the **fence post**. Every job is now closed.
+remains: What's left standing
+	nodes=d_house
+	desc=|
+		Only the **finished birdhouse** and the decisions that shaped it remain — all the scaffolding is gone.
+now: And now?
+	nodes=q3
+	desc=|
+		One question hangs in the air: **will the birds actually come?**
+
+# inherits kg.attrs (kind/owner/dept); overrides only what moved today
+@attrs
+status:
+  done: a5 a6
+
+@edges
+	a5 -> d_house produces
+	a6 -> onfence addresses
+	d_house -> bh about
+	weatherproof -> bh constrains
+	slantroof -> bh about
+	slantroof -> weatherproof reinforces
+	forbluebirds -> bh about
+	hole15 -> forbluebirds reinforces
+	tooheavy -> bh constrains
+	onfence -> bh about
+	paintblue -> forbluebirds reinforces
+	q3 -> bh about

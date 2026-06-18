@@ -1,0 +1,46 @@
+{
+  "node_color_palettes": {
+    "kind": {
+      "entity": "#64748b",
+      "decision": "#22c55e",
+      "constraint": "#dc2626",
+      "question": "#eab308",
+      "action": "#f59e0b",
+      "deliverable": "#14b8a6"
+    },
+    "status": {
+      "active": "#22c55e",
+      "open": "#f59e0b",
+      "done": "#94a3b8",
+      "superseded": "#dc2626",
+      "resolved": "#3b82f6"
+    },
+    "first_seen": {
+      "d1": "#fde68a",
+      "d2": "#fbbf24",
+      "d3": "#f59e0b",
+      "d4": "#ea580c",
+      "d5": "#b91c1c"
+    },
+    "owner": {
+      "Mia": "#ec4899",
+      "Leo": "#3b82f6",
+      "Aria": "#22c55e"
+    },
+    "dept": {
+      "Woodwork": "#8b5cf6",
+      "Finishing": "#14b8a6"
+    }
+  },
+  "edge_color_palettes": {
+    "relation": {
+      "about": "#94a3b8",
+      "constrains": "#dc2626",
+      "addresses": "#f59e0b",
+      "produces": "#14b8a6",
+      "reinforces": "#22c55e",
+      "supersedes": "#a855f7",
+      "answers": "#3b82f6"
+    }
+  }
+}

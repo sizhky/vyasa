@@ -23,7 +23,7 @@ from .helpers import (
     should_exclude_dir,
     slug_to_title,
 )
-ContentKind = Literal["folder", "markdown", "html", "pdf", "tree"]
+ContentKind = Literal["folder", "markdown", "html", "pdf", "tree", "kg"]
 
 
 class VisibilityPolicy(Protocol):
@@ -120,12 +120,17 @@ class ContentTree:
     def resolve_document(self, slug: str | Path) -> ResolvedDocument | None:
         clean_slug = str(slug).strip("/")
         for suffix in self.allowed_suffixes:
-            path = self._path_for_slug(clean_slug, suffix)
-            if path and path.exists():
+            path = (
+                self._path_for_slug(clean_slug)
+                if Path(clean_slug).suffix.lower() == suffix
+                else self._path_for_slug(clean_slug, suffix)
+            )
+            if path and path.exists() and self._is_document_path(path):
                 kind = document_kind_for_suffix(suffix)
                 if not kind:
                     continue
-                return ResolvedDocument(clean_slug, path, kind, content_url_for_slug(clean_slug, prefix="/posts"))
+                doc_slug = self._slug_for_path(path)
+                return ResolvedDocument(doc_slug or clean_slug, path, kind, content_url_for_slug(doc_slug or clean_slug, prefix="/posts"))
         folder_path = self._path_for_slug(clean_slug)
         if folder_path and folder_path.exists() and folder_path.is_dir():
             note = self.find_folder_note(clean_slug)
@@ -193,9 +198,11 @@ class ContentTree:
                 continue
             if folder.resolve() == self.root and item.is_dir() and item.name == self.root.name:
                 continue
-            if item.is_dir():
-                if should_exclude_dir(item.name, self.excluded_dirs) or (not self.show_hidden and item.name.startswith(".")):
-                    continue
+            if item.is_dir() and (should_exclude_dir(item.name, self.excluded_dirs) or (not self.show_hidden and item.name.startswith("."))):
+                continue
+            if self._is_document_path(item):
+                entries.append(item)
+            elif item.is_dir():
                 if _should_include_folder(item.name, include_list, ignore_list):
                     entries.append(item)
             elif item.suffix in self.allowed_suffixes:
@@ -207,7 +214,7 @@ class ContentTree:
         return order_vyasa_entries(entries, get_vyasa_config(folder))
 
     def _entry_for_path(self, path: Path, roles: list[str] | None = None) -> ContentEntry:
-        if path.is_dir():
+        if path.is_dir() and not self._is_document_path(path):
             slug = self._slug_for_path(path, strip_suffix=False) or path.name
             title = slug_to_title(path.name, abbreviations=_effective_abbreviations(self.root, path.parent))
             route = content_url_for_slug(slug)
@@ -220,6 +227,13 @@ class ContentTree:
         route = content_url_for_slug(slug, prefix="/posts")
         visible = self.visibility.can_read(route, roles)
         return ContentEntry(slug, path, kind, self._title_for_file(path, kind), route, visible, False)
+
+    def _is_document_path(self, path: Path) -> bool:
+        if path.suffix.lower() not in self.allowed_suffixes:
+            return False
+        if path.is_dir():
+            return path.suffix == ".kg" and (path / "kg.schema").is_file()
+        return path.is_file()
 
     def _title_for_file(self, path: Path, kind: ContentKind) -> str:
         return document_title_for_path(path, abbreviations=_effective_abbreviations(self.root, path.parent))
@@ -265,7 +279,8 @@ class ContentTree:
             except ValueError:
                 continue
             if strip_suffix:
-                rel = rel.with_suffix("")
+                if not (resolved.is_dir() and rel.suffix.lower() == ".kg"):
+                    rel = rel.with_suffix("")
             return (Path(alias) / rel).as_posix() if alias else rel.as_posix()
         return content_slug_for_path(path, strip_suffix=strip_suffix)
 
