@@ -568,6 +568,39 @@ items_schema: roadmap.kg.schema
     assert [edge["id"] for edge in chapter["dependency_edges"]] == ["c1"]
 
 
+def test_context_kg_pack_loads_latest_context_and_status_defaults(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        """@graph id=bird title=Birdhouse
+pool=kg.nodes
+attrs=kg.attrs
+contexts=*.context
+default_context=latest
+hover_attrs=summary,owner,status
+@status_defaults
+action=open
+question=open
+@views
+state:
+    group_by,color_by=status
+mia:
+    filter=owner:Mia
+    group_by,color_by=status
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text("a1: Cut wood\nq1: Which bird?\nold: Old plan\n", encoding="utf-8")
+    (tmp_path / "kg.attrs").write_text("@node_attrs\nkind:\n  action: a1 old\n  question: q1\nowner:\n  Mia: a1 old\n", encoding="utf-8")
+    (tmp_path / "day1.context").write_text("@context id=day1 seq=1 label=Day1\n@edges\n    old -> q1 about\n", encoding="utf-8")
+    (tmp_path / "day10.context").write_text("@context id=day10 seq=10 label=Day10\ncaption=\"Done day\"\n@attrs\nstatus:\n  done: a1\n@edges\n    a1 -> q1 answers\n", encoding="utf-8")
+
+    model = parse_tasks_text("```items\n---\nitems_schema: kg.schema\n---\n```", current_path=tmp_path / "graph.md")
+
+    assert model["kg_context"]["id"] == "day10"
+    assert [item["id"] for item in model["kg_contexts"]] == ["day1", "day10"]
+    assert {task["id"]: task["status"] for task in model["tasks"]} == {"a1": "done", "q1": "open"}
+    assert [task["id"] for task in model["projection_models"]["mia"]["model"]["tasks"]] == ["a1"]
+
+
 def test_kg_pack_source_attr_groups_scope_projection_nodes(tmp_path):
     (tmp_path / "roadmap.kg.schema").write_text(
         """@graph id=roadmap title=Roadmap initial_view=chapter
