@@ -90,6 +90,8 @@ def test_kg_document_runtime_includes_tasks_assets(tmp_path):
     assert "tasks.js" in html
     assert "data-tasks-widget=\"true\"" in html
     assert "width: 100%;" in html
+    assert "height: 100%; display: flex; flex-direction: column;" in html
+    assert "flex:1 1 auto;min-height:0;overflow:hidden;cursor:grab" in html
     assert "my-6 rounded-xl border-4" not in html
 
 

@@ -211,11 +211,18 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     optional_layout_attrs_str = (" " + " ".join(optional_layout_attrs)) if optional_layout_attrs else ""
     breakout = not standalone and (str(width).lower() in {"100%", "100vw"} or "vw" in str(width).lower())
     container_style_parts = [f"width: {width};"]
+    if standalone:
+        container_style_parts.append("height: 100%; display: flex; flex-direction: column;")
     if min_height:
         container_style_parts.append(f"min-height: {min_height};")
     if breakout:
         container_style_parts.append("position: relative; left: 50%; transform: translateX(-50%);")
     container_style = " ".join(container_style_parts)
+    flow_style = (
+        "flex:1 1 auto;min-height:0;overflow:hidden;cursor:grab"
+        if standalone
+        else f"height:{flow_height};min-height:420px;overflow:hidden;cursor:grab"
+    )
     return (
         f'<div class="tasks-container relative {"overflow-hidden" if standalone else "my-6 rounded-xl border-4 border-slate-200 dark:border-slate-800"}" '
         f'style="{container_style}" '
@@ -241,7 +248,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         f'<div data-tasks-stats class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">{stats_label}</div>'
         f'</div>'
         f'</div>'
-        f'<div class="vyasa-tasks-flow" style="height:{flow_height};min-height:420px;overflow:hidden;cursor:grab">'
+        f'<div class="vyasa-tasks-flow" style="{flow_style}">'
         '<div class="vyasa-tasks-scene" style="position:relative;width:100%;height:100%;transform-origin:center center"></div></div>'
         f'</div>'
     )
