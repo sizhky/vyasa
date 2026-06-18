@@ -1,0 +1,32 @@
+@context id=day1 seq=1 label="Monday — The plan"
+caption=|
+	The plan: a birdhouse for sparrows, hung in the apple tree, must survive rain.
+	Open question: what color? Mia gathers wood, Leo finds tools.
+
+@slides
+why: Why we're here
+	nodes=bh
+	desc=|
+		Three friends — Mia, Leo, and Aria — decide to build one birdhouse this week.
+plan: The plan, in three calls
+	nodes=forsparrows,intree,weatherproof
+	desc=|
+		- **For sparrows** — size it small.
+		- **In the apple tree** — that's where it'll hang.
+		- **Survive the rain** — it has to stay dry inside.
+color: The one open argument
+	nodes=q1
+	desc=|
+		Everything else is agreed. The one thing they can't settle: **what color to paint it?**
+jobs: First jobs out the door
+	nodes=a1,a2
+	desc=|
+		Mia takes **gather the wood**; Leo takes **find the tools**. The week begins.
+
+@edges
+	forsparrows -> bh about
+	intree -> bh about
+	weatherproof -> bh constrains
+	q1 -> bh about
+	a1 -> bh addresses
+	a2 -> bh addresses

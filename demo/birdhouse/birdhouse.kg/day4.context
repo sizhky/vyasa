@@ -1,0 +1,39 @@
+@context id=day4 seq=4 label="Thursday — A problem"
+caption=|
+	Box assembled (done). Too heavy for the branch, so mount on the fence post
+	instead (tree plan dropped). Color answered: paint it blue.
+
+@slides
+build: The build
+	nodes=a4,d_box
+	desc=|
+		Leo **assembles the box**. It finally looks like a birdhouse.
+snag: The snag
+	nodes=tooheavy,intree,onfence
+	desc=|
+		But the box is **too heavy for the branch**. The apple-tree plan is dropped — it'll go on the **fence post** instead.
+paint: The last call
+	nodes=paintblue,q1
+	desc=|
+		With bluebirds locked in, the color settles itself: **paint it blue.** The last open question is closed.
+
+# inherits kg.attrs (kind/owner/dept); overrides only what moved today
+@attrs
+status:
+  done: a4
+  resolved: q1
+  superseded: intree
+
+@edges
+	onfence -> intree supersedes
+	paintblue -> q1 answers
+	a4 -> d_box produces
+	weatherproof -> bh constrains
+	slantroof -> bh about
+	slantroof -> weatherproof reinforces
+	forbluebirds -> bh about
+	hole15 -> forbluebirds reinforces
+	tooheavy -> bh constrains
+	onfence -> bh about
+	paintblue -> forbluebirds reinforces
+	a5 -> bh addresses

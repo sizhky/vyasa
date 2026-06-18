@@ -1041,7 +1041,7 @@ def test_context_graphs_have_day_switch_contract():
 
     assert "async function loadTasksContext" in source
     assert "fetch('/api/tasks/context'" in source
-    assert "const filterKeyColumn = '132px';" in source
+    assert "const filterKeyColumn = '104px';" in source
     assert "const filterRowStyle = { display: 'grid', gridTemplateColumns: `${filterKeyColumn} minmax(0, 1fr)`" in source
     assert "const filterChoiceListStyle = { display: 'grid', gap: '8px', minWidth: 0 };" in source
     assert "const contextOptions = React.useMemo" in source
@@ -1049,6 +1049,7 @@ def test_context_graphs_have_day_switch_contract():
     assert source.index("'Context'") < source.index("'View'")
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
     assert "React.createElement('div', { style: filterChoiceListStyle }," in source
+    assert "sourceModel?.kg_context?.caption ? React.createElement('div', { style: { ...filterRowStyle, marginTop: '8px' } }," in source
     assert "if (options?.resetSlideIndex) setSlideIndex((index) => index >= 0 ? 0 : -1);" in source
     assert "applyLoadedSource(payload, null, { resetSlideIndex: true });" in source
 

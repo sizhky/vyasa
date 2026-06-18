@@ -1,0 +1,38 @@
+bh: Backyard Birdhouse
+	summary=Three friends — Mia, Leo, Aria — build a birdhouse over one week.
+
+forsparrows: Build it for sparrows
+	summary=Size the house and entrance for small sparrows. (Replaced on Day 3.)
+intree: Hang it in the apple tree
+	summary=Mount the finished house on a branch of the apple tree. (Replaced on Day 4.)
+weatherproof: Must survive the rain
+	summary=The house has to stay dry inside through a rainstorm.
+
+q1: What color should we paint it?
+a1: Mia gathers the wood
+a2: Leo finds the tools
+
+slantroof: Give it a slanted roof
+	summary=A sloped roof so rain runs off instead of pooling.
+a3: Aria cuts the panels
+q2: How big should the entrance hole be?
+
+forbluebirds: Build it for bluebirds
+	summary=Switch the target bird from sparrows to bluebirds.
+hole15: A 1.5-inch entrance hole
+	summary=The hole size that fits bluebirds.
+d_panels: Cut wood panels
+a4: Leo assembles the box
+
+d_box: Assembled birdhouse box
+tooheavy: The box is too heavy for the tree branch
+	summary=The assembled box would bend or snap a thin apple-tree branch.
+onfence: Mount it on the fence post
+	summary=Attach the house to the sturdy fence post instead of the tree.
+paintblue: Paint it blue
+	summary=Blue paint to match the bluebirds.
+a5: Mia paints the birdhouse
+
+d_house: Finished painted birdhouse
+a6: Aria mounts it on the fence post
+q3: Will the birds actually come?

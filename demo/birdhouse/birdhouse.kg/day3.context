@@ -1,0 +1,38 @@
+@context id=day3 seq=3 label="Wednesday — A change of mind"
+caption=|
+	Switched from sparrows to bluebirds (sparrows dropped). Hole question answered (1.5").
+	Panels cut.
+
+@slides
+pivot: The change of mind
+	nodes=forsparrows,forbluebirds
+	desc=|
+		Out of nowhere: **not sparrows — bluebirds.** The sparrow plan is struck through and leaves the board.
+ripple: The ripple
+	nodes=hole15,q2
+	desc=|
+		Bigger bird, bigger door. The switch **answers the hole question**: a **1.5-inch** entrance.
+piece: First real piece
+	nodes=a3,d_panels
+	desc=|
+		Aria's **panels are cut** — the first physical part of the house now exists.
+
+# inherits kg.attrs (kind/owner/dept); overrides only what moved today
+@attrs
+status:
+  done: a3
+  resolved: q2
+  superseded: forsparrows
+
+@edges
+	forbluebirds -> forsparrows supersedes
+	hole15 -> q2 answers
+	a3 -> d_panels produces
+	intree -> bh about
+	weatherproof -> bh constrains
+	slantroof -> bh about
+	slantroof -> weatherproof reinforces
+	forbluebirds -> bh about
+	hole15 -> forbluebirds reinforces
+	q1 -> bh about
+	a4 -> bh addresses
