@@ -28,7 +28,8 @@
 
     try {
         ['posts', 'toc'].forEach((kind) => {
-            if (localStorage.getItem(`vyasa-${kind}-sidebar-hidden`) === '1') {
+            const stored = localStorage.getItem(`vyasa-${kind}-sidebar-hidden`);
+            if (stored === '1' || (kind === 'toc' && stored !== '0')) {
                 document.documentElement.setAttribute(`data-vyasa-hide-${kind}-sidebar`, '');
             }
         });

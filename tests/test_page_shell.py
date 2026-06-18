@@ -49,6 +49,14 @@ def test_sidebar_title_click_hides_docked_sidebar_and_pulses_nav_icon():
     assert 'data_sidebar="toc"' in toc_source
 
 
+def test_toc_sidebar_defaults_closed_but_open_choice_persists():
+    head_init = Path("vyasa/static/head-init.js").read_text(encoding="utf-8")
+    scripts = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+
+    assert "kind === 'toc' && stored !== '0'" in head_init
+    assert "localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '0')" in scripts
+
+
 def test_static_layout_hides_updated_label_in_navbar():
     html = static_layout(
         "<h1>Page</h1>",
