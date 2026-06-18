@@ -4105,7 +4105,7 @@ async function renderTasksGraphs(rootElement = document) {
                 target.addEventListener('paste', handleDefaultViewPaste, true);
                 return () => target.removeEventListener('paste', handleDefaultViewPaste, true);
             }, [handleDefaultViewPaste]);
-            const applyLoadedSource = React.useCallback((payload, projectionId = null) => {
+            const applyLoadedSource = React.useCallback((payload, projectionId = null, options = null) => {
                 const nextModel = {
                     ...(payload.model || {}),
                     document_path: sourceModel.document_path,
@@ -4123,6 +4123,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setSelectedNodeIds(new Set());
                 setDragSelection(null);
                 setHoveredNodeId(null);
+                if (options?.resetSlideIndex) setSlideIndex((index) => index >= 0 ? 0 : -1);
                 pendingFitActionRef.current = 'mode';
             }, [sourceModel, activeProjectionId, ganttEnabled]);
             const handleSwitchContext = React.useCallback(async (contextId) => {
@@ -4135,7 +4136,7 @@ async function renderTasksGraphs(rootElement = document) {
                         currentPath: sourceModel?.document_path || '',
                         contextId,
                     });
-                    applyLoadedSource(payload);
+                    applyLoadedSource(payload, null, { resetSlideIndex: true });
                 } catch (error) {
                     window.alert(error instanceof Error ? error.message : String(error));
                 } finally {

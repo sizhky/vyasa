@@ -1045,6 +1045,8 @@ def test_context_graphs_have_day_switch_contract():
     assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.7 } }, 'Context')" in source
     assert source.index("'Context'") < source.index("'View'")
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
+    assert "if (options?.resetSlideIndex) setSlideIndex((index) => index >= 0 ? 0 : -1);" in source
+    assert "applyLoadedSource(payload, null, { resetSlideIndex: true });" in source
 
 
 def test_tasks_block_serializes_document_path_and_stable_storage_id():
