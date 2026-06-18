@@ -1041,15 +1041,18 @@ def test_context_graphs_have_day_switch_contract():
 
     assert "async function loadTasksContext" in source
     assert "fetch('/api/tasks/context'" in source
-    assert "const filterKeyColumn = '104px';" in source
-    assert "const filterRowStyle = { display: 'grid', gridTemplateColumns: `${filterKeyColumn} minmax(0, 1fr)`" in source
+    assert "const filterSectionStyle = { display: 'grid', gap: '8px', fontSize: '12px' };" in source
+    assert "const filterInlineControlStyle = { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto'" in source
     assert "const filterChoiceListStyle = { display: 'grid', gap: '8px', minWidth: 0 };" in source
     assert "const contextOptions = React.useMemo" in source
     assert "React.createElement('span', { style: filterKeyStyle }, 'Context')" in source
     assert source.index("'Context'") < source.index("'View'")
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
     assert "React.createElement('div', { style: filterChoiceListStyle }," in source
-    assert "sourceModel?.kg_context?.caption ? React.createElement('div', { style: { ...filterRowStyle, marginTop: '8px' } }," in source
+    assert "sourceModel?.kg_context?.caption ? React.createElement('div', {" in source
+    assert "React.createElement('span', { style: filterKeyStyle }, 'Intensity')" in source
+    assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Edge Intensity')" in source
+    assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Null Intensity')" in source
     assert "if (options?.resetSlideIndex) setSlideIndex((index) => index >= 0 ? 0 : -1);" in source
     assert "applyLoadedSource(payload, null, { resetSlideIndex: true });" in source
 
