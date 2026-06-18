@@ -262,10 +262,10 @@ function tasksApplyEdgeOpacity(alpha, opacity) {
     return Number((normalized * clampTasksEdgeOpacity(opacity)).toFixed(4));
 }
 
-function normalizeTasksEdgeAnimationMode(mode, enabledFallback = true) {
+function normalizeTasksEdgeAnimationMode(mode, enabledFallback = undefined) {
     const text = String(mode || '').trim().toLowerCase();
     if (text === 'none' || text === 'tick' || text === 'smooth') return text;
-    return enabledFallback === false ? 'none' : 'smooth';
+    return enabledFallback === true ? 'smooth' : 'none';
 }
 
 function nextTasksEdgeAnimationMode(mode) {
@@ -6791,6 +6791,7 @@ async function renderTasksGraphs(rootElement = document) {
                     filtersCollapsed: isActiveLive ? filtersCollapsed : def?.filters_collapsed,
                     edgesVisible: isActiveLive ? edgesVisible : def?.edges_visible,
                     edgeAnimationEnabled: isActiveLive ? edgeAnimationEnabled : def?.edge_animation_enabled,
+                    edgeAnimationMode: isActiveLive ? edgeAnimationMode : def?.edge_animation_mode,
                     edgeOpacity: isActiveLive ? edgeOpacity : def?.edge_opacity,
                     projectionUnspecifiedContentOpacity: isActiveLive ? projectionUnspecifiedContentOpacity : def?.projection_unspecified_content_opacity,
                     defaultOpenDepth: effectiveDefaultOpenDepth,
@@ -6915,7 +6916,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, window.React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
                 window.React.createElement('strong', null, 'Graph help'),
                 window.React.createElement('button', { type: 'button', onClick: () => setHelpOpen(false), style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: 1, opacity: 0.7 } }, '×')
-            ), window.React.createElement('div', { style: { whiteSpace: 'pre-line' } }, 'Mouse\nClick node: select card or group\nClick canvas: clear selection\nShift + drag: box select\nCmd + drag: lasso select\nWheel / pinch: zoom\nDrag canvas: pan\n\nKeys\n?: toggle this help\nF: fit view\nShift + F: toggle fullscreen\nG: open EG\nShift + G: open EG+\nS: toggle filters\nE: toggle edges\n0: edge animation smooth / tick / none\nT: toggle hovered group\nI / O: expand or collapse one group depth\nU / P: unfold or collapse all groups\nArrow keys: pan\nShift + arrows: pan faster'));
+            ), window.React.createElement('div', { style: { whiteSpace: 'pre-line' } }, 'Mouse\nClick node: select card or group\nClick canvas: clear selection\nShift + drag: box select\nCmd + drag: lasso select\nWheel / pinch: zoom\nDrag canvas: pan\n\nKeys\n?: toggle this help\nF: fit view\nShift + F: toggle fullscreen\nG: open EG\nShift + G: open EG+\nS: toggle filters\nE: toggle edges\n0: edge animation none / smooth / tick\nT: toggle hovered group\nI / O: expand or collapse one group depth\nU / P: unfold or collapse all groups\nArrow keys: pan\nShift + arrows: pan faster'));
             const SlideLauncher = () => {
                 if (!slides.length || slideIndex >= 0) return null;
                 return window.React.createElement('button', {

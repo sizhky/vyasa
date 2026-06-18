@@ -494,8 +494,24 @@ def test_tasks_source_uses_reset_button_label():
     assert "setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, defaults, nodeNotes))" in source
     assert "setActiveSecondaryColorBy(resolveTasksPreferredSecondaryColorBy(model, defaults, nodeNotes))" in source
     assert "setEdgesVisible(typeof defaults.edgesVisible === 'boolean'" in source
-    assert "setEdgeAnimationEnabled(typeof defaults.edgeAnimationEnabled === 'boolean'" in source
+    assert "setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(defaults.edgeAnimationMode, defaults.edgeAnimationEnabled))" in source
     assert "onClick: resetProjectionControls" in source
+
+
+def test_tasks_edge_animation_defaults_off_and_zero_cycles_smooth_then_tick():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "function normalizeTasksEdgeAnimationMode(mode, enabledFallback = undefined)" in source
+    assert "return enabledFallback === true ? 'smooth' : 'none';" in source
+    assert "return ({ smooth: 'tick', tick: 'none', none: 'smooth' })" in source
+    assert "0: edge animation none / smooth / tick" in source
+
+
+def test_tasks_projection_copy_preserves_edge_animation_mode():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "edgeAnimationMode: isActiveLive ? edgeAnimationMode : def?.edge_animation_mode" in source
+    assert "if (cfg.edgeAnimationMode) lines.push(`\\tedge_animation_mode=${normalizeTasksEdgeAnimationMode(cfg.edgeAnimationMode, cfg.edgeAnimationEnabled)}`);" in source
 
 
 def test_tasks_color_swatch_filter_is_independent_and_ands_with_query_filter():
