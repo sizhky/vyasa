@@ -351,11 +351,17 @@ class RootClass:
 
 
 def classify_root(path: Path) -> RootClass:
-    """Classify a content root using dulwich, never shelling out to git."""
-    from dulwich.errors import NotGitRepository
-    from dulwich.repo import Repo
+    """Classify a content root using dulwich, never shelling out to git.
 
+    If dulwich is unavailable, git features degrade off: every root is
+    treated as a plain folder rather than breaking content serving."""
     path = Path(path).resolve()
+    try:
+        from dulwich.errors import NotGitRepository
+        from dulwich.repo import Repo
+    except ImportError:
+        return RootClass("plain", path)
+
     try:
         repo = Repo(str(path))
     except NotGitRepository:
