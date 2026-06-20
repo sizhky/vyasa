@@ -100,6 +100,21 @@ def test_sidebar_uncommitted_dot_for_dirty_clone_file(site):
     assert "vyasa-uncommitted-dot" not in clean
 
 
+def test_ref_picker_lists_branches_tags_and_marks_current(site):
+    from fasthtml.common import to_xml
+
+    from vyasa.content_routes import _ref_picker_node
+    from vyasa.content_tree import resolve_ref_document
+
+    work = site.parent / "repo"
+    _git(work, "tag", "v1")
+    html = to_xml(_ref_picker_node(resolve_ref_document("repo@feature/feat")))
+    assert ">feature<" in html and "main (default)" in html and ">v1<" in html
+    assert 'value="feature"' in html and "selected" in html
+    # the clone's current branch is disk-served, so no ref doc / picker there
+    assert resolve_ref_document("repo/a") is None
+
+
 def test_sidebar_tree_built_for_a_ref(site):
     import vyasa.core as core
     from fasthtml.common import Ul, to_xml
