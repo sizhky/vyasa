@@ -579,58 +579,96 @@ def theme_toggle():
     )
 
 
-def _navbar_ref_switcher(current_path):
-    """A branch/tag dropdown button for the repo the current page belongs to.
+@lru_cache(maxsize=2)
+def _git_roots_with_refs(time_bucket):
+    """Discover every git-backed content root and its refs, as
+    (alias, default_ref, current_branch, ((name, kind, is_default), ...)).
 
-    Shown for any git-backed root (including a working clone on its current
-    branch, served from disk). Switching navigates to the chosen ref and
-    remembers it per root in localStorage."""
-    if not current_path:
-        return None
+    Cached per coarse time bucket so the per-root dulwich opens happen at
+    most once every few seconds, not on every page render."""
     from .content_backend import GitBackend, classify_root
+    from .helpers import get_content_mounts
+
+    out = []
+    for alias, root in get_content_mounts():
+        rc = classify_root(root)
+        if rc.kind == "plain" or rc.git_dir is None:
+            continue
+        try:
+            refs = GitBackend(rc.git_dir).list_refs()
+        except Exception:
+            continue
+        if not refs:
+            continue
+        default = next((r.name for r in refs if r.is_default), "")
+        current_branch = rc.current_branch if rc.kind == "clone" else ""
+        out.append((alias, default, current_branch or "", tuple((r.name, r.kind, r.is_default) for r in refs)))
+    return tuple(out)
+
+
+def _ref_target_url(alias, name, current_path):
+    """Where switching `alias` to `name` should land."""
     from .helpers import content_location
 
-    root_id, root_path, ref, relative = content_location(current_path)
-    if root_path is None:
-        return None
-    rc = classify_root(root_path)
-    if rc.kind == "plain" or rc.git_dir is None:
-        return None
-    try:
-        refs = GitBackend(rc.git_dir).list_refs()
-    except Exception:
-        return None
-    if not refs:
-        return None
-    default_ref = next((r.name for r in refs if r.is_default), "")
-    current = ref or (rc.current_branch if rc.kind == "clone" else "") or default_ref
-    rel = relative.as_posix()
-    rel = "" if rel == "." else rel
+    if alias:
+        return content_url_for_slug(f"{alias}@{name}")
+    # primary root: carry the ref as a query param on the current page (or home)
+    base = "/"
+    if current_path:
+        _, _, _, rel = content_location(current_path)
+        relp = rel.as_posix()
+        base = content_url_for_slug(relp) if relp and relp != "." else "/"
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}ref={quote(name, safe='')}"
 
-    def target(name):
-        if root_id:
-            return content_url_for_slug(f"{root_id}@{name}/{rel}".strip("/"))
-        base = content_url_for_slug(rel) if rel else "/"
-        return f"{base}?ref={quote(name, safe='')}"
 
-    ref_urls = {r.name: target(r.name) for r in refs}
-    storage_key = f"vyasa-ref:{root_id}"
-    items = [
-        Li(Button(
-            Span("✓ " if r.name == current else "", cls="w-4 inline-block"),
-            Span(r.name), Span(" (default)" if r.is_default else "", cls="opacity-60 text-xs"),
-            type="button",
-            onclick=f"try{{localStorage.setItem('{storage_key}','{r.name}');}}catch(e){{}};window.location='{ref_urls[r.name]}';",
-            cls="vyasa-ref-option flex w-full items-center gap-1 rounded px-3 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800",
-        ))
-        for group in (("branch",), ("tag",)) for r in refs if r.kind == group[0]
-    ]
+def _navbar_ref_switcher(current_path=None):
+    """Always-visible navbar dropdown of every git-backed root, each
+    expanding to its branches and tags. Picking a ref navigates to that
+    root on the ref and remembers it per root in localStorage."""
+    roots = _git_roots_with_refs(int(time.time() // 10))
+    if not roots:
+        return None
+    from .helpers import content_location
+
+    cur_root_id, cur_ref = "", ""
+    if current_path:
+        cur_root_id, _, cur_ref, _ = content_location(current_path)
+
+    root_blocks = []
+    for alias, default, current_branch, refs in roots:
+        active = alias == cur_root_id
+        current = (cur_ref if active else "") or current_branch or default
+        storage_key = f"vyasa-ref:{alias}"
+        ref_items = []
+        for name, kind, is_default in refs:
+            url = _ref_target_url(alias, name, current_path if active else "")
+            ref_items.append(Li(Button(
+                Span("✓" if name == current else "", cls="w-3 inline-block text-amber-500"),
+                Span(name), Span(" (default)" if is_default else "", cls="opacity-60 text-xs"),
+                UkIcon("tag", cls="w-3 h-3 opacity-50 ml-auto") if kind == "tag" else "",
+                type="button",
+                onclick=f"try{{localStorage.setItem('{storage_key}','{name}');}}catch(e){{}};window.location='{url}';",
+                cls="flex w-full items-center gap-1 rounded px-3 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800",
+            )))
+        root_blocks.append(Li(Details(
+            Summary(
+                UkIcon("folder-git-2", cls="w-4 h-4 shrink-0"),
+                Span(alias or "(primary)", cls="font-medium truncate"),
+                Span(current, cls="opacity-60 text-xs ml-auto truncate max-w-[7rem]"),
+                cls="list-none flex items-center gap-2 cursor-pointer rounded px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden",
+            ),
+            Ul(*ref_items, cls="list-none pl-3 mt-1 mb-1 border-l border-slate-200 dark:border-slate-700"),
+            open=active,
+            cls="vyasa-ref-root",
+        ), cls="my-0.5"))
+
     return Details(
         Summary(
-            UkIcon("git-branch", cls="w-4 h-4"), Span(current, cls="max-w-[10rem] truncate"), Span("⌄", cls="opacity-70"),
+            UkIcon("git-branch", cls="w-4 h-4"), Span("Branches", cls="hidden sm:inline"), Span("⌄", cls="opacity-70"),
             cls="list-none flex items-center gap-2 cursor-pointer select-none rounded-md px-3 py-2 text-slate-100 hover:bg-slate-800/80 transition-colors [&::-webkit-details-marker]:hidden",
         ),
-        Div(Ul(*items, cls="list-none"), cls="absolute right-0 mt-2 w-64 p-2 rounded-lg bg-white text-slate-800 shadow-lg border border-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 z-[1100] max-h-[60vh] overflow-y-auto"),
+        Div(Ul(*root_blocks, cls="list-none"), cls="absolute right-0 mt-2 w-72 p-2 rounded-lg bg-white text-slate-800 shadow-lg border border-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 z-[1100] max-h-[70vh] overflow-y-auto"),
         cls="vyasa-ref-switcher relative",
     )
 

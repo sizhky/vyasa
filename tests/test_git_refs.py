@@ -132,20 +132,23 @@ def test_ref_picker_lists_branches_tags_and_marks_current(site):
     assert resolve_ref_document("repo/a") is None
 
 
-def test_navbar_ref_switcher_lists_refs_for_git_root(site):
+def test_navbar_ref_switcher_discovers_all_git_roots(site):
     import vyasa.core as core
     from fasthtml.common import to_xml
 
     work = site.parent / "repo"
     _git(work, "tag", "v1")
-    # clone on its current branch is disk-served, but the navbar switcher
-    # still appears so the user can jump to another ref.
-    sw = core._navbar_ref_switcher("repo/a")
-    assert sw is not None
-    html = to_xml(sw)
-    assert ">main<" in html and ">feature<" in html and ">v1<" in html
-    # a plain (non-git) primary page gets no switcher
-    assert core._navbar_ref_switcher("nonexistent") is None or True
+    core._git_roots_with_refs.cache_clear()
+
+    # Always visible, even with no current page and on a non-git page.
+    for path in (None, "nonexistent"):
+        sw = core._navbar_ref_switcher(path)
+        assert sw is not None
+        html = to_xml(sw)
+        assert "repo" in html  # the git root is listed
+        assert ">main<" in html and ">feature<" in html and ">v1<" in html
+        assert "repo%40feature" in html  # ref target carries the root@ref
+    core._git_roots_with_refs.cache_clear()
 
 
 def test_sidebar_tree_built_for_a_ref(site):
