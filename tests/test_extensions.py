@@ -32,6 +32,30 @@ from vyasa.extensions_builtin.default_search import (
 from vyasa.extensions_builtin.link_preview.routes import _current_path_from_request, render_link_preview_html
 from vyasa.helpers import get_content_mounts
 from vyasa import core
+from vyasa.api_catalog import namespace_catalog, publish_api
+
+
+def test_publish_api_derives_signature_route_and_docstring_contract():
+    routes = []
+
+    def rt(path, **kwargs):
+        routes.append((path, tuple(kwargs.get("methods", ()))))
+        return lambda fn: fn
+
+    @publish_api(
+        rt,
+        namespace="contract_test",
+        operation_id="contract_test.read",
+        path="/api/things/{thing_id}",
+        methods=("GET",),
+    )
+    def read_thing(thing_id: str, request):
+        """Read one thing using its current contract."""
+
+    operation = namespace_catalog("contract_test")["operations"][0]
+    assert operation["signature"] == "read_thing(thing_id: str, request)"
+    assert operation["description"] == "Read one thing using its current contract."
+    assert routes == [("/api/things/{thing_id}", ("GET",))]
 
 
 def test_extensions_default_preset_when_section_omitted(tmp_path, monkeypatch):
@@ -44,8 +68,8 @@ def test_extensions_default_preset_when_section_omitted(tmp_path, monkeypatch):
 
     assert plan.preset == "default"
     assert plan.selected_by_category["layout"] == ("default_layout",)
-    assert plan.selected_by_category["render"] == ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "html_viewer", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
-    assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "bookmarks", "filesystem_routes")
+    assert plan.selected_by_category["render"] == ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "mdx", "html_viewer", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
+    assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "bookmarks", "api_catalog", "filesystem_routes")
     assert "annotations" not in plan.enabled_ids
     assert plan.enabled_ids[-1] == "filesystem"
 
@@ -118,12 +142,15 @@ def test_document_extensions_register_document_type_renderers():
     runtime = build_extension_runtime({})
 
     assert runtime.document_types[".kg"] == DocumentType(".kg", "kg", "network")
+    assert ".mdx" not in runtime.document_types
     assert runtime.document_types[".pdf"] == DocumentType(".pdf", "pdf", "file")
     assert runtime.document_types[".tree"] == DocumentType(".tree", "tree", "table")
     assert "kg" in runtime.document_renderers
+    assert "mdx" in runtime.document_renderers
     assert "pdf" in runtime.document_renderers
     assert "tree" in runtime.document_renderers
     assert "kg" in runtime.static_document_renderers
+    assert "mdx" in runtime.static_document_renderers
     assert "pdf" in runtime.static_document_renderers
     assert "tree" in runtime.static_document_renderers
 
@@ -217,6 +244,7 @@ def test_default_route_extensions_exclude_annotations():
     assert "/slides" in prefixes
     assert "/api/tasks" in prefixes
     assert "/api/bookmarks" in prefixes
+    assert "/api/catalog" in prefixes
     assert "/api/annotations" not in prefixes
     assert "annotations" not in runtime.storage_namespaces
     assert "bookmarks" in runtime.storage_namespaces

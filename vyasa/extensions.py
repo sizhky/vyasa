@@ -166,6 +166,8 @@ class ExtensionRuntime:
     search_preview_match_finder: Callable | None = None
     search_preview_page_renderer: Callable | None = None
     document_types: dict[str, DocumentType] = field(default_factory=dict)
+    document_kind_resolvers: list[Callable] = field(default_factory=list)
+    document_kind_icons: dict[str, str] = field(default_factory=dict)
     document_renderers: dict[str, Callable] = field(default_factory=dict)
     static_document_renderers: dict[str, Callable] = field(default_factory=dict)
 
@@ -237,7 +239,6 @@ class _RegistrationGuard:
             raise ExtensionConfigError(
                 f"Extension {self.meta.id} attempted to register undeclared storage namespace {namespace}"
             )
-
 
 class _MarkdownRegistrar:
     def __init__(self, runtime: ExtensionRuntime, meta: ExtensionMeta, guard: _RegistrationGuard):
@@ -410,6 +411,11 @@ class _DocumentRegistrar:
         self.guard.require_capability(f"cap:document_type:{document_type.kind}")
         self.runtime.document_types[document_type.suffix] = document_type
 
+    def kind_resolver(self, kind: str, icon: str, provider: Callable) -> None:
+        self.guard.require_capability(f"cap:document_type:{kind}")
+        self.runtime.document_kind_icons[kind] = icon
+        self.runtime.document_kind_resolvers.append(provider)
+
     def renderer(self, kind: str, provider: Callable) -> None:
         self.guard.require_capability(f"cap:document_type:{kind}")
         self.runtime.document_renderers[kind] = provider
@@ -579,8 +585,8 @@ def default_preset_selection() -> dict[ExtensionCategory, tuple[str, ...]]:
         "search": ("default_search",),
         "home": ("blog_home",),
         "errors": ("default_errors",),
-        "render": ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "html_viewer", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon"),
-        "route": ("slides", "auth_rbac", "sidebar_routes", "bookmarks", "filesystem_routes"),
+        "render": ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "mdx", "html_viewer", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon"),
+        "route": ("slides", "auth_rbac", "sidebar_routes", "bookmarks", "api_catalog", "filesystem_routes"),
         "content_source": ("filesystem",),
     }
 

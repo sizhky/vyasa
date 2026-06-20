@@ -1,5 +1,6 @@
 def load_builtin_extensions():
     from . import annotations
+    from . import api_catalog
     from . import auth_rbac
     from . import auth_routes
     from . import blog_home
@@ -20,6 +21,7 @@ def load_builtin_extensions():
     from . import code_tools
     from . import link_preview
     from . import mermaid
+    from . import mdx
     from . import rbac_admin
     from . import scoped_custom_css
     from . import slides
@@ -45,6 +47,7 @@ def load_builtin_extensions():
         cytograph.EXTENSION,
         cryptograph.EXTENSION,
         tasks.EXTENSION,
+        mdx.EXTENSION,
         html_viewer.EXTENSION,
         pdf_viewer.EXTENSION,
         tree_table.EXTENSION,
@@ -59,6 +62,7 @@ def load_builtin_extensions():
         sidebar_routes.EXTENSION,
         annotations.EXTENSION,
         bookmarks.EXTENSION,
+        api_catalog.EXTENSION,
         rbac_admin.EXTENSION,
         auth_routes.EXTENSION,
         filesystem_routes.EXTENSION,

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vyasa MDX"
+  short_description: "Author and operate Vyasa MDX documents"
+  default_prompt: "Use $mdx to build or operate a Vyasa MDX document."

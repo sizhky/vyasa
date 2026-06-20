@@ -32,6 +32,14 @@ def _register_filesystem_routes(rt, runtime) -> None:
             return FileResponse(file_path)
         return Response(status_code=404)
 
+    @rt("/posts/{path:path}.jsx")
+    def serve_post_jsx(path: str):
+        services = get_runtime_services()
+        file_path = services.content_path_for_slug(path, ".jsx")
+        if file_path and file_path.exists():
+            return FileResponse(file_path, media_type="text/javascript; charset=utf-8")
+        return Response(status_code=404)
+
     @rt("/posts/{path:path}.json")
     def serve_post_json(path: str):
         services = get_runtime_services()

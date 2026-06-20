@@ -215,15 +215,34 @@ def document_kind_for_suffix(suffix: str) -> str | None:
             return item["kind"]
     return None
 
+def document_kind_for_path(path: Path) -> str | None:
+    try:
+        from .extensions import get_extension_runtime
+        runtime = get_extension_runtime()
+        for resolver in runtime.document_kind_resolvers if runtime else ():
+            if kind := resolver(path):
+                return kind
+    except Exception:
+        pass
+    return document_kind_for_suffix(path.suffix)
+
 def document_icon_for_path(path: Path) -> str:
+    kind = document_kind_for_path(path)
+    try:
+        from .extensions import get_extension_runtime
+        runtime = get_extension_runtime()
+        if runtime and kind in runtime.document_kind_icons:
+            return runtime.document_kind_icons[kind]
+    except Exception:
+        pass
     for item in enabled_document_types():
-        if path.suffix.lower() == item["suffix"]:
+        if kind == item["kind"]:
             return item["icon"]
     return "file-text"
 
 def document_title_for_path(path: Path, abbreviations=None) -> str:
-    kind = document_kind_for_suffix(path.suffix)
-    if kind == "markdown":
+    kind = document_kind_for_path(path)
+    if path.suffix.lower() == ".md":
         return get_post_title(path, abbreviations=abbreviations)
     title = slug_to_title(path.stem, abbreviations=abbreviations)
     return f"{title} (PDF)" if kind == "pdf" else title
