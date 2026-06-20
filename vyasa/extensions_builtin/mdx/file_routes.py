@@ -43,14 +43,39 @@ def register_mdx_file_routes(rt, runtime) -> None:
         """Atomically replace a sidecar file relative to an MDX document."""
         if not _is_local_request(request):
             return Response("Forbidden", status_code=403)
-        from .excalidraw_routes import browser_autosave_conflicts
-        if browser_autosave_conflicts(path, request):
-            return Response("Stale Excalidraw autosave", status_code=409)
+        if not _edits_enabled():
+            return Response("Editing disabled: unset VYASA_MDX_READONLY", status_code=403)
         file_path = _resolve_ref(path, request, runtime)
         if file_path is None:
             return Response(status_code=404)
+        from .excalidraw_routes import browser_autosave_conflicts
+        if browser_autosave_conflicts(file_path, request):
+            return Response("Stale Excalidraw autosave", status_code=409)
         _atomic_write_bytes(file_path, await request.body())
-        return Response('{"ok": true}', media_type="application/json", headers={"Cache-Control": "no-store"})
+        revision = file_path.stat().st_mtime_ns
+        return Response(
+            f'{{"ok": true, "revision": "{revision}"}}',
+            media_type="application/json",
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+def register_mdx_events_routes(rt, runtime) -> None:
+    @publish_api(
+        rt,
+        namespace="mdx",
+        operation_id="mdx.events.subscribe",
+        path="/api/mdx/events/{path:path}",
+        query=_REF_QUERY,
+    )
+    def subscribe_events(path: str, request):
+        """Push sidecar change events to an open page via Server-Sent Events."""
+        file_path = _resolve_ref(path, request, runtime)
+        if file_path is None:
+            return Response(status_code=404)
+        from ...live import sse_stream, watch_path
+
+        return sse_stream(watch_path(file_path))
 
 
 def _resolve_ref(path: str, request, runtime) -> Path | None:
@@ -87,6 +112,14 @@ def _inside_content_roots(path: Path, mounts) -> bool:
 def _is_local_request(request) -> bool:
     host = getattr(getattr(request, "client", None), "host", "")
     return host in {"127.0.0.1", "::1", "localhost", ""}
+
+
+def _readonly() -> bool:
+    return os.getenv("VYASA_MDX_READONLY", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _edits_enabled() -> bool:
+    return not _readonly()
 
 
 def _atomic_write_bytes(path: Path, payload: bytes) -> None:

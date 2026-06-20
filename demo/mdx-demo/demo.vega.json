@@ -1,0 +1,75 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "data": { "url": "https://vega.github.io/vega-datasets/data/movies.json" },
+  "params": [
+    {
+      "name": "genreFilter",
+      "value": "Drama",
+      "bind": {
+        "input": "select",
+        "options": ["Action", "Comedy", "Drama", "Documentary", "Horror", "Romantic Comedy", "Thriller/Suspense"],
+        "name": "Genre "
+      }
+    },
+    { "name": "minRating", "value": 5, "bind": { "input": "range", "min": 1, "max": 9, "step": 0.5, "name": "Min IMDB " } }
+  ],
+  "transform": [
+    { "filter": "isValid(datum[\"IMDB Rating\"]) && datum[\"IMDB Rating\"] >= minRating" },
+    { "filter": "isValid(datum[\"Rotten Tomatoes Rating\"])" }
+  ],
+  "vconcat": [
+    {
+      "title": "Filtered movie rating landscape",
+      "width": 680,
+      "height": 360,
+      "layer": [
+        {
+          "transform": [{ "filter": "datum[\"Major Genre\"] == genreFilter || genreFilter == null" }],
+          "mark": "rect",
+          "encoding": {
+            "x": { "bin": { "maxbins": 18 }, "field": "IMDB Rating", "type": "quantitative" },
+            "y": { "bin": { "maxbins": 18 }, "field": "Rotten Tomatoes Rating", "type": "quantitative" },
+            "color": {
+              "aggregate": "count",
+              "type": "quantitative",
+              "scale": { "scheme": "viridis" },
+              "legend": { "title": "Movies", "direction": "horizontal", "gradientLength": 160 }
+            },
+            "tooltip": [{ "aggregate": "count", "type": "quantitative", "title": "Movies" }]
+          }
+        },
+        {
+          "transform": [{ "filter": { "param": "genrePick" } }],
+          "mark": { "type": "circle", "opacity": 0.9, "stroke": "white", "strokeWidth": 1.4 },
+          "encoding": {
+            "x": { "bin": { "maxbins": 18 }, "field": "IMDB Rating", "type": "quantitative" },
+            "y": { "bin": { "maxbins": 18 }, "field": "Rotten Tomatoes Rating", "type": "quantitative" },
+            "size": { "aggregate": "count", "type": "quantitative", "legend": { "title": "Selected genre" } },
+            "color": { "value": "#f97316" }
+          }
+        }
+      ]
+    },
+    {
+      "title": "Click a bar to cross-highlight",
+      "width": 680,
+      "height": 180,
+      "params": [{ "name": "genrePick", "select": { "type": "point", "encodings": ["x"] } }],
+      "mark": "bar",
+      "encoding": {
+        "x": { "field": "Major Genre", "type": "nominal", "axis": { "labelAngle": -35 }, "sort": "-y" },
+        "y": { "aggregate": "count", "type": "quantitative" },
+        "color": { "condition": { "param": "genrePick", "value": "#38bdf8" }, "value": "#64748b" },
+        "tooltip": [{ "field": "Major Genre", "type": "nominal" }, { "aggregate": "count", "type": "quantitative" }]
+      }
+    }
+  ],
+  "resolve": { "legend": { "color": "independent", "size": "independent" } },
+  "config": {
+    "background": "transparent",
+    "title": { "color": "#e2e8f0", "fontSize": 18, "anchor": "start" },
+    "axis": { "labelColor": "#94a3b8", "titleColor": "#cbd5e1", "gridColor": "#334155" },
+    "legend": { "labelColor": "#cbd5e1", "titleColor": "#cbd5e1" },
+    "view": { "stroke": "transparent" }
+  }
+}

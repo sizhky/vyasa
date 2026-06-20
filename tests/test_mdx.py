@@ -102,12 +102,12 @@ def test_split_mdx_ignores_jsx_inside_code_fence():
 
 
 def test_excalidraw_is_available_without_an_import():
-    imports, _, islands = split_mdx('<Excalidraw id="roadmap" stateFile="./board.json" />')
+    imports, _, islands = split_mdx('<Excalidraw id="roadmap" />')
     component_source = (MDX_STATIC / "excalidraw.js").read_text(encoding="utf-8")
     runtime_source = (MDX_STATIC / "mdx.js").read_text(encoding="utf-8")
 
     assert imports == {}
-    assert islands == ['<Excalidraw id="roadmap" stateFile="./board.json" />']
+    assert islands == ['<Excalidraw id="roadmap" />']
     assert "window.VyasaMdxComponents" in component_source
     assert "window.VyasaMdxComponents" in runtime_source
     assert "canvasApi.current.updateScene(next)" in component_source

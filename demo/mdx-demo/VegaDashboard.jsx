@@ -21,86 +21,15 @@ function loadVegaScript(src) {
   return promise;
 }
 
-function dashboardSpec() {
-  return {
-    $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
-    description: 'Interactive movies dashboard with bound controls plus chart selection.',
-    data: { url: 'https://vega.github.io/vega-datasets/data/movies.json' },
-    params: [
-      {
-        name: 'genreFilter',
-        value: 'Drama',
-        bind: {
-          input: 'select',
-          options: ['Action', 'Comedy', 'Drama', 'Documentary', 'Horror', 'Romantic Comedy', 'Thriller/Suspense'],
-          name: 'Genre '
-        }
-      },
-      { name: 'minRating', value: 5, bind: { input: 'range', min: 1, max: 9, step: 0.5, name: 'Min IMDB ' } }
-    ],
-    transform: [
-      { filter: 'datum["Major Genre"] == genreFilter || genreFilter == null' },
-      { filter: 'isValid(datum["IMDB Rating"]) && datum["IMDB Rating"] >= minRating' },
-      { filter: 'isValid(datum["Rotten Tomatoes Rating"])' }
-    ],
-    vconcat: [
-      {
-        title: 'Filtered movie rating landscape',
-        width: 680,
-        height: 360,
-        layer: [
-          {
-            mark: 'rect',
-            encoding: {
-              x: { bin: { maxbins: 18 }, field: 'IMDB Rating', type: 'quantitative' },
-              y: { bin: { maxbins: 18 }, field: 'Rotten Tomatoes Rating', type: 'quantitative' },
-              color: {
-                aggregate: 'count',
-                type: 'quantitative',
-                scale: { scheme: 'viridis' },
-                legend: { title: 'Movies', direction: 'horizontal', gradientLength: 160 }
-              },
-              tooltip: [{ aggregate: 'count', type: 'quantitative', title: 'Movies' }]
-            }
-          },
-          {
-            transform: [{ filter: { param: 'genrePick' } }],
-            mark: { type: 'circle', opacity: 0.9, stroke: 'white', strokeWidth: 1.4 },
-            encoding: {
-              x: { bin: { maxbins: 18 }, field: 'IMDB Rating', type: 'quantitative' },
-              y: { bin: { maxbins: 18 }, field: 'Rotten Tomatoes Rating', type: 'quantitative' },
-              size: { aggregate: 'count', type: 'quantitative', legend: { title: 'Selected genre' } },
-              color: { value: '#f97316' }
-            }
-          }
-        ]
-      },
-      {
-        title: 'Click a bar to cross-highlight',
-        width: 680,
-        height: 180,
-        params: [{ name: 'genrePick', select: { type: 'point', encodings: ['x'] } }],
-        mark: 'bar',
-        encoding: {
-          x: { field: 'Major Genre', type: 'nominal', axis: { labelAngle: -35 }, sort: '-y' },
-          y: { aggregate: 'count', type: 'quantitative' },
-          color: { condition: { param: 'genrePick', value: '#38bdf8' }, value: '#64748b' },
-          tooltip: [{ field: 'Major Genre', type: 'nominal' }, { aggregate: 'count', type: 'quantitative' }]
-        }
-      }
-    ],
-    resolve: { legend: { color: 'independent', size: 'independent' } },
-    config: {
-      background: 'transparent',
-      title: { color: '#e2e8f0', fontSize: 18, anchor: 'start' },
-      axis: { labelColor: '#94a3b8', titleColor: '#cbd5e1', gridColor: '#334155' },
-      legend: { labelColor: '#cbd5e1', titleColor: '#cbd5e1' },
-      view: { stroke: 'transparent' }
-    }
-  };
+async function loadSpec(specFile) {
+  const slug = location.pathname.replace(/^\/posts\//, '').replace(/\/$/, '');
+  const fileUrl = `/api/mdx/files/${slug}?ref=${encodeURIComponent(specFile)}`;
+  const response = await fetch(fileUrl);
+  if (response.ok) return response.json();
+  return fetch(specFile).then(item => item.json());
 }
 
-function VegaDashboard({ stateFile }) {
+function VegaDashboard({ specFile = './demo.vega.json' }) {
   const ref = React.useRef(null);
   const [error, setError] = React.useState('');
   React.useEffect(() => {
@@ -108,8 +37,9 @@ function VegaDashboard({ stateFile }) {
     let view;
     async function mount() {
       for (const src of VEGA_SCRIPTS) await loadVegaScript(src);
+      const spec = await loadSpec(specFile);
       if (cancelled) return;
-      const result = await window.vegaEmbed(ref.current, dashboardSpec(), { actions: false, renderer: 'canvas' });
+      const result = await window.vegaEmbed(ref.current, spec, { actions: false, renderer: 'canvas' });
       view = result.view;
     }
     mount().catch(error => { if (!cancelled) setError(String(error)); });
@@ -117,7 +47,7 @@ function VegaDashboard({ stateFile }) {
       cancelled = true;
       if (view) view.finalize();
     };
-  }, [stateFile]);
+  }, [specFile]);
   if (error) return <pre>{error}</pre>;
   return <div ref={ref} style={{ overflowX: 'auto', border: '1px solid var(--vyasa-border)', borderRadius: 12, padding: 12 }} />;
 }

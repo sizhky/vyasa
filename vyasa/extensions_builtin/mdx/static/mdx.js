@@ -121,5 +121,23 @@ async function hydrateMdx() {
   }
 }
 
+function watchResource(documentSlug, ref, onChange) {
+  if (typeof EventSource === 'undefined') return () => {};
+  const slug = String(documentSlug || '').replace(/^\/+|\/+$/g, '');
+  const url = `/api/mdx/events/${slug}?ref=${encodeURIComponent(ref)}`;
+  const source = new EventSource(url);
+  const dispatch = (event) => {
+    try {
+      const data = JSON.parse(event.data || '{}');
+      onChange(data.revision);
+    } catch (_) { /* ignore malformed frames */ }
+  };
+  source.addEventListener('ready', dispatch);
+  source.addEventListener('change', dispatch);
+  return () => source.close();
+}
+
+window.VyasaMdx = { ...(window.VyasaMdx || {}), watchResource };
+
 document.addEventListener('DOMContentLoaded', hydrateMdx);
 document.addEventListener('htmx:afterSwap', hydrateMdx);

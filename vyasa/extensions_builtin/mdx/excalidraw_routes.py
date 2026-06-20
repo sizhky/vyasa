@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import re
 import secrets
-import threading
 import time
 
 from starlette.responses import JSONResponse, Response
@@ -12,8 +11,6 @@ from ...api_catalog import publish_api
 from .file_routes import _atomic_write_bytes, _is_local_request, _resolve_ref
 
 
-_revisions: dict[tuple[str, str], int] = {}
-_revision_lock = threading.Lock()
 _CONNECTOR_TYPES = {"arrow", "line"}
 _REF_QUERY = ({"name": "ref", "required": True, "description": "Content-root-safe Excalidraw sidecar path"},)
 _CREATE_BODY = {
@@ -23,6 +20,10 @@ _CREATE_BODY = {
 _PATCH_BODY = {
     "nodes": [{"id": "node-id", "text": "optional", "color": "optional"}],
     "connections": [{"id": "connection-id", "text": "optional", "color": "optional"}],
+}
+_DELETE_BODY = {
+    "nodes": ["node-id"],
+    "connections": ["connection-id"],
 }
 
 
@@ -40,9 +41,14 @@ def register_excalidraw_routes(rt, runtime) -> None:
     def get_refresh(path: str, canvas_id: str, request):
         """Read the refresh revision watched by an open Excalidraw canvas."""
         canvas = _canvas_id(canvas_id)
-        if not canvas or _resolve_ref(path, request, runtime) is None:
+        file_path = _resolve_ref(path, request, runtime)
+        if not canvas or file_path is None:
             return Response(status_code=404)
-        return JSONResponse({"revision": _revision(path, canvas)}, headers={"Cache-Control": "no-store"})
+        from .file_routes import _readonly
+        return JSONResponse(
+            {"revision": str(_mtime_revision(file_path)), "readonly": _readonly()},
+            headers={"Cache-Control": "no-store"},
+        )
 
     @publish_api(
         rt,
@@ -58,9 +64,11 @@ def register_excalidraw_routes(rt, runtime) -> None:
         canvas = _canvas_id(canvas_id)
         if not _is_local_request(request):
             return Response("Forbidden", status_code=403)
-        if not canvas or _resolve_ref(path, request, runtime) is None:
+        file_path = _resolve_ref(path, request, runtime)
+        if not canvas or file_path is None:
             return Response(status_code=404)
-        return JSONResponse({"revision": _bump_revision(path, canvas)}, headers={"Cache-Control": "no-store"})
+        file_path.touch()
+        return JSONResponse({"revision": str(_mtime_revision(file_path))}, headers={"Cache-Control": "no-store"})
 
     @publish_api(
         rt,
@@ -107,6 +115,20 @@ def register_excalidraw_routes(rt, runtime) -> None:
         """Patch existing Excalidraw node or connection text and colors."""
         return await _write_graph(path, canvas_id, request, runtime, apply_compact_patch)
 
+    @publish_api(
+        rt,
+        namespace="mdx",
+        operation_id="mdx.excalidraw.graph.delete",
+        path=graph_path,
+        methods=("DELETE",),
+        query=_REF_QUERY,
+        body=_DELETE_BODY,
+        local_only=True,
+    )
+    async def delete_graph_elements(path: str, canvas_id: str, request):
+        """Delete nodes (with their labels and bound connectors) and connections by id."""
+        return await _write_graph(path, canvas_id, request, runtime, apply_compact_delete)
+
 
 async def _write_graph(path, canvas_id, request, runtime, operation):
     if not _is_local_request(request):
@@ -123,7 +145,6 @@ async def _write_graph(path, canvas_id, request, runtime, operation):
     _atomic_write_bytes(file_path, (json.dumps(data, indent=2) + "\n").encode())
     graph = compact_scene(scene)
     graph.update({"document": path.strip("/"), "canvas": canvas, "ref": str(request.query_params.get("ref", ""))})
-    _bump_revision(path, canvas)
     return JSONResponse(graph, headers={"Cache-Control": "no-store"})
 
 
@@ -240,6 +261,59 @@ def apply_compact_create(scene: dict, payload: dict) -> None:
             by_id[label_id] = label
 
 
+def apply_compact_delete(scene: dict, patch: dict) -> None:
+    if not isinstance(patch, dict):
+        raise TypeError("Expected a JSON object")
+    elements = scene.get("elements", [])
+    active = [element for element in elements if not element.get("isDeleted")]
+    by_id = {element.get("id"): element for element in active}
+    texts = [element for element in active if element.get("type") == "text"]
+    connectors = [element for element in active if element.get("type") in _CONNECTOR_TYPES]
+    removal: set[str] = set()
+    for node_id in _delete_ids(patch, "nodes"):
+        element = by_id.get(node_id)
+        if element is None:
+            raise ValueError(f"Unknown node {node_id}")
+        removal.add(node_id)
+        labels = [element] if element.get("type") == "text" else _labels_for(element, texts)
+        removal.update(label.get("id") for label in labels)
+        for connector in connectors:
+            if node_id in {
+                (connector.get("startBinding") or {}).get("elementId"),
+                (connector.get("endBinding") or {}).get("elementId"),
+            }:
+                removal.add(connector.get("id"))
+                removal.update(label.get("id") for label in _labels_for(connector, texts))
+    for connection_id in _delete_ids(patch, "connections"):
+        element = by_id.get(connection_id)
+        if element is None:
+            raise ValueError(f"Unknown connection {connection_id}")
+        if element.get("type") not in _CONNECTOR_TYPES:
+            raise ValueError(f"Element {connection_id} is not a connection")
+        removal.add(connection_id)
+        removal.update(label.get("id") for label in _labels_for(element, texts))
+    if not removal:
+        raise ValueError("No ids supplied to delete")
+    scene["elements"] = [element for element in elements if element.get("id") not in removal]
+    for element in scene["elements"]:
+        bound = element.get("boundElements")
+        if isinstance(bound, list):
+            element["boundElements"] = [ref for ref in bound if ref.get("id") not in removal]
+
+
+def _delete_ids(patch: dict, key: str) -> list[str]:
+    items = patch.get(key, [])
+    if not isinstance(items, list):
+        raise TypeError(f"{key} must be an array of ids")
+    ids = []
+    for item in items:
+        element_id = item.get("id") if isinstance(item, dict) else item
+        if not isinstance(element_id, str) or not element_id:
+            raise TypeError(f"{key} entries must be id strings")
+        ids.append(element_id)
+    return ids
+
+
 def _request_scene(path, canvas_id, request, runtime):
     canvas = _canvas_id(canvas_id)
     file_path = _resolve_ref(path, request, runtime)
@@ -254,11 +328,6 @@ def _request_scene(path, canvas_id, request, runtime):
 
 
 def _scene_for(data: dict, canvas: str) -> dict | None:
-    canvases = data.get("excalidrawCanvases")
-    if isinstance(canvases, dict) and isinstance(canvases.get(canvas), dict):
-        return canvases[canvas]
-    if isinstance(data.get("excalidraw"), dict):
-        return data["excalidraw"]
     if isinstance(data.get("elements"), list):
         return data
     return None
@@ -447,31 +516,19 @@ def _valid_id(value: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", value))
 
 
-def _revision(path: str, canvas: str) -> int:
-    with _revision_lock:
-        return _revisions.get((path.strip("/"), canvas), 0)
+def _mtime_revision(file_path) -> int:
+    try:
+        return file_path.stat().st_mtime_ns
+    except FileNotFoundError:
+        return 0
 
 
-def _bump_revision(path: str, canvas: str) -> int:
-    key = (path.strip("/"), canvas)
-    with _revision_lock:
-        _revisions[key] = _revisions.get(key, 0) + 1
-        return _revisions[key]
-
-
-def browser_autosave_conflicts(path: str, request) -> bool:
+def browser_autosave_conflicts(file_path, request) -> bool:
     headers = getattr(request, "headers", {})
     if not headers.get("sec-fetch-mode"):
         return False
     query = getattr(request, "query_params", {})
-    canvas = _canvas_id(query.get("canvas"))
     supplied = str(query.get("revision", ""))
-    with _revision_lock:
-        active = {
-            active_canvas: revision
-            for (active_path, active_canvas), revision in _revisions.items()
-            if active_path == path.strip("/")
-        }
-    if not active:
+    if not supplied or not file_path.exists():
         return False
-    return canvas not in active or supplied != str(active[canvas])
+    return supplied != str(_mtime_revision(file_path))

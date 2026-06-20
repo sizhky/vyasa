@@ -59,7 +59,12 @@ Base path:
 - `GET`: return token-light `nodes` and `connections` with IDs, text, colors, and connection endpoints.
 - `POST`: add cards and bound connections. Nodes require `text`; IDs and positions are optional.
 - `PATCH`: update existing node/connection text or color without replacing layout metadata.
-- `POST .../refresh`: signal open pages after directly editing the full sidecar.
+- `DELETE`: remove nodes/connections by id — `{"nodes":["id"],"connections":["id"]}`. Deleting a node cascades to its text label and any connectors bound to it.
+- `POST .../refresh`: force open pages to reload. Only needed after a direct sidecar edit that did **not** change the file mtime; `POST`/`PATCH` already write the file, so open pages reload on their own — do not chain a refresh after them.
+
+### Task-card convention
+
+Cards can act as a todo board by background color: `#ffc9c9` (red) = todo, `#ffec99` (yellow) / `#ffa94d` (orange) = in progress, `#b2f2bb` (green) = done. To mark a task done, `PATCH` that node's `color` to `#b2f2bb`. The open page reloads automatically (the watch signal is the sidecar's mtime); no separate refresh call is required.
 
 Create example:
 

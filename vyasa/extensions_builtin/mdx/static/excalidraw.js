@@ -1,11 +1,7 @@
-const CSS_URL = 'https://unpkg.com/@excalidraw/excalidraw@0.17.6/dist/excalidraw.min.css';
+// Excalidraw 0.17 injects its own styles via the JS bundle; there is no standalone CSS file.
 const JS_URL = 'https://unpkg.com/@excalidraw/excalidraw@0.17.6/dist/excalidraw.production.min.js';
 
 function loadAsset() {
-  if (!document.querySelector(`link[href="${CSS_URL}"]`)) {
-    const link = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: CSS_URL });
-    document.head.appendChild(link);
-  }
   if (window.ExcalidrawLib) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const found = document.querySelector(`script[src="${JS_URL}"]`);
@@ -31,34 +27,52 @@ function durableScene(elements = [], appState = {}, files = {}) {
   };
 }
 
-function savedScene(data, canvasId) {
-  return data.excalidrawCanvases?.[canvasId] || data.excalidraw || data || {};
+const DEFAULT_HEIGHT = '85vh';
+const PREFS_KEY = 'vyasa-excalidraw-prefs';
+const VALID_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
+
+function loadPrefs() {
+  try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch (_) { return {}; }
 }
 
-function withSavedScene(data, canvasId, scene) {
-  if (data.excalidrawCanvases) {
-    return { ...data, excalidrawCanvases: { ...data.excalidrawCanvases, [canvasId]: scene } };
-  }
-  return { ...data, excalidraw: scene };
+function savePrefs(appState = {}) {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify({ theme: appState.theme })); } catch (_) { /* private mode */ }
 }
 
-function Excalidraw({ id, stateFile }) {
+function sceneSignature(elements = [], files = {}) {
+  const shape = elements.map(item => `${item.id}:${item.version}:${item.isDeleted ? 1 : 0}`).join(',');
+  return `${shape}|${Object.keys(files).sort().join(',')}`;
+}
+
+function savedScene(data) {
+  return data && Array.isArray(data.elements) ? data : {};
+}
+
+function Excalidraw({ id, height }) {
   const React = window.React;
+  const canvasHeight = Number(height) || DEFAULT_HEIGHT;
   const [scene, setScene] = React.useState(null);
   const [status, setStatus] = React.useState('');
+  const [readonly, setReadonly] = React.useState(false);
+  const readonlyRef = React.useRef(false);
   const timer = React.useRef();
   const canvasApi = React.useRef();
   const revision = React.useRef();
   const suppressSave = React.useRef(true);
+  const lastSig = React.useRef();
+  const validId = VALID_ID.test(String(id || ''));
   const slug = location.pathname.replace(/^\/posts\//, '').replace(/\/$/, '');
+  const stateFile = `./${id || ''}.state.json`;
   const fileUrl = `/api/mdx/files/${slug}?ref=${encodeURIComponent(stateFile)}`;
   const refreshUrl = `/api/mdx/excalidraw/${slug}/canvas/${encodeURIComponent(id || '')}/refresh?ref=${encodeURIComponent(stateFile)}`;
   const loadScene = React.useCallback(async () => {
     clearTimeout(timer.current);
     const response = await fetch(fileUrl);
     const data = response.ok ? await response.json() : await fetch(stateFile).then(item => item.json());
-    const saved = savedScene(data, id);
+    const saved = savedScene(data);
     const next = durableScene(saved.elements, saved.appState, saved.files);
+    next.appState = { ...next.appState, ...loadPrefs() };
+    lastSig.current = sceneSignature(next.elements, next.files);
     suppressSave.current = true;
     if (canvasApi.current) canvasApi.current.updateScene(next);
     else setScene(next);
@@ -67,8 +81,8 @@ function Excalidraw({ id, stateFile }) {
   }, [fileUrl, id, stateFile]);
   React.useEffect(() => {
     let active = true;
-    if (!id) {
-      setStatus('Excalidraw requires a stable id');
+    if (!validId) {
+      setStatus('Excalidraw requires a stable id matching [A-Za-z0-9][A-Za-z0-9_.-]{0,127}');
       return () => {};
     }
     loadAsset().then(loadScene)
@@ -76,27 +90,32 @@ function Excalidraw({ id, stateFile }) {
     return () => { active = false; clearTimeout(timer.current); };
   }, [id, loadScene]);
   React.useEffect(() => {
-    if (!id) return () => {};
+    if (!validId) return () => {};
     let active = true;
-    const poll = async () => {
-      try {
-        const response = await fetch(refreshUrl);
-        if (!response.ok) return;
-        const current = (await response.json()).revision;
-        if (revision.current === undefined) revision.current = current;
-        else if (current !== revision.current) {
-          revision.current = current;
-          await loadScene();
-          if (active) setStatus('Refreshed');
-        }
-      } catch (_) { /* The file fallback still works in static builds. */ }
-    };
-    poll();
-    const interval = setInterval(poll, 1000);
-    return () => { active = false; clearInterval(interval); };
-  }, [id, loadScene, refreshUrl]);
+    fetch(refreshUrl)
+      .then(response => (response.ok ? response.json() : null))
+      .then(body => {
+        if (!active || !body) return;
+        readonlyRef.current = Boolean(body.readonly);
+        setReadonly(readonlyRef.current);
+        if (revision.current === undefined) revision.current = body.revision;
+      })
+      .catch(() => { /* static builds have no refresh endpoint */ });
+    const stop = window.VyasaMdx?.watchResource?.(slug, stateFile, async (current) => {
+      if (!active || current === undefined) return;
+      if (revision.current === undefined) { revision.current = current; return; }
+      if (current !== revision.current) {
+        revision.current = current;
+        await loadScene();
+        if (active) setStatus('Refreshed');
+      }
+    });
+    return () => { active = false; if (stop) stop(); };
+  }, [id, loadScene, refreshUrl, slug, stateFile]);
   const save = React.useCallback((elements, appState, files) => {
-    if (suppressSave.current) return;
+    if (readonlyRef.current || suppressSave.current) return;
+    const signature = sceneSignature(elements, files);
+    if (signature === lastSig.current) return;
     clearTimeout(timer.current);
     setStatus('Saving...');
     const excalidraw = durableScene(elements, appState, files);
@@ -112,25 +131,31 @@ function Excalidraw({ id, stateFile }) {
             return;
           }
         }
-        const dataResponse = await fetch(fileUrl);
-        const data = dataResponse.ok ? await dataResponse.json() : {};
         const saveUrl = `${fileUrl}&canvas=${encodeURIComponent(id)}&revision=${encodeURIComponent(revision.current ?? 0)}`;
         const response = await fetch(saveUrl, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withSavedScene(data, id, excalidraw), null, 2),
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(excalidraw, null, 2),
         });
         if (!response.ok) throw new Error(`Save failed: ${response.status}`);
+        const result = await response.json().catch(() => ({}));
+        if (result.revision !== undefined) revision.current = result.revision;
+        lastSig.current = signature;
         setStatus('Saved');
       } catch (error) { setStatus(String(error)); }
     }, 450);
   }, [fileUrl, id, loadScene, refreshUrl]);
+  const handleChange = React.useCallback((elements, appState, files) => {
+    savePrefs(appState);
+    save(elements, appState, files);
+  }, [save]);
   const Canvas = window.ExcalidrawLib?.Excalidraw;
   if (!scene || !Canvas) return React.createElement('div', null, status || 'Loading Excalidraw...');
+  const banner = readonly ? 'Read-only — editing disabled here\nsee vyasa documentation to learn how to make it editable' : (status || 'Saved');
   return React.createElement('div', null,
     React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 8 } },
-      React.createElement('span', { style: { fontSize: 13, opacity: 0.72 } }, status || 'Edits save to sibling JSON'),
+      React.createElement('span', { style: { fontSize: 13, opacity: readonly ? 1 : 0.72, fontWeight: readonly ? 600 : 400, whiteSpace: 'pre-line' } }, banner),
       React.createElement('button', { onClick: loadScene }, 'Reload saved canvas')),
-    React.createElement('div', { style: { height: 960, border: '1px solid var(--vyasa-border)', borderRadius: 8, overflow: 'hidden' } },
-      React.createElement(Canvas, { initialData: scene, excalidrawAPI: api => { canvasApi.current = api; }, onChange: save })));
+    React.createElement('div', { style: { height: canvasHeight, border: '1px solid var(--vyasa-border)', borderRadius: 8, overflow: 'hidden' } },
+      React.createElement(Canvas, { initialData: scene, viewModeEnabled: readonly, excalidrawAPI: api => { canvasApi.current = api; }, onChange: handleChange })));
 }
 
 window.VyasaMdxComponents = { ...(window.VyasaMdxComponents || {}), Excalidraw };
