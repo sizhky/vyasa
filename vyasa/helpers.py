@@ -754,7 +754,8 @@ def _normalize_vyasa_config(parsed):
 def _effective_abbreviations(root: Path, folder: Path | None = None):
     root_config = get_vyasa_config(root)
     root_abbrevs = _merge_abbreviations(_DEFAULT_ABBREVIATIONS, root_config.get("abbreviations") or [])
-    if folder is None or folder == root:
+    if folder is None or folder == root or not isinstance(folder, Path):
+        # VirtualPath (git-ref) folders carry no on-disk .vyasa to walk.
         return root_abbrevs
     current = folder
     while True:

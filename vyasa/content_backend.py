@@ -235,18 +235,23 @@ class VirtualPath:
     `root_id`/`ref` are carried so the slug it yields is `alias@ref/rel`,
     which keeps generated navigation links pinned to the viewed ref."""
 
-    __slots__ = ("_backend", "ref", "root_id", "rel", "_kind")
+    __slots__ = ("_backend", "ref", "root_id", "rel", "_kind", "display_name")
 
-    def __init__(self, backend: "ContentBackend", ref: str, root_id: str, rel: str = "", kind: EntryKind | None = None):
+    def __init__(self, backend: "ContentBackend", ref: str, root_id: str, rel: str = "", kind: EntryKind | None = None, display_name: str = ""):
         self._backend = backend
         self.ref = ref
         self.root_id = root_id
         self.rel = rel.strip("/")
         self._kind = kind
+        # Name to show when this is a root (rel == ""), e.g. the mount alias;
+        # otherwise the name derives from rel.
+        self.display_name = display_name
 
     # --- identity -------------------------------------------------------
     @property
     def name(self) -> str:
+        if not self.rel:
+            return self.display_name
         return self.rel.rsplit("/", 1)[-1]
 
     @property

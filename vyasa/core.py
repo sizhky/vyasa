@@ -3,6 +3,7 @@ import json
 import base64
 import time
 from datetime import datetime
+from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 from fasthtml.common import *
@@ -1073,10 +1074,17 @@ def layout(
 _nav_entries_cache: dict[tuple[str, bool], tuple[float, list[Path]]] = {}
 
 
+# The git ref a specific root is currently being viewed on, as (root_id, ref),
+# so the sidebar can render that one mount from objects while the rest of the
+# tree stays on disk. Per-request, set by get_posts.
+_active_ref_root: "ContextVar[tuple[str, str] | None]" = ContextVar("vyasa_active_ref_root", default=None)
+
+
 def _get_nav_entries(
     folder: Path, root: Path, show_hidden: bool, excluded_dirs: set[str]
 ):
-    key = (str(folder.resolve()), show_hidden)
+    active = _active_ref_root.get()
+    key = (str(folder.resolve()), show_hidden, active)
     try:
         mtime = folder.stat().st_mtime
     except OSError:
@@ -1086,39 +1094,55 @@ def _get_nav_entries(
         return cached[1]
     ordered = get_tree_entries(folder, root, show_hidden, excluded_dirs, enabled_document_suffixes())
     if folder.resolve() == root.resolve():
-        ordered = _swap_bare_mounts_for_ref_roots(ordered)
+        ordered = _swap_ref_roots(ordered, active)
     _nav_entries_cache[key] = (mtime, ordered)
     return ordered
 
 
-def _swap_bare_mounts_for_ref_roots(entries):
-    """A bare mirror has no working tree, so walking it as disk would expose
-    git internals. Represent each bare-root top-level mount as a default-ref
-    VirtualPath so the sidebar shows its content tree instead.
+def _swap_ref_roots(entries, active):
+    """Swap top-level mount entries for git-ref VirtualPaths:
 
-    Only the configured git-mirror mounts can be bare, so classification is
-    limited to those — never the full mount list."""
-    git_mounts = get_config().get_git_mounts()
-    if not git_mounts:
-        return entries
+    - a bare mirror has no working tree, so it always renders from its default
+      ref (walking it as disk would expose git internals);
+    - the `active` (root_id, ref) mount renders from that ref, so switching a
+      branch shows that root's branch content while every other root stays put.
+    """
     from .content_backend import classify_root
     from .content_tree import ref_root_vpath
+    from .helpers import get_content_mounts
 
-    bare = {}
-    for alias, mount_root in git_mounts:
-        if alias and classify_root(mount_root).kind == "bare":
-            bare[Path(mount_root).resolve()] = alias
-    if not bare:
+    git_mounts = get_config().get_git_mounts()
+    active_id, active_ref = active or ("", "")
+    bare = {Path(p).resolve(): a for a, p in git_mounts if a and classify_root(p).kind == "bare"}
+    alias_by_path = {Path(p).resolve(): a for a, p in get_content_mounts() if a}
+    if not bare and not (active_id and active_id in alias_by_path.values()):
         return entries
+
     swapped = []
     for entry in entries:
-        alias = bare.get(entry.resolve()) if hasattr(entry, "resolve") and not hasattr(entry, "slug") else None
-        if alias:
-            vpath = ref_root_vpath(alias, "")
-            swapped.append(vpath if vpath is not None else entry)
-        else:
+        if not (hasattr(entry, "resolve") and not hasattr(entry, "slug")):
             swapped.append(entry)
+            continue
+        resolved = entry.resolve()
+        alias = alias_by_path.get(resolved)
+        vpath = None
+        if alias and alias == active_id:
+            vpath = ref_root_vpath(alias, active_ref)  # None if ref == current branch (disk)
+        elif resolved in bare:
+            vpath = ref_root_vpath(bare[resolved], "")
+        swapped.append(vpath if vpath is not None else entry)
     return swapped
+
+
+def _nav_entries_for(folder, root, show_hidden, excluded_dirs):
+    """Dispatch nav-entry listing: VirtualPath (git ref) folders read from the
+    object store, disk folders from the filesystem."""
+    from .content_backend import VirtualPath
+    from .content_tree import ref_nav_entries
+
+    if isinstance(folder, VirtualPath):
+        return ref_nav_entries(folder, root, show_hidden, excluded_dirs)
+    return _get_nav_entries(folder, root, show_hidden, excluded_dirs)
 
 
 def _folder_has_visible_descendant(folder: Path, roles, depth: int = 3):
@@ -1133,7 +1157,7 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
     return build_post_tree_render(
         folder, roles=roles, max_depth=max_depth, active_parts=active_parts,
         root=get_root_folder(), show_hidden=get_config().get_show_hidden(),
-        excluded_dirs=set(get_config().get_reload_excludes()), get_nav_entries=_get_nav_entries,
+        excluded_dirs=set(get_config().get_reload_excludes()), get_nav_entries=_nav_entries_for,
         effective_abbreviations=_effective_abbreviations, should_exclude_dir_fn=should_exclude_dir,
         slug_to_title_fn=slug_to_title, find_folder_note_file_fn=find_folder_note_file,
         is_allowed_fn=is_allowed, parse_frontmatter_fn=parse_frontmatter,
@@ -1196,6 +1220,16 @@ def get_posts(roles=None, current_path=""):
     parsed = _ref_from_current_path(current_path)
     if parsed:
         root_id, ref, active_parts = parsed
+        if root_id:
+            # A named mount viewed on a ref: keep the whole multi-root tree, but
+            # render that one mount from the ref. active_parts use the bare alias
+            # (the swapped VirtualPath mount is named by the alias, not alias@ref).
+            token = _active_ref_root.set((root_id, ref))
+            try:
+                return build_post_tree(get_root_folder(), roles=roles, max_depth=1, active_parts=(root_id, *active_parts))
+            finally:
+                _active_ref_root.reset(token)
+        # The primary root itself on a ref (?ref=): serve its ref tree.
         from .content_tree import ref_root_vpath
 
         root_vpath = ref_root_vpath(root_id, ref)

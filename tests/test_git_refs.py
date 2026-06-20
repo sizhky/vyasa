@@ -151,6 +151,46 @@ def test_navbar_ref_switcher_discovers_all_git_roots(site):
     core._git_roots_with_refs.cache_clear()
 
 
+def test_branch_page_keeps_all_roots(tmp_path, monkeypatch):
+    import vyasa.core as core
+    from fasthtml.common import Ul, to_xml
+
+    from vyasa.config import reload_config
+
+    site = tmp_path / "site"
+    repo = tmp_path / "repo"
+    notes = tmp_path / "notes"
+    for p in (site, repo, notes):
+        p.mkdir()
+    (site / "home.md").write_text("# Home\n")
+    (notes / "note1.md").write_text("# Note One\n")
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@t")
+    _git(repo, "config", "user.name", "t")
+    (repo / "a.md").write_text("# A\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "c1")
+    _git(repo, "checkout", "-q", "-b", "feature")
+    (repo / "feat.md").write_text("# Feature Doc\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "c2")
+    _git(repo, "checkout", "-q", "main")
+    (site / ".vyasa").write_text('vyasa_roots = ["../repo", "../notes"]\n')
+    monkeypatch.chdir(site)
+    reload_config(site / ".vyasa")
+    core._nav_entries_cache.clear()
+    try:
+        html = to_xml(Ul(*core.get_posts(roles=[], current_path="repo@feature/feat")))
+        # the other roots are still present...
+        assert "/posts/home" in html
+        assert "note1" in html or "Note One" in html
+        # ...and the viewed root shows its branch content (ref-carrying link)
+        assert "repo%40feature/feat" in html
+    finally:
+        reload_config()
+        core._nav_entries_cache.clear()
+
+
 def test_sidebar_tree_built_for_a_ref(site):
     import vyasa.core as core
     from fasthtml.common import Ul, to_xml

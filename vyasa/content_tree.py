@@ -357,7 +357,7 @@ def ref_root_vpath(root_id: str, ref: str):
     backend, disk_mode = backend_for(classify_root(root_path), ref, root_id)
     if disk_mode:
         return None
-    return VirtualPath(backend, ref, root_id, "", "dir")
+    return VirtualPath(backend, ref, root_id, "", "dir", display_name=root_id)
 
 
 def ref_nav_entries(folder, root, show_hidden, excluded_dirs):
