@@ -260,6 +260,26 @@ def classify_root(path: Path) -> RootClass:
         repo.close()
 
 
+def uncommitted_paths(rc: RootClass) -> frozenset[str]:
+    """Posix-relative paths in a working clone that differ from HEAD
+    (staged, unstaged, or untracked). Empty for bare/plain roots and for a
+    detached HEAD. Drives the per-file uncommitted indicator in disk mode."""
+    if rc.kind != "clone" or rc.current_branch is None:
+        return frozenset()
+    from dulwich import porcelain
+
+    try:
+        status = porcelain.status(str(rc.path), untracked_files="all")
+    except Exception:
+        return frozenset()
+    dirty: set[str] = set()
+    for paths in status.staged.values():
+        dirty.update(p.decode() if isinstance(p, bytes) else p for p in paths)
+    for p in (*status.unstaged, *status.untracked):
+        dirty.add(p.decode() if isinstance(p, bytes) else p)
+    return frozenset(dirty)
+
+
 def backend_for(rc: RootClass, ref: str = "", root_id: str = "") -> tuple[ContentBackend, bool]:
     """Pick the backend for a (root, ref) pair. Returns (backend, disk_mode);
     disk_mode is True only when a working tree is served and uncommitted

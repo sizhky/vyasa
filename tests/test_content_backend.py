@@ -8,6 +8,7 @@ from vyasa.content_backend import (
     GitBackend,
     backend_for,
     classify_root,
+    uncommitted_paths,
 )
 
 
@@ -96,3 +97,17 @@ def test_classify_and_choose_backend(tmp_path, repo):
     assert isinstance(backend_for(rc, "main")[0], FilesystemBackend)
     assert isinstance(backend_for(rc, "feature")[0], GitBackend)  # other ref -> objects
     assert backend_for(rc, "feature")[1] is False
+
+
+def test_uncommitted_paths_flags_only_working_clone_drift(tmp_path, repo):
+    work, bare = repo
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    assert uncommitted_paths(classify_root(bare)) == frozenset()
+    assert uncommitted_paths(classify_root(plain)) == frozenset()
+    assert uncommitted_paths(classify_root(work)) == frozenset()  # clean tree
+
+    (work / "a.md").write_text("changed\n")  # unstaged
+    (work / "drafty.md").write_text("new\n")  # untracked
+    dirty = uncommitted_paths(classify_root(work))
+    assert "a.md" in dirty and "drafty.md" in dirty

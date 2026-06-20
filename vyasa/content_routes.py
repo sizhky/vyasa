@@ -115,6 +115,27 @@ def _render_ref_markdown(ref_doc, *, path, htmx, request, slug_to_title, layout,
     return DocumentPage(ref_doc.title, path, content, toc_source=ref_doc.body).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
 
 
+def _uncommitted_banner(root, file_path):
+    """Show an indicator when a working clone serves an uncommitted file from
+    disk (its checked-out branch). Per-file: only flags the page being viewed."""
+    from .content_backend import classify_root, uncommitted_paths
+
+    try:
+        rc = classify_root(root)
+        if rc.kind != "clone":
+            return None
+        rel = Path(file_path).resolve().relative_to(Path(root).resolve()).as_posix()
+    except (ValueError, OSError):
+        return None
+    if rel not in uncommitted_paths(rc):
+        return None
+    return Div(
+        Span(UkIcon("git-commit", cls="w-4 h-4"), cls="opacity-70"),
+        Span("Uncommitted draft - this page shows the working tree, not a committed ref."),
+        cls="vyasa-uncommitted-banner mb-3 flex items-center gap-2 text-xs rounded-md px-3 py-2 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200",
+    )
+
+
 @traced("total")
 def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbreviations, find_folder_note_file, slug_to_title, layout, get_blog_title, not_found, parse_frontmatter, resolve_markdown_title, from_md, logger, PathCls=Path):
     request_start = time.time()
@@ -187,8 +208,10 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         )
     )
     actions = ((error_chip,) if error_chip else ()) + document_actions
+    uncommitted_banner = _uncommitted_banner(root, file_path)
     post_content = Div(
         document_header(post_title, read_source, actions=actions, breadcrumbs=breadcrumbs, file_path=file_path),
+        uncommitted_banner if uncommitted_banner else Div(),
         frontmatter_metadata_block(metadata) or Div(),
         error_toast if error_toast else Div(),
         error_script if error_script else Div(),
