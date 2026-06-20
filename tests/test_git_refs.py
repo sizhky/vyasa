@@ -84,20 +84,37 @@ def test_non_markdown_kinds_and_blobs_at_a_ref(site):
         set_extension_runtime(previous)
 
 
-def test_sidebar_uncommitted_dot_for_dirty_clone_file(site):
+def test_sidebar_uncommitted_dot_for_dirty_primary_clone_file(tmp_path, monkeypatch):
     import vyasa.core as core
     from fasthtml.common import A, to_xml
 
-    work = site.parent / "repo"
-    (work / "a.md").write_text("# Main A\n\nedited unstaged\n")  # dirty on current branch
-    core._uncommitted_slugs.cache_clear()
+    from vyasa.config import reload_config
 
-    slugs = core._uncommitted_slugs(core._posts_tree_fingerprint())
-    assert "repo/a" in slugs
-    dirty = to_xml(core._uncommitted_row_decorator(A("A", href="/posts/repo/a"), slug="repo/a"))
-    clean = to_xml(core._uncommitted_row_decorator(A("X", href="/posts/repo/x"), slug="repo/x"))
-    assert "vyasa-uncommitted-dot" in dirty
-    assert "vyasa-uncommitted-dot" not in clean
+    # The uncommitted scan is scoped to the primary root, so the primary
+    # must itself be a working clone with a dirty file.
+    primary = tmp_path / "primary"
+    primary.mkdir()
+    _git(primary, "init", "-q", "-b", "main")
+    _git(primary, "config", "user.email", "t@t")
+    _git(primary, "config", "user.name", "t")
+    (primary / "page.md").write_text("# Page\n")
+    _git(primary, "add", "-A")
+    _git(primary, "commit", "-qm", "c1")
+    (primary / "page.md").write_text("# Page edited\n")  # dirty
+    (primary / ".vyasa").write_text("")
+    monkeypatch.chdir(primary)
+    reload_config(primary / ".vyasa")
+    core._uncommitted_slugs.cache_clear()
+    try:
+        slugs = core._uncommitted_slugs(core._posts_tree_fingerprint())
+        assert "page" in slugs
+        dirty = to_xml(core._uncommitted_row_decorator(A("Page", href="/posts/page"), slug="page"))
+        clean = to_xml(core._uncommitted_row_decorator(A("X", href="/posts/x"), slug="x"))
+        assert "vyasa-uncommitted-dot" in dirty
+        assert "vyasa-uncommitted-dot" not in clean
+    finally:
+        reload_config()
+        core._uncommitted_slugs.cache_clear()
 
 
 def test_ref_picker_lists_branches_tags_and_marks_current(site):

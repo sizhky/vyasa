@@ -704,26 +704,31 @@ def _sidebar_section_nodes():
     return [provider(context) for provider in providers]
 
 
-@lru_cache(maxsize=4)
-def _uncommitted_slugs(fingerprint):
-    """Slugs whose backing file differs from HEAD in a working-clone mount.
-    Keyed by the content fingerprint so working-tree edits refresh it."""
+@lru_cache(maxsize=2)
+def _uncommitted_slugs(time_bucket):
+    """Slugs whose backing file differs from HEAD in the primary working
+    clone. Scoped to the primary root only (git status across every mounted
+    repo is too slow when several are large, and drafts live in the author's
+    own root). Cached per coarse time bucket so it is computed at most once
+    every few seconds, never per sidebar row."""
     from .content_backend import classify_root, uncommitted_paths
 
+    rc = classify_root(get_root_folder())
+    if rc.kind != "clone":
+        return frozenset()
     slugs = set()
-    for alias, root in get_content_mounts():
-        rc = classify_root(root)
-        if rc.kind != "clone":
-            continue
-        for rel in uncommitted_paths(rc):
-            stripped = rel.rsplit(".", 1)[0] if "." in rel.rsplit("/", 1)[-1] else rel
-            for value in (rel, stripped):
-                slugs.add(f"{alias}/{value}" if alias else value)
+    for rel in uncommitted_paths(rc):
+        stripped = rel.rsplit(".", 1)[0] if "." in rel.rsplit("/", 1)[-1] else rel
+        slugs.update((rel, stripped))
     return frozenset(slugs)
 
 
+def _current_uncommitted_slugs():
+    return _uncommitted_slugs(int(time.time() // 5))
+
+
 def _uncommitted_row_decorator(node, *, slug=None, title="", context="tree"):
-    if not slug or slug not in _uncommitted_slugs(_posts_tree_fingerprint()):
+    if not slug or slug not in _current_uncommitted_slugs():
         return node
     dot = Span("●", cls="vyasa-uncommitted-dot text-amber-500 text-[0.6rem] ml-1 shrink-0", title="Uncommitted changes")
     return Span(node, dot, cls="inline-flex items-center min-w-0")
@@ -1051,15 +1056,20 @@ def _get_nav_entries(
 def _swap_bare_mounts_for_ref_roots(entries):
     """A bare mirror has no working tree, so walking it as disk would expose
     git internals. Represent each bare-root top-level mount as a default-ref
-    VirtualPath so the sidebar shows its content tree instead."""
+    VirtualPath so the sidebar shows its content tree instead.
+
+    Only the configured git-mirror mounts can be bare, so classification is
+    limited to those — never the full mount list."""
+    git_mounts = get_config().get_git_mounts()
+    if not git_mounts:
+        return entries
     from .content_backend import classify_root
     from .content_tree import ref_root_vpath
-    from .helpers import get_content_mounts
 
     bare = {}
-    for alias, mount_root in get_content_mounts():
+    for alias, mount_root in git_mounts:
         if alias and classify_root(mount_root).kind == "bare":
-            bare[mount_root.resolve()] = alias
+            bare[Path(mount_root).resolve()] = alias
     if not bare:
         return entries
     swapped = []

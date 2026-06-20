@@ -427,6 +427,11 @@ def resolve_ref_document(slug: str, *, ref_override: str = "") -> RefDocument | 
 
     rel = relative.as_posix() if relative.as_posix() != "." else ""
     sha = backend.resolve_ref(ref)
+    if sha is None:
+        # The ref does not resolve to a real commit, so this is not a git-ref
+        # request (e.g. a ?ref= query param another feature uses for its own
+        # purpose). Fall back to the disk pipeline rather than a soft 404.
+        return None
     found = _resolve_ref_blob_rel(backend, rel, ref)
     if found is None:
         stem = (rel.rsplit("/", 1)[-1] or root_id)
