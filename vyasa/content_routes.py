@@ -136,6 +136,31 @@ def _uncommitted_banner(root, file_path):
     )
 
 
+def _render_ref_other_kind(ref_doc, *, path, htmx, request, slug_to_title, layout, get_blog_title, not_found):
+    """Dispatch a non-markdown git-ref document (pdf/html/...) to its kind
+    renderer. The renderer builds asset URLs from the ref-carrying slug, so
+    the ref-aware byte routes serve the blob from objects."""
+    runtime = get_extension_runtime() or refresh_extension_runtime(get_config().get_extensions_config())
+    renderer = runtime.document_renderers.get(ref_doc.kind) if runtime else None
+    if renderer is None:
+        return None
+    document = SimpleNamespace(kind=ref_doc.kind, path=ref_doc.vpath, folder_note=None, slug=ref_doc.slug)
+    return renderer(
+        SimpleNamespace(
+            document=document,
+            path=path,
+            htmx=htmx,
+            request=request,
+            auth=request.scope.get("auth"),
+            layout=layout,
+            blog_title=get_blog_title(),
+            breadcrumbs=_breadcrumbs(path, slug_to_title, {}),
+            slug_to_title=slug_to_title,
+            abbreviations={},
+        )
+    )
+
+
 @traced("total")
 def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbreviations, find_folder_note_file, slug_to_title, layout, get_blog_title, not_found, parse_frontmatter, resolve_markdown_title, from_md, logger, PathCls=Path):
     request_start = time.time()
@@ -143,9 +168,13 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     ref_override = request.query_params.get("ref", "") if hasattr(request, "query_params") else ""
     root_id, root_path, ref, relative = content_location(path, ref_override=ref_override)
     if root_path is not None:
-        from .content_tree import resolve_ref_markdown
-        ref_doc = resolve_ref_markdown(path, ref_override=ref_override)
+        from .content_tree import resolve_ref_document
+        ref_doc = resolve_ref_document(path, ref_override=ref_override)
         if ref_doc is not None:  # served from git objects (bare, or non-current ref)
+            if ref_doc.found and ref_doc.kind != "markdown":
+                rendered = _render_ref_other_kind(ref_doc, path=path, htmx=htmx, request=request, slug_to_title=slug_to_title, layout=layout, get_blog_title=get_blog_title, not_found=not_found)
+                if rendered is not None:
+                    return rendered
             return _render_ref_markdown(ref_doc, path=path, htmx=htmx, request=request, slug_to_title=slug_to_title, layout=layout, get_blog_title=get_blog_title, from_md=from_md, not_found=not_found)
         if ref:
             # disk-served but slug carries @ref (plain folder, or clone on its

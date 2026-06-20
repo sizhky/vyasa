@@ -310,6 +310,8 @@ class RefDocument:
     body: str
     title: str
     sha: str | None = None
+    kind: ContentKind = "markdown"
+    vpath: object | None = None  # VirtualPath to the resolved blob (any kind)
 
 
 def _git_folder_note(backend, rel: str, ref: str) -> str | None:
@@ -324,6 +326,23 @@ def _git_folder_note(backend, rel: str, ref: str) -> str | None:
             child = names[stem]
             return f"{rel}/{child}" if rel else child
     return None
+
+
+def resolve_ref_blob(slug: str, suffix: str = "", *, ref_override: str = "") -> bytes | None:
+    """Raw bytes for a slug (+optional suffix) when it is served from a git
+    ref's object store; None when disk-served, so callers fall back to a
+    FileResponse. Powers ref-aware serving of pdf/html/images/assets."""
+    from .content_backend import backend_for, classify_root
+    from .helpers import content_location
+
+    root_id, root_path, ref, relative = content_location(slug, ref_override=ref_override)
+    if root_path is None:
+        return None
+    backend, disk_mode = backend_for(classify_root(root_path), ref, root_id)
+    if disk_mode:
+        return None
+    rel = f"{relative.as_posix()}{suffix}" if relative.as_posix() != "." else suffix.lstrip("/")
+    return backend.read_bytes(rel, ref)
 
 
 def ref_root_vpath(root_id: str, ref: str):
@@ -362,14 +381,36 @@ def _is_kg_pack(vpath) -> bool:
     return vpath.suffix.lower() == ".kg" and (vpath / "kg.schema").exists()
 
 
-def resolve_ref_markdown(slug: str, *, ref_override: str = "") -> RefDocument | None:
-    """Resolve a slug to a markdown document read from a git ref.
+def _resolve_ref_blob_rel(backend, rel: str, ref: str) -> tuple[str, ContentKind] | None:
+    """Find the blob for `rel` on `ref` and its kind, trying each enabled
+    suffix and the folder-note rule. None when nothing matches."""
+    from .helpers import document_kind_for_suffix
+
+    if "." in rel.rsplit("/", 1)[-1]:
+        suffix = rel[rel.rindex("."):].lower()
+        kind = document_kind_for_suffix(suffix)
+        if kind and backend.stat_kind(rel, ref) == "file":
+            return rel, kind
+    for suffix in enabled_document_suffixes():
+        candidate = f"{rel}{suffix}"
+        if backend.stat_kind(candidate, ref) == "file":
+            return candidate, document_kind_for_suffix(suffix) or "markdown"
+    note = _git_folder_note(backend, rel, ref)
+    if note:
+        return note, "markdown"
+    return None
+
+
+def resolve_ref_document(slug: str, *, ref_override: str = "") -> RefDocument | None:
+    """Resolve a slug to a document of any kind read from a git ref.
 
     Returns None when the slug maps to no root or to a disk-served backend
     (plain folder, or a working clone on its current branch) — the caller
     then uses the normal disk pipeline. Returns a RefDocument (possibly with
-    found=False) only when content is served from the git object store."""
-    from .content_backend import backend_for, classify_root
+    found=False) only when content is served from the git object store. For
+    markdown, body/title/metadata are populated; other kinds carry a vpath
+    the caller hands to the kind's document renderer."""
+    from .content_backend import VirtualPath, backend_for, classify_root
     from .helpers import (
         content_location,
         parse_frontmatter_text,
@@ -385,12 +426,23 @@ def resolve_ref_markdown(slug: str, *, ref_override: str = "") -> RefDocument | 
         return None  # working tree / plain folder -> normal disk pipeline
 
     rel = relative.as_posix() if relative.as_posix() != "." else ""
-    blob_rel = rel if rel.endswith(".md") else _git_folder_note(backend, rel, ref) or f"{rel}.md"
-    data = backend.read_bytes(blob_rel, ref)
     sha = backend.resolve_ref(ref)
-    stem = blob_rel.rsplit("/", 1)[-1].removesuffix(".md") or root_id
-    if data is None:
-        return RefDocument(root_id, ref, slug, blob_rel, False, {}, "", slug_to_title(stem), sha)
-    metadata, raw = parse_frontmatter_text(data.decode("utf-8", "replace"), source=slug)
+    found = _resolve_ref_blob_rel(backend, rel, ref)
+    if found is None:
+        stem = (rel.rsplit("/", 1)[-1] or root_id)
+        return RefDocument(root_id, ref, slug, f"{rel}.md", False, {}, "", slug_to_title(stem), sha)
+    blob_rel, kind = found
+    vpath = VirtualPath(backend, ref, root_id, blob_rel, "file")
+    stem = blob_rel.rsplit("/", 1)[-1]
+    if "." in stem:
+        stem = stem[: stem.rindex(".")]
+    if kind != "markdown":
+        return RefDocument(root_id, ref, slug, blob_rel, True, {}, "", slug_to_title(stem), sha, kind, vpath)
+    data = backend.read_bytes(blob_rel, ref)
+    metadata, raw = parse_frontmatter_text((data or b"").decode("utf-8", "replace"), source=slug)
     title, body = resolve_markdown_title_text(metadata, raw, stem)
-    return RefDocument(root_id, ref, slug, blob_rel, True, metadata, body, title, sha)
+    return RefDocument(root_id, ref, slug, blob_rel, True, metadata, body, title, sha, "markdown", vpath)
+
+
+# Backwards-compatible alias: markdown was the first kind supported.
+resolve_ref_markdown = resolve_ref_document

@@ -59,6 +59,31 @@ def test_no_ref_uses_disk_pipeline(site):
     assert resolve_ref_markdown("repo/a") is None
 
 
+def test_non_markdown_kinds_and_blobs_at_a_ref(site):
+    from vyasa.content_tree import resolve_ref_blob, resolve_ref_document
+    from vyasa.extensions import build_extension_runtime, get_extension_runtime, set_extension_runtime
+
+    work = site.parent / "repo"
+    _git(work, "checkout", "-q", "feature")
+    (work / "doc.html").write_text("<h1>HTML</h1>")
+    (work / "file.pdf").write_bytes(b"%PDF-1.4 fake")
+    _git(work, "add", "-A")
+    _git(work, "commit", "-qm", "c3")
+    _git(work, "checkout", "-q", "main")
+
+    previous = get_extension_runtime()
+    set_extension_runtime(build_extension_runtime({"preset": "default"}))
+    try:
+        assert resolve_ref_document("repo@feature/doc").kind == "html"
+        assert resolve_ref_document("repo@feature/file").kind == "pdf"
+        assert resolve_ref_document("repo@feature/feat").kind == "markdown"
+        assert resolve_ref_blob("repo@feature/doc", ".html") == b"<h1>HTML</h1>"
+        assert resolve_ref_blob("repo@feature/file", ".pdf") == b"%PDF-1.4 fake"
+        assert resolve_ref_blob("repo@main/a", ".md") is None  # disk-served -> FileResponse
+    finally:
+        set_extension_runtime(previous)
+
+
 def test_sidebar_tree_built_for_a_ref(site):
     import vyasa.core as core
     from fasthtml.common import Ul, to_xml
