@@ -57,3 +57,15 @@ def test_ref_equal_to_checked_out_branch_falls_back_to_disk(site):
 
 def test_no_ref_uses_disk_pipeline(site):
     assert resolve_ref_markdown("repo/a") is None
+
+
+def test_sidebar_tree_built_for_a_ref(site):
+    import vyasa.core as core
+    from fasthtml.common import Ul, to_xml
+
+    items = core.build_ref_post_tree("repo", "feature", roles=[])
+    html = to_xml(Ul(*items))
+    assert "repo%40feature/feat" in html  # feature-only file, ref-carrying link
+    assert "repo%40feature/a" in html
+    # disk-served ref (current branch) -> None, caller uses disk tree
+    assert core.build_ref_post_tree("repo", "main", roles=[]) is None

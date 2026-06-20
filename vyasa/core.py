@@ -961,8 +961,35 @@ def _get_nav_entries(
     if cached and cached[0] == mtime:
         return cached[1]
     ordered = get_tree_entries(folder, root, show_hidden, excluded_dirs, enabled_document_suffixes())
+    if folder.resolve() == root.resolve():
+        ordered = _swap_bare_mounts_for_ref_roots(ordered)
     _nav_entries_cache[key] = (mtime, ordered)
     return ordered
+
+
+def _swap_bare_mounts_for_ref_roots(entries):
+    """A bare mirror has no working tree, so walking it as disk would expose
+    git internals. Represent each bare-root top-level mount as a default-ref
+    VirtualPath so the sidebar shows its content tree instead."""
+    from .content_backend import classify_root
+    from .content_tree import ref_root_vpath
+    from .helpers import get_content_mounts
+
+    bare = {}
+    for alias, mount_root in get_content_mounts():
+        if alias and classify_root(mount_root).kind == "bare":
+            bare[mount_root.resolve()] = alias
+    if not bare:
+        return entries
+    swapped = []
+    for entry in entries:
+        alias = bare.get(entry.resolve()) if hasattr(entry, "resolve") and not hasattr(entry, "slug") else None
+        if alias:
+            vpath = ref_root_vpath(alias, "")
+            swapped.append(vpath if vpath is not None else entry)
+        else:
+            swapped.append(entry)
+    return swapped
 
 
 def _folder_has_visible_descendant(folder: Path, roles, depth: int = 3):
@@ -1001,7 +1028,53 @@ def _cached_build_post_tree(fingerprint, roles_key, show_hidden, current_path):
     )
 
 
+def build_ref_post_tree(root_id, ref, roles=None, active_parts=()):
+    """Build the sidebar tree for a git-ref root, walking the object store
+    via VirtualPaths through the same renderer as the disk tree."""
+    from .content_tree import ref_nav_entries, ref_root_vpath
+
+    root_vpath = ref_root_vpath(root_id, ref)
+    if root_vpath is None:
+        return None
+    return build_post_tree_render(
+        root_vpath, roles=roles, max_depth=None, active_parts=active_parts,
+        root=root_vpath, show_hidden=get_config().get_show_hidden(),
+        excluded_dirs=set(get_config().get_reload_excludes()), get_nav_entries=ref_nav_entries,
+        effective_abbreviations=lambda root, folder=None: {}, should_exclude_dir_fn=should_exclude_dir,
+        slug_to_title_fn=slug_to_title, find_folder_note_file_fn=find_folder_note_file,
+        is_allowed_fn=is_allowed, parse_frontmatter_fn=parse_frontmatter,
+        rbac_rules=_rbac_rules, logger=logger, row_decorators=_sidebar_row_decorators(),
+    )
+
+
+@lru_cache(maxsize=16)
+def _cached_build_ref_post_tree(root_id, ref, sha, roles_key, active_parts):
+    return build_ref_post_tree(root_id, ref, roles=list(roles_key) if roles_key else [], active_parts=active_parts)
+
+
+def _ref_from_current_path(current_path):
+    """(root_id, ref, active_parts) when current_path carries alias@ref, else None."""
+    parts = Path(str(current_path).strip("/")).parts if current_path else ()
+    if not parts or "@" not in parts[0]:
+        return None
+    root_id, ref = parts[0].split("@", 1)
+    if not ref:
+        return None
+    return root_id, ref, tuple(parts[1:-1])
+
+
 def get_posts(roles=None, current_path=""):
+    parsed = _ref_from_current_path(current_path)
+    if parsed:
+        root_id, ref, active_parts = parsed
+        from .content_tree import ref_root_vpath
+
+        root_vpath = ref_root_vpath(root_id, ref)
+        if root_vpath is not None:
+            sha = root_vpath._backend.resolve_ref(ref)
+            items = _cached_build_ref_post_tree(root_id, ref, sha, tuple(roles or []), active_parts)
+            if items is not None:
+                return items
     fingerprint = _posts_tree_fingerprint()
     roles_key = tuple(roles or [])
     show_hidden = get_config().get_show_hidden()

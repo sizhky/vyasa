@@ -216,6 +216,121 @@ class GitBackend:
             return 0.0
 
 
+class _VStat:
+    __slots__ = ("st_mtime",)
+
+    def __init__(self, mtime: float):
+        self.st_mtime = mtime
+
+
+class VirtualPath:
+    """A read-only, duck-typed path-like backed by a ContentBackend at a ref.
+
+    It implements just the slice of the pathlib.Path surface that Vyasa's
+    nav/render/read code touches, so that Path-based code can walk and read
+    git-ref content without a worktree. It is deliberately NOT a
+    pathlib.Path subclass (that is fragile across 3.10-3.12) and exposes no
+    __fspath__, so it can never be silently opened from disk.
+
+    `root_id`/`ref` are carried so the slug it yields is `alias@ref/rel`,
+    which keeps generated navigation links pinned to the viewed ref."""
+
+    __slots__ = ("_backend", "ref", "root_id", "rel", "_kind")
+
+    def __init__(self, backend: "ContentBackend", ref: str, root_id: str, rel: str = "", kind: EntryKind | None = None):
+        self._backend = backend
+        self.ref = ref
+        self.root_id = root_id
+        self.rel = rel.strip("/")
+        self._kind = kind
+
+    # --- identity -------------------------------------------------------
+    @property
+    def name(self) -> str:
+        return self.rel.rsplit("/", 1)[-1]
+
+    @property
+    def suffix(self) -> str:
+        name = self.name
+        return name[name.rindex("."):] if "." in name else ""
+
+    @property
+    def stem(self) -> str:
+        name = self.name
+        return name[: name.rindex(".")] if "." in name else name
+
+    @property
+    def parent(self) -> "VirtualPath":
+        parent_rel = self.rel.rsplit("/", 1)[0] if "/" in self.rel else ""
+        return VirtualPath(self._backend, self.ref, self.root_id, parent_rel, "dir")
+
+    def __truediv__(self, other: str) -> "VirtualPath":
+        child = f"{self.rel}/{other}".strip("/")
+        return VirtualPath(self._backend, self.ref, self.root_id, child)
+
+    def with_suffix(self, suffix: str) -> "VirtualPath":
+        base = self.rel[: len(self.rel) - len(self.suffix)] if self.suffix else self.rel
+        return VirtualPath(self._backend, self.ref, self.root_id, f"{base}{suffix}")
+
+    def resolve(self) -> "VirtualPath":
+        return self
+
+    def as_posix(self) -> str:
+        return self.rel
+
+    @property
+    def slug(self) -> str:
+        if self.ref:
+            prefix = f"{self.root_id}@{self.ref}" if self.root_id else self.ref
+        else:
+            prefix = self.root_id  # default ref -> no @ suffix
+        return f"{prefix}/{self.rel}".strip("/") if self.rel else prefix
+
+    # --- probes / reads -------------------------------------------------
+    def _resolved_kind(self) -> EntryKind | None:
+        if self._kind is None:
+            self._kind = self._backend.stat_kind(self.rel, self.ref)
+        return self._kind
+
+    def is_dir(self) -> bool:
+        return self._resolved_kind() == "dir"
+
+    def is_file(self) -> bool:
+        return self._resolved_kind() == "file"
+
+    def exists(self) -> bool:
+        return self._resolved_kind() is not None
+
+    def iterdir(self):
+        for item in self._backend.list_dir(self.rel, self.ref):
+            child = f"{self.rel}/{item.name}".strip("/")
+            yield VirtualPath(self._backend, self.ref, self.root_id, child, item.kind)
+
+    def read_bytes(self) -> bytes:
+        data = self._backend.read_bytes(self.rel, self.ref)
+        if data is None:
+            raise FileNotFoundError(self.slug)
+        return data
+
+    def read_text(self, encoding: str = "utf-8", errors: str = "strict") -> str:
+        return self.read_bytes().decode(encoding, errors)
+
+    def stat(self) -> _VStat:
+        return _VStat(self._backend.mtime(self.rel, self.ref))
+
+    def __str__(self) -> str:
+        return self.slug
+
+    def __repr__(self) -> str:
+        return f"VirtualPath({self.slug!r})"
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, VirtualPath) and other.slug == self.slug
+
+    def __hash__(self) -> int:
+        return hash(("vpath", self.slug))
+
+
 RootKind = Literal["plain", "bare", "clone"]
 
 

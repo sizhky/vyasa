@@ -193,6 +193,13 @@ def content_path_for_slug(slug: str | Path, suffix: str = "") -> Path | None:
     return _safe_child(root, f"{relative.as_posix()}{suffix}")
 
 def content_slug_for_path(path: Path, strip_suffix: bool = True) -> str | None:
+    from .content_backend import VirtualPath
+
+    if isinstance(path, VirtualPath):
+        slug = path.slug
+        if strip_suffix and not (path.is_dir() and path.suffix.lower() == ".kg") and path.suffix:
+            slug = slug[: len(slug) - len(path.suffix)]
+        return slug
     resolved = path.resolve()
     for alias, root in get_content_mounts():
         try:
@@ -376,7 +383,29 @@ def parse_frontmatter_text(text: str, *, source: str = "") -> tuple[dict, str]:
 
 
 def parse_frontmatter(file_path: str | Path):
-    """Parse frontmatter from a markdown file with mtime caching."""
+    """Parse frontmatter from a markdown file with mtime caching.
+
+    Also accepts a VirtualPath (git-ref blob), read through its backend and
+    cached by its commit-time stamp."""
+    from .content_backend import VirtualPath
+
+    if isinstance(file_path, VirtualPath):
+        cache_key = file_path.slug
+        try:
+            stamp = file_path.stat().st_mtime
+        except OSError:
+            return {}, ""
+        cached = _frontmatter_cache.get(cache_key)
+        if cached and cached[0] == stamp:
+            return cached[1]
+        try:
+            text = file_path.read_text(encoding="utf-8", errors="replace")
+        except (OSError, FileNotFoundError):
+            return {}, ""
+        result = parse_frontmatter_text(text, source=file_path.slug)
+        _frontmatter_cache[cache_key] = (stamp, result)
+        return result
+
     file_path = Path(file_path)
     cache_key = str(file_path)
     try:
@@ -425,9 +454,11 @@ def resolve_markdown_title_text(metadata: dict, raw_content: str, fallback_stem:
 
 def resolve_markdown_title(file_path: str | Path, abbreviations=None) -> tuple[str, str]:
     """Get effective title and body, preferring frontmatter title, then first H1, then slug."""
+    from .content_backend import VirtualPath
+
     metadata, raw_content = parse_frontmatter(file_path)
-    file_path = Path(file_path)
-    return resolve_markdown_title_text(metadata, raw_content, file_path.stem, abbreviations=abbreviations)
+    stem = file_path.stem if isinstance(file_path, VirtualPath) else Path(file_path).stem
+    return resolve_markdown_title_text(metadata, raw_content, stem, abbreviations=abbreviations)
 
 
 _MORE_MARKER_RE = re.compile(r"^\s*<!--\s*more\s*-->\s*$", re.MULTILINE)

@@ -326,6 +326,42 @@ def _git_folder_note(backend, rel: str, ref: str) -> str | None:
     return None
 
 
+def ref_root_vpath(root_id: str, ref: str):
+    """A VirtualPath at the root of `root_id` for `ref`, or None when the
+    root is disk-served (caller should use the normal disk tree)."""
+    from .content_backend import VirtualPath, backend_for, classify_root
+    from .helpers import get_content_mounts
+
+    root_path = next((root for alias, root in get_content_mounts() if alias == root_id), None)
+    if root_path is None:
+        return None
+    backend, disk_mode = backend_for(classify_root(root_path), ref, root_id)
+    if disk_mode:
+        return None
+    return VirtualPath(backend, ref, root_id, "", "dir")
+
+
+def ref_nav_entries(folder, root, show_hidden, excluded_dirs):
+    """nav-entry source over a git ref: immediate children of `folder` as
+    VirtualPaths, drop-in for the disk get_nav_entries. Ordering and .vyasa
+    tuning do not apply at a ref; entries come back name-sorted."""
+    from .helpers import should_exclude_dir
+
+    entries = []
+    for child in folder.iterdir():
+        if child.is_dir() and not _is_kg_pack(child):
+            if should_exclude_dir(child.name, excluded_dirs) or (not show_hidden and child.name.startswith(".")):
+                continue
+            entries.append(child)
+        elif child.suffix.lower() in enabled_document_suffixes():
+            entries.append(child)
+    return entries
+
+
+def _is_kg_pack(vpath) -> bool:
+    return vpath.suffix.lower() == ".kg" and (vpath / "kg.schema").exists()
+
+
 def resolve_ref_markdown(slug: str, *, ref_override: str = "") -> RefDocument | None:
     """Resolve a slug to a markdown document read from a git ref.
 

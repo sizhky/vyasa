@@ -142,15 +142,16 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     logger.info(f"\n[DEBUG] ########## REQUEST START: /posts/{path} ##########")
     ref_override = request.query_params.get("ref", "") if hasattr(request, "query_params") else ""
     root_id, root_path, ref, relative = content_location(path, ref_override=ref_override)
-    if ref and root_path is not None:
+    if root_path is not None:
         from .content_tree import resolve_ref_markdown
         ref_doc = resolve_ref_markdown(path, ref_override=ref_override)
-        if ref_doc is not None:
+        if ref_doc is not None:  # served from git objects (bare, or non-current ref)
             return _render_ref_markdown(ref_doc, path=path, htmx=htmx, request=request, slug_to_title=slug_to_title, layout=layout, get_blog_title=get_blog_title, from_md=from_md, not_found=not_found)
-        # disk-served at a ref (plain folder, or clone on its current branch):
-        # strip the @ref so the disk pipeline resolves the slug normally.
-        rel = relative.as_posix()
-        path = (f"{root_id}/{rel}" if root_id else rel).strip("/")
+        if ref:
+            # disk-served but slug carries @ref (plain folder, or clone on its
+            # current branch): strip the @ref so the disk pipeline resolves it.
+            rel = relative.as_posix()
+            path = (f"{root_id}/{rel}" if root_id else rel).strip("/")
     root, relative_path = content_root_and_relative(path)
     if root is None:
         return not_found(htmx, auth=request.scope.get("auth"))
