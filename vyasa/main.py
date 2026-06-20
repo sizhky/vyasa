@@ -252,7 +252,9 @@ def cli():
     print(f"Reload enabled: {reload} for directories: {reload_kwargs.get('reload_dirs', [])}")
 
     _ensure_logging_configured()
-    uvicorn.run("vyasa.main:app", host=host, port=port, log_config=None, **reload_kwargs)
+    # Force-close lingering connections (e.g. the live-reload SSE stream) after
+    # a few seconds so --reload restarts don't hang on graceful shutdown.
+    uvicorn.run("vyasa.main:app", host=host, port=port, log_config=None, timeout_graceful_shutdown=3, **reload_kwargs)
 
 if __name__ == "__main__":
     cli()
