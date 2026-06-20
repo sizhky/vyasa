@@ -644,21 +644,21 @@ def _navbar_ref_switcher(current_path=None):
         for name, kind, is_default in refs:
             url = _ref_target_url(alias, name, current_path if active else "")
             ref_items.append(Li(Button(
-                Span("✓" if name == current else "", cls="w-3 inline-block text-amber-500"),
+                Span("✓" if name == current else "", cls="w-3 inline-block"),
                 Span(name), Span(" (default)" if is_default else "", cls="opacity-60 text-xs"),
                 UkIcon("tag", cls="w-3 h-3 opacity-50 ml-auto") if kind == "tag" else "",
                 type="button",
                 onclick=f"try{{localStorage.setItem('{storage_key}','{name}');}}catch(e){{}};window.location='{url}';",
-                cls="flex w-full items-center gap-1 rounded px-3 py-1.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800",
+                cls="vyasa-emphasis-control-option flex w-full items-center gap-1 px-3 py-1.5 text-left text-sm",
             )))
         root_blocks.append(Li(Details(
             Summary(
                 UkIcon("folder-git-2", cls="w-4 h-4 shrink-0"),
                 Span(alias or "(primary)", cls="font-medium truncate"),
                 Span(current, cls="opacity-60 text-xs ml-auto truncate max-w-[7rem]"),
-                cls="list-none flex items-center gap-2 cursor-pointer rounded px-2 py-1.5 text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden",
+                cls="vyasa-emphasis-control-option list-none flex items-center gap-2 cursor-pointer px-2 py-1.5 [&::-webkit-details-marker]:hidden",
             ),
-            Ul(*ref_items, cls="list-none pl-3 mt-1 mb-1 border-l border-slate-200 dark:border-slate-700"),
+            Ul(*ref_items, cls="list-none pl-3 mt-1 mb-1 border-l", style="border-color:var(--vyasa-emphasis-control-border)"),
             open=active,
             cls="vyasa-ref-root",
         ), cls="my-0.5"))
@@ -668,7 +668,7 @@ def _navbar_ref_switcher(current_path=None):
             UkIcon("git-branch", cls="w-4 h-4"), Span("Branches", cls="hidden sm:inline"), Span("⌄", cls="opacity-70"),
             cls="list-none flex items-center gap-2 cursor-pointer select-none rounded-md px-3 py-2 text-slate-100 hover:bg-slate-800/80 transition-colors [&::-webkit-details-marker]:hidden",
         ),
-        Div(Ul(*root_blocks, cls="list-none"), cls="absolute right-0 mt-2 w-72 p-2 rounded-lg bg-white text-slate-800 shadow-lg border border-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 z-[1100] max-h-[70vh] overflow-y-auto"),
+        Div(Ul(*root_blocks, cls="list-none"), cls="vyasa-emphasis-control-menu absolute right-0 mt-2 w-72 z-[1100] max-h-[70vh] overflow-y-auto"),
         cls="vyasa-ref-switcher relative",
     )
 
