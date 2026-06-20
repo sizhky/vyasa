@@ -12,6 +12,7 @@ from .helpers import (
     content_slug_for_path,
     content_url_for_slug,
     document_kind_for_suffix,
+    document_kind_for_path,
     document_title_for_path,
     enabled_document_suffixes,
     find_folder_note_file,
@@ -126,7 +127,7 @@ class ContentTree:
                 else self._path_for_slug(clean_slug, suffix)
             )
             if path and path.exists() and self._is_document_path(path):
-                kind = document_kind_for_suffix(suffix)
+                kind = document_kind_for_path(path)
                 if not kind:
                     continue
                 doc_slug = self._slug_for_path(path)
@@ -137,7 +138,7 @@ class ContentTree:
             if note:
                 note_slug = self._slug_for_path(note)
                 if note_slug:
-                    return ResolvedDocument(note_slug, note, "markdown", content_url_for_slug(note_slug), folder_note=note)
+                    return ResolvedDocument(note_slug, note, document_kind_for_path(note) or "markdown", content_url_for_slug(note_slug), folder_note=note)
             return ResolvedDocument(clean_slug, folder_path, "folder", content_url_for_slug(clean_slug))
         return None
 
@@ -221,7 +222,7 @@ class ContentTree:
             has_note = bool(find_folder_note_file(path))
             return ContentEntry(slug, path, "folder", title, route, True, has_note)
         slug = self._slug_for_path(path) or path.with_suffix("").name
-        kind = document_kind_for_suffix(path.suffix)
+        kind = document_kind_for_path(path)
         if not kind:
             raise ValueError(f"unsupported document suffix: {path.suffix}")
         route = content_url_for_slug(slug, prefix="/posts")

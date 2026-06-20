@@ -71,6 +71,30 @@ def test_content_tree_discovers_html_documents(tmp_path):
     assert resolved.path == page.resolve()
 
 
+def test_content_tree_rejects_mdx_suffix(tmp_path):
+    page = tmp_path / "dashboard.mdx"
+    page.write_text("# Dashboard\n\n<Widget />\n", encoding="utf-8")
+
+    tree = ContentTree(root=tmp_path)
+    resolved = tree.resolve_document("dashboard")
+
+    assert tree.list_entries() == []
+    assert resolved is None
+
+
+def test_content_tree_discovers_mdx_in_named_folder_markdown(tmp_path):
+    folder = tmp_path / "demo"
+    folder.mkdir()
+    page = folder / "demo.md"
+    page.write_text("# Demo\n\n<Widget />\n", encoding="utf-8")
+
+    resolved = ContentTree(root=tmp_path).resolve_document("demo")
+
+    assert resolved is not None
+    assert resolved.kind == "mdx"
+    assert resolved.path == page.resolve()
+
+
 def test_content_tree_discovers_kg_pack_as_document(tmp_path):
     pack = tmp_path / "roadmap.kg"
     pack.mkdir()
@@ -122,6 +146,22 @@ def test_sidebar_renders_kg_pack_row_when_markdown_shares_stem(monkeypatch, tmp_
 
     assert "/posts/chapter-1.kg" in html
     assert "/posts/chapter-1" in html
+
+
+def test_sidebar_uses_mdx_icon_for_markdown_with_component(monkeypatch, tmp_path):
+    page = tmp_path / "demo.md"
+    page.write_text("# Demo\n\n<Widget />\n", encoding="utf-8")
+    (tmp_path / ".vyasa").write_text("", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    reload_config(tmp_path / ".vyasa")
+    core._nav_entries_cache.clear()
+
+    try:
+        html = to_xml(core.build_post_tree(tmp_path))
+    finally:
+        reload_config()
+
+    assert 'icon="file-code"' in html
 
 
 def test_sidebar_navigation_uses_enabled_document_suffixes(monkeypatch, tmp_path):

@@ -105,6 +105,15 @@ def test_build_post_tree_static_includes_tree_files(tmp_path):
     assert "/posts/scope.html" in html
 
 
+def test_static_tree_uses_mdx_icon_for_markdown_with_component(tmp_path):
+    page = tmp_path / "demo.md"
+    page.write_text("# Demo\n\n<Widget />\n", encoding="utf-8")
+
+    html = to_xml(build_post_tree_static(tmp_path, tmp_path))
+
+    assert 'icon="file-code"' in html
+
+
 def test_build_post_tree_static_hides_tree_without_extension(tmp_path):
     root = tmp_path / "site"
     root.mkdir()

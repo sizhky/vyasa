@@ -25,6 +25,7 @@ Bad: `[Guide](guide.md#install)`.
 
 | Request | Route |
 |---|---|
+| MDX documents, components, sidecars, catalogs, Excalidraw APIs | `topics/mdx/SKILL.md` |
 | `.vyasa`, CLI, env, auth, RBAC | `routes/config.md` |
 | Markdown authoring or rendering, including Knowledge Graph or KG blocks (`items`/`tasks`) | `routes/markdown.md` |
 | Mermaid, D2, Cytograph, `.cytree` | `routes/diagrams.md` |

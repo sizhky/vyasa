@@ -12,7 +12,7 @@ from monsterui.all import *
 from .helpers import (
     _effective_abbreviations, _effective_ignore_list,
     _effective_include_list, _should_include_folder, _strip_inline_markdown,
-    _unique_anchor, content_slug_for_path, content_url_for_slug, document_icon_for_path, document_title_for_path, enabled_document_suffixes, enabled_document_types, estimate_read_time_minutes, expand_markdown_includes_for_reading, find_folder_note_file,
+    _unique_anchor, content_slug_for_path, content_url_for_slug, document_icon_for_path, document_kind_for_path, document_title_for_path, enabled_document_suffixes, enabled_document_types, estimate_read_time_minutes, expand_markdown_includes_for_reading, find_folder_note_file,
     format_last_modified_label,
     get_adjacent_posts, get_post_title, is_document_path, is_inside_document_directory, parse_frontmatter, resolve_markdown_title, slug_to_title,
     text_to_anchor,
@@ -463,7 +463,7 @@ def build_post_tree_static(folder, root_folder, show_hidden=False):
         elif item.suffix in enabled_document_suffixes() and item.suffix != ".pdf":
             slug = str(item.relative_to(root_folder).with_suffix(''))
             if item.suffix == ".md":
-                title, icon = get_post_title(item, abbreviations=abbreviations), "file-text"
+                title, icon = get_post_title(item, abbreviations=abbreviations), document_icon_for_path(item)
             else:
                 title, icon = document_title_for_path(item, abbreviations=abbreviations), document_icon_for_path(item)
             
@@ -590,7 +590,8 @@ def build_static_site(input_dir=None, output_dir=None):
         relative_path = doc_file.relative_to(root_folder)
         print(f"  Processing: {relative_path}")
 
-        if doc_file.suffix == ".md":
+        kind = document_kind_for_path(doc_file)
+        if kind == "markdown":
             metadata, raw_content = parse_frontmatter(doc_file)
             post_title, render_content = resolve_markdown_title(doc_file, abbreviations=abbreviations)
             content_div = from_md(render_content, current_path=str(relative_path))
@@ -598,7 +599,6 @@ def build_static_site(input_dir=None, output_dir=None):
             toc_items = build_toc_items(toc_headings)
             content_html = to_xml(content_div)
         else:
-            kind = next((item["kind"] for item in enabled_document_types() if item["suffix"] == doc_file.suffix), None)
             renderer = runtime.static_document_renderers.get(kind) if runtime is not None and kind else None
             if renderer is None:
                 continue
@@ -618,10 +618,10 @@ def build_static_site(input_dir=None, output_dir=None):
             content_html = rendered.content_html
         prev_item, next_item = get_adjacent_posts(root_folder, relative_path, abbreviations=abbreviations)
         read_source = expand_markdown_includes_for_reading(
-            render_content if doc_file.suffix == ".md" else raw_content,
-            current_path=str(relative_path.with_suffix("")) if doc_file.suffix == ".md" else None,
+            render_content if kind == "markdown" else raw_content,
+            current_path=str(relative_path.with_suffix("")) if kind == "markdown" else None,
             root_folder=root_folder,
-        ) if doc_file.suffix == ".md" else raw_content
+        ) if kind == "markdown" else raw_content
 
         read_time = estimate_read_time_minutes(read_source)
         last_modified = format_last_modified_label(doc_file)

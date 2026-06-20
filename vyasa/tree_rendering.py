@@ -122,7 +122,7 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             continue
         if item.suffix == ".md":
             metadata, _ = parse_frontmatter_fn(item)
-            icon = "monitor" if metadata.get("slides", False) else "file-text"
+            icon = "monitor" if metadata.get("slides", False) else document_icon_for_path(item)
             title = metadata.get("title", document_title_for_path(item, abbreviations=abbreviations))
             label, href = title, content_url_for_slug(slug)
         else:

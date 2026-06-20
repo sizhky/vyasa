@@ -219,6 +219,18 @@ def cli():
         reload_excludes.append(".py[cod]")
         reload_excludes.append(".sw.*")
         reload_excludes.append("~*")
+        # Atomic sidecar writes drop a dot-prefixed temp next to the target; the
+        # ".*" include below would otherwise reload the server on every save.
+        reload_excludes.append("*.tmp")
+        # OS/editor junk that the ".*" include would otherwise pick up.
+        reload_excludes.extend([
+            ".DS_Store",
+            "*/.DS_Store",
+            ".git/*",
+            "*.swp",
+            "*.swo",
+            "Thumbs.db",
+        ])
         reload_excludes.extend([
             "*.db",
             "*.db-journal",
