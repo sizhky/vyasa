@@ -50,6 +50,7 @@ auth = [
 
 [project.scripts]
 vyasa = "vyasa.main:cli"
+vyasa-fetch = "vyasa.git_fetcher:main"
 
 [project.urls]
 Homepage = "https://github.com/yeshwanth/vyasa"

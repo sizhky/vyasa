@@ -155,6 +155,45 @@ class VyasaConfig:
                 roots.append(path)
         return list(dict.fromkeys(roots))
 
+    def get_git_mirror_root(self) -> Path:
+        """Directory holding bare mirrors maintained by the fetcher."""
+        raw = self.get('git_mirror_root', 'VYASA_GIT_MIRROR_ROOT', '.vyasa-mirrors')
+        path = Path(str(raw)).expanduser()
+        if not path.is_absolute():
+            base = self._loaded_config_path.parent if self._loaded_config_path else Path.cwd()
+            path = base / path
+        return path.resolve()
+
+    def get_git_repos(self) -> list[tuple[str, str]]:
+        """Upstream repos to mirror, as (name, url). Accepts a TOML table
+        `git_repos = { name = "url" }` or a list of `"name=url"` strings."""
+        raw = self.get('git_repos', 'VYASA_GIT_REPOS', {})
+        pairs: list[tuple[str, str]] = []
+        if isinstance(raw, dict):
+            pairs = [(str(name), str(url)) for name, url in raw.items()]
+        else:
+            for item in self._coerce_list(raw):
+                text = str(item)
+                if "=" in text:
+                    name, url = text.split("=", 1)
+                    pairs.append((name.strip(), url.strip()))
+        seen, out = set(), []
+        for name, url in pairs:
+            if name and url and name not in seen:
+                seen.add(name)
+                out.append((name, url))
+        return out
+
+    def get_git_mounts(self) -> list[tuple[str, Path]]:
+        """Mirror dirs that exist on disk, as (alias, path), for mounting."""
+        mirror_root = self.get_git_mirror_root()
+        mounts = []
+        for name, _ in self.get_git_repos():
+            path = (mirror_root / f"{name}.git").resolve()
+            if (path / "HEAD").exists():
+                mounts.append((name, path))
+        return mounts
+
     def get_ignore_cwd_as_root(self) -> bool:
         """Get whether the primary root should be hidden from content discovery."""
         value = self.get('ignore_cwd_as_root', 'VYASA_IGNORE_CWD_AS_ROOT', False)

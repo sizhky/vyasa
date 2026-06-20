@@ -93,6 +93,10 @@ def _config_content_mounts() -> list[tuple[str, Path]]:
             continue
         aliases.add(alias)
         mounts.append((alias, root.resolve()))
+    for alias, path in cfg.get_git_mounts():
+        if alias and alias not in aliases:
+            aliases.add(alias)
+            mounts.append((alias, path))
     return mounts
 
 
