@@ -84,6 +84,22 @@ def test_non_markdown_kinds_and_blobs_at_a_ref(site):
         set_extension_runtime(previous)
 
 
+def test_sidebar_uncommitted_dot_for_dirty_clone_file(site):
+    import vyasa.core as core
+    from fasthtml.common import A, to_xml
+
+    work = site.parent / "repo"
+    (work / "a.md").write_text("# Main A\n\nedited unstaged\n")  # dirty on current branch
+    core._uncommitted_slugs.cache_clear()
+
+    slugs = core._uncommitted_slugs(core._posts_tree_fingerprint())
+    assert "repo/a" in slugs
+    dirty = to_xml(core._uncommitted_row_decorator(A("A", href="/posts/repo/a"), slug="repo/a"))
+    clean = to_xml(core._uncommitted_row_decorator(A("X", href="/posts/repo/x"), slug="repo/x"))
+    assert "vyasa-uncommitted-dot" in dirty
+    assert "vyasa-uncommitted-dot" not in clean
+
+
 def test_sidebar_tree_built_for_a_ref(site):
     import vyasa.core as core
     from fasthtml.common import Ul, to_xml

@@ -648,11 +648,36 @@ def _sidebar_section_nodes():
     return [provider(context) for provider in providers]
 
 
+@lru_cache(maxsize=4)
+def _uncommitted_slugs(fingerprint):
+    """Slugs whose backing file differs from HEAD in a working-clone mount.
+    Keyed by the content fingerprint so working-tree edits refresh it."""
+    from .content_backend import classify_root, uncommitted_paths
+
+    slugs = set()
+    for alias, root in get_content_mounts():
+        rc = classify_root(root)
+        if rc.kind != "clone":
+            continue
+        for rel in uncommitted_paths(rc):
+            stripped = rel.rsplit(".", 1)[0] if "." in rel.rsplit("/", 1)[-1] else rel
+            for value in (rel, stripped):
+                slugs.add(f"{alias}/{value}" if alias else value)
+    return frozenset(slugs)
+
+
+def _uncommitted_row_decorator(node, *, slug=None, title="", context="tree"):
+    if not slug or slug not in _uncommitted_slugs(_posts_tree_fingerprint()):
+        return node
+    dot = Span("●", cls="vyasa-uncommitted-dot text-amber-500 text-[0.6rem] ml-1 shrink-0", title="Uncommitted changes")
+    return Span(node, dot, cls="inline-flex items-center min-w-0")
+
+
 def _sidebar_row_decorators():
     runtime = get_extension_runtime()
     if not runtime:
         return ()
-    return (*runtime.sidebar_row_decorators, _row_action_decorator(runtime.sidebar_action_registry()))
+    return (*runtime.sidebar_row_decorators, _uncommitted_row_decorator, _row_action_decorator(runtime.sidebar_action_registry()))
 
 
 def _search_result_row_decorators():
