@@ -649,14 +649,14 @@ def _navbar_ref_switcher(current_path=None):
                 UkIcon("tag", cls="w-3 h-3 opacity-50 ml-auto") if kind == "tag" else "",
                 type="button",
                 onclick=f"try{{localStorage.setItem('{storage_key}','{name}');}}catch(e){{}};window.location='{url}';",
-                cls="flex w-full items-center gap-1 rounded px-3 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800",
+                cls="flex w-full items-center gap-1 rounded px-3 py-1.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800",
             )))
         root_blocks.append(Li(Details(
             Summary(
                 UkIcon("folder-git-2", cls="w-4 h-4 shrink-0"),
                 Span(alias or "(primary)", cls="font-medium truncate"),
                 Span(current, cls="opacity-60 text-xs ml-auto truncate max-w-[7rem]"),
-                cls="list-none flex items-center gap-2 cursor-pointer rounded px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden",
+                cls="list-none flex items-center gap-2 cursor-pointer rounded px-2 py-1.5 text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden",
             ),
             Ul(*ref_items, cls="list-none pl-3 mt-1 mb-1 border-l border-slate-200 dark:border-slate-700"),
             open=active,
