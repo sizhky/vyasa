@@ -579,10 +579,66 @@ def theme_toggle():
     )
 
 
+def _navbar_ref_switcher(current_path):
+    """A branch/tag dropdown button for the repo the current page belongs to.
+
+    Shown for any git-backed root (including a working clone on its current
+    branch, served from disk). Switching navigates to the chosen ref and
+    remembers it per root in localStorage."""
+    if not current_path:
+        return None
+    from .content_backend import GitBackend, classify_root
+    from .helpers import content_location
+
+    root_id, root_path, ref, relative = content_location(current_path)
+    if root_path is None:
+        return None
+    rc = classify_root(root_path)
+    if rc.kind == "plain" or rc.git_dir is None:
+        return None
+    try:
+        refs = GitBackend(rc.git_dir).list_refs()
+    except Exception:
+        return None
+    if not refs:
+        return None
+    default_ref = next((r.name for r in refs if r.is_default), "")
+    current = ref or (rc.current_branch if rc.kind == "clone" else "") or default_ref
+    rel = relative.as_posix()
+    rel = "" if rel == "." else rel
+
+    def target(name):
+        if root_id:
+            return content_url_for_slug(f"{root_id}@{name}/{rel}".strip("/"))
+        base = content_url_for_slug(rel) if rel else "/"
+        return f"{base}?ref={quote(name, safe='')}"
+
+    ref_urls = {r.name: target(r.name) for r in refs}
+    storage_key = f"vyasa-ref:{root_id}"
+    items = [
+        Li(Button(
+            Span("✓ " if r.name == current else "", cls="w-4 inline-block"),
+            Span(r.name), Span(" (default)" if r.is_default else "", cls="opacity-60 text-xs"),
+            type="button",
+            onclick=f"try{{localStorage.setItem('{storage_key}','{r.name}');}}catch(e){{}};window.location='{ref_urls[r.name]}';",
+            cls="vyasa-ref-option flex w-full items-center gap-1 rounded px-3 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800",
+        ))
+        for group in (("branch",), ("tag",)) for r in refs if r.kind == group[0]
+    ]
+    return Details(
+        Summary(
+            UkIcon("git-branch", cls="w-4 h-4"), Span(current, cls="max-w-[10rem] truncate"), Span("⌄", cls="opacity-70"),
+            cls="list-none flex items-center gap-2 cursor-pointer select-none rounded-md px-3 py-2 text-slate-100 hover:bg-slate-800/80 transition-colors [&::-webkit-details-marker]:hidden",
+        ),
+        Div(Ul(*items, cls="list-none"), cls="absolute right-0 mt-2 w-64 p-2 rounded-lg bg-white text-slate-800 shadow-lg border border-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 z-[1100] max-h-[60vh] overflow-y-auto"),
+        cls="vyasa-ref-switcher relative",
+    )
+
+
 def navbar(
-    show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None, mobile_extra_controls=()
+    show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None, mobile_extra_controls=(), current_path=None
 ):
-    return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label, mobile_extra_controls)
+    return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label, mobile_extra_controls, ref_switcher=_navbar_ref_switcher(current_path))
 
 
 def _posts_sidebar_fingerprint():
