@@ -157,6 +157,31 @@ def content_root_and_relative(slug: str | Path) -> tuple[Path | None, Path]:
         return mounts[0][1], Path(*parts) if parts else Path()
     return None, Path(*parts) if parts else Path()
 
+def content_location(slug: str | Path, *, ref_override: str = "") -> tuple[str, Path | None, str, Path]:
+    """Resolve a slug to (root_id, root_path, ref, relative).
+
+    `root_id` is the mount alias ("" for the primary root); `ref` is the
+    git ref carried as `alias@ref` in the first slug segment, or supplied via
+    `ref_override` (the `?ref=` query param, used for the primary root).
+    Self-contained so it resolves git refs that content_root_and_relative
+    deliberately declines."""
+    parts = Path(str(slug).strip("/")).parts
+    ref = ref_override
+    body = list(parts)
+    if parts and "@" in parts[0]:
+        alias, ref = parts[0].split("@", 1)
+        body = [alias, *parts[1:]]
+    mounts = get_content_mounts()
+    for alias, root in mounts:
+        if alias and body and body[0] == alias:
+            rel = Path(*body[1:]) if len(body) > 1 else Path()
+            return alias, root, ref, rel
+    for alias, root in mounts:
+        if alias == "":
+            return "", root, ref, Path(*body) if body else Path()
+    return (body[0] if body else ""), None, ref, Path(*body[1:]) if len(body) > 1 else Path()
+
+
 def content_path_for_slug(slug: str | Path, suffix: str = "") -> Path | None:
     root, relative = content_root_and_relative(slug)
     if root is None:
@@ -329,11 +354,25 @@ def should_exclude_dir(name: str, excluded: set[str]) -> bool:
     prefixes = (".venv", "venv", "node_modules", ".git", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "dist", "build", ".cache")
     return any(name == prefix or name.startswith(prefix + ".") for prefix in prefixes)
 
-def parse_frontmatter(file_path: str | Path):
-    """Parse frontmatter from a markdown file with caching"""
-    import time
-    start_time = time.time()
+def parse_frontmatter_text(text: str, *, source: str = "") -> tuple[dict, str]:
+    """Split frontmatter from markdown text. `source` only labels errors.
 
+    Shared core for both disk files and git blobs, so a ref-served page
+    parses identically to a working-tree one."""
+    if not text.startswith(('---\n', '---\r\n', '+++\n', '+++\r\n')):
+        return ({}, text)
+    try:
+        post = frontmatter.loads(text)
+        return (post.metadata, post.content)
+    except Exception as e:
+        logger.warning("Error parsing frontmatter from {}: {}", source or "<text>", e)
+        recovered = _recover_simple_frontmatter(text)
+        recovered["__frontmatter_error__"] = {"message": str(e), "file": source}
+        return (recovered, _strip_leading_frontmatter_block(text))
+
+
+def parse_frontmatter(file_path: str | Path):
+    """Parse frontmatter from a markdown file with mtime caching."""
     file_path = Path(file_path)
     cache_key = str(file_path)
     try:
@@ -344,49 +383,25 @@ def parse_frontmatter(file_path: str | Path):
     if cache_key in _frontmatter_cache:
         cached_mtime, cached_data = _frontmatter_cache[cache_key]
         if cached_mtime == mtime:
-            elapsed = (time.time() - start_time) * 1000
-            logger.debug(f"[DEBUG] parse_frontmatter CACHE HIT for {file_path.name} ({elapsed:.2f}ms)")
             return cached_data
 
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            text = f.read()
-            if not text.startswith(('---\n', '---\r\n', '+++\n', '+++\r\n')):
-                result = ({}, text)
-                _frontmatter_cache[cache_key] = (mtime, result)
-                elapsed = (time.time() - start_time) * 1000
-                logger.debug(f"[DEBUG] parse_frontmatter SKIP NO FRONTMATTER {file_path.name} ({elapsed:.2f}ms)")
-                return result
-            post = frontmatter.loads(text)
-            result = (post.metadata, post.content)
-            _frontmatter_cache[cache_key] = (mtime, result)
-            elapsed = (time.time() - start_time) * 1000
-            logger.debug(f"[DEBUG] parse_frontmatter READ FILE {file_path.name} ({elapsed:.2f}ms)")
-            return result
+        text = file_path.read_text(encoding="utf-8")
     except UnicodeDecodeError as e:
         logger.warning("Skipping non-UTF8 markdown file {}: {}", file_path, e)
         result = ({}, "")
         _frontmatter_cache[cache_key] = (mtime, result)
         return result
-    except Exception as e:
-        logger.warning("Error parsing frontmatter from {}: {}", file_path, e)
-        try:
-            text = file_path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            return {}, ""
-        recovered = _recover_simple_frontmatter(text)
-        recovered["__frontmatter_error__"] = {
-            "message": str(e),
-            "file": str(file_path),
-        }
-        result = (recovered, _strip_leading_frontmatter_block(text))
-        _frontmatter_cache[cache_key] = (mtime, result)
-        return result
+    except OSError:
+        return {}, ""
+    result = parse_frontmatter_text(text, source=str(file_path))
+    _frontmatter_cache[cache_key] = (mtime, result)
+    return result
 
-def resolve_markdown_title(file_path: str | Path, abbreviations=None) -> tuple[str, str]:
-    """Get effective title and body, preferring frontmatter title, then first H1, then slug."""
-    metadata, raw_content = parse_frontmatter(file_path)
-    file_path = Path(file_path)
+def resolve_markdown_title_text(metadata: dict, raw_content: str, fallback_stem: str, abbreviations=None) -> tuple[str, str]:
+    """Title + body from already-parsed frontmatter, preferring explicit title,
+    then first H1, then a slug-derived fallback. Path-free core shared by disk
+    and git-blob reads."""
     explicit_title = metadata.get("title")
     if explicit_title:
         match = re.match(r"^\s*#\s+(.+?)\s*$\n?", raw_content or "", re.MULTILINE)
@@ -396,14 +411,20 @@ def resolve_markdown_title(file_path: str | Path, abbreviations=None) -> tuple[s
                 body = (raw_content[:match.start()] + raw_content[match.end():]).lstrip("\n")
                 return explicit_title, body
         return explicit_title, raw_content
-
     match = re.match(r"^\s*#\s+(.+?)\s*$\n?", raw_content or "", re.MULTILINE)
     if match:
         title = _plain_text_from_html(_strip_inline_markdown(match.group(1).strip()))
         body = (raw_content[:match.start()] + raw_content[match.end():]).lstrip("\n")
         return title, body
+    return slug_to_title(fallback_stem, abbreviations=abbreviations), raw_content
 
-    return slug_to_title(file_path.stem, abbreviations=abbreviations), raw_content
+
+def resolve_markdown_title(file_path: str | Path, abbreviations=None) -> tuple[str, str]:
+    """Get effective title and body, preferring frontmatter title, then first H1, then slug."""
+    metadata, raw_content = parse_frontmatter(file_path)
+    file_path = Path(file_path)
+    return resolve_markdown_title_text(metadata, raw_content, file_path.stem, abbreviations=abbreviations)
+
 
 _MORE_MARKER_RE = re.compile(r"^\s*<!--\s*more\s*-->\s*$", re.MULTILINE)
 

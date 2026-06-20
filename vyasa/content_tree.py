@@ -292,3 +292,69 @@ class ContentTree:
                 if candidate.is_file() and candidate.suffix == ".md" and candidate.stem.lower() == stem:
                     return candidate
         return None
+
+
+@dataclass(frozen=True)
+class RefDocument:
+    """A markdown document read from a git ref (object store, not disk).
+
+    `found` is False when the path is absent on the ref, which drives the
+    soft "not present on <ref>" view instead of a hard 404."""
+
+    root_id: str
+    ref: str
+    slug: str
+    relative: str
+    found: bool
+    metadata: dict
+    body: str
+    title: str
+    sha: str | None = None
+
+
+def _git_folder_note(backend, rel: str, ref: str) -> str | None:
+    """Folder-note rule mirrored from find_folder_note_file, over a git tree:
+    index.md, then readme.md, then <foldername>.md."""
+    if backend.stat_kind(rel, ref) != "dir":
+        return None
+    names = {item.name.lower(): item.name for item in backend.list_dir(rel, ref) if item.kind == "file"}
+    folder_name = (rel.rsplit("/", 1)[-1] if rel else "").lower()
+    for stem in ("index.md", "readme.md", f"{folder_name}.md"):
+        if stem in names:
+            child = names[stem]
+            return f"{rel}/{child}" if rel else child
+    return None
+
+
+def resolve_ref_markdown(slug: str, *, ref_override: str = "") -> RefDocument | None:
+    """Resolve a slug to a markdown document read from a git ref.
+
+    Returns None when the slug maps to no root or to a disk-served backend
+    (plain folder, or a working clone on its current branch) — the caller
+    then uses the normal disk pipeline. Returns a RefDocument (possibly with
+    found=False) only when content is served from the git object store."""
+    from .content_backend import backend_for, classify_root
+    from .helpers import (
+        content_location,
+        parse_frontmatter_text,
+        resolve_markdown_title_text,
+        slug_to_title,
+    )
+
+    root_id, root_path, ref, relative = content_location(slug, ref_override=ref_override)
+    if root_path is None:
+        return None
+    backend, disk_mode = backend_for(classify_root(root_path), ref, root_id)
+    if disk_mode:
+        return None  # working tree / plain folder -> normal disk pipeline
+
+    rel = relative.as_posix() if relative.as_posix() != "." else ""
+    blob_rel = rel if rel.endswith(".md") else _git_folder_note(backend, rel, ref) or f"{rel}.md"
+    data = backend.read_bytes(blob_rel, ref)
+    sha = backend.resolve_ref(ref)
+    stem = blob_rel.rsplit("/", 1)[-1].removesuffix(".md") or root_id
+    if data is None:
+        return RefDocument(root_id, ref, slug, blob_rel, False, {}, "", slug_to_title(stem), sha)
+    metadata, raw = parse_frontmatter_text(data.decode("utf-8", "replace"), source=slug)
+    title, body = resolve_markdown_title_text(metadata, raw, stem)
+    return RefDocument(root_id, ref, slug, blob_rel, True, metadata, body, title, sha)

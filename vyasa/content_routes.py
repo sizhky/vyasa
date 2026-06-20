@@ -18,7 +18,7 @@ from .document_pages import (
     resolve_document_actions,
 )
 from .extensions import get_extension_runtime, refresh_extension_runtime
-from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, expand_markdown_includes_for_reading, get_adjacent_posts, strip_more_marker
+from .helpers import content_location, content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, expand_markdown_includes_for_reading, get_adjacent_posts, strip_more_marker
 from .runtime_context import traced
 from .extensions_builtin.markdown.renderer import _render_markdown_fragment
 from .extensions_builtin.slides.deck import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
@@ -94,10 +94,42 @@ def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, inc
     return Div(*items, cls="vyasa-breadcrumbs mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400")
 
 
+def _render_ref_markdown(ref_doc, *, path, htmx, request, slug_to_title, layout, get_blog_title, from_md, not_found):
+    """Render a markdown document served from a git ref (object store)."""
+    abbreviations = {}
+    breadcrumbs = _breadcrumbs(path, slug_to_title, abbreviations)
+    ref_badge = Span(UkIcon("git-branch", cls="w-3 h-3"), Span(ref_doc.ref), cls="vyasa-ref-badge inline-flex items-center gap-1 text-xs opacity-70")
+    if not ref_doc.found:
+        body = Div(
+            H1(f"Not present on {ref_doc.ref}", cls="mb-2"),
+            Span(f"“{ref_doc.relative}” does not exist on this ref.", cls="opacity-70"),
+            cls="w-full",
+        )
+        return DocumentPage(f"Not on {ref_doc.ref}", path, body, toc_source="").render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
+    content = Div(
+        document_header(ref_doc.title, ref_doc.body, actions=(), breadcrumbs=breadcrumbs),
+        Div(ref_badge, cls="mb-3"),
+        from_md(strip_more_marker(ref_doc.body), current_path=path),
+        cls="w-full",
+    )
+    return DocumentPage(ref_doc.title, path, content, toc_source=ref_doc.body).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
+
+
 @traced("total")
 def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbreviations, find_folder_note_file, slug_to_title, layout, get_blog_title, not_found, parse_frontmatter, resolve_markdown_title, from_md, logger, PathCls=Path):
     request_start = time.time()
     logger.info(f"\n[DEBUG] ########## REQUEST START: /posts/{path} ##########")
+    ref_override = request.query_params.get("ref", "") if hasattr(request, "query_params") else ""
+    root_id, root_path, ref, relative = content_location(path, ref_override=ref_override)
+    if ref and root_path is not None:
+        from .content_tree import resolve_ref_markdown
+        ref_doc = resolve_ref_markdown(path, ref_override=ref_override)
+        if ref_doc is not None:
+            return _render_ref_markdown(ref_doc, path=path, htmx=htmx, request=request, slug_to_title=slug_to_title, layout=layout, get_blog_title=get_blog_title, from_md=from_md, not_found=not_found)
+        # disk-served at a ref (plain folder, or clone on its current branch):
+        # strip the @ref so the disk pipeline resolves the slug normally.
+        rel = relative.as_posix()
+        path = (f"{root_id}/{rel}" if root_id else rel).strip("/")
     root, relative_path = content_root_and_relative(path)
     if root is None:
         return not_found(htmx, auth=request.scope.get("auth"))
