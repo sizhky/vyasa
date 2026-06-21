@@ -72,6 +72,7 @@ def _safe_child(base: Path, relative: str | Path) -> Path | None:
 def _config_content_mounts() -> list[tuple[str, Path]]:
     """Return primary and configured content roots as URL slug mounts."""
     from .config import get_config
+    from .content_backend import classify_root
 
     cfg = get_config()
     primary = cfg.get_root_folder().resolve()
@@ -93,6 +94,24 @@ def _config_content_mounts() -> list[tuple[str, Path]]:
             continue
         aliases.add(alias)
         mounts.append((alias, root.resolve()))
+    mounted_aliases = {alias for alias, _ in mounts if alias}
+    if not ignore_primary:
+        try:
+            top_level = sorted((p for p in primary.iterdir() if p.is_dir()), key=lambda p: p.name.lower())
+        except OSError:
+            top_level = []
+        for root in top_level:
+            alias = root.name
+            if not alias or alias in mounted_aliases:
+                continue
+            try:
+                if classify_root(root).kind == "plain":
+                    continue
+            except Exception:
+                continue
+            aliases.add(alias)
+            mounted_aliases.add(alias)
+            mounts.append((alias, root.resolve()))
     for alias, path in cfg.get_git_mounts():
         if alias and alias not in aliases:
             aliases.add(alias)
