@@ -10,6 +10,7 @@ docs/grill-sessions or the git-backed-docs design for the rationale.
 
 from __future__ import annotations
 
+import fnmatch
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol, runtime_checkable
@@ -340,6 +341,21 @@ class VirtualPath:
             child = f"{self.rel}/{item.name}".strip("/")
             yield VirtualPath(self._backend, self.ref, self.root_id, child, item.kind)
 
+    def glob(self, pattern: str):
+        # Single-level glob only (no '/' / '**'); matches the patterns the KG
+        # and view readers actually use (e.g. 'kg.*.context', 'tmp.*.view').
+        for child in self.iterdir():
+            if fnmatch.fnmatch(child.name, pattern):
+                yield child
+
+    def is_absolute(self) -> bool:
+        # rel is always content-root-relative; never an absolute disk path.
+        return False
+
+    def mkdir(self, *args, **kwargs) -> None:
+        # Read-only object store: caches/sidecars are not written at a ref.
+        return None
+
     def read_bytes(self) -> bytes:
         data = self._backend.read_bytes(self.rel, self.ref)
         if data is None:
@@ -360,6 +376,10 @@ class VirtualPath:
 
     def __eq__(self, other) -> bool:
         return isinstance(other, VirtualPath) and other.slug == self.slug
+
+    def __lt__(self, other) -> bool:
+        # Lets sorted(vpath.glob(...)) work, mirroring sorted() over Paths.
+        return self.slug < getattr(other, "slug", str(other))
 
     def __hash__(self) -> int:
         return hash(("vpath", self.slug))
