@@ -66,11 +66,14 @@ def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, inc
     breadcrumb_parts = parts if include_current else parts[:-1]
     for part in breadcrumb_parts:
         acc.append(part)
+        # the first segment may carry the git ref as `alias@ref`; show only the
+        # alias (the ref already appears as a badge), but keep it in the href.
+        label_part = part.split("@", 1)[0] if "@" in part else part
         items.append(
             Span(
                 Span(UkIcon("chevron-right", cls="w-3 h-3"), cls="opacity-50"),
                 A(
-                    slug_to_title(part, abbreviations=abbreviations),
+                    slug_to_title(label_part, abbreviations=abbreviations),
                     href=content_url_for_slug("/".join(acc)),
                     cls="hover:underline whitespace-nowrap",
                     **boost_attrs,

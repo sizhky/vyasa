@@ -440,6 +440,8 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
 /* Git-ref switcher: identical row chrome at every hierarchy level.
    Depth is applied as inline padding-left; everything else is uniform here. */
 .vyasa-ref-switcher ul { margin: 0; padding: 0; list-style: none; }
+.vyasa-ref-switcher > summary { list-style: none; }
+.vyasa-ref-switcher > summary::-webkit-details-marker { display: none; }
 .vyasa-ref-row {
     display: flex;
     align-items: center;
@@ -460,9 +462,28 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
 }
 .vyasa-ref-row::-webkit-details-marker { display: none; }
 .vyasa-ref-row::marker { content: ""; }
-/* Refresh icon button: no highlight box of its own, just an opacity affordance. */
-.vyasa-ref-refresh { background: transparent !important; opacity: 0.55; transition: opacity 160ms ease; }
-.vyasa-ref-refresh:hover { background: transparent !important; opacity: 1; }
+/* Icon buttons (refresh / working-tree): fixed square that fits the row, no
+   highlight box of its own (scoped to out-specify .vyasa-navbar-card button). */
+.vyasa-ref-refresh {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    height: 1.5rem;
+    width: 1.5rem;
+    padding: 0;
+    border: 0;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 160ms ease;
+}
+.vyasa-ref-switcher .vyasa-ref-refresh,
+.vyasa-ref-switcher .vyasa-ref-refresh:hover,
+.vyasa-ref-switcher .vyasa-ref-refresh:focus {
+    background: transparent !important;
+}
+.vyasa-ref-refresh:hover { opacity: 1; }
 
 .vyasa-navbar-search-trigger {
     border: 1px solid color-mix(in srgb, var(--vyasa-primary-text) 20%, transparent);

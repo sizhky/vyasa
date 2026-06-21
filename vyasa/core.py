@@ -6,6 +6,7 @@ from datetime import datetime
 from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote
 from fasthtml.common import *
 from fasthtml.jupyter import *
 from monsterui.all import *
@@ -561,6 +562,8 @@ def theme_toggle():
     presets = cfg.get_theme_extension_payloads()
     preset_meta = cfg.get_theme_extension_meta()
     random_icon = to_xml(UkIcon("shuffle"))
+    chevron_icon = to_xml(UkIcon("chevron-down", cls="w-4 h-4"))
+    palette_icon = to_xml(UkIcon("palette", cls="w-4 h-4 shrink-0"))
     menu_items = "".join(
         f'<button type="button" data-theme-name="{name}" '
         f'onclick="window.vyasaApplyThemePreset && window.vyasaApplyThemePreset(this.dataset.themeName, this)" '
@@ -576,9 +579,10 @@ def theme_toggle():
                 <div id="theme-preset-dropdown" class="relative min-w-44" style="position:relative;min-width:11rem;">
                     <button type="button" id="theme-preset-toggle"
                         onclick="window.vyasaToggleThemePresetMenu && window.vyasaToggleThemePresetMenu(this)"
-                        class="vyasa-emphasis-control vyasa-emphasis-control-field flex w-full items-center justify-between rounded-md px-3 py-2 text-sm">
-                        <span id="theme-preset-active-label" class="truncate">{active or "Theme"}</span>
-                        <span class="ml-3">⌄</span>
+                        class="vyasa-emphasis-control vyasa-emphasis-control-field flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm">
+                        <span class="shrink-0">{palette_icon}</span>
+                        <span id="theme-preset-active-label" class="truncate mr-auto">{active or "Theme"}</span>
+                        <span class="ml-3 shrink-0 opacity-70">{chevron_icon}</span>
                     </button>
                     <div id="theme-preset-menu" class="vyasa-emphasis-control-menu" style="display:none;position:absolute;left:0;top:calc(100% + 0.5rem);z-index:1400;max-height:18rem;width:16rem;overflow-y:auto;">
                         {menu_items}
@@ -664,6 +668,44 @@ def _ref_row_style(depth):
     return f"padding-left:{0.5 + depth * 0.9:.3f}rem"
 
 
+def _ref_leaf(name, kind, is_default, alias, current, current_path, active, storage_key, depth):
+    """A single selectable branch/tag row."""
+    url = _ref_target_url(alias, name, current_path if active else "")
+    return Li(Button(
+        Span("✓" if name == current else "", cls="shrink-0", style="width:0.75rem;display:inline-block"),
+        Span(name.split("/")[-1], cls="truncate"), Span(" (default)" if is_default else "", cls="opacity-60 text-xs"),
+        UkIcon("tag", cls="w-3 h-3 opacity-50 ml-auto") if kind == "tag" else "",
+        type="button",
+        onclick=f"try{{localStorage.setItem('{storage_key}','{name}');}}catch(e){{}};window.location='{url}';",
+        cls="vyasa-ref-row vyasa-emphasis-control-option",
+        style=_ref_row_style(depth),
+    ))
+
+
+def _version_sort_key(name):
+    """Natural/version-aware key: digit runs compare numerically. Flag tuples
+    keep ints and strings from ever being compared to each other."""
+    return [(0, int(p)) if p.isdigit() else (1, p.lower()) for p in re.split(r"(\d+)", name) if p]
+
+
+def _render_tags_group(tags, alias, current, current_path, active, storage_key, depth=1):
+    """Tags collapsed under one group, newest (highest version) first."""
+    tags = sorted(tags, key=lambda t: _version_sort_key(t[0]), reverse=True)
+    is_open = active and any(t[0] == current for t in tags)
+    items = [_ref_leaf(n, k, d, alias, current, current_path, active, storage_key, depth + 1) for n, k, d in tags]
+    return Li(Details(
+        Summary(
+            UkIcon("tags", cls="w-3.5 h-3.5 opacity-60 shrink-0"),
+            Span("Tags", cls="truncate"),
+            Span(str(len(tags)), cls="opacity-50 text-xs ml-auto"),
+            cls="vyasa-ref-row vyasa-emphasis-control-option",
+            style=_ref_row_style(depth),
+        ),
+        Ul(*items),
+        open=is_open,
+    ))
+
+
 def _render_ref_nodes(node, alias, current, current_path, active, storage_key, open_parts, depth=1):
     """Recursive list items: folders (sorted, collapsed) first, then leaf refs.
     `open_parts` = remaining segments of the current ref, so its chain auto-opens."""
@@ -681,16 +723,7 @@ def _render_ref_nodes(node, alias, current, current_path, active, storage_key, o
             open=is_open,
         )))
     for name, kind, is_default in node["_leaves"]:
-        url = _ref_target_url(alias, name, current_path if active else "")
-        out.append(Li(Button(
-            Span("✓" if name == current else "", cls="shrink-0", style="width:0.75rem;display:inline-block"),
-            Span(name.split("/")[-1], cls="truncate"), Span(" (default)" if is_default else "", cls="opacity-60 text-xs"),
-            UkIcon("tag", cls="w-3 h-3 opacity-50 ml-auto") if kind == "tag" else "",
-            type="button",
-            onclick=f"try{{localStorage.setItem('{storage_key}','{name}');}}catch(e){{}};window.location='{url}';",
-            cls="vyasa-ref-row vyasa-emphasis-control-option",
-            style=_ref_row_style(depth),
-        )))
+        out.append(_ref_leaf(name, kind, is_default, alias, current, current_path, active, storage_key, depth))
     return out
 
 
@@ -713,20 +746,38 @@ def _navbar_ref_switcher(current_path=None):
         current = (cur_ref if active else "") or current_branch or default
         storage_key = f"vyasa-ref:{alias}"
         open_parts = current.split("/")[:-1] if active else []
-        tree = _build_ref_tree(refs)
-        ref_items = _render_ref_nodes(tree, alias, current, current_path, active, storage_key, open_parts)
+        branches = [r for r in refs if r[1] == "branch"]
+        tags = [r for r in refs if r[1] == "tag"]
+        ref_items = _render_ref_nodes(_build_ref_tree(branches), alias, current, current_path, active, storage_key, open_parts)
+        if tags:
+            ref_items.append(_render_tags_group(tags, alias, current, current_path, active, storage_key))
         refresh_btn = Button(
             UkIcon("refresh-cw", cls="w-3.5 h-3.5"),
             type="button", title="Fetch & refresh branches",
             onclick="event.stopPropagation();event.preventDefault();var i=this.querySelector('svg');if(i)i.classList.add('animate-spin');fetch('/_vyasa/refresh-refs',{method:'GET'}).finally(function(){window.location.reload();});",
-            cls="vyasa-ref-refresh ml-1 shrink-0 rounded p-1",
+            cls="vyasa-ref-refresh shrink-0",
         )
+        # Clones (non-bare) have a checked-out working tree to return to.
+        home_btn = ""
+        if current_branch:
+            rel = ""
+            if active and current_path:
+                relp = content_location(current_path)[3].as_posix()
+                rel = relp if relp and relp != "." else ""
+            home_url = content_url_for_slug(f"{alias}/{rel}" if rel else alias)
+            home_btn = Button(
+                UkIcon("house", cls="w-3.5 h-3.5"),
+                type="button", title=f"Working tree ({current_branch})",
+                onclick=f"event.stopPropagation();event.preventDefault();try{{localStorage.removeItem('{storage_key}');}}catch(e){{}};window.location='{home_url}';",
+                cls="vyasa-ref-refresh shrink-0",
+            )
         root_blocks.append(Li(Details(
             Summary(
                 UkIcon("folder-git-2", cls="w-3.5 h-3.5 opacity-60 shrink-0"),
                 Span(alias or "(primary)", cls="truncate"),
                 refresh_btn,
-                Span(current, cls="opacity-60 ml-auto truncate max-w-[7rem]"),
+                home_btn,
+                Span(current, cls="opacity-60 ml-auto truncate", style="max-width:10rem"),
                 cls="vyasa-ref-row vyasa-emphasis-control-option",
                 style=_ref_row_style(0),
             ),
@@ -737,10 +788,12 @@ def _navbar_ref_switcher(current_path=None):
 
     return Details(
         Summary(
-            UkIcon("git-branch", cls="w-4 h-4"), Span("Branches", cls="hidden sm:inline"), Span("⌄", cls="opacity-70"),
-            cls="list-none flex items-center gap-2 cursor-pointer select-none rounded-md px-3 py-2 text-slate-100 hover:bg-slate-800/80 transition-colors [&::-webkit-details-marker]:hidden",
+            UkIcon("git-branch", cls="w-4 h-4 shrink-0"),
+            Span("Branches", cls="hidden sm:inline truncate"),
+            UkIcon("chevron-down", cls="w-4 h-4 ml-1 shrink-0 opacity-70"),
+            cls="vyasa-emphasis-control vyasa-emphasis-control-field flex items-center gap-2 cursor-pointer select-none rounded-md px-3 py-2 text-sm",
         ),
-        Div(Ul(*root_blocks), cls="vyasa-emphasis-control-menu absolute right-0 mt-2 w-72 z-[1100] max-h-[70vh] overflow-y-auto"),
+        Div(Ul(*root_blocks), cls="vyasa-emphasis-control-menu absolute right-0 mt-2 z-[1100] max-h-[70vh] overflow-y-auto", style="width:26rem"),
         cls="vyasa-ref-switcher relative",
     )
 
