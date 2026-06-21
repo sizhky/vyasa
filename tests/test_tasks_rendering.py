@@ -1068,6 +1068,13 @@ def test_slide_notes_panel_uses_stable_render_helper():
     assert "window.React.createElement(SlideShow)" not in render_source
 
 
+def test_client_stats_label_counts_hierarchy_links_without_edges():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "Hierarchy Link" in source
+    assert "for (const [parent, items] of Object.entries(model?.task_children || {}))" in source
+
+
 def test_tasks_slide_show_nav_stays_above_title_and_supports_jump_select():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     slide_source = source.split("const SlideShow = () => {", 1)[1].split("const DragSelectionOverlay = () => {", 1)[0]

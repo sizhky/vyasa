@@ -950,8 +950,23 @@ function tasksLogicalGraphStatsLabel(model) {
         + (Array.isArray(model?.tasks) ? model.tasks.length : 0);
     const edgeCount = Array.isArray(model?.dependency_edges) ? model.dependency_edges.length : 0;
     const nodeLabel = nodeCount === 1 ? 'Node' : 'Nodes';
-    const edgeLabel = edgeCount === 1 ? 'Edge' : 'Edges';
-    return `${nodeCount} ${nodeLabel} and ${edgeCount} ${edgeLabel}`;
+    if (edgeCount) {
+        const edgeLabel = edgeCount === 1 ? 'Edge' : 'Edges';
+        return `${nodeCount} ${nodeLabel} and ${edgeCount} ${edgeLabel}`;
+    }
+    const childCount = (items) => Array.isArray(items) ? items.length : 0;
+    let hierarchyLinks = 0;
+    for (const [parent, items] of Object.entries(model?.group_tree || {})) {
+        if (parent) hierarchyLinks += childCount(items);
+    }
+    for (const [parent, items] of Object.entries(model?.task_children || {})) {
+        if (parent) hierarchyLinks += childCount(items);
+    }
+    if (hierarchyLinks) {
+        const hierarchyLabel = hierarchyLinks === 1 ? 'Hierarchy Link' : 'Hierarchy Links';
+        return `${nodeCount} ${nodeLabel} and ${hierarchyLinks} ${hierarchyLabel}`;
+    }
+    return `${nodeCount} ${nodeLabel} and 0 Edges`;
 }
 
 function tasksExpandableNodeIds(model) {
