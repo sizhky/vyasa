@@ -84,6 +84,47 @@ def test_non_markdown_kinds_and_blobs_at_a_ref(site):
         set_extension_runtime(previous)
 
 
+def test_ref_kg_document_renders_pack_from_objects(site):
+    from fasthtml.common import to_xml
+
+    from vyasa.content_backend import ref_read_scope
+    from vyasa.content_tree import resolve_ref_document
+    from vyasa.extensions import build_extension_runtime, get_extension_runtime, set_extension_runtime
+    from vyasa.extensions_builtin.tasks import render_kg_document
+
+    work = site.parent / "repo"
+    _git(work, "checkout", "-q", "feature")
+    pack = work / "roadmap.kg"
+    pack.mkdir()
+    (pack / "kg.schema").write_text("@graph id=roadmap title=Roadmap\n@sources\nnodes=kg.nodes\n", encoding="utf-8")
+    (pack / "kg.nodes").write_text("n1: Start\n", encoding="utf-8")
+    _git(work, "add", "-A")
+    _git(work, "commit", "-qm", "kg")
+    _git(work, "checkout", "-q", "main")
+
+    previous = get_extension_runtime()
+    set_extension_runtime(build_extension_runtime({"preset": "default"}))
+    try:
+        ref_doc = resolve_ref_document("repo@feature/roadmap.kg")
+        assert ref_doc is not None and ref_doc.kind == "kg" and ref_doc.vpath.is_dir()
+        context = type("Context", (), {
+            "path": "repo@feature/roadmap.kg",
+            "breadcrumbs": None,
+            "document": type("Document", (), {"path": ref_doc.vpath})(),
+            "layout": lambda self, body, **kwargs: (*kwargs.get("extra_head_nodes", ()), body),
+            "htmx": False,
+            "blog_title": "Site",
+            "auth": None,
+        })()
+        with ref_read_scope(ref_doc.vpath):
+            html = to_xml(render_kg_document(context))
+    finally:
+        set_extension_runtime(previous)
+
+    assert "1 Nodes and 0 Edges" in html
+    assert "0 Nodes and 0 Edges" not in html
+
+
 def test_sidebar_uncommitted_dot_for_dirty_primary_clone_file(tmp_path, monkeypatch):
     import vyasa.core as core
     from fasthtml.common import A, to_xml

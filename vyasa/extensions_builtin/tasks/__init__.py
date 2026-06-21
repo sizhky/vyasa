@@ -41,7 +41,7 @@ def _kg_schema_path(pack_path: Path) -> Path:
 
 
 def _kg_block(schema_path: Path) -> str:
-    return f"---\nitems_schema: {schema_path}\nstandalone: true\nwidth: 100%\n---\n"
+    return f"---\nitems_schema: {schema_path}\nstandalone: true\nwidth: 100%\ndefault_open_depth: -1\n---\n"
 
 
 def _kg_title(schema_path: Path, fallback: str) -> str:

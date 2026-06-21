@@ -5,7 +5,7 @@ import re
 import secrets
 
 from ...markdown_fence import current_content_path, get_root_folder
-from .items_pack import read_kg_pack
+from .items_pack import PathLike, read_kg_pack
 from .projections import attach_projection_models, normalize_projections
 
 
@@ -483,7 +483,7 @@ def _clean_edge_kinds(value) -> dict[str, dict]:
     return out
 
 
-def _resolve_tasks_source_path(current_path: str | Path | None, source: str) -> Path | None:
+def _resolve_tasks_source_path(current_path: str | Path | None, source: str) -> PathLike | None:
     source_text = str(source or "").strip()
     if not source_text:
         return None
@@ -493,6 +493,11 @@ def _resolve_tasks_source_path(current_path: str | Path | None, source: str) -> 
 
     doc_vpath = active_ref_doc_path()
     if doc_vpath is not None:
+        if source_text == getattr(doc_vpath, "slug", ""):
+            return doc_vpath
+        prefix = f"{getattr(doc_vpath, 'slug', '').rstrip('/')}/"
+        if source_text.startswith(prefix):
+            return doc_vpath / source_text[len(prefix):]
         # Ref-served doc: resolve the source against the doc's directory on the
         # same git ref, yielding a VirtualPath the readers consume ref-aware.
         base = doc_vpath.parent if doc_vpath.is_file() else doc_vpath

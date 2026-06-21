@@ -105,6 +105,18 @@ def _should_open_filters_by_default(width_value) -> bool:
         return False
 
 
+def _tasks_stats_label(model: dict) -> str:
+    node_count = len(model.get("groups") or []) + len(model.get("tasks") or [])
+    edge_count = len(model.get("dependency_edges") or [])
+    if edge_count:
+        return f"{node_count} Nodes and {edge_count} Edges"
+    hierarchy_links = sum(len(items or []) for parent, items in (model.get("group_tree") or {}).items() if parent)
+    hierarchy_links += sum(len(items or []) for parent, items in (model.get("task_children") or {}).items() if parent)
+    if hierarchy_links:
+        return f"{node_count} Nodes and {hierarchy_links} Hierarchy Links"
+    return f"{node_count} Nodes and 0 Edges"
+
+
 def render_tasks_block(code: str, current_path: str | None = None, fence_name: str = "tasks") -> str:
     raw_code = html.unescape(code)
     config, code = split_fence_frontmatter(raw_code)
@@ -190,7 +202,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     color_mix_intensity = html.escape(str(config.get("color_mix_intensity") or "22"))
     projection_group_opacity = html.escape(str(config.get("projection-group-opacity") or "12"))
     projection_unspecified_group_opacity = html.escape(str(config.get("projection-unspecified-group-opacity") or "7"))
-    stats_label = html.escape(f"{len(model.get('groups') or []) + len(model.get('tasks') or [])} Nodes and {len(model.get('dependency_edges') or [])} Edges")
+    stats_label = html.escape(_tasks_stats_label(model))
     jitter = html.escape(str(config.get("jitter") or 0))
     jitter_y = html.escape(str(config.get("jitter_y") or config.get("jitter") or 0))
     spacing = html.escape(str(config.get("spacing") or "normal"))
