@@ -153,7 +153,7 @@ def test_top_level_child_git_repos_are_implicit_roots(tmp_path, monkeypatch):
     import vyasa.core as core
     from fasthtml.common import to_xml
 
-    from vyasa.helpers import get_content_mounts
+    from vyasa.helpers import get_content_mounts, get_ref_content_mounts
 
     workspace = tmp_path / "workspace"
     repo = workspace / "repo"
@@ -175,7 +175,8 @@ def test_top_level_child_git_repos_are_implicit_roots(tmp_path, monkeypatch):
     reload_config()
     core._git_roots_with_refs.cache_clear()
     try:
-        assert ("repo", repo.resolve()) in get_content_mounts()
+        assert ("repo", repo.resolve()) not in get_content_mounts()
+        assert ("repo", repo.resolve()) in get_ref_content_mounts()
         doc = resolve_ref_markdown("repo@feature/feat")
         assert doc is not None and doc.found and doc.title == "Feature"
         html = to_xml(core._navbar_ref_switcher(None))
