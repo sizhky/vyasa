@@ -10,12 +10,35 @@ docs/grill-sessions or the git-backed-docs design for the rationale.
 
 from __future__ import annotations
 
+import contextvars
 import fnmatch
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol, runtime_checkable
 
 EntryKind = Literal["file", "dir"]
+
+# When a doc is served from a git ref, this holds that doc's VirtualPath for the
+# duration of its render. current_path stays a plain slug string everywhere; only
+# the few readers that pull in sibling files (KG packs, palettes, ...) consult
+# this to resolve those siblings from the same ref instead of the working tree.
+_ref_doc_path: contextvars.ContextVar = contextvars.ContextVar("vyasa_ref_doc_path", default=None)
+
+
+@contextmanager
+def ref_read_scope(doc_vpath):
+    """Expose `doc_vpath` to dependent-file readers for the wrapped render."""
+    token = _ref_doc_path.set(doc_vpath)
+    try:
+        yield
+    finally:
+        _ref_doc_path.reset(token)
+
+
+def active_ref_doc_path():
+    """The current ref-served doc's VirtualPath, or None on the working-tree path."""
+    return _ref_doc_path.get()
 
 
 @dataclass(frozen=True)
