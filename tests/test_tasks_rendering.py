@@ -498,6 +498,16 @@ def test_tasks_source_uses_reset_button_label():
     assert "onClick: resetProjectionControls" in source
 
 
+def test_tasks_filter_reset_button_stays_in_filter_card_header():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    panel_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
+
+    assert "React.createElement('button', { type: 'button', onClick: resetProjectionControls" in panel_source
+    assert panel_source.index("activeCount ? `Filters (${activeCount})` : 'Filters'") < panel_source.index("onClick: resetProjectionControls")
+    assert panel_source.index("onClick: resetProjectionControls") < panel_source.index("'×'")
+    assert panel_source.index("onClick: resetProjectionControls") < panel_source.index("'Intensity'")
+
+
 def test_tasks_edge_animation_defaults_off_and_zero_cycles_smooth_then_tick():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
