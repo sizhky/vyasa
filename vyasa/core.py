@@ -727,7 +727,23 @@ def _render_ref_nodes(node, alias, current, current_path, active, storage_key, o
     return out
 
 
-def _navbar_ref_switcher(current_path=None):
+def _ref_root_visible_to_roles(alias, root, roles):
+    if not _rbac_rules:
+        return True
+    if is_allowed(f"/posts/{alias}" if alias else "/posts", roles or [], _rbac_rules):
+        return True
+    try:
+        return tree_folder_has_visible_descendant(
+            Path(root), roles or [], 3,
+            root=Path(root), show_hidden=get_config().get_show_hidden(),
+            excluded_dirs=set(get_config().get_reload_excludes()), get_nav_entries=_nav_entries_for,
+            is_allowed_fn=is_allowed, rbac_rules=_rbac_rules,
+        )
+    except Exception:
+        return False
+
+
+def _navbar_ref_switcher(current_path=None, roles=None):
     """Always-visible navbar dropdown of every git-backed root, each
     expanding to a `/`-nested tree of its branches and tags. Picking a ref
     navigates to that root on the ref and remembers it per root in localStorage."""
@@ -741,7 +757,10 @@ def _navbar_ref_switcher(current_path=None):
         cur_root_id, _, cur_ref, _ = content_location(current_path)
 
     root_blocks = []
+    root_by_alias = {alias: root for alias, root in get_ref_content_mounts()}
     for alias, default, current_branch, refs in roots:
+        if not _ref_root_visible_to_roles(alias, root_by_alias.get(alias), roles):
+            continue
         active = alias == cur_root_id
         current = (cur_ref if active else "") or current_branch or default
         storage_key = f"vyasa-ref:{alias}"
@@ -785,6 +804,8 @@ def _navbar_ref_switcher(current_path=None):
             open=active,
             cls="vyasa-ref-root",
         ), cls="my-0.5"))
+    if not root_blocks:
+        return None
 
     return Details(
         Summary(
@@ -799,9 +820,9 @@ def _navbar_ref_switcher(current_path=None):
 
 
 def navbar(
-    show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None, mobile_extra_controls=(), current_path=None
+    show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None, mobile_extra_controls=(), current_path=None, roles=None
 ):
-    return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label, mobile_extra_controls, ref_switcher=_navbar_ref_switcher(current_path))
+    return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label, mobile_extra_controls, ref_switcher=_navbar_ref_switcher(current_path, roles=roles))
 
 
 def _posts_sidebar_fingerprint():

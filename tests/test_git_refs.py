@@ -149,6 +149,28 @@ def test_navbar_ref_switcher_discovers_all_git_roots(site):
     core._git_roots_with_refs.cache_clear()
 
 
+def test_navbar_ref_switcher_hides_git_root_when_rbac_has_no_visible_path(site, monkeypatch):
+    import re
+
+    import vyasa.core as core
+    from fasthtml.common import to_xml
+
+    work = site.parent / "repo"
+    (work / "public.md").write_text("# Public\n")
+    rules = [
+        (re.compile(r"^/posts/repo"), {"admin"}),
+        (re.compile(r"^/posts/repo/public$"), {"reader"}),
+    ]
+    monkeypatch.setattr(core, "_rbac_rules", rules)
+    core._git_roots_with_refs.cache_clear()
+    try:
+        assert core._navbar_ref_switcher(None, roles=[]) is None
+        html = to_xml(core._navbar_ref_switcher(None, roles=["reader"]))
+        assert "repo" in html and ">feature<" in html
+    finally:
+        core._git_roots_with_refs.cache_clear()
+
+
 def test_top_level_child_git_repos_are_implicit_roots(tmp_path, monkeypatch):
     import vyasa.core as core
     from fasthtml.common import to_xml
