@@ -388,7 +388,8 @@ class FrankenRenderer(mst.HTMLRenderer):
             ("http://", "https://", "/", "attachment:", "blob:", "data:")
         ):
             src = f"{self.img_dir}/{src}"
-        return tpl.format(src, token.children[0].content if token.children else "", title)
+        child = next(iter(token.children), None) if token.children else None
+        return tpl.format(src, getattr(child, "content", "") if child else "", title)
 
 
 def _asset_url(path):
@@ -784,7 +785,7 @@ class ContentRenderer(FrankenRenderer):
 
 
 @traced("markdown")
-def from_md(content, img_dir=None, current_path=None, slide_mode=False, asset_collector=None, emit_bundle_nodes=True, apply_class_mods=True):
+def from_md(content: str, img_dir: str | None = None, current_path: str | None = None, slide_mode: bool = False, asset_collector=None, emit_bundle_nodes: bool = True, apply_class_mods: bool = True):
     runtime = get_extension_runtime()
     if runtime is None:
         runtime = refresh_extension_runtime(get_config().get_extensions_config())
@@ -910,7 +911,7 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False, asset_co
             html_out = re.sub(r"<details(?![^>]*\bopen\b)([^>]*)>", r"<details open\1>", html_out)
         html_out = _render_todo_html(html_out)
         html_out = _render_double_rules(html_out)
-        html_out = _wrap_tables(html_out, get_config().get_table_col_max_width())
+        html_out = _wrap_tables(html_out, get_config().get_table_col_max_width() or "")
     bundle_nodes = [Link(rel="stylesheet", href=_asset_url("/static/sidenote.css"))] if emit_bundle_nodes else []
     if emit_bundle_nodes and asset_collector:
         bundle_nodes.extend(bundle_asset_nodes_for_collector(asset_collector, runtime=runtime))

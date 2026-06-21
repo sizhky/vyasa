@@ -392,10 +392,14 @@ def _resolve_ref_blob_rel(backend, rel: str, ref: str) -> tuple[str, ContentKind
         kind = document_kind_for_suffix(suffix)
         if kind and backend.stat_kind(rel, ref) == "file":
             return rel, kind
+        if suffix == ".kg" and kind and backend.stat_kind(rel, ref) == "dir" and backend.stat_kind(f"{rel}/kg.schema", ref) == "file":
+            return rel, kind
     for suffix in enabled_document_suffixes():
         candidate = f"{rel}{suffix}"
         if backend.stat_kind(candidate, ref) == "file":
             return candidate, document_kind_for_suffix(suffix) or "markdown"
+        if suffix == ".kg" and backend.stat_kind(candidate, ref) == "dir" and backend.stat_kind(f"{candidate}/kg.schema", ref) == "file":
+            return candidate, document_kind_for_suffix(suffix) or "kg"
     note = _git_folder_note(backend, rel, ref)
     if note:
         return note, "markdown"
@@ -438,7 +442,7 @@ def resolve_ref_document(slug: str, *, ref_override: str = "") -> RefDocument | 
         stem = (rel.rsplit("/", 1)[-1] or root_id)
         return RefDocument(root_id, ref, slug, f"{rel}.md", False, {}, "", slug_to_title(stem), sha)
     blob_rel, kind = found
-    vpath = VirtualPath(backend, ref, root_id, blob_rel, "file")
+    vpath = VirtualPath(backend, ref, root_id, blob_rel, backend.stat_kind(blob_rel, ref))
     stem = blob_rel.rsplit("/", 1)[-1]
     if "." in stem:
         stem = stem[: stem.rindex(".")]

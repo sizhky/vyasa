@@ -6,16 +6,23 @@ import json
 import shlex
 import re
 import textwrap
-from typing import Any
+from typing import TYPE_CHECKING, Any, Union
+
+if TYPE_CHECKING:
+    from ...content_backend import VirtualPath
+
+# A filesystem path or a ref-backed VirtualPath. Both expose the read surface
+# (read_text, parent, /, with_suffix, exists, glob, ...) the KG readers use.
+PathLike = Union[Path, "VirtualPath"]
 
 NODE_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 
 
-def _as_pathlike(p):
-    """Keep a ref-backed VirtualPath (or any read_text-capable path-like) as-is;
-    wrap only plain strings into a filesystem Path. Coercing to Path() would strip
-    the git ref and silently fall back to the working tree."""
-    return p if hasattr(p, "read_text") else Path(p)
+def _as_pathlike(p: "str | PathLike") -> PathLike:
+    """Wrap a plain string into a filesystem Path; pass a ref-backed VirtualPath
+    (or existing Path) through untouched. Coercing to Path() would strip the git
+    ref and silently fall back to the working tree."""
+    return Path(p) if isinstance(p, str) else p
 
 
 @dataclass
@@ -72,7 +79,7 @@ class KgContext:
     slides: list[dict[str, Any]] = field(default_factory=list)
 
 
-def read_kg_pack(schema_path: str | Path, context_id: str = "") -> dict[str, Any]:
+def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
     schema_path = _as_pathlike(schema_path)
     schema = read_schema(schema_path)
     if schema.graph.get("contexts"):
@@ -98,7 +105,8 @@ def read_kg_pack(schema_path: str | Path, context_id: str = "") -> dict[str, Any
             for node in read_nodes(_resolve(schema_path, node_path)):
                 nodes_by_id[node["id"]] = {**nodes_by_id.get(node["id"], {}), **node}
         for edge_path in _path_list(source.get("edges")):
-            for edge in read_edges(_resolve(schema_path, edge_path), schema.relations):
+            for raw_edge in read_edges(_resolve(schema_path, edge_path), schema.relations):
+                edge: dict[str, Any] = dict(raw_edge)
                 edge["__kg_sources"] = _source_tags(edges_by_id.get(edge["id"], {}).get("__kg_sources"), source_name)
                 edges_by_id[edge["id"]] = {**edges_by_id.get(edge["id"], {}), **edge}
         for attrs_path in _path_list(source.get("attrs")):
@@ -130,7 +138,7 @@ def read_kg_pack(schema_path: str | Path, context_id: str = "") -> dict[str, Any
     return graph
 
 
-def _read_context_kg_pack(schema_path: Path, schema: KgSchema, context_id: str = "") -> dict[str, Any]:
+def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: str = "") -> dict[str, Any]:
     contexts = _discover_contexts(schema_path, schema.graph.get("contexts", ""))
     active = _default_context(contexts, context_id or schema.graph.get("default_context", "latest"))
     nodes_by_id = {node["id"]: node for node in read_nodes(_resolve(schema_path, schema.nodes))}
@@ -165,7 +173,7 @@ def _read_context_kg_pack(schema_path: Path, schema: KgSchema, context_id: str =
     return graph
 
 
-def _discover_contexts(schema_path: Path, pattern: str) -> list[KgContext]:
+def _discover_contexts(schema_path: PathLike, pattern: str) -> list[KgContext]:
     contexts = [_read_context(path) for path in sorted(schema_path.parent.glob(pattern))]
     return sorted((item for item in contexts if item.id), key=lambda item: item.seq)
 
@@ -178,7 +186,7 @@ def _default_context(contexts: list[KgContext], default_id: str) -> KgContext:
     return next((item for item in contexts if item.id == default_id), contexts[0])
 
 
-def _read_context(path: Path) -> KgContext:
+def _read_context(path: PathLike) -> KgContext:
     context = KgContext(id="", seq=0)
     section = ""
     current_slide: dict[str, Any] | None = None
@@ -286,7 +294,7 @@ def _apply_status_defaults(schema: KgSchema, nodes_by_id: dict[str, dict], edges
             node["status"] = schema.status_defaults.get(str(node.get("kind") or ""), "")
 
 
-def _write_kg_cache(schema_path: Path, cache_name: str, graph: dict[str, Any]) -> None:
+def _write_kg_cache(schema_path: PathLike, cache_name: str, graph: dict[str, Any]) -> None:
     cache_name = str(cache_name or "").strip()
     if not cache_name:
         return
@@ -304,7 +312,7 @@ def _write_kg_cache(schema_path: Path, cache_name: str, graph: dict[str, Any]) -
     cache_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def read_schema(path: str | Path) -> KgSchema:
+def read_schema(path: PathLike) -> KgSchema:
     path = _as_pathlike(path)
     schema = KgSchema()
     section = ""
@@ -384,7 +392,7 @@ def read_schema(path: str | Path) -> KgSchema:
     return schema
 
 
-def _read_tmp_view_sidecars(schema: KgSchema, schema_path: Path) -> None:
+def _read_tmp_view_sidecars(schema: KgSchema, schema_path: PathLike) -> None:
     view_dir = _tmp_view_sidecar_dir(schema_path)
     if not view_dir.is_dir():
         return
@@ -407,11 +415,11 @@ def _read_tmp_view_sidecars(schema: KgSchema, schema_path: Path) -> None:
                 schema.views.append(current_view)
 
 
-def _tmp_view_sidecar_dir(schema_path: Path) -> Path:
+def _tmp_view_sidecar_dir(schema_path: PathLike) -> PathLike:
     return schema_path.parent if schema_path.name == "kg.schema" else schema_path.with_suffix("")
 
 
-def read_nodes(path: str | Path) -> list[dict[str, str]]:
+def read_nodes(path: PathLike) -> list[dict[str, str]]:
     nodes_by_id: dict[str, dict[str, Any]] = {}
     stack: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
@@ -472,7 +480,7 @@ def _read_indented_multiline(raw_lines: list[str], start_index: int, parent_inde
     return textwrap.dedent("\n".join(block_lines)).strip("\n"), line_index - start_index
 
 
-def read_edges(path: str | Path, relations: dict[str, dict[str, str]] | None = None) -> list[dict[str, str]]:
+def read_edges(path: PathLike, relations: dict[str, dict[str, str]] | None = None) -> list[dict[str, str]]:
     edges = []
     known_relations = set((relations or {}).keys())
     for line in _record_lines(path):
@@ -498,7 +506,7 @@ def read_edges(path: str | Path, relations: dict[str, dict[str, str]] | None = N
     return edges
 
 
-def apply_attrs(path: str | Path, nodes: dict[str, dict], edges: dict[str, dict]) -> dict[str, list[str]]:
+def apply_attrs(path: PathLike, nodes: dict[str, dict], edges: dict[str, dict]) -> dict[str, list[str]]:
     section = ""
     current_key = ""
     target = nodes
@@ -539,7 +547,7 @@ def apply_attrs(path: str | Path, nodes: dict[str, dict], edges: dict[str, dict]
     return indexed
 
 
-def read_palette(path: str | Path) -> dict[str, Any]:
+def read_palette(path: PathLike) -> dict[str, Any]:
     try:
         payload = json.loads(_as_pathlike(path).read_text(encoding="utf-8"))
     except Exception:
@@ -702,7 +710,7 @@ def _looks_like_node_line(line: str) -> bool:
     return bool(NODE_ID_RE.fullmatch(node_id.strip()))
 
 
-def _read_node_line(line: str, path: str | Path) -> dict[str, Any]:
+def _read_node_line(line: str, path: PathLike) -> dict[str, Any]:
     node_id, label = line.split(":", 1)
     node_id = node_id.strip()
     if not NODE_ID_RE.fullmatch(node_id):
@@ -735,7 +743,7 @@ def _propagate_inherited_attrs(nodes_by_id: dict[str, dict[str, Any]]) -> None:
         visit(root_id)
 
 
-def _merge_node(existing: dict[str, Any], node: dict[str, Any], path: str | Path) -> None:
+def _merge_node(existing: dict[str, Any], node: dict[str, Any], path: PathLike) -> None:
     if existing.get("label") and node.get("label") and existing["label"] != node["label"]:
         raise ValueError(f"{path}: duplicate node id {node['id']!r} has conflicting labels")
     for key, value in node.items():
@@ -848,7 +856,7 @@ def _source_tags(existing, source_name: str) -> list[str]:
     return tags
 
 
-def _resolve(schema_path: Path, value: str) -> Path:
+def _resolve(schema_path: PathLike, value: str) -> PathLike:
     value = str(value)
     if isinstance(schema_path, Path):
         path = Path(value)
@@ -857,12 +865,12 @@ def _resolve(schema_path: Path, value: str) -> Path:
     return schema_path.parent / value.lstrip("/")
 
 
-def _record_lines(path: str | Path):
+def _record_lines(path: PathLike):
     for line in _record_raw_lines(path):
         yield line.strip()
 
 
-def _record_raw_lines(path: str | Path):
+def _record_raw_lines(path: PathLike):
     for raw in _as_pathlike(path).read_text(encoding="utf-8").splitlines():
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
@@ -871,7 +879,7 @@ def _record_raw_lines(path: str | Path):
         yield raw
 
 
-def _lines(path: str | Path):
+def _lines(path: PathLike):
     for raw in _as_pathlike(path).read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if line and not line.startswith("#"):

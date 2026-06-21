@@ -226,9 +226,9 @@ Places:
     assert payload["default_projection"] == "city"
     assert payload["view_projections"][0]["label"] == "City View"
     assert payload["view_projections"][0]["default_color_by"] == "city"
-    assert payload["projection_models"]["city"]["model"]["groups"][0]["label"] == "City > Tokyo"
+    assert payload["projection_models"]["city"]["model"]["groups"][0]["label"] == "City ›› Tokyo"
     assert payload["projection_models"]["city"]["model"]["default_color_by"] == "city"
-    assert 'data-tasks-stats class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">3 Nodes and 0 Edges</div>' in rendered
+    assert 'data-tasks-stats class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">3 Nodes and 2 Hierarchy Links</div>' in rendered
 
 
 def test_items_render_payload_contains_base_view_label():

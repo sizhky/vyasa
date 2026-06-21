@@ -171,20 +171,23 @@ def _render_ref_other_kind(ref_doc, *, path, htmx, request, slug_to_title, layou
     if renderer is None:
         return None
     document = SimpleNamespace(kind=ref_doc.kind, path=ref_doc.vpath, folder_note=None, slug=ref_doc.slug)
-    return renderer(
-        SimpleNamespace(
-            document=document,
-            path=path,
-            htmx=htmx,
-            request=request,
-            auth=request.scope.get("auth"),
-            layout=layout,
-            blog_title=get_blog_title(),
-            breadcrumbs=_breadcrumbs(path, slug_to_title, {}),
-            slug_to_title=slug_to_title,
-            abbreviations={},
+    from .content_backend import ref_read_scope
+
+    with ref_read_scope(ref_doc.vpath):
+        return renderer(
+            SimpleNamespace(
+                document=document,
+                path=path,
+                htmx=htmx,
+                request=request,
+                auth=request.scope.get("auth"),
+                layout=layout,
+                blog_title=get_blog_title(),
+                breadcrumbs=_breadcrumbs(path, slug_to_title, {}),
+                slug_to_title=slug_to_title,
+                abbreviations={},
+            )
         )
-    )
 
 
 @traced("total")
