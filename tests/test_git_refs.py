@@ -149,6 +149,43 @@ def test_navbar_ref_switcher_discovers_all_git_roots(site):
     core._git_roots_with_refs.cache_clear()
 
 
+def test_top_level_child_git_repos_are_implicit_roots(tmp_path, monkeypatch):
+    import vyasa.core as core
+    from fasthtml.common import to_xml
+
+    from vyasa.helpers import get_content_mounts
+
+    workspace = tmp_path / "workspace"
+    repo = workspace / "repo"
+    workspace.mkdir()
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@t")
+    _git(repo, "config", "user.name", "t")
+    (repo / "a.md").write_text("# Main A\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "c1")
+    _git(repo, "checkout", "-q", "-b", "feature")
+    (repo / "feat.md").write_text("# Feature\n\nonly feature\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "c2")
+    _git(repo, "checkout", "-q", "main")
+
+    monkeypatch.chdir(workspace)
+    reload_config()
+    core._git_roots_with_refs.cache_clear()
+    try:
+        assert ("repo", repo.resolve()) in get_content_mounts()
+        doc = resolve_ref_markdown("repo@feature/feat")
+        assert doc is not None and doc.found and doc.title == "Feature"
+        html = to_xml(core._navbar_ref_switcher(None))
+        assert "repo" in html and ">feature<" in html
+        assert "/posts/repo?ref=feature" in html
+    finally:
+        reload_config()
+        core._git_roots_with_refs.cache_clear()
+
+
 def test_branch_page_keeps_all_roots(tmp_path, monkeypatch):
     import vyasa.core as core
     from fasthtml.common import Ul, to_xml
