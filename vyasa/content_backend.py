@@ -134,6 +134,11 @@ class GitBackend:
     def resolve_ref(self, ref: str) -> str | None:
         name = ref or "HEAD"
         refs = self._repo.refs
+        if name.startswith("local/"):
+            try:
+                return self._peel(refs[f"refs/heads/{name.removeprefix('local/')}".encode()]).decode()
+            except KeyError:
+                return None
         for candidate in (name, f"refs/heads/{name}", f"refs/tags/{name}", f"refs/remotes/{name}"):
             try:
                 sha = refs[candidate.encode()]
@@ -172,17 +177,16 @@ class GitBackend:
         default = self.default_ref()
         out: list[RefInfo] = []
         local_branches = {full.decode() for full in self._repo.refs.keys(base=b"refs/heads/")}
-        for name in local_branches:
-            out.append(RefInfo(name, "branch", name == default))
         remote_refs = self._remote_refs_by_short()
         remotes = {name.split("/", 1)[0] for names in remote_refs.values() for name in names}
-        qualify_remote = len(remotes) > 1
+        qualify_sources = len(remotes) > 1 or any(name in remote_refs for name in local_branches)
+        for name in local_branches:
+            display = f"local/{name}" if qualify_sources else name
+            out.append(RefInfo(display, "branch", name == default, "local" if qualify_sources else ""))
         for short, names in remote_refs.items():
             for full in names:
-                display = full if qualify_remote else short
-                if short in local_branches:
-                    continue
-                out.append(RefInfo(display, "branch", False, full.split("/", 1)[0] if qualify_remote else ""))
+                display = full if qualify_sources else short
+                out.append(RefInfo(display, "branch", False, full.split("/", 1)[0] if qualify_sources else ""))
         for full in self._repo.refs.keys(base=b"refs/tags/"):
             out.append(RefInfo(full.decode(), "tag", False))
         return out

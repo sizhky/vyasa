@@ -62,7 +62,7 @@ def test_fetch_clone_remotes_fetches_all_remotes(tmp_path, upstream):
     from vyasa.content_backend import GitBackend
 
     refs = {r.name for r in GitBackend(clone / ".git").list_refs()}
-    assert refs == {"main", "feature"}
+    assert refs == {"local/main", "origin/main", "origin/feature"}
 
 
 def test_fetched_mirror_is_mounted_and_served_at_ref(tmp_path, upstream, monkeypatch):

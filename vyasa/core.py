@@ -711,21 +711,22 @@ def _render_tags_group(tags, alias, current, current_path, active, storage_key, 
     ))
 
 
-def _render_ref_nodes(node, alias, current, current_path, active, storage_key, open_parts, remote_groups=frozenset(), depth=1):
+def _render_ref_nodes(node, alias, current, current_path, active, storage_key, open_parts, source_groups=frozenset(), depth=1):
     """Recursive list items: folders (sorted, collapsed) first, then leaf refs.
     `open_parts` = remaining segments of the current ref, so its chain auto-opens."""
     out = []
     for seg in sorted(k for k in node if k != "_leaves"):
         is_open = bool(open_parts) and open_parts[0] == seg
-        is_remote = depth == 1 and seg in remote_groups
+        is_source = depth == 1 and seg in source_groups
+        icon = "hard-drive" if seg == "local" else ("radio-tower" if is_source else "folder")
         out.append(Li(Details(
             Summary(
-                UkIcon("radio-tower" if is_remote else "folder", cls="w-3.5 h-3.5 opacity-60 shrink-0"),
-                Span(seg if is_remote else f"{seg}/", cls="truncate"),
+                UkIcon(icon, cls="w-3.5 h-3.5 opacity-60 shrink-0"),
+                Span(seg if is_source else f"{seg}/", cls="truncate"),
                 cls="vyasa-ref-row vyasa-emphasis-control-option",
                 style=_ref_row_style(depth),
             ),
-            Ul(*_render_ref_nodes(node[seg], alias, current, current_path, active, storage_key, open_parts[1:] if is_open else [], remote_groups, depth + 1)),
+            Ul(*_render_ref_nodes(node[seg], alias, current, current_path, active, storage_key, open_parts[1:] if is_open else [], source_groups, depth + 1)),
             open=is_open,
         )))
     for item in node["_leaves"]:
@@ -773,8 +774,8 @@ def _navbar_ref_switcher(current_path=None, roles=None):
         open_parts = current.split("/")[:-1] if active else []
         branches = [r for r in refs if r[1] == "branch"]
         tags = [r for r in refs if r[1] == "tag"]
-        remote_groups = frozenset(r[3] for r in branches if len(r) > 3 and r[3])
-        ref_items = _render_ref_nodes(_build_ref_tree(branches), alias, current, current_path, active, storage_key, open_parts, remote_groups)
+        source_groups = frozenset(r[3] for r in branches if len(r) > 3 and r[3])
+        ref_items = _render_ref_nodes(_build_ref_tree(branches), alias, current, current_path, active, storage_key, open_parts, source_groups)
         if tags:
             ref_items.append(_render_tags_group(tags, alias, current, current_path, active, storage_key))
         refresh_btn = Button(
