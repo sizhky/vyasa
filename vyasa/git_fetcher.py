@@ -65,6 +65,17 @@ def fetch_mirror(spec: MirrorSpec, mirror_root: Path) -> bool:
     return ok
 
 
+def fetch_clone_remotes(root: Path) -> bool:
+    """Fetch all remotes for a working clone used as a content root."""
+    ok_remotes, remotes = _run_git("-C", str(root), "remote")
+    if ok_remotes and not remotes:
+        return True
+    ok, msg = _run_git("-C", str(root), "fetch", "--all", "--prune")
+    if not ok:
+        logger.warning("git fetch --all failed for {}: {}", root, msg)
+    return ok
+
+
 def fetch_all(specs: list[MirrorSpec], mirror_root: Path, *, max_workers: int = 4) -> dict[str, bool]:
     """Fetch every mirror concurrently in a bounded pool. Returns name->ok."""
     mirror_root = Path(mirror_root)

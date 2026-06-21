@@ -514,11 +514,16 @@ def refresh_refs():
     branches/tags appear immediately. Sync def → runs in a threadpool."""
     _git_roots_with_refs.cache_clear()
     try:
-        from .git_fetcher import fetch_all, specs_from_config
+        from .content_backend import classify_root
+        from .git_fetcher import fetch_all, fetch_clone_remotes, specs_from_config
 
         specs, mirror_root = specs_from_config()
         if specs:
             fetch_all(specs, mirror_root)
+        for _, root in get_ref_content_mounts():
+            rc = classify_root(root)
+            if rc.kind == "clone":
+                fetch_clone_remotes(root)
     except Exception:
         pass
     _git_roots_with_refs.cache_clear()

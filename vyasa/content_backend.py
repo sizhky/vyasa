@@ -133,16 +133,32 @@ class GitBackend:
     def resolve_ref(self, ref: str) -> str | None:
         name = ref or "HEAD"
         refs = self._repo.refs
-        for candidate in (name, f"refs/heads/{name}", f"refs/tags/{name}"):
+        for candidate in (name, f"refs/heads/{name}", f"refs/tags/{name}", f"refs/remotes/{name}"):
             try:
                 sha = refs[candidate.encode()]
             except KeyError:
                 continue
             return self._peel(sha).decode()
+        remote_matches = self._remote_refs_by_short().get(name, [])
+        if len(remote_matches) == 1:
+            try:
+                return self._peel(refs[f"refs/remotes/{remote_matches[0]}".encode()]).decode()
+            except KeyError:
+                pass
         raw = name.encode()
         if len(raw) == 40 and raw in self._repo.object_store:
             return self._peel(raw).decode()
         return None
+
+    def _remote_refs_by_short(self) -> dict[str, list[str]]:
+        refs: dict[str, list[str]] = {}
+        for full in self._repo.refs.keys(base=b"refs/remotes/"):
+            name = full.decode()
+            remote, _, short = name.partition("/")
+            if not remote or not short or short == "HEAD":
+                continue
+            refs.setdefault(short, []).append(name)
+        return refs
 
     def _peel(self, sha: bytes) -> bytes:
         """Follow annotated tags down to the commit they point at."""
@@ -154,13 +170,20 @@ class GitBackend:
     def list_refs(self) -> list[RefInfo]:
         default = self.default_ref()
         out: list[RefInfo] = []
-        for raw, kind, prefix in (
-            (b"refs/heads/", "branch", "refs/heads/"),
-            (b"refs/tags/", "tag", "refs/tags/"),
-        ):
-            for full in self._repo.refs.keys(base=raw):
-                name = full.decode()
-                out.append(RefInfo(name, kind, kind == "branch" and name == default))
+        local_branches = {full.decode() for full in self._repo.refs.keys(base=b"refs/heads/")}
+        for name in local_branches:
+            out.append(RefInfo(name, "branch", name == default))
+        remote_refs = self._remote_refs_by_short()
+        remotes = {name.split("/", 1)[0] for names in remote_refs.values() for name in names}
+        qualify_remote = len(remotes) > 1
+        for short, names in remote_refs.items():
+            for full in names:
+                display = full if qualify_remote else short
+                if short in local_branches:
+                    continue
+                out.append(RefInfo(display, "branch", False))
+        for full in self._repo.refs.keys(base=b"refs/tags/"):
+            out.append(RefInfo(full.decode(), "tag", False))
         return out
 
     def _tree_at(self, ref: str):
