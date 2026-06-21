@@ -94,7 +94,7 @@ def test_git_backend_lists_remote_branches_by_remote_count(tmp_path):
     work = tmp_path / "work"
     subprocess.run(["git", "clone", "-q", str(upstream), str(work)], check=True, capture_output=True)
     backend = GitBackend(work / ".git", "docs")
-    assert {r.name for r in backend.list_refs()} == {"main", "team/dev"}
+    assert {r.name for r in backend.list_refs()} == {"local/main", "origin/main", "origin/team/dev"}
     assert backend.read_bytes("remote.md", "team/dev") == b"remote\n"
 
     backup = tmp_path / "backup"
@@ -106,8 +106,9 @@ def test_git_backend_lists_remote_branches_by_remote_count(tmp_path):
     backend = GitBackend(work / ".git", "docs")
     refs = {r.name for r in backend.list_refs()}
     assert "team/dev" not in refs
-    assert {"origin/team/dev", "backup/team/dev"} <= refs
+    assert {"local/main", "origin/team/dev", "backup/team/dev"} <= refs
     assert backend.resolve_ref("team/dev") is None
+    assert backend.read_bytes("a.md", "local/main") == b"main\n"
     assert backend.read_bytes("remote.md", "origin/team/dev") == b"remote\n"
 
 
