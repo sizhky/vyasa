@@ -17,4 +17,4 @@ When you notice nearby smells while doing the requested work, name them plainly 
 Do not test anything by opening browser unless I ask you to do so. Any test you run should be testable in milliseconds only - like python -m or javascript's mjs etc..
 Do not start work if commit is dirty. Make the user aware. Commit if a feature is done. Amend previous commit if the user made a follow-up request that is related to the previous commit.
 
-Run `make typecheck` (pyright, configured in `[tool.pyright]`); typing is gradual, so annotate the signature you are touching to catch misuse and don't chase the ~150 pre-existing errors. Use pyright not ty — ty 0.0.51 mis-resolves some first-party functions to `Unknown` and silently misses bugs.
+Run `make typecheck` (pyright, configured in `[tool.pyright]`); typing is gradual, so annotate the signature you are touching to catch misuse and don't chase the ~150 pre-existing errors.

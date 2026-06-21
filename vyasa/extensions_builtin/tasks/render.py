@@ -231,14 +231,14 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         container_style_parts.append("position: relative; left: 50%; transform: translateX(-50%);")
     container_style = " ".join(container_style_parts)
     flow_style = (
-        "flex:1 1 auto;min-height:0;overflow:hidden;cursor:grab"
+        "flex:1 1 auto;min-height:0;overflow:hidden;cursor:grab;display:flex;flex-direction:column;position:relative"
         if standalone
-        else f"height:{flow_height};min-height:420px;overflow:hidden;cursor:grab"
+        else f"height:{flow_height};min-height:420px;overflow:hidden;cursor:grab;display:flex;flex-direction:column;position:relative"
     )
     return (
         f'<div class="tasks-container relative {"overflow-hidden" if standalone else "my-6 rounded-xl border-4 border-slate-200 dark:border-slate-800"}" '
         f'style="{container_style}" '
-        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-gantt="{str(gantt_enabled).lower()}" data-tasks-default-view="{html.escape(default_view)}" data-tasks-open-filters-default="{str(open_filters_by_default).lower()}" data-tasks-node-card-width="{node_card_width}" data-tasks-hover-font-size="{hover_font_size}" data-tasks-color-mix="{color_mix}" data-tasks-color-mix-intensity="{color_mix_intensity}" data-tasks-projection-group-opacity="{projection_group_opacity}" data-tasks-projection-unspecified-group-opacity="{projection_unspecified_group_opacity}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
+        f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-standalone="{str(standalone).lower()}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-gantt="{str(gantt_enabled).lower()}" data-tasks-default-view="{html.escape(default_view)}" data-tasks-open-filters-default="{str(open_filters_by_default).lower()}" data-tasks-node-card-width="{node_card_width}" data-tasks-hover-font-size="{hover_font_size}" data-tasks-color-mix="{color_mix}" data-tasks-color-mix-intensity="{color_mix_intensity}" data-tasks-projection-group-opacity="{projection_group_opacity}" data-tasks-projection-unspecified-group-opacity="{projection_unspecified_group_opacity}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
         f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'
         f'<button onclick="openTasksFullscreen(\'{widget_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen (Shift+F)">⛶</button>'
         f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">'

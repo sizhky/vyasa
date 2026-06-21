@@ -71,10 +71,10 @@ def test_static_layout_hides_updated_label_in_navbar():
     assert "Updated 5 min ago" not in html
 
 
-def test_no_scroll_layout_removes_main_column_padding():
+def test_no_scroll_layout_keeps_minor_side_padding():
     source = Path("vyasa/layout_page.py").read_text(encoding="utf-8")
 
-    assert 'main_column_padding_cls = "px-0" if no_scroll else "px-4"' in source
+    assert 'main_column_padding_cls = "px-2" if no_scroll else "px-4"' in source
     assert "{main_column_padding_cls} flex flex-1" in source
 
 

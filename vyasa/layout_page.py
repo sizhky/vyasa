@@ -1,5 +1,6 @@
 import time
 import re
+from typing import Any
 from urllib.parse import quote
 from fasthtml.common import Link
 
@@ -301,7 +302,7 @@ def _collect_toc_panels(*, toc_content, show_toc, current_path, build_sidebar_to
                 desktop, mobile = panels
                 return desktop, mobile, toc_items
     desktop_cls = docked_sidebar_classes("toc")
-    desktop_attrs = {"id": "toc-sidebar"}
+    desktop_attrs: dict[str, Any] = {"id": "toc-sidebar"}
     if oob:
         desktop_attrs["hx_swap_oob"] = "true"
     desktop = Aside(
@@ -309,7 +310,7 @@ def _collect_toc_panels(*, toc_content, show_toc, current_path, build_sidebar_to
         cls=desktop_cls,
         **desktop_attrs,
     ) if toc_items else Div(**desktop_attrs)
-    mobile_attrs = {
+    mobile_attrs: dict[str, Any] = {
         "id": "mobile-toc-panel",
         "cls": "vyasa-mobile-panel fixed inset-y-0 right-0 w-full sm:w-96 sm:border-l border-slate-200 dark:border-slate-800 sm:shadow-2xl bg-white dark:bg-slate-950 z-[9999] xl:hidden transform translate-x-full transition-transform duration-300",
         "aria_hidden": "true",
@@ -366,7 +367,7 @@ def _render_htmx_layout(content, title, show_sidebar, toc_content, current_path,
 
 def _render_full_layout(content, title, show_sidebar, toc_content, current_path, show_toc, auth, htmx_nav, nav_posts_menu, show_footer, no_scroll, slide_mode, current_updated_label, extra_head_nodes, logger, t_section, layout_start_time, layout_fluid_class, layout_max_class, layout_max_style, page_style, main_spacing_cls, page_container_cls, navbar_margin_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar, style_attr, footer_node):
     body_fragments = _collect_body_fragments(current_path, show_sidebar, show_toc, auth, slide_mode)
-    main_column_padding_cls = "px-0" if no_scroll else "px-4"
+    main_column_padding_cls = "px-2" if no_scroll else "px-4"
     if show_sidebar:
         toc_sidebar, mobile_toc_panel, toc_items = _collect_toc_panels(
             toc_content=toc_content,

@@ -20,6 +20,8 @@ foundation :: Foundation:
 
     assert 'class="tasks-container' in html
     assert 'data-tasks-widget="true"' in html
+    assert 'data-tasks-standalone="false"' in html
+    assert 'display:flex;flex-direction:column;position:relative' in html
     assert '"graph_id": "hybrid-task-rendering-' in html
     assert '"label": "Foundation"' in html
     assert "1 groups, 1 items, 0 edges" not in html
@@ -682,6 +684,9 @@ def test_tasks_fullscreen_reuses_canvas_background_contract():
     assert "modal.className = 'fixed inset-0 z-[10000] bg-black/88 backdrop-blur-sm';" in source
     assert "flow.style.flex = '1 1 auto';" in source
     assert "flow.style.minHeight = '0';" in source
+    assert "flow.style.display = 'flex';" in source
+    assert "flow.style.flexDirection = 'column';" in source
+    assert "flow.style.position = 'relative';" in source
     assert "closeBtn.title = 'Close (Shift+Esc)';" in source
     assert "modal.__tasksSuspendedModal = suspendedModal;" in source
     assert "const suspendedMaximizeWrapper = wrapper.getAttribute('data-tasks-maximized') === 'true' && wrapper.__tasksMaximizeEsc" in source
@@ -1066,6 +1071,26 @@ def test_slide_notes_panel_uses_stable_render_helper():
 
     assert "SlideShow()," in render_source
     assert "window.React.createElement(SlideShow)" not in render_source
+
+
+def test_client_stats_label_counts_hierarchy_links_without_edges():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "Hierarchy Link" in source
+    assert "parent !== 'null'" in source
+    assert "for (const [parent, items] of Object.entries(model?.task_children || {}))" in source
+
+
+def test_react_flow_component_fills_flow_wrapper():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("const existing = document.getElementById", 1)[0]
+
+    assert "function applyTasksStandaloneHeight(wrapper)" in source
+    assert "wrapper.closest('.vyasa-main-shell')" in source
+    assert "applyTasksStandaloneHeight(wrapper);" in source
+    assert "style: { width: '100%', height: '100%' }" in render_source
+    assert "style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0" in render_source
+    assert "alignSelf: 'stretch', display: 'flex'" in render_source
 
 
 def test_tasks_slide_show_nav_stays_above_title_and_supports_jump_select():
