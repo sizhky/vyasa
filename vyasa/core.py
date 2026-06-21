@@ -3,8 +3,10 @@ import json
 import base64
 import time
 from datetime import datetime
+from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote
 from fasthtml.common import *
 from fasthtml.jupyter import *
 from monsterui.all import *
@@ -503,6 +505,23 @@ async def live_reload():
     if not get_config().get_browser_reload_enabled():
         return Response(status_code=404)
     return StreamingResponse(_live_reload_events(), media_type="text/event-stream")
+
+
+@rt("/_vyasa/refresh-refs")
+def refresh_refs():
+    """Bust the ref-discovery cache and fetch mirrors so newly-created
+    branches/tags appear immediately. Sync def → runs in a threadpool."""
+    _git_roots_with_refs.cache_clear()
+    try:
+        from .git_fetcher import fetch_all, specs_from_config
+
+        specs, mirror_root = specs_from_config()
+        if specs:
+            fetch_all(specs, mirror_root)
+    except Exception:
+        pass
+    _git_roots_with_refs.cache_clear()
+    return Response(status_code=204)
 def _initialize_app(app_instance):
     _mount_package_static(app_instance)
 
@@ -543,6 +562,8 @@ def theme_toggle():
     presets = cfg.get_theme_extension_payloads()
     preset_meta = cfg.get_theme_extension_meta()
     random_icon = to_xml(UkIcon("shuffle"))
+    chevron_icon = to_xml(UkIcon("chevron-down", cls="w-4 h-4"))
+    palette_icon = to_xml(UkIcon("palette", cls="w-4 h-4 shrink-0"))
     menu_items = "".join(
         f'<button type="button" data-theme-name="{name}" '
         f'onclick="window.vyasaApplyThemePreset && window.vyasaApplyThemePreset(this.dataset.themeName, this)" '
@@ -558,9 +579,10 @@ def theme_toggle():
                 <div id="theme-preset-dropdown" class="relative min-w-44" style="position:relative;min-width:11rem;">
                     <button type="button" id="theme-preset-toggle"
                         onclick="window.vyasaToggleThemePresetMenu && window.vyasaToggleThemePresetMenu(this)"
-                        class="vyasa-emphasis-control vyasa-emphasis-control-field flex w-full items-center justify-between rounded-md px-3 py-2 text-sm">
-                        <span id="theme-preset-active-label" class="truncate">{active or "Theme"}</span>
-                        <span class="ml-3">⌄</span>
+                        class="vyasa-emphasis-control vyasa-emphasis-control-field flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm">
+                        <span class="shrink-0">{palette_icon}</span>
+                        <span id="theme-preset-active-label" class="truncate mr-auto">{active or "Theme"}</span>
+                        <span class="ml-3 shrink-0 opacity-70">{chevron_icon}</span>
                     </button>
                     <div id="theme-preset-menu" class="vyasa-emphasis-control-menu" style="display:none;position:absolute;left:0;top:calc(100% + 0.5rem);z-index:1400;max-height:18rem;width:16rem;overflow-y:auto;">
                         {menu_items}
@@ -579,10 +601,207 @@ def theme_toggle():
     )
 
 
+@lru_cache(maxsize=2)
+def _git_roots_with_refs(time_bucket):
+    """Discover every git-backed content root and its refs, as
+    (alias, default_ref, current_branch, ((name, kind, is_default), ...)).
+
+    Cached per coarse time bucket so the per-root dulwich opens happen at
+    most once every few seconds, not on every page render."""
+    from .content_backend import GitBackend, classify_root
+    from .helpers import get_content_mounts
+
+    out = []
+    for alias, root in get_content_mounts():
+        rc = classify_root(root)
+        if rc.kind == "plain" or rc.git_dir is None:
+            continue
+        try:
+            refs = GitBackend(rc.git_dir).list_refs()
+        except Exception:
+            continue
+        if not refs:
+            continue
+        # branches before tags; then strictly case-insensitive alpha by name.
+        refs.sort(key=lambda r: (0 if r.kind == "branch" else 1, r.name.lower()))
+        default = next((r.name for r in refs if r.is_default), "")
+        current_branch = rc.current_branch if rc.kind == "clone" else ""
+        out.append((alias, default, current_branch or "", tuple((r.name, r.kind, r.is_default) for r in refs)))
+    return tuple(out)
+
+
+def _ref_target_url(alias, name, current_path):
+    """Where switching `alias` to `name` should land: the SAME document you're
+    viewing, but pinned to `name`. Falls back to the root when not on a doc."""
+    from .helpers import content_location
+
+    rel = ""
+    if current_path:
+        _, _, _, relp = content_location(current_path)
+        rp = relp.as_posix()
+        rel = rp if rp and rp != "." else ""
+    if alias:
+        # pack ref slashes as ':' (git refnames forbid ':') to keep one segment
+        slug = f"{alias}@{name.replace('/', ':')}"
+        return content_url_for_slug(f"{slug}/{rel}" if rel else slug)
+    # primary root: carry the ref as a query param on the current page (or home)
+    base = content_url_for_slug(rel) if rel else "/"
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}ref={quote(name, safe='')}"
+
+
+def _build_ref_tree(refs):
+    """Nest refs by their `/` segments. `feat/git-refs` → tree["feat"] leaf.
+    Each node is a dict; "_leaves" holds (name, kind, is_default) at that level."""
+    root = {"_leaves": []}
+    for item in refs:
+        node = root
+        for seg in item[0].split("/")[:-1]:
+            node = node.setdefault(seg, {"_leaves": []})
+        node["_leaves"].append(item)
+    return root
+
+
+def _ref_row_style(depth):
+    """Only the depth indent is inline; all other row chrome lives in the
+    `.vyasa-ref-row` CSS class so every level renders identically."""
+    return f"padding-left:{0.5 + depth * 0.9:.3f}rem"
+
+
+def _ref_leaf(name, kind, is_default, alias, current, current_path, active, storage_key, depth):
+    """A single selectable branch/tag row."""
+    url = _ref_target_url(alias, name, current_path if active else "")
+    return Li(Button(
+        Span("✓" if name == current else "", cls="shrink-0", style="width:0.75rem;display:inline-block"),
+        Span(name.split("/")[-1], cls="truncate"), Span(" (default)" if is_default else "", cls="opacity-60 text-xs"),
+        UkIcon("tag", cls="w-3 h-3 opacity-50 ml-auto") if kind == "tag" else "",
+        type="button",
+        onclick=f"try{{localStorage.setItem('{storage_key}','{name}');}}catch(e){{}};window.location='{url}';",
+        cls="vyasa-ref-row vyasa-emphasis-control-option",
+        style=_ref_row_style(depth),
+    ))
+
+
+def _version_sort_key(name):
+    """Natural/version-aware key: digit runs compare numerically. Flag tuples
+    keep ints and strings from ever being compared to each other."""
+    return [(0, int(p)) if p.isdigit() else (1, p.lower()) for p in re.split(r"(\d+)", name) if p]
+
+
+def _render_tags_group(tags, alias, current, current_path, active, storage_key, depth=1):
+    """Tags collapsed under one group, newest (highest version) first."""
+    tags = sorted(tags, key=lambda t: _version_sort_key(t[0]), reverse=True)
+    is_open = active and any(t[0] == current for t in tags)
+    items = [_ref_leaf(n, k, d, alias, current, current_path, active, storage_key, depth + 1) for n, k, d in tags]
+    return Li(Details(
+        Summary(
+            UkIcon("tags", cls="w-3.5 h-3.5 opacity-60 shrink-0"),
+            Span("Tags", cls="truncate"),
+            Span(str(len(tags)), cls="opacity-50 text-xs ml-auto"),
+            cls="vyasa-ref-row vyasa-emphasis-control-option",
+            style=_ref_row_style(depth),
+        ),
+        Ul(*items),
+        open=is_open,
+    ))
+
+
+def _render_ref_nodes(node, alias, current, current_path, active, storage_key, open_parts, depth=1):
+    """Recursive list items: folders (sorted, collapsed) first, then leaf refs.
+    `open_parts` = remaining segments of the current ref, so its chain auto-opens."""
+    out = []
+    for seg in sorted(k for k in node if k != "_leaves"):
+        is_open = bool(open_parts) and open_parts[0] == seg
+        out.append(Li(Details(
+            Summary(
+                UkIcon("folder", cls="w-3.5 h-3.5 opacity-60 shrink-0"),
+                Span(f"{seg}/", cls="truncate"),
+                cls="vyasa-ref-row vyasa-emphasis-control-option",
+                style=_ref_row_style(depth),
+            ),
+            Ul(*_render_ref_nodes(node[seg], alias, current, current_path, active, storage_key, open_parts[1:] if is_open else [], depth + 1)),
+            open=is_open,
+        )))
+    for name, kind, is_default in node["_leaves"]:
+        out.append(_ref_leaf(name, kind, is_default, alias, current, current_path, active, storage_key, depth))
+    return out
+
+
+def _navbar_ref_switcher(current_path=None):
+    """Always-visible navbar dropdown of every git-backed root, each
+    expanding to a `/`-nested tree of its branches and tags. Picking a ref
+    navigates to that root on the ref and remembers it per root in localStorage."""
+    roots = _git_roots_with_refs(int(time.time() // 10))
+    if not roots:
+        return None
+    from .helpers import content_location
+
+    cur_root_id, cur_ref = "", ""
+    if current_path:
+        cur_root_id, _, cur_ref, _ = content_location(current_path)
+
+    root_blocks = []
+    for alias, default, current_branch, refs in roots:
+        active = alias == cur_root_id
+        current = (cur_ref if active else "") or current_branch or default
+        storage_key = f"vyasa-ref:{alias}"
+        open_parts = current.split("/")[:-1] if active else []
+        branches = [r for r in refs if r[1] == "branch"]
+        tags = [r for r in refs if r[1] == "tag"]
+        ref_items = _render_ref_nodes(_build_ref_tree(branches), alias, current, current_path, active, storage_key, open_parts)
+        if tags:
+            ref_items.append(_render_tags_group(tags, alias, current, current_path, active, storage_key))
+        refresh_btn = Button(
+            UkIcon("refresh-cw", cls="w-3.5 h-3.5"),
+            type="button", title="Fetch & refresh branches",
+            onclick="event.stopPropagation();event.preventDefault();var i=this.querySelector('svg');if(i)i.classList.add('animate-spin');fetch('/_vyasa/refresh-refs',{method:'GET'}).finally(function(){window.location.reload();});",
+            cls="vyasa-ref-refresh shrink-0",
+        )
+        # Clones (non-bare) have a checked-out working tree to return to.
+        home_btn = ""
+        if current_branch:
+            rel = ""
+            if active and current_path:
+                relp = content_location(current_path)[3].as_posix()
+                rel = relp if relp and relp != "." else ""
+            home_url = content_url_for_slug(f"{alias}/{rel}" if rel else alias)
+            home_btn = Button(
+                UkIcon("house", cls="w-3.5 h-3.5"),
+                type="button", title=f"Working tree ({current_branch})",
+                onclick=f"event.stopPropagation();event.preventDefault();try{{localStorage.removeItem('{storage_key}');}}catch(e){{}};window.location='{home_url}';",
+                cls="vyasa-ref-refresh shrink-0",
+            )
+        root_blocks.append(Li(Details(
+            Summary(
+                UkIcon("folder-git-2", cls="w-3.5 h-3.5 opacity-60 shrink-0"),
+                Span(alias or "(primary)", cls="truncate"),
+                refresh_btn,
+                home_btn,
+                Span(current, cls="opacity-60 ml-auto truncate", style="max-width:10rem"),
+                cls="vyasa-ref-row vyasa-emphasis-control-option",
+                style=_ref_row_style(0),
+            ),
+            Ul(*ref_items),
+            open=active,
+            cls="vyasa-ref-root",
+        ), cls="my-0.5"))
+
+    return Details(
+        Summary(
+            UkIcon("git-branch", cls="w-4 h-4 shrink-0"),
+            Span("Branches", cls="hidden sm:inline truncate"),
+            UkIcon("chevron-down", cls="w-4 h-4 ml-1 shrink-0 opacity-70"),
+            cls="vyasa-emphasis-control vyasa-emphasis-control-field flex items-center gap-2 cursor-pointer select-none rounded-md px-3 py-2 text-sm",
+        ),
+        Div(Ul(*root_blocks), cls="vyasa-emphasis-control-menu absolute right-0 mt-2 z-[1100] max-h-[70vh] overflow-y-auto", style="width:26rem"),
+        cls="vyasa-ref-switcher relative",
+    )
+
+
 def navbar(
-    show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None, mobile_extra_controls=()
+    show_mobile_menus=False, htmx_nav=True, posts_menu_items=None, compact_mode=False, updated_label=None, mobile_extra_controls=(), current_path=None
 ):
-    return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label, mobile_extra_controls)
+    return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label, mobile_extra_controls, ref_switcher=_navbar_ref_switcher(current_path))
 
 
 def _posts_sidebar_fingerprint():
@@ -648,11 +867,41 @@ def _sidebar_section_nodes():
     return [provider(context) for provider in providers]
 
 
+@lru_cache(maxsize=2)
+def _uncommitted_slugs(time_bucket):
+    """Slugs whose backing file differs from HEAD in the primary working
+    clone. Scoped to the primary root only (git status across every mounted
+    repo is too slow when several are large, and drafts live in the author's
+    own root). Cached per coarse time bucket so it is computed at most once
+    every few seconds, never per sidebar row."""
+    from .content_backend import classify_root, uncommitted_paths
+
+    rc = classify_root(get_root_folder())
+    if rc.kind != "clone":
+        return frozenset()
+    slugs = set()
+    for rel in uncommitted_paths(rc):
+        stripped = rel.rsplit(".", 1)[0] if "." in rel.rsplit("/", 1)[-1] else rel
+        slugs.update((rel, stripped))
+    return frozenset(slugs)
+
+
+def _current_uncommitted_slugs():
+    return _uncommitted_slugs(int(time.time() // 5))
+
+
+def _uncommitted_row_decorator(node, *, slug=None, title="", context="tree"):
+    if not slug or slug not in _current_uncommitted_slugs():
+        return node
+    dot = Span("●", cls="vyasa-uncommitted-dot text-amber-500 text-[0.6rem] ml-1 shrink-0", title="Uncommitted changes")
+    return Span(node, dot, cls="inline-flex items-center min-w-0")
+
+
 def _sidebar_row_decorators():
     runtime = get_extension_runtime()
     if not runtime:
         return ()
-    return (*runtime.sidebar_row_decorators, _row_action_decorator(runtime.sidebar_action_registry()))
+    return (*runtime.sidebar_row_decorators, _uncommitted_row_decorator, _row_action_decorator(runtime.sidebar_action_registry()))
 
 
 def _search_result_row_decorators():
@@ -949,10 +1198,17 @@ def layout(
 _nav_entries_cache: dict[tuple[str, bool], tuple[float, list[Path]]] = {}
 
 
+# The git ref a specific root is currently being viewed on, as (root_id, ref),
+# so the sidebar can render that one mount from objects while the rest of the
+# tree stays on disk. Per-request, set by get_posts.
+_active_ref_root: "ContextVar[tuple[str, str] | None]" = ContextVar("vyasa_active_ref_root", default=None)
+
+
 def _get_nav_entries(
     folder: Path, root: Path, show_hidden: bool, excluded_dirs: set[str]
 ):
-    key = (str(folder.resolve()), show_hidden)
+    active = _active_ref_root.get()
+    key = (str(folder.resolve()), show_hidden, active)
     try:
         mtime = folder.stat().st_mtime
     except OSError:
@@ -961,8 +1217,56 @@ def _get_nav_entries(
     if cached and cached[0] == mtime:
         return cached[1]
     ordered = get_tree_entries(folder, root, show_hidden, excluded_dirs, enabled_document_suffixes())
+    if folder.resolve() == root.resolve():
+        ordered = _swap_ref_roots(ordered, active)
     _nav_entries_cache[key] = (mtime, ordered)
     return ordered
+
+
+def _swap_ref_roots(entries, active):
+    """Swap top-level mount entries for git-ref VirtualPaths:
+
+    - a bare mirror has no working tree, so it always renders from its default
+      ref (walking it as disk would expose git internals);
+    - the `active` (root_id, ref) mount renders from that ref, so switching a
+      branch shows that root's branch content while every other root stays put.
+    """
+    from .content_backend import classify_root
+    from .content_tree import ref_root_vpath
+    from .helpers import get_content_mounts
+
+    git_mounts = get_config().get_git_mounts()
+    active_id, active_ref = active or ("", "")
+    bare = {Path(p).resolve(): a for a, p in git_mounts if a and classify_root(p).kind == "bare"}
+    alias_by_path = {Path(p).resolve(): a for a, p in get_content_mounts() if a}
+    if not bare and not (active_id and active_id in alias_by_path.values()):
+        return entries
+
+    swapped = []
+    for entry in entries:
+        if not (hasattr(entry, "resolve") and not hasattr(entry, "slug")):
+            swapped.append(entry)
+            continue
+        resolved = entry.resolve()
+        alias = alias_by_path.get(resolved)
+        vpath = None
+        if alias and alias == active_id:
+            vpath = ref_root_vpath(alias, active_ref)  # None if ref == current branch (disk)
+        elif resolved in bare:
+            vpath = ref_root_vpath(bare[resolved], "")
+        swapped.append(vpath if vpath is not None else entry)
+    return swapped
+
+
+def _nav_entries_for(folder, root, show_hidden, excluded_dirs):
+    """Dispatch nav-entry listing: VirtualPath (git ref) folders read from the
+    object store, disk folders from the filesystem."""
+    from .content_backend import VirtualPath
+    from .content_tree import ref_nav_entries
+
+    if isinstance(folder, VirtualPath):
+        return ref_nav_entries(folder, root, show_hidden, excluded_dirs)
+    return _get_nav_entries(folder, root, show_hidden, excluded_dirs)
 
 
 def _folder_has_visible_descendant(folder: Path, roles, depth: int = 3):
@@ -977,7 +1281,7 @@ def build_post_tree(folder, roles=None, max_depth=None, active_parts=()):
     return build_post_tree_render(
         folder, roles=roles, max_depth=max_depth, active_parts=active_parts,
         root=get_root_folder(), show_hidden=get_config().get_show_hidden(),
-        excluded_dirs=set(get_config().get_reload_excludes()), get_nav_entries=_get_nav_entries,
+        excluded_dirs=set(get_config().get_reload_excludes()), get_nav_entries=_nav_entries_for,
         effective_abbreviations=_effective_abbreviations, should_exclude_dir_fn=should_exclude_dir,
         slug_to_title_fn=slug_to_title, find_folder_note_file_fn=find_folder_note_file,
         is_allowed_fn=is_allowed, parse_frontmatter_fn=parse_frontmatter,
@@ -1001,7 +1305,64 @@ def _cached_build_post_tree(fingerprint, roles_key, show_hidden, current_path):
     )
 
 
+def build_ref_post_tree(root_id, ref, roles=None, active_parts=()):
+    """Build the sidebar tree for a git-ref root, walking the object store
+    via VirtualPaths through the same renderer as the disk tree."""
+    from .content_tree import ref_nav_entries, ref_root_vpath
+
+    root_vpath = ref_root_vpath(root_id, ref)
+    if root_vpath is None:
+        return None
+    return build_post_tree_render(
+        root_vpath, roles=roles, max_depth=None, active_parts=active_parts,
+        root=root_vpath, show_hidden=get_config().get_show_hidden(),
+        excluded_dirs=set(get_config().get_reload_excludes()), get_nav_entries=ref_nav_entries,
+        effective_abbreviations=lambda root, folder=None: {}, should_exclude_dir_fn=should_exclude_dir,
+        slug_to_title_fn=slug_to_title, find_folder_note_file_fn=find_folder_note_file,
+        is_allowed_fn=is_allowed, parse_frontmatter_fn=parse_frontmatter,
+        rbac_rules=_rbac_rules, logger=logger, row_decorators=_sidebar_row_decorators(),
+    )
+
+
+@lru_cache(maxsize=16)
+def _cached_build_ref_post_tree(root_id, ref, sha, roles_key, active_parts):
+    return build_ref_post_tree(root_id, ref, roles=list(roles_key) if roles_key else [], active_parts=active_parts)
+
+
+def _ref_from_current_path(current_path):
+    """(root_id, ref, active_parts) when current_path carries alias@ref, else None."""
+    parts = Path(str(current_path).strip("/")).parts if current_path else ()
+    if not parts or "@" not in parts[0]:
+        return None
+    root_id, ref = parts[0].split("@", 1)
+    ref = ref.replace(":", "/")  # ref slashes are packed as ':' in the slug
+    if not ref:
+        return None
+    return root_id, ref, tuple(parts[1:-1])
+
+
 def get_posts(roles=None, current_path=""):
+    parsed = _ref_from_current_path(current_path)
+    if parsed:
+        root_id, ref, active_parts = parsed
+        if root_id:
+            # A named mount viewed on a ref: keep the whole multi-root tree, but
+            # render that one mount from the ref. active_parts use the bare alias
+            # (the swapped VirtualPath mount is named by the alias, not alias@ref).
+            token = _active_ref_root.set((root_id, ref))
+            try:
+                return build_post_tree(get_root_folder(), roles=roles, max_depth=1, active_parts=(root_id, *active_parts))
+            finally:
+                _active_ref_root.reset(token)
+        # The primary root itself on a ref (?ref=): serve its ref tree.
+        from .content_tree import ref_root_vpath
+
+        root_vpath = ref_root_vpath(root_id, ref)
+        if root_vpath is not None:
+            sha = root_vpath._backend.resolve_ref(ref)
+            items = _cached_build_ref_post_tree(root_id, ref, sha, tuple(roles or []), active_parts)
+            if items is not None:
+                return items
     fingerprint = _posts_tree_fingerprint()
     roles_key = tuple(roles or [])
     show_hidden = get_config().get_show_hidden()

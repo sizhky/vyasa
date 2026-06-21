@@ -18,7 +18,7 @@ from .document_pages import (
     resolve_document_actions,
 )
 from .extensions import get_extension_runtime, refresh_extension_runtime
-from .helpers import content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, expand_markdown_includes_for_reading, get_adjacent_posts, strip_more_marker
+from .helpers import content_location, content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, expand_markdown_includes_for_reading, get_adjacent_posts, strip_more_marker
 from .runtime_context import traced
 from .extensions_builtin.markdown.renderer import _render_markdown_fragment
 from .extensions_builtin.slides.deck import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
@@ -66,11 +66,14 @@ def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, inc
     breadcrumb_parts = parts if include_current else parts[:-1]
     for part in breadcrumb_parts:
         acc.append(part)
+        # the first segment may carry the git ref as `alias@ref`; show only the
+        # alias (the ref already appears as a badge), but keep it in the href.
+        label_part = part.split("@", 1)[0] if "@" in part else part
         items.append(
             Span(
                 Span(UkIcon("chevron-right", cls="w-3 h-3"), cls="opacity-50"),
                 A(
-                    slug_to_title(part, abbreviations=abbreviations),
+                    slug_to_title(label_part, abbreviations=abbreviations),
                     href=content_url_for_slug("/".join(acc)),
                     cls="hover:underline whitespace-nowrap",
                     **boost_attrs,
@@ -94,10 +97,115 @@ def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, inc
     return Div(*items, cls="vyasa-breadcrumbs mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400")
 
 
+def _ref_badge(name):
+    """Small branch/tag chip shown in a document's meta line."""
+    return Span(UkIcon("git-branch", cls="w-3.5 h-3.5"), Span(name or "default"), cls="vyasa-ref-badge inline-flex items-center gap-1")
+
+
+def _current_branch_for(root):
+    """The checked-out branch when `root` is a working clone, else "" (plain
+    folders / bare mirrors have no working branch to surface)."""
+    from .content_backend import classify_root
+
+    try:
+        rc = classify_root(root)
+        return rc.current_branch if rc.kind == "clone" else ""
+    except Exception:
+        return ""
+
+
+def _render_ref_markdown(ref_doc, *, path, htmx, request, slug_to_title, layout, get_blog_title, from_md, not_found):
+    """Render a markdown document served from a git ref (object store)."""
+    abbreviations = {}
+    breadcrumbs = _breadcrumbs(path, slug_to_title, abbreviations)
+    ref_badge = _ref_badge(ref_doc.ref)
+    if not ref_doc.found:
+        body = Div(
+            H1(f"Not present on {ref_doc.ref}", cls="mb-2"),
+            Span(f"“{ref_doc.relative}” does not exist on this ref.", cls="opacity-70"),
+            cls="w-full",
+        )
+        return DocumentPage(f"Not on {ref_doc.ref}", path, body, toc_source="").render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
+    content = Div(
+        document_header(ref_doc.title, ref_doc.body, actions=(), breadcrumbs=breadcrumbs, meta_extra=ref_badge),
+        from_md(strip_more_marker(ref_doc.body), current_path=path),
+        cls="w-full",
+    )
+    return DocumentPage(ref_doc.title, path, content, toc_source=ref_doc.body).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
+
+
+def _uncommitted_banner(root, file_path):
+    """Show an indicator when a working clone serves an uncommitted file from
+    disk (its checked-out branch). Per-file: only flags the page being viewed."""
+    from .content_backend import classify_root, uncommitted_paths
+
+    try:
+        rc = classify_root(root)
+        if rc.kind != "clone":
+            return None
+        rel = Path(file_path).resolve().relative_to(Path(root).resolve()).as_posix()
+    except (ValueError, OSError):
+        return None
+    if rel not in uncommitted_paths(rc):
+        return None
+    return Div(
+        Span(UkIcon("git-commit", cls="w-4 h-4"), cls="opacity-70"),
+        Span("Uncommitted draft - this page shows the working tree, not a committed ref."),
+        cls="vyasa-uncommitted-banner mb-3 flex items-center gap-2 text-xs rounded-md px-3 py-2 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200",
+    )
+
+
+def _render_ref_other_kind(ref_doc, *, path, htmx, request, slug_to_title, layout, get_blog_title, not_found):
+    """Dispatch a non-markdown git-ref document (pdf/html/...) to its kind
+    renderer. The renderer builds asset URLs from the ref-carrying slug, so
+    the ref-aware byte routes serve the blob from objects."""
+    runtime = get_extension_runtime() or refresh_extension_runtime(get_config().get_extensions_config())
+    renderer = runtime.document_renderers.get(ref_doc.kind) if runtime else None
+    if renderer is None:
+        return None
+    document = SimpleNamespace(kind=ref_doc.kind, path=ref_doc.vpath, folder_note=None, slug=ref_doc.slug)
+    return renderer(
+        SimpleNamespace(
+            document=document,
+            path=path,
+            htmx=htmx,
+            request=request,
+            auth=request.scope.get("auth"),
+            layout=layout,
+            blog_title=get_blog_title(),
+            breadcrumbs=_breadcrumbs(path, slug_to_title, {}),
+            slug_to_title=slug_to_title,
+            abbreviations={},
+        )
+    )
+
+
 @traced("total")
 def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbreviations, find_folder_note_file, slug_to_title, layout, get_blog_title, not_found, parse_frontmatter, resolve_markdown_title, from_md, logger, PathCls=Path):
     request_start = time.time()
     logger.info(f"\n[DEBUG] ########## REQUEST START: /posts/{path} ##########")
+    ref_override = request.query_params.get("ref", "") if hasattr(request, "query_params") else ""
+    root_id, root_path, ref, relative = content_location(path, ref_override=ref_override)
+    if root_id and ref and "@" not in Path(path.strip("/")).parts[0]:
+        # ref arrived as `?ref=` on a named root — fold it back into the
+        # internal `alias@ref` slug so the render + sidebar pipeline is uniform.
+        rel = relative.as_posix()
+        packed = f"{root_id}@{ref.replace('/', ':')}"
+        path = f"{packed}/{rel}" if rel and rel != "." else packed
+    if root_path is not None:
+        from .content_tree import resolve_ref_document
+        ref_doc = resolve_ref_document(path, ref_override=ref_override)
+        if ref_doc is not None:  # served from git objects (bare, or non-current ref)
+            if ref_doc.found and ref_doc.kind != "markdown":
+                rendered = _render_ref_other_kind(ref_doc, path=path, htmx=htmx, request=request, slug_to_title=slug_to_title, layout=layout, get_blog_title=get_blog_title, not_found=not_found)
+                if rendered is not None:
+                    return rendered
+            return _render_ref_markdown(ref_doc, path=path, htmx=htmx, request=request, slug_to_title=slug_to_title, layout=layout, get_blog_title=get_blog_title, from_md=from_md, not_found=not_found)
+        if ref:
+            # disk-served but slug carries @ref (plain folder, or clone on its
+            # current branch): strip the @ref so the disk pipeline resolves it.
+            rel = relative.as_posix()
+            path = (f"{root_id}/{rel}" if root_id else rel).strip("/")
     root, relative_path = content_root_and_relative(path)
     if root is None:
         return not_found(htmx, auth=request.scope.get("auth"))
@@ -155,8 +263,11 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         )
     )
     actions = ((error_chip,) if error_chip else ()) + document_actions
+    uncommitted_banner = _uncommitted_banner(root, file_path)
+    disk_branch = _current_branch_for(root)
     post_content = Div(
-        document_header(post_title, read_source, actions=actions, breadcrumbs=breadcrumbs, file_path=file_path),
+        document_header(post_title, read_source, actions=actions, breadcrumbs=breadcrumbs, file_path=file_path, meta_extra=_ref_badge(disk_branch) if disk_branch else None),
+        uncommitted_banner if uncommitted_banner else Div(),
         frontmatter_metadata_block(metadata) or Div(),
         error_toast if error_toast else Div(),
         error_script if error_script else Div(),

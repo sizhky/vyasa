@@ -33,8 +33,8 @@
     },
     {
       "type": "text",
-      "version": 362,
-      "versionNonce": 1409986875,
+      "version": 367,
+      "versionNonce": 389868054,
       "isDeleted": false,
       "id": "kg-text",
       "fillStyle": "solid",
@@ -56,7 +56,7 @@
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1781979349261,
+      "updated": 1781990290939,
       "link": null,
       "locked": false,
       "fontSize": 22.139572619331727,
@@ -123,8 +123,8 @@
     },
     {
       "type": "text",
-      "version": 465,
-      "versionNonce": 1277187061,
+      "version": 470,
+      "versionNonce": 921627210,
       "isDeleted": false,
       "id": "mdx-text",
       "fillStyle": "solid",
@@ -146,7 +146,7 @@
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1781979349272,
+      "updated": 1781990290947,
       "link": null,
       "locked": false,
       "fontSize": 24,
@@ -213,8 +213,8 @@
     },
     {
       "type": "text",
-      "version": 229,
-      "versionNonce": 1136054747,
+      "version": 234,
+      "versionNonce": 595801942,
       "isDeleted": false,
       "id": "HYxm7qQ0EJev6_KlO3f1G",
       "fillStyle": "solid",
@@ -234,7 +234,7 @@
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1781979349278,
+      "updated": 1781990290952,
       "link": null,
       "locked": false,
       "fontSize": 36,
@@ -361,8 +361,8 @@
     },
     {
       "type": "text",
-      "version": 1360,
-      "versionNonce": 356257109,
+      "version": 1365,
+      "versionNonce": 854528266,
       "isDeleted": false,
       "id": "Q-QTDcRgPTwIIBChmdHb3",
       "fillStyle": "solid",
@@ -389,7 +389,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1781979349282,
+      "updated": 1781990290956,
       "link": null,
       "locked": false,
       "fontSize": 23.98769093415435,
@@ -400,7 +400,7 @@
       "containerId": null,
       "originalText": "Excalidraw mdx needs to expose \n- get nodes and connections as endpoints for LLMs\nto consume the flow charts with\n- ideally we need a token light intermediate loader\nto convert excalidraw's giant json only into the important\nthings that are needed for the LLM: node text+color \nand connections\n- they can directly edit JSON to update state \n(like making a card green for done)\n- refresh drawing on page endpoint",
       "lineHeight": 1.25,
-      "baseline": 290
+      "baseline": 291
     },
     {
       "type": "arrow",
@@ -559,8 +559,8 @@
     },
     {
       "type": "text",
-      "version": 676,
-      "versionNonce": 1985339003,
+      "version": 681,
+      "versionNonce": 68017302,
       "isDeleted": false,
       "id": "A324a3z6VCRQbUwkGU5eA",
       "fillStyle": "solid",
@@ -582,7 +582,7 @@
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1781979349291,
+      "updated": 1781990290964,
       "link": null,
       "locked": false,
       "fontSize": 22.139572619331727,
@@ -628,8 +628,8 @@
     },
     {
       "type": "text",
-      "version": 553,
-      "versionNonce": 693738165,
+      "version": 558,
+      "versionNonce": 1908170698,
       "isDeleted": false,
       "id": "79fRxRPMnL4nermaFvlq5",
       "fillStyle": "solid",
@@ -651,7 +651,7 @@
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1781979349297,
+      "updated": 1781990290972,
       "link": null,
       "locked": false,
       "fontSize": 22.139572619331727,
@@ -710,8 +710,8 @@
     },
     {
       "type": "text",
-      "version": 962,
-      "versionNonce": 1722439451,
+      "version": 967,
+      "versionNonce": 1586616790,
       "isDeleted": false,
       "id": "DvPJlYGUavcjNppRsvSWu",
       "fillStyle": "solid",
@@ -733,7 +733,7 @@
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1781979349302,
+      "updated": 1781990290980,
       "link": null,
       "locked": false,
       "fontSize": 24,
@@ -865,7 +865,7 @@
       "containerId": null,
       "originalText": "rename internet-",
       "lineHeight": 1.25,
-      "baseline": 20
+      "baseline": 21
     },
     {
       "type": "rectangle",
@@ -938,8 +938,8 @@
     },
     {
       "type": "text",
-      "version": 638,
-      "versionNonce": 1897823253,
+      "version": 643,
+      "versionNonce": 1869731466,
       "isDeleted": false,
       "id": "Wwoh0Vwtid1BLQLesc889",
       "fillStyle": "solid",
@@ -961,7 +961,7 @@
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1781979349307,
+      "updated": 1781990290989,
       "link": null,
       "locked": false,
       "fontSize": 22.139572619331727,
@@ -1012,8 +1012,8 @@
     },
     {
       "type": "text",
-      "version": 1208,
-      "versionNonce": 321305531,
+      "version": 1213,
+      "versionNonce": 1512320790,
       "isDeleted": false,
       "id": "riXPVUNKZt12dWl0A5LmY",
       "fillStyle": "solid",
@@ -1035,7 +1035,7 @@
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1781979349312,
+      "updated": 1781990290995,
       "link": null,
       "locked": false,
       "fontSize": 22.139572619331727,
@@ -1138,8 +1138,8 @@
     },
     {
       "type": "text",
-      "version": 842,
-      "versionNonce": 612381045,
+      "version": 847,
+      "versionNonce": 1825207626,
       "isDeleted": false,
       "id": "PrG_iHBeuTCelpXFNCljo",
       "fillStyle": "solid",
@@ -1161,7 +1161,7 @@
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1781979349318,
+      "updated": 1781990290999,
       "link": null,
       "locked": false,
       "fontSize": 24,
@@ -1212,8 +1212,8 @@
     },
     {
       "type": "text",
-      "version": 960,
-      "versionNonce": 133008475,
+      "version": 965,
+      "versionNonce": 1933171798,
       "isDeleted": false,
       "id": "ZMje9rKMk1TwpYShKD82c",
       "fillStyle": "solid",
@@ -1235,7 +1235,7 @@
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1781979349320,
+      "updated": 1781990291003,
       "link": null,
       "locked": false,
       "fontSize": 24,
@@ -1459,8 +1459,8 @@
     },
     {
       "type": "text",
-      "version": 1662,
-      "versionNonce": 1623472853,
+      "version": 1667,
+      "versionNonce": 1528904714,
       "isDeleted": false,
       "id": "DG8BTLfXd5jbzLKPF-FoC",
       "fillStyle": "solid",
@@ -1482,7 +1482,7 @@
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1781979349322,
+      "updated": 1781990291005,
       "link": null,
       "locked": false,
       "fontSize": 22.139572619331727,
@@ -1794,8 +1794,8 @@
     },
     {
       "type": "text",
-      "version": 1178,
-      "versionNonce": 684804347,
+      "version": 1183,
+      "versionNonce": 1336402326,
       "isDeleted": false,
       "id": "u40mYz_adrrwH5P5JSETV",
       "fillStyle": "solid",
@@ -1817,7 +1817,7 @@
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1781979349329,
+      "updated": 1781990291010,
       "link": null,
       "locked": false,
       "fontSize": 22.139572619331727,
@@ -2076,7 +2076,7 @@
       "containerId": "XXHXcqgLrpszttmLEf6dT",
       "originalText": "in vega component separate out vega spec into another sidecar input",
       "lineHeight": 1.25,
-      "baseline": 131
+      "baseline": 132
     },
     {
       "type": "rectangle",
@@ -2102,12 +2102,7 @@
       "roundness": {
         "type": 3
       },
-      "boundElements": [
-        {
-          "type": "text",
-          "id": "0AD2IuwLMe4tSd20767Dc"
-        }
-      ],
+      "boundElements": [],
       "updated": 1781979357451,
       "link": null,
       "locked": false
@@ -2146,7 +2141,7 @@
       "containerId": "YT3bOgxmm6ZP7IVijfgpN",
       "originalText": "Testing",
       "lineHeight": 1.25,
-      "baseline": 26
+      "baseline": 27
     }
   ],
   "appState": {

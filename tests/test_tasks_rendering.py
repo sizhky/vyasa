@@ -436,6 +436,19 @@ def test_tasks_node_card_width_ignores_note_text_length():
     assert "noteMetrics.width" not in panel_source
 
 
+def test_tasks_node_card_attr_values_can_be_copied_from_hover_button():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+
+    assert "function renderTasksDetailEntries(React, entries, options = {})" in source
+    assert "const canCopy = options.copyValues && String(entry?.value ?? '').trim();" in source
+    assert "await copyTasksText(entry.value);" in source
+    assert "className: 'vyasa-task-node-card-copy'" in source
+    assert "renderTasksDetailEntries(React, entries, { copyValues: true })" in source
+    assert ".vyasa-task-node-card-row:hover .vyasa-task-node-card-copy" in css_source
+    assert "pointer-events: none;" in css_source
+
+
 def test_tasks_selected_panel_shows_href_as_detail_instead_of_title_link():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
@@ -496,6 +509,16 @@ def test_tasks_source_uses_reset_button_label():
     assert "setEdgesVisible(typeof defaults.edgesVisible === 'boolean'" in source
     assert "setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(defaults.edgeAnimationMode, defaults.edgeAnimationEnabled))" in source
     assert "onClick: resetProjectionControls" in source
+
+
+def test_tasks_filter_reset_button_stays_in_filter_card_header():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    panel_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
+
+    assert "React.createElement('button', { type: 'button', onClick: resetProjectionControls" in panel_source
+    assert panel_source.index("activeCount ? `Filters (${activeCount})` : 'Filters'") < panel_source.index("onClick: resetProjectionControls")
+    assert panel_source.index("onClick: resetProjectionControls") < panel_source.index("'×'")
+    assert panel_source.index("onClick: resetProjectionControls") < panel_source.index("'Intensity'")
 
 
 def test_tasks_edge_animation_defaults_off_and_zero_cycles_smooth_then_tick():
@@ -1043,6 +1066,19 @@ def test_slide_notes_panel_uses_stable_render_helper():
 
     assert "SlideShow()," in render_source
     assert "window.React.createElement(SlideShow)" not in render_source
+
+
+def test_tasks_slide_show_nav_stays_above_title_and_supports_jump_select():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    slide_source = source.split("const SlideShow = () => {", 1)[1].split("const DragSelectionOverlay = () => {", 1)[0]
+
+    assert "className: 'vyasa-task-slide-nav'" in slide_source
+    assert "'aria-label': 'Jump to slide'" in slide_source
+    assert "'aria-label': 'Previous slide'" in slide_source
+    assert "'aria-label': 'Next slide'" in slide_source
+    assert "onChange: (event) => setSlideIndex(Number(event.target.value))" in slide_source
+    assert slide_source.index("className: 'vyasa-task-slide-nav'") < slide_source.index("slide.title || `Slide ${slideIndex + 1}`")
+    assert "`${index + 1} / ${slides.length}`" in slide_source
 
 
 def test_context_graphs_have_day_switch_contract():

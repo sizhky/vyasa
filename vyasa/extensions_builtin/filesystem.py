@@ -28,6 +28,10 @@ def filesystem_mounts():
         if alias and alias not in seen:
             seen.add(alias)
             mounts.append((alias, Path(root).resolve()))
+    for alias, path in cfg.get_git_mounts():
+        if alias and alias not in seen:
+            seen.add(alias)
+            mounts.append((alias, path))
     return mounts
 
 

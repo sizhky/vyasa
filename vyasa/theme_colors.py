@@ -68,6 +68,29 @@ def _contrast_ratio(l1: float, l2: float) -> float:
     return (hi + 0.05) / (lo + 0.05)
 
 
+# Dark surfaces clamped to fixed OKLch lightness + low chroma, so every theme lands
+# at the same comfortable darkness regardless of how bright its primary is.
+# (name, target lightness, max chroma)
+_DARK_SURFACES = (
+    ("theme_dark_paper", 0.165, 0.020),
+    ("theme_dark_paper_low", 0.205, 0.026),
+    ("theme_dark_paper_raised", 0.240, 0.032),
+    ("theme_dark_paper_accent", 0.290, 0.040),
+)
+
+
+def _rgb_to_hex(rgb: tuple[float, float, float]) -> str:
+    return "#" + "".join(f"{round(max(0.0, min(1.0, c)) * 255):02x}" for c in rgb)
+
+
+def _dark_surfaces(hue: float, chroma: float) -> dict[str, str]:
+    base = min(chroma, _MAX_C)
+    return {
+        name: _rgb_to_hex(_oklch_to_rgb(light, min(base, cap), hue))
+        for name, light, cap in _DARK_SURFACES
+    }
+
+
 def normalize_theme_primary(color: str) -> dict[str, str]:
     rgb = _hex_to_rgb(color)
     if rgb is None:
@@ -85,4 +108,5 @@ def normalize_theme_primary(color: str) -> dict[str, str]:
         "theme_primary_dim": primary_dim,
         "theme_primary_text": primary_text,
         "theme_dark_primary_text": primary_text,
+        **_dark_surfaces(hue, chroma),
     }

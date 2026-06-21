@@ -12,6 +12,10 @@
 .vyasa-task-node-card-value li > p { margin: 0; }
 .vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }
 .vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }
+.vyasa-task-node-card-row:hover .vyasa-task-node-card-copy,
+.vyasa-task-node-card-row:focus-within .vyasa-task-node-card-copy { opacity: 0.72; pointer-events: auto; }
+.vyasa-task-node-card-copy { position: absolute; top: 8px; right: 0; width: 20px; height: 20px; border: 0; border-radius: 6px; background: color-mix(in srgb, var(--vyasa-paper) 92%, transparent); color: inherit; cursor: pointer; font-size: 12px; line-height: 1; opacity: 0; pointer-events: none; transition: opacity 120ms ease, background 120ms ease; }
+.vyasa-task-node-card-copy:hover { opacity: 1; background: color-mix(in srgb, var(--vyasa-primary) 14%, var(--vyasa-paper)); }
 .vyasa-task-slide-description { display: block; min-width: 0; max-width: 100%; white-space: normal; }
 .vyasa-task-slide-description > :first-child { margin-top: 0 !important; }
 .vyasa-task-slide-description > :last-child { margin-bottom: 0 !important; }

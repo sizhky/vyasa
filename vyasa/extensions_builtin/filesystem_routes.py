@@ -13,11 +13,29 @@ class FilesystemRoutesExtension(VyasaExtensionBase):
         app.routes.static_build("cap:static_copy:filesystem_routes", copy_static_filesystem_routes)
 
 
+def _ref_blob_response(path: str, suffix: str, *, media_type=None, headers=None):
+    """A Response for a git-ref-served blob, or None when disk-served."""
+    import mimetypes
+
+    from starlette.responses import Response
+
+    from ..content_tree import resolve_ref_blob
+
+    data = resolve_ref_blob(path, suffix)
+    if data is None:
+        return None
+    guessed = media_type or mimetypes.guess_type(f"x{suffix}")[0] or "application/octet-stream"
+    return Response(data, media_type=guessed, headers=headers)
+
+
 def _register_filesystem_routes(rt, runtime) -> None:
     from starlette.responses import FileResponse, Response
 
     @rt("/posts/{path:path}.md")
     def serve_post_markdown(path: str):
+        ref = _ref_blob_response(path, ".md", media_type="text/markdown; charset=utf-8")
+        if ref is not None:
+            return ref
         services = get_runtime_services()
         file_path = services.content_path_for_slug(path, ".md")
         if file_path and file_path.exists():
@@ -26,6 +44,9 @@ def _register_filesystem_routes(rt, runtime) -> None:
 
     @rt("/posts/{path:path}.{ext:static}")
     def serve_post_static(path: str, ext: str):
+        ref = _ref_blob_response(path, f".{ext}")
+        if ref is not None:
+            return ref
         services = get_runtime_services()
         file_path = services.content_path_for_slug(path, f".{ext}")
         if file_path and file_path.exists():
@@ -34,6 +55,9 @@ def _register_filesystem_routes(rt, runtime) -> None:
 
     @rt("/posts/{path:path}.jsx")
     def serve_post_jsx(path: str):
+        ref = _ref_blob_response(path, ".jsx", media_type="text/javascript; charset=utf-8")
+        if ref is not None:
+            return ref
         services = get_runtime_services()
         file_path = services.content_path_for_slug(path, ".jsx")
         if file_path and file_path.exists():
@@ -42,6 +66,10 @@ def _register_filesystem_routes(rt, runtime) -> None:
 
     @rt("/posts/{path:path}.json")
     def serve_post_json(path: str):
+        name = f"{path.rsplit('/', 1)[-1]}.json"
+        ref = _ref_blob_response(path, ".json", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+        if ref is not None:
+            return ref
         services = get_runtime_services()
         file_path = services.content_path_for_slug(path, ".json")
         if file_path and file_path.exists():
@@ -53,6 +81,10 @@ def _register_filesystem_routes(rt, runtime) -> None:
 
     @rt("/download/{path:path}")
     def download_file(path: str):
+        name = path.rsplit("/", 1)[-1]
+        ref = _ref_blob_response(path, "", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+        if ref is not None:
+            return ref
         services = get_runtime_services()
         file_path = services.content_path_for_slug(path)
         if not file_path:

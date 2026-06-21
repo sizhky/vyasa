@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vyasa"
-version = "0.6.57"
+version = "0.6.58"
 description = "A lightweight, elegant blogging platform built with FastHTML"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -34,6 +34,7 @@ dependencies = [
     "monsterui>=0.0.37",
     "loguru>=0.7.3",
     "fastsql>=2.1.2",
+    "dulwich>=0.22.0",
 ]
 
 [project.optional-dependencies]
@@ -48,6 +49,7 @@ auth = [
 
 [project.scripts]
 vyasa = "vyasa.main:cli"
+vyasa-fetch = "vyasa.git_fetcher:main"
 
 [project.urls]
 Homepage = "https://github.com/yeshwanth/vyasa"

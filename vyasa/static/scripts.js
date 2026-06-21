@@ -1702,6 +1702,12 @@ function closeThemePresetMenus() {
     });
 }
 
+function closeRefSwitchers() {
+    document.querySelectorAll('details.vyasa-ref-switcher[open]').forEach((details) => {
+        details.open = false;
+    });
+}
+
 function initFloatingUiDismiss() {
     if (window.__vyasaFloatingUiDismissBound) return;
     window.__vyasaFloatingUiDismissBound = true;
@@ -1712,11 +1718,15 @@ function initFloatingUiDismiss() {
         if (!event.target.closest('[data-theme-switcher]')) {
             closeThemePresetMenus();
         }
+        if (!event.target.closest('.vyasa-ref-switcher')) {
+            closeRefSwitchers();
+        }
     });
     document.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape') return;
         closeNavbarSearchResults();
         closeThemePresetMenus();
+        closeRefSwitchers();
     });
 }
 
