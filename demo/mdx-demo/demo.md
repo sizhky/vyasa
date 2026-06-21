@@ -16,6 +16,8 @@ Canvas editing, pan, zoom, selection, drawing tools, and scene state come from E
 
 <Excalidraw id="mdx-roadmap" />
 
+<Excalidraw id="vyasa-bugs" />
+
 ## Vega-Lite
 This uses Vega-Lite's official interactive movies dashboard pattern: click genre bars, and the rating heatmap cross-highlights the selected genre.
 

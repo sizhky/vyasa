@@ -68,7 +68,16 @@ function Excalidraw({ id, height }) {
   const loadScene = React.useCallback(async () => {
     clearTimeout(timer.current);
     const response = await fetch(fileUrl);
-    const data = response.ok ? await response.json() : await fetch(stateFile).then(item => item.json());
+    let data = {};
+    if (response.ok) {
+      data = await response.json();
+    } else {
+      const fallback = await fetch(stateFile);
+      if (fallback.ok) data = await fallback.json();
+      else if (response.status !== 404 || fallback.status !== 404) {
+        throw new Error(`Failed to load Excalidraw scene: ${response.status}/${fallback.status}`);
+      }
+    }
     const saved = savedScene(data);
     const next = durableScene(saved.elements, saved.appState, saved.files);
     next.appState = { ...next.appState, ...loadPrefs() };
@@ -150,7 +159,7 @@ function Excalidraw({ id, height }) {
   const Canvas = window.ExcalidrawLib?.Excalidraw;
   if (!scene || !Canvas) return React.createElement('div', null, status || 'Loading Excalidraw...');
   const banner = readonly ? 'Read-only — editing disabled here\nsee vyasa documentation to learn how to make it editable' : (status || 'Saved');
-  return React.createElement('div', null,
+  return React.createElement('div', { style: { paddingTop: 24 } },
     React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 8 } },
       React.createElement('span', { style: { fontSize: 13, opacity: readonly ? 1 : 0.72, fontWeight: readonly ? 600 : 400, whiteSpace: 'pre-line' } }, banner),
       React.createElement('button', { onClick: loadScene }, 'Reload saved canvas')),
