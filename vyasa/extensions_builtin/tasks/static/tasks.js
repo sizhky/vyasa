@@ -7005,7 +7005,8 @@ async function renderTasksGraphs(rootElement = document) {
             };
             const SlideShow = () => {
                 if (!slides.length || slideIndex < 0) return null;
-                const navBtn = (disabled) => ({ border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 88%, transparent)', borderRadius: '7px', padding: '5px 11px', fontSize: '12px', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1 });
+                const navBtn = (disabled) => ({ flex: '0 0 34px', width: '34px', height: '34px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 88%, transparent)', borderRadius: '8px', padding: 0, fontSize: '18px', lineHeight: 1, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1 });
+                const jumpSelectStyle = { flex: '1 1 auto', minWidth: 0, height: '34px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', color: 'inherit', borderRadius: '8px', padding: '0 8px', fontSize: '12px', fontWeight: 700, textAlign: 'center' };
                 const slide = slides[slideIndex] || {};
                 const slideDescriptionHtml = slide.__rendered_attrs__?.desc || slide.__rendered_attrs__?.description || '';
                 const slideDescriptionText = slide.desc || slide.description || '';
@@ -7015,6 +7016,16 @@ async function renderTasksGraphs(rootElement = document) {
                 return window.React.createElement('aside', {
                     style: { flex: `0 0 ${panelWidth}`, width: panelWidth, minWidth: 0, height: '100%', marginLeft: '-12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: '16px', borderRadius: '14px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 26%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 95%, transparent)', boxShadow: '0 14px 36px rgba(0,0,0,0.16)', pointerEvents: 'auto' },
                 },
+                    window.React.createElement('div', { className: 'vyasa-task-slide-nav', style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid color-mix(in srgb, var(--vyasa-primary) 14%, transparent)' } },
+                        window.React.createElement('button', { type: 'button', 'aria-label': 'Previous slide', onClick: () => go(-1), disabled: slideIndex <= 0, style: navBtn(slideIndex <= 0) }, '‹'),
+                        window.React.createElement('select', {
+                            'aria-label': 'Jump to slide',
+                            value: String(slideIndex),
+                            onChange: (event) => setSlideIndex(Number(event.target.value)),
+                            style: jumpSelectStyle,
+                        }, slides.map((entry, index) => window.React.createElement('option', { key: entry.id || index, value: String(index) }, `${index + 1} / ${slides.length}`))),
+                        window.React.createElement('button', { type: 'button', 'aria-label': 'Next slide', onClick: () => go(1), disabled: slideIndex >= slides.length - 1, style: navBtn(slideIndex >= slides.length - 1) }, '›')
+                    ),
                     window.React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' } },
                         window.React.createElement('strong', { style: { fontSize: '16px' } }, slide.title || `Slide ${slideIndex + 1}`),
                         window.React.createElement('button', { type: 'button', onClick: close, style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', lineHeight: 1, opacity: 0.6 } }, '×')
@@ -7033,11 +7044,6 @@ async function renderTasksGraphs(rootElement = document) {
                                 style: { width: '100%', height: '100%', minHeight: '0', resize: 'vertical', boxSizing: 'border-box', borderRadius: '10px', border: '1px solid color-mix(in srgb, currentColor 14%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 97%, transparent)', color: 'inherit', padding: '10px 11px', fontSize: '12.5px', lineHeight: 1.5 },
                             })
                         )
-                    ),
-                    window.React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid color-mix(in srgb, var(--vyasa-primary) 14%, transparent)' } },
-                        window.React.createElement('button', { type: 'button', onClick: () => go(-1), disabled: slideIndex <= 0, style: navBtn(slideIndex <= 0) }, '‹ Prev'),
-                        window.React.createElement('span', { style: { fontSize: '11px', opacity: 0.6 } }, `${slideIndex + 1} / ${slides.length}`),
-                        window.React.createElement('button', { type: 'button', onClick: () => go(1), disabled: slideIndex >= slides.length - 1, style: navBtn(slideIndex >= slides.length - 1) }, 'Next ›')
                     )
                 );
             };

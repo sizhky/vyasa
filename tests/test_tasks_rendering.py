@@ -1045,6 +1045,19 @@ def test_slide_notes_panel_uses_stable_render_helper():
     assert "window.React.createElement(SlideShow)" not in render_source
 
 
+def test_tasks_slide_show_nav_stays_above_title_and_supports_jump_select():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    slide_source = source.split("const SlideShow = () => {", 1)[1].split("const DragSelectionOverlay = () => {", 1)[0]
+
+    assert "className: 'vyasa-task-slide-nav'" in slide_source
+    assert "'aria-label': 'Jump to slide'" in slide_source
+    assert "'aria-label': 'Previous slide'" in slide_source
+    assert "'aria-label': 'Next slide'" in slide_source
+    assert "onChange: (event) => setSlideIndex(Number(event.target.value))" in slide_source
+    assert slide_source.index("className: 'vyasa-task-slide-nav'") < slide_source.index("slide.title || `Slide ${slideIndex + 1}`")
+    assert "`${index + 1} / ${slides.length}`" in slide_source
+
+
 def test_context_graphs_have_day_switch_contract():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
