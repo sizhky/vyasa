@@ -63,12 +63,15 @@ code, pre { font-family: var(--vyasa-font-mono); }
 }
 .dark,
 .dark #page-container {
-    --vyasa-paper: var(--vyasa-dark-paper, color-mix(in srgb, #14201c 60%, var(--vyasa-primary) 40%)) !important;
-    --vyasa-paper-low: var(--vyasa-dark-paper-low, color-mix(in srgb, #182622 54%, var(--vyasa-primary) 46%)) !important;
-    --vyasa-paper-raised: var(--vyasa-dark-paper-raised, color-mix(in srgb, #1d2d28 50%, var(--vyasa-primary) 50%)) !important;
-    --vyasa-paper-accent: var(--vyasa-dark-paper-accent, color-mix(in srgb, #223631 44%, var(--vyasa-primary) 56%)) !important;
-    --vyasa-ink: var(--vyasa-dark-ink, #edf2f1) !important;
-    --vyasa-ink-soft: var(--vyasa-dark-ink-soft, #b5c3bf) !important;
+    /* Dark surfaces: keep them dark and calm. Only a hint of primary so the canvas
+       reads near-#121212, not a bright saturated wash. Raised > paper = inverted elevation. */
+    --vyasa-paper: var(--vyasa-dark-paper, color-mix(in srgb, #0e1513 86%, var(--vyasa-primary) 14%)) !important;
+    --vyasa-paper-low: var(--vyasa-dark-paper-low, color-mix(in srgb, #121b18 82%, var(--vyasa-primary) 18%)) !important;
+    --vyasa-paper-raised: var(--vyasa-dark-paper-raised, color-mix(in srgb, #16211d 78%, var(--vyasa-primary) 22%)) !important;
+    --vyasa-paper-accent: var(--vyasa-dark-paper-accent, color-mix(in srgb, #1b2823 72%, var(--vyasa-primary) 28%)) !important;
+    /* Lift dark text toward white for legibility (keeps a faint theme tint, avoids pure #fff halation). */
+    --vyasa-ink: color-mix(in srgb, var(--vyasa-dark-ink, #edf2f1) 55%, #ffffff 45%) !important;
+    --vyasa-ink-soft: color-mix(in srgb, var(--vyasa-dark-ink-soft, #b5c3bf) 60%, #ffffff 40%) !important;
     --vyasa-outline-ghost: var(--vyasa-dark-outline-ghost, rgba(181, 195, 191, 0.2)) !important;
     --vyasa-code-fg: var(--vyasa-dark-code-fg, #edf2f1) !important;
     --vyasa-code-bg: var(--vyasa-dark-code-bg, color-mix(in srgb, #17202a 82%, var(--vyasa-primary) 18%)) !important;
@@ -111,6 +114,10 @@ html, body { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) 
 body.bg-background, body.text-foreground { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
 #page-container { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; min-height: 100vh; }
 .dark #page-container { background: var(--vyasa-paper) !important; color: var(--vyasa-ink) !important; }
+/* Dim raster media in dark mode so bright images don't glare; opt out with .vyasa-no-dim. */
+.dark img:not(.vyasa-no-dim):not([src$=".svg"]),
+.dark video:not(.vyasa-no-dim) { filter: brightness(0.86) contrast(1.04); transition: filter 200ms ease; }
+.dark img:hover:not(.vyasa-no-dim):not([src$=".svg"]) { filter: none; }
 h1, h2, h3, h4, h5, h6 {
     font-family: var(--vyasa-font-heading);
     color: var(--vyasa-ink);
@@ -396,11 +403,14 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
 }
 
 .vyasa-navbar-card {
-    background: var(--vyasa-primary) !important;
-    color: var(--vyasa-primary-text) !important;
+    /* Local override: navbar text/controls follow ink so they track light/dark.
+       Cascades to descendants (search trigger, input, icons) that reference it. */
+    --vyasa-primary-text: var(--vyasa-ink);
+    background: color-mix(in srgb, var(--vyasa-paper-raised) 90%, var(--vyasa-primary) 10%) !important;
+    color: var(--vyasa-ink) !important;
     border-radius: 0 !important;
     box-shadow: none;
-    border-bottom: 1px solid color-mix(in srgb, var(--vyasa-primary-text) 14%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent);
 }
 
 .vyasa-footer-card {
@@ -417,7 +427,14 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
 
 .vyasa-navbar-card button:hover,
 .vyasa-navbar-card summary:hover {
-    background: rgba(242, 244, 243, 0.14) !important;
+    background: color-mix(in srgb, var(--vyasa-primary) 14%, transparent) !important;
+    color: var(--vyasa-ink) !important;
+}
+.vyasa-navbar-card button:hover [uk-icon],
+.vyasa-navbar-card summary:hover [uk-icon],
+.vyasa-navbar-card button:hover svg,
+.vyasa-navbar-card summary:hover svg {
+    color: var(--vyasa-ink) !important;
 }
 
 .vyasa-navbar-search-trigger {

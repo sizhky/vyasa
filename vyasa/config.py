@@ -254,7 +254,8 @@ class VyasaConfig:
                 if key == "theme_primary":
                     continue
                 token_name = key.removeprefix("theme_").replace("_", "-")
-                tokens[token_name] = value
+                # Explicit theme TOML values win over auto-derived ones.
+                tokens.setdefault(token_name, value)
         return tokens
     
     def get_host(self) -> str:
