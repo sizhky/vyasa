@@ -658,17 +658,10 @@ def _build_ref_tree(refs):
     return root
 
 
-_REF_ROW_STYLE = (
-    "display:flex;align-items:center;justify-content:flex-start;text-align:left;"
-    "box-sizing:border-box;width:100%;min-height:1.9rem;gap:0.4rem;"
-    "padding:0.25rem 0.5rem;line-height:1.25;font-size:0.8125rem;font-weight:400;"
-)
-
-
 def _ref_row_style(depth):
-    """Shared row style; depth is rendered as left padding so every level keeps
-    the same height/font and a full-width highlight (only the text shifts in)."""
-    return f"{_REF_ROW_STYLE}padding-left:{0.5 + depth * 0.9:.3f}rem;"
+    """Only the depth indent is inline; all other row chrome lives in the
+    `.vyasa-ref-row` CSS class so every level renders identically."""
+    return f"padding-left:{0.5 + depth * 0.9:.3f}rem"
 
 
 def _render_ref_nodes(node, alias, current, current_path, active, storage_key, open_parts, depth=1):
@@ -681,11 +674,10 @@ def _render_ref_nodes(node, alias, current, current_path, active, storage_key, o
             Summary(
                 UkIcon("folder", cls="w-3.5 h-3.5 opacity-60 shrink-0"),
                 Span(f"{seg}/", cls="truncate"),
-                cls="vyasa-emphasis-control-option list-none cursor-pointer [&::-webkit-details-marker]:hidden",
+                cls="vyasa-ref-row vyasa-emphasis-control-option",
                 style=_ref_row_style(depth),
             ),
-            Ul(*_render_ref_nodes(node[seg], alias, current, current_path, active, storage_key, open_parts[1:] if is_open else [], depth + 1),
-               cls="list-none", style="margin:0;padding:0"),
+            Ul(*_render_ref_nodes(node[seg], alias, current, current_path, active, storage_key, open_parts[1:] if is_open else [], depth + 1)),
             open=is_open,
         )))
     for name, kind, is_default in node["_leaves"]:
@@ -696,7 +688,7 @@ def _render_ref_nodes(node, alias, current, current_path, active, storage_key, o
             UkIcon("tag", cls="w-3 h-3 opacity-50 ml-auto") if kind == "tag" else "",
             type="button",
             onclick=f"try{{localStorage.setItem('{storage_key}','{name}');}}catch(e){{}};window.location='{url}';",
-            cls="vyasa-emphasis-control-option",
+            cls="vyasa-ref-row vyasa-emphasis-control-option",
             style=_ref_row_style(depth),
         )))
     return out
@@ -727,7 +719,7 @@ def _navbar_ref_switcher(current_path=None):
             UkIcon("refresh-cw", cls="w-3.5 h-3.5"),
             type="button", title="Fetch & refresh branches",
             onclick="event.stopPropagation();event.preventDefault();var i=this.querySelector('svg');if(i)i.classList.add('animate-spin');fetch('/_vyasa/refresh-refs',{method:'GET'}).finally(function(){window.location.reload();});",
-            cls="vyasa-emphasis-control-option ml-1 shrink-0 rounded p-1",
+            cls="vyasa-ref-refresh ml-1 shrink-0 rounded p-1",
         )
         root_blocks.append(Li(Details(
             Summary(
@@ -735,10 +727,10 @@ def _navbar_ref_switcher(current_path=None):
                 Span(alias or "(primary)", cls="truncate"),
                 refresh_btn,
                 Span(current, cls="opacity-60 ml-auto truncate max-w-[7rem]"),
-                cls="vyasa-emphasis-control-option list-none cursor-pointer [&::-webkit-details-marker]:hidden",
+                cls="vyasa-ref-row vyasa-emphasis-control-option",
                 style=_ref_row_style(0),
             ),
-            Ul(*ref_items, cls="list-none", style="margin:0;padding:0"),
+            Ul(*ref_items),
             open=active,
             cls="vyasa-ref-root",
         ), cls="my-0.5"))
@@ -748,7 +740,7 @@ def _navbar_ref_switcher(current_path=None):
             UkIcon("git-branch", cls="w-4 h-4"), Span("Branches", cls="hidden sm:inline"), Span("⌄", cls="opacity-70"),
             cls="list-none flex items-center gap-2 cursor-pointer select-none rounded-md px-3 py-2 text-slate-100 hover:bg-slate-800/80 transition-colors [&::-webkit-details-marker]:hidden",
         ),
-        Div(Ul(*root_blocks, cls="list-none", style="margin:0;padding:0"), cls="vyasa-emphasis-control-menu absolute right-0 mt-2 w-72 z-[1100] max-h-[70vh] overflow-y-auto"),
+        Div(Ul(*root_blocks), cls="vyasa-emphasis-control-menu absolute right-0 mt-2 w-72 z-[1100] max-h-[70vh] overflow-y-auto"),
         cls="vyasa-ref-switcher relative",
     )
 
