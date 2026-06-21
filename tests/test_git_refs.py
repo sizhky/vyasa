@@ -117,18 +117,16 @@ def test_sidebar_uncommitted_dot_for_dirty_primary_clone_file(tmp_path, monkeypa
         core._uncommitted_slugs.cache_clear()
 
 
-def test_ref_picker_lists_branches_tags_and_marks_current(site):
-    from fasthtml.common import to_xml
+def test_ref_markdown_shows_branch_badge_in_meta_line(site):
+    from fasthtml.common import Span, to_xml
 
-    from vyasa.content_routes import _ref_picker_node
+    from vyasa.document_pages import meta_line
+
+    ref_badge = Span("feature", cls="vyasa-ref-badge")
+    html = to_xml(meta_line("hello world", meta_extra=ref_badge))
+    assert "vyasa-ref-badge" in html and ">feature<" in html and "-min read" in html
+    # the clone's current branch is disk-served, so no ref doc there
     from vyasa.content_tree import resolve_ref_document
-
-    work = site.parent / "repo"
-    _git(work, "tag", "v1")
-    html = to_xml(_ref_picker_node(resolve_ref_document("repo@feature/feat")))
-    assert ">feature<" in html and "main (default)" in html and ">v1<" in html
-    assert 'value="feature"' in html and "selected" in html
-    # the clone's current branch is disk-served, so no ref doc / picker there
     assert resolve_ref_document("repo/a") is None
 
 
@@ -147,7 +145,7 @@ def test_navbar_ref_switcher_discovers_all_git_roots(site):
         html = to_xml(sw)
         assert "repo" in html  # the git root is listed
         assert ">main<" in html and ">feature<" in html and ">v1<" in html
-        assert "repo%40feature" in html  # ref target carries the root@ref
+        assert "/posts/repo?ref=feature" in html  # ref target carries the ref as a query param
     core._git_roots_with_refs.cache_clear()
 
 
@@ -185,7 +183,7 @@ def test_branch_page_keeps_all_roots(tmp_path, monkeypatch):
         assert "/posts/home" in html
         assert "note1" in html or "Note One" in html
         # ...and the viewed root shows its branch content (ref-carrying link)
-        assert "repo%40feature/feat" in html
+        assert "repo/feat?ref=feature" in html
     finally:
         reload_config()
         core._nav_entries_cache.clear()
@@ -197,7 +195,7 @@ def test_sidebar_tree_built_for_a_ref(site):
 
     items = core.build_ref_post_tree("repo", "feature", roles=[])
     html = to_xml(Ul(*items))
-    assert "repo%40feature/feat" in html  # feature-only file, ref-carrying link
-    assert "repo%40feature/a" in html
+    assert "repo/feat?ref=feature" in html  # feature-only file, ref-carrying link
+    assert "repo/a?ref=feature" in html
     # disk-served ref (current branch) -> None, caller uses disk tree
     assert core.build_ref_post_tree("repo", "main", roles=[]) is None

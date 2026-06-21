@@ -174,6 +174,9 @@ def content_location(slug: str | Path, *, ref_override: str = "") -> tuple[str, 
     body = list(parts)
     if parts and "@" in parts[0]:
         alias, ref = parts[0].split("@", 1)
+        # ref slashes are packed as ':' in the slug (git refnames forbid ':'),
+        # so a ref like 'tmp/testing-vyasa' survives the path-segment split.
+        ref = ref.replace(":", "/")
         body = [alias, *parts[1:]]
     mounts = get_content_mounts()
     for alias, root in mounts:
@@ -212,8 +215,19 @@ def content_slug_for_path(path: Path, strip_suffix: bool = True) -> str | None:
     return None
 
 def content_url_for_slug(slug: str | Path, prefix: str = "/posts", suffix: str = "", fragment: str | None = None) -> str:
-    encoded = quote(str(slug).strip("/"), safe="/")
+    raw = str(slug).strip("/")
+    ref_query = ""
+    if raw:
+        first, sep, rest = raw.partition("/")
+        if "@" in first:
+            # internal slug carries the git ref as `alias@ref` (ref slashes
+            # packed as ':'). Render it as a clean `?ref=` query instead.
+            alias, ref = first.split("@", 1)
+            raw = f"{alias}/{rest}" if rest else alias
+            ref_query = f"?ref={quote(ref.replace(':', '/'), safe='/')}"
+    encoded = quote(raw.strip("/"), safe="/")
     url = f"{prefix.rstrip('/')}/{encoded}{suffix}" if encoded else prefix.rstrip("/") or "/"
+    url = f"{url}{ref_query}"
     return f"{url}#{quote(fragment, safe='-._~')}" if fragment else url
 
 def enabled_document_types() -> tuple[dict[str, str], ...]:

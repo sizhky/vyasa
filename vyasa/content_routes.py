@@ -94,68 +94,28 @@ def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, inc
     return Div(*items, cls="vyasa-breadcrumbs mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400")
 
 
-def _ref_picker_node(ref_doc):
-    """A branch/tag selector for a git-served page. Switching navigates to
-    the ref (full reload) and remembers the pick per root in localStorage.
-    None when the root exposes no selectable refs."""
-    from fasthtml.common import Option, Script, Select
-    from .content_backend import backend_for, classify_root
-    from .helpers import content_location, content_url_for_slug
+def _ref_badge(name):
+    """Small branch/tag chip shown in a document's meta line."""
+    return Span(UkIcon("git-branch", cls="w-3.5 h-3.5"), Span(name or "default"), cls="vyasa-ref-badge inline-flex items-center gap-1")
 
-    root_id, root_path, _, _ = content_location(ref_doc.slug)
-    if root_path is None:
-        return None
-    backend, _ = backend_for(classify_root(root_path), ref_doc.ref, root_id)
-    refs = backend.list_refs()
-    if not refs:
-        return None
-    rel = ref_doc.relative[:-3] if ref_doc.relative.endswith(".md") else ref_doc.relative
-    default_ref = next((r.name for r in refs if r.is_default), "")
-    current = ref_doc.ref or default_ref
 
-    def target(ref_name):
-        prefix = f"{root_id}@{ref_name}" if root_id else ref_name
-        return content_url_for_slug(f"{prefix}/{rel}".strip("/"))
+def _current_branch_for(root):
+    """The checked-out branch when `root` is a working clone, else "" (plain
+    folders / bare mirrors have no working branch to surface)."""
+    from .content_backend import classify_root
 
-    branches = [r for r in refs if r.kind == "branch"]
-    tags = [r for r in refs if r.kind == "tag"]
-    options = [
-        Option(f"{r.name}{' (default)' if r.is_default else ''}", value=r.name, selected=(r.name == current))
-        for group in (branches, tags) for r in group
-    ]
-    storage_key = f"vyasa-ref:{root_id}"
-    ref_urls = json.dumps({r.name: target(r.name) for r in refs})
-    on_default = not bool(ref_doc.ref)  # showing the repo's default ref
-    # Persist on switch + navigate; and on a fresh default-ref landing, honour
-    # a previously remembered ref by redirecting once.
-    boot = (
-        f"(function(){{try{{var U={ref_urls},K={storage_key!r},C={current!r};"
-        f"var s=localStorage.getItem(K);"
-        f"if({str(on_default).lower()}&&s&&s!==C&&U[s]){{location.replace(U[s]);}}"
-        f"}}catch(e){{}}}})();"
-    )
-    return Div(
-        UkIcon("git-branch", cls="w-3 h-3 opacity-70"),
-        Select(
-            *options,
-            cls="vyasa-ref-select bg-transparent text-xs border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5",
-            onchange=(
-                f"try{{localStorage.setItem('{storage_key}', this.value);}}catch(e){{}};"
-                f"var U={ref_urls}; if(U[this.value]) window.location=U[this.value];"
-            ),
-            aria_label="Select git ref",
-        ),
-        Script(boot),
-        cls="vyasa-ref-picker inline-flex items-center gap-1",
-    )
+    try:
+        rc = classify_root(root)
+        return rc.current_branch if rc.kind == "clone" else ""
+    except Exception:
+        return ""
 
 
 def _render_ref_markdown(ref_doc, *, path, htmx, request, slug_to_title, layout, get_blog_title, from_md, not_found):
     """Render a markdown document served from a git ref (object store)."""
     abbreviations = {}
     breadcrumbs = _breadcrumbs(path, slug_to_title, abbreviations)
-    picker = _ref_picker_node(ref_doc)
-    ref_badge = Span(UkIcon("git-branch", cls="w-3 h-3"), Span(ref_doc.ref or "default"), cls="vyasa-ref-badge inline-flex items-center gap-1 text-xs opacity-70")
+    ref_badge = _ref_badge(ref_doc.ref)
     if not ref_doc.found:
         body = Div(
             H1(f"Not present on {ref_doc.ref}", cls="mb-2"),
@@ -164,8 +124,7 @@ def _render_ref_markdown(ref_doc, *, path, htmx, request, slug_to_title, layout,
         )
         return DocumentPage(f"Not on {ref_doc.ref}", path, body, toc_source="").render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
     content = Div(
-        document_header(ref_doc.title, ref_doc.body, actions=(), breadcrumbs=breadcrumbs),
-        Div(ref_badge, picker if picker else Div(), cls="mb-3 flex items-center gap-3"),
+        document_header(ref_doc.title, ref_doc.body, actions=(), breadcrumbs=breadcrumbs, meta_extra=ref_badge),
         from_md(strip_more_marker(ref_doc.body), current_path=path),
         cls="w-full",
     )
@@ -224,6 +183,12 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     logger.info(f"\n[DEBUG] ########## REQUEST START: /posts/{path} ##########")
     ref_override = request.query_params.get("ref", "") if hasattr(request, "query_params") else ""
     root_id, root_path, ref, relative = content_location(path, ref_override=ref_override)
+    if root_id and ref and "@" not in Path(path.strip("/")).parts[0]:
+        # ref arrived as `?ref=` on a named root — fold it back into the
+        # internal `alias@ref` slug so the render + sidebar pipeline is uniform.
+        rel = relative.as_posix()
+        packed = f"{root_id}@{ref.replace('/', ':')}"
+        path = f"{packed}/{rel}" if rel and rel != "." else packed
     if root_path is not None:
         from .content_tree import resolve_ref_document
         ref_doc = resolve_ref_document(path, ref_override=ref_override)
@@ -296,8 +261,9 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
     )
     actions = ((error_chip,) if error_chip else ()) + document_actions
     uncommitted_banner = _uncommitted_banner(root, file_path)
+    disk_branch = _current_branch_for(root)
     post_content = Div(
-        document_header(post_title, read_source, actions=actions, breadcrumbs=breadcrumbs, file_path=file_path),
+        document_header(post_title, read_source, actions=actions, breadcrumbs=breadcrumbs, file_path=file_path, meta_extra=_ref_badge(disk_branch) if disk_branch else None),
         uncommitted_banner if uncommitted_banner else Div(),
         frontmatter_metadata_block(metadata) or Div(),
         error_toast if error_toast else Div(),

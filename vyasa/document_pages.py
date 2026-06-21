@@ -118,11 +118,13 @@ def resolve_document_actions(context: DocumentActionContext) -> tuple[tuple[Any,
     return actions, aux_nodes
 
 
-def meta_line(source_text: str, file_path=None):
+def meta_line(source_text: str, file_path=None, meta_extra=None):
     items = [Span(f"{estimate_read_time_minutes(source_text)}-min read")]
     label = format_last_modified_label(file_path) if file_path else None
     if label:
         items.extend([Span("•", aria_hidden="true"), Span(label)])
+    if meta_extra is not None:
+        items.extend([Span("•", aria_hidden="true"), meta_extra])
     return P(*items, cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2 flex flex-wrap items-center gap-2")
 
 
@@ -195,11 +197,11 @@ def action_row(*actions):
     return Div(*actions, cls="flex items-center gap-2 flex-wrap", data_vyasa_page_actions="true")
 
 
-def document_header(title: str, source_text: str, *, actions=(), breadcrumbs=None, file_path=None):
+def document_header(title: str, source_text: str, *, actions=(), breadcrumbs=None, file_path=None, meta_extra=None):
     return Div(
         breadcrumbs,
         Div(H1(title, cls=PAGE_TITLE_CLS), action_row(*actions), cls="flex items-start justify-between gap-4 flex-wrap"),
-        meta_line(source_text, file_path),
+        meta_line(source_text, file_path, meta_extra),
         cls="mb-8",
     )
 

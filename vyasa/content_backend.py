@@ -286,7 +286,8 @@ class VirtualPath:
     @property
     def slug(self) -> str:
         if self.ref:
-            prefix = f"{self.root_id}@{self.ref}" if self.root_id else self.ref
+            # pack ref slashes as ':' so 'alias@tmp/x' stays one path segment
+            prefix = f"{self.root_id}@{self.ref.replace('/', ':')}" if self.root_id else self.ref
         else:
             prefix = self.root_id  # default ref -> no @ suffix
         return f"{prefix}/{self.rel}".strip("/") if self.rel else prefix

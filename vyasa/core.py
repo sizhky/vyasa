@@ -504,6 +504,23 @@ async def live_reload():
     if not get_config().get_browser_reload_enabled():
         return Response(status_code=404)
     return StreamingResponse(_live_reload_events(), media_type="text/event-stream")
+
+
+@rt("/_vyasa/refresh-refs")
+def refresh_refs():
+    """Bust the ref-discovery cache and fetch mirrors so newly-created
+    branches/tags appear immediately. Sync def → runs in a threadpool."""
+    _git_roots_with_refs.cache_clear()
+    try:
+        from .git_fetcher import fetch_all, specs_from_config
+
+        specs, mirror_root = specs_from_config()
+        if specs:
+            fetch_all(specs, mirror_root)
+    except Exception:
+        pass
+    _git_roots_with_refs.cache_clear()
+    return Response(status_code=204)
 def _initialize_app(app_instance):
     _mount_package_static(app_instance)
 
@@ -601,6 +618,8 @@ def _git_roots_with_refs(time_bucket):
             continue
         if not refs:
             continue
+        # branches before tags; then strictly case-insensitive alpha by name.
+        refs.sort(key=lambda r: (0 if r.kind == "branch" else 1, r.name.lower()))
         default = next((r.name for r in refs if r.is_default), "")
         current_branch = rc.current_branch if rc.kind == "clone" else ""
         out.append((alias, default, current_branch or "", tuple((r.name, r.kind, r.is_default) for r in refs)))
@@ -608,25 +627,85 @@ def _git_roots_with_refs(time_bucket):
 
 
 def _ref_target_url(alias, name, current_path):
-    """Where switching `alias` to `name` should land."""
+    """Where switching `alias` to `name` should land: the SAME document you're
+    viewing, but pinned to `name`. Falls back to the root when not on a doc."""
     from .helpers import content_location
 
-    if alias:
-        return content_url_for_slug(f"{alias}@{name}")
-    # primary root: carry the ref as a query param on the current page (or home)
-    base = "/"
+    rel = ""
     if current_path:
-        _, _, _, rel = content_location(current_path)
-        relp = rel.as_posix()
-        base = content_url_for_slug(relp) if relp and relp != "." else "/"
+        _, _, _, relp = content_location(current_path)
+        rp = relp.as_posix()
+        rel = rp if rp and rp != "." else ""
+    if alias:
+        # pack ref slashes as ':' (git refnames forbid ':') to keep one segment
+        slug = f"{alias}@{name.replace('/', ':')}"
+        return content_url_for_slug(f"{slug}/{rel}" if rel else slug)
+    # primary root: carry the ref as a query param on the current page (or home)
+    base = content_url_for_slug(rel) if rel else "/"
     sep = "&" if "?" in base else "?"
     return f"{base}{sep}ref={quote(name, safe='')}"
 
 
+def _build_ref_tree(refs):
+    """Nest refs by their `/` segments. `feat/git-refs` → tree["feat"] leaf.
+    Each node is a dict; "_leaves" holds (name, kind, is_default) at that level."""
+    root = {"_leaves": []}
+    for item in refs:
+        node = root
+        for seg in item[0].split("/")[:-1]:
+            node = node.setdefault(seg, {"_leaves": []})
+        node["_leaves"].append(item)
+    return root
+
+
+_REF_ROW_STYLE = (
+    "display:flex;align-items:center;justify-content:flex-start;text-align:left;"
+    "box-sizing:border-box;width:100%;min-height:1.9rem;gap:0.4rem;"
+    "padding:0.25rem 0.5rem;line-height:1.25;font-size:0.8125rem;font-weight:400;"
+)
+
+
+def _ref_row_style(depth):
+    """Shared row style; depth is rendered as left padding so every level keeps
+    the same height/font and a full-width highlight (only the text shifts in)."""
+    return f"{_REF_ROW_STYLE}padding-left:{0.5 + depth * 0.9:.3f}rem;"
+
+
+def _render_ref_nodes(node, alias, current, current_path, active, storage_key, open_parts, depth=1):
+    """Recursive list items: folders (sorted, collapsed) first, then leaf refs.
+    `open_parts` = remaining segments of the current ref, so its chain auto-opens."""
+    out = []
+    for seg in sorted(k for k in node if k != "_leaves"):
+        is_open = bool(open_parts) and open_parts[0] == seg
+        out.append(Li(Details(
+            Summary(
+                UkIcon("folder", cls="w-3.5 h-3.5 opacity-60 shrink-0"),
+                Span(f"{seg}/", cls="truncate"),
+                cls="vyasa-emphasis-control-option list-none cursor-pointer [&::-webkit-details-marker]:hidden",
+                style=_ref_row_style(depth),
+            ),
+            Ul(*_render_ref_nodes(node[seg], alias, current, current_path, active, storage_key, open_parts[1:] if is_open else [], depth + 1),
+               cls="list-none", style="margin:0;padding:0"),
+            open=is_open,
+        )))
+    for name, kind, is_default in node["_leaves"]:
+        url = _ref_target_url(alias, name, current_path if active else "")
+        out.append(Li(Button(
+            Span("✓" if name == current else "", cls="shrink-0", style="width:0.75rem;display:inline-block"),
+            Span(name.split("/")[-1], cls="truncate"), Span(" (default)" if is_default else "", cls="opacity-60 text-xs"),
+            UkIcon("tag", cls="w-3 h-3 opacity-50 ml-auto") if kind == "tag" else "",
+            type="button",
+            onclick=f"try{{localStorage.setItem('{storage_key}','{name}');}}catch(e){{}};window.location='{url}';",
+            cls="vyasa-emphasis-control-option",
+            style=_ref_row_style(depth),
+        )))
+    return out
+
+
 def _navbar_ref_switcher(current_path=None):
     """Always-visible navbar dropdown of every git-backed root, each
-    expanding to its branches and tags. Picking a ref navigates to that
-    root on the ref and remembers it per root in localStorage."""
+    expanding to a `/`-nested tree of its branches and tags. Picking a ref
+    navigates to that root on the ref and remembers it per root in localStorage."""
     roots = _git_roots_with_refs(int(time.time() // 10))
     if not roots:
         return None
@@ -641,25 +720,25 @@ def _navbar_ref_switcher(current_path=None):
         active = alias == cur_root_id
         current = (cur_ref if active else "") or current_branch or default
         storage_key = f"vyasa-ref:{alias}"
-        ref_items = []
-        for name, kind, is_default in refs:
-            url = _ref_target_url(alias, name, current_path if active else "")
-            ref_items.append(Li(Button(
-                Span("✓" if name == current else "", cls="w-3 inline-block"),
-                Span(name), Span(" (default)" if is_default else "", cls="opacity-60 text-xs"),
-                UkIcon("tag", cls="w-3 h-3 opacity-50 ml-auto") if kind == "tag" else "",
-                type="button",
-                onclick=f"try{{localStorage.setItem('{storage_key}','{name}');}}catch(e){{}};window.location='{url}';",
-                cls="vyasa-emphasis-control-option flex w-full items-center gap-1 px-3 py-1.5 text-left text-sm",
-            )))
+        open_parts = current.split("/")[:-1] if active else []
+        tree = _build_ref_tree(refs)
+        ref_items = _render_ref_nodes(tree, alias, current, current_path, active, storage_key, open_parts)
+        refresh_btn = Button(
+            UkIcon("refresh-cw", cls="w-3.5 h-3.5"),
+            type="button", title="Fetch & refresh branches",
+            onclick="event.stopPropagation();event.preventDefault();var i=this.querySelector('svg');if(i)i.classList.add('animate-spin');fetch('/_vyasa/refresh-refs',{method:'GET'}).finally(function(){window.location.reload();});",
+            cls="vyasa-emphasis-control-option ml-1 shrink-0 rounded p-1",
+        )
         root_blocks.append(Li(Details(
             Summary(
-                UkIcon("folder-git-2", cls="w-4 h-4 shrink-0"),
-                Span(alias or "(primary)", cls="font-medium truncate"),
-                Span(current, cls="opacity-60 text-xs ml-auto truncate max-w-[7rem]"),
-                cls="vyasa-emphasis-control-option list-none flex items-center gap-2 cursor-pointer px-2 py-1.5 [&::-webkit-details-marker]:hidden",
+                UkIcon("folder-git-2", cls="w-3.5 h-3.5 opacity-60 shrink-0"),
+                Span(alias or "(primary)", cls="truncate"),
+                refresh_btn,
+                Span(current, cls="opacity-60 ml-auto truncate max-w-[7rem]"),
+                cls="vyasa-emphasis-control-option list-none cursor-pointer [&::-webkit-details-marker]:hidden",
+                style=_ref_row_style(0),
             ),
-            Ul(*ref_items, cls="list-none pl-3 mt-1 mb-1 border-l", style="border-color:var(--vyasa-emphasis-control-border)"),
+            Ul(*ref_items, cls="list-none", style="margin:0;padding:0"),
             open=active,
             cls="vyasa-ref-root",
         ), cls="my-0.5"))
@@ -669,7 +748,7 @@ def _navbar_ref_switcher(current_path=None):
             UkIcon("git-branch", cls="w-4 h-4"), Span("Branches", cls="hidden sm:inline"), Span("⌄", cls="opacity-70"),
             cls="list-none flex items-center gap-2 cursor-pointer select-none rounded-md px-3 py-2 text-slate-100 hover:bg-slate-800/80 transition-colors [&::-webkit-details-marker]:hidden",
         ),
-        Div(Ul(*root_blocks, cls="list-none"), cls="vyasa-emphasis-control-menu absolute right-0 mt-2 w-72 z-[1100] max-h-[70vh] overflow-y-auto"),
+        Div(Ul(*root_blocks, cls="list-none", style="margin:0;padding:0"), cls="vyasa-emphasis-control-menu absolute right-0 mt-2 w-72 z-[1100] max-h-[70vh] overflow-y-auto"),
         cls="vyasa-ref-switcher relative",
     )
 
@@ -1211,6 +1290,7 @@ def _ref_from_current_path(current_path):
     if not parts or "@" not in parts[0]:
         return None
     root_id, ref = parts[0].split("@", 1)
+    ref = ref.replace(":", "/")  # ref slashes are packed as ':' in the slug
     if not ref:
         return None
     return root_id, ref, tuple(parts[1:-1])
