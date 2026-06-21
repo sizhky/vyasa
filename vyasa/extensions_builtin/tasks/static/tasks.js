@@ -955,12 +955,13 @@ function tasksLogicalGraphStatsLabel(model) {
         return `${nodeCount} ${nodeLabel} and ${edgeCount} ${edgeLabel}`;
     }
     const childCount = (items) => Array.isArray(items) ? items.length : 0;
+    const hasRealParent = (parent) => Boolean(parent) && parent !== 'null' && parent !== 'undefined';
     let hierarchyLinks = 0;
     for (const [parent, items] of Object.entries(model?.group_tree || {})) {
-        if (parent) hierarchyLinks += childCount(items);
+        if (hasRealParent(parent)) hierarchyLinks += childCount(items);
     }
     for (const [parent, items] of Object.entries(model?.task_children || {})) {
-        if (parent) hierarchyLinks += childCount(items);
+        if (hasRealParent(parent)) hierarchyLinks += childCount(items);
     }
     if (hierarchyLinks) {
         const hierarchyLabel = hierarchyLinks === 1 ? 'Hierarchy Link' : 'Hierarchy Links';
@@ -3680,6 +3681,21 @@ function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode, g
     };
 }
 
+function applyTasksStandaloneHeight(wrapper) {
+    if (String(wrapper?.dataset?.tasksStandalone || '').toLowerCase() !== 'true') return;
+    const box = wrapper.getBoundingClientRect();
+    const boundary = wrapper.closest('.vyasa-main-shell') || wrapper.parentElement;
+    const boundaryBox = boundary?.getBoundingClientRect?.();
+    const viewportBottom = window.visualViewport?.height || window.innerHeight || 0;
+    const bottom = boundaryBox?.height ? Math.min(boundaryBox.bottom, viewportBottom) : viewportBottom;
+    const height = Math.max(420, Math.floor(bottom - box.top));
+    wrapper.style.height = `${height}px`;
+    if (!wrapper.__tasksStandaloneResize) {
+        wrapper.__tasksStandaloneResize = () => applyTasksStandaloneHeight(wrapper);
+        window.addEventListener('resize', wrapper.__tasksStandaloneResize);
+    }
+}
+
 async function renderTasksGraphs(rootElement = document) {
     const wrappers = Array.from(rootElement.querySelectorAll('.tasks-container[data-tasks-widget="true"]'));
     if (!wrappers.length) return;
@@ -3689,6 +3705,7 @@ async function renderTasksGraphs(rootElement = document) {
         if (wrapper.dataset.tasksMounted === 'true') continue;
         const mount = wrapper.querySelector('.vyasa-tasks-flow');
         if (!mount || !rf) continue;
+        applyTasksStandaloneHeight(wrapper);
         if (wrapper.offsetParent === null || mount.clientWidth <= 0 || mount.clientHeight <= 0) {
             needsRetry = true;
             continue;
@@ -7157,11 +7174,11 @@ async function renderTasksGraphs(rootElement = document) {
                 },
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
-                window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', display: 'flex', alignItems: 'stretch', gap: '12px' } },
+                window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', gap: '12px' } },
                     filterPanelElement,
                     SlideShow(),
-                    window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { flex: '1 1 auto', minWidth: 0, height: '100%', outline: 'none', position: 'relative', ...edgeAnimationStyle }, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { flex: '1 1 auto', minWidth: 0, minHeight: 0, alignSelf: 'stretch', display: 'flex', outline: 'none', position: 'relative', ...edgeAnimationStyle }, ...flowPointerHandlers },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
@@ -7176,10 +7193,10 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(GroupHoverTooltip),
                     window.React.createElement(DragSelectionOverlay)
                 ))
-            ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', display: 'flex', alignItems: 'stretch', gap: '12px' } },
+            ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', gap: '12px' } },
                 filterPanelElement,
-                window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { flex: '1 1 auto', minWidth: 0, height: '100%', outline: 'none', position: 'relative', ...edgeAnimationStyle }, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { flex: '1 1 auto', minWidth: 0, minHeight: 0, alignSelf: 'stretch', display: 'flex', outline: 'none', position: 'relative', ...edgeAnimationStyle }, ...flowPointerHandlers },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                         window.React.createElement(rf.Controls),
                         window.React.createElement(PanControls),
@@ -7453,6 +7470,9 @@ async function openTasksGraphModal(wrapper, options = {}) {
     flow.style.minHeight = '0';
     flow.style.overflow = 'hidden';
     flow.style.cursor = 'grab';
+    flow.style.display = 'flex';
+    flow.style.flexDirection = 'column';
+    flow.style.position = 'relative';
 
     const scene = document.createElement('div');
     scene.className = 'vyasa-tasks-scene';
