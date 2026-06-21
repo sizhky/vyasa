@@ -128,7 +128,11 @@ def get_root_folder():
 
 
 def _current_content_path(current_path):
-    parts = Path(str(current_path).strip("/")).parts
+    # current_path may be a VirtualPath (ref-served doc); these helpers do
+    # slug/URL math, so collapse to the slug string first (VirtualPath has no
+    # __fspath__, so a bare Path(current_path) would raise).
+    current_path = str(current_path)
+    parts = Path(current_path.strip("/")).parts
     aliases = {alias for alias, _ in get_content_mounts() if alias}
     if parts and parts[0] in aliases:
         return content_path_for_slug(current_path)
@@ -136,7 +140,8 @@ def _current_content_path(current_path):
 
 
 def _current_content_root_and_relative(current_path):
-    parts = Path(str(current_path).strip("/")).parts
+    current_path = str(current_path)
+    parts = Path(current_path.strip("/")).parts
     aliases = {alias for alias, _ in get_content_mounts() if alias}
     if parts and parts[0] in aliases:
         return content_root_and_relative(current_path)
@@ -798,7 +803,7 @@ def from_md(content, img_dir=None, current_path=None, slide_mode=False, asset_co
     )
     content = _rewrite_raw_html_urls(content, current_path)
     if img_dir is None and current_path:
-        path_parts = Path(current_path).parts
+        path_parts = Path(str(current_path)).parts
         img_dir = "/posts/" + "/".join(path_parts[:-1]) if len(path_parts) > 1 else "/posts"
 
     def _protect_escaped_dollar(md):

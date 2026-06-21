@@ -489,6 +489,13 @@ def _resolve_tasks_source_path(current_path: str | Path | None, source: str) -> 
         return None
     if re.match(r"^[a-zA-Z][\w+.-]*://", source_text):
         return None
+    from ...content_backend import VirtualPath
+
+    if isinstance(current_path, VirtualPath):
+        # Ref-served doc: resolve the source against the doc's directory on the
+        # same git ref, yielding a VirtualPath the readers consume ref-aware.
+        base = current_path.parent if current_path.is_file() else current_path
+        return base / source_text.lstrip("/")
     source_path = Path(source_text)
     if source_path.is_absolute():
         return source_path

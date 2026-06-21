@@ -11,6 +11,13 @@ from typing import Any
 NODE_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 
 
+def _as_pathlike(p):
+    """Keep a ref-backed VirtualPath (or any read_text-capable path-like) as-is;
+    wrap only plain strings into a filesystem Path. Coercing to Path() would strip
+    the git ref and silently fall back to the working tree."""
+    return p if hasattr(p, "read_text") else Path(p)
+
+
 @dataclass
 class KgView:
     id: str
@@ -66,7 +73,7 @@ class KgContext:
 
 
 def read_kg_pack(schema_path: str | Path, context_id: str = "") -> dict[str, Any]:
-    schema_path = Path(schema_path)
+    schema_path = _as_pathlike(schema_path)
     schema = read_schema(schema_path)
     if schema.graph.get("contexts"):
         return _read_context_kg_pack(schema_path, schema, context_id)
@@ -284,6 +291,8 @@ def _write_kg_cache(schema_path: Path, cache_name: str, graph: dict[str, Any]) -
     if not cache_name:
         return
     cache_path = _resolve(schema_path, cache_name)
+    if not isinstance(cache_path, Path):
+        return  # ref-served from a read-only object store: nothing to cache to disk
     payload = {
         "generated": True,
         "nodes": {node["id"]: node for node in graph.get("tasks", [])},
@@ -296,7 +305,7 @@ def _write_kg_cache(schema_path: Path, cache_name: str, graph: dict[str, Any]) -
 
 
 def read_schema(path: str | Path) -> KgSchema:
-    path = Path(path)
+    path = _as_pathlike(path)
     schema = KgSchema()
     section = ""
     current_source = ""
@@ -406,7 +415,7 @@ def read_nodes(path: str | Path) -> list[dict[str, str]]:
     nodes_by_id: dict[str, dict[str, Any]] = {}
     stack: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
-    raw_lines = Path(path).read_text(encoding="utf-8").splitlines()
+    raw_lines = _as_pathlike(path).read_text(encoding="utf-8").splitlines()
     line_index = 0
     while line_index < len(raw_lines):
         raw = raw_lines[line_index]
@@ -494,7 +503,7 @@ def apply_attrs(path: str | Path, nodes: dict[str, dict], edges: dict[str, dict]
     current_key = ""
     target = nodes
     indexed = {"node": [], "edge": []}
-    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+    for raw in _as_pathlike(path).read_text(encoding="utf-8").splitlines():
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         line = raw.rstrip()
@@ -532,7 +541,7 @@ def apply_attrs(path: str | Path, nodes: dict[str, dict], edges: dict[str, dict]
 
 def read_palette(path: str | Path) -> dict[str, Any]:
     try:
-        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        payload = json.loads(_as_pathlike(path).read_text(encoding="utf-8"))
     except Exception:
         return {}
     return payload if isinstance(payload, dict) else {}
@@ -840,8 +849,12 @@ def _source_tags(existing, source_name: str) -> list[str]:
 
 
 def _resolve(schema_path: Path, value: str) -> Path:
-    path = Path(value)
-    return path if path.is_absolute() else (schema_path.parent / path).resolve()
+    value = str(value)
+    if isinstance(schema_path, Path):
+        path = Path(value)
+        return path if path.is_absolute() else (schema_path.parent / path).resolve()
+    # VirtualPath: resolve the sibling source on the same git ref.
+    return schema_path.parent / value.lstrip("/")
 
 
 def _record_lines(path: str | Path):
@@ -850,7 +863,7 @@ def _record_lines(path: str | Path):
 
 
 def _record_raw_lines(path: str | Path):
-    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+    for raw in _as_pathlike(path).read_text(encoding="utf-8").splitlines():
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         if raw.strip().startswith("@"):
@@ -859,7 +872,7 @@ def _record_raw_lines(path: str | Path):
 
 
 def _lines(path: str | Path):
-    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+    for raw in _as_pathlike(path).read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if line and not line.startswith("#"):
             yield line

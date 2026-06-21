@@ -128,7 +128,11 @@ def _render_ref_markdown(ref_doc, *, path, htmx, request, slug_to_title, layout,
         return DocumentPage(f"Not on {ref_doc.ref}", path, body, toc_source="").render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
     content = Div(
         document_header(ref_doc.title, ref_doc.body, actions=(), breadcrumbs=breadcrumbs, meta_extra=ref_badge),
-        from_md(strip_more_marker(ref_doc.body), current_path=path),
+        # Pass the ref-backed VirtualPath (not the slug string) as current_path so
+        # dependent-file readers (KG packs, palettes, CSS, ...) resolve siblings
+        # from the same git ref instead of the working tree. Its __str__ is the
+        # ref-carrying slug, so href/string-based code keeps working unchanged.
+        from_md(strip_more_marker(ref_doc.body), current_path=ref_doc.vpath or path),
         cls="w-full",
     )
     return DocumentPage(ref_doc.title, path, content, toc_source=ref_doc.body).render(layout, htmx=htmx, blog_title=get_blog_title(), auth=request.scope.get("auth"))
