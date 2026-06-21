@@ -3405,14 +3405,29 @@ function tasksNoteEditorMetrics(note, font = '500 12px ui-sans-serif, system-ui,
 function renderTasksDetailEntries(React, entries, options = {}) {
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '12px', lineHeight: options.lineHeight || 1.35 } },
         ...(entries || []).map((entry, index) => {
+            const canCopy = options.copyValues && String(entry?.value ?? '').trim();
+            const copyValue = async (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                await copyTasksText(entry.value);
+            };
             return React.createElement('div', {
                 key: entry.key || entry.attr || `${index}`,
-                style: { paddingTop: index === 0 ? '0' : '8px', marginTop: index === 0 ? '0' : '8px', borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)', overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'pre-line' },
+                className: 'vyasa-task-node-card-row',
+                style: { position: 'relative', paddingTop: index === 0 ? '0' : '8px', paddingRight: canCopy ? '26px' : 0, marginTop: index === 0 ? '0' : '8px', borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)', overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'pre-line' },
             },
             React.createElement('span', { style: { fontWeight: 700, opacity: 0.72, display: 'block', marginBottom: '4px' } }, `${entry.label}:`),
             entry.renderedValue
                 ? React.createElement('span', { className: 'vyasa-task-node-card-value', dangerouslySetInnerHTML: { __html: entry.renderedValue } })
-                : React.createElement('span', { className: 'vyasa-task-node-card-value' }, entry.value));
+                : React.createElement('span', { className: 'vyasa-task-node-card-value' }, entry.value),
+            canCopy ? React.createElement('button', {
+                type: 'button',
+                title: 'Copy value',
+                'aria-label': `Copy ${entry.label} value`,
+                'data-vyasa-task-control': 'true',
+                onClick: copyValue,
+                className: 'vyasa-task-node-card-copy',
+            }, '⧉') : null);
         }));
 }
 
@@ -5783,7 +5798,7 @@ async function renderTasksGraphs(rootElement = document) {
                             style: { display: 'inline-block', marginTop: '6px', fontSize: '12px', lineHeight: 1.3, textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit', overflowWrap: 'anywhere', wordBreak: 'break-word' },
                         }, panelHref) : null,
                     ),
-                    renderTasksDetailEntries(React, entries),
+                    renderTasksDetailEntries(React, entries, { copyValues: true }),
                     React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: '12px', lineHeight: 1.35 } },
                         React.createElement('label', {
                             style: {

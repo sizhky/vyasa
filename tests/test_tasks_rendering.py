@@ -436,6 +436,19 @@ def test_tasks_node_card_width_ignores_note_text_length():
     assert "noteMetrics.width" not in panel_source
 
 
+def test_tasks_node_card_attr_values_can_be_copied_from_hover_button():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+
+    assert "function renderTasksDetailEntries(React, entries, options = {})" in source
+    assert "const canCopy = options.copyValues && String(entry?.value ?? '').trim();" in source
+    assert "await copyTasksText(entry.value);" in source
+    assert "className: 'vyasa-task-node-card-copy'" in source
+    assert "renderTasksDetailEntries(React, entries, { copyValues: true })" in source
+    assert ".vyasa-task-node-card-row:hover .vyasa-task-node-card-copy" in css_source
+    assert "pointer-events: none;" in css_source
+
+
 def test_tasks_selected_panel_shows_href_as_detail_instead_of_title_link():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
