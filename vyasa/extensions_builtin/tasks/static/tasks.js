@@ -2010,6 +2010,9 @@ function ensureTasksReactFlow() {
                     height: auto !important;
                     min-height: 0 !important;
                 }
+                .vyasa-tasks-fullscreen-toggle svg {
+                    stroke-width: 1.5 !important;
+                }
                 .react-flow__edge-textwrapper,
                 .react-flow__edge-text,
                 .react-flow__edge-textbg {
@@ -3461,11 +3464,25 @@ function tasksHeaderButtonHtml(widgetId, action, label, title) {
     return `<button type="button" title="${title}" data-vyasa-tasks-widget-id="${widgetId}" data-vyasa-tasks-action="${action}" onclick="runTasksHeaderAction('${widgetId}', '${action}')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">${label}</button>`;
 }
 
+function tasksFullscreenIconHtml(on = false) {
+    return `<uk-icon icon="${on ? 'shrink' : 'expand'}" class="w-4 h-4"></uk-icon>`;
+}
+
 function tasksHeaderControlsHtml(widgetId, includeFullscreen = false) {
     const fullscreen = includeFullscreen
-        ? `<button onclick="openTasksFullscreen('${widgetId}')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen (Shift+F)">⛶</button>`
+        ? `<button onclick="openTasksFullscreen('${widgetId}')" data-vyasa-tasks-fullscreen-toggle="${widgetId}" class="vyasa-tasks-fullscreen-toggle px-1.5 py-1 text-xs border rounded inline-flex items-center justify-center text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen (Shift+F)" aria-label="Fullscreen (Shift+F)">${tasksFullscreenIconHtml(false)}</button>`
         : '';
     return `${fullscreen}<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">${tasksHeaderButtonHtml(widgetId, 'toggleHelp', '?', 'Show graph shortcuts and gestures')}${tasksHeaderButtonHtml(widgetId, 'openEgo', 'EG', 'Open selected ego graph (G)')}${tasksHeaderButtonHtml(widgetId, 'openEgoNeighbors', 'EG+', 'Open selected ego graph with neighbors (Shift+G)')}${tasksHeaderButtonHtml(widgetId, 'fit', 'F', 'Fit view')}${tasksHeaderButtonHtml(widgetId, 'toggleFilters', 'S', 'Toggle filters')}${tasksHeaderButtonHtml(widgetId, 'expandDepth', 'I', 'Expand next group depth')}${tasksHeaderButtonHtml(widgetId, 'collapseDepth', 'O', 'Collapse deepest group depth')}${tasksHeaderButtonHtml(widgetId, 'expand', 'U', 'Unfold all groups')}${tasksHeaderButtonHtml(widgetId, 'collapse', 'P', 'Collapse all groups')}${tasksHeaderButtonHtml(widgetId, 'toggleEdges', 'E', 'Toggle edges')}</div>`;
+}
+
+function syncTasksFullscreenButton(wrapper) {
+    if (!wrapper?.id) return;
+    const on = wrapper.getAttribute('data-tasks-maximized') === 'true';
+    document.querySelectorAll(`[data-vyasa-tasks-fullscreen-toggle="${CSS.escape(wrapper.id)}"]`).forEach((button) => {
+        button.innerHTML = tasksFullscreenIconHtml(on);
+        button.title = on ? 'Exit fullscreen (Shift+F)' : 'Fullscreen (Shift+F)';
+        button.setAttribute('aria-label', button.title);
+    });
 }
 
 function tasksHoverAttrRows(node, hoverAttrs) {
@@ -3706,6 +3723,7 @@ async function renderTasksGraphs(rootElement = document) {
         const mount = wrapper.querySelector('.vyasa-tasks-flow');
         if (!mount || !rf) continue;
         applyTasksStandaloneHeight(wrapper);
+        syncTasksFullscreenButton(wrapper);
         if (wrapper.offsetParent === null || mount.clientWidth <= 0 || mount.clientHeight <= 0) {
             needsRetry = true;
             continue;
@@ -7534,6 +7552,7 @@ function setTasksMaximized(wrapper, on) {
             wrapper.__tasksMaximizeEsc = null;
         }
     }
+    syncTasksFullscreenButton(wrapper);
     // Same React instance, just a new size — let layout settle, then refit.
     window.requestAnimationFrame(() => {
         window.dispatchEvent(new Event('resize'));

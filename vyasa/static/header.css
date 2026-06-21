@@ -566,6 +566,20 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     min-height: 2.75rem;
 }
 
+#theme-mode-toggle,
+#theme-mode-toggle:hover,
+#theme-mode-toggle:focus,
+#theme-mode-toggle:focus-visible {
+    --vyasa-emphasis-control-text: var(--vyasa-ink);
+    color: var(--vyasa-ink) !important;
+}
+
+#theme-mode-toggle [uk-icon],
+#theme-mode-toggle svg {
+    color: currentColor !important;
+    stroke: currentColor !important;
+}
+
 .vyasa-emphasis-control-menu {
     border-radius: var(--vyasa-rect-radius);
     background: var(--vyasa-emphasis-control-menu-bg);

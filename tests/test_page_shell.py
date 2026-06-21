@@ -49,6 +49,15 @@ def test_sidebar_title_click_hides_docked_sidebar_and_pulses_nav_icon():
     assert 'data_sidebar="toc"' in toc_source
 
 
+def test_theme_toggle_icon_keeps_ink_color_on_focus():
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+
+    assert "#theme-mode-toggle:focus" in css
+    assert "--vyasa-emphasis-control-text: var(--vyasa-ink)" in css
+    assert "#theme-mode-toggle [uk-icon]" in css
+    assert "stroke: currentColor !important" in css
+
+
 def test_toc_sidebar_defaults_closed_but_open_choice_persists():
     head_init = Path("vyasa/static/head-init.js").read_text(encoding="utf-8")
     scripts = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
