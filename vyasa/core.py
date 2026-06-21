@@ -27,6 +27,7 @@ from .helpers import (
     estimate_read_time_minutes,
     expand_markdown_includes_for_reading,
     get_content_mounts,
+    get_ref_content_mounts,
     document_kind_for_suffix,
     enabled_document_suffixes,
     iter_visible_files,
@@ -609,10 +610,9 @@ def _git_roots_with_refs(time_bucket):
     Cached per coarse time bucket so the per-root dulwich opens happen at
     most once every few seconds, not on every page render."""
     from .content_backend import GitBackend, classify_root
-    from .helpers import get_content_mounts
 
     out = []
-    for alias, root in get_content_mounts():
+    for alias, root in get_ref_content_mounts():
         rc = classify_root(root)
         if rc.kind == "plain" or rc.git_dir is None:
             continue
@@ -1233,12 +1233,11 @@ def _swap_ref_roots(entries, active):
     """
     from .content_backend import classify_root
     from .content_tree import ref_root_vpath
-    from .helpers import get_content_mounts
 
     git_mounts = get_config().get_git_mounts()
     active_id, active_ref = active or ("", "")
     bare = {Path(p).resolve(): a for a, p in git_mounts if a and classify_root(p).kind == "bare"}
-    alias_by_path = {Path(p).resolve(): a for a, p in get_content_mounts() if a}
+    alias_by_path = {Path(p).resolve(): a for a, p in get_ref_content_mounts() if a}
     if not bare and not (active_id and active_id in alias_by_path.values()):
         return entries
 

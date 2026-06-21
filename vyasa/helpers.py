@@ -100,6 +100,41 @@ def _config_content_mounts() -> list[tuple[str, Path]]:
     return mounts
 
 
+def _top_level_git_mounts(primary: Path, existing_aliases: set[str]) -> list[tuple[str, Path]]:
+    """Top-level child git repos selectable by the ref switcher. No recursion."""
+    from .content_backend import classify_root
+
+    try:
+        children = sorted((p for p in primary.iterdir() if p.is_dir()), key=lambda p: p.name.lower())
+    except OSError:
+        return []
+    mounts = []
+    for root in children:
+        alias = root.name
+        if not alias or alias in existing_aliases:
+            continue
+        try:
+            if classify_root(root).kind == "plain":
+                continue
+        except Exception:
+            continue
+        existing_aliases.add(alias)
+        mounts.append((alias, root.resolve()))
+    return mounts
+
+
+def get_ref_content_mounts() -> list[tuple[str, Path]]:
+    """Content mounts plus top-level child git repos for git-ref operations."""
+    from .config import get_config
+
+    mounts = list(get_content_mounts())
+    if get_config().get_ignore_cwd_as_root():
+        return mounts
+    aliases = {alias for alias, _ in mounts if alias}
+    mounts.extend(_top_level_git_mounts(get_config().get_root_folder().resolve(), aliases))
+    return mounts
+
+
 def get_content_mounts() -> list[tuple[str, Path]]:
     try:
         from .extensions import get_extension_runtime
@@ -140,7 +175,7 @@ def content_root_and_relative(slug: str | Path) -> tuple[Path | None, Path]:
     mounts = get_content_mounts()
     if parts and "@" in parts[0]:
         alias, ref = parts[0].split("@", 1)
-        for mount_alias, _ in mounts:
+        for mount_alias, _ in get_ref_content_mounts():
             if mount_alias == alias:
                 try:
                     from .extensions import ContentRootRequest, get_extension_runtime
@@ -178,7 +213,7 @@ def content_location(slug: str | Path, *, ref_override: str = "") -> tuple[str, 
         # so a ref like 'tmp/testing-vyasa' survives the path-segment split.
         ref = ref.replace(":", "/")
         body = [alias, *parts[1:]]
-    mounts = get_content_mounts()
+    mounts = get_ref_content_mounts() if ref else get_content_mounts()
     for alias, root in mounts:
         if alias and body and body[0] == alias:
             rel = Path(*body[1:]) if len(body) > 1 else Path()

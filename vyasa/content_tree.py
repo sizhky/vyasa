@@ -17,6 +17,7 @@ from .helpers import (
     enabled_document_suffixes,
     find_folder_note_file,
     get_content_mounts,
+    get_ref_content_mounts,
     get_post_title,
     get_vyasa_config,
     iter_visible_files,
@@ -349,9 +350,9 @@ def ref_root_vpath(root_id: str, ref: str):
     """A VirtualPath at the root of `root_id` for `ref`, or None when the
     root is disk-served (caller should use the normal disk tree)."""
     from .content_backend import VirtualPath, backend_for, classify_root
-    from .helpers import get_content_mounts
+    from .helpers import get_ref_content_mounts
 
-    root_path = next((root for alias, root in get_content_mounts() if alias == root_id), None)
+    root_path = next((root for alias, root in get_ref_content_mounts() if alias == root_id), None)
     if root_path is None:
         return None
     backend, disk_mode = backend_for(classify_root(root_path), ref, root_id)
