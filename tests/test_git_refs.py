@@ -149,6 +149,23 @@ def test_navbar_ref_switcher_discovers_all_git_roots(site):
     core._git_roots_with_refs.cache_clear()
 
 
+def test_ref_tree_uses_remote_icon_for_multi_remote_group():
+    import vyasa.core as core
+    from fasthtml.common import Ul, to_xml
+
+    branches = [
+        ("origin/team/dev", "branch", False, "origin"),
+        ("backup/team/dev", "branch", False, "backup"),
+    ]
+    html = to_xml(Ul(*core._render_ref_nodes(
+        core._build_ref_tree(branches),
+        "repo", "", "", False, "vyasa-ref:repo", [], frozenset({"origin", "backup"}),
+    )))
+    assert "radio-tower" in html
+    assert ">origin<" in html and ">origin/<" not in html
+    assert ">team/<" in html
+
+
 def test_navbar_ref_switcher_hides_git_root_when_rbac_has_no_visible_path(site, monkeypatch):
     import re
 
