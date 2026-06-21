@@ -72,5 +72,18 @@ vyasa = [
     "themes/*.toml",
 ]
 
+[tool.pyright]
+include = ["vyasa"]
+exclude = ["**/__pycache__", "**/node_modules", "dist", "build", "tmp", "_proc", "_plan"]
+pythonVersion = "3.10"
+# Gradual adoption: 'basic' catches real type errors (e.g. wrong argument types)
+# without the flood that 'strict' brings to a largely-unannotated codebase.
+typeCheckingMode = "basic"
+# Third-party deps (fasthtml, monsterui, mistletoe, loguru, ...) ship no stubs;
+# their symbols are Unknown, which is fine for gradual typing. Silence that noise
+# so the gate surfaces only first-party type errors.
+reportMissingTypeStubs = false
+reportMissingModuleSource = false
+
 [tool.uv]
 cache-keys = [{file = "pyproject.toml"}]
