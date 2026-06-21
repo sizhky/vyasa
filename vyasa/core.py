@@ -631,7 +631,7 @@ def _git_roots_with_refs(time_bucket):
         refs.sort(key=lambda r: (0 if r.kind == "branch" else 1, r.name.lower()))
         default = next((r.name for r in refs if r.is_default), "")
         current_branch = rc.current_branch if rc.kind == "clone" else ""
-        out.append((alias, default, current_branch or "", tuple((r.name, r.kind, r.is_default) for r in refs)))
+        out.append((alias, default, current_branch or "", tuple((r.name, r.kind, r.is_default, r.remote) for r in refs)))
     return tuple(out)
 
 
@@ -677,11 +677,11 @@ def _ref_leaf(name, kind, is_default, alias, current, current_path, active, stor
     """A single selectable branch/tag row."""
     url = _ref_target_url(alias, name, current_path if active else "")
     return Li(Button(
-        Span("✓" if name == current else "", cls="shrink-0", style="width:0.75rem;display:inline-block"),
+        Span(Span("✓" if name == current else "", data_ref_check="true"), Span(UkIcon("loader", cls="w-3 h-3 animate-spin"), data_ref_spinner="true", style="display:none"), cls="shrink-0", style="width:0.75rem;display:inline-flex;align-items:center;justify-content:center"),
         Span(name.split("/")[-1], cls="truncate"), Span(" (default)" if is_default else "", cls="opacity-60 text-xs"),
         UkIcon("tag", cls="w-3 h-3 opacity-50 ml-auto") if kind == "tag" else "",
         type="button",
-        onclick=f"try{{localStorage.setItem('{storage_key}','{name}');}}catch(e){{}};window.location='{url}';",
+        onclick=f"var c=this.querySelector('[data-ref-check]'),s=this.querySelector('[data-ref-spinner]');if(c)c.style.display='none';if(s)s.style.display='inline-flex';try{{localStorage.setItem('{storage_key}','{name}');}}catch(e){{}};window.location='{url}';",
         cls="vyasa-ref-row vyasa-emphasis-control-option",
         style=_ref_row_style(depth),
     ))
@@ -697,7 +697,7 @@ def _render_tags_group(tags, alias, current, current_path, active, storage_key, 
     """Tags collapsed under one group, newest (highest version) first."""
     tags = sorted(tags, key=lambda t: _version_sort_key(t[0]), reverse=True)
     is_open = active and any(t[0] == current for t in tags)
-    items = [_ref_leaf(n, k, d, alias, current, current_path, active, storage_key, depth + 1) for n, k, d in tags]
+    items = [_ref_leaf(t[0], t[1], t[2], alias, current, current_path, active, storage_key, depth + 1) for t in tags]
     return Li(Details(
         Summary(
             UkIcon("tags", cls="w-3.5 h-3.5 opacity-60 shrink-0"),
@@ -711,24 +711,25 @@ def _render_tags_group(tags, alias, current, current_path, active, storage_key, 
     ))
 
 
-def _render_ref_nodes(node, alias, current, current_path, active, storage_key, open_parts, depth=1):
+def _render_ref_nodes(node, alias, current, current_path, active, storage_key, open_parts, remote_groups=frozenset(), depth=1):
     """Recursive list items: folders (sorted, collapsed) first, then leaf refs.
     `open_parts` = remaining segments of the current ref, so its chain auto-opens."""
     out = []
     for seg in sorted(k for k in node if k != "_leaves"):
         is_open = bool(open_parts) and open_parts[0] == seg
+        is_remote = depth == 1 and seg in remote_groups
         out.append(Li(Details(
             Summary(
-                UkIcon("folder", cls="w-3.5 h-3.5 opacity-60 shrink-0"),
-                Span(f"{seg}/", cls="truncate"),
+                UkIcon("radio-tower" if is_remote else "folder", cls="w-3.5 h-3.5 opacity-60 shrink-0"),
+                Span(seg if is_remote else f"{seg}/", cls="truncate"),
                 cls="vyasa-ref-row vyasa-emphasis-control-option",
                 style=_ref_row_style(depth),
             ),
-            Ul(*_render_ref_nodes(node[seg], alias, current, current_path, active, storage_key, open_parts[1:] if is_open else [], depth + 1)),
+            Ul(*_render_ref_nodes(node[seg], alias, current, current_path, active, storage_key, open_parts[1:] if is_open else [], remote_groups, depth + 1)),
             open=is_open,
         )))
-    for name, kind, is_default in node["_leaves"]:
-        out.append(_ref_leaf(name, kind, is_default, alias, current, current_path, active, storage_key, depth))
+    for item in node["_leaves"]:
+        out.append(_ref_leaf(item[0], item[1], item[2], alias, current, current_path, active, storage_key, depth))
     return out
 
 
@@ -772,7 +773,8 @@ def _navbar_ref_switcher(current_path=None, roles=None):
         open_parts = current.split("/")[:-1] if active else []
         branches = [r for r in refs if r[1] == "branch"]
         tags = [r for r in refs if r[1] == "tag"]
-        ref_items = _render_ref_nodes(_build_ref_tree(branches), alias, current, current_path, active, storage_key, open_parts)
+        remote_groups = frozenset(r[3] for r in branches if len(r) > 3 and r[3])
+        ref_items = _render_ref_nodes(_build_ref_tree(branches), alias, current, current_path, active, storage_key, open_parts, remote_groups)
         if tags:
             ref_items.append(_render_tags_group(tags, alias, current, current_path, active, storage_key))
         refresh_btn = Button(

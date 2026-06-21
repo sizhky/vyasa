@@ -32,6 +32,7 @@ class RefInfo:
     name: str
     kind: Literal["branch", "tag"]
     is_default: bool = False
+    remote: str = ""
 
 
 @runtime_checkable
@@ -181,7 +182,7 @@ class GitBackend:
                 display = full if qualify_remote else short
                 if short in local_branches:
                     continue
-                out.append(RefInfo(display, "branch", False))
+                out.append(RefInfo(display, "branch", False, full.split("/", 1)[0] if qualify_remote else ""))
         for full in self._repo.refs.keys(base=b"refs/tags/"):
             out.append(RefInfo(full.decode(), "tag", False))
         return out
