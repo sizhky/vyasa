@@ -4,7 +4,7 @@ import pytest
 
 from vyasa.config import get_config, reload_config
 from vyasa.content_tree import resolve_ref_markdown
-from vyasa.git_fetcher import MirrorSpec, fetch_all, fetch_mirror, main
+from vyasa.git_fetcher import MirrorSpec, fetch_all, fetch_clone_remotes, fetch_mirror, main
 
 
 def _git(cwd, *args):
@@ -47,6 +47,22 @@ def test_fetch_clone_then_prune_with_isolation(tmp_path, upstream):
     assert refs == {"main"}  # pruned
 
     assert fetch_mirror(MirrorSpec("bad", "/no/such/repo"), mirrors) is False
+
+
+def test_fetch_clone_remotes_fetches_all_remotes(tmp_path, upstream):
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", str(upstream), str(clone)], check=True, capture_output=True)
+    _git(upstream, "checkout", "-q", "-b", "feature")
+    (upstream / "b.md").write_text("body b\n")
+    _git(upstream, "add", "-A")
+    _git(upstream, "commit", "-qm", "c2")
+    _git(upstream, "checkout", "-q", "main")
+
+    assert fetch_clone_remotes(clone) is True
+    from vyasa.content_backend import GitBackend
+
+    refs = {r.name for r in GitBackend(clone / ".git").list_refs()}
+    assert refs == {"main", "feature"}
 
 
 def test_fetched_mirror_is_mounted_and_served_at_ref(tmp_path, upstream, monkeypatch):

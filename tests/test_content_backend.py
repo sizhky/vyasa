@@ -76,6 +76,41 @@ def test_git_backend_reads_refs_in_isolation(repo):
     assert b.mtime("", "main") > 0
 
 
+def test_git_backend_lists_remote_branches_by_remote_count(tmp_path):
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    _git(upstream, "init", "-q", "-b", "main")
+    _git(upstream, "config", "user.email", "t@t")
+    _git(upstream, "config", "user.name", "t")
+    (upstream / "a.md").write_text("main\n")
+    _git(upstream, "add", "-A")
+    _git(upstream, "commit", "-qm", "c1")
+    _git(upstream, "checkout", "-q", "-b", "team/dev")
+    (upstream / "remote.md").write_text("remote\n")
+    _git(upstream, "add", "-A")
+    _git(upstream, "commit", "-qm", "c2")
+    _git(upstream, "checkout", "-q", "main")
+
+    work = tmp_path / "work"
+    subprocess.run(["git", "clone", "-q", str(upstream), str(work)], check=True, capture_output=True)
+    backend = GitBackend(work / ".git", "docs")
+    assert {r.name for r in backend.list_refs()} == {"main", "team/dev"}
+    assert backend.read_bytes("remote.md", "team/dev") == b"remote\n"
+
+    backup = tmp_path / "backup"
+    subprocess.run(["git", "clone", "-q", str(upstream), str(backup)], check=True, capture_output=True)
+    _git(backup, "checkout", "-q", "-b", "team/dev", "origin/team/dev")
+    _git(backup, "checkout", "-q", "main")
+    _git(work, "remote", "add", "backup", str(backup))
+    _git(work, "fetch", "-q", "backup")
+    backend = GitBackend(work / ".git", "docs")
+    refs = {r.name for r in backend.list_refs()}
+    assert "team/dev" not in refs
+    assert {"origin/team/dev", "backup/team/dev"} <= refs
+    assert backend.resolve_ref("team/dev") is None
+    assert backend.read_bytes("remote.md", "origin/team/dev") == b"remote\n"
+
+
 def test_classify_and_choose_backend(tmp_path, repo):
     work, bare = repo
     plain = tmp_path / "plain"
