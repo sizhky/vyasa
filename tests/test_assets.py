@@ -16,6 +16,7 @@ def test_route_bundle_names_select_route_bundles():
         "default_search.runtime",
         "bookmarks.runtime",
         "annotations.runtime",
+        "feedback.runtime",
     )
     assert route_bundle_names(slide_mode=True) == ("slides.runtime",)
 

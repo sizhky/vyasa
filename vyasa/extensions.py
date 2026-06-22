@@ -26,6 +26,13 @@ CORE_CAPABILITIES = frozenset({
     "cap:markdown_pipeline",
 })
 
+ADDITIVE_CAPABILITIES = frozenset({
+    "cap:layout:body_fragment",
+    "cap:layout:footer_link",
+    "cap:layout:main_attrs",
+    "cap:layout:navbar_mobile_action",
+})
+
 SINGULAR_CATEGORIES: dict[ExtensionCategory, str] = {
     "layout": "layout",
     "theme": "theme",
@@ -590,7 +597,7 @@ def default_preset_selection() -> dict[ExtensionCategory, tuple[str, ...]]:
         "home": ("blog_home",),
         "errors": ("default_errors",),
         "render": ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "mdx", "html_viewer", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon"),
-        "route": ("slides", "auth_rbac", "sidebar_routes", "git_refs", "annotations", "bookmarks", "api_catalog", "filesystem_routes"),
+        "route": ("slides", "auth_rbac", "sidebar_routes", "git_refs", "annotations", "feedback", "bookmarks", "api_catalog", "filesystem_routes"),
         "content_source": ("filesystem",),
     }
 
@@ -738,7 +745,7 @@ def _validate_contract(
                 slot_owners[capability] = extension_id
             elif capability.startswith("cap:"):
                 owner = cap_owners.get(capability)
-                if owner:
+                if owner and capability not in ADDITIVE_CAPABILITIES:
                     raise ExtensionConfigError(
                         f"Duplicate capability provider for {capability}: {owner} and {extension_id}"
                     )

@@ -169,6 +169,27 @@ def test_fold_all_script_keeps_tooltip_in_sync_with_button_state():
     assert "syncFoldAllButton(toggle, shouldOpen);" in source
 
 
+def test_shell_shortcuts_ignore_shadow_dom_editors_and_lavish_ui():
+    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+
+    assert "event.composedPath().some" in source
+    assert "node.matches('input, textarea, select')" in source
+    assert "node.closest('[data-lavish-ui]')" in source
+    assert "if (isEditableShortcutEvent(e)) return;" in source
+    assert "if (window.__vyasaShortcutsSuspended) return;" in source
+
+
+def test_scroll_top_and_extensions_share_floating_action_rail():
+    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+
+    assert "window.__vyasaEnsureFloatingActions = ensureFloatingActionRail;" in source
+    assert "vyasa-floating-bubble vyasa-scroll-top-button" in source
+    assert "rail.appendChild(button)" in source
+    assert ".vyasa-floating-actions" in css
+    assert ".vyasa-floating-bubble" in css
+
+
 def test_copy_markdown_button_keeps_raw_content_out_of_searchable_dom():
     button_html = to_xml(copy_raw_button("Copy Markdown", "# Heading\nbody", "raw-md-toast"))
     aux_html = "".join(to_xml(node) for node in copy_raw_nodes("# Heading\nbody"))

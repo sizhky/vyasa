@@ -2738,6 +2738,26 @@ function setTasksGroupToggleHover(wrapper, groupId) {
     });
 }
 
+function tasksGraphNodeAtFlowPoint(nodes, point) {
+    const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
+    const absoluteRect = (node) => {
+        let x = node.position?.x || 0;
+        let y = node.position?.y || 0;
+        let parent = node.parentId ? byId[node.parentId] : null;
+        while (parent) {
+            x += parent.position?.x || 0;
+            y += parent.position?.y || 0;
+            parent = parent.parentId ? byId[parent.parentId] : null;
+        }
+        return { x, y, width: node.style?.width || node.width || 0, height: node.style?.height || node.height || 0 };
+    };
+    return (nodes || [])
+        .filter((node) => node.data?.__kind__ !== 'ganttHeader')
+        .map((node) => ({ node, rect: absoluteRect(node), z: Number(node.zIndex || node.style?.zIndex || 0) }))
+        .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
+        .sort((a, b) => b.z - a.z)[0] || null;
+}
+
 function openTasksNodeHref(href, event = null) {
     if (!href) return;
     logTasksDebug('nodeHrefOpen:start', {
@@ -3454,6 +3474,35 @@ async function renderTasksGraphs(rootElement = document) {
             const [queryBuilderReady, setQueryBuilderReady] = React.useState(() => Boolean(window.VyasaTasksQueryBuilder?.QueryBuilder));
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
+            const reviewTargets = React.useMemo(() => [
+                ...nodes
+                    .filter((node) => node.data?.highlightMode && !['dim', 'none'].includes(node.data.highlightMode))
+                    .slice(0, 40)
+                    .map((node) => ({
+                        kind: 'node',
+                        id: node.data?.__kind__ === 'groupTitle' ? (node.data?.sourceGroupId || node.id) : node.id,
+                        label: String(node.data?.label || node.id).slice(0, 240),
+                        node_kind: node.data?.__kind__ || '',
+                        widget_id: widgetId,
+                    })),
+                ...edges
+                    .filter((edge) => edge.data?.highlightMode && !['dim', 'none'].includes(edge.data.highlightMode))
+                    .slice(0, 20)
+                    .map((edge) => ({
+                        kind: 'edge',
+                        id: edge.id,
+                        label: String(edge.label || edge.id).slice(0, 240),
+                        source: edge.source,
+                        target: edge.target,
+                        widget_id: widgetId,
+                    })),
+            ], [nodes, edges]);
+            React.useEffect(() => {
+                const carrier = flowWrapperRef.current;
+                if (!carrier) return;
+                if (reviewTargets.length) carrier.dataset.vyasaReviewTargets = JSON.stringify(reviewTargets);
+                else delete carrier.dataset.vyasaReviewTargets;
+            }, [reviewTargets]);
             const noteTextareaRef = React.useRef(null);
             const extendLassoPoints = React.useCallback((points, nextPoint) => {
                 const current = Array.isArray(points) ? points : [];
@@ -5322,6 +5371,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const reactFlow = rf.useReactFlow();
                 React.useEffect(() => {
                     const onKeyDown = (event) => {
+                        if (window.__vyasaShortcutsSuspended) return;
                         if (event.defaultPrevented || event.repeat) return;
                         if (event.metaKey || event.ctrlKey || event.altKey) return;
                         const flowWrapper = flowWrapperRef.current;
@@ -6493,31 +6543,23 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const point = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
                 const baseNodes = graphBase.nodes || [];
-                const byId = Object.fromEntries(baseNodes.map((node) => [node.id, node]));
-                const absoluteRect = (node) => {
-                    let x = node.position?.x || 0;
-                    let y = node.position?.y || 0;
-                    let parent = node.parentId ? byId[node.parentId] : null;
-                    while (parent) {
-                        x += parent.position?.x || 0;
-                        y += parent.position?.y || 0;
-                        parent = parent.parentId ? byId[parent.parentId] : null;
-                    }
-                    return { x, y, width: node.style?.width || node.width || 0, height: node.style?.height || node.height || 0 };
-                };
                 // Pick the deepest hit (highest z) under the cursor without touching React state.
-                const hit = baseNodes
-                    .filter((node) => node.data?.__kind__ !== 'ganttHeader')
-                    .map((node) => ({ node, rect: absoluteRect(node), z: Number(node.zIndex || node.style?.zIndex || 0) }))
-                    .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
-                    .sort((a, b) => b.z - a.z)[0];
+                const hit = tasksGraphNodeAtFlowPoint(baseNodes, point);
                 if (!hit) {
+                    delete wrapper.dataset.vyasaReviewPointerTarget;
                     clearGraphHoverState();
                     traceHoverFrame('miss', { scannedNodes: baseNodes.length });
                     finishPerf('miss', { scannedNodes: baseNodes.length });
                     return;
                 }
                 const nodeData = hit.node.data || {};
+                wrapper.dataset.vyasaReviewPointerTarget = JSON.stringify({
+                    kind: 'node',
+                    id: nodeData.__kind__ === 'groupTitle' ? (nodeData.sourceGroupId || hit.node.id) : hit.node.id,
+                    label: String(nodeData.label || hit.node.id).slice(0, 240),
+                    node_kind: nodeData.__kind__ || '',
+                    widget_id: widgetId,
+                });
                 const hoverGroupId = nodeData.__kind__ === 'group'
                     ? hit.node.id
                     : (nodeData.__kind__ === 'groupTitle' ? nodeData.sourceGroupId : '');
@@ -7243,6 +7285,7 @@ async function renderTasksGraphs(rootElement = document) {
                 onPointerCancelCapture: finishDragSelection,
                 onPointerLeave: (event) => {
                     finishDragSelection(event);
+                    if (flowWrapperRef.current) delete flowWrapperRef.current.dataset.vyasaReviewPointerTarget;
                     clearGraphHoverState();
                 },
             };
@@ -7265,7 +7308,7 @@ async function renderTasksGraphs(rootElement = document) {
                 window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', gap: '12px', position: 'relative' } },
                     filterPanelElement,
                     SlideShow(),
-                    window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
+                    window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(rf.Controls),
@@ -7283,7 +7326,7 @@ async function renderTasksGraphs(rootElement = document) {
                 ))
             ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', gap: '12px', position: 'relative' } },
                 filterPanelElement,
-                window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
+                window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                         window.React.createElement(rf.Controls),

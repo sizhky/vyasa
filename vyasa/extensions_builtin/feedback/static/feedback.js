@@ -1,0 +1,332 @@
+// Review interaction model derived from lavish-axi. See ../LAVISH_LICENSE.
+(function () {
+  let documentPath = '';
+  let apiDocument = '';
+  let queueKey = '';
+  let queued = [];
+  let presence = 'waiting';
+  let snapshot = '';
+  let sending = false;
+  let captureLoaded = false;
+  let annotationEnabled = true;
+  let knownEvents = '';
+  let sidebar;
+  let launcher;
+  let chat;
+  let input;
+  let pills;
+  let sendButton;
+  let presenceNode;
+  let banner;
+  let annotationToggle;
+
+  const pathOf = () => document.getElementById('main-content')?.dataset.feedbackPath || '';
+
+  function createUi() {
+    if (sidebar) return;
+    launcher = document.createElement('button');
+    launcher.type = 'button';
+    launcher.className = 'vyasa-floating-bubble vyasa-feedback-launcher';
+    launcher.title = 'Review document (R)';
+    launcher.setAttribute('aria-label', 'Review document');
+    launcher.setAttribute('aria-keyshortcuts', 'R');
+    launcher.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-feedback-icon"><path d="M5 5.75h14v9.5H9l-4 3v-12.5Z"/><path d="M8 9h8M8 12h5"/></svg>';
+    launcher.dataset.lavishUi = 'true';
+    launcher.setAttribute('aria-expanded', 'false');
+    launcher.setAttribute('aria-controls', 'vyasa-feedback-sidebar');
+    sidebar = document.createElement('aside');
+    sidebar.id = 'vyasa-feedback-sidebar';
+    sidebar.className = 'vyasa-feedback-sidebar';
+    sidebar.dataset.lavishUi = 'true';
+    sidebar.setAttribute('aria-label', 'Agent review conversation');
+    sidebar.addEventListener('keydown', (event) => event.stopPropagation());
+    sidebar.innerHTML = `
+      <header class="vyasa-feedback-head"><div><div class="vyasa-feedback-heading">Conversation</div><span class="vyasa-feedback-presence" data-state="waiting">waiting</span></div><div class="vyasa-feedback-head-actions"><label class="vyasa-feedback-mode"><span>Annotate Mode</span><input type="checkbox" role="switch" checked data-annotation-mode></label><button class="vyasa-feedback-close" type="button" aria-label="Close review">×</button></div></header>
+      <div class="vyasa-feedback-chat"></div>
+      <div class="vyasa-feedback-compose"><div class="vyasa-feedback-banner">Your agent is not listening. Start the listener command below.</div><div class="vyasa-feedback-pills"></div><textarea class="vyasa-feedback-input" placeholder="Write a message for the agent..."></textarea><div class="vyasa-feedback-actions"><button class="vyasa-feedback-action secondary" type="button" data-copy-listener>Copy listener command</button><button class="vyasa-feedback-action" type="button" data-send>Send to Agent</button></div></div>`;
+    document.body.appendChild(sidebar);
+    floatingActions().prepend(launcher);
+    chat = sidebar.querySelector('.vyasa-feedback-chat');
+    input = sidebar.querySelector('.vyasa-feedback-input');
+    pills = sidebar.querySelector('.vyasa-feedback-pills');
+    sendButton = sidebar.querySelector('[data-send]');
+    presenceNode = sidebar.querySelector('.vyasa-feedback-presence');
+    banner = sidebar.querySelector('.vyasa-feedback-banner');
+    annotationToggle = sidebar.querySelector('[data-annotation-mode]');
+    launcher.onclick = openReview;
+    sidebar.querySelector('.vyasa-feedback-close').onclick = closeReview;
+    sidebar.querySelector('[data-copy-listener]').onclick = copyListener;
+    sendButton.onclick = requestSnapshotAndSend;
+    annotationToggle.onchange = () => {
+      annotationEnabled = annotationToggle.checked;
+      if (document.body.classList.contains('vyasa-feedback-open')) setAnnotationMode(annotationEnabled);
+    };
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        requestSnapshotAndSend();
+      }
+    });
+  }
+
+  function floatingActions() {
+    const shared = window.__vyasaEnsureFloatingActions?.();
+    if (shared) return shared;
+    const existing = document.getElementById('vyasa-floating-actions');
+    if (existing) return existing;
+    const rail = document.createElement('div');
+    rail.id = 'vyasa-floating-actions';
+    rail.className = 'vyasa-floating-actions';
+    document.body.appendChild(rail);
+    return rail;
+  }
+
+  function openReview() {
+    loadCapture();
+    document.body.classList.add('vyasa-feedback-open');
+    requestAnimationFrame(() => window.__vyasaSyncFloatingActions?.());
+    launcher.setAttribute('aria-expanded', 'true');
+    setAnnotationMode(annotationEnabled);
+    input.focus();
+    refreshSession();
+  }
+
+  function closeReview() {
+    document.body.classList.remove('vyasa-feedback-open');
+    requestAnimationFrame(() => window.__vyasaSyncFloatingActions?.());
+    launcher.setAttribute('aria-expanded', 'false');
+    setAnnotationMode(false);
+  }
+
+  function setAnnotationMode(enabled) {
+    const message = { type: 'lavish:setAnnotationMode', enabled };
+    window.postMessage(message, '*');
+    document.querySelector('#main-content iframe[src*=".html"]')?.contentWindow?.postMessage(message, '*');
+  }
+
+  function loadCapture() {
+    if (captureLoaded || document.querySelector('script[data-vyasa-lavish-capture]')) return;
+    captureLoaded = true;
+    const script = document.createElement('script');
+    script.src = '/static/extensions/feedback/lavish-capture.js?v=af721003';
+    script.dataset.vyasaLavishCapture = 'true';
+    script.onload = () => {
+      setAnnotationMode(document.body.classList.contains('vyasa-feedback-open') && annotationEnabled);
+      bindNestedHtmlFrame();
+    };
+    document.head.appendChild(script);
+  }
+
+  function bindNestedHtmlFrame() {
+    const frame = document.querySelector('#main-content iframe[src*=".html"]');
+    if (!frame) return;
+    const inject = () => {
+      try {
+        const doc = frame.contentDocument;
+        if (!doc || doc.querySelector('script[data-vyasa-lavish-capture]')) return;
+        const script = doc.createElement('script');
+        script.src = '/static/extensions/feedback/lavish-capture.js?v=af721003';
+        script.dataset.vyasaLavishCapture = 'true';
+        script.onload = () => frame.contentWindow?.postMessage({
+          type: 'lavish:setAnnotationMode',
+          enabled: document.body.classList.contains('vyasa-feedback-open') && annotationEnabled,
+        }, '*');
+        (doc.head || doc.documentElement).appendChild(script);
+      } catch (_) {}
+    };
+    frame.addEventListener('load', inject);
+    inject();
+  }
+
+  function loadQueued() {
+    try {
+      const value = JSON.parse(sessionStorage.getItem(queueKey) || '[]');
+      return Array.isArray(value) ? value : [];
+    } catch (_) { return []; }
+  }
+
+  function persistQueued() {
+    try {
+      if (queued.length) sessionStorage.setItem(queueKey, JSON.stringify(queued));
+      else sessionStorage.removeItem(queueKey);
+    } catch (_) {}
+  }
+
+  function enqueue(prompt) {
+    if (!prompt || typeof prompt !== 'object') return;
+    const replacement = typeof prompt._lavishQueueKey === 'string' ? prompt._lavishQueueKey.trim() : '';
+    const index = replacement ? queued.findIndex((item) => item._lavishQueueKey === replacement) : -1;
+    if (index >= 0) queued[index] = prompt;
+    else queued.push(prompt);
+    persistQueued();
+    renderQueue();
+  }
+
+  function renderQueue() {
+    pills.replaceChildren(...queued.map((prompt, index) => {
+      const pill = document.createElement('div');
+      const text = document.createElement('span');
+      const remove = document.createElement('button');
+      pill.className = 'vyasa-feedback-pill';
+      text.textContent = prompt.prompt;
+      text.title = `${prompt.selector || 'Document'}\n${prompt.prompt}`;
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.setAttribute('aria-label', 'Remove queued feedback');
+      remove.onclick = () => { queued.splice(index, 1); persistQueued(); renderQueue(); };
+      pill.append(text, remove);
+      return pill;
+    }));
+    sendButton.disabled = sending || presence === 'working';
+  }
+
+  function syncChat(events) {
+    const signature = JSON.stringify([presence, events.map((event) => [event.cursor, event.kind])]);
+    if (signature === knownEvents) return;
+    knownEvents = signature;
+    chat.replaceChildren(...events.map((event) => {
+      const bubble = document.createElement('div');
+      const label = document.createElement('small');
+      const body = document.createElement('div');
+      const role = event.kind === 'reply' ? 'agent' : 'user';
+      bubble.className = 'vyasa-feedback-bubble';
+      bubble.dataset.role = role;
+      label.textContent = role === 'agent' ? 'Agent' : 'You';
+      body.textContent = event.message || event.comment;
+      bubble.append(label, body);
+      return bubble;
+    }));
+    if (presence === 'working') {
+      const working = document.createElement('div');
+      working.className = 'vyasa-feedback-bubble';
+      working.textContent = 'Agent working…';
+      chat.appendChild(working);
+    }
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  async function refreshSession() {
+    if (!apiDocument) return;
+    try {
+      const response = await fetch(`/api/feedback/session/${apiDocument}`, { headers: { accept: 'application/json' } });
+      if (!response.ok) return;
+      const state = await response.json();
+      presence = state.presence || 'waiting';
+      presenceNode.dataset.state = presence;
+      presenceNode.textContent = presence;
+      banner.hidden = presence !== 'waiting';
+      syncChat(state.events || []);
+      renderQueue();
+    } catch (_) {}
+  }
+
+  function requestSnapshotAndSend() {
+    if (sending || presence === 'working') return;
+    const message = input.value.trim();
+    if (message) {
+      enqueue({ prompt: message, selector: '', tag: 'message', text: 'Freeform message' });
+      input.value = '';
+    }
+    if (!queued.length) { input.focus(); return; }
+    snapshot = '';
+    window.postMessage({ type: 'lavish:requestSnapshot' }, '*');
+    setTimeout(submitQueued, 250);
+  }
+
+  function targetFor(prompt) {
+    if (prompt.target) return { ...prompt.target, kind: prompt.target.kind || prompt.target.type || 'text-range' };
+    if (prompt.selector) return { kind: prompt.tag === 'text' ? 'text-range' : 'element', locator: { selector: prompt.selector }, quote: prompt.text || '' };
+    return { kind: 'document', locator: {} };
+  }
+
+  function surface() {
+    if (document.querySelector('.vyasa-mdx-payload')) return 'mdx';
+    if (document.querySelector('.pdf-viewer')) return 'pdf';
+    if (document.querySelector('[data-vyasa-review-surface="knowledge-graph"], [data-node-id], [data-edge-id]')) return 'knowledge-graph';
+    if (document.querySelector('#main-content iframe[src*=".html"]')) return 'html';
+    return 'markdown';
+  }
+
+  async function submitQueued() {
+    if (sending || !queued.length) return;
+    sending = true;
+    renderQueue();
+    const prompts = queued.slice();
+    try {
+      for (const prompt of prompts) {
+        const documentSurface = surface();
+        const response = await fetch(`/api/feedback/submit/${apiDocument}`, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            url: location.pathname + location.search,
+            surface: documentSurface, comment: String(prompt.prompt || ''),
+            target: targetFor(prompt),
+            snapshot: { dom: snapshot.slice(0, documentSurface === 'knowledge-graph' ? 8_000 : 24_000), selector: prompt.selector || '', tag: prompt.tag || '', selected: prompt.text || '' },
+          }),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const index = queued.indexOf(prompt);
+        if (index >= 0) queued.splice(index, 1);
+      }
+      persistQueued();
+      presence = 'working';
+      await refreshSession();
+    } catch (error) {
+      banner.hidden = false;
+      banner.textContent = `Could not send feedback: ${error.message}`;
+    } finally { sending = false; renderQueue(); }
+  }
+
+  async function copyListener() {
+    const command = `vyasa feedback poll ${JSON.stringify(location.href)}`;
+    const button = sidebar.querySelector('[data-copy-listener]');
+    try { await navigator.clipboard.writeText(command); button.textContent = 'Copied'; }
+    catch (_) { banner.hidden = false; banner.textContent = command; }
+    setTimeout(() => { button.textContent = 'Copy listener command'; }, 1500);
+  }
+
+  function init() {
+    const path = pathOf();
+    if (!path) return;
+    createUi();
+    if (path !== documentPath) {
+      documentPath = path;
+      apiDocument = path.split('/').map(encodeURIComponent).join('/');
+      queueKey = `vyasa-feedback:queued:${path}`;
+      queued = loadQueued();
+      knownEvents = '';
+      renderQueue();
+      refreshSession();
+      if (captureLoaded) bindNestedHtmlFrame();
+    }
+  }
+
+  window.addEventListener('message', (event) => {
+    if (event.source !== window && event.source !== document.querySelector('#main-content iframe[src*=".html"]')?.contentWindow) return;
+    const message = event.data || {};
+    if (message.type === 'lavish:queuePrompt') enqueue(message.prompt);
+    if (message.type === 'lavish:sendQueuedPrompts') requestSnapshotAndSend();
+    if (message.type === 'lavish:snapshot') { snapshot = String(message.snapshot || ''); submitQueued(); }
+  });
+  window.addEventListener('keydown', (event) => {
+    const open = document.body.classList.contains('vyasa-feedback-open');
+    if (event.key === 'Escape' && open) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeReview();
+      return;
+    }
+    if (open || event.key.toLowerCase() !== 'r' || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+    const editing = event.composedPath().some((node) => (
+      node instanceof Element
+      && (node.matches('input, textarea, select') || node.isContentEditable || node.closest('[data-lavish-ui]'))
+    ));
+    if (editing) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    openReview();
+  }, true);
+  document.addEventListener('DOMContentLoaded', init);
+  document.body.addEventListener('htmx:afterSwap', init);
+  setInterval(refreshSession, 2000);
+})();

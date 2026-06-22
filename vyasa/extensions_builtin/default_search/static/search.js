@@ -536,6 +536,7 @@ function initCommandPalette() {
         if (event.target === palette) close();
     });
     document.addEventListener('keydown', (event) => {
+        if (window.__vyasaShortcutsSuspended) return;
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
             event.preventDefault();
             open();

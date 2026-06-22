@@ -543,6 +543,7 @@ function initCommandPalette() {
         if (event.target === palette) close();
     });
     document.addEventListener('keydown', (event) => {
+        if (window.__vyasaShortcutsSuspended) return;
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
             event.preventDefault();
             open();
@@ -1231,26 +1232,40 @@ function initHeadingFolds(root = document) {
     main.dataset.headingFoldsInit = '1';
 }
 
+function ensureFloatingActionRail() {
+    let rail = document.getElementById('vyasa-floating-actions');
+    if (rail) return rail;
+    rail = document.createElement('div');
+    rail.id = 'vyasa-floating-actions';
+    rail.className = 'vyasa-floating-actions';
+    document.body.appendChild(rail);
+    return rail;
+}
+window.__vyasaEnsureFloatingActions = ensureFloatingActionRail;
+
 function initScrollTopButton(root = document) {
     const page = root.getElementById?.('page-container') || document.getElementById('page-container');
     if (!page || document.getElementById('vyasa-scroll-top')) return;
     const button = document.createElement('button');
     button.type = 'button';
     button.id = 'vyasa-scroll-top';
-    button.className = 'vyasa-scroll-top-button';
+    button.className = 'vyasa-floating-bubble vyasa-scroll-top-button';
     button.setAttribute('aria-label', 'Go to top');
     button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-scroll-top-icon"><path d="M12 19V7"/><path d="m6.75 12.25 5.25-5.25 5.25 5.25"/></svg>';
     button.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    document.body.appendChild(button);
+    const rail = ensureFloatingActionRail();
+    rail.appendChild(button);
     const sync = () => {
         const main = document.getElementById('main-content');
         const rect = main?.getBoundingClientRect();
         if (rect) {
-            const left = Math.max(16, rect.right - button.offsetWidth);
-            button.style.left = `${left}px`;
+            rail.style.left = Math.max(16, rect.right) + 'px';
+            rail.style.right = 'auto';
+            rail.style.transform = 'translateX(-100%)';
         }
         button.classList.toggle('is-visible', window.scrollY > 0);
     };
+    window.__vyasaSyncFloatingActions = sync;
     window.addEventListener('scroll', sync, { passive: true });
     window.addEventListener('resize', sync, { passive: true });
     sync();
@@ -1643,12 +1658,18 @@ function initMobileMenus() {
 }
 
 // Keyboard shortcuts for toggling sidebars
+function isEditableShortcutEvent(event) {
+    return event.composedPath().some((node) => (
+        node instanceof HTMLElement
+        && (node.matches('input, textarea, select') || node.isContentEditable || node.closest('[data-lavish-ui]'))
+    ));
+}
+
 function initKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
-        // Skip if user is typing in an input field
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
-            return;
-        }
+        if (window.__vyasaShortcutsSuspended) return;
+        // composedPath sees editors inside shadow DOM; event.target only sees the shadow host.
+        if (isEditableShortcutEvent(e)) return;
         if (e.metaKey || e.ctrlKey || e.altKey) return;
         
         // Z: Toggle posts panel
