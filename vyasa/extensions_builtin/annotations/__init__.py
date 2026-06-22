@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 from ...runtime_services import get_runtime_services
 from .api import CallableAnnotationStore, register_annotations_routes
@@ -13,7 +15,9 @@ class AnnotationsExtension(VyasaExtensionBase):
         app.assets.bundle(
             AssetBundle(
                 "annotations.runtime",
+                css=("/static/extensions/annotations/annotations.css",),
                 js=("/static/extensions/annotations/annotations.js",),
+                static_dir=Path(__file__).parent / "static",
             )
         )
 

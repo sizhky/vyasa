@@ -69,8 +69,8 @@ def test_extensions_default_preset_when_section_omitted(tmp_path, monkeypatch):
     assert plan.preset == "default"
     assert plan.selected_by_category["layout"] == ("default_layout",)
     assert plan.selected_by_category["render"] == ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "mdx", "html_viewer", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
-    assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "bookmarks", "api_catalog", "filesystem_routes")
-    assert "annotations" not in plan.enabled_ids
+    assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "annotations", "bookmarks", "api_catalog", "filesystem_routes")
+    assert "annotations" in plan.enabled_ids
     assert plan.enabled_ids[-1] == "filesystem"
 
 
@@ -237,7 +237,7 @@ def test_config_resolve_extensions_reads_extensions_section(tmp_path, monkeypatc
     assert set(CORE_CAPABILITIES) == {"cap:markdown_pipeline"}
 
 
-def test_default_route_extensions_exclude_annotations():
+def test_default_route_extensions_include_annotations():
     runtime = build_extension_runtime({})
 
     prefixes = {entry["prefix"] for entry in runtime.route_handlers}
@@ -245,17 +245,21 @@ def test_default_route_extensions_exclude_annotations():
     assert "/api/tasks" in prefixes
     assert "/api/bookmarks" in prefixes
     assert "/api/catalog" in prefixes
-    assert "/api/annotations" not in prefixes
-    assert "annotations" not in runtime.storage_namespaces
+    assert "/api/annotations" in prefixes
+    assert "annotations" in runtime.storage_namespaces
     assert "bookmarks" in runtime.storage_namespaces
 
 
-def test_annotations_extension_is_opt_in():
-    runtime = build_extension_runtime({"routes_add": ["annotations"]})
+def test_annotations_are_enabled_by_default_and_can_be_disabled(tmp_path):
+    try:
+        config = reload_config(tmp_path / ".vyasa")
+        assert config.get_annotations_enabled() is True
 
-    prefixes = {entry["prefix"] for entry in runtime.route_handlers}
-    assert "/api/annotations" in prefixes
-    assert "annotations" in runtime.storage_namespaces
+        (tmp_path / ".vyasa").write_text("[annotations]\nenabled = false\n", encoding="utf-8")
+        config = reload_config(tmp_path / ".vyasa")
+        assert config.get_annotations_enabled() is False
+    finally:
+        reload_config()
 
 
 def test_bookmarks_register_row_action_intent_not_html_decorator():
