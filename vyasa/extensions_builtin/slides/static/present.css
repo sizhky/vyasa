@@ -64,6 +64,22 @@
 
 .vyasa-zen-slide-body .code-block {
   position: relative;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.vyasa-zen-slide-body .code-block pre {
+  max-width: 100%;
+  overflow-x: auto !important;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+.vyasa-zen-slide-body .code-block pre code {
+  width: max-content;
+  min-width: 100%;
 }
 
 .vyasa-zen-slide-body .code-copy-button {
