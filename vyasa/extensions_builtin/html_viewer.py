@@ -1,9 +1,9 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from fasthtml.common import Div, H1, Iframe, to_xml
+from fasthtml.common import A, Div, H1, Iframe, Span, to_xml
 
-from ..document_pages import PAGE_TITLE_CLS, DocumentPage
+from ..document_pages import PAGE_TITLE_CLS, DocumentPage, action_icon
 from ..extensions import DocumentType, ExtensionMeta, VyasaExtensionBase
 from ..helpers import content_url_for_slug
 
@@ -28,12 +28,31 @@ def _frame(**attrs):
     )
 
 
+def _popout(src):
+    return A(
+        action_icon("external-link"),
+        Span("Open standalone", cls="text-sm font-medium"),
+        href=src,
+        target="_blank",
+        rel="noopener",
+        hx_boost="false",
+        data_tooltip="Open raw HTML in a new tab",
+        aria_label="Open raw HTML in a new tab",
+        cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+    )
+
+
 def render_html_document(context):
     title = _title(context.path, context.abbreviations, context.slug_to_title)
+    src = content_url_for_slug(context.path, suffix=".html")
     content = Div(
         context.breadcrumbs,
-        H1(title, cls=f"{PAGE_TITLE_CLS} mb-6"),
-        _frame(src=content_url_for_slug(context.path, suffix=".html")),
+        Div(
+            H1(title, cls=PAGE_TITLE_CLS),
+            _popout(src),
+            cls="flex items-center justify-between gap-3 mb-6",
+        ),
+        _frame(src=src),
     )
     return DocumentPage(title, context.path, content, file_path=str(context.document.path), show_toc=False).render(
         context.layout, htmx=context.htmx, blog_title=context.blog_title, auth=context.auth
