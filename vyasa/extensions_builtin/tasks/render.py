@@ -12,6 +12,7 @@ from ..markdown.renderer import _render_markdown_fragment
 
 
 _diagram_uid_counter = count(1)
+_FULLSCREEN_EXPAND_ICON = '<uk-icon icon="expand" class="w-4 h-4"></uk-icon>'
 _RENDERABLE_NODE_KEYS = {
     "id", "label", "kind", "__kind__", "group_id", "parent_group_id",
     "handlelayout", "highlightmode", "sourcegroupid",
@@ -240,7 +241,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         f'style="{container_style}" '
         f'data-tasks-widget="true" id="{widget_id}" data-tasks-title="{title}" data-tasks-standalone="{str(standalone).lower()}" data-tasks-default-open-depth="{default_open_depth}" data-tasks-gantt="{str(gantt_enabled).lower()}" data-tasks-default-view="{html.escape(default_view)}" data-tasks-open-filters-default="{str(open_filters_by_default).lower()}" data-tasks-node-card-width="{node_card_width}" data-tasks-hover-font-size="{hover_font_size}" data-tasks-color-mix="{color_mix}" data-tasks-color-mix-intensity="{color_mix_intensity}" data-tasks-projection-group-opacity="{projection_group_opacity}" data-tasks-projection-unspecified-group-opacity="{projection_unspecified_group_opacity}" data-tasks-jitter="{jitter}" data-tasks-jitter-y="{jitter_y}" data-tasks-spacing="{spacing}"{optional_layout_attrs_str} data-tasks-payload="{payload}" data-tasks-graph="{graph_payload}">'
         f'<div class="absolute top-2 right-2 z-10 flex items-center gap-1">'
-        f'<button onclick="openTasksFullscreen(\'{widget_id}\')" class="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen (Shift+F)">⛶</button>'
+        f'<button onclick="openTasksFullscreen(\'{widget_id}\')" data-vyasa-tasks-fullscreen-toggle="{widget_id}" class="vyasa-tasks-fullscreen-toggle px-1.5 py-1 text-xs border rounded inline-flex items-center justify-center text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen (Shift+F)" aria-label="Fullscreen (Shift+F)">{_FULLSCREEN_EXPAND_ICON}</button>'
         f'<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">'
         f'<button type="button" title="Show graph shortcuts and gestures" onclick="runTasksHeaderAction(\'{widget_id}\', \'toggleHelp\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">?</button>'
         f'<button type="button" title="Fit view" onclick="runTasksHeaderAction(\'{widget_id}\', \'fit\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">F</button>'

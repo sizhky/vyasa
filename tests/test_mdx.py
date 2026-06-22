@@ -114,6 +114,9 @@ def test_excalidraw_is_available_without_an_import():
     assert "Excalidraw requires a stable id" in component_source
     assert "latest !== revision.current" in component_source
     assert "suppressSave.current" in component_source
+    assert "if (fallback.ok) data = await fallback.json()" in component_source
+    assert "response.status !== 404 || fallback.status !== 404" in component_source
+    assert "style: { paddingTop: 24 }" in component_source
 
     bundle = build_extension_runtime({}).bundles["mdx.runtime"]
     assert bundle.js == (

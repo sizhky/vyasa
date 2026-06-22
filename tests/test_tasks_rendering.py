@@ -680,6 +680,14 @@ def test_tasks_fullscreen_reuses_canvas_background_contract():
     assert "window.React.createElement(rf.Background, backgroundProps)" in source
     assert "fullscreenWrapper.className = 'tasks-container relative';" in source
     assert "tasksHeaderControlsHtml(fullscreenId, false)" in source
+    assert "data-vyasa-tasks-fullscreen-toggle" in source
+    assert "vyasa-tasks-fullscreen-toggle" in source
+    assert "stroke-width: 1.5 !important" in source
+    assert "function syncTasksFullscreenButton(wrapper)" in source
+    assert "function tasksFullscreenIconHtml(on = false)" in source
+    assert "'shrink' : 'expand'" in source
+    assert "button.innerHTML = tasksFullscreenIconHtml(on);" in source
+    assert "syncTasksFullscreenButton(wrapper);" in source
     assert "runTasksHeaderAction('${fullscreenId}', 'toggleFilters')" in source
     assert "modal.className = 'fixed inset-0 z-[10000] bg-black/88 backdrop-blur-sm';" in source
     assert "flow.style.flex = '1 1 auto';" in source

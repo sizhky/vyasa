@@ -420,7 +420,7 @@ class VyasaConfig:
         cfg = self._config.get('annotations', {})
         if not isinstance(cfg, dict):
             cfg = {}
-        value = cfg.get('enabled', self.get('annotations_enabled', 'VYASA_ANNOTATIONS_ENABLED', False))
+        value = cfg.get('enabled', self.get('annotations_enabled', 'VYASA_ANNOTATIONS_ENABLED', True))
         if isinstance(value, str):
             return value.lower() in ('true', '1', 'yes', 'on')
         return bool(value)
