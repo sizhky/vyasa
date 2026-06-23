@@ -258,7 +258,6 @@ html { overflow-x: hidden; overflow-x: clip; }
 #content-with-sidebars .vyasa-main-shell img,
 #content-with-sidebars .vyasa-main-shell video,
 #content-with-sidebars .vyasa-main-shell iframe,
-#content-with-sidebars .vyasa-main-shell svg,
 #content-with-sidebars .vyasa-main-shell canvas {
     max-width: 100%;
 }

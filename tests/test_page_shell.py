@@ -198,6 +198,7 @@ def test_sidebars_bound_main_content_width():
     assert "overflow: clip;" in css
     assert "#content-with-sidebars .tasks-container:not([data-tasks-maximized=\"true\"])" in css
     assert "#content-with-sidebars .vyasa-main-shell img" in css
+    assert "#content-with-sidebars .vyasa-main-shell svg" not in css
     assert "width: 100% !important;" in css
     assert "window.dispatchEvent(new Event('resize'));" in source
 

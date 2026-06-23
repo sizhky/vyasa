@@ -309,7 +309,8 @@ def test_feedback_review_lifts_lavish_capture_and_conversation_contract():
     assert 'document.addEventListener(\n    "mouseover"' in capture
     assert "lavish:queuePrompt" in client
     assert "lavish:requestSnapshot" not in client
-    assert "Copy listener command" in client
+    assert "Copy command to start agent" in client
+    assert "Your agent is not connected" in client
     assert "Conversation" in client
     assert "vyasa-feedback-sidebar" in client
     assert "renderMarkdown(event.message || '')" in client

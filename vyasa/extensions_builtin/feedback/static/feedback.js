@@ -43,7 +43,7 @@
     sidebar.innerHTML = `
       <header class="vyasa-feedback-head"><div><div class="vyasa-feedback-heading">Conversation</div><span class="vyasa-feedback-presence" data-state="waiting">waiting</span></div><div class="vyasa-feedback-head-actions"><label class="vyasa-feedback-mode"><span>Annotate Mode</span><input type="checkbox" role="switch" checked data-annotation-mode></label><button class="vyasa-feedback-close" type="button" aria-label="Close review">×</button></div></header>
       <div class="vyasa-feedback-chat"></div>
-      <div class="vyasa-feedback-compose"><div class="vyasa-feedback-banner">Your agent is not listening. Start the listener command below.</div><div class="vyasa-feedback-pills"></div><textarea class="vyasa-feedback-input" placeholder="Write a message for the agent..."></textarea><div class="vyasa-feedback-actions"><button class="vyasa-feedback-action secondary" type="button" data-copy-listener>Copy listener command</button><button class="vyasa-feedback-action" type="button" data-send>Send to Agent</button></div></div>`;
+      <div class="vyasa-feedback-compose"><div class="vyasa-feedback-banner">Your agent is not connected. Copy the command, run it in a terminal, then send feedback.</div><div class="vyasa-feedback-pills"></div><textarea class="vyasa-feedback-input" placeholder="Write a message for the agent..."></textarea><div class="vyasa-feedback-actions"><button class="vyasa-feedback-action secondary" type="button" data-copy-listener>Copy command to start agent</button><button class="vyasa-feedback-action" type="button" data-send>Send to Agent</button></div></div>`;
     document.body.appendChild(sidebar);
     floatingActions().prepend(launcher);
     chat = sidebar.querySelector('.vyasa-feedback-chat');
@@ -343,7 +343,7 @@
     const button = sidebar.querySelector('[data-copy-listener]');
     try { await navigator.clipboard.writeText(command); button.textContent = 'Copied'; }
     catch (_) { banner.hidden = false; banner.textContent = command; }
-    setTimeout(() => { button.textContent = 'Copy listener command'; }, 1500);
+    setTimeout(() => { button.textContent = 'Copy command to start agent'; }, 1500);
   }
 
   function init() {
