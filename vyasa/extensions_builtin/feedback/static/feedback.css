@@ -29,9 +29,15 @@
 .vyasa-feedback-mode input:focus-visible { outline: 2px solid var(--vyasa-primary); outline-offset: 2px; }
 .vyasa-feedback-close { border: 0; color: var(--vyasa-ink-soft); background: transparent; font-size: 1.25rem; cursor: pointer; }
 .vyasa-feedback-chat { min-height: 0; overflow-y: auto; padding: 1rem; }
-.vyasa-feedback-bubble { max-width: 88%; margin: 0 0 .7rem; padding: .65rem .75rem; border-radius: .75rem; background: var(--vyasa-paper-low); font-size: .8rem; white-space: pre-wrap; }
+.vyasa-feedback-bubble { max-width: 88%; margin: 0 0 .7rem; padding: .65rem .75rem; border-radius: .75rem; background: var(--vyasa-paper-low); font-size: .8rem; }
 .vyasa-feedback-bubble[data-role="user"] { margin-left: auto; color: var(--vyasa-primary-text); background: var(--vyasa-primary); }
 .vyasa-feedback-bubble small { display: block; margin-bottom: .2rem; opacity: .68; font-size: .64rem; text-transform: uppercase; }
+.vyasa-feedback-body { white-space: pre-wrap; }
+.vyasa-feedback-body p { margin: 0 0 .45rem; }
+.vyasa-feedback-body p:last-child { margin-bottom: 0; }
+.vyasa-feedback-body ul, .vyasa-feedback-body ol { margin: .25rem 0 .45rem 1.1rem; padding: 0; }
+.vyasa-feedback-body pre { overflow-x: auto; margin: .35rem 0; padding: .5rem; border-radius: .45rem; background: color-mix(in srgb, var(--vyasa-ink) 8%, transparent); }
+.vyasa-feedback-body code { font-family: var(--vyasa-font-mono, monospace); font-size: .78rem; }
 .vyasa-feedback-compose { display: grid; gap: .65rem; padding: .8rem 1rem 1rem; border-top: 1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent); }
 .vyasa-feedback-banner { padding: .55rem .65rem; border-radius: .45rem; color: #7b571e; background: #fff3d7; font-size: .72rem; }
 .vyasa-feedback-pills { display: flex; flex-wrap: wrap; gap: .35rem; }

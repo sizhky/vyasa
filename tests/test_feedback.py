@@ -236,5 +236,8 @@ def test_feedback_review_lifts_lavish_capture_and_conversation_contract():
     assert "Copy listener command" in client
     assert "Conversation" in client
     assert "vyasa-feedback-sidebar" in client
+    assert "renderMarkdown(event.message || '')" in client
+    assert "safeHref" in client
+    assert "body.textContent = event.comment || ''" in client
     assert "const message = { type: 'lavish:setAnnotationMode', enabled }" in client
     assert "window.postMessage(message, '*')" in client

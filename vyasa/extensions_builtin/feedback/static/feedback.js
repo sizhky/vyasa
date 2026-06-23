@@ -152,6 +152,61 @@
     } catch (_) {}
   }
 
+  function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[char]));
+  }
+
+  function safeHref(value) {
+    const href = String(value || '').trim();
+    return /^(https?:|mailto:|\/|#)/i.test(href) ? href : '#';
+  }
+
+  function renderInlineMarkdown(value) {
+    const links = [];
+    const linked = String(value || '').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_match, label, href) => {
+      links.push({ label, href });
+      return `@@LAVISH_LINK_${links.length - 1}@@`;
+    });
+    return escapeHtml(linked)
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+      .replace(/@@LAVISH_LINK_(\d+)@@/g, (_match, index) => {
+        const link = links[Number(index)] || {};
+        return `<a href="${escapeHtml(safeHref(link.href))}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.label)}</a>`;
+      });
+  }
+
+  function renderMarkdown(value) {
+    const lines = String(value || '').split(/\r?\n/);
+    const html = [];
+    let list = '';
+    let inCode = false;
+    for (const line of lines) {
+      if (line.trim().startsWith('```')) {
+        if (list) { html.push(`</${list}>`); list = ''; }
+        html.push(inCode ? '</code></pre>' : '<pre><code>');
+        inCode = !inCode;
+      } else if (inCode) html.push(`${escapeHtml(line)}\n`);
+      else {
+        const item = line.match(/^(\s*)([-*]|\d+\.)\s+(.+)$/);
+        if (item) {
+          const tag = /^\d+\./.test(item[2]) ? 'ol' : 'ul';
+          if (list !== tag) { if (list) html.push(`</${list}>`); html.push(`<${tag}>`); list = tag; }
+          html.push(`<li>${renderInlineMarkdown(item[3])}</li>`);
+        } else {
+          if (list) { html.push(`</${list}>`); list = ''; }
+          if (line.trim()) html.push(`<p>${renderInlineMarkdown(line)}</p>`);
+        }
+      }
+    }
+    if (list) html.push(`</${list}>`);
+    if (inCode) html.push('</code></pre>');
+    return html.join('');
+  }
+
   function enqueue(prompt) {
     if (!prompt || typeof prompt !== 'object') return;
     const replacement = typeof prompt._lavishQueueKey === 'string' ? prompt._lavishQueueKey.trim() : '';
@@ -192,7 +247,9 @@
       bubble.className = 'vyasa-feedback-bubble';
       bubble.dataset.role = role;
       label.textContent = role === 'agent' ? 'Agent' : 'You';
-      body.textContent = event.message || event.comment;
+      body.className = 'vyasa-feedback-body';
+      if (role === 'agent') body.innerHTML = renderMarkdown(event.message || '');
+      else body.textContent = event.comment || '';
       bubble.append(label, body);
       return bubble;
     }));
