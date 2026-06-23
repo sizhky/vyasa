@@ -335,6 +335,7 @@ def test_feedback_review_lifts_lavish_capture_and_conversation_contract():
     assert "lavish:requestSnapshot" not in client
     assert "Copy command to start agent" in client
     assert "Your agent is not connected" in client
+    assert ".vyasa-feedback-actions { display: grid; gap: .5rem; }" in css
     assert "Conversation" in client
     assert "vyasa-feedback-sidebar" in client
     assert "event.message_html || renderMarkdown(event.message || '')" in client

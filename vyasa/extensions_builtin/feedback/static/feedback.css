@@ -46,9 +46,9 @@
 .vyasa-feedback-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vyasa-feedback-pill button { border: 0; color: inherit; background: transparent; cursor: pointer; }
 .vyasa-feedback-input { width: 100%; min-height: 6rem; resize: vertical; padding: .7rem; border: 1px solid color-mix(in srgb, var(--vyasa-ink) 18%, transparent); border-radius: var(--vyasa-button-radius, .5rem); color: var(--vyasa-ink); background: var(--vyasa-paper); font: inherit; }
-.vyasa-feedback-actions { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.vyasa-feedback-actions { display: grid; gap: .5rem; }
 .vyasa-feedback-action { padding: .55rem .7rem; border: 0; border-radius: var(--vyasa-button-radius, .5rem); color: var(--vyasa-primary-text); background: var(--vyasa-primary); font-weight: 650; cursor: pointer; }
-.vyasa-feedback-action.secondary { color: var(--vyasa-link); background: transparent; font-size: .7rem; }
+.vyasa-feedback-action.secondary { color: var(--vyasa-link); background: color-mix(in srgb, var(--vyasa-link) 8%, transparent); font-size: .78rem; }
 .vyasa-feedback-action:disabled { cursor: wait; opacity: .55; }
 @media (max-width: 800px) {
   :root { --vyasa-feedback-width: min(25rem, 100vw); }
