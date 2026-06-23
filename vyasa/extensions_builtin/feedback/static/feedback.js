@@ -17,6 +17,7 @@
   let input;
   let pills;
   let sendButton;
+  let copyPayloadButton;
   let presenceNode;
   let banner;
   let annotationToggle;
@@ -44,19 +45,21 @@
     sidebar.innerHTML = `
       <header class="vyasa-feedback-head"><div><div class="vyasa-feedback-heading">Conversation</div><span class="vyasa-feedback-presence" data-state="waiting">waiting</span></div><div class="vyasa-feedback-head-actions"><label class="vyasa-feedback-mode"><span>Annotate Mode (A)</span><input type="checkbox" role="switch" checked data-annotation-mode aria-keyshortcuts="A"></label><button class="vyasa-feedback-close" type="button" aria-label="Close review">×</button></div></header>
       <div class="vyasa-feedback-chat"></div>
-      <div class="vyasa-feedback-compose"><div class="vyasa-feedback-banner">Your agent is not connected. Copy the command, run it in a terminal, then send feedback.</div><div class="vyasa-feedback-pills"></div><textarea class="vyasa-feedback-input" placeholder="Write a message for the agent..."></textarea><div class="vyasa-feedback-actions"><button class="vyasa-feedback-action secondary" type="button" data-copy-listener>Copy command to start agent</button><button class="vyasa-feedback-action" type="button" data-send>Send to Agent</button></div></div>`;
+      <div class="vyasa-feedback-compose"><div class="vyasa-feedback-banner">Your agent is not connected. Copy the command, run it in a terminal, then send feedback.</div><div class="vyasa-feedback-pills"></div><textarea class="vyasa-feedback-input" placeholder="Write a message for the agent..."></textarea><div class="vyasa-feedback-actions"><button class="vyasa-feedback-action secondary" type="button" data-copy-listener>Copy command to start agent</button><button class="vyasa-feedback-action secondary" type="button" data-copy-payload>Copy feedback payload</button><button class="vyasa-feedback-action" type="button" data-send>Send to Agent</button></div></div>`;
     document.body.appendChild(sidebar);
     floatingActions().prepend(launcher);
     chat = sidebar.querySelector('.vyasa-feedback-chat');
     input = sidebar.querySelector('.vyasa-feedback-input');
     pills = sidebar.querySelector('.vyasa-feedback-pills');
     sendButton = sidebar.querySelector('[data-send]');
+    copyPayloadButton = sidebar.querySelector('[data-copy-payload]');
     presenceNode = sidebar.querySelector('.vyasa-feedback-presence');
     banner = sidebar.querySelector('.vyasa-feedback-banner');
     annotationToggle = sidebar.querySelector('[data-annotation-mode]');
     launcher.onclick = openReview;
     sidebar.querySelector('.vyasa-feedback-close').onclick = closeReview;
     sidebar.querySelector('[data-copy-listener]').onclick = copyListener;
+    copyPayloadButton.onclick = copyFeedbackPayload;
     sendButton.onclick = requestSnapshotAndSend;
     annotationToggle.onchange = () => {
       annotationEnabled = annotationToggle.checked;
@@ -68,6 +71,7 @@
         requestSnapshotAndSend();
       }
     });
+    input.addEventListener('input', renderQueue);
   }
 
   function floatingActions() {
@@ -285,6 +289,7 @@
       return pill;
     }));
     sendButton.disabled = sending || presence === 'working';
+    copyPayloadButton.disabled = sending || !pendingPrompts().length;
   }
 
   function syncChat(events) {
@@ -351,6 +356,35 @@
     return { kind: 'document', locator: {} };
   }
 
+  function pendingPrompts() {
+    const message = input?.value.trim();
+    return message
+      ? queued.concat({ prompt: message, selector: '', tag: 'message', text: 'Freeform message' })
+      : queued.slice();
+  }
+
+  function feedbackPayload(prompt) {
+    return {
+      url: location.pathname + location.search,
+      surface: prompt.surface || surface(),
+      comment: String(prompt.prompt || ''),
+      target: targetFor(prompt),
+      snapshot: { selector: prompt.selector || '', tag: prompt.tag || '', selected: prompt.text || '' },
+    };
+  }
+
+  function agentFeedbackPayload() {
+    return {
+      document: documentPath,
+      status: 'feedback',
+      events: pendingPrompts().map((prompt, index) => ({
+        cursor: index + 1,
+        kind: 'feedback',
+        ...feedbackPayload(prompt),
+      })),
+    };
+  }
+
   function surface() {
     if (document.querySelector('.vyasa-mdx-payload')) return 'mdx';
     if (document.querySelector('.pdf-viewer')) return 'pdf';
@@ -369,12 +403,7 @@
         const documentSurface = surface();
         const response = await fetch(`/api/feedback/submit/${apiDocument}`, {
           method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            url: location.pathname + location.search,
-            surface: documentSurface, comment: String(prompt.prompt || ''),
-            target: targetFor(prompt),
-            snapshot: { selector: prompt.selector || '', tag: prompt.tag || '', selected: prompt.text || '' },
-          }),
+          body: JSON.stringify(feedbackPayload({ ...prompt, surface: documentSurface })),
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const index = queued.indexOf(prompt);
@@ -395,6 +424,18 @@
     try { await navigator.clipboard.writeText(command); button.textContent = 'Copied'; }
     catch (_) { banner.hidden = false; banner.textContent = command; }
     setTimeout(() => { button.textContent = 'Copy command to start agent'; }, 1500);
+  }
+
+  async function copyFeedbackPayload() {
+    const payload = JSON.stringify(agentFeedbackPayload(), null, 2);
+    try {
+      await navigator.clipboard.writeText(payload);
+      copyPayloadButton.textContent = 'Copied feedback payload';
+    } catch (_) {
+      banner.hidden = false;
+      banner.textContent = payload;
+    }
+    setTimeout(() => { copyPayloadButton.textContent = 'Copy feedback payload'; }, 1500);
   }
 
   function init() {

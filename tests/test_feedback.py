@@ -341,6 +341,11 @@ def test_feedback_review_lifts_lavish_capture_and_conversation_contract():
     assert "lavish:queuePrompt" in client
     assert "lavish:requestSnapshot" not in client
     assert "Copy command to start agent" in client
+    assert "Copy feedback payload" in client
+    assert "data-copy-payload" in client
+    assert "function agentFeedbackPayload()" in client
+    assert "events: pendingPrompts().map" in client
+    assert "body: JSON.stringify(feedbackPayload" in client
     assert "Your agent is not connected" in client
     assert ".vyasa-feedback-actions { display: grid; gap: .5rem; }" in css
     assert "Conversation" in client
