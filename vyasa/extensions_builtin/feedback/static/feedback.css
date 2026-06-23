@@ -33,6 +33,7 @@
 .vyasa-feedback-bubble[data-role="user"] { margin-left: auto; color: var(--vyasa-primary-text); background: var(--vyasa-primary); }
 .vyasa-feedback-bubble small { display: block; margin-bottom: .2rem; opacity: .68; font-size: .64rem; text-transform: uppercase; }
 .vyasa-feedback-body { white-space: pre-wrap; }
+.vyasa-feedback-body[data-rendered="true"] { white-space: normal; }
 .vyasa-feedback-body p { margin: 0 0 .45rem; }
 .vyasa-feedback-body p:last-child { margin-bottom: 0; }
 .vyasa-feedback-body ul, .vyasa-feedback-body ol { margin: .25rem 0 .45rem 1.1rem; padding: 0; }

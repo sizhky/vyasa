@@ -193,6 +193,30 @@ def test_feedback_api_queues_polls_acknowledges_and_replies(tmp_path):
         response = asyncio.run(reply("plan", FakeRequest({"message": "Updated", "ack_cursor": cursor})))
         assert response.status_code == 201
         assert store.recent("plan")[-1].payload["message"] == "Updated"
+        assert store.recent("plan")[-1].payload["message_html"]
+    finally:
+        set_runtime_services(None)
+
+
+def test_feedback_reply_renders_with_vyasa_markdown(tmp_path):
+    set_runtime_services({"content_path_for_slug": lambda slug, suffix="": tmp_path / f"{slug}{suffix}"})
+    try:
+        handlers, store, _ = feedback_handlers(tmp_path)
+        reply = handlers[("POST", "/api/feedback/reply/{path:path}")]
+        session = handlers[("GET", "/api/feedback/session/{path:path}")]
+
+        response = asyncio.run(reply("plan", FakeRequest({
+            "message": "**bold**\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n$$\nx=1\n$$",
+        })))
+        event = json.loads(response.body)["event"]
+        state = json.loads(asyncio.run(session("plan", FakeRequest())).body)
+
+        assert response.status_code == 201
+        assert "<strong>bold</strong>" in event["message_html"]
+        assert "vyasa-table-scroll" in event["message_html"]
+        assert "$$\nx=1\n$$" in event["message_html"]
+        assert state["events"][0]["message_html"] == event["message_html"]
+        assert store.recent("plan")[-1].payload["message_html"] == event["message_html"]
     finally:
         set_runtime_services(None)
 
@@ -313,7 +337,9 @@ def test_feedback_review_lifts_lavish_capture_and_conversation_contract():
     assert "Your agent is not connected" in client
     assert "Conversation" in client
     assert "vyasa-feedback-sidebar" in client
-    assert "renderMarkdown(event.message || '')" in client
+    assert "event.message_html || renderMarkdown(event.message || '')" in client
+    assert "body.dataset.rendered = event.message_html ? 'true' : 'false'" in client
+    assert "window.__vyasaRenderMathSafely?.(body)" in client
     assert "safeHref" in client
     assert "body.textContent = event.comment || ''" in client
     assert "window.dispatchEvent(new Event('resize'));" in client

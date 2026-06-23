@@ -213,6 +213,10 @@
     return html.join('');
   }
 
+  function hydrateReply(body) {
+    window.__vyasaRenderMathSafely?.(body);
+  }
+
   function enqueue(prompt) {
     if (!prompt || typeof prompt !== 'object') return;
     const replacement = typeof prompt._lavishQueueKey === 'string' ? prompt._lavishQueueKey.trim() : '';
@@ -254,7 +258,11 @@
       bubble.dataset.role = role;
       label.textContent = role === 'agent' ? 'Agent' : 'You';
       body.className = 'vyasa-feedback-body';
-      if (role === 'agent') body.innerHTML = renderMarkdown(event.message || '');
+      if (role === 'agent') {
+        body.innerHTML = event.message_html || renderMarkdown(event.message || '');
+        body.dataset.rendered = event.message_html ? 'true' : 'false';
+        hydrateReply(body);
+      }
       else body.textContent = event.comment || '';
       bubble.append(label, body);
       return bubble;

@@ -8,6 +8,7 @@ import time
 from typing import cast
 from uuid import uuid4
 
+from fasthtml.common import to_xml
 from starlette.responses import Response
 
 from ...api_catalog import publish_api
@@ -151,7 +152,7 @@ def _delivered_event(event, current_revision: str) -> dict:
 
 def _event_summary(event) -> dict:
     payload = event_payload(event)
-    keys = ("cursor", "id", "kind", "created_at", "comment", "message", "author", "revision", "surface")
+    keys = ("cursor", "id", "kind", "created_at", "comment", "message", "message_html", "author", "revision", "surface")
     return {key: payload[key] for key in keys if key in payload}
 
 
@@ -165,6 +166,21 @@ def _parse_object(raw: bytes) -> dict | None:
 
 def _context_size(payload: dict) -> int:
     return len(json.dumps({"target": payload.get("target"), "snapshot": payload.get("snapshot")}).encode("utf-8"))
+
+
+def _render_reply_html(message: str, document: str) -> str:
+    try:
+        from ..markdown.renderer import from_md
+
+        rendered = from_md(
+            message,
+            current_path=document,
+            emit_bundle_nodes=False,
+            apply_class_mods=True,
+        )
+        return to_xml(rendered)
+    except Exception:
+        return ""
 
 
 def register_feedback_routes(
@@ -343,6 +359,6 @@ def register_feedback_routes(
             event_id=uuid4().hex,
             document=document,
             kind="reply",
-            payload={"message": message, "revision": _revision(document)},
+            payload={"message": message, "message_html": _render_reply_html(message, document), "revision": _revision(document)},
         )
         return _json({"ok": True, "event": event_payload(event), "ack_cursor": store.acknowledged_cursor(document)}, 201)

@@ -1870,6 +1870,7 @@ function renderMathSafely(root) {
     walker.currentNode = root;
     while ((node = walker.nextNode())) if (node.nodeValue && node.nodeValue.includes(marker)) node.nodeValue = node.nodeValue.split(marker).join('$');
 }
+window.__vyasaRenderMathSafely = renderMathSafely;
 
 function ensureFragmentStylesheets(root = document) {
     const scope = root instanceof Element || root instanceof Document ? root : document;

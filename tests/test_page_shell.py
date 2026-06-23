@@ -203,6 +203,12 @@ def test_sidebars_bound_main_content_width():
     assert "window.dispatchEvent(new Event('resize'));" in source
 
 
+def test_runtime_exposes_math_render_hook_for_dynamic_fragments():
+    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+
+    assert "window.__vyasaRenderMathSafely = renderMathSafely;" in source
+
+
 def test_copy_markdown_button_keeps_raw_content_out_of_searchable_dom():
     button_html = to_xml(copy_raw_button("Copy Markdown", "# Heading\nbody", "raw-md-toast"))
     aux_html = "".join(to_xml(node) for node in copy_raw_nodes("# Heading\nbody"))
