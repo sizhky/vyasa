@@ -231,6 +231,24 @@ def test_feedback_poll_wakes_when_feedback_arrives(tmp_path):
         set_runtime_services(None)
 
 
+def test_feedback_poll_cancellation_returns_client_closed_status(tmp_path):
+    handlers, _, presence = feedback_handlers(tmp_path)
+    poll = handlers[("GET", "/api/feedback/poll/{path:path}")]
+
+    async def run_and_cancel():
+        pending = asyncio.create_task(poll("plan", FakeRequest(query={"after": "0", "timeout": "30"})))
+        await asyncio.sleep(0.01)
+        pending.cancel()
+        return await pending
+
+    cancelled = asyncio.run(run_and_cancel())
+    payload = json.loads(cancelled.body)
+
+    assert cancelled.status_code == 499
+    assert payload["status"] == "cancelled"
+    assert presence.is_listening("plan") is False
+
+
 def test_feedback_reply_then_poll_reuses_one_cli_call(monkeypatch, capsys):
     calls = []
 

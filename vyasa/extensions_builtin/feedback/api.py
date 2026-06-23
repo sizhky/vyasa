@@ -275,23 +275,26 @@ def register_feedback_routes(
         except (TypeError, ValueError):
             return _json({"error": "after and timeout must be numbers"}, 400)
         deadline = time.monotonic() + timeout
-        with presence.polling(document):
-            while True:
-                events = store.after(document, after, kinds=("feedback",))
-                if events:
-                    current_revision = _revision(document)
-                    store.mark_delivered(document, events[-1].cursor)
-                    return _json({
-                        "document": document,
-                        "status": "feedback",
-                        "after": after,
-                        "cursor": events[-1].cursor,
-                        "current_revision": current_revision,
-                        "events": [_delivered_event(event, current_revision) for event in events],
-                    })
-                if time.monotonic() >= deadline:
-                    return _json({"document": document, "status": "timeout", "after": after, "cursor": after, "events": []})
-                await wait_for_feedback(deadline)
+        try:
+            with presence.polling(document):
+                while True:
+                    events = store.after(document, after, kinds=("feedback",))
+                    if events:
+                        current_revision = _revision(document)
+                        store.mark_delivered(document, events[-1].cursor)
+                        return _json({
+                            "document": document,
+                            "status": "feedback",
+                            "after": after,
+                            "cursor": events[-1].cursor,
+                            "current_revision": current_revision,
+                            "events": [_delivered_event(event, current_revision) for event in events],
+                        })
+                    if time.monotonic() >= deadline:
+                        return _json({"document": document, "status": "timeout", "after": after, "cursor": after, "events": []})
+                    await wait_for_feedback(deadline)
+        except asyncio.CancelledError:
+            return _json({"document": document, "status": "cancelled", "after": after, "cursor": after, "events": []}, 499)
 
     @publish_api(
         rt,
