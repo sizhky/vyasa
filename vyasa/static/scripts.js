@@ -1538,6 +1538,12 @@ function initMobileMenus() {
             window.setTimeout(() => button.classList.remove('vyasa-sidebar-toggle-pulse'), 1600);
         });
     };
+    const syncContentResize = () => {
+        requestAnimationFrame(() => {
+            window.dispatchEvent(new Event('resize'));
+            window.__vyasaSyncFloatingActions?.();
+        });
+    };
 
     const toggleDockedSidebar = (kind) => {
         const sidebar = document.getElementById(`${kind}-sidebar`);
@@ -1550,6 +1556,7 @@ function initMobileMenus() {
             if (hidden) localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '1');
             else localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '0');
         } catch (_) {}
+        syncContentResize();
         return true;
     };
 

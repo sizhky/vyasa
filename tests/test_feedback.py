@@ -259,6 +259,10 @@ def test_feedback_review_lifts_lavish_capture_and_conversation_contract():
         Path(__file__).parents[1]
         / "vyasa" / "extensions_builtin" / "feedback" / "static" / "feedback.js"
     ).read_text(encoding="utf-8")
+    css = (
+        Path(__file__).parents[1]
+        / "vyasa" / "extensions_builtin" / "feedback" / "static" / "feedback.css"
+    ).read_text(encoding="utf-8")
 
     assert "showAnnotationCard" in capture
     assert "textSelectionContext" in capture
@@ -293,5 +297,7 @@ def test_feedback_review_lifts_lavish_capture_and_conversation_contract():
     assert "renderMarkdown(event.message || '')" in client
     assert "safeHref" in client
     assert "body.textContent = event.comment || ''" in client
+    assert "window.dispatchEvent(new Event('resize'));" in client
+    assert ".vyasa-feedback-open #page-container { width: calc(100vw - var(--vyasa-feedback-width));" in css
     assert "const message = { type: 'lavish:setAnnotationMode', enabled }" in client
     assert "window.postMessage(message, '*')" in client

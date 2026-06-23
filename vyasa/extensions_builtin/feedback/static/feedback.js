@@ -84,7 +84,10 @@
   function openReview() {
     loadCapture();
     document.body.classList.add('vyasa-feedback-open');
-    requestAnimationFrame(() => window.__vyasaSyncFloatingActions?.());
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'));
+      window.__vyasaSyncFloatingActions?.();
+    });
     launcher.setAttribute('aria-expanded', 'true');
     setAnnotationMode(annotationEnabled);
     input.focus();
@@ -93,7 +96,10 @@
 
   function closeReview() {
     document.body.classList.remove('vyasa-feedback-open');
-    requestAnimationFrame(() => window.__vyasaSyncFloatingActions?.());
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'));
+      window.__vyasaSyncFloatingActions?.();
+    });
     launcher.setAttribute('aria-expanded', 'false');
     setAnnotationMode(false);
   }

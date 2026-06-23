@@ -225,7 +225,18 @@ summary {
 /* Off-canvas slide-in panels (translate-x-full) must not widen the page;
    hidden is the fallback for Safari < 16 which lacks overflow clip */
 html { overflow-x: hidden; overflow-x: clip; }
-.vyasa-content-grid { overflow: visible; }
+.vyasa-content-grid {
+    min-width: 0;
+    max-width: 100%;
+    overflow: clip;
+}
+#page-container,
+#content-with-sidebars,
+.vyasa-main-shell,
+#content-with-sidebars > .layout-container {
+    min-width: 0;
+    box-sizing: border-box;
+}
 .vyasa-posts-sidebar {
     width: var(--vyasa-posts-sidebar-width, var(--vyasa-sidebar-width, 22rem));
     margin-right: min(0px, calc(var(--vyasa-sidebar-width, 22rem) - var(--vyasa-posts-sidebar-width, var(--vyasa-sidebar-width, 22rem))));
@@ -233,6 +244,28 @@ html { overflow-x: hidden; overflow-x: clip; }
 .vyasa-toc-sidebar {
     width: var(--vyasa-toc-sidebar-width, var(--vyasa-sidebar-width, 22rem));
     margin-left: min(0px, calc(var(--vyasa-sidebar-width, 22rem) - var(--vyasa-toc-sidebar-width, var(--vyasa-sidebar-width, 22rem))));
+}
+#content-with-sidebars .vyasa-main-shell > *,
+#content-with-sidebars .tasks-container,
+#content-with-sidebars .mermaid-container,
+#content-with-sidebars .d2-container,
+#content-with-sidebars .code-block,
+#content-with-sidebars .vyasa-tree-doc,
+#content-with-sidebars .vyasa-table-scroll {
+    max-width: 100% !important;
+    box-sizing: border-box;
+}
+#content-with-sidebars .vyasa-main-shell img,
+#content-with-sidebars .vyasa-main-shell video,
+#content-with-sidebars .vyasa-main-shell iframe,
+#content-with-sidebars .vyasa-main-shell svg,
+#content-with-sidebars .vyasa-main-shell canvas {
+    max-width: 100%;
+}
+#content-with-sidebars .tasks-container:not([data-tasks-maximized="true"]) {
+    width: 100% !important;
+    left: auto !important;
+    transform: none !important;
 }
 .vyasa-sidebar-docked {
     position: fixed !important;
