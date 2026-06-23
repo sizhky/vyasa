@@ -326,9 +326,12 @@ def test_feedback_review_lifts_lavish_capture_and_conversation_contract():
     assert "launcher.setAttribute('aria-keyshortcuts', 'R')" in client
     assert "event.key.toLowerCase() !== 'r'" in client
     assert "event.composedPath().some" in client
-    assert "Annotate Mode" in client
+    assert "Annotate Mode (A)" in client
     assert "data-annotation-mode" in client
+    assert 'aria-keyshortcuts="A"' in client
     assert "setAnnotationMode(annotationEnabled)" in client
+    assert "function toggleAnnotationMode()" in client
+    assert "event.key.toLowerCase() === 'a'" in client
     assert "&& annotationEnabled" in client
     assert 'document.addEventListener(\n    "mouseover"' in capture
     assert "lavish:queuePrompt" in client

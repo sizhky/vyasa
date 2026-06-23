@@ -41,7 +41,7 @@
     sidebar.setAttribute('aria-label', 'Agent review conversation');
     sidebar.addEventListener('keydown', (event) => event.stopPropagation());
     sidebar.innerHTML = `
-      <header class="vyasa-feedback-head"><div><div class="vyasa-feedback-heading">Conversation</div><span class="vyasa-feedback-presence" data-state="waiting">waiting</span></div><div class="vyasa-feedback-head-actions"><label class="vyasa-feedback-mode"><span>Annotate Mode</span><input type="checkbox" role="switch" checked data-annotation-mode></label><button class="vyasa-feedback-close" type="button" aria-label="Close review">×</button></div></header>
+      <header class="vyasa-feedback-head"><div><div class="vyasa-feedback-heading">Conversation</div><span class="vyasa-feedback-presence" data-state="waiting">waiting</span></div><div class="vyasa-feedback-head-actions"><label class="vyasa-feedback-mode"><span>Annotate Mode (A)</span><input type="checkbox" role="switch" checked data-annotation-mode aria-keyshortcuts="A"></label><button class="vyasa-feedback-close" type="button" aria-label="Close review">×</button></div></header>
       <div class="vyasa-feedback-chat"></div>
       <div class="vyasa-feedback-compose"><div class="vyasa-feedback-banner">Your agent is not connected. Copy the command, run it in a terminal, then send feedback.</div><div class="vyasa-feedback-pills"></div><textarea class="vyasa-feedback-input" placeholder="Write a message for the agent..."></textarea><div class="vyasa-feedback-actions"><button class="vyasa-feedback-action secondary" type="button" data-copy-listener>Copy command to start agent</button><button class="vyasa-feedback-action" type="button" data-send>Send to Agent</button></div></div>`;
     document.body.appendChild(sidebar);
@@ -108,6 +108,12 @@
     const message = { type: 'lavish:setAnnotationMode', enabled };
     window.postMessage(message, '*');
     document.querySelector('#main-content iframe[src*=".html"]')?.contentWindow?.postMessage(message, '*');
+  }
+
+  function toggleAnnotationMode() {
+    annotationEnabled = !annotationEnabled;
+    if (annotationToggle) annotationToggle.checked = annotationEnabled;
+    setAnnotationMode(annotationEnabled);
   }
 
   function loadCapture() {
@@ -379,17 +385,23 @@
   });
   window.addEventListener('keydown', (event) => {
     const open = document.body.classList.contains('vyasa-feedback-open');
+    const editing = event.composedPath().some((node) => (
+      node instanceof Element
+      && (node.matches('input, textarea, select') || node.isContentEditable || node.closest('[data-lavish-ui] input, [data-lavish-ui] textarea, [data-lavish-ui] select'))
+    ));
     if (event.key === 'Escape' && open) {
       event.preventDefault();
       event.stopImmediatePropagation();
       closeReview();
       return;
     }
+    if (open && event.key.toLowerCase() === 'a' && !event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey && !editing) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      toggleAnnotationMode();
+      return;
+    }
     if (open || event.key.toLowerCase() !== 'r' || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
-    const editing = event.composedPath().some((node) => (
-      node instanceof Element
-      && (node.matches('input, textarea, select') || node.isContentEditable || node.closest('[data-lavish-ui]'))
-    ));
     if (editing) return;
     event.preventDefault();
     event.stopImmediatePropagation();
