@@ -27,6 +27,7 @@ def feedback_command(argv: list[str] | None = None) -> int:
     reply.add_argument("--message", required=True)
     reply.add_argument("--ack", type=int, dest="ack_cursor")
     reply.add_argument("--then-poll", action="store_true", help="After publishing the reply, wait for the next feedback event")
+    reply.add_argument("--refresh", action="store_true", help="Ask the open review page to refresh after this reply")
     reply.add_argument("--timeout", type=float, default=DEFAULT_POLL_TIMEOUT_SECONDS, help="Long-poll timeout for --then-poll")
     reply.add_argument("--json", action="store_true")
 
@@ -58,6 +59,8 @@ def feedback_command(argv: list[str] | None = None) -> int:
             payload = {"message": args.message}
             if args.ack_cursor is not None:
                 payload["ack_cursor"] = args.ack_cursor
+            if args.refresh:
+                payload["refresh"] = True
             result = request_json(f"{api}/reply/{encoded_document}", method="POST", payload=payload)
             if args.then_poll:
                 after = result.get("ack_cursor")

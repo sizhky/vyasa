@@ -152,7 +152,7 @@ def _delivered_event(event, current_revision: str) -> dict:
 
 def _event_summary(event) -> dict:
     payload = event_payload(event)
-    keys = ("cursor", "id", "kind", "created_at", "comment", "message", "message_html", "author", "revision", "surface")
+    keys = ("cursor", "id", "kind", "created_at", "comment", "message", "message_html", "action", "author", "revision", "surface")
     return {key: payload[key] for key in keys if key in payload}
 
 
@@ -338,7 +338,7 @@ def register_feedback_routes(
         operation_id="feedback.reply",
         path="/api/feedback/reply/{path:path}",
         methods=("POST",),
-        body={"message": "string", "ack_cursor": "integer?"},
+        body={"message": "string", "ack_cursor": "integer?", "refresh": "boolean?"},
     )
     async def reply_feedback(path: str, request):
         """Publish an agent response into the document and optionally acknowledge consumed feedback."""
@@ -355,10 +355,13 @@ def register_feedback_routes(
                 store.acknowledge(document, int(ack_cursor))
             except (TypeError, ValueError):
                 return _json({"error": "ack_cursor must be an integer"}, 400)
+        reply_payload = {"message": message, "message_html": _render_reply_html(message, document), "revision": _revision(document)}
+        if bool((payload or {}).get("refresh")):
+            reply_payload["action"] = "refresh"
         event = store.append(
             event_id=uuid4().hex,
             document=document,
             kind="reply",
-            payload={"message": message, "message_html": _render_reply_html(message, document), "revision": _revision(document)},
+            payload=reply_payload,
         )
         return _json({"ok": True, "event": event_payload(event), "ack_cursor": store.acknowledged_cursor(document)}, 201)

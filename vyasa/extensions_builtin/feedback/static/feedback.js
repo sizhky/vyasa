@@ -10,6 +10,7 @@
   let captureLoaded = false;
   let annotationEnabled = true;
   let knownEvents = '';
+  let lastRefreshCursor = 0;
   let sidebar;
   let launcher;
   let chat;
@@ -157,6 +158,41 @@
     } catch (_) { return []; }
   }
 
+  function refreshCursorKey() {
+    return `vyasa-feedback:refresh:${documentPath}`;
+  }
+
+  function loadLastRefreshCursor() {
+    try {
+      return Number(sessionStorage.getItem(refreshCursorKey()) || 0) || 0;
+    } catch (_) { return 0; }
+  }
+
+  function rememberRefreshCursor(cursor) {
+    lastRefreshCursor = Math.max(lastRefreshCursor, Number(cursor) || 0);
+    try { sessionStorage.setItem(refreshCursorKey(), String(lastRefreshCursor)); } catch (_) {}
+  }
+
+  function refreshCurrentDocument() {
+    if (window.htmx?.ajax) {
+      window.htmx.ajax('GET', location.pathname + location.search, {
+        target: '#main-content',
+        swap: 'outerHTML show:window:top settle:0.1s',
+      });
+      return;
+    }
+    window.location.reload();
+  }
+
+  function maybeRefreshDocument(events) {
+    const refresh = events
+      .filter((event) => event.kind === 'reply' && event.action === 'refresh' && Number(event.cursor) > lastRefreshCursor)
+      .pop();
+    if (!refresh) return;
+    rememberRefreshCursor(refresh.cursor);
+    refreshCurrentDocument();
+  }
+
   function persistQueued() {
     try {
       if (queued.length) sessionStorage.setItem(queueKey, JSON.stringify(queued));
@@ -293,6 +329,7 @@
       presenceNode.textContent = presence;
       banner.hidden = presence !== 'waiting';
       syncChat(state.events || []);
+      maybeRefreshDocument(state.events || []);
       renderQueue();
     } catch (_) {}
   }
@@ -368,6 +405,7 @@
       documentPath = path;
       apiDocument = path.split('/').map(encodeURIComponent).join('/');
       queueKey = `vyasa-feedback:queued:${path}`;
+      lastRefreshCursor = loadLastRefreshCursor();
       queued = loadQueued();
       knownEvents = '';
       renderQueue();

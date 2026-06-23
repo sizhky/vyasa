@@ -190,9 +190,12 @@ def test_feedback_api_queues_polls_acknowledges_and_replies(tmp_path):
         acknowledged = asyncio.run(ack("plan", FakeRequest({"cursor": cursor})))
         assert json.loads(acknowledged.body)["ack_cursor"] == cursor
 
-        response = asyncio.run(reply("plan", FakeRequest({"message": "Updated", "ack_cursor": cursor})))
+        response = asyncio.run(reply("plan", FakeRequest({"message": "Updated", "ack_cursor": cursor, "refresh": True})))
+        reply_event = json.loads(response.body)["event"]
         assert response.status_code == 201
         assert store.recent("plan")[-1].payload["message"] == "Updated"
+        assert store.recent("plan")[-1].payload["action"] == "refresh"
+        assert reply_event["action"] == "refresh"
         assert store.recent("plan")[-1].payload["message_html"]
     finally:
         set_runtime_services(None)
@@ -284,9 +287,10 @@ def test_feedback_reply_then_poll_reuses_one_cli_call(monkeypatch, capsys):
 
     monkeypatch.setattr("vyasa.extensions_builtin.feedback.cli.request_json", fake_request_json)
 
-    assert feedback_command(["reply", "plan", "--message", "Done", "--ack", "7", "--then-poll", "--timeout", "12"]) == 0
+    assert feedback_command(["reply", "plan", "--message", "Done", "--ack", "7", "--refresh", "--then-poll", "--timeout", "12"]) == 0
 
     assert calls[0][1] == "POST"
+    assert calls[0][2]["refresh"] is True
     assert calls[1][0].endswith("/api/feedback/poll/plan?timeout=12.0&after=7")
     assert calls[1][3] == 22.0
     assert "status: \"feedback\"" in capsys.readouterr().out
@@ -344,6 +348,10 @@ def test_feedback_review_lifts_lavish_capture_and_conversation_contract():
     assert "event.message_html || renderMarkdown(event.message || '')" in client
     assert "body.dataset.rendered = event.message_html ? 'true' : 'false'" in client
     assert "window.__vyasaRenderMathSafely?.(body)" in client
+    assert "event.action === 'refresh'" in client
+    assert "window.htmx.ajax('GET', location.pathname + location.search" in client
+    assert "sessionStorage.setItem(refreshCursorKey()" in client
+    assert "window.location.reload()" in client
     assert "safeHref" in client
     assert "body.textContent = event.comment || ''" in client
     assert "window.dispatchEvent(new Event('resize'));" in client
