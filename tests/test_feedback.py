@@ -6,7 +6,7 @@ from typing import cast
 
 from vyasa.extensions import build_extension_runtime
 from vyasa.extensions_builtin.feedback.api import _heading_path, _normalized_offsets, register_feedback_routes
-from vyasa.extensions_builtin.feedback.cli import format_toon, request_json, resolve_document_url
+from vyasa.extensions_builtin.feedback.cli import feedback_command, format_toon, request_json, resolve_document_url
 from vyasa.extensions_builtin.feedback.store import FeedbackStore, PresenceRegistry, event_payload
 from vyasa.runtime_services import set_runtime_services
 from vyasa.runtime_context import RuntimeAccess
@@ -168,13 +168,14 @@ def test_feedback_api_queues_polls_acknowledges_and_replies(tmp_path):
             "comment": "Clarify this",
             "surface": "markdown",
             "target": {"kind": "text-range", "quote": "Generalize the loop."},
-            "snapshot": {"selected": "Generalize the loop."},
+            "snapshot": {"selected": "Generalize the loop.", "dom": "<main>large</main>"},
         })))
         created_payload = json.loads(created.body)
         assert created.status_code == 201
         assert created_payload["presence"] == "waiting"
         assert created_payload["event"]["target"]["locator"]["heading_path"] == ["Plan"]
         assert created_payload["event"]["snapshot"]["source_selected"] == "Generalize the loop."
+        assert "dom" not in created_payload["event"]["snapshot"]
 
         delivered = asyncio.run(poll("plan", FakeRequest(query={"after": "0", "timeout": "0"})))
         delivered_payload = json.loads(delivered.body)
@@ -194,6 +195,59 @@ def test_feedback_api_queues_polls_acknowledges_and_replies(tmp_path):
         assert store.recent("plan")[-1].payload["message"] == "Updated"
     finally:
         set_runtime_services(None)
+
+
+def test_feedback_poll_times_out_without_idle_waiting_status(tmp_path):
+    handlers, _, _ = feedback_handlers(tmp_path)
+    poll = handlers[("GET", "/api/feedback/poll/{path:path}")]
+
+    timed_out = asyncio.run(poll("plan", FakeRequest(query={"after": "0", "timeout": "0"})))
+    payload = json.loads(timed_out.body)
+
+    assert payload["status"] == "timeout"
+    assert payload["events"] == []
+
+
+def test_feedback_poll_wakes_when_feedback_arrives(tmp_path):
+    document = tmp_path / "plan.md"
+    document.write_text("# Plan\n\nGeneralize the loop.\n", encoding="utf-8")
+    set_runtime_services({"content_path_for_slug": lambda slug, suffix="": tmp_path / f"{slug}{suffix}"})
+    try:
+        handlers, _, _ = feedback_handlers(tmp_path)
+        create = handlers[("POST", "/api/feedback/submit/{path:path}")]
+        poll = handlers[("GET", "/api/feedback/poll/{path:path}")]
+
+        async def run_poll_then_submit():
+            pending = asyncio.create_task(poll("plan", FakeRequest(query={"after": "0", "timeout": "2"})))
+            await asyncio.sleep(0.01)
+            await create("plan", FakeRequest({"comment": "Clarify", "surface": "markdown"}))
+            return await pending
+
+        payload = json.loads(asyncio.run(run_poll_then_submit()).body)
+
+        assert payload["status"] == "feedback"
+        assert payload["events"][0]["comment"] == "Clarify"
+    finally:
+        set_runtime_services(None)
+
+
+def test_feedback_reply_then_poll_reuses_one_cli_call(monkeypatch, capsys):
+    calls = []
+
+    def fake_request_json(url, *, method="GET", payload=None, timeout=60):
+        calls.append((url, method, payload, timeout))
+        if method == "POST":
+            return {"ok": True, "ack_cursor": 7}
+        return {"status": "feedback", "cursor": 8, "events": []}
+
+    monkeypatch.setattr("vyasa.extensions_builtin.feedback.cli.request_json", fake_request_json)
+
+    assert feedback_command(["reply", "plan", "--message", "Done", "--ack", "7", "--then-poll", "--timeout", "12"]) == 0
+
+    assert calls[0][1] == "POST"
+    assert calls[1][0].endswith("/api/feedback/poll/plan?timeout=12.0&after=7")
+    assert calls[1][3] == 22.0
+    assert "status: \"feedback\"" in capsys.readouterr().out
 
 
 def test_feedback_review_lifts_lavish_capture_and_conversation_contract():
@@ -232,7 +286,7 @@ def test_feedback_review_lifts_lavish_capture_and_conversation_contract():
     assert "&& annotationEnabled" in client
     assert 'document.addEventListener(\n    "mouseover"' in capture
     assert "lavish:queuePrompt" in client
-    assert "lavish:requestSnapshot" in client
+    assert "lavish:requestSnapshot" not in client
     assert "Copy listener command" in client
     assert "Conversation" in client
     assert "vyasa-feedback-sidebar" in client

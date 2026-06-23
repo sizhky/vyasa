@@ -18,7 +18,9 @@ from .store import FeedbackStore, PresenceRegistry, event_payload
 
 MAX_COMMENT_CHARS = 8_000
 MAX_CONTEXT_BYTES = 48_000
-POLL_INTERVAL_SECONDS = 0.2
+DEFAULT_POLL_TIMEOUT_SECONDS = 30 * 60
+MAX_POLL_TIMEOUT_SECONDS = 60 * 60
+POLL_FALLBACK_CHECK_SECONDS = 5.0
 
 
 def _json(payload: dict, status_code: int = 200) -> Response:
@@ -120,6 +122,18 @@ def _enrich_source_context(document: str, surface: str, target: dict, snapshot: 
     return target, snapshot
 
 
+def _compact_snapshot(snapshot: dict) -> dict:
+    """Keep agent payload token-light; DOM can be fetched separately when needed."""
+    compact = {
+        key: value
+        for key, value in snapshot.items()
+        if key != "dom" and value not in ("", None, [], {})
+    }
+    if "selected" in compact:
+        compact["selected"] = str(compact["selected"])[:4_000]
+    return compact
+
+
 def _presence(document: str, store: FeedbackStore, presence: PresenceRegistry) -> str:
     if presence.is_listening(document):
         return "listening"
@@ -160,6 +174,25 @@ def register_feedback_routes(
     store: FeedbackStore,
     presence: PresenceRegistry,
 ) -> None:
+    wake_condition = asyncio.Condition()
+
+    async def wake_pollers() -> None:
+        async with wake_condition:
+            wake_condition.notify_all()
+
+    async def wait_for_feedback(deadline: float) -> None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return
+        async with wake_condition:
+            try:
+                await asyncio.wait_for(
+                    wake_condition.wait(),
+                    timeout=min(remaining, POLL_FALLBACK_CHECK_SECONDS),
+                )
+            except asyncio.TimeoutError:
+                return
+
     @publish_api(
         rt,
         namespace="feedback",
@@ -204,6 +237,7 @@ def register_feedback_routes(
         surface = str(payload.get("surface") or "document")[:64]
         target = cast(dict, payload.get("target")) if isinstance(payload.get("target"), dict) else {}
         snapshot = cast(dict, payload.get("snapshot")) if isinstance(payload.get("snapshot"), dict) else {}
+        snapshot = _compact_snapshot(snapshot)
         target, snapshot = _enrich_source_context(document, surface, target, snapshot)
         event = store.append(
             event_id=uuid4().hex,
@@ -219,6 +253,7 @@ def register_feedback_routes(
                 "author": runtime.auth_for_request(request).get("name") or "anonymous",
             },
         )
+        await wake_pollers()
         return _json({"ok": True, "event": event_payload(event), "presence": _presence(document, store, presence)}, 201)
 
     @publish_api(
@@ -236,7 +271,7 @@ def register_feedback_routes(
             return Response("Forbidden", status_code=403)
         try:
             after = max(0, int(request.query_params.get("after", store.acknowledged_cursor(document))))
-            timeout = max(0.0, min(float(request.query_params.get("timeout", 50)), 55.0))
+            timeout = max(0.0, min(float(request.query_params.get("timeout", DEFAULT_POLL_TIMEOUT_SECONDS)), MAX_POLL_TIMEOUT_SECONDS))
         except (TypeError, ValueError):
             return _json({"error": "after and timeout must be numbers"}, 400)
         deadline = time.monotonic() + timeout
@@ -255,8 +290,8 @@ def register_feedback_routes(
                         "events": [_delivered_event(event, current_revision) for event in events],
                     })
                 if time.monotonic() >= deadline:
-                    return _json({"document": document, "status": "waiting", "after": after, "cursor": after, "events": []})
-                await asyncio.sleep(POLL_INTERVAL_SECONDS)
+                    return _json({"document": document, "status": "timeout", "after": after, "cursor": after, "events": []})
+                await wait_for_feedback(deadline)
 
     @publish_api(
         rt,

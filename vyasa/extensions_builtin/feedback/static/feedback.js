@@ -285,9 +285,7 @@
       input.value = '';
     }
     if (!queued.length) { input.focus(); return; }
-    snapshot = '';
-    window.postMessage({ type: 'lavish:requestSnapshot' }, '*');
-    setTimeout(submitQueued, 250);
+    submitQueued();
   }
 
   function targetFor(prompt) {
@@ -318,7 +316,7 @@
             url: location.pathname + location.search,
             surface: documentSurface, comment: String(prompt.prompt || ''),
             target: targetFor(prompt),
-            snapshot: { dom: snapshot.slice(0, documentSurface === 'knowledge-graph' ? 8_000 : 24_000), selector: prompt.selector || '', tag: prompt.tag || '', selected: prompt.text || '' },
+            snapshot: { selector: prompt.selector || '', tag: prompt.tag || '', selected: prompt.text || '' },
           }),
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
