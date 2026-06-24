@@ -26,44 +26,53 @@ class FeedbackStore:
         self._initialized = False
         self._init_lock = Lock()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(self.path, timeout=5)
-        connection.row_factory = sqlite3.Row
-        if not self._initialized:
-            with self._init_lock:
-                if not self._initialized:
-                    connection.execute("PRAGMA journal_mode=WAL")
-                    connection.execute(
-                        """CREATE TABLE IF NOT EXISTS feedback_events (
-                            cursor INTEGER PRIMARY KEY AUTOINCREMENT,
-                            id TEXT NOT NULL UNIQUE,
-                            document TEXT NOT NULL,
-                            kind TEXT NOT NULL,
-                            payload TEXT NOT NULL,
-                            created_at TEXT NOT NULL
-                        )"""
-                    )
-                    connection.execute(
-                        """CREATE TABLE IF NOT EXISTS feedback_state (
-                            document TEXT PRIMARY KEY,
-                            ack_cursor INTEGER NOT NULL DEFAULT 0,
-                            delivered_cursor INTEGER NOT NULL DEFAULT 0
-                        )"""
-                    )
-                    columns = {
-                        row[1] for row in connection.execute("PRAGMA table_info(feedback_state)").fetchall()
-                    }
-                    if "delivered_cursor" not in columns:
+        try:
+            connection.row_factory = sqlite3.Row
+            if not self._initialized:
+                with self._init_lock:
+                    if not self._initialized:
+                        connection.execute("PRAGMA journal_mode=WAL")
                         connection.execute(
-                            "ALTER TABLE feedback_state ADD COLUMN delivered_cursor INTEGER NOT NULL DEFAULT 0"
+                            """CREATE TABLE IF NOT EXISTS feedback_events (
+                                cursor INTEGER PRIMARY KEY AUTOINCREMENT,
+                                id TEXT NOT NULL UNIQUE,
+                                document TEXT NOT NULL,
+                                kind TEXT NOT NULL,
+                                payload TEXT NOT NULL,
+                                created_at TEXT NOT NULL
+                            )"""
                         )
-                    connection.execute(
-                        "CREATE INDEX IF NOT EXISTS feedback_events_document_cursor ON feedback_events(document, cursor)"
-                    )
-                    connection.commit()
-                    self._initialized = True
-        return connection
+                        connection.execute(
+                            """CREATE TABLE IF NOT EXISTS feedback_state (
+                                document TEXT PRIMARY KEY,
+                                ack_cursor INTEGER NOT NULL DEFAULT 0,
+                                delivered_cursor INTEGER NOT NULL DEFAULT 0
+                            )"""
+                        )
+                        columns = {
+                            row[1] for row in connection.execute("PRAGMA table_info(feedback_state)").fetchall()
+                        }
+                        if "delivered_cursor" not in columns:
+                            connection.execute(
+                                "ALTER TABLE feedback_state ADD COLUMN delivered_cursor INTEGER NOT NULL DEFAULT 0"
+                            )
+                        connection.execute(
+                            "CREATE INDEX IF NOT EXISTS feedback_events_document_cursor ON feedback_events(document, cursor)"
+                        )
+                        connection.commit()
+                        self._initialized = True
+            try:
+                yield connection
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        finally:
+            connection.close()
 
     def append(self, *, event_id: str, document: str, kind: str, payload: dict) -> FeedbackEvent:
         created_at = datetime.now(timezone.utc).isoformat()

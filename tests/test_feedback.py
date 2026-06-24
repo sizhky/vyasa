@@ -1,6 +1,7 @@
 import asyncio
 import json
 from pathlib import Path
+import sqlite3
 from types import SimpleNamespace
 from typing import cast
 
@@ -53,6 +54,20 @@ def test_feedback_store_replays_until_monotonic_ack(tmp_path):
     assert store.after("plan", store.acknowledged_cursor("plan")) == []
     assert store.mark_delivered("plan", second.cursor) == second.cursor
     assert store.delivered_cursor("plan") == second.cursor
+
+
+def test_feedback_store_closes_sqlite_connections(tmp_path):
+    store = FeedbackStore(tmp_path)
+
+    with store._connect() as connection:
+        connection.execute("SELECT 1").fetchone()
+
+    try:
+        connection.execute("SELECT 1").fetchone()
+    except sqlite3.ProgrammingError:
+        pass
+    else:
+        raise AssertionError("feedback sqlite connection stayed open")
 
 
 def test_feedback_store_keeps_replies_out_of_agent_poll_filter(tmp_path):
