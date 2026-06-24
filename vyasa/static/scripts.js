@@ -23,6 +23,51 @@ function switchTab(tabsId, index) {
 }
 window.switchTab = switchTab;
 
+function currentPostsSearchRefState() {
+    const refs = {};
+    try {
+        for (let i = 0; i < localStorage.length; i += 1) {
+            const key = localStorage.key(i) || '';
+            if (!key.startsWith('vyasa-ref:')) continue;
+            const alias = key.slice('vyasa-ref:'.length);
+            const ref = localStorage.getItem(key);
+            if (alias && ref) refs[alias] = ref;
+        }
+    } catch (err) {}
+    return refs;
+}
+
+function currentPostsSearchPath() {
+    const currentPath = normalizeSidebarPath(window.location.pathname);
+    const ref = new URLSearchParams(window.location.search).get('ref');
+    if (!currentPath || !ref) return currentPath;
+    const parts = currentPath.split('/').filter(Boolean);
+    const alias = parts.shift();
+    if (!alias) return currentPath;
+    return `${alias}@${ref.replace(/\//g, ':')}${parts.length ? `/${parts.join('/')}` : ''}`;
+}
+
+function postsSearchUrl(query) {
+    const params = new URLSearchParams();
+    params.set('q', query || '');
+    params.set('current_path', currentPostsSearchPath());
+    params.set('ref_state', JSON.stringify(currentPostsSearchRefState()));
+    return `/_sidebar/posts/search?${params.toString()}`;
+}
+
+function installPostsSearchRequestState() {
+    if (document.body?.dataset.postsSearchStateBound === 'true') return;
+    if (!document.body) return;
+    document.body.dataset.postsSearchStateBound = 'true';
+    document.body.addEventListener('htmx:configRequest', (event) => {
+        const path = event.detail?.path || event.detail?.requestConfig?.path || event.target?.getAttribute?.('hx-get') || '';
+        if (!String(path).startsWith('/_sidebar/posts/search')) return;
+        if (!event.detail?.parameters) return;
+        event.detail.parameters.current_path = currentPostsSearchPath();
+        event.detail.parameters.ref_state = JSON.stringify(currentPostsSearchRefState());
+    });
+}
+
 function initSearchPlaceholderCycle(rootElement = document) {
     const inputs = rootElement.querySelectorAll('input[data-placeholder-cycle]');
     inputs.forEach((input) => {
@@ -279,7 +324,7 @@ function initPostsSearchPersistence(rootElement = document) {
         openPostsSearchPreview(block);
     });
     const fetchResults = (query) => {
-        return fetch(`/_sidebar/posts/search?q=${query}`, { headers: { 'HX-Request': 'true' } })
+        return fetch(postsSearchUrl(query), { headers: { 'HX-Request': 'true' } })
             .then((response) => response.text())
             .then((html) => {
                 results.innerHTML = extractSearchResultsHtml(html);
@@ -306,11 +351,10 @@ function initPostsSearchPersistence(rootElement = document) {
         } catch (err) {}
     });
     if (input.value) {
-        const query = encodeURIComponent(input.value);
         if (window.htmx && typeof window.htmx.ajax === 'function') {
-            window.htmx.ajax('GET', `/_sidebar/posts/search?q=${query}`, { target: results, swap: 'innerHTML' });
+            window.htmx.ajax('GET', postsSearchUrl(input.value), { target: results, swap: 'innerHTML' });
         } else {
-            fetchResults(query);
+            fetchResults(input.value);
         }
     }
 }
@@ -393,8 +437,7 @@ function initCommandPalette() {
         if (!results.innerHTML.trim()) results.innerHTML = '<div class="text-xs text-slate-500">Type to search file names.</div>';
     };
     const runSearch = () => {
-        const query = encodeURIComponent(input.value.trim());
-        fetch(`/_sidebar/posts/search?q=${query}`, { headers: { 'HX-Request': 'true' } }).then((response) => response.text()).then((html) => {
+        fetch(postsSearchUrl(input.value.trim()), { headers: { 'HX-Request': 'true' } }).then((response) => response.text()).then((html) => {
             results.innerHTML = extractSearchResultsHtml(html);
             setActive(0);
             window.__vyasaInitBookmarksButtons?.(results);
@@ -1839,6 +1882,7 @@ window.addEventListener('resize', syncNavbarHeightVar);
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    installPostsSearchRequestState();
     syncNavbarHeightVar();
     ensureFragmentStylesheets(document);
     initHeadingFolds(document);

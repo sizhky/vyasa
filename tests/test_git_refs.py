@@ -41,7 +41,39 @@ def test_ref_markdown_reads_non_current_ref_from_objects(site):
     doc = resolve_ref_markdown("repo@feature/feat")
     assert doc is not None and doc.found
     assert doc.title == "Feature" and doc.body == "only feature\n"
-    assert doc.relative == "feat.md" and len(doc.sha) == 40
+    assert doc.relative == "feat.md" and doc.sha is not None and len(doc.sha) == 40
+
+
+def test_default_search_uses_current_ref_path(site):
+    from vyasa.extensions_builtin.default_search import find_default_search_matches
+    from vyasa.helpers import content_slug_for_path
+
+    disk_matches, _ = find_default_search_matches("feat")
+    assert "repo@feature/feat" not in {content_slug_for_path(item) for item in disk_matches}
+
+    ref_matches, _ = find_default_search_matches("feat", current_path="repo@feature/feat")
+    assert "repo@feature/feat" in {content_slug_for_path(item) for item in ref_matches}
+
+
+def test_default_search_uses_sidebar_ref_state(site):
+    from vyasa.extensions_builtin.default_search import find_default_search_matches
+    from vyasa.helpers import content_slug_for_path
+
+    matches, _ = find_default_search_matches("feat", ref_state='{"repo":"feature"}')
+    assert "repo@feature/feat" in {content_slug_for_path(item) for item in matches}
+
+
+def test_search_js_sends_sidebar_ref_state():
+    for asset in (
+        Path("vyasa/static/scripts.js"),
+        Path("vyasa/extensions_builtin/default_search/static/search.js"),
+    ):
+        source = asset.read_text(encoding="utf-8")
+        assert "vyasa-ref:" in source
+        assert "current_path" in source
+        assert "ref_state" in source
+        assert "htmx:configRequest" in source
+        assert "postsSearchUrl(input.value.trim())" in source
 
 
 def test_ref_markdown_soft_missing_when_path_absent_on_ref(site):
@@ -75,9 +107,12 @@ def test_non_markdown_kinds_and_blobs_at_a_ref(site):
     previous = get_extension_runtime()
     set_extension_runtime(build_extension_runtime({"preset": "default"}))
     try:
-        assert resolve_ref_document("repo@feature/doc").kind == "html"
-        assert resolve_ref_document("repo@feature/file").kind == "pdf"
-        assert resolve_ref_document("repo@feature/feat").kind == "markdown"
+        doc = resolve_ref_document("repo@feature/doc")
+        pdf = resolve_ref_document("repo@feature/file")
+        markdown = resolve_ref_document("repo@feature/feat")
+        assert doc is not None and doc.kind == "html"
+        assert pdf is not None and pdf.kind == "pdf"
+        assert markdown is not None and markdown.kind == "markdown"
         assert resolve_ref_blob("repo@feature/doc", ".html") == b"<h1>HTML</h1>"
         assert resolve_ref_blob("repo@feature/file", ".pdf") == b"%PDF-1.4 fake"
         assert resolve_ref_blob("repo@main/a", ".md") is None  # disk-served -> FileResponse
@@ -107,7 +142,8 @@ def test_ref_kg_document_renders_pack_from_objects(site):
     set_extension_runtime(build_extension_runtime({"preset": "default"}))
     try:
         ref_doc = resolve_ref_document("repo@feature/roadmap.kg")
-        assert ref_doc is not None and ref_doc.kind == "kg" and ref_doc.vpath.is_dir()
+        assert ref_doc is not None and ref_doc.kind == "kg" and ref_doc.vpath is not None
+        assert getattr(ref_doc.vpath, "is_dir")()
         context = type("Context", (), {
             "path": "repo@feature/roadmap.kg",
             "breadcrumbs": None,

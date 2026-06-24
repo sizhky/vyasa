@@ -39,9 +39,9 @@ class PageFrameDeps:
     get_config: Callable
     build_collapsible_sidebar: Callable
     get_roles_from_auth: Callable
-    rbac_rules: Callable
-    rbac_cfg: Callable
-    google_oauth_cfg: Callable
+    rbac_rules: Any
+    rbac_cfg: Any
+    google_oauth_cfg: Any
     coerce_list: Callable
     cached_posts_sidebar_html: Callable
     posts_sidebar_fingerprint: Callable

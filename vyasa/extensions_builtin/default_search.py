@@ -1,7 +1,11 @@
+import json
+from pathlib import Path
+
 from ..extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 from ..file_search import search_file_records
 from ..config import get_config
-from ..helpers import get_content_mounts, enabled_document_suffixes
+from ..content_tree import ref_root_vpath
+from ..helpers import content_location, get_content_mounts, get_ref_content_mounts, enabled_document_suffixes
 from .default_search_routes import register_default_search_routes
 from ..search_views import posts_search_block
 
@@ -33,26 +37,59 @@ META = EXTENSION.meta
 __all__ = ["EXTENSION", "META"]
 
 
-def find_default_search_matches(query, limit=40):
+def find_default_search_matches(query, limit=40, *, current_path="", ref_state=""):
     return _find_search_candidates(
         query,
         limit,
         suffixes=tuple(suffix for suffix in enabled_document_suffixes() if suffix in {".md", ".pdf"}),
+        current_path=current_path,
+        ref_state=ref_state,
     )
 
 
-def find_default_search_preview_matches(query, limit=200):
-    return _find_search_candidates(query, limit, suffixes=(".md",))
+def find_default_search_preview_matches(query, limit=200, *, current_path="", ref_state=""):
+    return _find_search_candidates(query, limit, suffixes=(".md",), current_path=current_path, ref_state=ref_state)
 
 
-def _find_search_candidates(query, limit, *, suffixes):
+def _find_search_candidates(query, limit, *, suffixes, current_path="", ref_state=""):
     return search_file_records(
         query,
-        get_content_mounts(),
+        _search_mounts(current_path=current_path, ref_state=ref_state),
         suffixes,
         get_config().get_show_hidden(),
         limit,
     )
+
+
+def _search_mounts(*, current_path="", ref_state=""):
+    refs = _parse_ref_state(ref_state)
+    if current_path:
+        root_id, _, ref, _ = content_location(current_path)
+        if root_id and ref:
+            refs[root_id] = ref
+    mounts = list(get_content_mounts())
+    mounted_aliases = {alias for alias, _ in mounts}
+    for alias, root in get_ref_content_mounts():
+        if alias in refs and alias not in mounted_aliases:
+            mounts.append((alias, root))
+    out = []
+    for alias, root in mounts:
+        ref = refs.get(alias)
+        root_vpath = ref_root_vpath(alias, ref) if ref else None
+        out.append(("", root_vpath) if root_vpath is not None else (alias, Path(root)))
+    return out
+
+
+def _parse_ref_state(raw):
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(alias): str(ref) for alias, ref in data.items() if alias and ref}
 
 
 def _search_sidebar_section(context):

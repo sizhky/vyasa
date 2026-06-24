@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from .helpers import _effective_ignore_list, _effective_include_list, _should_include_folder, document_kind_for_suffix, iter_visible_files
+from .helpers import _effective_ignore_list, _effective_include_list, _should_include_folder, content_slug_for_path, document_kind_for_suffix, iter_visible_files, should_exclude_dir
 from .search_service import normalize_search_text, parse_search_query
 
 
@@ -19,6 +19,9 @@ _CACHE = {}
 
 
 def _slug_for_path(path: Path, root: Path, alias: str, strip_suffix=True):
+    slug = content_slug_for_path(path, strip_suffix=strip_suffix)
+    if slug is not None and not isinstance(path, Path):
+        return slug
     try:
         rel = path.resolve().relative_to(root.resolve())
     except ValueError:
@@ -33,6 +36,11 @@ def _normalize_file_search_text(text: str):
 
 
 def _root_stamp(root: Path) -> tuple[str, float]:
+    if not isinstance(root, Path):
+        try:
+            return str(root.slug), root.stat().st_mtime
+        except Exception:
+            return str(root), 0
     try:
         return str(root.resolve()), root.stat().st_mtime
     except OSError:
@@ -54,10 +62,11 @@ def get_file_search_index(roots, suffixes, show_hidden=False):
         return cached
     records = []
     for alias, root in roots:
-        ignore_list = _effective_ignore_list(root)
-        include_list = _effective_include_list(root)
-        for item in iter_visible_files(root, suffixes, show_hidden):
-            rel_parts = item.relative_to(root).parts
+        virtual_root = not isinstance(root, Path)
+        ignore_list = [] if virtual_root else _effective_ignore_list(root)
+        include_list = [] if virtual_root else _effective_include_list(root)
+        for item in _iter_search_files(root, suffixes, show_hidden):
+            rel_parts = tuple(str(getattr(item, "rel", "")).split("/")) if virtual_root else item.relative_to(root).parts
             if ".vyasa" in rel_parts:
                 continue
             if any(not _should_include_folder(part, include_list, ignore_list) for part in rel_parts[:-1]):
@@ -65,10 +74,28 @@ def get_file_search_index(roots, suffixes, show_hidden=False):
             slug = _slug_for_path(item, root, alias)
             if not slug:
                 continue
-            display = _slug_for_path(item, root, alias, strip_suffix=False) if document_kind_for_suffix(item.suffix) != "markdown" else slug
+            display = (_slug_for_path(item, root, alias, strip_suffix=False) or slug) if document_kind_for_suffix(item.suffix) != "markdown" else slug
             records.append(FileSearchRecord(item, slug, display, item.name, _normalize_file_search_text(display), _normalize_file_search_text(item.name)))
     _CACHE[key] = tuple(records)
     return _CACHE[key]
+
+
+def _iter_search_files(root, suffixes, show_hidden=False):
+    if isinstance(root, Path):
+        yield from iter_visible_files(root, suffixes, show_hidden)
+        return
+    stack = [root]
+    while stack:
+        folder = stack.pop()
+        for item in folder.iterdir():
+            if item.is_dir():
+                if item.name == ".vyasa":
+                    continue
+                if should_exclude_dir(item.name, set()) or (not show_hidden and item.name.startswith(".")):
+                    continue
+                stack.append(item)
+            elif item.suffix.lower() in suffixes:
+                yield item
 
 
 def _fuzzy_score(needle: str, haystack: str):
