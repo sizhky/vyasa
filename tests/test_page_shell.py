@@ -58,6 +58,15 @@ def test_theme_toggle_icon_keeps_ink_color_on_focus():
     assert "stroke: currentColor !important" in css
 
 
+def test_git_ref_select_resets_button_alignment():
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+
+    assert ".vyasa-ref-select" in css
+    assert "justify-content: flex-start" in css
+    assert "appearance: none" in css
+    assert "font: inherit" in css
+
+
 def test_toc_sidebar_defaults_closed_but_open_choice_persists():
     head_init = Path("vyasa/static/head-init.js").read_text(encoding="utf-8")
     scripts = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
