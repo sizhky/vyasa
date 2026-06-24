@@ -45,7 +45,7 @@ def register_default_search_routes(rt, runtime) -> None:
         return services.render_search_preview_page(htmx, request, q=query)
 
     @rt("/_sidebar/posts/search")
-    def posts_sidebar_search(q: str = "", request=None):
+    def posts_sidebar_search(q: str = "", current_path: str = "", ref_state: str = "", request=None):
         services = get_runtime_services()
         roles = services.get_roles_from_request(
             request,
@@ -54,4 +54,4 @@ def register_default_search_routes(rt, runtime) -> None:
             services.google_oauth_cfg(),
             services.coerce_list,
         )
-        return services.render_posts_search_results(q, roles=roles)
+        return services.render_posts_search_results(q, roles=roles, current_path=current_path, ref_state=ref_state)

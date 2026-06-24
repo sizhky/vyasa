@@ -2,6 +2,7 @@ import re
 import json
 import base64
 import time
+import asyncio
 from datetime import datetime
 from contextvars import ContextVar
 from functools import lru_cache
@@ -161,7 +162,7 @@ def render_search_preview_feed(entries, root):
     return Div(*cards, cls="space-y-4", id="search-preview-feed")
 
 
-def render_search_preview_page(htmx, request: Request, q: str = ""):
+def render_search_preview_page(htmx, request: Request | None, q: str = ""):
     runtime = get_extension_runtime()
     provider = runtime.search_preview_page_renderer if runtime else None
     if provider and provider is not render_search_preview_page:
@@ -194,7 +195,7 @@ def render_search_preview_page(htmx, request: Request, q: str = ""):
     return layout(shell, htmx=htmx, title=f"Search previews - {query} - {get_blog_title()}", show_sidebar=True, current_path="search-previews", auth=auth)
 
 
-def search_preview_results_path(query_token: str = "", htmx=None, request: Request = None):
+def search_preview_results_path(query_token: str = "", htmx=None, request: Request | None = None):
     token = (query_token or "").strip()
     if not token:
         return render_search_preview_page(htmx, request, q="")
@@ -386,7 +387,7 @@ _rbac_cfg = _load_rbac_cfg_from_store()
 _set_rbac_cfg(_rbac_cfg)
 def _build_beforeware():
     auth_before = make_user_auth_before(_auth_required, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
-    return build_beforeware(auth_before, _auth_enabled or (_rbac_cfg.get("enabled") and _rbac_rules))
+    return build_beforeware(auth_before, bool(_auth_enabled or (_rbac_cfg.get("enabled") and _rbac_rules)))
 
 
 def _build_app():
@@ -892,20 +893,26 @@ def _posts_sidebar_fingerprint():
         return 0
 
 
-def _find_search_matches(query, limit=40):
+def _find_search_matches(query, limit=40, *, current_path="", ref_state=""):
     runtime = get_extension_runtime()
     provider = runtime.search_match_finder if runtime else None
     if provider and provider is not _find_search_matches:
-        return provider(query, limit)
-    return _find_search_matches_uncached(query, limit)
+        try:
+            return provider(query, limit, current_path=current_path, ref_state=ref_state)
+        except TypeError:
+            return provider(query, limit)
+    return _find_search_matches_uncached(query, limit, current_path=current_path, ref_state=ref_state)
 
 
-def _find_search_preview_matches(query, limit=200):
+def _find_search_preview_matches(query, limit=200, *, current_path="", ref_state=""):
     runtime = get_extension_runtime()
     provider = runtime.search_preview_match_finder if runtime else None
     if provider and provider is not _find_search_preview_matches:
-        return provider(query, limit)
-    return _find_search_preview_matches_uncached(query, limit)
+        try:
+            return provider(query, limit, current_path=current_path, ref_state=ref_state)
+        except TypeError:
+            return provider(query, limit)
+    return _find_search_preview_matches_uncached(query, limit, current_path=current_path, ref_state=ref_state)
 
 
 def _find_search_candidates(query, limit=40, *, suffixes=(".md", ".pdf")):
@@ -918,11 +925,11 @@ def _find_search_candidates(query, limit=40, *, suffixes=(".md", ".pdf")):
     )
 
 
-def _find_search_matches_uncached(query, limit=40):
+def _find_search_matches_uncached(query, limit=40, *, current_path="", ref_state=""):
     return _find_search_candidates(query, limit, suffixes=(".md", ".pdf"))
 
 
-def _find_search_preview_matches_uncached(query, limit=200):
+def _find_search_preview_matches_uncached(query, limit=200, *, current_path="", ref_state=""):
     return _find_search_candidates(query, limit, suffixes=(".md",))
 
 
@@ -1040,9 +1047,9 @@ def _row_action_decorator(registry):
     return decorate
 
 
-def _render_posts_search_results(query, roles=None):
+def _render_posts_search_results(query, roles=None, current_path="", ref_state=""):
     trimmed = (query or "").strip()
-    matches, regex_error = _find_search_matches(trimmed)
+    matches, regex_error = _find_search_matches(trimmed, current_path=current_path, ref_state=ref_state)
     matches = _filter_search_matches_by_roles(matches, roles)
     rendered_matches = [
         (slug, content_slug_for_path(item, strip_suffix=False) if document_kind_for_suffix(item.suffix) != "markdown" else slug)
@@ -1276,7 +1283,7 @@ def layout(
     )
 
 
-_nav_entries_cache: dict[tuple[str, bool], tuple[float, list[Path]]] = {}
+_nav_entries_cache: dict[tuple[str, bool, tuple[str, str] | None], tuple[float, list[Path]]] = {}
 
 
 # The git ref a specific root is currently being viewed on, as (root_id, ref),
@@ -1571,7 +1578,7 @@ def find_index_file():
     return find_index_file_helper(get_root_folder)
 
 
-@rt
+@rt  # type: ignore[reportArgumentType]
 def index(htmx, request: Request):
     if not find_index_file():
         return render_blog_home(htmx, request)
@@ -1590,7 +1597,7 @@ def index(htmx, request: Request):
 
 
 @rt("/_home/feed")
-def home_feed(offset: int = 0, htmx=None, request: Request = None):
+def home_feed(offset: int = 0, htmx=None, request: Request | None = None):
     runtime = get_extension_runtime()
     provider = runtime.home_feed_renderer if runtime else None
     if provider and provider is not home_feed:
