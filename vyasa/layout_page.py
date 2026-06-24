@@ -245,7 +245,10 @@ def render_page_frame(frame: PageFrame, *, htmx, deps: PageFrameDeps):
         )
         return Footer(Div(footer_inner, cls="vyasa-footer-card bg-slate-900 text-white p-4 dark:bg-slate-800"), cls=f"{outer_cls} vyasa-footer-shell".strip(), id="site-footer", **outer_style)
 
-    if htmx and getattr(htmx, "request", None):
+    # History-restore requests (back/swipe with a cache miss) must return the full
+    # page; htmx writes the response into <body>, so a partial would wipe the navbar
+    # and sidebars and leave main content orphaned.
+    if htmx and getattr(htmx, "request", None) and not getattr(htmx, "history_restore_request", None):
         return _render_htmx_layout(frame.content, frame.title, frame.show_sidebar, frame.toc_content, frame.current_path, frame.show_toc, frame.slide_mode, frame.extra_head_nodes, logger, t_section, layout_start_time, main_spacing_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar)
 
     return _render_full_layout(frame.content, frame.title, frame.show_sidebar, frame.toc_content, frame.current_path, frame.show_toc, frame.auth, frame.htmx_nav, frame.nav_posts_menu, frame.show_footer, frame.no_scroll, frame.slide_mode, frame.current_updated_label, frame.extra_head_nodes, logger, t_section, layout_start_time, layout_fluid_class, layout_max_class, layout_max_style, page_style, main_spacing_cls, page_container_cls, navbar_margin_cls, section_class, theme_font_links, get_sidebar_custom_css_links, get_root_folder, build_sidebar_toc_items, extract_sidebar_toc, strip_inline_markdown, text_to_anchor, unique_anchor, get_config, build_collapsible_sidebar, get_roles_from_auth, rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list, cached_posts_sidebar_html, posts_sidebar_fingerprint, get_posts, navbar, style_attr, _footer_node)

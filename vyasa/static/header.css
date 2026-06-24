@@ -232,8 +232,16 @@ html { overflow-x: hidden; overflow-x: clip; }
     margin-left: min(0px, calc(var(--vyasa-sidebar-width, 22rem) - var(--vyasa-toc-sidebar-width, var(--vyasa-sidebar-width, 22rem))));
 }
 .vyasa-sidebar-docked {
-    background: var(--vyasa-paper);
+    position: fixed !important;
+    top: var(--vyasa-navbar-height, 3.75rem) !important;
+    height: calc(100vh - var(--vyasa-navbar-height, 3.75rem)) !important;
+    z-index: 1000;
+    background: color-mix(in srgb, var(--vyasa-paper) 55%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
+.vyasa-posts-sidebar.vyasa-sidebar-docked { left: 0 !important; }
+.vyasa-toc-sidebar.vyasa-sidebar-docked { right: 0 !important; }
 .vyasa-sidebar-docked > .vyasa-sidebar-card {
     display: flex;
     flex-direction: column;
@@ -249,12 +257,13 @@ html { overflow-x: hidden; overflow-x: clip; }
     min-height: 0;
 }
 .vyasa-sidebar-docked .vyasa-sidebar-toggle,
-.vyasa-sidebar-docked .vyasa-sidebar-body {
-    background: transparent;
-    border: 0;
-    box-shadow: none;
-    backdrop-filter: none;
-    border-radius: 0;
+.vyasa-sidebar-docked .vyasa-sidebar-body,
+.vyasa-sidebar-docked .vyasa-sidebar-card {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    border-radius: 0 !important;
 }
 .vyasa-sidebar-docked .vyasa-sidebar-toggle {
     margin: 0 !important;

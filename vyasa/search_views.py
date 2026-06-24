@@ -54,7 +54,7 @@ def posts_search_block(initial_results):
                 hx_trigger="input changed delay:300ms",
                 hx_target="next .posts-search-results",
                 hx_swap="innerHTML",
-                cls="posts-search-input w-full px-3 py-2 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500",
+                cls="posts-search-input w-full px-3 py-2 text-sm rounded-md border border-slate-900/10 dark:border-slate-700/25 ring-1 ring-white/20 dark:ring-slate-900/30 backdrop-blur-lg bg-white/20 dark:bg-slate-950/40 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500",
             ),
             A(
                 "→",
