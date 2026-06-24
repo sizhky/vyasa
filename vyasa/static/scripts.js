@@ -777,6 +777,34 @@ function syncFoldAllButton(button, allOpen) {
         : '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 14 3-3 3 3"/></svg><span>Unfold all</span>';
 }
 
+window.vyasaRefreshRefTree = async function(button, storageKey, refName, sidebarPath) {
+    const icon = button?.querySelector?.('svg');
+    icon?.classList?.add('animate-spin');
+    try {
+        localStorage.setItem(storageKey, refName);
+    } catch (error) {}
+    try {
+        await fetch(`/_vyasa/refresh-ref-tree/${encodeURIComponent(sidebarPath || '')}`, { method: 'GET', credentials: 'same-origin' });
+        const url = `/_sidebar/posts?current_path=${encodeURIComponent(sidebarPath || '')}`;
+        if (window.htmx?.ajax) {
+            await window.htmx.ajax('GET', url, { target: '#posts-sidebar', swap: 'outerHTML' });
+            return;
+        }
+        const response = await fetch(url, { credentials: 'same-origin' });
+        if (!response.ok) return;
+        const html = await response.text();
+        const sidebar = document.getElementById('posts-sidebar');
+        if (sidebar) {
+            sidebar.outerHTML = html;
+            initFolderChevronState();
+            initFolderHoverExpand(document);
+            syncPostsHoverToggleButtons(document);
+        }
+    } finally {
+        icon?.classList?.remove('animate-spin');
+    }
+};
+
 document.addEventListener('click', (event) => {
     const sidebarLocate = event.target.closest('[data-sidebar-locate-current="true"]');
     if (sidebarLocate) {

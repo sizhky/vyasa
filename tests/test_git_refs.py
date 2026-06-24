@@ -1,4 +1,5 @@
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -187,6 +188,8 @@ def test_navbar_ref_switcher_discovers_all_git_roots(site):
         assert "repo" in html  # the git root is listed
         assert ">main<" in html and ">feature<" in html and ">v1<" in html
         assert "/posts/repo?ref=feature" in html  # ref target carries the ref as a query param
+        assert "/_vyasa/refresh-refs/root/repo" in html
+        assert "fetch('/_vyasa/refresh-refs',{method:'GET'})" not in html
     core._git_roots_with_refs.cache_clear()
 
 
@@ -205,6 +208,57 @@ def test_ref_tree_uses_remote_icon_for_multi_remote_group():
     assert "radio-tower" in html
     assert ">origin<" in html and ">origin/<" not in html
     assert ">team/<" in html
+
+
+def test_active_branch_ref_row_exposes_file_tree_refresh_action():
+    import vyasa.core as core
+    from fasthtml.common import Ul, to_xml
+
+    branches = [("feature/tree", "branch", False, "")]
+    html = to_xml(Ul(*core._render_ref_nodes(
+        core._build_ref_tree(branches),
+        "repo", "feature/tree", "repo@feature:tree/guide", True, "vyasa-ref:repo", ["feature"], frozenset(),
+    )))
+    assert "Refresh file tree for feature/tree" in html
+    assert "vyasaRefreshRefTree" in html
+    assert "repo@feature:tree" in html
+
+
+def test_inactive_branch_ref_rows_do_not_expose_file_tree_refresh_action():
+    import vyasa.core as core
+    from fasthtml.common import Ul, to_xml
+
+    branches = [("feature/tree", "branch", False, "")]
+    html = to_xml(Ul(*core._render_ref_nodes(
+        core._build_ref_tree(branches),
+        "repo", "", "", False, "vyasa-ref:repo", [], frozenset(),
+    )))
+    assert "Refresh file tree for feature/tree" not in html
+    assert "vyasaRefreshRefTree" not in html
+
+
+def test_tag_ref_rows_do_not_expose_file_tree_refresh_action():
+    import vyasa.core as core
+    from fasthtml.common import to_xml
+
+    html = to_xml(core._render_tags_group(
+        [("v1", "tag", False, "")],
+        "repo", "", "", False, "vyasa-ref:repo",
+    ))
+    assert "Refresh file tree for v1" not in html
+    assert "vyasaRefreshRefTree" not in html
+
+
+def test_git_ref_debug_logs_are_present():
+    core_source = Path("vyasa/core.py").read_text(encoding="utf-8")
+
+    assert '@rt("/_vyasa/refresh-refs/root/{root:path}")' in core_source
+    assert '@rt("/_vyasa/refresh-ref-tree/{path:path}")' in core_source
+    assert 'logger.info("git-ref refresh requested root={} url={}"' in core_source
+    assert 'logger.info("git-ref tree refresh root={} ref={}' in core_source
+    assert "if target_root and alias != target_root:" in core_source
+    assert 'logger.info("git-ref sidebar build root=' in core_source
+    assert 'logger.info("git-ref posts tree requested current_path=' in core_source
 
 
 def test_navbar_ref_switcher_hides_git_root_when_rbac_has_no_visible_path(site, monkeypatch):
@@ -312,6 +366,7 @@ def test_sidebar_tree_built_for_a_ref(site):
     from fasthtml.common import Ul, to_xml
 
     items = core.build_ref_post_tree("repo", "feature", roles=[])
+    assert items is not None
     html = to_xml(Ul(*items))
     assert "repo/feat?ref=feature" in html  # feature-only file, ref-carrying link
     assert "repo/a?ref=feature" in html

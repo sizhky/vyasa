@@ -462,6 +462,26 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
 }
 .vyasa-ref-row::-webkit-details-marker { display: none; }
 .vyasa-ref-row::marker { content: ""; }
+.vyasa-ref-select {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    height: 100%;
+    margin: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+    text-align: left;
+    appearance: none;
+    cursor: pointer;
+}
+.vyasa-ref-switcher .vyasa-ref-select:hover,
+.vyasa-ref-switcher .vyasa-ref-select:focus {
+    background: transparent !important;
+}
 /* Icon buttons (refresh / working-tree): fixed square that fits the row, no
    highlight box of its own (scoped to out-specify .vyasa-navbar-card button). */
 .vyasa-ref-refresh {

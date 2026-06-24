@@ -1,0 +1,1 @@
+The kanban filter for this project is projects="Vyasa". If starting a new work, either pick up an existing task or create a new one by running cp ./.yeshwanth/obsidian-template.md ~/Vault/$(date +%Y%m%d%H%M).md and add the task

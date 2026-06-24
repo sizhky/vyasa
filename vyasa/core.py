@@ -6,6 +6,7 @@ from datetime import datetime
 from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
+from typing import Any, Iterable
 from urllib.parse import quote
 from fasthtml.common import *
 from fasthtml.jupyter import *
@@ -508,26 +509,60 @@ async def live_reload():
     return StreamingResponse(_live_reload_events(), media_type="text/event-stream")
 
 
-@rt("/_vyasa/refresh-refs")
-def refresh_refs():
+def _refresh_refs_for_root(target_root: str = "", request=None):
     """Bust the ref-discovery cache and fetch mirrors so newly-created
     branches/tags appear immediately. Sync def → runs in a threadpool."""
+    target_root = (target_root or "").strip()
+    raw_url = str(getattr(request, "url", "")) if request is not None else ""
+    logger.info("git-ref refresh requested root={} url={}", target_root or "*", raw_url or "-")
     _git_roots_with_refs.cache_clear()
     try:
         from .content_backend import classify_root
         from .git_fetcher import fetch_all, fetch_clone_remotes, specs_from_config
 
         specs, mirror_root = specs_from_config()
-        if specs:
+        if specs and not target_root:
+            logger.info("git-ref refreshing configured mirrors count={} root={}", len(specs), mirror_root)
             fetch_all(specs, mirror_root)
-        for _, root in get_ref_content_mounts():
-            rc = classify_root(root)
+        for alias, mount_root in get_ref_content_mounts():
+            if target_root and alias != target_root:
+                continue
+            rc = classify_root(mount_root)
             if rc.kind == "clone":
-                fetch_clone_remotes(root)
-    except Exception:
-        pass
+                logger.info("git-ref refreshing clone alias={} root={} branch={}", alias, mount_root, rc.current_branch)
+                fetch_clone_remotes(mount_root)
+    except Exception as exc:
+        logger.warning("git-ref refresh failed: {}", exc)
     _git_roots_with_refs.cache_clear()
+    logger.info("git-ref refresh complete root={}", target_root or "*")
     return Response(status_code=204)
+
+
+@rt("/_vyasa/refresh-refs")
+def refresh_refs(request=None):
+    return _refresh_refs_for_root("", request)
+
+
+@rt("/_vyasa/refresh-refs/root/{root:path}")
+def refresh_refs_root(root: str, request=None):
+    return _refresh_refs_for_root(root, request)
+
+
+@rt("/_vyasa/refresh-ref-tree/{path:path}")
+def refresh_ref_tree(path: str, request=None):
+    parsed = _ref_from_current_path(path)
+    raw_url = str(getattr(request, "url", "")) if request is not None else ""
+    if not parsed:
+        logger.info("git-ref tree refresh skipped path={} url={} reason=no-ref", path, raw_url or "-")
+        return Response(status_code=204)
+    root_id, ref, active_parts = parsed
+    logger.info("git-ref tree refresh root={} ref={} active_parts={} url={}", root_id, ref, active_parts, raw_url or "-")
+    _cached_build_ref_post_tree.cache_clear()
+    _cached_posts_sidebar_html.cache_clear()
+    _nav_entries_cache.clear()
+    return Response(status_code=204)
+
+
 def _initialize_app(app_instance):
     _mount_package_static(app_instance)
 
@@ -655,33 +690,50 @@ def _ref_target_url(alias, name, current_path):
     return f"{base}{sep}ref={quote(name, safe='')}"
 
 
-def _build_ref_tree(refs):
+def _build_ref_tree(refs: Iterable[tuple[str, str, bool, str]]) -> dict[str, Any]:
     """Nest refs by their `/` segments. `feat/git-refs` → tree["feat"] leaf.
     Each node is a dict; "_leaves" holds (name, kind, is_default) at that level."""
-    root = {"_leaves": []}
+    root: dict[str, Any] = {"_leaves": []}
     for item in refs:
-        node = root
+        node: dict[str, Any] = root
         for seg in item[0].split("/")[:-1]:
             node = node.setdefault(seg, {"_leaves": []})
         node["_leaves"].append(item)
     return root
 
 
-def _ref_row_style(depth):
+def _ref_row_style(depth: int) -> str:
     """Only the depth indent is inline; all other row chrome lives in the
     `.vyasa-ref-row` CSS class so every level renders identically."""
     return f"padding-left:{0.5 + depth * 0.9:.3f}rem"
 
 
-def _ref_leaf(name, kind, is_default, alias, current, current_path, active, storage_key, depth):
+def _ref_sidebar_path(alias: str, name: str) -> str:
+    packed_ref = name.replace("/", ":")
+    return f"{alias}@{packed_ref}" if alias else f"@{packed_ref}"
+
+
+def _ref_leaf(name: str, kind: str, is_default: bool, alias: str, current: str, current_path: str | None, active: bool, storage_key: str, depth: int):
     """A single selectable branch/tag row."""
     url = _ref_target_url(alias, name, current_path if active else "")
-    return Li(Button(
-        Span(Span("✓" if name == current else "", data_ref_check="true"), Span(UkIcon("loader", cls="w-3 h-3 animate-spin"), data_ref_spinner="true", style="display:none"), cls="shrink-0", style="width:0.75rem;display:inline-flex;align-items:center;justify-content:center"),
-        Span(name.split("/")[-1], cls="truncate"), Span(" (default)" if is_default else "", cls="opacity-60 text-xs"),
-        UkIcon("tag", cls="w-3 h-3 opacity-50 ml-auto") if kind == "tag" else "",
+    refresh = Button(
+        UkIcon("refresh-cw", cls="w-3 h-3"),
         type="button",
-        onclick=f"var c=this.querySelector('[data-ref-check]'),s=this.querySelector('[data-ref-spinner]');if(c)c.style.display='none';if(s)s.style.display='inline-flex';try{{localStorage.setItem('{storage_key}','{name}');}}catch(e){{}};window.location='{url}';",
+        title=f"Refresh file tree for {name}",
+        aria_label=f"Refresh file tree for {name}",
+        onclick=f"event.stopPropagation();event.preventDefault();window.vyasaRefreshRefTree&&window.vyasaRefreshRefTree(this,{json.dumps(storage_key)},{json.dumps(name)},{json.dumps(_ref_sidebar_path(alias, name))});",
+        cls="vyasa-ref-refresh shrink-0",
+    ) if kind == "branch" and active and name == current else ""
+    return Li(Div(
+        Button(
+            Span(Span("✓" if name == current else "", data_ref_check="true"), Span(UkIcon("loader", cls="w-3 h-3 animate-spin"), data_ref_spinner="true", style="display:none"), cls="shrink-0", style="width:0.75rem;display:inline-flex;align-items:center;justify-content:center"),
+            Span(name.split("/")[-1], cls="truncate"), Span(" (default)" if is_default else "", cls="opacity-60 text-xs"),
+            UkIcon("tag", cls="w-3 h-3 opacity-50 ml-auto") if kind == "tag" else "",
+            type="button",
+            onclick=f"var c=this.querySelector('[data-ref-check]'),s=this.querySelector('[data-ref-spinner]');if(c)c.style.display='none';if(s)s.style.display='inline-flex';try{{localStorage.setItem('{storage_key}','{name}');}}catch(e){{}};window.location='{url}';",
+            cls="vyasa-ref-select min-w-0 flex flex-1 items-center gap-2",
+        ),
+        refresh,
         cls="vyasa-ref-row vyasa-emphasis-control-option",
         style=_ref_row_style(depth),
     ))
@@ -781,7 +833,7 @@ def _navbar_ref_switcher(current_path=None, roles=None):
         refresh_btn = Button(
             UkIcon("refresh-cw", cls="w-3.5 h-3.5"),
             type="button", title="Fetch & refresh branches",
-            onclick="event.stopPropagation();event.preventDefault();var i=this.querySelector('svg');if(i)i.classList.add('animate-spin');fetch('/_vyasa/refresh-refs',{method:'GET'}).finally(function(){window.location.reload();});",
+            onclick=f"event.stopPropagation();event.preventDefault();var i=this.querySelector('svg');if(i)i.classList.add('animate-spin');fetch('/_vyasa/refresh-refs/root/{quote(alias, safe='')}',{{method:'GET'}}).finally(function(){{window.location.reload();}});",
             cls="vyasa-ref-refresh shrink-0",
         )
         # Clones (non-bare) have a checked-out working tree to return to.
@@ -1340,7 +1392,9 @@ def build_ref_post_tree(root_id, ref, roles=None, active_parts=()):
 
     root_vpath = ref_root_vpath(root_id, ref)
     if root_vpath is None:
+        logger.info("git-ref sidebar build skipped root={} ref={} reason=disk-served", root_id, ref)
         return None
+    logger.info("git-ref sidebar build root={} ref={} active_parts={}", root_id, ref, active_parts)
     return build_post_tree_render(
         root_vpath, roles=roles, max_depth=None, active_parts=active_parts,
         root=root_vpath, show_hidden=get_config().get_show_hidden(),
@@ -1354,6 +1408,7 @@ def build_ref_post_tree(root_id, ref, roles=None, active_parts=()):
 
 @lru_cache(maxsize=16)
 def _cached_build_ref_post_tree(root_id, ref, sha, roles_key, active_parts):
+    logger.info("git-ref sidebar cache miss root={} ref={} sha={} roles={} active_parts={}", root_id, ref, sha, roles_key, active_parts)
     return build_ref_post_tree(root_id, ref, roles=list(roles_key) if roles_key else [], active_parts=active_parts)
 
 
@@ -1373,6 +1428,7 @@ def get_posts(roles=None, current_path=""):
     parsed = _ref_from_current_path(current_path)
     if parsed:
         root_id, ref, active_parts = parsed
+        logger.info("git-ref posts tree requested current_path={} root={} ref={} active_parts={}", current_path, root_id, ref, active_parts)
         if root_id:
             # A named mount viewed on a ref: keep the whole multi-root tree, but
             # render that one mount from the ref. active_parts use the bare alias
