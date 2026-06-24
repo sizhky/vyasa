@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextvars
 import fnmatch
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -336,6 +337,13 @@ class VirtualPath:
         return self.rel
 
     @property
+    def content_oid(self) -> str:
+        """The peeled commit OID this ref points at — a content-addressed
+        fingerprint of the whole tree. Stable cache key: it changes iff the
+        branch tip moves, which is exactly when cached views must rebuild."""
+        return self._backend.resolve_ref(self.ref) or ""
+
+    @property
     def slug(self) -> str:
         if self.ref:
             # pack ref slashes as ':' so 'alias@tmp/x' stays one path segment
@@ -478,6 +486,27 @@ def uncommitted_paths(rc: RootClass) -> frozenset[str]:
     return frozenset(dirty)
 
 
+_GIT_BACKEND_CACHE: dict[tuple[str, str], "GitBackend"] = {}
+_GIT_BACKEND_LOCK = threading.Lock()
+
+
+def git_backend_for(git_dir, root_id: str = "") -> "GitBackend":
+    """One long-lived GitBackend (dulwich Repo) per (git_dir, root_id).
+
+    A fresh Repo per call leaks ~9 fds each (open packfiles) and exhausts the
+    process fd limit under ref browsing. A cached Repo is safe: dulwich re-reads
+    packed-refs and rescans for new packs on access, so it still sees fetched
+    updates. Read-only, so sharing across requests needs no per-read lock; the
+    lock only guards the get-or-create race."""
+    key = (str(Path(git_dir).resolve()), root_id)
+    backend = _GIT_BACKEND_CACHE.get(key)
+    if backend is None:
+        with _GIT_BACKEND_LOCK:
+            backend = _GIT_BACKEND_CACHE.get(key) or GitBackend(git_dir, root_id)
+            _GIT_BACKEND_CACHE[key] = backend
+    return backend
+
+
 def backend_for(rc: RootClass, ref: str = "", root_id: str = "") -> tuple[ContentBackend, bool]:
     """Pick the backend for a (root, ref) pair. Returns (backend, disk_mode);
     disk_mode is True only when a working tree is served and uncommitted
@@ -485,8 +514,8 @@ def backend_for(rc: RootClass, ref: str = "", root_id: str = "") -> tuple[Conten
     if rc.kind == "plain":
         return FilesystemBackend(rc.path, root_id), True
     if rc.kind == "bare":
-        return GitBackend(rc.git_dir, root_id), False
+        return git_backend_for(rc.git_dir, root_id), False
     serves_working_tree = rc.current_branch is not None and ref in ("", rc.current_branch)
     if serves_working_tree:
         return FilesystemBackend(rc.path, root_id), True
-    return GitBackend(rc.git_dir, root_id), False
+    return git_backend_for(rc.git_dir, root_id), False

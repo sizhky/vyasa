@@ -1281,7 +1281,7 @@ wheels = [
 
 [[package]]
 name = "vyasa"
-version = "0.6.72"
+version = "0.6.73"
 source = { editable = "." }
 dependencies = [
     { name = "dulwich" },

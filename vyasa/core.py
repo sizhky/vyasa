@@ -650,7 +650,7 @@ def _git_roots_with_refs(time_bucket):
 
     Cached per coarse time bucket so the per-root dulwich opens happen at
     most once every few seconds, not on every page render."""
-    from .content_backend import GitBackend, classify_root
+    from .content_backend import classify_root, git_backend_for
 
     out = []
     for alias, root in get_ref_content_mounts():
@@ -658,7 +658,7 @@ def _git_roots_with_refs(time_bucket):
         if rc.kind == "plain" or rc.git_dir is None:
             continue
         try:
-            refs = GitBackend(rc.git_dir).list_refs()
+            refs = git_backend_for(rc.git_dir).list_refs()
         except Exception:
             continue
         if not refs:
@@ -1319,28 +1319,21 @@ def _swap_ref_roots(entries, active):
     - the `active` (root_id, ref) mount renders from that ref, so switching a
       branch shows that root's branch content while every other root stays put.
     """
-    from .content_backend import classify_root
-    from .content_tree import ref_root_vpath
+    from .content_tree import ref_mount_maps, ref_served_root
 
-    git_mounts = get_config().get_git_mounts()
     active_id, active_ref = active or ("", "")
-    bare = {Path(p).resolve(): a for a, p in git_mounts if a and classify_root(p).kind == "bare"}
-    alias_by_path = {Path(p).resolve(): a for a, p in get_ref_content_mounts() if a}
-    if not bare and not (active_id and active_id in alias_by_path.values()):
+    alias_by_path, bare_by_path = ref_mount_maps()
+    if not bare_by_path and not (active_id and active_id in alias_by_path.values()):
         return entries
 
+    refs = {active_id: active_ref} if active_id and active_ref else {}
     swapped = []
     for entry in entries:
         if not (hasattr(entry, "resolve") and not hasattr(entry, "slug")):
             swapped.append(entry)
             continue
         resolved = entry.resolve()
-        alias = alias_by_path.get(resolved)
-        vpath = None
-        if alias and alias == active_id:
-            vpath = ref_root_vpath(alias, active_ref)  # None if ref == current branch (disk)
-        elif resolved in bare:
-            vpath = ref_root_vpath(bare[resolved], "")
+        vpath = ref_served_root(alias_by_path.get(resolved), resolved, refs=refs, bare_by_path=bare_by_path)
         swapped.append(vpath if vpath is not None else entry)
     return swapped
 

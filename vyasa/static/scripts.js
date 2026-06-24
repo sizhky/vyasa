@@ -23,20 +23,6 @@ function switchTab(tabsId, index) {
 }
 window.switchTab = switchTab;
 
-function currentPostsSearchRefState() {
-    const refs = {};
-    try {
-        for (let i = 0; i < localStorage.length; i += 1) {
-            const key = localStorage.key(i) || '';
-            if (!key.startsWith('vyasa-ref:')) continue;
-            const alias = key.slice('vyasa-ref:'.length);
-            const ref = localStorage.getItem(key);
-            if (alias && ref) refs[alias] = ref;
-        }
-    } catch (err) {}
-    return refs;
-}
-
 function currentPostsSearchPath() {
     const currentPath = normalizeSidebarPath(window.location.pathname);
     const ref = new URLSearchParams(window.location.search).get('ref');
@@ -50,8 +36,10 @@ function currentPostsSearchPath() {
 function postsSearchUrl(query) {
     const params = new URLSearchParams();
     params.set('q', query || '');
+    // current_path carries the active view's ref — the same single ref the
+    // sidebar tree swaps in. Do NOT also send the localStorage ref union: it
+    // pins other repos to stale refs and diverges search from the sidebar.
     params.set('current_path', currentPostsSearchPath());
-    params.set('ref_state', JSON.stringify(currentPostsSearchRefState()));
     return `/_sidebar/posts/search?${params.toString()}`;
 }
 
@@ -64,7 +52,6 @@ function installPostsSearchRequestState() {
         if (!String(path).startsWith('/_sidebar/posts/search')) return;
         if (!event.detail?.parameters) return;
         event.detail.parameters.current_path = currentPostsSearchPath();
-        event.detail.parameters.ref_state = JSON.stringify(currentPostsSearchRefState());
     });
 }
 
@@ -88,6 +75,71 @@ function initSearchPlaceholderCycle(rootElement = document) {
             showAlt = !showAlt;
             input.setAttribute('placeholder', showAlt ? alt : primary);
         }, 10000);
+    });
+}
+
+function escapeSearchHtml(text) {
+    return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function searchMatchIndices(text, query) {
+    // Indices of `text` to bold, mirroring the server's matchers. Returns null
+    // when nothing should be highlighted.
+    if (query.length >= 2 && query.startsWith('/') && query.endsWith('/')) {
+        try {
+            const re = new RegExp(query.slice(1, -1), 'ig');
+            const set = new Set();
+            let m;
+            while ((m = re.exec(text)) !== null) {
+                if (m.index === re.lastIndex) re.lastIndex += 1; // never loop on zero-width
+                for (let i = m.index; i < m.index + m[0].length; i += 1) set.add(i);
+            }
+            return set;
+        } catch (err) {
+            return null; // invalid regex -> server fell back to fuzzy; do the same
+        }
+    }
+    // Normalize both sides 1:1 (length-preserving) so indices map back to `text`.
+    const norm = (s) => s.toLowerCase().replace(/[-_\/]/g, ' ');
+    const t = norm(text);
+    const q = norm(query).trim();
+    if (!q) return null;
+    // Token-contiguous: every whitespace token as an in-order substring. This is
+    // why "ws 011" bolds the literal `ws`/`011` runs instead of scattered letters.
+    const set = new Set();
+    let cursor = 0, ok = true;
+    for (const tok of q.split(/\s+/).filter(Boolean)) {
+        const idx = t.indexOf(tok, cursor);
+        if (idx < 0) { ok = false; break; }
+        for (let i = idx; i < idx + tok.length; i += 1) set.add(i);
+        cursor = idx + tok.length;
+    }
+    if (ok && set.size) return set;
+    // Subsequence fallback (separator-insensitive), matching the server.
+    set.clear();
+    const qchars = q.replace(/\s+/g, '');
+    let qi = 0;
+    for (let i = 0; i < t.length && qi < qchars.length; i += 1) {
+        if (t[i] === qchars[qi]) { set.add(i); qi += 1; }
+    }
+    return set;
+}
+
+function highlightSearchMatches(container, rawQuery) {
+    if (!container) return;
+    const query = (rawQuery || '').trim();
+    container.querySelectorAll('a[data-path] span[title]').forEach((span) => {
+        const text = span.getAttribute('title') || span.textContent || '';
+        const idx = query ? searchMatchIndices(text, query) : null;
+        if (!idx || idx.size === 0) { span.textContent = text; return; } // idempotent reset
+        let html = '', open = false;
+        for (let i = 0; i < text.length; i += 1) {
+            const hit = idx.has(i);
+            if (hit && !open) { html += '<b class="search-match">'; open = true; }
+            else if (!hit && open) { html += '</b>'; open = false; }
+            html += escapeSearchHtml(text[i]);
+        }
+        span.innerHTML = open ? `${html}</b>` : html;
     });
 }
 
@@ -329,6 +381,7 @@ function initPostsSearchPersistence(rootElement = document) {
             .then((html) => {
                 results.innerHTML = extractSearchResultsHtml(html);
                 enhanceGatherLink();
+                highlightSearchMatches(results, input.value);
                 try {
                     localStorage.setItem(resultsKey, JSON.stringify({
                         term: input.value,
@@ -343,6 +396,7 @@ function initPostsSearchPersistence(rootElement = document) {
             return;
         }
         enhanceGatherLink();
+        highlightSearchMatches(results, input.value);
         try {
             localStorage.setItem(resultsKey, JSON.stringify({
                 term: input.value,
@@ -439,6 +493,7 @@ function initCommandPalette() {
     const runSearch = () => {
         fetch(postsSearchUrl(input.value.trim()), { headers: { 'HX-Request': 'true' } }).then((response) => response.text()).then((html) => {
             results.innerHTML = extractSearchResultsHtml(html);
+            highlightSearchMatches(results, input.value);
             setActive(0);
             window.__vyasaInitBookmarksButtons?.(results);
         }).catch(() => {});
