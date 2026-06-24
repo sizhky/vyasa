@@ -361,6 +361,30 @@ def ref_root_vpath(root_id: str, ref: str):
     return VirtualPath(backend, ref, root_id, "", "dir", display_name=root_id)
 
 
+def ref_mount_maps():
+    """`(alias_by_path, bare_by_path)` for ref resolution: every disk path that
+    can be served from a git ref, and the subset that are bare mirrors (no
+    working tree, so they must always render from a ref)."""
+    from .config import get_config
+    from .content_backend import classify_root
+
+    alias_by_path = {Path(p).resolve(): a for a, p in get_ref_content_mounts() if a}
+    bare_by_path = {Path(p).resolve(): a for a, p in get_config().get_git_mounts() if a and classify_root(p).kind == "bare"}
+    return alias_by_path, bare_by_path
+
+
+def ref_served_root(alias, resolved_path, *, refs, bare_by_path):
+    """Single source of truth shared by the sidebar tree and search: does this
+    top-level child render from a git ref? Returns its VirtualPath root, or None
+    to render from disk. `refs` is {alias: ref} the viewer has pinned (the
+    sidebar passes the one active ref; search passes every stored ref)."""
+    if alias and alias in refs:
+        return ref_root_vpath(alias, refs[alias])  # None when ref == disk's branch
+    if resolved_path in bare_by_path:
+        return ref_root_vpath(bare_by_path[resolved_path], "")
+    return None
+
+
 def ref_nav_entries(folder, root, show_hidden, excluded_dirs):
     """nav-entry source over a git ref: immediate children of `folder` as
     VirtualPaths, drop-in for the disk get_nav_entries. Ordering and .vyasa

@@ -701,16 +701,22 @@ def get_adjacent_posts(root: Path, current_path: str | Path, abbreviations=None)
     next_item = _item(siblings[idx + 1]) if idx < len(siblings) - 1 else None
     return prev_item, next_item
 
-def iter_visible_files(root: Path, suffixes: tuple[str, ...], include_hidden: bool = False):
-    """Yield files while pruning hidden and excluded directories before descent."""
+def iter_visible_files(root: Path, suffixes: tuple[str, ...], include_hidden: bool = False, exclude_paths: tuple = ()):
+    """Yield files while pruning hidden and excluded directories before descent.
+
+    `exclude_paths` are resolved subtree roots to skip entirely — used to keep
+    a disk root from re-listing child repos that are being served from a git
+    ref instead (so search shows the active ref OR disk, never both)."""
     from .config import get_config
 
     root = root.resolve()
     excluded = set(get_config().get_reload_excludes())
+    excluded_subtrees = {str(Path(p).resolve()) for p in exclude_paths}
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [
             name for name in dirnames
             if (include_hidden or not name.startswith(".")) and not should_exclude_dir(name, excluded)
+            and str(Path(dirpath) / name) not in excluded_subtrees
         ]
         for filename in filenames:
             if not include_hidden and filename.startswith("."):

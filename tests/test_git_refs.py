@@ -63,17 +63,20 @@ def test_default_search_uses_sidebar_ref_state(site):
     assert "repo@feature/feat" in {content_slug_for_path(item) for item in matches}
 
 
-def test_search_js_sends_sidebar_ref_state():
+def test_search_js_scopes_to_active_view_ref_only():
+    # Search must mirror the sidebar: scope to the one active ref via
+    # current_path, NOT the localStorage ref union (which pins other repos to
+    # stale refs and hides their on-disk files). See feat/git-ref-optimizations.
     for asset in (
         Path("vyasa/static/scripts.js"),
         Path("vyasa/extensions_builtin/default_search/static/search.js"),
     ):
         source = asset.read_text(encoding="utf-8")
-        assert "vyasa-ref:" in source
         assert "current_path" in source
-        assert "ref_state" in source
         assert "htmx:configRequest" in source
         assert "postsSearchUrl(input.value.trim())" in source
+        assert "ref_state" not in source  # the localStorage union is no longer sent
+        assert "vyasa-ref:" not in source  # and the helper that read it is gone
 
 
 def test_ref_markdown_soft_missing_when_path_absent_on_ref(site):
