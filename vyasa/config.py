@@ -164,6 +164,16 @@ class VyasaConfig:
             path = base / path
         return path.resolve()
 
+    def get_git_fetch_interval(self) -> float:
+        """Seconds between in-process background git fetches. 0 (or negative)
+        disables auto-fetch — use that when running `vyasa-fetch` as a separate
+        sidecar. Default 30s keeps ref-served pages fresh under a lone `vyasa`."""
+        raw = self.get('git_fetch_interval', 'VYASA_GIT_FETCH_INTERVAL', 30.0)
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return 30.0
+
     def get_git_repos(self) -> list[tuple[str, str]]:
         """Upstream repos to mirror, as (name, url). Accepts a TOML table
         `git_repos = { name = "url" }` or a list of `"name=url"` strings."""

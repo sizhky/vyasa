@@ -46,6 +46,22 @@ The root `ignore = [...]` list also hides matching files from the homepage card 
 | `sidebars_open` | Changes the default information density of the reading surface. |
 | `reload_exclude` | Keeps local dev fast when the repo contains large generated folders. |
 
+## Serving Content From Git Refs
+
+Vyasa can serve any committed branch or tag of a content repo through a `?ref=` query (for example `?ref=origin/feat/my-branch`), reading the files straight from git objects without a checkout. For those pages to show the latest commit, the local copy of the repo has to be fetched first — otherwise a page reload keeps showing whatever commit was last pulled.
+
+Fetching is handled in two ways, and you pick based on how you run the server:
+
+- **In-process (default).** A lone `vyasa` process now runs the fetcher itself on a background thread, so configured mirrors (`git_repos`) *and* clone-backed content roots stay fresh automatically. Control the cadence with `git_fetch_interval` (seconds, default `30`). Push a commit, wait one interval, reload — the new commit appears without touching the branch-menu refresh button.
+- **Separate sidecar.** Run `vyasa-fetch` as its own process (cron or service) when you want fetching isolated from the web process — for example under multiple uvicorn workers, where an in-process fetcher would run once per worker. Set `git_fetch_interval = 0` to disable the in-process fetcher and avoid double-fetching.
+
+The branch-menu refresh button always forces an immediate fetch regardless of this setting; the interval only governs the automatic background cycle.
+
+| Setting | Why it exists |
+|---|---|
+| `git_repos` | Upstream repos to mirror, as `{ name = "url" }`, exposed as content roots. |
+| `git_fetch_interval` | Seconds between automatic in-process fetches. `0` disables it (use a `vyasa-fetch` sidecar instead). |
+
 ## Keep In Mind
 
 If auth is configured, the login and role checks are assembled during startup in [`vyasa/core.py`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/core.py) and [`vyasa/auth/runtime.py`](/Users/yeshwanth/Code/Personal/vyasa/vyasa/auth/runtime.py). If you only need to reorder one branch in the sidebar, create a folder-local `.vyasa` instead of bloating the root config. If a setting seems ignored, check whether you set the same thing in both CLI flags and `.vyasa`; the CLI wins.
