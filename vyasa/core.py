@@ -3,6 +3,7 @@ import json
 import base64
 import time
 import asyncio
+import threading
 from datetime import datetime
 from contextvars import ContextVar
 from functools import lru_cache
@@ -518,20 +519,15 @@ def _refresh_refs_for_root(target_root: str = "", request=None):
     logger.info("git-ref refresh requested root={} url={}", target_root or "*", raw_url or "-")
     _git_roots_with_refs.cache_clear()
     try:
-        from .content_backend import classify_root
-        from .git_fetcher import fetch_all, fetch_clone_remotes, specs_from_config
+        from .git_fetcher import fetch_all, fetch_clone_mounts, specs_from_config
 
         specs, mirror_root = specs_from_config()
         if specs and not target_root:
             logger.info("git-ref refreshing configured mirrors count={} root={}", len(specs), mirror_root)
             fetch_all(specs, mirror_root)
-        for alias, mount_root in get_ref_content_mounts():
-            if target_root and alias != target_root:
-                continue
-            rc = classify_root(mount_root)
-            if rc.kind == "clone":
-                logger.info("git-ref refreshing clone alias={} root={} branch={}", alias, mount_root, rc.current_branch)
-                fetch_clone_remotes(mount_root)
+        clones = fetch_clone_mounts(target_root)
+        if clones:
+            logger.info("git-ref refreshing clone mounts count={} root={}", len(clones), target_root or "*")
     except Exception as exc:
         logger.warning("git-ref refresh failed: {}", exc)
     _git_roots_with_refs.cache_clear()
@@ -1137,6 +1133,46 @@ if hasattr(app, "add_event_handler"):
     app.add_event_handler("startup", _preload_posts_cache)
 elif hasattr(app, "on_event"):
     app.on_event("startup")(_preload_posts_cache)
+
+
+_git_fetcher_started = False
+
+
+def _start_git_fetcher():
+    """Run the git fetcher inside the web process so a lone `vyasa` keeps
+    ref-served pages fresh — no separate `vyasa-fetch` sidecar required. Opt out
+    with git_fetch_interval=0. Daemon thread: dies with the server, never blocks
+    shutdown."""
+    global _git_fetcher_started
+    if _git_fetcher_started:
+        return
+    interval = get_config().get_git_fetch_interval()
+    if interval <= 0:
+        logger.info("in-process git fetcher disabled (git_fetch_interval<=0)")
+        return
+    try:
+        from .git_fetcher import clone_mount_roots, poll_forever, specs_from_config
+
+        specs, mirror_root = specs_from_config()
+        if not specs and not clone_mount_roots():
+            return  # nothing fetchable; stay quiet
+        _git_fetcher_started = True
+        threading.Thread(
+            target=poll_forever,
+            args=(specs, mirror_root),
+            kwargs={"interval": interval},
+            name="vyasa-git-fetcher",
+            daemon=True,
+        ).start()
+        logger.info("in-process git fetcher started interval={}s mirrors={}", interval, len(specs))
+    except Exception as exc:
+        logger.warning("failed to start in-process git fetcher: {}", exc)
+
+
+if hasattr(app, "add_event_handler"):
+    app.add_event_handler("startup", _start_git_fetcher)
+elif hasattr(app, "on_event"):
+    app.on_event("startup")(_start_git_fetcher)
 
 
 def is_active_toc_item(anchor):

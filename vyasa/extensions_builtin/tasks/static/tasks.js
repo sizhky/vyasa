@@ -6082,22 +6082,37 @@ async function renderTasksGraphs(rootElement = document) {
                     },
                         contextOptions.length > 1 ? React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                             React.createElement('span', { style: filterKeyStyle }, 'Context'),
-                            React.createElement('select', {
-                                    value: activeContextId,
-                                    disabled: contextLoading,
-                                    onChange: (event) => handleSwitchContext(event.target.value),
-                                    style: {
-                                        width: '100%',
-                                        minWidth: 0,
-                                        border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
-                                        borderRadius: '8px',
-                                        padding: '6px 8px',
-                                        background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
-                                        color: 'inherit',
-                                    },
-                                },
-                                    ...contextOptions.map((context) => React.createElement('option', { key: context.id, value: context.id }, context.label || context.caption || context.id))
-                                ),
+                            (() => {
+                                const ctxIndex = contextOptions.findIndex((context) => context.id === activeContextId);
+                                const ctxNavBtn = (disabled) => ({ flex: '0 0 34px', width: '34px', height: '34px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 88%, transparent)', color: 'inherit', borderRadius: '8px', padding: 0, fontSize: '18px', lineHeight: 1, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1 });
+                                const goContext = (delta) => {
+                                    const target = contextOptions[ctxIndex + delta];
+                                    if (target) handleSwitchContext(target.id);
+                                };
+                                const prevDisabled = contextLoading || ctxIndex <= 0;
+                                const nextDisabled = contextLoading || ctxIndex < 0 || ctxIndex >= contextOptions.length - 1;
+                                return React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 } },
+                                    React.createElement('button', { type: 'button', 'aria-label': 'Previous context', onClick: () => goContext(-1), disabled: prevDisabled, style: ctxNavBtn(prevDisabled) }, '‹'),
+                                    React.createElement('select', {
+                                            value: activeContextId,
+                                            disabled: contextLoading,
+                                            onChange: (event) => handleSwitchContext(event.target.value),
+                                            style: {
+                                                flex: '1 1 auto',
+                                                width: '100%',
+                                                minWidth: 0,
+                                                border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                                borderRadius: '8px',
+                                                padding: '6px 8px',
+                                                background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                                color: 'inherit',
+                                            },
+                                        },
+                                            ...contextOptions.map((context) => React.createElement('option', { key: context.id, value: context.id }, context.label || context.caption || context.id))
+                                        ),
+                                    React.createElement('button', { type: 'button', 'aria-label': 'Next context', onClick: () => goContext(1), disabled: nextDisabled, style: ctxNavBtn(nextDisabled) }, '›')
+                                );
+                            })(),
                             sourceModel?.kg_context?.caption ? React.createElement('div', {
                                 style: {
                                     padding: '9px 10px',

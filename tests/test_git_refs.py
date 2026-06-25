@@ -288,6 +288,30 @@ def test_tag_ref_rows_do_not_expose_file_tree_refresh_action():
     assert "vyasaRefreshRefTree" not in html
 
 
+def test_palette_source_full_slug_resolves_against_ref_root(site, tmp_path):
+    """A color_palette_source baked by read_kg_pack arrives as a full ref slug
+    ('repo@feature/dir/kg.palettes.json'). It must resolve against the ref root
+    (root-relative rel), not get joined onto the doc's directory — else the
+    palette 404s and KG colors silently vanish on ref-served pages."""
+    from vyasa.content_backend import VirtualPath, backend_for, classify_root, ref_read_scope
+    from vyasa.extensions_builtin.tasks.model import _resolve_tasks_source_path
+
+    repo = tmp_path / "repo"
+    rc = classify_root(repo)
+    backend, _ = backend_for(rc, "feature", "repo")
+    # Doc sits in a nested folder; palette lives elsewhere under the ref root.
+    doc = VirtualPath(backend, "feature", "repo", "docs/page.md", "file")
+    palette_slug = "repo@feature/data/kg.palettes.json"
+
+    with ref_read_scope(doc):
+        resolved = _resolve_tasks_source_path(doc.slug, palette_slug)
+
+    assert isinstance(resolved, VirtualPath)
+    # rel is root-relative, NOT 'docs/repo@feature/data/...' (the old bug).
+    assert resolved.rel == "data/kg.palettes.json"
+    assert resolved.ref == "feature" and resolved.root_id == "repo"
+
+
 def test_git_ref_debug_logs_are_present():
     core_source = Path("vyasa/core.py").read_text(encoding="utf-8")
 
@@ -295,7 +319,11 @@ def test_git_ref_debug_logs_are_present():
     assert '@rt("/_vyasa/refresh-ref-tree/{path:path}")' in core_source
     assert 'logger.info("git-ref refresh requested root={} url={}"' in core_source
     assert 'logger.info("git-ref tree refresh root={} ref={}' in core_source
-    assert "if target_root and alias != target_root:" in core_source
+    # clone-mount filtering now lives in git_fetcher.clone_mount_roots, shared
+    # by the manual refresh handler and the background poller.
+    assert "fetch_clone_mounts(target_root)" in core_source
+    fetcher_source = Path("vyasa/git_fetcher.py").read_text(encoding="utf-8")
+    assert "if target_root and alias != target_root:" in fetcher_source
     assert 'logger.info("git-ref sidebar build root=' in core_source
     assert 'logger.info("git-ref posts tree requested current_path=' in core_source
 

@@ -86,6 +86,37 @@ def fetch_all(specs: list[MirrorSpec], mirror_root: Path, *, max_workers: int = 
         return dict(results)
 
 
+def clone_mount_roots(target_root: str = "") -> list[tuple[str, Path]]:
+    """Discover content mounts that are working clones (have an origin to fetch).
+    `target_root` limits to a single alias. Degrades to [] if discovery fails."""
+    target_root = (target_root or "").strip()
+    try:
+        from .content_backend import classify_root
+        from .helpers import get_ref_content_mounts
+
+        out: list[tuple[str, Path]] = []
+        for alias, mount_root in get_ref_content_mounts():
+            if target_root and alias != target_root:
+                continue
+            if classify_root(mount_root).kind == "clone":
+                out.append((alias, Path(mount_root)))
+        return out
+    except Exception as exc:
+        logger.warning("clone-mount discovery failed: {}", exc)
+        return []
+
+
+def fetch_clone_mounts(target_root: str = "", *, max_workers: int = 4) -> dict[str, bool]:
+    """Fetch every clone-backed content mount concurrently. Mirrors fetch_all so
+    the background poller keeps clone roots fresh, not just the manual button."""
+    mounts = clone_mount_roots(target_root)
+    if not mounts:
+        return {}
+    with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(mounts)))) as pool:
+        results = pool.map(lambda m: (m[0], fetch_clone_remotes(m[1])), mounts)
+        return dict(results)
+
+
 def poll_forever(specs: list[MirrorSpec], mirror_root: Path, *, interval: float = 30.0, max_workers: int = 4) -> None:
     """Run non-overlapping fetch cycles. The next cycle starts `interval`
     seconds after the previous one *finishes*, so slow fetches never stack."""
@@ -93,6 +124,7 @@ def poll_forever(specs: list[MirrorSpec], mirror_root: Path, *, interval: float 
     while True:
         started = time.time()
         results = fetch_all(specs, mirror_root, max_workers=max_workers)
+        results.update(fetch_clone_mounts(max_workers=max_workers))
         failed = [name for name, ok in results.items() if not ok]
         logger.info("fetch cycle done in {:.1f}s ({} ok, {} failed)", time.time() - started, len(results) - len(failed), len(failed))
         time.sleep(interval)
@@ -116,11 +148,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     specs, mirror_root = specs_from_config()
-    if not specs:
-        logger.warning("No git_repos configured; nothing to fetch.")
+    clones = clone_mount_roots()
+    if not specs and not clones:
+        logger.warning("No git_repos or clone content roots configured; nothing to fetch.")
         return 0
     if args.once:
         results = fetch_all(specs, mirror_root, max_workers=args.workers)
+        results.update(fetch_clone_mounts(max_workers=args.workers))
         return 0 if all(results.values()) else 1
     poll_forever(specs, mirror_root, interval=args.interval, max_workers=args.workers)
     return 0

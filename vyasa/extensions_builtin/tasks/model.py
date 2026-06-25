@@ -498,6 +498,17 @@ def _resolve_tasks_source_path(current_path: str | Path | None, source: str) -> 
         prefix = f"{getattr(doc_vpath, 'slug', '').rstrip('/')}/"
         if source_text.startswith(prefix):
             return doc_vpath / source_text[len(prefix):]
+        # A source already stringified from a VirtualPath arrives as a full ref
+        # slug ('alias@ref/rel') — e.g. color_palette_source baked by
+        # read_kg_pack. Resolve it against the ref ROOT (rel is root-relative),
+        # not the doc dir, or the whole slug gets joined onto the doc folder and
+        # 404s (palette silently drops on ref-served pages).
+        root = doc_vpath
+        while getattr(root, "rel", ""):
+            root = root.parent
+        root_prefix = getattr(root, "slug", "")
+        if root_prefix and (source_text == root_prefix or source_text.startswith(f"{root_prefix}/")):
+            return root / source_text[len(root_prefix):].lstrip("/")
         # Ref-served doc: resolve the source against the doc's directory on the
         # same git ref, yielding a VirtualPath the readers consume ref-aware.
         base = doc_vpath.parent if doc_vpath.is_file() else doc_vpath
