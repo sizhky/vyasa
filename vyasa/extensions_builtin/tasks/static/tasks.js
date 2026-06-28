@@ -54,9 +54,7 @@ const TASKS_SPECIAL_NODE_ATTRS = new Set([
     '__card_state_color__',
     '__has_note__',
     '__node_image__',
-    '__secondary_color__',
-    '__composite_color__',
-    '__composite_sweep__',
+    '__color_levels__',
 ]);
 const TASKS_INTERNAL_NODE_META_KEYS = new Set([
     'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
@@ -661,6 +659,17 @@ function tasksProjectionSchemaPrefs(model, projectionId) {
         prefs.unspecifiedContentOpacity = clampTasksProjectionContentOpacity(projection.projection_unspecified_content_opacity);
     }
     return prefs;
+}
+
+function normalizeTasksColorHierarchy(value, model, nodeNotes = null) {
+    const validColorKeys = new Set(tasksColorOptions(model, nodeNotes).map((option) => option.key));
+    const raw = Array.isArray(value) ? value : [];
+    const out = [];
+    raw.forEach((entry) => {
+        const key = String(entry || '').trim();
+        if (key && validColorKeys.has(key) && !out.includes(key)) out.push(key);
+    });
+    return out;
 }
 
 function readTasksProjectionPrefsForModel(model, prefs, projectionId) {
@@ -1898,20 +1907,6 @@ function tasksMixedFill(color, colorMix) {
         : color;
 }
 
-function tasksCompositeSweep(node, colorBy, palette, secondaryColorBy, secondaryPalette, colorMix) {
-    const colors = [
-        ...tasksAttrValues(node?.[colorBy]).map((value) => palette?.[value]),
-        ...tasksAttrValues(node?.[secondaryColorBy]).map((value) => secondaryPalette?.[value]),
-    ].filter((color) => typeof color === 'string' && color.trim());
-    const unique = Array.from(new Set(colors));
-    if (unique.length < 2) return '';
-    const mixed = unique.map((color) => tasksMixedFill(color, colorMix));
-    const stops = [...mixed, mixed[0]].map((color, index, all) => (
-        `${color} ${Math.round((index / (all.length - 1)) * 100)}%`
-    ));
-    return `linear-gradient(90deg, ${stops.join(', ')})`;
-}
-
 function tasksNodeBackground(primaryColor, secondaryColor, colorMix, fallback, composite = false) {
     const primary = tasksMixedFill(primaryColor, colorMix);
     const secondary = tasksMixedFill(secondaryColor, colorMix);
@@ -1920,16 +1915,6 @@ function tasksNodeBackground(primaryColor, secondaryColor, colorMix, fallback, c
         fill = `linear-gradient(135deg, ${primary} 0 50%, ${secondary} 50% 100%)`;
     }
     return fill;
-}
-
-function tasksCompositeAnimationStyle(node, active) {
-    const sweep = node?.data?.__composite_sweep__;
-    if (!active || !sweep) return {};
-    return {
-        background: sweep,
-        backgroundSize: '300% 100%',
-        animation: 'var(--vyasa-composite-animation, vyasa-composite-color-sweep 5s ease-in-out infinite alternate)',
-    };
 }
 
 function tasksGroupBackground(primaryColor, secondaryColor, fallback, options = {}) {
@@ -1949,6 +1934,116 @@ function tasksGroupBackground(primaryColor, secondaryColor, fallback, options = 
     }
     return primary || fallback;
 }
+
+// Clip a convex polygon to the half-plane { (x,y): a*x + b*y <= c } (Sutherland-Hodgman).
+function tasksClipPolygon(poly, a, b, c) {
+    const out = [];
+    const n = poly.length;
+    for (let i = 0; i < n; i++) {
+        const cur = poly[i];
+        const prev = poly[(i + n - 1) % n];
+        const dCur = a * cur[0] + b * cur[1] - c;
+        const dPrev = a * prev[0] + b * prev[1] - c;
+        const curIn = dCur <= 1e-9;
+        const prevIn = dPrev <= 1e-9;
+        if (curIn !== prevIn) {
+            const t = dPrev / (dPrev - dCur);
+            out.push([prev[0] + t * (cur[0] - prev[0]), prev[1] + t * (cur[1] - prev[1])]);
+        }
+        if (curIn) out.push(cur);
+    }
+    return out;
+}
+
+// levels: array (one per color level) of arrays of color strings.
+// Returns polygons: each level is a 45deg diagonal band, split into horizontal strips per value.
+function tasksColorLevelPolygons(levels, width = 100, height = 100) {
+    const active = (levels || []).filter((colors) => Array.isArray(colors) && colors.some(Boolean));
+    const n = active.length;
+    if (!n) return [];
+    const w = Math.max(1, Number(width) || 100);
+    const h = Math.max(1, Number(height) || 100);
+    const rect = [[0, 0], [w, 0], [w, h], [0, h]];
+    const out = [];
+    active.forEach((colorsRaw, i) => {
+        const colors = colorsRaw.filter(Boolean);
+        let band = tasksClipPolygon(rect, 1, 1, ((w + h) * (i + 1)) / n);
+        band = tasksClipPolygon(band, -1, -1, -((w + h) * i) / n);
+        if (band.length < 3) return;
+        const m = colors.length;
+        colors.forEach((color, j) => {
+            let strip = tasksClipPolygon(band, 0, 1, (h * (j + 1)) / m);
+            strip = tasksClipPolygon(strip, 0, -1, -(h * j) / m);
+            if (strip.length >= 3) out.push({ color, points: strip });
+        });
+    });
+    return out;
+}
+
+function tasksColorLevelFromNode(node, model, spec, colorMix) {
+    if (!spec || !spec.colorBy) return [];
+    const values = tasksAttrValues(node?.[spec.colorBy]);
+    const colors = values
+        .map((value) => spec.palette?.[value])
+        .filter((color) => typeof color === 'string' && color.trim());
+    if (!colors.length) {
+        const resolved = resolveTasksNodeColor(node, model, spec.colorBy, spec.palette);
+        if (resolved) colors.push(resolved);
+    }
+    return Array.from(new Set(colors.map((color) => tasksMixedFill(color, colorMix))));
+}
+
+function tasksColorLevelFromCollapsedGroup(node, model, spec, colorMix, colorSources) {
+    if (!spec || !spec.colorBy || !node || node.__kind__ !== 'group') return [];
+    if (isTasksGradientPalette(spec.palette)) {
+        const resolved = resolveTasksCollapsedGroupColor(node, model, spec.colorBy, spec.palette);
+        return resolved ? [tasksMixedFill(resolved, colorMix)] : [];
+    }
+    const colors = (colorSources || [])
+        .flatMap((entry) => tasksAttrValues(entry?.[spec.colorBy]).map((value) => spec.palette?.[value]))
+        .filter((color) => typeof color === 'string' && color.trim());
+    return Array.from(new Set(colors.map((color) => tasksMixedFill(color, colorMix))));
+}
+
+function tasksNodeColorLevels(node, model, levelSpecs, colorMix, options = {}) {
+    if (options.collapsedGroup) {
+        // Walk the group's descendant tree once, then map every color level over the cached set.
+        const descendants = (node && node.__kind__ === 'group')
+            ? collectTasksGroupDescendants(node.id, model)
+            : { tasks: [], groups: [] };
+        const colorSources = descendants.tasks.length ? descendants.tasks : descendants.groups;
+        return (levelSpecs || []).map((spec) => tasksColorLevelFromCollapsedGroup(node, model, spec, colorMix, colorSources));
+    }
+    return (levelSpecs || []).map((spec) => tasksColorLevelFromNode(node, model, spec, colorMix));
+}
+
+function tasksUseColorOverlay(levels) {
+    return (levels || []).reduce((sum, level) => sum + (Array.isArray(level) ? level.length : 0), 0) >= 2;
+}
+
+// Single seam for "is this built node drawn with the SVG color overlay?".
+function tasksNodeIsOverlaid(node) {
+    const levels = node?.data?.__color_levels__;
+    return Boolean(levels && levels.length);
+}
+
+// Build an inset SVG overlay element drawing the diagonal-band / horizontal-strip fill.
+function tasksColorOverlay(React, levels, width, height) {
+    const w = Math.max(1, Number(width) || 100);
+    const h = Math.max(1, Number(height) || 100);
+    const polys = tasksColorLevelPolygons(levels, w, h);
+    if (!polys.length) return null;
+    return React.createElement('svg', {
+        viewBox: `0 0 ${w} ${h}`,
+        preserveAspectRatio: 'none',
+        style: { position: 'absolute', inset: 0, width: '100%', height: '100%', borderRadius: 'inherit', pointerEvents: 'none', zIndex: 0 },
+    }, ...polys.map((p, idx) => React.createElement('polygon', {
+        key: idx,
+        points: p.points.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' '),
+        fill: p.color,
+    })));
+}
+
 window.runTasksHeaderAction = function(widgetId, action) {
     const actions = window.__vyasaTasksActions?.[widgetId];
     if (!actions || typeof actions[action] !== 'function') return;
@@ -2233,13 +2328,6 @@ function ensureTasksReactFlow() {
                     to {
                         stroke-dashoffset: 0;
                     }
-                }
-                @keyframes vyasa-composite-color-sweep {
-                    0%, 14% { background-position: 0% 50%; }
-                    86%, 100% { background-position: 100% 50%; }
-                }
-                @media (prefers-reduced-motion: reduce) {
-                    .react-flow__node { --vyasa-composite-animation: none; }
                 }
             `;
             document.head.appendChild(style);
@@ -3546,6 +3634,14 @@ function resolveTasksPreferredSecondaryColorBy(model, prefs, nodeNotes = null) {
     return validColorKeys.has(fallback) ? fallback : '';
 }
 
+function resolveTasksPreferredColorHierarchy(model, projectionId, prefs, nodeNotes = null) {
+    const explicit = normalizeTasksColorHierarchy(prefs?.colorHierarchy, model, nodeNotes);
+    if (explicit.length) return explicit;
+    const primary = resolveTasksPreferredColorBy(model, projectionId, prefs, nodeNotes);
+    const secondary = resolveTasksPreferredSecondaryColorBy(model, prefs, nodeNotes);
+    return normalizeTasksColorHierarchy([primary, secondary], model, nodeNotes);
+}
+
 function tasksConfigListValue(values) {
     return (values || []).map((value) => String(value ?? '').trim()).filter(Boolean).join(',');
 }
@@ -3870,11 +3966,8 @@ async function renderTasksGraphs(rootElement = document) {
             ));
             const [nodeNotes, setNodeNotes] = React.useState(() => normalizeTasksNodeNotes(sourcePrefsRef.current?.nodeNotes));
             const [slideNotes, setSlideNotes] = React.useState(() => normalizeTasksSlideNotes(sourcePrefsRef.current?.slideNotes));
-            const [activeColorBy, setActiveColorBy] = React.useState(() => (
-                resolveTasksPreferredColorBy(model, activeProjectionId, projectionPrefs, nodeNotes)
-            ));
-            const [activeSecondaryColorBy, setActiveSecondaryColorBy] = React.useState(() => (
-                resolveTasksPreferredSecondaryColorBy(model, projectionPrefs, nodeNotes)
+            const [activeColorHierarchy, setActiveColorHierarchy] = React.useState(() => (
+                resolveTasksPreferredColorHierarchy(model, activeProjectionId, projectionPrefs, nodeNotes)
             ));
             const [filtersCollapsed, setFiltersCollapsed] = React.useState(() => {
                 if (typeof projectionPrefs?.filtersCollapsed === 'boolean') return projectionPrefs.filtersCollapsed;
@@ -3966,12 +4059,21 @@ async function renderTasksGraphs(rootElement = document) {
                 const id = String(activeProjectionId || '').trim();
                 return id ? (projections.find((p) => p && p.id === id) || null) : null;
             }, [sourceModel, activeProjectionId]);
-            const activeColorPalette = React.useMemo(() => tasksColorPaletteFor(model, activeColorBy), [model, activeColorBy]);
-            const activeSecondaryColorPalette = React.useMemo(() => tasksColorPaletteFor(model, activeSecondaryColorBy), [model, activeSecondaryColorBy]);
-            const activeGradientStops = React.useMemo(() => normalizeTasksGradientStops(activeColorPalette), [activeColorPalette]);
-            const activeGradientDomain = React.useMemo(() => tasksGradientDomain(activeColorPalette, activeGradientStops), [activeColorPalette, activeGradientStops]);
-            const activeSecondaryGradientStops = React.useMemo(() => normalizeTasksGradientStops(activeSecondaryColorPalette), [activeSecondaryColorPalette]);
-            const activeSecondaryGradientDomain = React.useMemo(() => tasksGradientDomain(activeSecondaryColorPalette, activeSecondaryGradientStops), [activeSecondaryColorPalette, activeSecondaryGradientStops]);
+            const activeColorBy = activeColorHierarchy[0] || '';
+            const setActiveColorLevel = React.useCallback((index, value) => {
+                setActiveColorHierarchy((current) => {
+                    const next = Array.isArray(current) ? current.slice() : [];
+                    const key = String(value || '').trim();
+                    if (key) next[index] = key;
+                    else next.splice(index);
+                    return normalizeTasksColorHierarchy(next, model, nodeNotes);
+                });
+            }, [model, nodeNotes]);
+            const activeColorLevelSpecs = React.useMemo(() => activeColorHierarchy.map((colorBy) => ({
+                colorBy,
+                palette: tasksColorPaletteFor(model, colorBy),
+            })), [model, activeColorHierarchy]);
+            const activeColorPalette = activeColorLevelSpecs[0]?.palette || {};
             React.useEffect(() => {
                 baseLayoutRef.current = null;
                 groupLayoutsRef.current = {};
@@ -3992,8 +4094,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setActiveSwatchFilters(egoMode ? tasksEmptyFilterQuery() : normalizeTasksFilterQuery(nextPrefs?.swatchFilters));
                 setSearchQuery(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
                 setSearchInputValue(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
-                setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, nextPrefs, nodeNotes));
-                setActiveSecondaryColorBy(resolveTasksPreferredSecondaryColorBy(model, nextPrefs, nodeNotes));
+                setActiveColorHierarchy(resolveTasksPreferredColorHierarchy(model, activeProjectionId, nextPrefs, nodeNotes));
                 setFiltersCollapsed(
                     typeof nextPrefs?.filtersCollapsed === 'boolean'
                         ? nextPrefs.filtersCollapsed
@@ -4070,16 +4171,15 @@ async function renderTasksGraphs(rootElement = document) {
                 const defaultColorBy = tasksResolvedProjectionDefaultColorBy(model, nodeNotes);
                 setActiveFilters((current) => tasksPruneFilterQueryFields(current, validFilterKeys));
                 setActiveSwatchFilters((current) => tasksPruneFilterQueryFields(current, validFilterKeys));
-                setActiveColorBy((current) => {
-                    if (current && validColorKeys.has(current)) return current;
-                    return validColorKeys.has(defaultColorBy) ? defaultColorBy : '';
+                setActiveColorHierarchy((current) => {
+                    const normalized = normalizeTasksColorHierarchy(current, model, nodeNotes);
+                    return normalized.length ? normalized : (validColorKeys.has(defaultColorBy) ? [defaultColorBy] : []);
                 });
-                setActiveSecondaryColorBy((current) => (current && validColorKeys.has(current) ? current : ''));
             }, [model, nodeNotes]);
             React.useEffect(() => {
-                const activeSwatchKeys = new Set([activeColorBy, activeSecondaryColorBy].filter(Boolean));
+                const activeSwatchKeys = new Set(activeColorHierarchy.filter(Boolean));
                 setActiveSwatchFilters((current) => tasksPruneFilterQueryFields(current, activeSwatchKeys));
-            }, [activeColorBy, activeSecondaryColorBy]);
+            }, [activeColorHierarchy]);
             React.useEffect(() => {
                 if (lastPersistedProjectionIdRef.current !== activeProjectionId) {
                     lastPersistedProjectionIdRef.current = activeProjectionId;
@@ -4094,7 +4194,8 @@ async function renderTasksGraphs(rootElement = document) {
                         queryBuilderEnabled,
                         searchQuery,
                         colorBy: activeColorBy,
-                        secondaryColorBy: activeSecondaryColorBy,
+                        secondaryColorBy: activeColorHierarchy[1] || '',
+                        colorHierarchy: activeColorHierarchy,
                         filtersCollapsed,
                         edgesVisible,
                         edgeAnimationEnabled,
@@ -4129,7 +4230,7 @@ async function renderTasksGraphs(rootElement = document) {
                     slideNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchQuery, activeColorBy, activeSecondaryColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes, slideNotes]);
+            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
@@ -4148,8 +4249,10 @@ async function renderTasksGraphs(rootElement = document) {
                     setProjectionUnspecifiedContentOpacity(clampTasksProjectionContentOpacity(cfg.projectionUnspecifiedContentOpacity));
                 }
                 const validColorKeys = new Set(tasksColorOptions(model, nodeNotes).map((option) => option.key));
-                if (cfg.colorBy !== undefined && validColorKeys.has(cfg.colorBy)) setActiveColorBy(cfg.colorBy);
-                if (cfg.secondaryColorBy !== undefined) setActiveSecondaryColorBy(validColorKeys.has(cfg.secondaryColorBy) ? cfg.secondaryColorBy : '');
+                if (Array.isArray(cfg.colorHierarchy)) setActiveColorHierarchy(normalizeTasksColorHierarchy(cfg.colorHierarchy, model, nodeNotes));
+                else if (cfg.colorBy !== undefined || cfg.secondaryColorBy !== undefined) {
+                    setActiveColorHierarchy(normalizeTasksColorHierarchy([cfg.colorBy, cfg.secondaryColorBy], model, nodeNotes));
+                }
                 if (!String(activeProjectionId || '').trim() && Array.isArray(cfg.groupBy)) {
                     setGroupByHierarchy(cfg.groupBy);
                     pendingFitActionRef.current = 'mode';
@@ -4346,8 +4449,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setQueryBuilderEnabled(typeof defaults.queryBuilderEnabled === 'boolean' ? defaults.queryBuilderEnabled : true);
                 setSearchInputValue(defaultSearch);
                 setSearchQuery(defaultSearch);
-                setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, defaults, nodeNotes));
-                setActiveSecondaryColorBy(resolveTasksPreferredSecondaryColorBy(model, defaults, nodeNotes));
+                setActiveColorHierarchy(resolveTasksPreferredColorHierarchy(model, activeProjectionId, defaults, nodeNotes));
                 setGroupByHierarchy([]);
                 setExpanded(hydrateExpandedSet(defaults));
                 setFiltersCollapsed(
@@ -4437,28 +4539,20 @@ async function renderTasksGraphs(rootElement = document) {
                         const hasNote = Boolean((nodeNotes[logicalNodeId] || '').trim());
                         const colorNode = { ...node, __has_note__: hasNote };
                         const nodeColor = resolveTasksNodeColor(colorNode, model, activeColorBy, activeColorPalette);
-                        const secondaryColor = activeSecondaryColorBy
-                            ? resolveTasksNodeColor(colorNode, model, activeSecondaryColorBy, activeSecondaryColorPalette)
-                            : '';
-                        const compositeColor = tasksAttrValues(colorNode[activeColorBy]).length > 1
-                            || tasksAttrValues(colorNode[activeSecondaryColorBy]).length > 1;
-                        const compositeSweep = tasksCompositeSweep(
-                            colorNode, activeColorBy, activeColorPalette,
-                            activeSecondaryColorBy, activeSecondaryColorPalette, colorMix
-                        );
+                        const colorLevels = tasksNodeColorLevels(colorNode, model, activeColorLevelSpecs, colorMix);
+                        const useOverlay = tasksUseColorOverlay(colorLevels);
                         const cardState = tasksCardStateForNode(sourceModel, nodeStates, logicalNodeId, cardStates);
                         const stateAccent = cardState.color || TASKS_DONE_ACCENT;
                         return {
                             id: node.id,
                             type: 'vyasaTask',
                             position: node.position,
-                            data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __composite_color__: compositeColor, __composite_sweep__: compositeSweep },
+                            data: { ...node, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __color_levels__: useOverlay ? colorLevels : null },
                             style: {
                                 width: node.width,
                                 height: node.height,
                                 zIndex: TASKS_TASK_Z,
-                                background: tasksNodeBackground(nodeColor, secondaryColor, colorMix, TASKS_NODE_BG, compositeColor),
-                                ...tasksCompositeAnimationStyle({ data: { __composite_sweep__: compositeSweep } }, compositeColor),
+                                background: useOverlay ? 'transparent' : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG, false),
                                 border: isChecked
                                     ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
                                     : (nodeColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 28%, ${nodeColor} 72%)` : TASKS_NODE_BORDER),
@@ -4567,30 +4661,15 @@ async function renderTasksGraphs(rootElement = document) {
                     const hasNote = Boolean((nodeNotes[logicalNodeId] || '').trim());
                     const colorNode = { ...n, __has_note__: hasNote };
                     const nodeColor = resolveTasksNodeColor(colorNode, model, activeColorBy, activeColorPalette);
-                    const secondaryColor = (activeSecondaryColorBy && n.__kind__ !== 'group')
-                        ? resolveTasksNodeColor(colorNode, model, activeSecondaryColorBy, activeSecondaryColorPalette)
-                        : '';
-                    const compositeColor = n.__kind__ !== 'group' && (
-                        tasksAttrValues(colorNode[activeColorBy]).length > 1
-                        || tasksAttrValues(colorNode[activeSecondaryColorBy]).length > 1
-                    );
-                    const compositeSweep = n.__kind__ !== 'group'
-                        ? tasksCompositeSweep(
-                            colorNode, activeColorBy, activeColorPalette,
-                            activeSecondaryColorBy, activeSecondaryColorPalette, colorMix
-                        )
-                        : '';
                     const nodeImage = resolveTasksNodeImage(n, model);
                     const collapsedGroupColor = !isExpanded ? resolveTasksCollapsedGroupColor(colorNode, model, activeColorBy, activeColorPalette) : '';
                     const isProjectionGroup = n.__kind__ === 'group' && n.__projection_group__;
                     const projectionGroupTone = isProjectionGroup ? resolveTasksProjectionGroupDimensionColor(n, model) : '';
-                    const collapsedGroupSecondaryColor = (!isExpanded && activeSecondaryColorBy)
-                        ? resolveTasksCollapsedGroupColor(colorNode, model, activeSecondaryColorBy, activeSecondaryColorPalette)
-                        : '';
                     const groupColor = isExpanded
                         ? (projectionGroupTone || nodeColor)
                         : (collapsedGroupColor || projectionGroupTone || nodeColor);
-                    const groupSecondaryColor = !isExpanded ? collapsedGroupSecondaryColor : '';
+                    const colorLevels = tasksNodeColorLevels(colorNode, model, activeColorLevelSpecs, colorMix, { collapsedGroup: n.__kind__ === 'group' && !isExpanded });
+                    const useOverlay = !isExpanded && tasksUseColorOverlay(colorLevels);
                     const isUnspecifiedProjectionGroup = isTasksUnspecifiedProjectionGroup(n, TASKS_PROJECTION_UNSPECIFIED_LABEL);
                     const groupFillExpanded = isProjectionGroup
                         ? (isUnspecifiedProjectionGroup ? projectionUnspecifiedGroupExpandedOpacity : projectionGroupExpandedOpacity)
@@ -4604,8 +4683,8 @@ async function renderTasksGraphs(rootElement = document) {
                     const background = n.__kind__ === 'group'
                         ? (isExpanded
                             ? tasksGroupBackground(groupColor, '', TASKS_GROUP_EXPANDED_BG, { mode: 'transparent', intensity: groupFillExpanded })
-                            : tasksGroupBackground(groupColor, groupSecondaryColor, TASKS_GROUP_BG, { intensity: groupFillCollapsed }))
-                        : tasksNodeBackground(nodeColor, secondaryColor, colorMix, TASKS_NODE_BG, compositeColor);
+                            : tasksGroupBackground(groupColor, '', TASKS_GROUP_BG, { intensity: groupFillCollapsed }))
+                        : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG, false);
                     const border = groupColor
                         ? (n.__kind__ === 'group'
                             ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${groupColor} ${groupBorderMix}%)`
@@ -4619,13 +4698,12 @@ async function renderTasksGraphs(rootElement = document) {
                         id: n.id,
                         type: 'vyasaTask',
                         position: n.position,
-                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __projection_branch_opacity__: branchOpacity, __secondary_color__: n.__kind__ === 'group' ? groupSecondaryColor : secondaryColor, __composite_color__: compositeColor, __composite_sweep__: compositeSweep },
+                        data: { ...n, __checked__: isChecked, __card_state__: cardState.label, __card_state_color__: cardState.color, __has_note__: hasNote, __node_image__: nodeImage, __projection_branch_opacity__: branchOpacity, __color_levels__: useOverlay ? colorLevels : null },
                         style: {
                             width: n.width,
                             height: n.height,
                             zIndex: nodeZ,
-                            background,
-                            ...tasksCompositeAnimationStyle({ data: { __composite_sweep__: compositeSweep } }, compositeColor),
+                            background: useOverlay ? 'transparent' : background,
                             border: isChecked
                                 ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
                                 : border,
@@ -4742,7 +4820,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setNodes(anchoredNodes);
                 setEdges(edgesVisible ? baseEdges : []);
                 setGraphRevision((value) => value + 1);
-            }, [ensureBaseLayout, model, sourceModel, activeColorBy, activeColorPalette, activeSecondaryColorBy, activeSecondaryColorPalette, activeProjection, viewMode, edgesVisible, edgeOpacity, projectionUnspecifiedContentOpacity, egoNeighborOpacity, checkedNodeIdSet, nodeStates, nodeNotes, cardStates]);
+            }, [ensureBaseLayout, model, sourceModel, activeColorBy, activeColorPalette, activeColorLevelSpecs, activeProjection, viewMode, edgesVisible, edgeOpacity, projectionUnspecifiedContentOpacity, egoNeighborOpacity, checkedNodeIdSet, nodeStates, nodeNotes, cardStates]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: 'currentColor' },
@@ -4772,7 +4850,6 @@ async function renderTasksGraphs(rootElement = document) {
                             data: { ...node.data, highlightMode: selected ? 'selected' : 'dim' },
                             style: {
                             ...node.style,
-                                ...tasksCompositeAnimationStyle(node, selected),
                                 opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (selected ? 1 : 0.18),
                                 boxShadow: selected
                                     ? `0 0 0 2px color-mix(in srgb, ${displayColor} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor} 34%, transparent)`
@@ -4812,7 +4889,6 @@ async function renderTasksGraphs(rootElement = document) {
                         data: { ...node.data, highlightMode: visibleSelectionIds.has(node.id) ? 'selected' : 'dim' },
                         style: {
                             ...node.style,
-                            ...tasksCompositeAnimationStyle(node, visibleSelectionIds.has(node.id)),
                             opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (visibleSelectionIds.has(node.id) ? 1 : 0.18),
                         },
                     })));
@@ -4890,9 +4966,6 @@ async function renderTasksGraphs(rootElement = document) {
                     const collapsedGroupColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
                         ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
                         : '';
-                    const groupSecondaryColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
-                        ? (node.data?.__secondary_color__ || '')
-                        : '';
                     const displayColor = collapsedGroupColor || nodeColor;
                     const stateAccent = node.data?.__card_state_color__ || TASKS_DONE_ACCENT;
                     const checkedShadow = node.data?.__checked__
@@ -4905,7 +4978,6 @@ async function renderTasksGraphs(rootElement = document) {
                     const zIndex = mode === 'selected' || mode === 'selected-focus' || mode === 'neighbor-focus'
                         ? baseZIndex + TASKS_SELECTED_Z_BOOST
                         : (mode === 'neighbor' ? baseZIndex + TASKS_NEIGHBOR_Z_BOOST : baseZIndex);
-                    const animateComposite = mode === 'selected' || mode === 'selected-focus' || mode === 'neighbor-focus';
                     return {
                         ...node,
                         data: { ...node.data, highlightMode: mode },
@@ -4915,9 +4987,8 @@ async function renderTasksGraphs(rootElement = document) {
                             background: mode === 'dim'
                                 ? node.style.background
                                 : (node.data?.__kind__ === 'group'
-                                    ? tasksGroupBackground(displayColor, groupSecondaryColor, TASKS_GROUP_BG_ACTIVE, { mode: 'transparent', intensity: 10 })
-                                    : tasksNodeBackground(nodeColor, node.data?.__secondary_color__, colorMix, TASKS_NODE_BG_ACTIVE, node.data?.__composite_color__)),
-                            ...tasksCompositeAnimationStyle(node, animateComposite),
+                                    ? (tasksNodeIsOverlaid(node) ? node.style.background : tasksGroupBackground(displayColor, '', TASKS_GROUP_BG_ACTIVE, { mode: 'transparent', intensity: 10 }))
+                                    : (tasksNodeIsOverlaid(node) ? node.style.background : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG_ACTIVE, false))),
                             opacity: mode === 'dim' ? branchOpacity * 0.22 : 1,
                             boxShadow: (mode === 'selected' || mode === 'selected-focus')
                                 ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
@@ -5032,7 +5103,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdges(edgesVisible ? nextEdges : []);
-            }, [effectiveQueryFilters, activeSwatchFilters, searchMatches, model, activeColorBy, activeColorPalette, activeSecondaryColorBy, activeSecondaryColorPalette, expanded, edgesVisible, edgeAnimationEnabled, edgeAnimationClassName, edgeOpacity, filteredSelectionIds]);
+            }, [effectiveQueryFilters, activeSwatchFilters, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeAnimationEnabled, edgeAnimationClassName, edgeOpacity, filteredSelectionIds]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -5566,6 +5637,7 @@ async function renderTasksGraphs(rootElement = document) {
                         background: isChecked ? `linear-gradient(135deg, color-mix(in srgb, ${taskStateColor} 12%, transparent), transparent 55%)` : undefined,
                     }
                 },
+                    tasksColorOverlay(React, data?.__color_levels__, data?.width, data?.height),
                     checkboxControl,
                     doneBadge,
                     noteBadge,
@@ -5575,6 +5647,8 @@ async function renderTasksGraphs(rootElement = document) {
                     React.createElement('span', {
                         style: {
                             boxSizing: 'border-box',
+                            position: 'relative',
+                            zIndex: 1,
                             flex: '1 1 auto',
                             minWidth: 0,
                             width: nodeImage ? 'auto' : '100%',
@@ -5914,10 +5988,6 @@ async function renderTasksGraphs(rootElement = document) {
                         ? projection.id === TASKS_GANTT_PROJECTION_ID
                         : projection.id === activeProjectionId
                 )) || null;
-                const activePaletteEntries = activeColorBy === 'rank' ? [] : tasksColorPaletteEntries(model, activeColorBy, nodeNotes);
-                const activeGradientPalette = isTasksGradientPalette(activeColorPalette);
-                const activeSecondaryPaletteEntries = activeSecondaryColorBy === 'rank' ? [] : tasksColorPaletteEntries(model, activeSecondaryColorBy, nodeNotes);
-                const activeSecondaryGradientPalette = isTasksGradientPalette(activeSecondaryColorPalette);
                 const customGroupingActive = !String(activeProjectionId || '').trim() && viewMode !== 'gantt';
                 const projectionGroupByHierarchy = viewMode === 'gantt' ? [] : tasksProjectionGroupByHierarchy(sourceModel, activeProjectionId);
                 const displayedGroupByHierarchy = customGroupingActive ? groupByHierarchy : projectionGroupByHierarchy;
@@ -5925,7 +5995,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const groupByLevels = displayedGroupByHierarchy.filter(Boolean);
                 if (customGroupingActive) groupByLevels.push('');
                 if (!groupByLevels.length && viewMode !== 'gantt') groupByLevels.push('');
-                const activeCount = (queryBuilderEnabled ? tasksCountFilterRules(activeFilters) : 0) + tasksCountFilterRules(activeSwatchFilters) + (activeColorBy ? 1 : 0) + (searchMatches.active ? 1 : 0) + activeGroupByCount;
+                const activeCount = (queryBuilderEnabled ? tasksCountFilterRules(activeFilters) : 0) + tasksCountFilterRules(activeSwatchFilters) + activeColorHierarchy.length + (searchMatches.active ? 1 : 0) + activeGroupByCount;
                 const QueryBuilder = queryBuilderEnabled && queryBuilderReady ? window.VyasaTasksQueryBuilder?.QueryBuilder : null;
                 const filterSectionStyle = { display: 'grid', gap: '8px', fontSize: '12px' };
                 const filterInlineControlStyle = { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '12px', alignItems: 'start', minWidth: 0 };
@@ -5933,8 +6003,6 @@ async function renderTasksGraphs(rootElement = document) {
                 const filterValueStackStyle = { display: 'grid', gap: '6px', minWidth: 0 };
                 const filterChoiceListStyle = { display: 'grid', gap: '8px', minWidth: 0 };
                 const filterChoiceStyle = { display: 'grid', gridTemplateColumns: '16px minmax(0, 1fr)', alignItems: 'center', columnGap: '10px', minWidth: 0 };
-                const colorChoiceListStyle = { display: 'flex', flexWrap: 'wrap', gap: '8px 14px', minWidth: 0 };
-                const colorChoiceStyle = { display: 'inline-flex', alignItems: 'center', gap: '7px', minWidth: 0, maxWidth: '100%' };
                 const textQueryBuilderOperators = [
                     { name: 'notnull', label: 'attribute exists' },
                     { name: 'contains', label: 'has string' },
@@ -5961,8 +6029,92 @@ async function renderTasksGraphs(rootElement = document) {
                     operators: option.isText ? textQueryBuilderOperators : enumQueryBuilderOperators,
                 }));
                 const queryBuilderOperators = enumQueryBuilderOperators;
-                const activeColorSelectedValues = new Set(tasksFilterQuerySelectedValues(activeSwatchFilters, activeColorBy));
-                const activeSecondarySelectedValues = new Set(tasksFilterQuerySelectedValues(activeSwatchFilters, activeSecondaryColorBy));
+                const colorLevelSlots = activeColorHierarchy.length ? [...activeColorHierarchy] : [''];
+                const remainingColorOptions = colorOptions.filter((option) => !activeColorHierarchy.includes(option.key));
+                if (activeColorHierarchy.length && remainingColorOptions.length) colorLevelSlots.push('');
+                const renderColorPalette = (colorBy) => {
+                    if (!colorBy || colorBy === 'rank') return null;
+                    const palette = tasksColorPaletteFor(model, colorBy);
+                    const gradientStops = normalizeTasksGradientStops(palette);
+                    const gradientDomain = tasksGradientDomain(palette, gradientStops);
+                    const selectedValues = new Set(tasksFilterQuerySelectedValues(activeSwatchFilters, colorBy));
+                    if (isTasksGradientPalette(palette)) {
+                        return React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
+                            React.createElement('div', { style: { display: 'grid', gap: '6px', fontSize: '11px', lineHeight: 1.3, opacity: 0.85 } },
+                                React.createElement('div', { style: {
+                                    height: '12px',
+                                    borderRadius: '999px',
+                                    border: '1px solid color-mix(in srgb, currentColor 12%, transparent)',
+                                    background: `linear-gradient(90deg, ${gradientStops.map((stop) => {
+                                        const start = gradientDomain?.start ?? gradientStops[0]?.at ?? 0;
+                                        const end = gradientDomain?.end ?? gradientStops[gradientStops.length - 1]?.at ?? 1;
+                                        const span = Math.max(end - start, 1);
+                                        return `${stop.color} ${((stop.at - start) / span) * 100}%`;
+                                    }).join(', ')})`,
+                                } }),
+                                React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' } },
+                                    ...gradientStops.map((stop, index) => React.createElement('span', { key: `${colorBy}-stop-${index}` }, stop.label || (Number.isInteger(stop.at) ? `${stop.at}` : `${stop.at}`)))
+                                )
+                            )
+                        );
+                    }
+                    const entries = tasksColorPaletteEntries(model, colorBy, nodeNotes);
+                    if (!entries.length) return null;
+                    return React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
+                        React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '11px', lineHeight: 1.3, opacity: 0.8 } },
+                            ...entries.map(([value, color]) => {
+                                const selected = selectedValues.has(value);
+                                return React.createElement('button', {
+                                    key: `${colorBy}-${value}-label`,
+                                    type: 'button',
+                                    'aria-pressed': selected,
+                                    onClick: () => toggleFilterValue(colorBy, value, !selected),
+                                    style: {
+                                        display: 'grid',
+                                        gridTemplateColumns: '12px 1fr',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        width: '100%',
+                                        padding: '4px 6px',
+                                        borderRadius: '6px',
+                                        border: selected ? `1px solid ${color}` : '1px solid transparent',
+                                        background: selected ? `color-mix(in srgb, ${color} 16%, transparent)` : 'transparent',
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                        color: 'inherit',
+                                    },
+                                },
+                                React.createElement('span', { style: { width: '12px', height: '12px', borderRadius: '999px', background: color, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)' } }),
+                                React.createElement('span', null, value));
+                            })
+                        )
+                    );
+                };
+                const renderColorLevel = (colorBy, index) => {
+                    const usedBefore = new Set(activeColorHierarchy.slice(0, index));
+                    const selectOptions = [{ key: '', label: 'None' }, ...colorOptions
+                        .filter((option) => option.key === colorBy || !usedBefore.has(option.key))
+                        .map((option) => ({ key: option.key, label: option.label }))];
+                    return React.createElement('div', { key: `color-level-${index}`, style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                        React.createElement('span', { style: filterKeyStyle }, index === 0 ? 'Color by' : `Color ${index + 1}`),
+                        React.createElement('div', { style: filterValueStackStyle },
+                            React.createElement('select', {
+                                value: colorBy || '',
+                                onChange: (event) => setActiveColorLevel(index, event.target.value),
+                                style: {
+                                    width: '100%',
+                                    minWidth: 0,
+                                    border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                    borderRadius: '8px',
+                                    padding: '6px 8px',
+                                    background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                    color: 'inherit',
+                                },
+                            }, selectOptions.map((option) => React.createElement('option', { key: option.key || '__none__', value: option.key }, option.label))),
+                            renderColorPalette(colorBy)
+                        )
+                    );
+                };
                 const QueryValueEditor = (props) => {
                     const values = Array.isArray(props.values) ? props.values : [];
                     const optionValue = (option) => String(option.value ?? option.name ?? '');
@@ -6326,155 +6478,7 @@ async function renderTasksGraphs(rootElement = document) {
                                         : React.createElement('div', { style: { fontSize: '11px', opacity: 0.72, lineHeight: 1.3 } }, searchMatches.active ? `${searchMatches.nodeIds.size} nodes matched` : 'Matches node id, label, text attrs, and matching edge text.')
                             )
                         ),
-                        React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('span', { style: filterKeyStyle }, 'Color by'),
-                            React.createElement('div', { style: filterValueStackStyle },
-                                    React.createElement('div', { style: colorChoiceListStyle },
-                                        [
-                                            { key: '', label: 'None' },
-                                            ...colorOptions.map((option) => ({ key: option.key, label: option.label })),
-                                        ].map((option) => React.createElement('label', { key: option.key || '__none__', style: colorChoiceStyle },
-                                        React.createElement('input', {
-                                            type: 'radio',
-                                            name: `${widgetId}-color-by`,
-                                            checked: activeColorBy === option.key,
-                                            onChange: () => setActiveColorBy(option.key),
-                                        }),
-                                        React.createElement('span', { style: { opacity: 0.85 } }, option.label)
-                                        ))
-                                    ),
-                                    activeGradientPalette
-                                        ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
-                                            React.createElement('div', { style: { display: 'grid', gap: '6px', fontSize: '11px', lineHeight: 1.3, opacity: 0.85 } },
-                                                React.createElement('div', {
-                                                    style: {
-                                                        height: '12px',
-                                                        borderRadius: '999px',
-                                                        border: '1px solid color-mix(in srgb, currentColor 12%, transparent)',
-                                                        background: `linear-gradient(90deg, ${activeGradientStops.map((stop) => {
-                                                            const start = activeGradientDomain?.start ?? activeGradientStops[0]?.at ?? 0;
-                                                            const end = activeGradientDomain?.end ?? activeGradientStops[activeGradientStops.length - 1]?.at ?? 1;
-                                                            const span = Math.max(end - start, 1);
-                                                            const pct = ((stop.at - start) / span) * 100;
-                                                            return `${stop.color} ${pct}%`;
-                                                        }).join(', ')})`,
-                                                    },
-                                                }),
-                                                React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' } },
-                                                    ...activeGradientStops.map((stop, index) => React.createElement('span', { key: `${activeColorBy}-stop-${index}` }, stop.label || (Number.isInteger(stop.at) ? `${stop.at}` : `${stop.at}`)))
-                                                )
-                                            )
-                                        )
-                                        : activePaletteEntries.length > 0
-                                        ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
-                                            React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '11px', lineHeight: 1.3, opacity: 0.8 } },
-                                                ...activePaletteEntries.map(([value, color]) => {
-                                                    const selected = activeColorSelectedValues.has(value);
-                                                    return React.createElement('button', {
-                                                        key: `${activeColorBy}-${value}-label`,
-                                                        type: 'button',
-                                                        'aria-pressed': selected,
-                                                        onClick: () => toggleFilterValue(activeColorBy, value, !selected),
-                                                        style: {
-                                                            display: 'grid',
-                                                            gridTemplateColumns: '12px 1fr',
-                                                            alignItems: 'center',
-                                                            gap: '6px',
-                                                            width: '100%',
-                                                            padding: '4px 6px',
-                                                            borderRadius: '6px',
-                                                            border: selected ? `1px solid ${color}` : '1px solid transparent',
-                                                            background: selected ? `color-mix(in srgb, ${color} 16%, transparent)` : 'transparent',
-                                                            cursor: 'pointer',
-                                                            textAlign: 'left',
-                                                            color: 'inherit',
-                                                        },
-                                                    },
-                                                    React.createElement('span', { style: { width: '12px', height: '12px', borderRadius: '999px', background: color, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)' } }),
-                                                    React.createElement('span', null, value));
-                                                })
-                                            )
-                                        )
-                                        : null
-                            )
-                        ),
-                        activeColorBy
-                            ? React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                                React.createElement('span', { style: filterKeyStyle }, 'Secondary color by'),
-                                React.createElement('div', { style: filterValueStackStyle },
-                                        React.createElement('div', { style: colorChoiceListStyle },
-                                            [
-                                                { key: '', label: 'None' },
-                                                ...colorOptions
-                                                    .filter((option) => option.key !== activeColorBy)
-                                                    .map((option) => ({ key: option.key, label: option.label })),
-                                            ].map((option) => React.createElement('label', { key: option.key || '__none__', style: colorChoiceStyle },
-                                            React.createElement('input', {
-                                                type: 'radio',
-                                                name: `${widgetId}-secondary-color-by`,
-                                                checked: activeSecondaryColorBy === option.key,
-                                                onChange: () => setActiveSecondaryColorBy(option.key),
-                                            }),
-                                            React.createElement('span', { style: { opacity: 0.85 } }, option.label)
-                                            ))
-                                        ),
-                                        React.createElement('div', { style: { marginTop: '2px', fontSize: '11px', opacity: 0.6, lineHeight: 1.3 } }, 'Adds a second color as a diagonal split on each node.'),
-                                        activeSecondaryColorBy && activeSecondaryGradientPalette
-                                            ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
-                                                React.createElement('div', { style: { display: 'grid', gap: '6px', fontSize: '11px', lineHeight: 1.3, opacity: 0.85 } },
-                                                    React.createElement('div', {
-                                                        style: {
-                                                            height: '12px',
-                                                            borderRadius: '999px',
-                                                            border: '1px solid color-mix(in srgb, currentColor 12%, transparent)',
-                                                            background: `linear-gradient(90deg, ${activeSecondaryGradientStops.map((stop) => {
-                                                                const start = activeSecondaryGradientDomain?.start ?? activeSecondaryGradientStops[0]?.at ?? 0;
-                                                                const end = activeSecondaryGradientDomain?.end ?? activeSecondaryGradientStops[activeSecondaryGradientStops.length - 1]?.at ?? 1;
-                                                                const span = Math.max(end - start, 1);
-                                                                const pct = ((stop.at - start) / span) * 100;
-                                                                return `${stop.color} ${pct}%`;
-                                                            }).join(', ')})`,
-                                                        },
-                                                    }),
-                                                    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' } },
-                                                        ...activeSecondaryGradientStops.map((stop, index) => React.createElement('span', { key: `${activeSecondaryColorBy}-stop-${index}` }, stop.label || (Number.isInteger(stop.at) ? `${stop.at}` : `${stop.at}`)))
-                                                    )
-                                                )
-                                            )
-                                            : activeSecondaryColorBy && activeSecondaryPaletteEntries.length > 0
-                                            ? React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
-                                                React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '11px', lineHeight: 1.3, opacity: 0.8 } },
-                                                    ...activeSecondaryPaletteEntries.map(([value, color]) => {
-                                                        const selected = activeSecondarySelectedValues.has(value);
-                                                        return React.createElement('button', {
-                                                            key: `${activeSecondaryColorBy}-${value}-label`,
-                                                            type: 'button',
-                                                            'aria-pressed': selected,
-                                                            onClick: () => toggleFilterValue(activeSecondaryColorBy, value, !selected),
-                                                            style: {
-                                                                display: 'grid',
-                                                                gridTemplateColumns: '12px 1fr',
-                                                                alignItems: 'center',
-                                                                gap: '6px',
-                                                                width: '100%',
-                                                                padding: '4px 6px',
-                                                                borderRadius: '6px',
-                                                                border: selected ? `1px solid ${color}` : '1px solid transparent',
-                                                                background: selected ? `color-mix(in srgb, ${color} 16%, transparent)` : 'transparent',
-                                                                cursor: 'pointer',
-                                                                textAlign: 'left',
-                                                                color: 'inherit',
-                                                            },
-                                                        },
-                                                        React.createElement('span', { style: { width: '12px', height: '12px', borderRadius: '999px', background: color, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)' } }),
-                                                        React.createElement('span', null, value));
-                                                    })
-                                                )
-                                            )
-                                            : null
-                                    )
-                            )
-                            : null,
+                        ...colorLevelSlots.map((colorBy, index) => renderColorLevel(colorBy, index)),
                         React.createElement('div', { style: { marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '12px' } },
                             React.createElement('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '7px', minWidth: 0 } },
                                 React.createElement('input', {
@@ -6935,7 +6939,7 @@ async function renderTasksGraphs(rootElement = document) {
                     source: def?.source || '',
                     groupBy,
                     colorBy: isActiveLive ? activeColorBy : (def?.default_color_by || ''),
-                    secondaryColorBy: isActiveLive ? activeSecondaryColorBy : (def?.default_secondary_color_by || ''),
+                    secondaryColorBy: isActiveLive ? (activeColorHierarchy[1] || '') : (def?.default_secondary_color_by || ''),
                     edgeColorBy: def?.edge_color_by || sourceModel?.edge_color_by,
                     edgeLabelFrom: def?.edge_label_from || sourceModel?.edge_label_from,
                     hoverAttrs: (Array.isArray(def?.hover_attrs) && def.hover_attrs.length)

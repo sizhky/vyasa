@@ -506,8 +506,7 @@ def test_tasks_source_uses_reset_button_label():
     assert "setActiveFilters(normalizeTasksFilterQuery(defaults.filters))" in source
     assert "setQueryBuilderEnabled(typeof defaults.queryBuilderEnabled === 'boolean'" in source
     assert "setSearchInputValue(defaultSearch)" in source
-    assert "setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, defaults, nodeNotes))" in source
-    assert "setActiveSecondaryColorBy(resolveTasksPreferredSecondaryColorBy(model, defaults, nodeNotes))" in source
+    assert "setActiveColorHierarchy(resolveTasksPreferredColorHierarchy(model, activeProjectionId, defaults, nodeNotes))" in source
     assert "setEdgesVisible(typeof defaults.edgesVisible === 'boolean'" in source
     assert "setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(defaults.edgeAnimationMode, defaults.edgeAnimationEnabled))" in source
     assert "onClick: resetProjectionControls" in source
@@ -547,23 +546,24 @@ def test_tasks_color_swatch_filter_is_independent_and_ands_with_query_filter():
     assert "setQueryBuilderEnabled(true)" not in callback
     assert "function tasksNodeMatchesAllFilters(node, queryFilters, swatchFilters)" in source
     assert "tasksNodeMatchesFilters(node, queryFilters) && tasksNodeMatchesFilters(node, swatchFilters)" in source
-    assert "tasksFilterQuerySelectedValues(activeSwatchFilters, activeColorBy)" in source
-    assert "tasksFilterQuerySelectedValues(activeSwatchFilters, activeSecondaryColorBy)" in source
+    assert "tasksFilterQuerySelectedValues(activeSwatchFilters, colorBy)" in source
     assert "swatchFilters: activeSwatchFilters" in source
     assert "setActiveSwatchFilters(tasksEmptyFilterQuery())" in source
     assert "query: normalizeTasksFilterQuery(activeFilters)" in source
     assert "onQueryChange: (query) => setActiveFilters(normalizeTasksFilterQuery(query))" in source
-    assert "const activeSwatchKeys = new Set([activeColorBy, activeSecondaryColorBy].filter(Boolean))" in source
+    assert "const activeSwatchKeys = new Set(activeColorHierarchy.filter(Boolean))" in source
     assert "tasksPruneFilterQueryFields(current, activeSwatchKeys)" in source
 
 
-def test_tasks_color_picker_choices_wrap_inline():
+def test_tasks_color_picker_uses_cascading_level_dropdowns():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "const colorChoiceListStyle = { display: 'flex', flexWrap: 'wrap'" in source
-    assert "const colorChoiceStyle = { display: 'inline-flex', alignItems: 'center'" in source
-    assert "React.createElement('div', { style: colorChoiceListStyle }" in source
-    assert "React.createElement('label', { key: option.key || '__none__', style: colorChoiceStyle }" in source
+    # Color levels mirror group-by: one <select> per level, each picked value adds the next slot.
+    assert "const renderColorLevel = (colorBy, index) => {" in source
+    assert "onChange: (event) => setActiveColorLevel(index, event.target.value)" in source
+    assert "index === 0 ? 'Color by' : `Color ${index + 1}`" in source
+    assert "if (activeColorHierarchy.length && remainingColorOptions.length) colorLevelSlots.push('')" in source
+    assert "...colorLevelSlots.map((colorBy, index) => renderColorLevel(colorBy, index))" in source
 
 
 def test_tasks_query_builder_supports_inline_text_attrs_and_exists_operator():
@@ -1126,7 +1126,7 @@ def test_context_graphs_have_day_switch_contract():
     assert "React.createElement('span', { style: filterKeyStyle }, 'Context')" in source
     assert source.index("'Context'") < source.index("'View'")
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
-    assert "React.createElement('div', { style: colorChoiceListStyle }," in source
+    assert "const renderColorLevel = (colorBy, index) => {" in source
     assert "sourceModel?.kg_context?.caption ? React.createElement('div', {" in source
     assert "React.createElement('span', { style: filterKeyStyle }, 'Intensity')" in source
     assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Edge Intensity')" in source
