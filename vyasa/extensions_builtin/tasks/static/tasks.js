@@ -366,6 +366,7 @@ window.__vyasaTasksPerf = window.__vyasaTasksPerf || {};
 window.__vyasaTasksPerf.enabled = window.__vyasaTasksPerf.enabled === true || new URLSearchParams(window.location.search).has('tasks_perf');
 window.__vyasaTasksPerf.pendingFrames = window.__vyasaTasksPerf.pendingFrames || new Set();
 window.__vyasaTasksPerf.loggedShell = window.__vyasaTasksPerf.loggedShell || new Set();
+window.__vyasaTasksPerf.loggedSurface = window.__vyasaTasksPerf.loggedSurface || new Set();
 if (!Array.isArray(window.__vyasaTasksDebug.watch) || window.__vyasaTasksDebug.watch.length === 0) {
     const rawWatch = new URLSearchParams(window.location.search).getAll('tasks_watch');
     window.__vyasaTasksDebug.watch = rawWatch
@@ -518,6 +519,46 @@ function logTasksPerfShellOnce(widgetId, wrapper, payload = {}) {
     if (window.__vyasaTasksPerf.loggedShell.has(key)) return;
     window.__vyasaTasksPerf.loggedShell.add(key);
     window.setTimeout(() => logTasksPerf('shell-context', { ...payload, ...tasksPerfShellSnapshot(wrapper) }), 120);
+}
+
+function tasksPerfElementSnapshot(el) {
+    if (!el) return null;
+    const style = window.getComputedStyle?.(el);
+    return {
+        tag: el.tagName?.toLowerCase?.() || '',
+        id: el.id || '',
+        cls: String(el.className || '').split(/\s+/).filter(Boolean).slice(0, 6).join('.'),
+        rect: tasksPerfRect(el),
+        transform: style?.transform || '',
+        transformOrigin: style?.transformOrigin || '',
+        overflow: `${style?.overflowX || ''}/${style?.overflowY || ''}`,
+        contain: style?.contain || '',
+        willChange: style?.willChange || '',
+        backfaceVisibility: style?.backfaceVisibility || '',
+        isolation: style?.isolation || '',
+    };
+}
+
+function tasksPerfSurfaceSnapshot(wrapper, event = null) {
+    const reactFlow = wrapper?.querySelector?.('.react-flow');
+    const viewport = wrapper?.querySelector?.('.react-flow__viewport');
+    const pane = wrapper?.querySelector?.('.react-flow__pane');
+    const target = event?.target instanceof Element ? event.target : null;
+    return {
+        wrapper: tasksPerfElementSnapshot(wrapper),
+        reactFlow: tasksPerfElementSnapshot(reactFlow),
+        viewport: tasksPerfElementSnapshot(viewport),
+        pane: tasksPerfElementSnapshot(pane),
+        eventTarget: tasksPerfElementSnapshot(target),
+    };
+}
+
+function logTasksPerfSurfaceOnce(widgetId, wrapper, payload = {}) {
+    if (!window.__vyasaTasksPerf.enabled || !wrapper) return;
+    const key = `${widgetId}:${window.location.host}:${window.location.pathname}`;
+    if (window.__vyasaTasksPerf.loggedSurface.has(key)) return;
+    window.__vyasaTasksPerf.loggedSurface.add(key);
+    window.setTimeout(() => logTasksPerf('render-surface', { ...payload, ...tasksPerfSurfaceSnapshot(wrapper) }), 250);
 }
 
 function tasksPerfWheelPayload(event) {
@@ -4151,6 +4192,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, [selectedNodeIds]);
             React.useEffect(() => {
                 logTasksPerfShellOnce(widgetId, wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
+                logTasksPerfSurfaceOnce(widgetId, flowWrapperRef.current || wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
             }, [widgetId, model]);
             React.useEffect(() => {
                 logTasksDebug('selectionStateCommit', {
@@ -6797,7 +6839,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const wrapper = flowWrapperRef.current;
                 const graphBase = graphBaseRef.current || {};
                 const perfContext = tasksPerfContext(widgetId, wrapper, model, graphBase);
-                traceTasksInteractionFrame('pointermove', perfContext);
+                traceTasksInteractionFrame('pointermove', { ...perfContext, surface: tasksPerfSurfaceSnapshot(wrapper, event) });
                 const perfStart = tasksPerfNow();
                 const finishPerf = (stage, extra = {}) => {
                     const durationMs = Math.round((tasksPerfNow() - perfStart) * 10) / 10;
@@ -7432,6 +7474,7 @@ async function renderTasksGraphs(rootElement = document) {
                 onWheelCapture: (event) => traceTasksInteractionFrame('wheel', {
                     ...tasksPerfContext(widgetId, flowWrapperRef.current, model, graphBaseRef.current),
                     ...tasksPerfWheelPayload(event),
+                    surface: tasksPerfSurfaceSnapshot(flowWrapperRef.current, event),
                 }),
                 onPointerMoveCapture: updateDragSelection,
                 onPointerUpCapture: finishDragSelection,
