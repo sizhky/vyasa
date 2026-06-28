@@ -305,22 +305,19 @@ def test_tasks_source_lazy_loads_react_flow_only_when_widgets_exist():
 
 def test_tasks_perf_logging_traces_root_and_interaction_costs():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    api_source = Path("vyasa/extensions_builtin/tasks/api.py").read_text()
 
     assert "new URLSearchParams(window.location.search).has('tasks_perf')" in source
     assert "[vyasa][tasks-perf]" in source
-    assert "host: window.location.host" in source
-    assert "path: window.location.pathname" in source
-    assert "logTasksPerf('shell-context'" in source
-    assert "logTasksPerf('render-surface'" in source
-    assert "logTasksPerf('graph-dom'" in source
-    assert "logTasksPerf('scroll-context'" in source
-    assert "tasksPerfScrollSnapshot(wrapper, event)" in source
-    assert "tasksPerfSurfaceSnapshot(wrapper, event)" in source
-    assert "groupHoverChanged" in source
-    assert "tooltipX" in source
-    assert "tasksPerfWheelPayload(event)" in source
-    assert "logTasksPerf('hover-pointer'" in source
-    assert "traceTasksInteractionFrame('wheel'" in source
+    assert "fetch('/api/tasks/perf-log'" in source
+    assert "label !== 'frame-probe' && label !== 'longtask'" in source
+    assert "reset: !window.__vyasaTasksPerf.fileLogReset.has(key)" in source
+    assert "logTasksPerf('frame-probe'" in source
+    assert "logTasksPerf('longtask'" in source
+    assert "markTasksFrameProbe(widgetId, wrapper, model, graphBase, 'pointermove')" in source
+    assert '"/api/tasks/perf-log"' in api_source
+    assert "vyasa-tasks-perf-" in api_source
+    assert 'Path("/tmp")' in api_source
 
 
 def test_tasks_query_builder_assets_stay_extension_local_and_lazy():

@@ -365,6 +365,8 @@ window.__vyasaTasksDebug.edgeLabelRenderCount = Number(window.__vyasaTasksDebug.
 window.__vyasaTasksPerf = window.__vyasaTasksPerf || {};
 window.__vyasaTasksPerf.enabled = window.__vyasaTasksPerf.enabled === true || new URLSearchParams(window.location.search).has('tasks_perf');
 window.__vyasaTasksPerf.pendingFrames = window.__vyasaTasksPerf.pendingFrames || new Set();
+window.__vyasaTasksPerf.frameProbes = window.__vyasaTasksPerf.frameProbes || new Map();
+window.__vyasaTasksPerf.fileLogReset = window.__vyasaTasksPerf.fileLogReset || new Set();
 window.__vyasaTasksPerf.loggedShell = window.__vyasaTasksPerf.loggedShell || new Set();
 window.__vyasaTasksPerf.loggedSurface = window.__vyasaTasksPerf.loggedSurface || new Set();
 window.__vyasaTasksPerf.loggedGraphDom = window.__vyasaTasksPerf.loggedGraphDom || new Set();
@@ -423,7 +425,26 @@ function tasksPerfNow() {
 
 function logTasksPerf(label, payload = {}) {
     if (!window.__vyasaTasksPerf.enabled) return null;
+    if (label !== 'frame-probe' && label !== 'longtask') return null;
     const event = { label, at: new Date().toISOString(), payload };
+    const host = window.location.host;
+    const path = window.location.pathname;
+    const key = `${host}${path}`;
+    const body = JSON.stringify({
+        label,
+        at: event.at,
+        host,
+        path,
+        reset: !window.__vyasaTasksPerf.fileLogReset.has(key),
+        payload,
+    });
+    window.__vyasaTasksPerf.fileLogReset.add(key);
+    fetch('/api/tasks/perf-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: body.length < 60000,
+    }).catch(() => {});
     console.log(`[vyasa][tasks-perf] ${label} ${JSON.stringify(payload)}`);
     return event;
 }
@@ -672,6 +693,81 @@ function traceTasksInteractionFrame(label, payload = {}) {
         const frameDelayMs = Math.round((frameAt - start) * 10) / 10;
         if (frameDelayMs >= 24) logTasksPerf('interaction-frame', { label, frameDelayMs, ...payload });
     });
+}
+
+function startTasksLongTaskObserver() {
+    if (!window.__vyasaTasksPerf.enabled || window.__vyasaTasksPerf.longTaskObserverStarted) return;
+    if (typeof PerformanceObserver === 'undefined') return;
+    window.__vyasaTasksPerf.longTaskObserverStarted = true;
+    try {
+        const observer = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+                logTasksPerf('longtask', {
+                    startTime: Math.round(entry.startTime * 10) / 10,
+                    durationMs: Math.round(entry.duration * 10) / 10,
+                    name: entry.name || '',
+                    attribution: Array.from(entry.attribution || []).map((item) => ({
+                        name: item.name || '',
+                        type: item.entryType || '',
+                        containerType: item.containerType || '',
+                    })),
+                });
+            }
+        });
+        observer.observe({ entryTypes: ['longtask'] });
+        window.__vyasaTasksPerf.longTaskObserver = observer;
+    } catch {
+        // Unsupported in this browser.
+    }
+}
+
+function tasksFrameProbeStats(probe, now) {
+    const deltas = probe.deltas.slice().sort((a, b) => a - b);
+    const elapsedMs = Math.max(1, now - probe.startedAt);
+    const pct = (p) => deltas.length ? deltas[Math.min(deltas.length - 1, Math.floor((deltas.length - 1) * p))] : 0;
+    const over = (limit) => probe.deltas.filter((delta) => delta >= limit).length;
+    return {
+        elapsedMs: Math.round(elapsedMs),
+        frames: probe.frames,
+        fps: Math.round((probe.frames * 1000 / elapsedMs) * 10) / 10,
+        maxFrameMs: Math.round((deltas[deltas.length - 1] || 0) * 10) / 10,
+        p95FrameMs: Math.round(pct(0.95) * 10) / 10,
+        longFrames24: over(24),
+        longFrames33: over(33),
+        longFrames50: over(50),
+        inputs: { ...probe.inputs },
+    };
+}
+
+function markTasksFrameProbe(widgetId, wrapper, model, graphBase, reason) {
+    if (!window.__vyasaTasksPerf.enabled || typeof window.requestAnimationFrame !== 'function') return;
+    startTasksLongTaskObserver();
+    const key = String(widgetId || 'tasks');
+    const now = tasksPerfNow();
+    let probe = window.__vyasaTasksPerf.frameProbes.get(key);
+    if (!probe) {
+        probe = { startedAt: now, lastInputAt: now, lastFrameAt: 0, lastLogAt: now, frames: 0, deltas: [], inputs: {} };
+        window.__vyasaTasksPerf.frameProbes.set(key, probe);
+        const tick = (frameAt) => {
+            if (!window.__vyasaTasksPerf.frameProbes.has(key)) return;
+            if (probe.lastFrameAt) probe.deltas.push(frameAt - probe.lastFrameAt);
+            probe.lastFrameAt = frameAt;
+            probe.frames += 1;
+            if (frameAt - probe.lastLogAt >= 1000) {
+                probe.lastLogAt = frameAt;
+                logTasksPerf('frame-probe', { ...tasksPerfContext(widgetId, wrapper, model, graphBase), final: false, ...tasksFrameProbeStats(probe, frameAt) });
+            }
+            if (frameAt - probe.lastInputAt > 700) {
+                logTasksPerf('frame-probe', { ...tasksPerfContext(widgetId, wrapper, model, graphBase), final: true, ...tasksFrameProbeStats(probe, frameAt) });
+                window.__vyasaTasksPerf.frameProbes.delete(key);
+                return;
+            }
+            window.requestAnimationFrame(tick);
+        };
+        window.requestAnimationFrame(tick);
+    }
+    probe.lastInputAt = now;
+    probe.inputs[reason || 'input'] = (probe.inputs[reason || 'input'] || 0) + 1;
 }
 
 function tasksSelectionDebugPayload(selectedNodeId, selectedNodeIds, hoveredNodeId = '') {
@@ -4387,6 +4483,7 @@ async function renderTasksGraphs(rootElement = document) {
             const prevExpandedCountRef = React.useRef(0);
             const hoverClearTimerRef = React.useRef(null);
             const groupToggleHoverIdRef = React.useRef('');
+            const transientGraphHoverActiveRef = React.useRef(false);
             const suppressNextGraphClickRef = React.useRef(false);
             const lastNodeClickRef = React.useRef(null);
             const activeProjection = React.useMemo(() => {
@@ -4420,6 +4517,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setDragSelection(null);
                 setHoveredNodeId(null);
                 groupToggleHoverIdRef.current = '';
+                transientGraphHoverActiveRef.current = false;
                 setTasksGroupToggleHover(flowWrapperRef.current, '');
                 pendingFitActionRef.current = 'mode';
             }, [sourceModel, activeProjectionId, hydrateExpandedSet]);
@@ -6922,6 +7020,14 @@ async function renderTasksGraphs(rootElement = document) {
             const clearGroupHoverTooltip = React.useCallback(() => {
                 setGroupHoverTooltip(null);
             }, []);
+            const clearGraphHoverState = React.useCallback(() => {
+                if (!transientGraphHoverActiveRef.current && !groupToggleHoverIdRef.current) return;
+                transientGraphHoverActiveRef.current = false;
+                groupToggleHoverIdRef.current = '';
+                setTasksGroupToggleHover(flowWrapperRef.current, '');
+                clearGroupHoverTooltip();
+                setHoveredNodeId(null);
+            }, [clearGroupHoverTooltip]);
             const activeHoverAttrs = React.useMemo(
                 () => tasksActiveHoverAttrs(sourceModel, activeProjectionId),
                 [sourceModel, activeProjectionId]
@@ -6930,6 +7036,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const reactFlow = reactFlowApiRef.current;
                 const wrapper = flowWrapperRef.current;
                 const graphBase = graphBaseRef.current || {};
+                markTasksFrameProbe(widgetId, wrapper, model, graphBase, 'pointermove');
                 const perfContext = tasksPerfContext(widgetId, wrapper, model, graphBase);
                 const traceHoverFrame = (stage, extra = {}) => traceTasksInteractionFrame('pointermove', {
                     ...perfContext,
@@ -6944,6 +7051,12 @@ async function renderTasksGraphs(rootElement = document) {
                     if (durationMs >= 8) logTasksPerf('hover-pointer', { ...perfContext, stage, durationMs, ...extra });
                 };
                 if (!reactFlow || !wrapper) return;
+                if (wrapper.querySelector('.react-flow__pane.dragging')) {
+                    clearGraphHoverState();
+                    traceHoverFrame('dragging', { scannedNodes: 0 });
+                    finishPerf('dragging', { scannedNodes: 0 });
+                    return;
+                }
                 const point = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
                 const baseNodes = graphBase.nodes || [];
                 const byId = Object.fromEntries(baseNodes.map((node) => [node.id, node]));
@@ -6965,9 +7078,7 @@ async function renderTasksGraphs(rootElement = document) {
                     .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
                     .sort((a, b) => b.z - a.z)[0];
                 if (!hit) {
-                    groupToggleHoverIdRef.current = '';
-                    setTasksGroupToggleHover(wrapper, '');
-                    clearGroupHoverTooltip();
+                    clearGraphHoverState();
                     traceHoverFrame('miss', { scannedNodes: baseNodes.length });
                     finishPerf('miss', { scannedNodes: baseNodes.length });
                     return;
@@ -6979,6 +7090,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const groupHoverChanged = groupToggleHoverIdRef.current !== hoverGroupId;
                 if (groupToggleHoverIdRef.current !== hoverGroupId) {
                     groupToggleHoverIdRef.current = hoverGroupId || '';
+                    if (hoverGroupId) transientGraphHoverActiveRef.current = true;
                     setTasksGroupToggleHover(wrapper, hoverGroupId);
                 }
                 const liveNode = nodes.find((node) => node.id === hit.node.id) || hit.node;
@@ -7001,6 +7113,7 @@ async function renderTasksGraphs(rootElement = document) {
                     return;
                 }
                 const bounds = wrapper.getBoundingClientRect();
+                transientGraphHoverActiveRef.current = true;
                 setGroupHoverTooltip({
                     label,
                     nodeId,
@@ -7012,7 +7125,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const hitPayload = { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '', rows: rows.length, groupHoverChanged, tooltipX: Math.round(event.clientX - bounds.left + 12), tooltipY: Math.round(event.clientY - bounds.top + 18) };
                 traceHoverFrame('hit', hitPayload);
                 finishPerf('hit', hitPayload);
-            }, [expanded, clearGroupHoverTooltip, activeHoverAttrs, nodes, widgetId, model]);
+            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -7082,6 +7195,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.clearTimeout(hoverClearTimerRef.current);
                         hoverClearTimerRef.current = null;
                     }
+                    transientGraphHoverActiveRef.current = true;
                     setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);
                     return;
                 }
@@ -7095,6 +7209,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.clearTimeout(hoverClearTimerRef.current);
                     hoverClearTimerRef.current = null;
                 }
+                transientGraphHoverActiveRef.current = true;
                 setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);
             }, [expanded, selectedNodeId]);
             const clearNeighborEdgeFocus = React.useCallback((_, node) => {
@@ -7571,26 +7686,31 @@ async function renderTasksGraphs(rootElement = document) {
                 clearSelection('paneClick');
             };
             const flowPointerHandlers = {
-                onPointerDown: () => {
+                onPointerDown: (event) => {
                     markWidgetActive();
                     flowWrapperRef.current?.focus({ preventScroll: true });
+                    markTasksFrameProbe(widgetId, flowWrapperRef.current, model, graphBaseRef.current, 'pointerdown');
+                    if (!event.shiftKey && !event.metaKey && !event.target?.closest?.('button, input, textarea, select, a, .react-flow__controls, .vyasa-tasks-filter-card')) {
+                        clearGraphHoverState();
+                    }
                 },
                 onPointerDownCapture: startDragSelection,
                 onPointerMove: updateGroupHoverTooltip,
-                onWheelCapture: (event) => traceTasksInteractionFrame('wheel', {
-                    ...tasksPerfContext(widgetId, flowWrapperRef.current, model, graphBaseRef.current),
-                    ...tasksPerfWheelPayload(event),
-                    surface: tasksPerfSurfaceSnapshot(flowWrapperRef.current, event),
-                    scroll: tasksPerfScrollSnapshot(flowWrapperRef.current, event),
-                }),
+                onWheelCapture: (event) => {
+                    markTasksFrameProbe(widgetId, flowWrapperRef.current, model, graphBaseRef.current, 'wheel');
+                    traceTasksInteractionFrame('wheel', {
+                        ...tasksPerfContext(widgetId, flowWrapperRef.current, model, graphBaseRef.current),
+                        ...tasksPerfWheelPayload(event),
+                        surface: tasksPerfSurfaceSnapshot(flowWrapperRef.current, event),
+                        scroll: tasksPerfScrollSnapshot(flowWrapperRef.current, event),
+                    });
+                },
                 onPointerMoveCapture: updateDragSelection,
                 onPointerUpCapture: finishDragSelection,
                 onPointerCancelCapture: finishDragSelection,
                 onPointerLeave: (event) => {
                     finishDragSelection(event);
-                    groupToggleHoverIdRef.current = '';
-                    setTasksGroupToggleHover(flowWrapperRef.current, '');
-                    clearGroupHoverTooltip();
+                    clearGraphHoverState();
                 },
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
