@@ -79,7 +79,6 @@ const TASKS_SPACING_PRESETS = {
     airy: { nodeSpacing: 72, layerSpacing: 140, collisionGap: 132, groupPadding: 56, edgeLabelWidth: 280 },
     xl: { nodeSpacing: 96, layerSpacing: 180, collisionGap: 168, groupPadding: 72, edgeLabelWidth: 320 },
 };
-const tasksColorOverlayCache = new Map();
 
 function readTasksNumber(value, fallback) {
     const parsed = Number.parseFloat(value || '');
@@ -2027,22 +2026,21 @@ function tasksNodeIsOverlaid(node) {
     return Boolean(levels && levels.length);
 }
 
-function tasksColorOverlayBackground(levels, width, height) {
+// Build an inset SVG overlay element drawing the diagonal-band / horizontal-strip fill.
+function tasksColorOverlay(React, levels, width, height) {
     const w = Math.max(1, Number(width) || 100);
     const h = Math.max(1, Number(height) || 100);
-    const key = JSON.stringify([levels || [], w, h]);
-    if (tasksColorOverlayCache.has(key)) return tasksColorOverlayCache.get(key);
     const polys = tasksColorLevelPolygons(levels, w, h);
-    if (!polys.length) return '';
-    const esc = (value) => String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const body = polys.map((p) => (
-        `<polygon points="${p.points.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ')}" fill="${esc(p.color)}"/>`
-    )).join('');
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${body}</svg>`;
-    const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-    tasksColorOverlayCache.set(key, url);
-    if (tasksColorOverlayCache.size > 240) tasksColorOverlayCache.delete(tasksColorOverlayCache.keys().next().value);
-    return url;
+    if (!polys.length) return null;
+    return React.createElement('svg', {
+        viewBox: `0 0 ${w} ${h}`,
+        preserveAspectRatio: 'none',
+        style: { position: 'absolute', inset: 0, width: '100%', height: '100%', borderRadius: 'inherit', pointerEvents: 'none', zIndex: 0 },
+    }, ...polys.map((p, idx) => React.createElement('polygon', {
+        key: idx,
+        points: p.points.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' '),
+        fill: p.color,
+    })));
 }
 
 window.runTasksHeaderAction = function(widgetId, action) {
@@ -4609,7 +4607,6 @@ async function renderTasksGraphs(rootElement = document) {
                         const nodeColor = resolveTasksNodeColor(colorNode, model, activeColorBy, activeColorPalette);
                         const colorLevels = tasksNodeColorLevels(colorNode, model, activeColorLevelSpecs, colorMix);
                         const useOverlay = tasksUseColorOverlay(colorLevels);
-                        const overlayBackground = useOverlay ? tasksColorOverlayBackground(colorLevels, node.width, node.height) : '';
                         const cardState = tasksCardStateForNode(sourceModel, nodeStates, logicalNodeId, cardStates);
                         const stateAccent = cardState.color || TASKS_DONE_ACCENT;
                         return {
@@ -4621,7 +4618,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 width: node.width,
                                 height: node.height,
                                 zIndex: TASKS_TASK_Z,
-                                background: overlayBackground || tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG, false),
+                                background: useOverlay ? 'transparent' : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG, false),
                                 border: isChecked
                                     ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
                                     : (nodeColor ? `1px solid color-mix(in srgb, var(--vyasa-paper) 28%, ${nodeColor} 72%)` : TASKS_NODE_BORDER),
@@ -4739,7 +4736,6 @@ async function renderTasksGraphs(rootElement = document) {
                         : (collapsedGroupColor || projectionGroupTone || nodeColor);
                     const colorLevels = tasksNodeColorLevels(colorNode, model, activeColorLevelSpecs, colorMix, { collapsedGroup: n.__kind__ === 'group' && !isExpanded });
                     const useOverlay = !isExpanded && tasksUseColorOverlay(colorLevels);
-                    const overlayBackground = useOverlay ? tasksColorOverlayBackground(colorLevels, n.width, n.height) : '';
                     const isUnspecifiedProjectionGroup = isTasksUnspecifiedProjectionGroup(n, TASKS_PROJECTION_UNSPECIFIED_LABEL);
                     const groupFillExpanded = isProjectionGroup
                         ? (isUnspecifiedProjectionGroup ? projectionUnspecifiedGroupExpandedOpacity : projectionGroupExpandedOpacity)
@@ -4773,7 +4769,7 @@ async function renderTasksGraphs(rootElement = document) {
                             width: n.width,
                             height: n.height,
                             zIndex: nodeZ,
-                            background: overlayBackground || background,
+                            background: useOverlay ? 'transparent' : background,
                             border: isChecked
                                 ? `2px solid color-mix(in srgb, ${stateAccent} 78%, white 22%)`
                                 : border,
@@ -5707,6 +5703,7 @@ async function renderTasksGraphs(rootElement = document) {
                         background: isChecked ? `linear-gradient(135deg, color-mix(in srgb, ${taskStateColor} 12%, transparent), transparent 55%)` : undefined,
                     }
                 },
+                    tasksColorOverlay(React, data?.__color_levels__, data?.width, data?.height),
                     checkboxControl,
                     doneBadge,
                     noteBadge,
