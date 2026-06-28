@@ -154,6 +154,14 @@ def cli():
     host = args.host or config.get_host()
     port = args.port or config.get_port()
     reload = not args.no_reload
+    # The in-process git fetcher writes into .git on every cycle; under --reload
+    # the file watcher sees those writes and restarts the worker, which respawns
+    # the fetcher — a feedback loop that pins CPU/memory until the box dies. Flag
+    # reload so the fetcher refuses to start in that mode (see _start_git_fetcher).
+    if reload:
+        os.environ['VYASA_RELOAD'] = '1'
+    else:
+        os.environ.pop('VYASA_RELOAD', None)
 
     # Set login credentials from CLI if provided
     if args.user:

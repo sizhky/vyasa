@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import Iterable, cast
 
 from starlette.responses import Response
 
@@ -47,7 +48,7 @@ def _allowed_roots(runtime) -> list[Path]:
     roots = [runtime.config.get_root_folder().resolve()]
     get_extra = getattr(runtime.config, "get_vyasa_roots", None)
     if callable(get_extra):
-        roots.extend(path.resolve() for path in get_extra())
+        roots.extend(path.resolve() for path in cast(Iterable[Path], get_extra()))
     return roots
 
 
@@ -69,6 +70,12 @@ def _compile_schema_payload(schema_path: Path, current_path: str = "", context_i
     return model, build_collapsed_graph(model)
 
 
+def _perf_log_path(host: str, path: str) -> Path:
+    safe_host = "".join(ch if ch.isalnum() or ch in ".-" else "-" for ch in str(host or "unknown"))[:80]
+    digest = hashlib.sha256(f"{host}\n{path}".encode("utf-8")).hexdigest()[:12]
+    return Path("/tmp") / f"vyasa-tasks-perf-{safe_host}-{digest}.ndjson"
+
+
 def register_tasks_routes(rt, runtime) -> None:
     @rt("/api/tasks/views", methods=["POST"])
     async def save_tmp_view(request):
@@ -80,7 +87,7 @@ def register_tasks_routes(rt, runtime) -> None:
             if not title or not pasted:
                 return Response("Missing title or view content", status_code=400)
             view_id, view_text = _view_sidecar_text(title, pasted)
-            view_dir = _tmp_view_sidecar_dir(schema_path)
+            view_dir = cast(Path, _tmp_view_sidecar_dir(schema_path))
             view_dir.mkdir(parents=True, exist_ok=True)
             view_path = view_dir / f"{view_id}.view"
             view_path.write_text(view_text, encoding="utf-8")
@@ -112,6 +119,31 @@ def register_tasks_routes(rt, runtime) -> None:
             return Response(str(exc), status_code=500)
         return Response(
             json.dumps({"ok": True, "context_id": context_id, "model": model, "graph": graph}),
+            media_type="application/json",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @rt("/api/tasks/perf-log", methods=["POST"])
+    async def write_perf_log(request):
+        try:
+            payload = json.loads((await request.body()).decode("utf-8"))
+            host = str(payload.get("host") or "")
+            path = str(payload.get("path") or "")
+            event = {
+                "label": str(payload.get("label") or ""),
+                "at": str(payload.get("at") or ""),
+                "payload": payload.get("payload") if isinstance(payload.get("payload"), dict) else {},
+            }
+            log_path = _perf_log_path(host, path)
+            if payload.get("reset") is True:
+                log_path.write_text("", encoding="utf-8")
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(event, separators=(",", ":")) + "\n")
+        except Exception as exc:
+            runtime.logger.exception("[tasks] failed to write perf log")
+            return Response(str(exc), status_code=500)
+        return Response(
+            json.dumps({"ok": True, "file": str(log_path)}),
             media_type="application/json",
             headers={"Cache-Control": "no-store"},
         )

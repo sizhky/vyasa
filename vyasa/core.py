@@ -1,4 +1,5 @@
 import re
+import os
 import json
 import base64
 import time
@@ -1145,6 +1146,12 @@ def _start_git_fetcher():
     shutdown."""
     global _git_fetcher_started
     if _git_fetcher_started:
+        return
+    if os.environ.get("VYASA_RELOAD"):
+        # --reload watches the content tree; an in-process fetcher writing to
+        # .git would trigger endless restarts. Run prod with --no-reload (and use
+        # a vyasa-fetch sidecar if you must keep --reload).
+        logger.warning("in-process git fetcher disabled under --reload; run with --no-reload or a vyasa-fetch sidecar")
         return
     interval = get_config().get_git_fetch_interval()
     if interval <= 0:

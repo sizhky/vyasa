@@ -60,6 +60,7 @@ class KgSchema:
     views: list[KgView] = field(default_factory=list)
     slides: list[dict[str, Any]] = field(default_factory=list)
     status_defaults: dict[str, str] = field(default_factory=dict)
+    acl: dict[str, Any] = field(default_factory=lambda: {"classes": [], "grants": {}, "people": {}})
     palette: str = ""
     cache: str = ""
     nodes: str = ""
@@ -95,6 +96,7 @@ def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
         "default_projection": schema.graph.get("initial_view", schema.views[0].id if schema.views else ""),
         "hover_attrs": _list_value(schema.graph.get("hover_attrs", "")),
         "card_states": _list_value(schema.graph.get("card_states", "")),
+        "acl": _acl_payload(schema),
     }
     nodes_by_id: dict[str, dict] = {}
     edges_by_id: dict[str, dict] = {}
@@ -161,6 +163,7 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
         "default_projection": schema.graph.get("initial_view", schema.views[0].id if schema.views else ""),
         "hover_attrs": _list_value(schema.graph.get("hover_attrs", "")),
         "card_states": _list_value(schema.graph.get("card_states", "")),
+        "acl": _acl_payload(schema),
         "kg_context": {"id": active.id, "seq": active.seq, "label": active.label, "caption": active.caption},
         "kg_contexts": [{"id": item.id, "seq": item.seq, "label": item.label, "caption": item.caption} for item in contexts],
     }
@@ -379,6 +382,8 @@ def read_schema(path: PathLike) -> KgSchema:
         elif section == "@status_defaults":
             payload = _assignments(shlex.split(line))
             schema.status_defaults.update(payload)
+        elif section == "@acl":
+            _read_acl_line(schema, line)
         elif section == "@views":
             current_view = _read_view(line)
             schema.views.append(current_view)
@@ -575,6 +580,29 @@ def _read_view(line: str) -> KgView:
     view = KgView(id=view_id)
     _update_view(view, payload)
     return view
+
+
+def _read_acl_line(schema: KgSchema, line: str) -> None:
+    if line.startswith("classes="):
+        schema.acl["classes"] = _list_value(line.split("=", 1)[1])
+        return
+    if line.startswith("grant "):
+        parts = line.split()
+        if len(parts) >= 3:
+            schema.acl.setdefault("grants", {})[parts[1]] = parts[2:]
+        return
+    if line.startswith("person ") and " = " in line:
+        people, role = line[len("person "):].split(" = ", 1)
+        for person in [part.strip() for part in people.split(",") if part.strip()]:
+            schema.acl.setdefault("people", {})[person] = role.strip()
+
+
+def _acl_payload(schema: KgSchema) -> dict[str, Any]:
+    return {
+        "classes": list(schema.acl.get("classes") or []),
+        "grants": dict(schema.acl.get("grants") or {}),
+        "people": dict(schema.acl.get("people") or {}),
+    }
 
 
 def _update_view(view: KgView, payload: dict[str, str]) -> None:

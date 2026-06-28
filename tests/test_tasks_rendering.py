@@ -21,6 +21,9 @@ foundation :: Foundation:
     assert 'class="tasks-container' in html
     assert 'data-tasks-widget="true"' in html
     assert 'data-tasks-standalone="false"' in html
+    assert 'contain: layout paint;' in html
+    assert 'overscroll-behavior:contain' in html
+    assert 'touch-action:none' in html
     assert 'display:flex;flex-direction:column;position:relative' in html
     assert '"graph_id": "hybrid-task-rendering-' in html
     assert '"label": "Foundation"' in html
@@ -303,6 +306,31 @@ def test_tasks_source_lazy_loads_react_flow_only_when_widgets_exist():
     assert "react-querybuilder" not in react_flow_loader
 
 
+def test_tasks_perf_logging_traces_root_and_interaction_costs():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    api_source = Path("vyasa/extensions_builtin/tasks/api.py").read_text()
+
+    assert "new URLSearchParams(window.location.search).has('tasks_perf')" in source
+    assert "[vyasa][tasks-perf]" in source
+    assert "fetch('/api/tasks/perf-log'" in source
+    assert "label !== 'frame-probe' && label !== 'longtask' && label !== 'render-context'" in source
+    assert "reset: !window.__vyasaTasksPerf.fileLogReset.has(key)" in source
+    assert "logTasksPerf('frame-probe'" in source
+    assert "logTasksPerf('longtask'" in source
+    assert "logTasksPerf('render-context'" in source
+    assert "document.getAnimations" in source
+    assert "fixedSticky" in source
+    assert "const flowWrapperStyle = {" in source
+    assert "contain: 'layout paint'" in source
+    assert "touchAction: 'none'" in source
+    assert "markTasksFrameProbe(widgetId, wrapper, model, graphBase, 'pointermove')" in source
+    assert '"/api/tasks/perf-log"' in api_source
+    assert "vyasa-tasks-perf-" in api_source
+    assert 'Path("/tmp")' in api_source
+    assert '.tasks-container[data-tasks-widget="true"] .react-flow__viewport' in source
+    assert "will-change: transform" in source
+
+
 def test_tasks_query_builder_assets_stay_extension_local_and_lazy():
     init_source = Path("vyasa/extensions_builtin/tasks/__init__.py").read_text()
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
@@ -506,8 +534,7 @@ def test_tasks_source_uses_reset_button_label():
     assert "setActiveFilters(normalizeTasksFilterQuery(defaults.filters))" in source
     assert "setQueryBuilderEnabled(typeof defaults.queryBuilderEnabled === 'boolean'" in source
     assert "setSearchInputValue(defaultSearch)" in source
-    assert "setActiveColorBy(resolveTasksPreferredColorBy(model, activeProjectionId, defaults, nodeNotes))" in source
-    assert "setActiveSecondaryColorBy(resolveTasksPreferredSecondaryColorBy(model, defaults, nodeNotes))" in source
+    assert "setActiveColorHierarchy(resolveTasksPreferredColorHierarchy(model, activeProjectionId, defaults, nodeNotes))" in source
     assert "setEdgesVisible(typeof defaults.edgesVisible === 'boolean'" in source
     assert "setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(defaults.edgeAnimationMode, defaults.edgeAnimationEnabled))" in source
     assert "onClick: resetProjectionControls" in source
@@ -547,23 +574,24 @@ def test_tasks_color_swatch_filter_is_independent_and_ands_with_query_filter():
     assert "setQueryBuilderEnabled(true)" not in callback
     assert "function tasksNodeMatchesAllFilters(node, queryFilters, swatchFilters)" in source
     assert "tasksNodeMatchesFilters(node, queryFilters) && tasksNodeMatchesFilters(node, swatchFilters)" in source
-    assert "tasksFilterQuerySelectedValues(activeSwatchFilters, activeColorBy)" in source
-    assert "tasksFilterQuerySelectedValues(activeSwatchFilters, activeSecondaryColorBy)" in source
+    assert "tasksFilterQuerySelectedValues(activeSwatchFilters, colorBy)" in source
     assert "swatchFilters: activeSwatchFilters" in source
     assert "setActiveSwatchFilters(tasksEmptyFilterQuery())" in source
     assert "query: normalizeTasksFilterQuery(activeFilters)" in source
     assert "onQueryChange: (query) => setActiveFilters(normalizeTasksFilterQuery(query))" in source
-    assert "const activeSwatchKeys = new Set([activeColorBy, activeSecondaryColorBy].filter(Boolean))" in source
+    assert "const activeSwatchKeys = new Set(activeColorHierarchy.filter(Boolean))" in source
     assert "tasksPruneFilterQueryFields(current, activeSwatchKeys)" in source
 
 
-def test_tasks_color_picker_choices_wrap_inline():
+def test_tasks_color_picker_uses_cascading_level_dropdowns():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "const colorChoiceListStyle = { display: 'flex', flexWrap: 'wrap'" in source
-    assert "const colorChoiceStyle = { display: 'inline-flex', alignItems: 'center'" in source
-    assert "React.createElement('div', { style: colorChoiceListStyle }" in source
-    assert "React.createElement('label', { key: option.key || '__none__', style: colorChoiceStyle }" in source
+    # Color levels mirror group-by: one <select> per level, each picked value adds the next slot.
+    assert "const renderColorLevel = (colorBy, index) => {" in source
+    assert "onChange: (event) => setActiveColorLevel(index, event.target.value)" in source
+    assert "index === 0 ? 'Color by' : `Color ${index + 1}`" in source
+    assert "if (activeColorHierarchy.length && remainingColorOptions.length) colorLevelSlots.push('')" in source
+    assert "...colorLevelSlots.map((colorBy, index) => renderColorLevel(colorBy, index))" in source
 
 
 def test_tasks_query_builder_supports_inline_text_attrs_and_exists_operator():
@@ -1126,7 +1154,7 @@ def test_context_graphs_have_day_switch_contract():
     assert "React.createElement('span', { style: filterKeyStyle }, 'Context')" in source
     assert source.index("'Context'") < source.index("'View'")
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
-    assert "React.createElement('div', { style: colorChoiceListStyle }," in source
+    assert "const renderColorLevel = (colorBy, index) => {" in source
     assert "sourceModel?.kg_context?.caption ? React.createElement('div', {" in source
     assert "React.createElement('span', { style: filterKeyStyle }, 'Intensity')" in source
     assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Edge Intensity')" in source

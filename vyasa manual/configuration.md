@@ -48,19 +48,16 @@ The root `ignore = [...]` list also hides matching files from the homepage card 
 
 ## Serving Content From Git Refs
 
-Vyasa can serve any committed branch or tag of a content repo through a `?ref=` query (for example `?ref=origin/feat/my-branch`), reading the files straight from git objects without a checkout. For those pages to show the latest commit, the local copy of the repo has to be fetched first — otherwise a page reload keeps showing whatever commit was last pulled.
+Vyasa can serve any committed branch or tag of a content repo through a `?ref=` query (for example `?ref=origin/feat/my-branch`), reading files straight from git objects without a checkout. For those pages to show the latest commit, the local copy of the repo has to be fetched first — otherwise a reload keeps showing whatever commit was last pulled.
 
-Fetching is handled in two ways, and you pick based on how you run the server:
+A lone `vyasa` process can run the fetcher itself on a background thread, keeping configured mirrors (`git_repos`) and clone-backed content roots fresh. Cadence is set by `git_fetch_interval` (seconds, default `30`); `0` disables it.
 
-- **In-process (default).** A lone `vyasa` process now runs the fetcher itself on a background thread, so configured mirrors (`git_repos`) *and* clone-backed content roots stay fresh automatically. Control the cadence with `git_fetch_interval` (seconds, default `30`). Push a commit, wait one interval, reload — the new commit appears without touching the branch-menu refresh button.
-- **Separate sidecar.** Run `vyasa-fetch` as its own process (cron or service) when you want fetching isolated from the web process — for example under multiple uvicorn workers, where an in-process fetcher would run once per worker. Set `git_fetch_interval = 0` to disable the in-process fetcher and avoid double-fetching.
-
-The branch-menu refresh button always forces an immediate fetch regardless of this setting; the interval only governs the automatic background cycle.
+> **Run production with `--no-reload`.** `--reload` (the default) watches the content tree. Every git fetch writes into `.git`, the watcher sees it and restarts the worker, the fetcher respawns and refetches — a loop that pins CPU/memory until the machine dies. To prevent that, the in-process fetcher refuses to start under `--reload` (it logs a line saying so), and ref pages then only update via the branch-menu button. For automatic freshness in production, start with `--no-reload`; keep `--reload` for local dev only. If you must keep `--reload`, run `vyasa-fetch` as a separate process instead and set `git_fetch_interval = 0`.
 
 | Setting | Why it exists |
 |---|---|
 | `git_repos` | Upstream repos to mirror, as `{ name = "url" }`, exposed as content roots. |
-| `git_fetch_interval` | Seconds between automatic in-process fetches. `0` disables it (use a `vyasa-fetch` sidecar instead). |
+| `git_fetch_interval` | Seconds between automatic in-process fetches. `0` disables it (use a `vyasa-fetch` sidecar, and always `0` under `--reload`). |
 
 ## Keep In Mind
 
