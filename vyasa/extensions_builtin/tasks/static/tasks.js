@@ -4864,8 +4864,19 @@ async function renderTasksGraphs(rootElement = document) {
                     slideNotes,
                 };
                 storedProjectionPrefsRef.current = nextProjectionPrefs;
-                // Keep automatic UI state in memory only. Persisting on every graph
-                // control change can crash browsers when localStorage is stressed.
+                // Writes go through scheduleTasksStorageWrite (debounced + payload-deduped),
+                // so persisting on every control change no longer thrashes localStorage.
+                writeTasksPrefs(sourceModel, {
+                    projectionId: activeProjectionId,
+                    edgeOpacity,
+                    unspecifiedContentOpacity: projectionUnspecifiedContentOpacity,
+                    groupByHierarchy,
+                    projectionPrefs: nextProjectionPrefs,
+                    nodeStates,
+                    nodeNotes,
+                    slideNotes,
+                });
+                writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
             }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
