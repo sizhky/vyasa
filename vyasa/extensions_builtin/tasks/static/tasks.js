@@ -367,6 +367,7 @@ window.__vyasaTasksPerf.enabled = window.__vyasaTasksPerf.enabled === true || ne
 window.__vyasaTasksPerf.pendingFrames = window.__vyasaTasksPerf.pendingFrames || new Set();
 window.__vyasaTasksPerf.loggedShell = window.__vyasaTasksPerf.loggedShell || new Set();
 window.__vyasaTasksPerf.loggedSurface = window.__vyasaTasksPerf.loggedSurface || new Set();
+window.__vyasaTasksPerf.loggedGraphDom = window.__vyasaTasksPerf.loggedGraphDom || new Set();
 if (!Array.isArray(window.__vyasaTasksDebug.watch) || window.__vyasaTasksDebug.watch.length === 0) {
     const rawWatch = new URLSearchParams(window.location.search).getAll('tasks_watch');
     window.__vyasaTasksDebug.watch = rawWatch
@@ -559,6 +560,54 @@ function logTasksPerfSurfaceOnce(widgetId, wrapper, payload = {}) {
     if (window.__vyasaTasksPerf.loggedSurface.has(key)) return;
     window.__vyasaTasksPerf.loggedSurface.add(key);
     window.setTimeout(() => logTasksPerf('render-surface', { ...payload, ...tasksPerfSurfaceSnapshot(wrapper) }), 250);
+}
+
+function tasksPerfGraphDomSnapshot(wrapper) {
+    const reactFlow = wrapper?.querySelector?.('.react-flow');
+    const selectors = [
+        '.react-flow__node',
+        '.react-flow__edge',
+        '.react-flow__edge-path',
+        '.react-flow__edge-text',
+        '.react-flow__edge-textbg',
+        '.react-flow__edge-label',
+        '.react-flow__handle',
+        'svg',
+        'path',
+        'foreignObject',
+        'img',
+        '[style*="filter"]',
+        '[style*="box-shadow"]',
+        '[style*="backdrop-filter"]',
+        '[class*="animate"]',
+        '[class*="animation"]',
+        '.vyasa-edge-dashdraw',
+        '.vyasa-edge-animation-tick',
+    ];
+    const counts = {};
+    selectors.forEach((selector) => {
+        counts[selector] = reactFlow?.querySelectorAll?.(selector)?.length || 0;
+    });
+    const classCounts = {};
+    reactFlow?.querySelectorAll?.('[class]')?.forEach((el) => {
+        String(el.className || '').split(/\s+/).filter(Boolean).forEach((cls) => {
+            if (cls.includes('edge') || cls.includes('node') || cls.includes('image') || cls.includes('animation')) {
+                classCounts[cls] = (classCounts[cls] || 0) + 1;
+            }
+        });
+    });
+    return {
+        counts,
+        topClasses: Object.entries(classCounts).sort((a, b) => b[1] - a[1]).slice(0, 20),
+    };
+}
+
+function logTasksPerfGraphDomOnce(widgetId, wrapper, payload = {}) {
+    if (!window.__vyasaTasksPerf.enabled || !wrapper) return;
+    const key = `${widgetId}:${window.location.host}:${window.location.pathname}`;
+    if (window.__vyasaTasksPerf.loggedGraphDom.has(key)) return;
+    window.__vyasaTasksPerf.loggedGraphDom.add(key);
+    window.setTimeout(() => logTasksPerf('graph-dom', { ...payload, ...tasksPerfGraphDomSnapshot(wrapper) }), 350);
 }
 
 function tasksPerfWheelPayload(event) {
@@ -4193,6 +4242,7 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 logTasksPerfShellOnce(widgetId, wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
                 logTasksPerfSurfaceOnce(widgetId, flowWrapperRef.current || wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
+                logTasksPerfGraphDomOnce(widgetId, flowWrapperRef.current || wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
             }, [widgetId, model]);
             React.useEffect(() => {
                 logTasksDebug('selectionStateCommit', {
