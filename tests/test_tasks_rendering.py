@@ -313,10 +313,13 @@ def test_tasks_perf_logging_traces_root_and_interaction_costs():
     assert "new URLSearchParams(window.location.search).has('tasks_perf')" in source
     assert "[vyasa][tasks-perf]" in source
     assert "fetch('/api/tasks/perf-log'" in source
-    assert "label !== 'frame-probe' && label !== 'longtask'" in source
+    assert "label !== 'frame-probe' && label !== 'longtask' && label !== 'render-context'" in source
     assert "reset: !window.__vyasaTasksPerf.fileLogReset.has(key)" in source
     assert "logTasksPerf('frame-probe'" in source
     assert "logTasksPerf('longtask'" in source
+    assert "logTasksPerf('render-context'" in source
+    assert "document.getAnimations" in source
+    assert "fixedSticky" in source
     assert "markTasksFrameProbe(widgetId, wrapper, model, graphBase, 'pointermove')" in source
     assert '"/api/tasks/perf-log"' in api_source
     assert "vyasa-tasks-perf-" in api_source

@@ -425,7 +425,7 @@ function tasksPerfNow() {
 
 function logTasksPerf(label, payload = {}) {
     if (!window.__vyasaTasksPerf.enabled) return null;
-    if (label !== 'frame-probe' && label !== 'longtask') return null;
+    if (label !== 'frame-probe' && label !== 'longtask' && label !== 'render-context') return null;
     const event = { label, at: new Date().toISOString(), payload };
     const host = window.location.host;
     const path = window.location.pathname;
@@ -739,6 +739,67 @@ function tasksFrameProbeStats(probe, now) {
     };
 }
 
+function tasksPerfCompactStyle(el) {
+    if (!el) return null;
+    const style = window.getComputedStyle?.(el);
+    return {
+        tag: el.tagName?.toLowerCase?.() || '',
+        id: el.id || '',
+        cls: String(el.className || '').split(/\s+/).filter(Boolean).slice(0, 6).join('.'),
+        rect: tasksPerfRect(el),
+        position: style?.position || '',
+        overflow: `${style?.overflowX || ''}/${style?.overflowY || ''}`,
+        transform: style?.transform || '',
+        contain: style?.contain || '',
+        willChange: style?.willChange || '',
+        isolation: style?.isolation || '',
+        filter: style?.filter || '',
+        backdropFilter: style?.backdropFilter || style?.webkitBackdropFilter || '',
+    };
+}
+
+function tasksPerfRenderContext(wrapper, reason) {
+    const animated = Array.from(document.getAnimations?.() || []);
+    const fixedSticky = Array.from(document.querySelectorAll('*'))
+        .filter((el) => {
+            const position = window.getComputedStyle?.(el)?.position;
+            return position === 'fixed' || position === 'sticky';
+        })
+        .slice(0, 20)
+        .map(tasksPerfCompactStyle);
+    return {
+        reason,
+        viewport: {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            dpr: window.devicePixelRatio || 1,
+            visualWidth: Math.round(window.visualViewport?.width || 0),
+            visualHeight: Math.round(window.visualViewport?.height || 0),
+            visualScale: window.visualViewport?.scale || 1,
+        },
+        scroll: {
+            x: Math.round(window.scrollX || 0),
+            y: Math.round(window.scrollY || 0),
+            documentHeight: Math.round(document.documentElement?.scrollHeight || 0),
+            bodyHeight: Math.round(document.body?.scrollHeight || 0),
+            htmlOverflow: `${getComputedStyle(document.documentElement).overflowX}/${getComputedStyle(document.documentElement).overflowY}`,
+            bodyOverflow: `${getComputedStyle(document.body).overflowX}/${getComputedStyle(document.body).overflowY}`,
+        },
+        elementCount: document.getElementsByTagName('*').length,
+        animationCount: animated.length,
+        animations: animated.slice(0, 12).map((animation) => ({
+            playState: animation.playState,
+            currentTime: Math.round(Number(animation.currentTime || 0)),
+            effectTarget: tasksPerfCompactStyle(animation.effect?.target),
+        })),
+        fixedSticky,
+        wrapper: tasksPerfCompactStyle(wrapper),
+        flow: tasksPerfCompactStyle(wrapper?.querySelector?.('.vyasa-tasks-flow')),
+        reactFlow: tasksPerfCompactStyle(wrapper?.querySelector?.('.react-flow')),
+        viewportEl: tasksPerfCompactStyle(wrapper?.querySelector?.('.react-flow__viewport')),
+    };
+}
+
 function markTasksFrameProbe(widgetId, wrapper, model, graphBase, reason) {
     if (!window.__vyasaTasksPerf.enabled || typeof window.requestAnimationFrame !== 'function') return;
     startTasksLongTaskObserver();
@@ -748,6 +809,7 @@ function markTasksFrameProbe(widgetId, wrapper, model, graphBase, reason) {
     if (!probe) {
         probe = { startedAt: now, lastInputAt: now, lastFrameAt: 0, lastLogAt: now, frames: 0, deltas: [], inputs: {} };
         window.__vyasaTasksPerf.frameProbes.set(key, probe);
+        logTasksPerf('render-context', { ...tasksPerfContext(widgetId, wrapper, model, graphBase), ...tasksPerfRenderContext(wrapper, reason) });
         const tick = (frameAt) => {
             if (!window.__vyasaTasksPerf.frameProbes.has(key)) return;
             if (probe.lastFrameAt) probe.deltas.push(frameAt - probe.lastFrameAt);
