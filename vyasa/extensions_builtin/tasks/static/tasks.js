@@ -2463,6 +2463,24 @@ function ensureTasksReactFlow() {
                     height: auto !important;
                     min-height: 0 !important;
                 }
+                .tasks-container[data-tasks-widget="true"] {
+                    contain: layout paint;
+                    isolation: isolate;
+                    overflow: hidden;
+                    transform: translateZ(0);
+                }
+                .tasks-container[data-tasks-widget="true"] .vyasa-tasks-flow,
+                .tasks-container[data-tasks-widget="true"] .react-flow {
+                    contain: layout paint;
+                    isolation: isolate;
+                    overscroll-behavior: contain;
+                    transform: translateZ(0);
+                }
+                .tasks-container[data-tasks-widget="true"] .react-flow__viewport {
+                    will-change: transform;
+                    backface-visibility: hidden;
+                    transform-style: preserve-3d;
+                }
                 .vyasa-tasks-fullscreen-toggle svg {
                     stroke-width: 1.5 !important;
                 }

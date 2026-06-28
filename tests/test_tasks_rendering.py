@@ -21,6 +21,9 @@ foundation :: Foundation:
     assert 'class="tasks-container' in html
     assert 'data-tasks-widget="true"' in html
     assert 'data-tasks-standalone="false"' in html
+    assert 'contain: layout paint;' in html
+    assert 'overscroll-behavior:contain' in html
+    assert 'touch-action:none' in html
     assert 'display:flex;flex-direction:column;position:relative' in html
     assert '"graph_id": "hybrid-task-rendering-' in html
     assert '"label": "Foundation"' in html
@@ -318,6 +321,8 @@ def test_tasks_perf_logging_traces_root_and_interaction_costs():
     assert '"/api/tasks/perf-log"' in api_source
     assert "vyasa-tasks-perf-" in api_source
     assert 'Path("/tmp")' in api_source
+    assert '.tasks-container[data-tasks-widget="true"] .react-flow__viewport' in source
+    assert "will-change: transform" in source
 
 
 def test_tasks_query_builder_assets_stay_extension_local_and_lazy():

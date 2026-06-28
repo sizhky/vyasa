@@ -223,7 +223,13 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             optional_layout_attrs.append(f'{data_name}="{html.escape(str(config[key]))}"')
     optional_layout_attrs_str = (" " + " ".join(optional_layout_attrs)) if optional_layout_attrs else ""
     breakout = not standalone and (str(width).lower() in {"100%", "100vw"} or "vw" in str(width).lower())
-    container_style_parts = [f"width: {width};"]
+    container_style_parts = [
+        f"width: {width};",
+        "overflow: hidden;",
+        "contain: layout paint;",
+        "isolation: isolate;",
+        "transform: translateZ(0);",
+    ]
     if standalone:
         container_style_parts.append("height: 100%; display: flex; flex-direction: column;")
     if min_height:
@@ -232,9 +238,9 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         container_style_parts.append("position: relative; left: 50%; transform: translateX(-50%);")
     container_style = " ".join(container_style_parts)
     flow_style = (
-        "flex:1 1 auto;min-height:0;overflow:hidden;cursor:grab;display:flex;flex-direction:column;position:relative"
+        "flex:1 1 auto;min-height:0;overflow:hidden;overscroll-behavior:contain;touch-action:none;cursor:grab;display:flex;flex-direction:column;position:relative;contain:layout paint;isolation:isolate;transform:translateZ(0)"
         if standalone
-        else f"height:{flow_height};min-height:420px;overflow:hidden;cursor:grab;display:flex;flex-direction:column;position:relative"
+        else f"height:{flow_height};min-height:420px;overflow:hidden;overscroll-behavior:contain;touch-action:none;cursor:grab;display:flex;flex-direction:column;position:relative;contain:layout paint;isolation:isolate;transform:translateZ(0)"
     )
     return (
         f'<div class="tasks-container relative {"overflow-hidden" if standalone else "my-6 rounded-xl border-4 border-slate-200 dark:border-slate-800"}" '
