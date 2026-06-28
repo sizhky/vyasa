@@ -303,6 +303,19 @@ def test_tasks_source_lazy_loads_react_flow_only_when_widgets_exist():
     assert "react-querybuilder" not in react_flow_loader
 
 
+def test_tasks_perf_logging_traces_root_and_interaction_costs():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "new URLSearchParams(window.location.search).has('tasks_perf')" in source
+    assert "[vyasa][tasks-perf]" in source
+    assert "host: window.location.host" in source
+    assert "path: window.location.pathname" in source
+    assert "logTasksPerf('shell-context'" in source
+    assert "tasksPerfWheelPayload(event)" in source
+    assert "logTasksPerf('hover-pointer'" in source
+    assert "traceTasksInteractionFrame('wheel'" in source
+
+
 def test_tasks_query_builder_assets_stay_extension_local_and_lazy():
     init_source = Path("vyasa/extensions_builtin/tasks/__init__.py").read_text()
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()

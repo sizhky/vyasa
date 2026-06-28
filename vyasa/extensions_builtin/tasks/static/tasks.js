@@ -362,6 +362,10 @@ window.__vyasaTasksDebug = window.__vyasaTasksDebug || { events: [] };
 window.__vyasaTasksDebug.enabled = window.__vyasaTasksDebug.enabled === true || new URLSearchParams(window.location.search).has('tasks_debug');
 window.__vyasaTasksDebug.verbose = window.__vyasaTasksDebug.verbose === true || new URLSearchParams(window.location.search).has('tasks_debug_verbose');
 window.__vyasaTasksDebug.edgeLabelRenderCount = Number(window.__vyasaTasksDebug.edgeLabelRenderCount || 0);
+window.__vyasaTasksPerf = window.__vyasaTasksPerf || {};
+window.__vyasaTasksPerf.enabled = window.__vyasaTasksPerf.enabled === true || new URLSearchParams(window.location.search).has('tasks_perf');
+window.__vyasaTasksPerf.pendingFrames = window.__vyasaTasksPerf.pendingFrames || new Set();
+window.__vyasaTasksPerf.loggedShell = window.__vyasaTasksPerf.loggedShell || new Set();
 if (!Array.isArray(window.__vyasaTasksDebug.watch) || window.__vyasaTasksDebug.watch.length === 0) {
     const rawWatch = new URLSearchParams(window.location.search).getAll('tasks_watch');
     window.__vyasaTasksDebug.watch = rawWatch
@@ -409,6 +413,134 @@ function logTasksDebug(label, payload = {}) {
 function logTasksDebugVerbose(label, payload = {}) {
     if (!window.__vyasaTasksDebug.verbose) return null;
     return logTasksDebug(label, payload);
+}
+
+function tasksPerfNow() {
+    return window.performance ? window.performance.now() : Date.now();
+}
+
+function logTasksPerf(label, payload = {}) {
+    if (!window.__vyasaTasksPerf.enabled) return null;
+    const event = { label, at: new Date().toISOString(), payload };
+    console.log(`[vyasa][tasks-perf] ${label} ${JSON.stringify(payload)}`);
+    return event;
+}
+
+function tasksPerfContext(widgetId, wrapper, model, graphBase) {
+    return {
+        widgetId,
+        host: window.location.host,
+        path: window.location.pathname,
+        title: wrapper?.dataset?.tasksTitle || '',
+        groups: (model?.groups || []).length,
+        tasks: (model?.tasks || []).length,
+        baseNodes: (graphBase?.nodes || []).length,
+        baseEdges: (graphBase?.edges || []).length,
+    };
+}
+
+function tasksPerfRect(el) {
+    const rect = el?.getBoundingClientRect?.();
+    if (!rect) return null;
+    return {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+    };
+}
+
+function tasksPerfShellSnapshot(wrapper) {
+    const ancestors = [];
+    let el = wrapper;
+    while (el && ancestors.length < 8) {
+        const style = window.getComputedStyle?.(el);
+        ancestors.push({
+            tag: el.tagName?.toLowerCase?.() || '',
+            id: el.id || '',
+            cls: String(el.className || '').split(/\s+/).filter(Boolean).slice(0, 5).join('.'),
+            rect: tasksPerfRect(el),
+            position: style?.position || '',
+            transform: style?.transform || '',
+            filter: style?.filter || '',
+            backdropFilter: style?.backdropFilter || style?.webkitBackdropFilter || '',
+            contain: style?.contain || '',
+            willChange: style?.willChange || '',
+            overflow: `${style?.overflowX || ''}/${style?.overflowY || ''}`,
+        });
+        el = el.parentElement;
+    }
+    const selectorCounts = {};
+    [
+        'body',
+        '#page-container',
+        '#mobile-posts-panel',
+        '#posts-sidebar',
+        '#toc-sidebar',
+        '#main-content',
+        '.vyasa-sidebar-body',
+        '.vyasa-tree-row',
+        '.post-link',
+        '.react-flow',
+    ].forEach((selector) => {
+        selectorCounts[selector] = document.querySelector(selector)?.getElementsByTagName('*')?.length
+            ?? document.querySelectorAll(selector).length;
+    });
+    const subtreeCounts = Array.from(document.body?.children || []).map((child) => ({
+        tag: child.tagName?.toLowerCase?.() || '',
+        id: child.id || '',
+        cls: String(child.className || '').split(/\s+/).filter(Boolean).slice(0, 6).join('.'),
+        count: child.getElementsByTagName('*').length,
+    })).sort((a, b) => b.count - a.count).slice(0, 12);
+    const pageContainer = document.getElementById('page-container');
+    const pageChildCounts = Array.from(pageContainer?.children || []).map((child) => ({
+        tag: child.tagName?.toLowerCase?.() || '',
+        id: child.id || '',
+        cls: String(child.className || '').split(/\s+/).filter(Boolean).slice(0, 6).join('.'),
+        count: child.getElementsByTagName('*').length,
+    })).sort((a, b) => b.count - a.count).slice(0, 12);
+    return {
+        viewport: { width: window.innerWidth, height: window.innerHeight, dpr: window.devicePixelRatio || 1 },
+        bodyClass: document.body?.className || '',
+        elementCount: document.getElementsByTagName('*').length,
+        selectorCounts,
+        subtreeCounts,
+        pageChildCounts,
+        reactFlowNodes: wrapper?.querySelectorAll?.('.react-flow__node')?.length || 0,
+        reactFlowEdges: wrapper?.querySelectorAll?.('.react-flow__edge')?.length || 0,
+        ancestors,
+    };
+}
+
+function logTasksPerfShellOnce(widgetId, wrapper, payload = {}) {
+    if (!window.__vyasaTasksPerf.enabled || !wrapper) return;
+    const key = `${widgetId}:${window.location.host}:${window.location.pathname}`;
+    if (window.__vyasaTasksPerf.loggedShell.has(key)) return;
+    window.__vyasaTasksPerf.loggedShell.add(key);
+    window.setTimeout(() => logTasksPerf('shell-context', { ...payload, ...tasksPerfShellSnapshot(wrapper) }), 120);
+}
+
+function tasksPerfWheelPayload(event) {
+    return {
+        deltaX: Math.round(Number(event?.deltaX || 0) * 10) / 10,
+        deltaY: Math.round(Number(event?.deltaY || 0) * 10) / 10,
+        deltaMode: event?.deltaMode ?? 0,
+        ctrlKey: Boolean(event?.ctrlKey),
+        metaKey: Boolean(event?.metaKey),
+        shiftKey: Boolean(event?.shiftKey),
+    };
+}
+
+function traceTasksInteractionFrame(label, payload = {}) {
+    if (!window.__vyasaTasksPerf.enabled || typeof window.requestAnimationFrame !== 'function') return;
+    if (window.__vyasaTasksPerf.pendingFrames.has(label)) return;
+    window.__vyasaTasksPerf.pendingFrames.add(label);
+    const start = tasksPerfNow();
+    window.requestAnimationFrame((frameAt) => {
+        window.__vyasaTasksPerf.pendingFrames.delete(label);
+        const frameDelayMs = Math.round((frameAt - start) * 10) / 10;
+        if (frameDelayMs >= 24) logTasksPerf('interaction-frame', { label, frameDelayMs, ...payload });
+    });
 }
 
 function tasksSelectionDebugPayload(selectedNodeId, selectedNodeIds, hoveredNodeId = '') {
@@ -4018,6 +4150,9 @@ async function renderTasksGraphs(rootElement = document) {
                 selectedNodeIdsRef.current = new Set(selectedNodeIds);
             }, [selectedNodeIds]);
             React.useEffect(() => {
+                logTasksPerfShellOnce(widgetId, wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
+            }, [widgetId, model]);
+            React.useEffect(() => {
                 logTasksDebug('selectionStateCommit', {
                     widgetId,
                     activeWidgetId: String(window.__vyasaTasksActiveWidgetId || ''),
@@ -6660,9 +6795,17 @@ async function renderTasksGraphs(rootElement = document) {
             const updateGroupHoverTooltip = React.useCallback((event) => {
                 const reactFlow = reactFlowApiRef.current;
                 const wrapper = flowWrapperRef.current;
+                const graphBase = graphBaseRef.current || {};
+                const perfContext = tasksPerfContext(widgetId, wrapper, model, graphBase);
+                traceTasksInteractionFrame('pointermove', perfContext);
+                const perfStart = tasksPerfNow();
+                const finishPerf = (stage, extra = {}) => {
+                    const durationMs = Math.round((tasksPerfNow() - perfStart) * 10) / 10;
+                    if (durationMs >= 8) logTasksPerf('hover-pointer', { ...perfContext, stage, durationMs, ...extra });
+                };
                 if (!reactFlow || !wrapper) return;
                 const point = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
-                const baseNodes = graphBaseRef.current.nodes || [];
+                const baseNodes = graphBase.nodes || [];
                 const byId = Object.fromEntries(baseNodes.map((node) => [node.id, node]));
                 const absoluteRect = (node) => {
                     let x = node.position?.x || 0;
@@ -6685,6 +6828,7 @@ async function renderTasksGraphs(rootElement = document) {
                     groupToggleHoverIdRef.current = '';
                     setTasksGroupToggleHover(wrapper, '');
                     clearGroupHoverTooltip();
+                    finishPerf('miss', { scannedNodes: baseNodes.length });
                     return;
                 }
                 const nodeData = hit.node.data || {};
@@ -6698,6 +6842,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const liveNode = nodes.find((node) => node.id === hit.node.id) || hit.node;
                 if (!tasksGraphNodeAllowsHover(liveNode)) {
                     clearGroupHoverTooltip();
+                    finishPerf('blocked', { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '' });
                     return;
                 }
                 const rows = tasksHoverAttrRows(nodeData, activeHoverAttrs);
@@ -6706,6 +6851,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const image = normalizeTasksNodeImageUrl(nodeData.__node_image__);
                 if (!label && !rows.length) {
                     clearGroupHoverTooltip();
+                    finishPerf('empty', { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '' });
                     return;
                 }
                 const bounds = wrapper.getBoundingClientRect();
@@ -6717,7 +6863,8 @@ async function renderTasksGraphs(rootElement = document) {
                     x: event.clientX - bounds.left + 12,
                     y: event.clientY - bounds.top + 18,
                 });
-            }, [expanded, clearGroupHoverTooltip, activeHoverAttrs, nodes]);
+                finishPerf('hit', { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '', rows: rows.length });
+            }, [expanded, clearGroupHoverTooltip, activeHoverAttrs, nodes, widgetId, model]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -7282,6 +7429,10 @@ async function renderTasksGraphs(rootElement = document) {
                 },
                 onPointerDownCapture: startDragSelection,
                 onPointerMove: updateGroupHoverTooltip,
+                onWheelCapture: (event) => traceTasksInteractionFrame('wheel', {
+                    ...tasksPerfContext(widgetId, flowWrapperRef.current, model, graphBaseRef.current),
+                    ...tasksPerfWheelPayload(event),
+                }),
                 onPointerMoveCapture: updateDragSelection,
                 onPointerUpCapture: finishDragSelection,
                 onPointerCancelCapture: finishDragSelection,
