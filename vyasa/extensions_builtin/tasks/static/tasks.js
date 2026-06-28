@@ -6931,7 +6931,13 @@ async function renderTasksGraphs(rootElement = document) {
                 const wrapper = flowWrapperRef.current;
                 const graphBase = graphBaseRef.current || {};
                 const perfContext = tasksPerfContext(widgetId, wrapper, model, graphBase);
-                traceTasksInteractionFrame('pointermove', { ...perfContext, surface: tasksPerfSurfaceSnapshot(wrapper, event), scroll: tasksPerfScrollSnapshot(wrapper, event) });
+                const traceHoverFrame = (stage, extra = {}) => traceTasksInteractionFrame('pointermove', {
+                    ...perfContext,
+                    stage,
+                    ...extra,
+                    surface: tasksPerfSurfaceSnapshot(wrapper, event),
+                    scroll: tasksPerfScrollSnapshot(wrapper, event),
+                });
                 const perfStart = tasksPerfNow();
                 const finishPerf = (stage, extra = {}) => {
                     const durationMs = Math.round((tasksPerfNow() - perfStart) * 10) / 10;
@@ -6962,6 +6968,7 @@ async function renderTasksGraphs(rootElement = document) {
                     groupToggleHoverIdRef.current = '';
                     setTasksGroupToggleHover(wrapper, '');
                     clearGroupHoverTooltip();
+                    traceHoverFrame('miss', { scannedNodes: baseNodes.length });
                     finishPerf('miss', { scannedNodes: baseNodes.length });
                     return;
                 }
@@ -6969,6 +6976,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const hoverGroupId = nodeData.__kind__ === 'group'
                     ? hit.node.id
                     : (nodeData.__kind__ === 'groupTitle' ? nodeData.sourceGroupId : '');
+                const groupHoverChanged = groupToggleHoverIdRef.current !== hoverGroupId;
                 if (groupToggleHoverIdRef.current !== hoverGroupId) {
                     groupToggleHoverIdRef.current = hoverGroupId || '';
                     setTasksGroupToggleHover(wrapper, hoverGroupId);
@@ -6976,7 +6984,9 @@ async function renderTasksGraphs(rootElement = document) {
                 const liveNode = nodes.find((node) => node.id === hit.node.id) || hit.node;
                 if (!tasksGraphNodeAllowsHover(liveNode)) {
                     clearGroupHoverTooltip();
-                    finishPerf('blocked', { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '' });
+                    const blockedPayload = { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '', groupHoverChanged };
+                    traceHoverFrame('blocked', blockedPayload);
+                    finishPerf('blocked', blockedPayload);
                     return;
                 }
                 const rows = tasksHoverAttrRows(nodeData, activeHoverAttrs);
@@ -6985,7 +6995,9 @@ async function renderTasksGraphs(rootElement = document) {
                 const image = normalizeTasksNodeImageUrl(nodeData.__node_image__);
                 if (!label && !rows.length) {
                     clearGroupHoverTooltip();
-                    finishPerf('empty', { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '' });
+                    const emptyPayload = { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '', groupHoverChanged };
+                    traceHoverFrame('empty', emptyPayload);
+                    finishPerf('empty', emptyPayload);
                     return;
                 }
                 const bounds = wrapper.getBoundingClientRect();
@@ -6997,7 +7009,9 @@ async function renderTasksGraphs(rootElement = document) {
                     x: event.clientX - bounds.left + 12,
                     y: event.clientY - bounds.top + 18,
                 });
-                finishPerf('hit', { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '', rows: rows.length });
+                const hitPayload = { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '', rows: rows.length, groupHoverChanged, tooltipX: Math.round(event.clientX - bounds.left + 12), tooltipY: Math.round(event.clientY - bounds.top + 18) };
+                traceHoverFrame('hit', hitPayload);
+                finishPerf('hit', hitPayload);
             }, [expanded, clearGroupHoverTooltip, activeHoverAttrs, nodes, widgetId, model]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;

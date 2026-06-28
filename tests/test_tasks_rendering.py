@@ -316,6 +316,8 @@ def test_tasks_perf_logging_traces_root_and_interaction_costs():
     assert "logTasksPerf('scroll-context'" in source
     assert "tasksPerfScrollSnapshot(wrapper, event)" in source
     assert "tasksPerfSurfaceSnapshot(wrapper, event)" in source
+    assert "groupHoverChanged" in source
+    assert "tooltipX" in source
     assert "tasksPerfWheelPayload(event)" in source
     assert "logTasksPerf('hover-pointer'" in source
     assert "traceTasksInteractionFrame('wheel'" in source
