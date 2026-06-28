@@ -35,8 +35,9 @@ def parse_fact(line: str) -> dict:
 
 
 class Index:
-    def __init__(self, path: Path):
-        self.facts = [parse_fact(ln) for ln in path.read_text().splitlines() if ln.strip()]
+    def __init__(self, path: Path, viewer: str = ""):
+        self.raw_facts = [parse_fact(ln) for ln in path.read_text().splitlines() if ln.strip()]
+        self.facts = self._visible_facts(viewer)
         self.seq = {f["e"]: int(f["v"]) for f in self.facts if f["a"] == "seq"}
         self.relations = {f["e"] for f in self.facts if f["a"] == "kind" and f["v"] == "relation"}
         self.lifecycle = next((f["e"] for f in self.facts if f["a"] == "is_lifecycle"), None)
@@ -44,6 +45,44 @@ class Index:
         self.by_e = defaultdict(list)
         for f in self.facts:
             self.by_e[f["e"]].append(f)
+
+    def _acl_classes_by_entity(self) -> dict[str, set[str]]:
+        out = defaultdict(set)
+        for f in self.raw_facts:
+            if f["a"] == "cls":
+                out[f["e"]].add(f["v"])
+        return out
+
+    def _viewer_classes(self, viewer: str) -> set[str]:
+        viewer = str(viewer or "").strip()
+        if not viewer:
+            return set()
+        class_ids = {f["e"] for f in self.raw_facts if f["a"] == "kind" and f["v"] == "acl_class"}
+        seeds = {viewer}
+        seeds |= {f["v"] for f in self.raw_facts if f["e"] == viewer and f["a"] == "role" and f["ref"]}
+        seen, frontier, grants = set(), set(seeds), set()
+        while frontier:
+            seen |= frontier
+            nxt = set()
+            for item in frontier:
+                for f in self.raw_facts:
+                    if f["e"] == item and f["a"] == "can_see" and f["ref"]:
+                        if f["v"] in class_ids:
+                            grants.add(f["v"])
+                        else:
+                            nxt.add(f["v"])
+            frontier = nxt - seen
+        return grants
+
+    def _visible_facts(self, viewer: str) -> list[dict]:
+        if not str(viewer or "").strip():
+            return list(self.raw_facts)
+        grants = self._viewer_classes(viewer)
+        class_ids = {f["e"] for f in self.raw_facts if f["a"] == "kind" and f["v"] == "acl_class"}
+        if class_ids and grants >= class_ids:
+            return [f for f in self.raw_facts if not (f["a"] in {"role", "can_see"} or (f["a"] == "kind" and f["v"] == "acl_class"))]
+        classes_by_entity = self._acl_classes_by_entity()
+        return [f for f in self.raw_facts if classes_by_entity.get(f["e"], set()) & grants]
 
     def _seq(self, ctx):
         return self.seq.get(ctx, 0)
@@ -56,7 +95,7 @@ class Index:
                 continue
             groups[f["a"]].append(f)
         for a, fs in groups.items():
-            if a in self.relations:
+            if a in self.relations or a == "cls":
                 rec[a] = sorted({f["v"] for f in fs})          # edges: union of targets
             else:
                 rec[a] = max(fs, key=lambda f: self._seq(f.get("c", "")))["v"]  # scalar: latest
@@ -233,10 +272,18 @@ def fmt(rec: dict) -> str:
 
 def main(argv):
     if len(argv) < 3:
-        print("usage: kg_query.py <kg.index> '<query>'", file=sys.stderr)
+        print("usage: kg_query.py [--viewer <role-or-person>] <kg.index> '<query>'", file=sys.stderr)
         return 2
-    idx = Index(Path(argv[1]))
-    rows = run(idx, argv[2])
+    viewer = ""
+    args = list(argv[1:])
+    if args[:1] == ["--viewer"] and len(args) >= 4:
+        viewer = args[1]
+        args = args[2:]
+    if len(args) < 2:
+        print("usage: kg_query.py [--viewer <role-or-person>] <kg.index> '<query>'", file=sys.stderr)
+        return 2
+    idx = Index(Path(args[0]), viewer=viewer)
+    rows = run(idx, args[1])
     for r in rows:
         print(fmt(r) if isinstance(r, dict) else r)
     print(f"-- {len(rows)} rows", file=sys.stderr)

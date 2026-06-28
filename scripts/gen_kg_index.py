@@ -121,7 +121,7 @@ def parse_attrs(path: Path, facts: list):
 
 
 def parse_schema(path: Path, facts: list):
-    """kg.schema -> relation vocab + per-kind status defaults."""
+    """kg.schema -> relation vocab, status defaults, and ACL facts."""
     if not path.exists():
         return
     section, marked = None, set()
@@ -136,6 +136,21 @@ def parse_schema(path: Path, facts: list):
         if section == "@relations":
             facts.append(fact(body.split()[0], "kind", "relation"))
             continue
+        if section == "@acl":
+            if body.startswith("classes="):
+                for cls in [part.strip() for part in body.split("=", 1)[1].split(",") if part.strip()]:
+                    facts.append(fact(cls, "kind", "acl_class"))
+                continue
+            if body.startswith("grant "):
+                parts = body.split()
+                for cls in parts[2:]:
+                    facts.append(fact(parts[1], "can_see", cls, ref=True))
+                continue
+            if body.startswith("person ") and " = " in body:
+                people, role = body[len("person "):].split(" = ", 1)
+                for person in [part.strip() for part in people.split(",") if part.strip()]:
+                    facts.append(fact(person, "role", role.strip(), ref=True))
+                continue
         m = re.match(r"@(\w+)_defaults$", section or "")     # @status_defaults -> lifecycle attr "status"
         if m and "=" in body:
             life = m.group(1)
