@@ -313,6 +313,8 @@ def test_tasks_perf_logging_traces_root_and_interaction_costs():
     assert "logTasksPerf('shell-context'" in source
     assert "logTasksPerf('render-surface'" in source
     assert "logTasksPerf('graph-dom'" in source
+    assert "logTasksPerf('scroll-context'" in source
+    assert "tasksPerfScrollSnapshot(wrapper, event)" in source
     assert "tasksPerfSurfaceSnapshot(wrapper, event)" in source
     assert "tasksPerfWheelPayload(event)" in source
     assert "logTasksPerf('hover-pointer'" in source

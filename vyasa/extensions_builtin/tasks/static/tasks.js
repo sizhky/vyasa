@@ -610,6 +610,47 @@ function logTasksPerfGraphDomOnce(widgetId, wrapper, payload = {}) {
     window.setTimeout(() => logTasksPerf('graph-dom', { ...payload, ...tasksPerfGraphDomSnapshot(wrapper) }), 350);
 }
 
+function logTasksPerfScrollOnce(widgetId, wrapper, payload = {}) {
+    if (!window.__vyasaTasksPerf.enabled || !wrapper) return;
+    const key = `${widgetId}:${window.location.host}:${window.location.pathname}`;
+    if (window.__vyasaTasksPerf.loggedGraphDom.has(`${key}:scroll`)) return;
+    window.__vyasaTasksPerf.loggedGraphDom.add(`${key}:scroll`);
+    window.setTimeout(() => logTasksPerf('scroll-context', { ...payload, ...tasksPerfScrollSnapshot(wrapper) }), 450);
+}
+
+function tasksPerfScrollSnapshot(wrapper, event = null) {
+    const target = event?.target instanceof Element ? event.target : wrapper;
+    const containers = [];
+    let el = target;
+    while (el && containers.length < 8) {
+        const style = window.getComputedStyle?.(el);
+        const scrollable = /(auto|scroll|hidden|clip)/.test(`${style?.overflowX || ''} ${style?.overflowY || ''}`);
+        if (scrollable || el === wrapper || el === document.body || el === document.documentElement) {
+            containers.push({
+                tag: el.tagName?.toLowerCase?.() || '',
+                id: el.id || '',
+                cls: String(el.className || '').split(/\s+/).filter(Boolean).slice(0, 6).join('.'),
+                rect: tasksPerfRect(el),
+                overflow: `${style?.overflowX || ''}/${style?.overflowY || ''}`,
+                scrollTop: Math.round(el.scrollTop || 0),
+                scrollHeight: Math.round(el.scrollHeight || 0),
+                clientHeight: Math.round(el.clientHeight || 0),
+                pointerEvents: style?.pointerEvents || '',
+                position: style?.position || '',
+            });
+        }
+        el = el.parentElement;
+    }
+    return {
+        scrollX: Math.round(window.scrollX || 0),
+        scrollY: Math.round(window.scrollY || 0),
+        documentHeight: Math.round(document.documentElement?.scrollHeight || 0),
+        viewportHeight: Math.round(window.innerHeight || 0),
+        target: tasksPerfElementSnapshot(target),
+        containers,
+    };
+}
+
 function tasksPerfWheelPayload(event) {
     return {
         deltaX: Math.round(Number(event?.deltaX || 0) * 10) / 10,
@@ -4243,6 +4284,7 @@ async function renderTasksGraphs(rootElement = document) {
                 logTasksPerfShellOnce(widgetId, wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
                 logTasksPerfSurfaceOnce(widgetId, flowWrapperRef.current || wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
                 logTasksPerfGraphDomOnce(widgetId, flowWrapperRef.current || wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
+                logTasksPerfScrollOnce(widgetId, flowWrapperRef.current || wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
             }, [widgetId, model]);
             React.useEffect(() => {
                 logTasksDebug('selectionStateCommit', {
@@ -6889,7 +6931,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const wrapper = flowWrapperRef.current;
                 const graphBase = graphBaseRef.current || {};
                 const perfContext = tasksPerfContext(widgetId, wrapper, model, graphBase);
-                traceTasksInteractionFrame('pointermove', { ...perfContext, surface: tasksPerfSurfaceSnapshot(wrapper, event) });
+                traceTasksInteractionFrame('pointermove', { ...perfContext, surface: tasksPerfSurfaceSnapshot(wrapper, event), scroll: tasksPerfScrollSnapshot(wrapper, event) });
                 const perfStart = tasksPerfNow();
                 const finishPerf = (stage, extra = {}) => {
                     const durationMs = Math.round((tasksPerfNow() - perfStart) * 10) / 10;
@@ -7525,6 +7567,7 @@ async function renderTasksGraphs(rootElement = document) {
                     ...tasksPerfContext(widgetId, flowWrapperRef.current, model, graphBaseRef.current),
                     ...tasksPerfWheelPayload(event),
                     surface: tasksPerfSurfaceSnapshot(flowWrapperRef.current, event),
+                    scroll: tasksPerfScrollSnapshot(flowWrapperRef.current, event),
                 }),
                 onPointerMoveCapture: updateDragSelection,
                 onPointerUpCapture: finishDragSelection,
