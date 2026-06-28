@@ -38,6 +38,23 @@ def test_navbar_sidebar_toggles_have_animation_targets():
     assert 'data-vyasa-sidebar-toggle="toc"' in html
 
 
+def test_compact_navbar_uses_panel_toggle_not_embedded_posts_tree():
+    from vyasa.nav_views import navbar_view
+
+    html = to_xml(navbar_view("BLOG", "", posts_menu_items=[Li("Huge tree")], compact_mode=True))
+    layout_source = Path("vyasa/layout_page.py").read_text(encoding="utf-8")
+
+    assert 'data-vyasa-sidebar-toggle="posts"' in html
+    assert "Huge tree" not in html
+    assert "nav_posts_items = get_posts" not in layout_source
+
+
+def test_compact_posts_panel_is_available_on_desktop():
+    source = Path("vyasa/layout_page.py").read_text(encoding="utf-8")
+
+    assert 'posts_panel_visibility_cls = "" if nav_posts_menu else "xl:hidden"' in source
+
+
 def test_sidebar_title_click_hides_docked_sidebar_and_pulses_nav_icon():
     source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
