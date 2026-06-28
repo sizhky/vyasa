@@ -7793,11 +7793,27 @@ async function renderTasksGraphs(rootElement = document) {
                     clearGraphHoverState();
                 },
             };
+            const flowWrapperStyle = {
+                flex: '1 1 auto',
+                minWidth: 0,
+                minHeight: 0,
+                alignSelf: 'stretch',
+                display: 'flex',
+                outline: 'none',
+                position: 'relative',
+                overflow: 'hidden',
+                contain: 'layout paint',
+                isolation: 'isolate',
+                transform: 'translateZ(0)',
+                overscrollBehavior: 'contain',
+                touchAction: 'none',
+                ...edgeAnimationStyle,
+            };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', gap: '12px', position: 'relative' } },
                     filterPanelElement,
                     SlideShow(),
-                    window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { flex: '1 1 auto', minWidth: 0, minHeight: 0, alignSelf: 'stretch', display: 'flex', outline: 'none', position: 'relative', ...edgeAnimationStyle }, ...flowPointerHandlers },
+                    window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(rf.Controls),
@@ -7815,7 +7831,7 @@ async function renderTasksGraphs(rootElement = document) {
                 ))
             ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', gap: '12px', position: 'relative' } },
                 filterPanelElement,
-                window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: { flex: '1 1 auto', minWidth: 0, minHeight: 0, alignSelf: 'stretch', display: 'flex', outline: 'none', position: 'relative', ...edgeAnimationStyle }, ...flowPointerHandlers },
+                window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                         window.React.createElement(rf.Controls),

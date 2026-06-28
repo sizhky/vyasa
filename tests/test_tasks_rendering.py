@@ -320,6 +320,9 @@ def test_tasks_perf_logging_traces_root_and_interaction_costs():
     assert "logTasksPerf('render-context'" in source
     assert "document.getAnimations" in source
     assert "fixedSticky" in source
+    assert "const flowWrapperStyle = {" in source
+    assert "contain: 'layout paint'" in source
+    assert "touchAction: 'none'" in source
     assert "markTasksFrameProbe(widgetId, wrapper, model, graphBase, 'pointermove')" in source
     assert '"/api/tasks/perf-log"' in api_source
     assert "vyasa-tasks-perf-" in api_source
