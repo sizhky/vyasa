@@ -4,6 +4,25 @@ if (!window.__vyasaZenBound) {
   const revealLog = (...args) => console.info('[vyasa:reveal]', ...args);
   let pendingRevealDirection = null;
   let pendingSlideBottomScroll = false;
+  const slidePageCache = new Map();
+
+  const cacheCurrentSlide = () => {
+    const main = document.getElementById('main-content');
+    if (main && location.pathname.startsWith('/slides/')) {
+      slidePageCache.set(`${location.pathname}${location.search}`, main.outerHTML);
+    }
+  };
+
+  const restoreCachedSlide = (href) => {
+    const cached = slidePageCache.get(new URL(href, location.href).pathname + new URL(href, location.href).search);
+    const main = document.getElementById('main-content');
+    if (!cached || !main) return false;
+    main.outerHTML = cached;
+    window.history.pushState(null, '', href);
+    disableNavbarBoost();
+    initReveal();
+    return true;
+  };
 
   const getRevealBody = (root = document) =>
     root.querySelector('.vyasa-zen-slide-body[data-reveal-mode="stagger"]');
@@ -266,14 +285,18 @@ if (!window.__vyasaZenBound) {
     if (!href) return false;
     pendingRevealDirection = direction;
     pendingSlideBottomScroll = direction === 'back';
+    cacheCurrentSlide();
+    if (restoreCachedSlide(href)) return true;
     if (window.htmx && typeof window.htmx.ajax === 'function') {
       window.htmx.ajax('GET', href, {
         target: '#main-content',
         swap: 'outerHTML show:window:top settle:0.1s',
       }).then(() => {
-        if (window.location.pathname !== href) {
+        const nextUrl = new URL(href, location.href);
+        if (`${window.location.pathname}${window.location.search}` !== `${nextUrl.pathname}${nextUrl.search}`) {
           window.history.pushState(null, '', href);
         }
+        cacheCurrentSlide();
       });
     } else {
       window.location.href = href;
@@ -288,8 +311,11 @@ if (!window.__vyasaZenBound) {
   };
 
   disableNavbarBoost();
+  cacheCurrentSlide();
   document.body.addEventListener('htmx:afterSwap', disableNavbarBoost);
-  document.body.addEventListener('htmx:afterSwap', () => initReveal());
+  document.body.addEventListener('htmx:afterSwap', () => {
+    initReveal();
+  });
   initReveal();
 
   const toggleOverview = () => {

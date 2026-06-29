@@ -133,8 +133,17 @@ def _render_ref_markdown(ref_doc, *, path, htmx, request, slug_to_title, layout,
     # siblings (KG packs, palettes, ...) from the same git ref, not the worktree.
     with ref_read_scope(ref_doc.vpath):
         rendered_body = from_md(strip_more_marker(ref_doc.body), current_path=path)
+    document_actions, action_aux_nodes = resolve_document_actions(
+        DocumentActionContext(
+            title=ref_doc.title,
+            current_path=path,
+            raw_content=ref_doc.body,
+            relative_file_path=getattr(ref_doc.vpath, "slug", None) or ref_doc.relative,
+        )
+    )
     content = Div(
-        document_header(ref_doc.title, ref_doc.body, actions=(), breadcrumbs=breadcrumbs, meta_extra=ref_badge),
+        document_header(ref_doc.title, ref_doc.body, actions=document_actions, breadcrumbs=breadcrumbs, meta_extra=ref_badge),
+        *action_aux_nodes,
         rendered_body,
         cls="w-full",
     )
@@ -252,6 +261,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
                 )
             )
         return not_found(htmx, auth=request.scope.get("auth"))
+    assert isinstance(file_path, Path)
     metadata, raw_content = parse_frontmatter(file_path)
     frontmatter_error = metadata.get("__frontmatter_error__")
     post_title, render_content = resolve_markdown_title(file_path, abbreviations=abbreviations)
@@ -298,6 +308,21 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
     if not match:
         return not_found(auth=request.scope.get("auth"))
     doc_path = match.group("doc")
+    ref_override = request.query_params.get("ref", "") if hasattr(request, "query_params") else ""
+    root_id, root_path, ref, relative = content_location(doc_path, ref_override=ref_override)
+    ref_doc = None
+    if root_path is not None and ref and "@" not in Path(doc_path.strip("/")).parts[0]:
+        rel = relative.as_posix()
+        packed = f"{root_id}@{ref.replace('/', ':')}"
+        doc_path = f"{packed}/{rel}" if rel and rel != "." else packed
+    if root_path is not None:
+        from .content_tree import resolve_ref_document
+        ref_doc = resolve_ref_document(doc_path, ref_override=ref_override)
+        if ref_doc is not None and (not ref_doc.found or ref_doc.kind != "markdown"):
+            return not_found(auth=request.scope.get("auth"))
+        if ref_doc is None and ref:
+            rel = relative.as_posix()
+            doc_path = (f"{root_id}/{rel}" if root_id else rel).strip("/")
     slide_token = match.group("num")
     if slide_token is None:
         from starlette.responses import RedirectResponse
@@ -316,18 +341,23 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         slide_num = max(1, min(slide_num, total))
         doc_href = "/"
     else:
-        root, _ = content_root_and_relative(doc_path)
-        if root is None:
-            return not_found(auth=request.scope.get("auth"))
-        file_path = content_path_for_slug(doc_path, ".md")
-        if not file_path or not file_path.exists():
-            return not_found(auth=request.scope.get("auth"))
         roles = get_roles_from_auth(request.scope.get("auth"), rbac_rules, rbac_cfg, google_oauth_cfg, coerce_list)
         if not is_allowed(f"/posts/{doc_path}", roles or [], rbac_rules):
             return not_found(auth=request.scope.get("auth"))
-        metadata, raw_content = parse_frontmatter(file_path)
-        abbreviations = effective_abbreviations(root)
-        title, render_content = resolve_markdown_title(file_path, abbreviations=abbreviations)
+        if ref_doc is not None:
+            metadata, raw_content = ref_doc.metadata, ref_doc.body
+            abbreviations = {}
+            title, render_content = ref_doc.title, ref_doc.body
+        else:
+            root, _ = content_root_and_relative(doc_path)
+            if root is None:
+                return not_found(auth=request.scope.get("auth"))
+            file_path = content_path_for_slug(doc_path, ".md")
+            if not file_path or not file_path.exists():
+                return not_found(auth=request.scope.get("auth"))
+            metadata, raw_content = parse_frontmatter(file_path)
+            abbreviations = effective_abbreviations(root)
+            title, render_content = resolve_markdown_title(file_path, abbreviations=abbreviations)
         reveal_config = resolve_slide_reveal_config(metadata)
         slide_width = _resolve_slide_width(metadata)
         deck = ZenSlideDeck(render_content or "")
@@ -378,14 +408,17 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         if runtime is None:
             runtime = refresh_extension_runtime(get_config().get_extensions_config())
         asset_collector = runtime.new_asset_collector() if runtime else None
+        def render_slide_fragment(body, current_path=None, slide_mode=False):
+            if ref_doc is not None:
+                from .content_backend import ref_read_scope
+
+                with ref_read_scope(ref_doc.vpath):
+                    return _render_markdown_fragment(body, current_path=current_path, slide_mode=slide_mode, asset_collector=asset_collector)
+            return _render_markdown_fragment(body, current_path=current_path, slide_mode=slide_mode, asset_collector=asset_collector)
+
         reveal_units = build_slide_reveal_units(
             slide_markdown,
-            render_fragment=lambda body, current_path=None, slide_mode=False: _render_markdown_fragment(
-                body,
-                current_path=current_path,
-                slide_mode=slide_mode,
-                asset_collector=asset_collector,
-            ),
+            render_fragment=render_slide_fragment,
             current_path=doc_path,
             config=reveal_config,
         ) if reveal_config.enabled else []
@@ -434,7 +467,14 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
                 ),
             )
         else:
-            slide_body = Div(from_md(slide_markdown, current_path=doc_path, slide_mode=True), cls="vyasa-zen-slide-body")
+            if ref_doc is not None:
+                from .content_backend import ref_read_scope
+
+                with ref_read_scope(ref_doc.vpath):
+                    rendered_slide = from_md(slide_markdown, current_path=doc_path, slide_mode=True)
+            else:
+                rendered_slide = from_md(slide_markdown, current_path=doc_path, slide_mode=True)
+            slide_body = Div(rendered_slide, cls="vyasa-zen-slide-body")
         content = Div(
             _breadcrumbs(doc_path, slug_to_title, abbreviations, disable_boost=True, include_current=True, current_anchor=deck.anchor(slide_num - 1)),
             Div(H1(title, cls="vyasa-zen-deck-title"), cls="flex justify-center"),
