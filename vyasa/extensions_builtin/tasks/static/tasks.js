@@ -4134,64 +4134,15 @@ function tasksProjectionOptions(model, ganttEnabled = false) {
 }
 
 function tasksAclViewerOptions(model) {
-    const acl = model?.acl && typeof model.acl === 'object' ? model.acl : {};
-    const grants = acl.grants && typeof acl.grants === 'object' ? acl.grants : {};
-    const people = acl.people && typeof acl.people === 'object' ? acl.people : {};
-    const roles = Object.keys(grants).sort().map((role) => ({ id: role, label: `View as ${role}` }));
-    const persons = Object.keys(people).sort().map((person) => ({ id: person, label: `View as ${person}` }));
-    return [...roles, ...persons];
+    const viewers = model?.viewer_models && typeof model.viewer_models === 'object' ? model.viewer_models : {};
+    return Object.keys(viewers).sort().map((role) => ({ id: role, label: role }));
 }
 
-function tasksAclClassesForViewer(model, viewer) {
-    const acl = model?.acl && typeof model.acl === 'object' ? model.acl : {};
-    const classIds = new Set(Array.isArray(acl.classes) ? acl.classes.map(String) : []);
-    const grants = acl.grants && typeof acl.grants === 'object' ? acl.grants : {};
-    const people = acl.people && typeof acl.people === 'object' ? acl.people : {};
-    const seeds = new Set([String(viewer || '').trim(), String(people[String(viewer || '').trim()] || '').trim()].filter(Boolean));
-    const seen = new Set();
-    const out = new Set();
-    while (seeds.size) {
-        const role = seeds.values().next().value;
-        seeds.delete(role);
-        if (seen.has(role)) continue;
-        seen.add(role);
-        for (const target of Array.isArray(grants[role]) ? grants[role] : []) {
-            const id = String(target || '').trim();
-            if (classIds.has(id)) out.add(id);
-            else if (id) seeds.add(id);
-        }
-    }
-    return out;
-}
-
-function maskTasksModelForAclViewer(sourceModel, sourceGraph, viewer) {
-    const classes = tasksAclClassesForViewer(sourceModel, viewer);
-    if (!classes.size) return { model: sourceModel, graph: sourceGraph };
-    const allClasses = Array.isArray(sourceModel?.acl?.classes) ? sourceModel.acl.classes.map(String).filter(Boolean) : [];
-    if (allClasses.length && allClasses.every((id) => classes.has(id))) return { model: sourceModel, graph: sourceGraph };
-    const visible = (node) => {
-        const values = Array.isArray(node?.cls) ? node.cls : [node?.cls];
-        return values.some((value) => classes.has(String(value || '').trim()));
-    };
-    const groups = (sourceModel.groups || []).filter(visible);
-    const tasks = (sourceModel.tasks || []).filter(visible);
-    const visibleIds = new Set([...groups, ...tasks].map((node) => node.id));
-    const dependency_edges = (sourceModel.dependency_edges || []).filter((edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target));
-    const group_tree = {};
-    const task_children = {};
-    for (const group of groups) {
-        const parent = visibleIds.has(group.parent_group_id) ? group.parent_group_id : null;
-        group_tree[parent] = [...(group_tree[parent] || []), group.id];
-    }
-    for (const task of tasks) {
-        const parent = visibleIds.has(task.group_id) ? task.group_id : null;
-        task_children[parent] = [...(task_children[parent] || []), task.id];
-    }
-    const graph = {
-        nodes: (sourceGraph.nodes || []).filter((node) => visibleIds.has(node.id)),
-        edges: (sourceGraph.edges || []).filter((edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target)),
-    };
-    return { model: { ...sourceModel, groups, tasks, dependency_edges, group_tree, task_children, document_order: [...groups, ...tasks].map((node) => node.id) }, graph };
+function selectTasksAclViewerState(sourceModel, sourceGraph, viewer) {
+    const id = String(viewer || '').trim();
+    const entry = id ? sourceModel?.viewer_models?.[id] : null;
+    if (!entry || !entry.model || !entry.graph) return { model: sourceModel, graph: sourceGraph, viewer: '' };
+    return { model: entry.model, graph: entry.graph, viewer: id };
 }
 
 function tasksProjectionDefaultColorBy(model) {
@@ -4433,11 +4384,11 @@ async function renderTasksGraphs(rootElement = document) {
             if (sourcePrefsRef.current === null) sourcePrefsRef.current = readTasksPrefs(sourceModel);
             const [activeAclViewer, setActiveAclViewer] = React.useState('');
             const aclViewerOptions = React.useMemo(() => egoMode ? [] : tasksAclViewerOptions(sourceModel), [egoMode, sourceModel]);
-            const maskedSource = React.useMemo(
-                () => maskTasksModelForAclViewer(sourceModel, sourceGraph, activeAclViewer),
+            const viewerState = React.useMemo(
+                () => selectTasksAclViewerState(sourceModel, sourceGraph, activeAclViewer),
                 [sourceModel, sourceGraph, activeAclViewer]
             );
-            const projectionOptions = React.useMemo(() => egoMode ? [] : tasksProjectionOptions(sourceModel, ganttEnabled), [egoMode, sourceModel, ganttEnabled]);
+            const projectionOptions = React.useMemo(() => egoMode ? [] : tasksProjectionOptions(viewerState.model, ganttEnabled), [egoMode, viewerState.model, ganttEnabled]);
             const contextOptions = React.useMemo(() => (
                 Array.isArray(sourceModel?.kg_contexts) ? sourceModel.kg_contexts.filter((item) => item && item.id) : []
             ), [sourceModel]);
@@ -4460,8 +4411,8 @@ async function renderTasksGraphs(rootElement = document) {
                 Array.isArray(sourcePrefsRef.current?.groupByHierarchy) ? sourcePrefsRef.current.groupByHierarchy : []
             ));
             const projectionState = React.useMemo(
-                () => buildTasksViewState(maskedSource.model, maskedSource.graph, activeProjectionId, viewMode, groupByHierarchy),
-                [maskedSource, activeProjectionId, viewMode, groupByHierarchy]
+                () => buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, groupByHierarchy),
+                [viewerState, activeProjectionId, viewMode, groupByHierarchy]
             );
             const model = projectionState.model;
             const effectiveDefaultOpenDepth = Number.parseInt(tasksModelSetting(model, 'default_open_depth', `${defaultOpenDepth}`), 10);
@@ -4656,10 +4607,10 @@ async function renderTasksGraphs(rootElement = document) {
             const suppressNextGraphClickRef = React.useRef(false);
             const lastNodeClickRef = React.useRef(null);
             const activeProjection = React.useMemo(() => {
-                const projections = Array.isArray(sourceModel?.view_projections) ? sourceModel.view_projections : [];
+                const projections = Array.isArray(viewerState.model?.view_projections) ? viewerState.model.view_projections : [];
                 const id = String(activeProjectionId || '').trim();
                 return id ? (projections.find((p) => p && p.id === id) || null) : null;
-            }, [sourceModel, activeProjectionId]);
+            }, [viewerState.model, activeProjectionId]);
             const activeColorBy = activeColorHierarchy[0] || '';
             const setActiveColorLevel = React.useCallback((index, value) => {
                 setActiveColorHierarchy((current) => {
@@ -5089,7 +5040,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setAllClearedNotes(null);
             }, [allClearedNotes, selectedLogicalNodeId, activeSlideId]);
             const resetProjectionControls = React.useCallback(() => {
-                const defaults = tasksProjectionSchemaPrefs(sourceModel, activeProjectionId);
+                const defaults = tasksProjectionSchemaPrefs(viewerState.model, activeProjectionId);
                 const defaultSearch = typeof defaults.searchQuery === 'string' ? defaults.searchQuery : '';
                 setActiveFilters(normalizeTasksFilterQuery(defaults.filters));
                 setActiveSwatchFilters(tasksEmptyFilterQuery());
@@ -5114,7 +5065,7 @@ async function renderTasksGraphs(rootElement = document) {
                         ? defaults.unspecifiedContentOpacity
                         : defaultProjectionUnspecifiedContentOpacity
                 );
-            }, [sourceModel, activeProjectionId, model, nodeNotes, hydrateExpandedSet, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
+            }, [viewerState.model, activeProjectionId, model, nodeNotes, hydrateExpandedSet, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
             React.useEffect(() => {
                 setNoteInputValue(nodeNotes[selectedLogicalNodeId] || '');
                 setClearedNote(null);
@@ -6638,7 +6589,7 @@ async function renderTasksGraphs(rootElement = document) {
                         : projection.id === activeProjectionId
                 )) || null;
                 const customGroupingActive = !String(activeProjectionId || '').trim() && viewMode !== 'gantt';
-                const projectionGroupByHierarchy = viewMode === 'gantt' ? [] : tasksProjectionGroupByHierarchy(sourceModel, activeProjectionId);
+                const projectionGroupByHierarchy = viewMode === 'gantt' ? [] : tasksProjectionGroupByHierarchy(viewerState.model, activeProjectionId);
                 const displayedGroupByHierarchy = customGroupingActive ? groupByHierarchy : projectionGroupByHierarchy;
                 const activeGroupByCount = customGroupingActive ? groupByHierarchy.filter(Boolean).length : 0;
                 const groupByLevels = displayedGroupByHierarchy.filter(Boolean);
@@ -6926,30 +6877,44 @@ async function renderTasksGraphs(rootElement = document) {
                                 },
                             }, sourceModel.kg_context.caption) : null
                         ) : null,
+                        aclViewerOptions.length ? React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
+                            React.createElement('span', { style: filterKeyStyle }, 'Viewer'),
+                            React.createElement('select', {
+                                value: activeAclViewer,
+                                onChange: (event) => {
+                                    setActiveAclViewer(event.target.value);
+                                    setSelectedNodeId(null);
+                                    setSelectedNodeIds(new Set());
+                                    setDragSelection(null);
+                                    setHoveredNodeId(null);
+                                    pendingFitActionRef.current = 'mode';
+                                },
+                                style: {
+                                    width: '100%',
+                                    minWidth: 0,
+                                    border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                    borderRadius: '8px',
+                                    padding: '6px 8px',
+                                    background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                    color: 'inherit',
+                                },
+                            },
+                                React.createElement('option', { value: '' }, 'All'),
+                                ...aclViewerOptions.map((viewer) => React.createElement('option', { key: viewer.id, value: viewer.id }, viewer.label))
+                            )
+                        ) : null,
                         projectionOptions.length >= 1 ? React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                             React.createElement('span', { style: filterKeyStyle }, 'View'),
                             React.createElement('div', { style: filterInlineControlStyle },
                                 React.createElement('select', {
-                                    value: activeAclViewer ? `__acl__:${activeAclViewer}` : (viewMode === 'gantt' ? TASKS_GANTT_PROJECTION_ID : activeProjectionId),
+                                    value: viewMode === 'gantt' ? TASKS_GANTT_PROJECTION_ID : activeProjectionId,
                                     onPaste: handleDefaultViewPaste,
                                     onChange: async (event) => {
                                         const nextProjectionId = event.target.value;
-                                        if (nextProjectionId.startsWith('__acl__:')) {
-                                            setActiveAclViewer(nextProjectionId.slice('__acl__:'.length));
-                                            setActiveProjectionId('');
-                                            setViewMode('graph');
-                                            setSelectedNodeId(null);
-                                            setSelectedNodeIds(new Set());
-                                            setDragSelection(null);
-                                            setHoveredNodeId(null);
-                                            pendingFitActionRef.current = 'mode';
-                                            return;
-                                        }
                                         if (nextProjectionId === TASKS_ADD_VIEW_OPTION_ID) {
                                             await handleAddView();
                                             return;
                                         }
-                                        setActiveAclViewer('');
                                         setSelectedNodeId(null);
                                         setSelectedNodeIds(new Set());
                                         setDragSelection(null);
@@ -6972,8 +6937,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     },
                                 },
                                     ...projectionOptions.map((projection) => React.createElement('option', { key: projection.id || '__default__', value: projection.id }, projection.label)),
-                                    ...aclViewerOptions.map((viewer) => React.createElement('option', { key: `acl-${viewer.id}`, value: `__acl__:${viewer.id}` }, viewer.label))
-                                    , React.createElement('option', { key: TASKS_ADD_VIEW_OPTION_ID, value: TASKS_ADD_VIEW_OPTION_ID }, '+ Add view...')
+                                    React.createElement('option', { key: TASKS_ADD_VIEW_OPTION_ID, value: TASKS_ADD_VIEW_OPTION_ID }, '+ Add view...')
                                 ),
                                 activeProjectionOption && activeProjectionOption.id !== TASKS_GANTT_PROJECTION_ID
                                     ? React.createElement('button', {
@@ -7242,8 +7206,8 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId(null);
             }, [clearGroupHoverTooltip]);
             const activeHoverAttrs = React.useMemo(
-                () => tasksActiveHoverAttrs(sourceModel, activeProjectionId),
-                [sourceModel, activeProjectionId]
+                () => tasksActiveHoverAttrs(viewerState.model, activeProjectionId),
+                [viewerState.model, activeProjectionId]
             );
             const updateGroupHoverTooltip = React.useCallback((event) => {
                 const reactFlow = reactFlowApiRef.current;
@@ -7634,10 +7598,10 @@ async function renderTasksGraphs(rootElement = document) {
             const flowWrapperClassName = hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '';
             const buildProjectionConfigText = (projection) => {
                 const pid = String(projection?.id || '');
-                const def = (Array.isArray(sourceModel?.view_projections) ? sourceModel.view_projections : []).find((p) => p && p.id === pid) || null;
+                const def = (Array.isArray(viewerState.model?.view_projections) ? viewerState.model.view_projections : []).find((p) => p && p.id === pid) || null;
                 const isActiveLive = viewMode !== 'gantt' && pid === String(activeProjectionId || '');
                 const defGroups = def ? (Array.isArray(def.groups_from) ? def.groups_from : [def.groups_from]) : [];
-                const fallbackGroups = defGroups.length ? defGroups : tasksProjectionGroupByHierarchy(sourceModel, pid);
+                const fallbackGroups = defGroups.length ? defGroups : tasksProjectionGroupByHierarchy(viewerState.model, pid);
                 const groupBy = (isActiveLive && !pid) ? groupByHierarchy : fallbackGroups;
                 return buildTasksProjectionConfigText({
                     id: pid || 'new-view',
