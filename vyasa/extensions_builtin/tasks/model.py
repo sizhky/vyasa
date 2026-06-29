@@ -1,12 +1,15 @@
 from collections import defaultdict
+import copy
 from pathlib import Path
 import json
 import re
 import secrets
+from typing import Any, cast
 
 from ...markdown_fence import current_content_path, get_root_folder
 from .items_pack import PathLike, read_kg_pack
 from .projections import attach_projection_models, normalize_projections
+from .layout import build_collapsed_graph
 
 
 _STRING_DECODER = json.JSONDecoder()
@@ -373,8 +376,11 @@ def _clean_gradient_palette(value) -> dict:
         color = str(stop.get("color") or "").strip()
         if not color:
             continue
+        raw_at = stop.get("at")
+        if raw_at is None:
+            continue
         try:
-            at = float(stop.get("at"))
+            at = float(raw_at)
         except (TypeError, ValueError):
             continue
         cleaned_stops.append({"at": at, "color": color})
@@ -981,7 +987,7 @@ def _apply_palette_source(graph: dict, current_path: str | Path | None, source_f
 
 def _apply_default_design_palette(graph: dict) -> None:
     selected = str(graph.get("default_design_palette") or "").strip()
-    palettes = graph.get("design_palette") if isinstance(graph.get("design_palette"), dict) else {}
+    palettes: dict[str, Any] = cast(dict[str, Any], graph.get("design_palette")) if isinstance(graph.get("design_palette"), dict) else {}
     if not selected or selected not in palettes:
         if len(palettes) == 1:
             selected = next(iter(palettes.keys()))
@@ -1009,7 +1015,7 @@ def _apply_default_design_palette(graph: dict) -> None:
             graph["image_by"] = image_by
 
 
-def _resolve_required_source(current_path: str | Path | None, source: str) -> Path:
+def _resolve_required_source(current_path: str | Path | None, source: str) -> PathLike:
     resolved = _resolve_tasks_source_path(current_path, source)
     if not resolved or not resolved.exists():
         raise ValueError(f"Missing KG source: {source}")
@@ -1029,6 +1035,85 @@ def _apply_kg_schema(graph: dict, current_path: str | Path | None) -> None:
     graph["tasks"].extend(compiled.get("tasks", []))
     graph["dependency_edges"].extend(compiled.get("dependency_edges", []))
     graph["items_schema"] = schema_source
+
+
+def _acl_reachable_classes(acl: dict[str, Any], viewer: str) -> set[str]:
+    classes = {str(item) for item in (acl.get("classes") or []) if str(item or "").strip()}
+    grants: dict[str, Any] = cast(dict[str, Any], acl.get("grants")) if isinstance(acl.get("grants"), dict) else {}
+    people: dict[str, Any] = cast(dict[str, Any], acl.get("people")) if isinstance(acl.get("people"), dict) else {}
+    seeds = {str(viewer or "").strip(), str(people.get(str(viewer or "").strip()) or "").strip()} - {""}
+    seen: set[str] = set()
+    out: set[str] = set()
+    while seeds:
+        role = seeds.pop()
+        if role in seen:
+            continue
+        seen.add(role)
+        targets = grants.get(role)
+        for target in targets if isinstance(targets, list) else []:
+            target_id = str(target or "").strip()
+            if target_id in classes:
+                out.add(target_id)
+            elif target_id:
+                seeds.add(target_id)
+    return out
+
+
+def _node_cls_set(node: dict[str, Any]) -> set[str]:
+    raw = node.get("cls")
+    values = raw if isinstance(raw, list) else [raw]
+    return {str(item).strip() for item in values if str(item or "").strip()}
+
+
+def _rebuild_model_indexes(model: dict[str, Any]) -> None:
+    group_ids = {group.get("id") for group in model.get("groups", [])}
+    group_tree = defaultdict(list)
+    task_children = defaultdict(list)
+    for group in model.get("groups", []):
+        parent = group.get("parent_group_id") if group.get("parent_group_id") in group_ids else None
+        group["parent_group_id"] = parent
+        group_tree[parent].append(group["id"])
+    for task in model.get("tasks", []):
+        parent = task.get("group_id") if task.get("group_id") in group_ids else None
+        task["group_id"] = parent
+        task_children[parent].append(task["id"])
+    model["group_tree"] = dict(group_tree)
+    model["task_children"] = dict(task_children)
+    model["document_order"] = [g["id"] for g in model.get("groups", [])] + [t["id"] for t in model.get("tasks", [])]
+
+
+def _masked_acl_model(model: dict[str, Any], viewer: str) -> dict[str, Any]:
+    classes = _acl_reachable_classes(model.get("acl") or {}, viewer)
+    masked = copy.deepcopy(model)
+    masked.pop("projection_models", None)
+    masked.pop("viewer_models", None)
+
+    def visible(node: dict[str, Any]) -> bool:
+        return bool(_node_cls_set(node).intersection(classes))
+
+    masked["groups"] = [node for node in masked.get("groups", []) if visible(node)]
+    masked["tasks"] = [node for node in masked.get("tasks", []) if visible(node)]
+    visible_ids = {node["id"] for node in [*masked["groups"], *masked["tasks"]]}
+    masked["dependency_edges"] = [
+        edge for edge in masked.get("dependency_edges", [])
+        if edge.get("source") in visible_ids and edge.get("target") in visible_ids
+    ]
+    _rebuild_model_indexes(masked)
+    return masked
+
+
+def _attach_acl_viewer_models(model: dict[str, Any]) -> dict[str, Any]:
+    acl: dict[str, Any] = cast(dict[str, Any], model.get("acl")) if isinstance(model.get("acl"), dict) else {}
+    grants: dict[str, Any] = cast(dict[str, Any], acl.get("grants")) if isinstance(acl.get("grants"), dict) else {}
+    viewer_models: dict[str, Any] = {}
+    for role in sorted(str(role) for role in grants.keys()):
+        if not _acl_reachable_classes(acl, role):
+            continue
+        role_model = attach_projection_models(_masked_acl_model(model, role))
+        viewer_models[role] = {"model": role_model, "graph": build_collapsed_graph(role_model)}
+    if viewer_models:
+        model["viewer_models"] = viewer_models
+    return model
 
 
 def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
@@ -1188,7 +1273,7 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "kg_contexts": graph.get("kg_contexts", []),
         "acl": graph.get("acl", {}),
     }
-    return attach_projection_models(model)
+    return _attach_acl_viewer_models(attach_projection_models(model))
 
 
 def parse_tasks_model(markdown_path: str | Path) -> dict:

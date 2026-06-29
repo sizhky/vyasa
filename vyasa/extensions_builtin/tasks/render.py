@@ -79,6 +79,10 @@ def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
         projection_model = entry.get("model") if isinstance(entry, dict) else None
         if isinstance(projection_model, dict):
             _attach_rendered_node_attrs(projection_model, current_path)
+    for entry in (model.get("viewer_models") or {}).values():
+        viewer_model = entry.get("model") if isinstance(entry, dict) else None
+        if isinstance(viewer_model, dict):
+            _attach_rendered_node_attrs(viewer_model, current_path)
 
 
 def _attach_rendered_slide_attrs(model: dict, current_path: str | None) -> None:

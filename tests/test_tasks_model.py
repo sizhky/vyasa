@@ -636,6 +636,57 @@ Places:
     ]
 
 
+def test_kg_schema_acl_masks_before_projection_and_folds_cls_as_set(tmp_path):
+    kg_dir = tmp_path / "demo.kg"
+    kg_dir.mkdir()
+    (kg_dir / "kg.schema").write_text(
+        """@graph id=demo title="Demo" pool=kg.nodes attrs=kg.attrs
+@acl
+classes=cls_external,cls_internal,cls_eng
+grant role_lead cls_internal role_dev
+grant role_dev cls_eng
+grant role_ext cls_external
+@views
+kind:
+\tgroup_by=kind
+""",
+        encoding="utf-8",
+    )
+    (kg_dir / "kg.nodes").write_text(
+        """d_brd: BRD
+api: API
+secret: Secret
+""",
+        encoding="utf-8",
+    )
+    (kg_dir / "kg.attrs").write_text(
+        """@node_attrs
+kind:
+  doc: d_brd secret
+  code: api
+cls:
+  cls_eng: d_brd api
+  cls_internal: d_brd secret
+  cls_external: d_brd
+""",
+        encoding="utf-8",
+    )
+
+    model = parse_tasks_text(f"""```items
+---
+items_schema: {kg_dir / "kg.schema"}
+---
+```""")
+
+    brd = next(node for node in model["tasks"] if node["id"] == "d_brd")
+    assert set(brd["cls"]) == {"cls_eng", "cls_internal", "cls_external"}
+    ext_model = model["viewer_models"]["role_ext"]["model"]
+    assert [node["id"] for node in ext_model["tasks"]] == ["d_brd"]
+    assert [node["id"] for node in ext_model["projection_models"]["kind"]["model"]["tasks"]] == ["d_brd"]
+    lead_ids = {node["id"] for node in model["viewer_models"]["role_lead"]["model"]["tasks"]}
+    assert lead_ids == {"d_brd", "api", "secret"}
+
+
 def test_collapsed_graph_projects_nested_task_edges_to_root_groups():
     model = parse_tasks_text(
         """```items

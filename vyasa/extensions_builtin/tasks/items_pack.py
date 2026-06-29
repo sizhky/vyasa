@@ -286,7 +286,20 @@ def _apply_context_attrs(context: KgContext, nodes_by_id: dict[str, dict]) -> No
         for value, node_ids in values.items():
             for node_id in node_ids:
                 if node_id in nodes_by_id:
-                    nodes_by_id[node_id][key] = value
+                    _set_node_attr(nodes_by_id[node_id], key, value)
+
+
+def _set_node_attr(node: dict[str, Any], key: str, value: Any) -> None:
+    if key != "cls":
+        node[key] = value
+        return
+    existing = node.get(key)
+    values = existing if isinstance(existing, list) else ([existing] if existing not in (None, "") else [])
+    for item in value if isinstance(value, list) else [value]:
+        if item not in (None, "") and item not in values:
+            values.append(item)
+    if values:
+        node[key] = values
 
 
 def _apply_status_defaults(schema: KgSchema, nodes_by_id: dict[str, dict], edges: list[dict]) -> None:
@@ -540,7 +553,9 @@ def apply_attrs(path: PathLike, nodes: dict[str, dict], edges: dict[str, dict]) 
                 if record_id in target:
                     attr_value = value.strip()
                     existing = target[record_id].get(current_key)
-                    if existing is None:
+                    if section == "@node_attrs" and current_key == "cls":
+                        _set_node_attr(target[record_id], current_key, attr_value)
+                    elif existing is None:
                         target[record_id][current_key] = attr_value
                     elif isinstance(existing, list):
                         if attr_value not in existing:
