@@ -402,7 +402,13 @@ def test_tasks_source_renders_hover_checkbox_and_done_badge():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "type: 'checkbox'" in source
-    assert "const showCheckbox = hoveredNodeId === sourceNodeId || selectedNodeId === sourceNodeId;" in source
+    # showCheckbox is derived from data.highlightMode (selected/selected-focus/
+    # neighbor-focus) plus a __hover_checkbox__ flag for the no-single-selection
+    # hover case. This keeps nodeTypes stable so React Flow does not remount nodes
+    # on every hover (which was swallowing clicks).
+    assert "const showCheckbox = highlightMode === 'selected'" in source
+    assert "data?.__hover_checkbox__ === true" in source
+    assert "const hoverCheckboxId = !nodeId && hoveredNodeId ? hoveredNodeId : null;" in source
     assert "if (!selectedNodeId) {" in source
     assert "setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);" in source
     assert "const doneBadge = isChecked ?" in source
@@ -698,6 +704,10 @@ def test_tasks_clicking_selected_node_toggles_selection_off():
 
     assert "selectedNodeIdRef.current === sourceNodeId && selectedNodeIdsRef.current.size === 0" in source
     assert "clearSelection('nodeClickToggle');" in source
+    assert "suppressNextGraphClickRef.current = true;" in source
+    assert "clearSelection('nodeBodyToggle');" in source
+    gantt_body = source.split("if (data?.__gantt) {", 1)[1].split("const labelNode", 1)[0]
+    assert "onClickCapture: handleSelectedNodeToggleCapture" in gantt_body
 
 
 def test_tasks_fullscreen_reuses_canvas_background_contract():
