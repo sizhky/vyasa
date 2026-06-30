@@ -211,6 +211,82 @@ def test_ref_markdown_shows_branch_badge_in_meta_line(site):
     assert resolve_ref_document("repo/a") is None
 
 
+def test_ref_markdown_renders_document_actions(site):
+    from fasthtml.common import NotStr, to_xml
+
+    from vyasa.content_routes import _render_ref_markdown
+    from vyasa.content_tree import resolve_ref_document
+    from vyasa.extensions import build_extension_runtime, get_extension_runtime, set_extension_runtime
+
+    previous = get_extension_runtime()
+    set_extension_runtime(build_extension_runtime({"preset": "default"}))
+    try:
+        ref_doc = resolve_ref_document("repo@feature/feat")
+        assert ref_doc is not None and ref_doc.found
+        page = _render_ref_markdown(
+            ref_doc,
+            path="repo@feature/feat",
+            htmx=False,
+            request=type("Request", (), {"scope": {"auth": None}})(),
+            slug_to_title=lambda value, abbreviations=None: value,
+            layout=lambda body, **kwargs: body,
+            get_blog_title=lambda: "Site",
+            from_md=lambda body, current_path=None: NotStr(body),
+            not_found=None,
+        )
+        html = to_xml(page)
+    finally:
+        set_extension_runtime(previous)
+
+    assert 'data-vyasa-fold-all="open"' in html
+    assert 'data-tooltip="Present document"' in html
+    assert 'data-tooltip="Copy raw markdown"' in html
+    assert 'data-copy-payload=' in html
+    assert "repo@feature/feat.md" in html
+
+
+def test_ref_slide_route_reads_ref_query_from_objects(site):
+    from fasthtml.common import Div, NotStr, to_xml
+
+    from vyasa.content_routes import render_slide_deck
+
+    request = type("Request", (), {"scope": {"auth": None}, "query_params": {"ref": "feature"}})()
+    page = render_slide_deck(
+        "repo/feat/slide-1",
+        False,
+        request,
+        get_root_folder=lambda: site,
+        not_found=lambda **kwargs: "NF",
+        get_roles_from_auth=lambda *args, **kwargs: [],
+        rbac_rules={},
+        rbac_cfg={},
+        google_oauth_cfg={},
+        coerce_list=lambda value: value,
+        is_allowed=lambda *args, **kwargs: True,
+        parse_frontmatter=lambda path: ({}, ""),
+        resolve_markdown_title=lambda path, abbreviations=None: ("Disk", ""),
+        slug_to_title=lambda value, abbreviations=None: value,
+        effective_abbreviations=lambda root: {},
+        from_md=lambda body, current_path=None, slide_mode=False: NotStr(body),
+        layout=lambda content, **kwargs: Div(content),
+    )
+    html = to_xml(page)
+
+    assert html != "NF"
+    assert "Feature" in html
+    assert "/slides/repo/feat/slide-2?ref=feature" in html
+    assert "/posts/repo/feat?ref=feature" in html
+
+
+def test_slide_runtime_caches_swapped_ref_pages():
+    source = Path("vyasa/extensions_builtin/slides/static/present.js").read_text(encoding="utf-8")
+
+    assert "const slidePageCache = new Map();" in source
+    assert "if (restoreCachedSlide(href)) return true;" in source
+    assert "window.history.pushState(null, '', href);" in source
+    assert "cacheCurrentSlide();" in source[source.index("window.history.pushState(null, '', href);") :]
+
+
 def test_navbar_ref_switcher_discovers_all_git_roots(site):
     import vyasa.core as core
     from fasthtml.common import to_xml

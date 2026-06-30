@@ -5428,6 +5428,10 @@ async function renderTasksGraphs(rootElement = document) {
             const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null, selectedIds = new Set()) => {
                 const baseNodes = graphBaseRef.current.nodes || [];
                 const baseEdges = graphBaseRef.current.edges || [];
+                // When no single node is selected, hovering a node should still reveal
+                // its checkbox. Carry it as a data flag (not the closure) so the
+                // memoized node updates without forcing the per-hover remount.
+                const hoverCheckboxId = !nodeId && hoveredNodeId ? hoveredNodeId : null;
                 const multiSelectedIds = selectedIds instanceof Set ? selectedIds : new Set(selectedIds || []);
                 const multiSelectedHighlightIds = new Set(multiSelectedIds);
                 for (const selectedId of multiSelectedIds) {
@@ -5447,7 +5451,7 @@ async function renderTasksGraphs(rootElement = document) {
                         const displayColor = collapsedGroupColor || nodeColor || 'var(--vyasa-primary)';
                         return {
                             ...node,
-                            data: { ...node.data, highlightMode: selected ? 'selected' : 'dim' },
+                            data: { ...node.data, highlightMode: selected ? 'selected' : 'dim', __hover_checkbox__: node.id === hoverCheckboxId },
                             style: {
                             ...node.style,
                                 opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (selected ? 1 : 0.18),
@@ -5477,7 +5481,11 @@ async function renderTasksGraphs(rootElement = document) {
                     const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters);
                     const hasSearch = searchMatches.active && !searchMatches.error;
                     if (!hasFilters && !hasSearch) {
-                        setNodes(baseNodes);
+                        setNodes(hoverCheckboxId
+                            ? baseNodes.map((node) => node.id === hoverCheckboxId
+                                ? { ...node, data: { ...node.data, __hover_checkbox__: true } }
+                                : node)
+                            : baseNodes);
                         setEdges(edgesVisible ? baseEdges : []);
                         return;
                     }
@@ -5486,7 +5494,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const visibleSelectionIds = new Set([...matchingIds, ...containerGroupIds]);
                     setNodes(baseNodes.map((node) => ({
                         ...node,
-                        data: { ...node.data, highlightMode: visibleSelectionIds.has(node.id) ? 'selected' : 'dim' },
+                        data: { ...node.data, highlightMode: visibleSelectionIds.has(node.id) ? 'selected' : 'dim', __hover_checkbox__: node.id === hoverCheckboxId },
                         style: {
                             ...node.style,
                             opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (visibleSelectionIds.has(node.id) ? 1 : 0.18),
@@ -5733,7 +5741,10 @@ async function renderTasksGraphs(rootElement = document) {
                     setHoveredNodeId(null);
                     return;
                 }
-                applyHighlight(selectedNodeId, selectedNodeId ? hoveredNodeId : null, selectedNodeIds);
+                // Pass hoveredNodeId through even with no selection so applyHighlight
+                // can flag the hovered node's checkbox (__hover_checkbox__). When a
+                // node is selected, hover drives neighbor focus as before.
+                applyHighlight(selectedNodeId, hoveredNodeId, selectedNodeIds);
             }, [graphRevision, selectedNodeId, selectedNodeIds, hoveredNodeId, applyHighlight]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnExpand()) {
@@ -6010,8 +6021,13 @@ async function renderTasksGraphs(rootElement = document) {
                 const isChecked = data?.__checked__ === true;
                 const taskStateLabel = String(data?.__card_state__ || (isChecked ? TASKS_DEFAULT_CARD_STATES[1] : TASKS_DEFAULT_CARD_STATES[0]));
                 const taskStateColor = data?.__card_state_color__ || TASKS_DONE_ACCENT;
-                const showCheckbox = hoveredNodeId === sourceNodeId || selectedNodeId === sourceNodeId;
-                const isActiveNode = !selectedNodeId || selectedNodeId === sourceNodeId;
+                // Derive selection/hover state from data.highlightMode rather than
+                // closing over selectedNodeId/hoveredNodeId. Keeping nodeTypes stable
+                // (see useMemo below) stops React Flow from remounting every node on
+                // each hover, which was destroying the node DOM mid-click and
+                // swallowing clicks (deselect / neighbor-activate never fired).
+                const showCheckbox = highlightMode === 'selected' || highlightMode === 'selected-focus' || highlightMode === 'neighbor-focus' || data?.__hover_checkbox__ === true;
+                const isActiveNode = highlightMode === 'none' || highlightMode === 'selected' || highlightMode === 'selected-focus';
                 const linksInteractive = isActiveNode;
                 const linkKinds = Array.from(tasksNodeLinkKinds(data));
                 const nodeImage = normalizeTasksNodeImageUrl(data?.__node_image__);
@@ -6041,6 +6057,18 @@ async function renderTasksGraphs(rootElement = document) {
                     setSelectedNodeId(sourceNodeId);
                     setHoveredNodeId(null);
                 };
+                const handleSelectedNodeToggleCapture = (event) => {
+                    if (event.defaultPrevented) return;
+                    if (event.target?.closest?.('a, button, input, textarea, select, [data-vyasa-task-control="true"]')) return;
+                    if (selectedNodeIdRef.current !== sourceNodeId || selectedNodeIdsRef.current.size !== 0) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    suppressNextGraphClickRef.current = true;
+                    clearSelection('nodeBodyToggle');
+                    window.setTimeout(() => {
+                        suppressNextGraphClickRef.current = false;
+                    }, 0);
+                };
                 if (data?.__kind__ === 'ganttHeader') {
                     return React.createElement('div', {
                         style: {
@@ -6066,6 +6094,7 @@ async function renderTasksGraphs(rootElement = document) {
                         setExpanded(next);
                     };
                     return React.createElement('div', {
+                        onClickCapture: handleSelectedNodeToggleCapture,
                         style: {
                             width: '100%', height: '100%',
                             boxSizing: 'border-box',
@@ -6106,6 +6135,7 @@ async function renderTasksGraphs(rootElement = document) {
                 if (data?.__gantt) {
                     return React.createElement('div', {
                         className: 'vyasa-task-node-body',
+                        onClickCapture: handleSelectedNodeToggleCapture,
                         style: {
                             width: '100%',
                             height: '100%',
@@ -6203,6 +6233,7 @@ async function renderTasksGraphs(rootElement = document) {
                 };
                 if (isExpanded) {
                     return React.createElement('div', {
+                        onClickCapture: handleSelectedNodeToggleCapture,
                         style: {
                             width: '100%', height: '100%',
                             boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: '8px',
@@ -6219,6 +6250,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 return React.createElement('div', {
                     className: 'vyasa-task-node-body',
+                    onClickCapture: handleSelectedNodeToggleCapture,
                     style: {
                         width: '100%', height: '100%',
                         boxSizing: 'border-box',
@@ -6278,7 +6310,7 @@ async function renderTasksGraphs(rootElement = document) {
             // Fit-on-mode-change is driven from inside ReactFlowProvider via
             // FitOnNodesReady below — it waits for useNodesInitialized() so the
             // fit lands after React Flow has finished measuring node rects.
-            const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [expanded, selectedNodeId, hoveredNodeId, cardStates]);
+            const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [expanded, cardStates]);
             const edgeTypes = React.useMemo(() => ({ vyasaEdge: CustomEdge }), []);
             const FitViewHotkey = () => {
                 const reactFlow = rf.useReactFlow();
@@ -7867,7 +7899,12 @@ async function renderTasksGraphs(rootElement = document) {
                     markWidgetActive();
                     flowWrapperRef.current?.focus({ preventScroll: true });
                     markTasksFrameProbe(widgetId, flowWrapperRef.current, model, graphBaseRef.current, 'pointerdown', currentPerfViewState());
-                    if (!event.shiftKey && !event.metaKey && !event.target?.closest?.('button, input, textarea, select, a, .react-flow__controls, .vyasa-tasks-filter-card')) {
+                    // Skip hover-clear when pressing a node: clearing hover here runs
+                    // applyHighlight synchronously mid-click, which rebuilds the node
+                    // DOM under the cursor between mousedown and mouseup and drops the
+                    // click through to the pane (clearing the selection). The node
+                    // click handler manages hover itself.
+                    if (!event.shiftKey && !event.metaKey && !event.target?.closest?.('button, input, textarea, select, a, .react-flow__controls, .vyasa-tasks-filter-card, .react-flow__node')) {
                         clearGraphHoverState();
                     }
                 },
