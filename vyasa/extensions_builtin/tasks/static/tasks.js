@@ -5741,7 +5741,10 @@ async function renderTasksGraphs(rootElement = document) {
                     setHoveredNodeId(null);
                     return;
                 }
-                applyHighlight(selectedNodeId, selectedNodeId ? hoveredNodeId : null, selectedNodeIds);
+                // Pass hoveredNodeId through even with no selection so applyHighlight
+                // can flag the hovered node's checkbox (__hover_checkbox__). When a
+                // node is selected, hover drives neighbor focus as before.
+                applyHighlight(selectedNodeId, hoveredNodeId, selectedNodeIds);
             }, [graphRevision, selectedNodeId, selectedNodeIds, hoveredNodeId, applyHighlight]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnExpand()) {
