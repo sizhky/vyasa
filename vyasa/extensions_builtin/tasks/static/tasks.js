@@ -4530,6 +4530,9 @@ async function renderTasksGraphs(rootElement = document) {
             const [edgesVisible, setEdgesVisible] = React.useState(() => (
                 typeof projectionPrefs?.edgesVisible === 'boolean' ? projectionPrefs.edgesVisible : true
             ));
+            const [hoverInactiveNodes, setHoverInactiveNodes] = React.useState(() => (
+                typeof projectionPrefs?.hoverInactiveNodes === 'boolean' ? projectionPrefs.hoverInactiveNodes : true
+            ));
             const [edgeAnimationMode, setEdgeAnimationMode] = React.useState(() => (
                 normalizeTasksEdgeAnimationMode(projectionPrefs?.edgeAnimationMode, projectionPrefs?.edgeAnimationEnabled)
             ));
@@ -4699,6 +4702,7 @@ async function renderTasksGraphs(rootElement = document) {
                 );
                 setQueryBuilderEnabled(typeof nextPrefs?.queryBuilderEnabled === 'boolean' ? nextPrefs.queryBuilderEnabled : true);
                 setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
+                setHoverInactiveNodes(typeof nextPrefs?.hoverInactiveNodes === 'boolean' ? nextPrefs.hoverInactiveNodes : true);
                 setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(nextPrefs?.edgeAnimationMode, nextPrefs?.edgeAnimationEnabled));
                 setEdgeAnimationTickSteps(clampTasksEdgeAnimationSteps(nextPrefs?.edgeAnimationTickSteps));
                 setEdgeAnimationTickDuration(clampTasksEdgeAnimationDuration(nextPrefs?.edgeAnimationTickDuration));
@@ -4794,6 +4798,7 @@ async function renderTasksGraphs(rootElement = document) {
                         colorHierarchy: activeColorHierarchy,
                         filtersCollapsed,
                         edgesVisible,
+                        hoverInactiveNodes,
                         edgeAnimationEnabled,
                         edgeAnimationMode,
                         edgeAnimationTickSteps,
@@ -4828,7 +4833,7 @@ async function renderTasksGraphs(rootElement = document) {
                     slideNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes, slideNotes]);
+            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
@@ -7155,6 +7160,16 @@ async function renderTasksGraphs(rootElement = document) {
                             )
                         ),
                         ...colorLevelSlots.map((colorBy, index) => renderColorLevel(colorBy, index)),
+                        React.createElement('div', { style: { marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' } },
+                            React.createElement('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '7px', minWidth: 0, cursor: 'pointer' }, title: 'Show hover highlight on dimmed (inactive) nodes too' },
+                                React.createElement('input', {
+                                    type: 'checkbox',
+                                    checked: hoverInactiveNodes,
+                                    onChange: (event) => setHoverInactiveNodes(event.target.checked),
+                                }),
+                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, 'Hover inactive nodes')
+                            )
+                        ),
                         React.createElement('div', { style: { marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '12px' } },
                             React.createElement('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '7px', minWidth: 0 } },
                                 React.createElement('input', {
@@ -7321,7 +7336,7 @@ async function renderTasksGraphs(rootElement = document) {
                     setTasksGroupToggleHover(wrapper, hoverGroupId);
                 }
                 const liveNode = nodes.find((node) => node.id === hit.node.id) || hit.node;
-                if (!tasksGraphNodeAllowsHover(liveNode)) {
+                if (!tasksGraphNodeAllowsHover(liveNode, hoverInactiveNodes)) {
                     clearGroupHoverTooltip();
                     const blockedPayload = { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '', groupHoverChanged };
                     traceHoverFrame('blocked', blockedPayload);
@@ -7352,7 +7367,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const hitPayload = { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '', rows: rows.length, groupHoverChanged, tooltipX: Math.round(event.clientX - bounds.left + 12), tooltipY: Math.round(event.clientY - bounds.top + 18) };
                 traceHoverFrame('hit', hitPayload);
                 finishPerf('hit', hitPayload);
-            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, currentPerfViewState]);
+            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, currentPerfViewState, hoverInactiveNodes]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -7414,7 +7429,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, [expanded, selectGroupDescendants]);
             const focusNeighborEdge = React.useCallback((_, node) => {
                 if (!node?.id) return;
-                if (!tasksGraphNodeAllowsHover(node)) return;
+                if (!tasksGraphNodeAllowsHover(node, hoverInactiveNodes)) return;
                 if (!isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id))) return;
                 const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
                 if (!selectedNodeId) {
@@ -7431,16 +7446,16 @@ async function renderTasksGraphs(rootElement = document) {
                     (edge.source === selectedNodeId && edge.target === sourceNodeId) ||
                     (edge.source === sourceNodeId && edge.target === selectedNodeId)
                 );
-                if (!isNeighbor && sourceNodeId !== selectedNodeId) return;
+                if (!hoverInactiveNodes && !isNeighbor && sourceNodeId !== selectedNodeId) return;
                 if (hoverClearTimerRef.current) {
                     window.clearTimeout(hoverClearTimerRef.current);
                     hoverClearTimerRef.current = null;
                 }
                 transientGraphHoverActiveRef.current = true;
                 setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);
-            }, [expanded, selectedNodeId]);
+            }, [expanded, selectedNodeId, hoverInactiveNodes]);
             const clearNeighborEdgeFocus = React.useCallback((_, node) => {
-                if (!tasksGraphNodeAllowsHover(node)) return;
+                if (!tasksGraphNodeAllowsHover(node, hoverInactiveNodes)) return;
                 if (!isTasksGraphNodeSelectable(node?.data?.__kind__, expanded.has(node?.id))) return;
                 clearGroupHoverTooltip();
                 if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
@@ -7448,7 +7463,7 @@ async function renderTasksGraphs(rootElement = document) {
                     setHoveredNodeId(null);
                     hoverClearTimerRef.current = null;
                 }, 90);
-            }, [expanded]);
+            }, [expanded, hoverInactiveNodes]);
             const startDragSelection = React.useCallback((event) => {
                 const mode = event.metaKey ? 'lasso' : (event.shiftKey ? 'rect' : '');
                 if (!mode || (event.pointerType === 'mouse' && event.button !== 0)) return;
