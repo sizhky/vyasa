@@ -102,8 +102,8 @@ export function isTasksGraphNodeSelectable(kind, isExpanded = false) {
     return false;
 }
 
-export function tasksGraphNodeAllowsHover(node) {
-    return node?.data?.highlightMode !== 'dim';
+export function tasksGraphNodeAllowsHover(node, allowDimmed = false) {
+    return allowDimmed || node?.data?.highlightMode !== 'dim';
 }
 
 export function tasksGraphNodeHitArea(kind, isExpanded = false) {
