@@ -621,7 +621,7 @@ export function buildTaskEdgeAnchors(nodes, edges) {
             const peerRole = role === 'source' ? 'target' : 'source';
             const peerEntries = peerGroups.get(`${nodeId}:${peerRole}:${side}`) || [];
             const slotCount = entries.length + peerEntries.length;
-            const slotOffset = role === 'source' ? 0 : peerEntries.length;
+            const slotOffset = role === 'source' ? peerEntries.length : 0;
             entries.sort((a, b) => (a.sortValue - b.sortValue) || (a.edge._anchorIndex - b.edge._anchorIndex));
             const handles = entries.map(({ edge }, index) => {
                 const handleId = `${role}-${side}-${index}`;

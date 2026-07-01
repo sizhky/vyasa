@@ -4617,7 +4617,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const next = Array.isArray(current) ? current.slice() : [];
                     const key = String(value || '').trim();
                     if (key) next[index] = key;
-                    else next.splice(index);
+                    else next.splice(index, 1);
                     const normalized = normalizeTasksColorHierarchy(next, model, nodeNotes);
                     const unchanged = normalized.length === current.length && normalized.every((entry, i) => entry === current[i]);
                     logTasksPerf('state-transition', {
@@ -6730,19 +6730,37 @@ async function renderTasksGraphs(rootElement = document) {
                     return React.createElement('div', { key: `color-level-${index}`, style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                         React.createElement('span', { style: filterKeyStyle }, index === 0 ? 'Color by' : `Color ${index + 1}`),
                         React.createElement('div', { style: filterValueStackStyle },
-                            React.createElement('select', {
-                                value: colorBy || '',
-                                onChange: (event) => setActiveColorLevel(index, event.target.value),
-                                style: {
-                                    width: '100%',
-                                    minWidth: 0,
-                                    border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
-                                    borderRadius: '8px',
-                                    padding: '6px 8px',
-                                    background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
-                                    color: 'inherit',
-                                },
-                            }, selectOptions.map((option) => React.createElement('option', { key: option.key || '__none__', value: option.key }, option.label))),
+                            React.createElement('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } },
+                                React.createElement('select', {
+                                    value: colorBy || '',
+                                    onChange: (event) => setActiveColorLevel(index, event.target.value),
+                                    style: {
+                                        flex: '1 1 auto',
+                                        minWidth: 0,
+                                        border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                        borderRadius: '8px',
+                                        padding: '6px 8px',
+                                        background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                        color: 'inherit',
+                                    },
+                                }, selectOptions.map((option) => React.createElement('option', { key: option.key || '__none__', value: option.key }, option.label))),
+                                colorBy ? React.createElement('button', {
+                                    type: 'button',
+                                    title: 'Remove this color level',
+                                    'aria-label': 'Remove this color level',
+                                    onClick: () => setActiveColorLevel(index, ''),
+                                    style: {
+                                        flex: '0 0 auto',
+                                        border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                        borderRadius: '8px',
+                                        padding: '6px 9px',
+                                        background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                        color: 'inherit',
+                                        cursor: 'pointer',
+                                        lineHeight: 1,
+                                    },
+                                }, '×') : null
+                            ),
                             renderColorPalette(colorBy)
                         )
                     );
