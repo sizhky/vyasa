@@ -1819,6 +1819,7 @@ function buildTasksEgoState(sourceModel, sourceGraph, selectedIds, includeNeighb
     };
     delete model.projection_models;
     delete model.view_projections;
+    delete model.slides;
     const graph = {
         nodes: (sourceGraph.nodes || []).filter((node) => visibleNodeIds.has(node.id)),
         edges: (sourceGraph.edges || []).filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)),
@@ -4467,6 +4468,13 @@ async function renderTasksGraphs(rootElement = document) {
                 return list.filter((slide) => slide && Array.isArray(slide.nodes) && slide.nodes.length);
             }, [sourceModel, model]);
             const [slideIndex, setSlideIndex] = React.useState(-1);
+            const [slideFocusMode, setSlideFocusMode] = React.useState('off'); // 'off' | 'eg' | 'egplus'
+            const teardownInlineEgo = React.useCallback(() => {
+                wrapper.querySelectorAll('[data-tasks-inline-ego="true"]').forEach((modal) => {
+                    if (modal.__tasksEscHandler) document.removeEventListener('keydown', modal.__tasksEscHandler, true);
+                    modal.remove();
+                });
+            }, []);
             React.useEffect(() => {
                 const slide = slideIndex >= 0 ? slides[slideIndex] : null;
                 if (!slide) return;
@@ -4480,6 +4488,20 @@ async function renderTasksGraphs(rootElement = document) {
                 }, 80);
                 return () => window.clearTimeout(timer);
             }, [slideIndex, slides]);
+            // Sticky EG/EG+ focus: rebuild the inline ego layer whenever the slide or mode changes.
+            React.useEffect(() => {
+                if (egoMode) return;
+                teardownInlineEgo();
+                if (slideFocusMode === 'off') return;
+                const slide = slideIndex >= 0 ? slides[slideIndex] : null;
+                if (!slide || !Array.isArray(slide.nodes) || !slide.nodes.length) return;
+                const timer = window.setTimeout(() => {
+                    window.__vyasaTasksActions?.[widgetId]?.openEgo?.(
+                        slideFocusMode === 'egplus', slide.nodes, true, () => setSlideFocusMode('off')
+                    );
+                }, 70);
+                return () => window.clearTimeout(timer);
+            }, [slideFocusMode, slideIndex, slides, egoMode, teardownInlineEgo]);
             const [activeFilters, setActiveFilters] = React.useState(() => egoMode ? {} : (
                 projectionPrefs?.filters && typeof projectionPrefs.filters === 'object'
                     ? normalizeTasksFilterQuery(projectionPrefs.filters)
@@ -6385,6 +6407,7 @@ async function renderTasksGraphs(rootElement = document) {
                             return;
                         }
                         if (event.key === '?' || (event.key === '/' && event.shiftKey)) {
+                            if (egoModalOpen && !egoMode) return; // ego layer owns help while open
                             event.preventDefault();
                             setHelpOpen((current) => !current);
                             return;
@@ -7587,8 +7610,10 @@ async function renderTasksGraphs(rootElement = document) {
                             setSelectedNodeIds(new Set());
                             logTasksDebug('manualSelect', { nodeId });
                         },
-                        openEgo: (includeNeighbors = false) => {
-                            const egoSelection = currentSelectionIds();
+                        openEgo: (includeNeighbors = false, explicitIds = null, inline = false, onClose = null) => {
+                            const egoSelection = Array.isArray(explicitIds) && explicitIds.length
+                                ? new Set(explicitIds.map((id) => String(id || '').trim()).filter(Boolean))
+                                : currentSelectionIds();
                             logTasksDebug('openEgoAction', {
                                 widgetId,
                                 includeNeighbors,
@@ -7603,6 +7628,8 @@ async function renderTasksGraphs(rootElement = document) {
                                 graph: egoState.graph,
                                 selectedIds: Array.from(egoSelection),
                                 includeNeighbors,
+                                inline,
+                                onClose,
                             });
                         },
                         openEgoNeighbors: () => window.__vyasaTasksActions[widgetId]?.openEgo?.(true),
@@ -7808,12 +7835,53 @@ async function renderTasksGraphs(rootElement = document) {
                     },
                 }, ...children);
             };
-            const HelpPopup = () => !helpOpen ? null : window.React.createElement('div', {
-                style: { position: 'absolute', left: '12px', top: egoMode && model.ego_include_neighbors ? '58px' : '12px', zIndex: 35, width: 'min(320px, calc(100% - 24px))', padding: '10px 12px', borderRadius: '10px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 22%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 10px 24px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', pointerEvents: 'auto', fontSize: '12px', lineHeight: 1.45 }
-            }, window.React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' } },
-                window.React.createElement('strong', null, 'Graph help'),
-                window.React.createElement('button', { type: 'button', onClick: () => setHelpOpen(false), style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: 1, opacity: 0.7 } }, '×')
-            ), window.React.createElement('div', { style: { whiteSpace: 'pre-line' } }, 'Mouse\nClick node: select card or group\nClick canvas: clear selection\nShift + drag: box select\nCmd + drag: lasso select\nWheel / pinch: zoom\nDrag canvas: pan\n\nKeys\n?: toggle this help\nF: fit view\nShift + F: toggle fullscreen\nG: open EG\nShift + G: open EG+\nS: toggle filters\nE: toggle edges\n0: edge animation none / smooth / tick\nT: toggle hovered group\nI / O: expand or collapse one group depth\nU / P: unfold or collapse all groups\nArrow keys: pan\nShift + arrows: pan faster'));
+            const HelpPopup = () => {
+                if (!helpOpen) return null;
+                // Under an inline ego layer the underlying widget must stay silent so only one help shows.
+                if (!egoMode && document.querySelector('#tasks-fullscreen-modal [data-tasks-ego="true"]')) return null;
+                const R = window.React;
+                const sep = () => R.createElement('div', { style: { height: '1px', background: 'color-mix(in srgb, var(--vyasa-primary) 22%, transparent)', margin: '16px 0' } });
+                const heading = (text) => R.createElement('div', { style: { fontSize: '12px', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55, marginBottom: '10px' } }, text);
+                const row = (k, v) => R.createElement('div', { style: { display: 'flex', gap: '16px', alignItems: 'baseline', padding: '5px 0', fontSize: '16px', lineHeight: 1.5 } },
+                    R.createElement('span', { style: { flex: '0 0 118px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontWeight: 700 } }, k),
+                    R.createElement('span', { style: { flex: '1 1 auto', opacity: 0.9 } }, v)
+                );
+                return R.createElement('div', {
+                    onClick: () => setHelpOpen(false),
+                    style: { position: 'absolute', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--vyasa-ink) 32%, transparent)', backdropFilter: 'blur(3px)', pointerEvents: 'auto' }
+                }, R.createElement('div', {
+                    onClick: (event) => event.stopPropagation(),
+                    style: { width: 'min(480px, calc(100% - 32px))', maxHeight: 'calc(100% - 32px)', overflowY: 'auto', padding: '24px 28px', borderRadius: '16px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 26%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 98%, transparent)', boxShadow: '0 28px 70px rgba(0,0,0,0.32)', color: 'var(--vyasa-ink)' }
+                },
+                    R.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' } },
+                        R.createElement('strong', { style: { fontSize: '20px' } }, 'Graph help'),
+                        R.createElement('button', { type: 'button', onClick: () => setHelpOpen(false), style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '22px', lineHeight: 1, opacity: 0.6 } }, '×')
+                    ),
+                    sep(),
+                    heading('Mouse'),
+                    row('Click node', 'select card or group'),
+                    row('Click canvas', 'clear selection'),
+                    row('Shift + drag', 'box select'),
+                    row('Cmd + drag', 'lasso select'),
+                    row('Wheel / pinch', 'zoom'),
+                    row('Drag canvas', 'pan'),
+                    sep(),
+                    heading('Keys'),
+                    row('?', 'toggle this help'),
+                    row('F', 'fit view'),
+                    row('Shift + F', 'toggle fullscreen'),
+                    row('G', 'open EG'),
+                    row('Shift + G', 'open EG+'),
+                    row('S', 'toggle filters'),
+                    row('E', 'toggle edges'),
+                    row('0', 'edge animation none / smooth / tick'),
+                    row('T', 'toggle hovered group'),
+                    row('I / O', 'expand / collapse one depth'),
+                    row('U / P', 'unfold / collapse all'),
+                    row('Arrows', 'pan'),
+                    row('Shift + arrows', 'pan faster')
+                ));
+            };
             const SlideLauncher = () => {
                 if (!slides.length || slideIndex >= 0) return null;
                 return window.React.createElement('button', {
@@ -7828,8 +7896,9 @@ async function renderTasksGraphs(rootElement = document) {
                 const slide = slides[slideIndex] || {};
                 const slideDescriptionHtml = slide.__rendered_attrs__?.desc || slide.__rendered_attrs__?.description || '';
                 const slideDescriptionText = slide.desc || slide.description || '';
-                const close = () => { setSlideIndex(-1); setSelectedNodeId(null); setSelectedNodeIds(new Set()); };
+                const close = () => { setSlideFocusMode('off'); setSlideIndex(-1); setSelectedNodeId(null); setSelectedNodeIds(new Set()); };
                 const go = (delta) => setSlideIndex((index) => Math.min(slides.length - 1, Math.max(0, index + delta)));
+                const focusBtn = (active) => ({ flex: '1 1 0', height: '30px', border: `1px solid ${active ? 'var(--vyasa-primary)' : 'color-mix(in srgb, var(--vyasa-primary) 26%, transparent)'}`, background: active ? 'color-mix(in srgb, var(--vyasa-primary) 86%, transparent)' : 'color-mix(in srgb, var(--vyasa-paper) 90%, transparent)', color: active ? 'var(--vyasa-paper)' : 'inherit', borderRadius: '8px', padding: '0 10px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', boxShadow: active ? '0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 22%, transparent)' : 'none' });
                 const panelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`;
                 return window.React.createElement('aside', {
                     style: { flex: `0 0 ${panelWidth}`, width: panelWidth, minWidth: 0, height: '100%', marginLeft: '-12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: '16px', borderRadius: '14px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 26%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 95%, transparent)', boxShadow: '0 14px 36px rgba(0,0,0,0.16)', pointerEvents: 'auto' },
@@ -7843,6 +7912,10 @@ async function renderTasksGraphs(rootElement = document) {
                             style: jumpSelectStyle,
                         }, slides.map((entry, index) => window.React.createElement('option', { key: entry.id || index, value: String(index) }, `${index + 1} / ${slides.length}`))),
                         window.React.createElement('button', { type: 'button', 'aria-label': 'Next slide', onClick: () => go(1), disabled: slideIndex >= slides.length - 1, style: navBtn(slideIndex >= slides.length - 1) }, '›')
+                    ),
+                    window.React.createElement('div', { style: { display: 'flex', gap: '6px', marginBottom: '10px' } },
+                        window.React.createElement('button', { type: 'button', title: "Focus this slide's nodes in a compact view (toggle)", onClick: () => setSlideFocusMode((m) => m === 'eg' ? 'off' : 'eg'), style: focusBtn(slideFocusMode === 'eg') }, 'EG'),
+                        window.React.createElement('button', { type: 'button', title: "Focus this slide's nodes plus their direct neighbors, dimmed (toggle)", onClick: () => setSlideFocusMode((m) => m === 'egplus' ? 'off' : 'egplus'), style: focusBtn(slideFocusMode === 'egplus') }, 'EG+')
                     ),
                     window.React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' } },
                         window.React.createElement('strong', { style: { fontSize: '16px' } }, slide.title || `Slide ${slideIndex + 1}`),
@@ -7979,7 +8052,7 @@ async function renderTasksGraphs(rootElement = document) {
                 window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', gap: '12px', position: 'relative' } },
                     filterPanelElement,
                     SlideShow(),
-                    window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
+                    window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(rf.Controls),
@@ -7997,7 +8070,7 @@ async function renderTasksGraphs(rootElement = document) {
                 ))
             ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', gap: '12px', position: 'relative' } },
                 filterPanelElement,
-                window.React.createElement('div', { ref: flowWrapperRef, className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
+                window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                         window.React.createElement(rf.Controls),
@@ -8138,6 +8211,12 @@ function bindPanZoomGestures(wrapper, state, { getTarget, applyState, maxScale =
 
 async function openTasksGraphModal(wrapper, options = {}) {
     if (!wrapper) return;
+    if (options.inline) {
+        document.querySelectorAll('[data-tasks-inline-ego="true"]').forEach((el) => {
+            if (el.__tasksEscHandler) document.removeEventListener('keydown', el.__tasksEscHandler, true);
+            el.remove();
+        });
+    }
     const originalTitle = options.title || wrapper.getAttribute('data-tasks-title') || 'Tasks';
     const originalPayload = options.payload || wrapper.getAttribute('data-tasks-payload');
     const originalGraph = options.graph || wrapper.getAttribute('data-tasks-graph');
@@ -8154,6 +8233,7 @@ async function openTasksGraphModal(wrapper, options = {}) {
         }
         const suspended = modal.__tasksSuspendedModal;
         if (modal.isConnected) modal.remove();
+        try { options.onClose?.(); } catch (e) { /* noop */ }
         if (suspended) {
             suspended.style.display = '';
             suspended.removeAttribute('data-tasks-suspended');
@@ -8183,12 +8263,18 @@ async function openTasksGraphModal(wrapper, options = {}) {
     modal.id = 'tasks-fullscreen-modal';
     modal.__tasksSuspendedModal = suspendedModal;
     modal.__tasksSuspendedMaximizeWrapper = suspendedMaximizeWrapper;
-    modal.className = 'fixed inset-0 z-[10000] bg-black/88 backdrop-blur-sm';
+    const inline = Boolean(options.inline);
+    const mountHost = inline ? (wrapper.querySelector('[data-tasks-canvas="true"]') || wrapper) : document.body;
+    if (inline && getComputedStyle(mountHost).position === 'static') mountHost.style.position = 'relative';
+    if (inline) { modal.setAttribute('data-tasks-inline-ego', 'true'); modal.style.zIndex = '9999'; }
+    modal.className = inline
+        ? 'absolute inset-0 overflow-hidden'
+        : 'fixed inset-0 z-[10000] bg-black/88 backdrop-blur-sm';
     modal.style.animation = 'fadeIn 0.2s ease-in';
 
     const modalContent = document.createElement('div');
     modalContent.className = 'relative w-full h-full flex flex-col';
-    modalContent.style.background = 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)';
+    modalContent.style.background = inline ? 'var(--vyasa-paper)' : 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)';
     modalContent.style.color = 'var(--vyasa-ink)';
 
     const body = document.createElement('div');
@@ -8289,7 +8375,7 @@ async function openTasksGraphModal(wrapper, options = {}) {
     body.appendChild(fullscreenWrapper);
     modalContent.appendChild(body);
     modal.appendChild(modalContent);
-    document.body.appendChild(modal);
+    mountHost.appendChild(modal);
 
     const escHandler = (e) => {
         if (e.key !== 'Escape' || !e.shiftKey) return;
@@ -8357,6 +8443,8 @@ async function openTasksEgoModal(wrapper, options = {}) {
         graph: JSON.stringify(options.graph || { nodes: [], edges: [] }),
         wrapperId: `${wrapper.id || 'tasks'}-ego-${options.includeNeighbors ? 'neighbors' : 'selected'}`,
         ego: true,
+        inline: Boolean(options.inline),
+        onClose: options.onClose,
     });
 }
 
