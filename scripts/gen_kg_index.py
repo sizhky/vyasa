@@ -131,8 +131,14 @@ def parse_schema(path: Path, facts: list):
             continue
         if s.startswith("@"):
             section = s.strip().split()[0]
+            fm = inline_attrs(s).get("fold_mode")               # @graph ... fold_mode=delta
+            if fm:
+                facts.append(fact("@graph", "fold_mode", fm))
             continue
         body = s.strip()
+        if body.startswith("fold_mode="):                       # standalone line form
+            facts.append(fact("@graph", "fold_mode", body.split("=", 1)[1].strip()))
+            continue
         if section == "@relations":
             facts.append(fact(body.split()[0], "kind", "relation"))
             continue
@@ -164,6 +170,8 @@ def parse_schema(path: Path, facts: list):
 def take_attr(lines, i):
     """Read one `key=value` or `key=|` block starting at lines[i]. Returns (key, value, next_i)."""
     m = ATTR_RE.match(lines[i])
+    if not m:
+        return "", "", i + 1
     indent, key, val = len(m.group(1)), m.group(2), m.group(3)
     if val == "|":
         body, j = [], i + 1
@@ -212,7 +220,8 @@ def parse_context(path: Path, facts: list):
             src, parts = left.strip(), right.split()
             tgt = parts[0]
             rel = parts[1] if len(parts) > 1 else "rel"
-            facts.append(fact(src, rel, tgt, ctx, ref=True))
+            op = inline_attrs(s).get("op")                     # op=- retracts this edge
+            facts.append(fact(src, rel, tgt, ctx, ref=True, op=op))
             present |= {src, tgt}
             i += 1
             continue
