@@ -5,6 +5,7 @@ import fs from 'node:fs';
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
 const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { buildTasksProjectionConfigText, parseTasksProjectionConfigText, tasksCollectSearchMatches, tasksNodeMatchesAllFilters, tasksNodeMatchesFilters, tasksSelectionClickKey } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
 
 function fakeStorage(initial = {}) {
     const values = new Map(Object.entries(initial));
@@ -42,21 +43,10 @@ test('Knowledge Graph notes backup round-trips one graph preference record', () 
 });
 
 test('Knowledge Graph search matches notes from only the supplied graph', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const start = source.indexOf('function tasksSearchNormalizeText');
-    const end = source.indexOf('function resolveTasksProjectionGroupOwnColor');
-    const factory = new Function(
-        'const tasksIsHiddenNodeMetaKey = () => false;\n'
-        + 'const tasksAttrValues = value => (Array.isArray(value) ? value : [value]).map(entry => String(entry ?? "").trim()).filter(Boolean);\n'
-        + 'const tasksLogicalNodeId = (node, fallback = "") => String(node?.__source_node_id || fallback || node?.id || "").trim();\n'
-        + source.slice(start, end)
-        + '\nreturn tasksCollectSearchMatches;'
-    );
-    const search = factory();
     const nodes = [{ id: 'current-node', data: { id: 'current-node', label: 'Current', owner: ['Yeshwanth', 'Satyasri'] } }];
-    assert.deepEqual(Array.from(search(nodes, [], 'private phrase', { 'current-node': 'private phrase' }).nodeIds), ['current-node']);
-    assert.deepEqual(Array.from(search(nodes, [], 'other phrase', { 'other-node': 'other phrase' }).nodeIds), []);
-    assert.deepEqual(Array.from(search(nodes, [], 'Satyasri').nodeIds), ['current-node']);
+    assert.deepEqual(Array.from(tasksCollectSearchMatches(nodes, [], 'private phrase', { 'current-node': 'private phrase' }).nodeIds), ['current-node']);
+    assert.deepEqual(Array.from(tasksCollectSearchMatches(nodes, [], 'other phrase', { 'other-node': 'other phrase' }).nodeIds), []);
+    assert.deepEqual(Array.from(tasksCollectSearchMatches(nodes, [], 'Satyasri').nodeIds), ['current-node']);
 });
 
 test('projection reset defaults include all authored sidebar parameters', () => {
@@ -286,21 +276,18 @@ test('task and collapsed group nodes are selectable in items graph', () => {
 });
 
 test('double click key treats expanded group title and body as same node', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const start = source.indexOf('function tasksSelectionClickKey');
-    const end = source.indexOf('function tasksNodeMetaEntries');
-    const clickKey = new Function(source.slice(start, end) + '\nreturn tasksSelectionClickKey;')();
-    assert.equal(clickKey({ id: 'group-a', data: { __kind__: 'group' } }), 'group-a');
-    assert.equal(clickKey({ id: 'group-a__title', data: { __kind__: 'groupTitle', sourceGroupId: 'group-a' } }), 'group-a');
+    assert.equal(tasksSelectionClickKey({ id: 'group-a', data: { __kind__: 'group' } }), 'group-a');
+    assert.equal(tasksSelectionClickKey({ id: 'group-a__title', data: { __kind__: 'groupTitle', sourceGroupId: 'group-a' } }), 'group-a');
 });
 
 test('edge toggle header button warns when edges are hidden', () => {
     const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const stylesheetSource = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.css', import.meta.url), 'utf8');
     assert.ok(source.includes('data-vyasa-tasks-action="${action}"'), 'header buttons carry action data');
     assert.ok(source.includes('syncTasksEdgeToggleButtons(widgetId, edgesVisible)'), 'edge button follows visibility state');
     assert.ok(source.includes('button[onclick*="toggleEdges"]'), 'sync handles old header buttons without data attrs');
     assert.ok(source.includes('data-vyasa-edges-off'), 'hidden edge state is marked on the E button');
-    assert.ok(source.includes('vyasa-edges-off-pulse'), 'hidden edge state pulses visibly');
+    assert.ok(stylesheetSource.includes('vyasa-edges-off-pulse'), 'hidden edge state pulses visibly');
 });
 
 test('collapsed groups average both primary and secondary colors', () => {
@@ -428,18 +415,6 @@ test('expanded root group keeps collapsed top-left anchored', () => {
 });
 
 test('note special filter uses derived yes/no value', async () => {
-    const fs = await import('node:fs/promises');
-    const source = await fs.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const match = source.match(/function tasksEmptyFilterQuery\(\) \{[\s\S]*?\nfunction tasksSearchNormalizeText/);
-    assert.ok(match, 'tasksNodeMatchesFilters should exist');
-    const helpers = match[0].replace(/\nfunction tasksSearchNormalizeText$/, '');
-    const factory = new Function(
-        'TASKS_HAS_NOTE_ATTR',
-        'const normalizeTasksAttrText = value => String(value ?? "").trim();\n'
-        + 'const tasksAttrValues = value => (Array.isArray(value) ? value : [value]).map(normalizeTasksAttrText).filter(Boolean);\n'
-        + `${helpers}; return { tasksNodeMatchesFilters, tasksNodeMatchesAllFilters };`
-    );
-    const { tasksNodeMatchesFilters, tasksNodeMatchesAllFilters } = factory('has_note');
     assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['yes'] }), true);
     assert.equal(tasksNodeMatchesFilters({ __has_note__: true }, { has_note: ['no'] }), false);
     assert.equal(tasksNodeMatchesFilters({ __has_note__: false }, { has_note: ['no'] }), true);
@@ -809,18 +784,8 @@ test('split-fill background composes a diagonal gradient from two colors', async
 });
 
 test('buildTasksProjectionConfigText emits a paste-ready kg.schema @views entry', async () => {
-    const fs = await import('node:fs/promises');
-    const source = await fs.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const start = source.indexOf('function tasksEmptyFilterQuery()');
-    const end = source.indexOf('function selectTasksProjectionState(');
-    assert.ok(start > 0 && end > start, 'serializer functions should exist');
-    const constants = 'const TASKS_EDGE_OPACITY_MIN = 0.05; const TASKS_EDGE_OPACITY_MAX = 1; const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;';
-    const clampEdge = source.match(/function clampTasksEdgeOpacity\(value\) \{[\s\S]*?\n\}/)?.[0];
-    const clampContent = source.match(/function clampTasksProjectionContentOpacity\(value\) \{[\s\S]*?\n\}/)?.[0];
-    assert.ok(clampEdge && clampContent, 'serializer clamp helpers should exist');
-    const animationHelpers = 'const normalizeTasksEdgeAnimationMode = (mode, enabled = true) => mode || (enabled === false ? "none" : "smooth"); const clampTasksEdgeAnimationSteps = value => Number(value); const clampTasksEdgeAnimationDuration = value => Number(value);';
-    const factory = new Function(`${constants}; ${clampEdge}; ${clampContent}; ${animationHelpers}; ${source.slice(start, end)}; return { buildTasksProjectionConfigText, parseTasksProjectionConfigText };`);
-    const { buildTasksProjectionConfigText: build, parseTasksProjectionConfigText: parse } = factory();
+    const build = buildTasksProjectionConfigText;
+    const parse = parseTasksProjectionConfigText;
 
     // Single-value filter maps to a where= line; caption with spaces is quoted.
     const single = build({
@@ -874,7 +839,7 @@ test('buildTasksProjectionConfigText emits a paste-ready kg.schema @views entry'
     assert.ok(noted.includes('\n\tfilters_collapsed=false'), 'filter drawer state emitted');
     assert.ok(noted.includes('\n\tedges_visible=false'), 'edge visibility emitted');
     assert.ok(noted.includes('\n\tedge_animation_enabled=false'), 'edge animation emitted');
-    assert.ok(noted.includes('\n\tedge_animation_mode=tick'), 'edge animation mode emitted');
+    assert.ok(noted.includes('\n\tedge_animation_mode=none'), 'disabled edge animation mode emitted');
     assert.ok(noted.includes('\n\tedge_animation_tick_steps=10'), 'edge animation steps emitted');
     assert.ok(noted.includes('\n\tedge_animation_tick_duration=1.4'), 'edge animation duration emitted');
     assert.ok(noted.includes('\n\tedge_opacity=0.37'), 'edge opacity emitted');

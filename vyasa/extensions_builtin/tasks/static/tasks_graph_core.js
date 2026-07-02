@@ -1,6 +1,6 @@
-export function clampScale(value, maxScale = 55) {
-    return Math.min(Math.max(0.1, value), maxScale);
-}
+import { clampScale, nextWheelState } from '../../../static/viewport_core.js';
+
+export { clampScale, nextWheelState };
 
 export function tasksGraphDynamicMinZoom(nodes, viewportRect, options = {}) {
     const baseMinZoom = Math.max(0.001, Number(options.baseMinZoom) || 0.05);
@@ -23,22 +23,6 @@ export function tasksGraphDynamicMinZoom(nodes, viewportRect, options = {}) {
     const graphHeight = Math.max(1, bounds.bottom - bounds.top);
     const fitZoom = Math.min((viewportWidth * targetViewportFraction) / graphWidth, (viewportHeight * targetViewportFraction) / graphHeight);
     return Math.min(baseMinZoom, Math.max(0.001, fitZoom));
-}
-
-export function nextWheelState(state, rect, point, deltaY, maxScale = 55) {
-    const mouseX = point.x - rect.left - rect.width / 2;
-    const mouseY = point.y - rect.top - rect.height / 2;
-    const oversizeFactor = Math.max(rect.width / Math.max(window.innerWidth || 1, 1), rect.height / Math.max(window.innerHeight || 1, 1), 1);
-    const zoomIntensity = Math.min(0.01 * oversizeFactor, 0.04);
-    const delta = deltaY > 0 ? 1 - zoomIntensity : 1 + zoomIntensity;
-    const scale = clampScale(state.scale * delta, maxScale);
-    const scaleFactor = scale / state.scale - 1;
-    return {
-        ...state,
-        scale,
-        translateX: state.translateX - mouseX * scaleFactor,
-        translateY: state.translateY - mouseY * scaleFactor,
-    };
 }
 
 const TASK_NODE_FONT = '600 16px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -621,7 +605,7 @@ export function buildTaskEdgeAnchors(nodes, edges) {
             const peerRole = role === 'source' ? 'target' : 'source';
             const peerEntries = peerGroups.get(`${nodeId}:${peerRole}:${side}`) || [];
             const slotCount = entries.length + peerEntries.length;
-            const slotOffset = role === 'source' ? peerEntries.length : 0;
+            const slotOffset = role === 'source' ? 0 : peerEntries.length;
             entries.sort((a, b) => (a.sortValue - b.sortValue) || (a.edge._anchorIndex - b.edge._anchorIndex));
             const handles = entries.map(({ edge }, index) => {
                 const handleId = `${role}-${side}-${index}`;
