@@ -84,15 +84,22 @@ def parse_attr_refs(path):
 
 
 def parse_schema(path):
-    """Return (declared_relations, referenced_source_files)."""
-    relations, sources = set(), {}
+    """Return (declared_relations, referenced_source_files, fold_mode)."""
+    relations, sources, fold_mode = set(), {}, "union"
     section = ""
     for line in path.read_text(encoding="utf-8").splitlines():
         s = line.strip()
         if s.startswith("@"):
             section = s.split()[0]
+            fm = re.search(r"fold_mode\s*=\s*(\S+)", s)      # @graph ... fold_mode=delta
+            if fm:
+                fold_mode = fm.group(1)
             continue
         if not s:
+            continue
+        fm = re.match(r"fold_mode\s*=\s*(\S+)", s)            # standalone line form
+        if fm:
+            fold_mode = fm.group(1)
             continue
         if section == "@relations":
             relations.add(s.split()[0])
@@ -100,7 +107,33 @@ def parse_schema(path):
             m = re.match(r"(nodes|edges|attrs|palette|cache)\s*=\s*(\S+)", s)
             if m:
                 sources[m.group(1)] = m.group(2)
-    return relations, sources
+    return relations, sources, fold_mode
+
+
+def parse_context_edges(pack):
+    """Scan *.context @edges blocks -> list of (ctx, src, tgt, rel, op)."""
+    out = []
+    for cf in sorted(pack.glob("*.context")):
+        ctx, section = cf.stem, None
+        for line in cf.read_text(encoding="utf-8").splitlines():
+            s = line.strip()
+            if not s or s.startswith("#"):
+                continue
+            if s.startswith("@context"):
+                m = re.search(r"\bid\s*=\s*(\S+)", s)
+                ctx, section = (m.group(1) if m else ctx), "@context"
+                continue
+            if s.startswith("@"):
+                section = s.split()[0]
+                continue
+            if section == "@edges" and "->" in s:
+                left, right = s.split("->", 1)
+                parts = right.split()
+                src, tgt = left.strip(), parts[0]
+                rel = parts[1] if len(parts) > 1 else "rel"
+                op = re.search(r"\bop\s*=\s*(\S+)", s)
+                out.append((ctx, src, tgt, rel, op.group(1) if op else "+"))
+    return out
 
 
 def main():
@@ -141,7 +174,8 @@ def main():
     node_ids = parse_nodes(need["kg.nodes"])
     edge_ids, edges = parse_edges(need["kg.edges"])
     node_refs, edge_refs = parse_attr_refs(need["kg.attrs"])
-    relations, sources = parse_schema(need["kg.schema"])
+    relations, sources, fold_mode = parse_schema(need["kg.schema"])
+    ctx_edges = parse_context_edges(pack)
 
     if not node_ids:
         errors.append("kg.nodes defines no nodes")
@@ -154,12 +188,34 @@ def main():
         if relations and rel not in relations:
             warnings.append(f"edge {eid}: relation '{rel}' is not declared in @relations")
 
+    # context edges: referential integrity + retraction sanity (fold_mode=delta)
+    asserted = {(s, r, t) for _, s, t, r in edges}          # base assertions
+    for ctx, src, tgt, rel, op in ctx_edges:
+        if src not in node_ids:
+            errors.append(f"context '{ctx}' edge: source '{src}' is not a defined node")
+        if tgt not in node_ids:
+            errors.append(f"context '{ctx}' edge: target '{tgt}' is not a defined node")
+        if relations and rel not in relations:
+            warnings.append(f"context '{ctx}' edge: relation '{rel}' is not declared in @relations")
+        if op == "-":
+            if fold_mode != "delta":
+                warnings.append(f"context '{ctx}': edge {src}-{rel}->{tgt} has op=- but "
+                                f"fold_mode is '{fold_mode}' — retraction is IGNORED "
+                                f"(set fold_mode=delta in @graph)")
+            if (src, rel, tgt) not in asserted:
+                errors.append(f"context '{ctx}': op=- retracts {src}-{rel}->{tgt} "
+                              f"which was never asserted (dangling retraction)")
+        else:
+            asserted.add((src, rel, tgt))                   # later contexts can retract this
+
     for nid in sorted(node_refs - node_ids):
         errors.append(f"kg.attrs references undefined node '{nid}'")
     for eid in sorted(edge_refs - edge_ids):
         errors.append(f"kg.attrs references undefined edge '{eid}'")
 
-    orphans = sorted(node_ids - {s for _, s, _, _ in edges} - {t for _, _, t, _ in edges})
+    linked = ({s for _, s, _, _ in edges} | {t for _, _, t, _ in edges}
+              | {s for _, s, _, _, _ in ctx_edges} | {t for _, _, t, _, _ in ctx_edges})
+    orphans = sorted(node_ids - linked)
     for nid in orphans:
         warnings.append(f"node '{nid}' has no edges (orphan)")
 

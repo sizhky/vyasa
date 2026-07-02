@@ -15,6 +15,8 @@ Treat code smells as first-class work, not cosmetic trivia. When a request expos
 When you notice nearby smells while doing the requested work, name them plainly and ask before fixing them unless they are required to complete the current fix. If the smell is required for the requested behavior, say that and fix it as part of the task. If it is adjacent cleanup, ask permission first with a short note like: `Found smell: <specific issue>. Fix it too?`
 
 Do not test anything by opening browser unless I ask you to do so. Any test you run should be testable in milliseconds only - like python -m or javascript's mjs etc..
+
+Testing the UI is only the user's job. You do not drive the browser (no preview/eval/click automation) to reproduce UI behavior. Instead, use query-param based file logging: add/keep `logTasksDebug`/`logTasksPerf` calls on the code path you are investigating, then ask the user to open the page with `?tasks_debug` (or `?tasks_perf`) and reproduce the interaction. Those events auto-populate an NDJSON file at `/tmp/vyasa-tasks-perf-<host>-<digest>.ndjson` (see `_perf_log_path` in `extensions_builtin/tasks/api.py`). You read that file to see what actually happened, instead of watching the screen. Give the user the exact URL + steps, wait for them to act, then `cat`/`tail` the log. When a code path lacks a log line you need, add one behind the debug gate first.
 Do not start work if commit is dirty. Make the user aware. Commit if a feature is done. Amend previous commit if the user made a follow-up request that is related to the previous commit.
 
 Run `make typecheck` (pyright, configured in `[tool.pyright]`); typing is gradual, so annotate the signature you are touching to catch misuse and don't chase the ~150 pre-existing errors.

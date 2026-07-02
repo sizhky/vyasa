@@ -285,6 +285,15 @@ test('task and collapsed group nodes are selectable in items graph', () => {
     assert.equal(isTasksGraphNodeSelectable('groupTitle'), true);
 });
 
+test('double click key treats expanded group title and body as same node', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function tasksSelectionClickKey');
+    const end = source.indexOf('function tasksNodeMetaEntries');
+    const clickKey = new Function(source.slice(start, end) + '\nreturn tasksSelectionClickKey;')();
+    assert.equal(clickKey({ id: 'group-a', data: { __kind__: 'group' } }), 'group-a');
+    assert.equal(clickKey({ id: 'group-a__title', data: { __kind__: 'groupTitle', sourceGroupId: 'group-a' } }), 'group-a');
+});
+
 test('edge toggle header button warns when edges are hidden', () => {
     const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
     assert.ok(source.includes('data-vyasa-tasks-action="${action}"'), 'header buttons carry action data');

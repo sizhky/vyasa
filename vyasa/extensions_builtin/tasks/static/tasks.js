@@ -413,6 +413,7 @@ function logTasksDebug(label, payload = {}) {
     window.__vyasaTasksDebug.events.push(event);
     if (window.__vyasaTasksDebug.events.length > 200) window.__vyasaTasksDebug.events.shift();
     console.log(`[vyasa][tasks-debug] ${label} ${JSON.stringify(payload)}`);
+    tasksPostFileLog(label, event.at, payload);
     renderTasksDebugOverlay();
     return event;
 }
@@ -424,6 +425,25 @@ function logTasksDebugVerbose(label, payload = {}) {
 
 function tasksPerfNow() {
     return window.performance ? window.performance.now() : Date.now();
+}
+
+// Ship an event to the server NDJSON log so the user can reproduce a UI
+// interaction and the agent can read what happened from the file instead of
+// driving the browser. Same file/key as perf logging; first write per page
+// truncates it.
+function tasksPostFileLog(label, at, payload = {}) {
+    const host = window.location.host;
+    const path = window.location.pathname;
+    const key = `${host}${path}`;
+    const reset = !window.__vyasaTasksPerf.fileLogReset.has(key);
+    window.__vyasaTasksPerf.fileLogReset.add(key);
+    const body = JSON.stringify({ label, at, host, path, reset, payload: payload || {} });
+    fetch('/api/tasks/perf-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: body.length < 60000,
+    }).catch(() => {});
 }
 
 function logTasksPerf(label, payload = {}) {
@@ -439,24 +459,7 @@ function logTasksPerf(label, payload = {}) {
         && label !== 'state-transition'
     ) return null;
     const event = { label, at: new Date().toISOString(), payload };
-    const host = window.location.host;
-    const path = window.location.pathname;
-    const key = `${host}${path}`;
-    const body = JSON.stringify({
-        label,
-        at: event.at,
-        host,
-        path,
-        reset: !window.__vyasaTasksPerf.fileLogReset.has(key),
-        payload,
-    });
-    window.__vyasaTasksPerf.fileLogReset.add(key);
-    fetch('/api/tasks/perf-log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-        keepalive: body.length < 60000,
-    }).catch(() => {});
+    tasksPostFileLog(label, event.at, payload);
     console.log(`[vyasa][tasks-perf] ${label} ${JSON.stringify(payload)}`);
     return event;
 }
@@ -1380,6 +1383,13 @@ function tasksAttrValues(value) {
 
 function tasksLogicalNodeId(node, fallback = '') {
     return String(node?.__source_node_id || fallback || node?.id || '').trim();
+}
+
+function tasksSelectionClickKey(node) {
+    if (!node) return '';
+    return String(node?.data?.__kind__ === 'groupTitle'
+        ? (node.data?.sourceGroupId || node.id || '')
+        : (node.id || '')).trim();
 }
 
 function tasksNodeMetaEntries(node) {
@@ -7420,10 +7430,11 @@ async function renderTasksGraphs(rootElement = document) {
                 // Detect a double-click ourselves: React Flow re-renders the node on the
                 // first click (selection -> setNodes), which replaces its DOM element and
                 // prevents the browser's native dblclick from ever firing.
+                const clickKey = tasksSelectionClickKey(node);
                 const last = lastNodeClickRef.current;
                 const now = window.performance ? window.performance.now() : 0;
-                const isDoubleClick = last && last.id === node?.id && (now - last.time) <= 400;
-                lastNodeClickRef.current = isDoubleClick ? null : { id: node?.id, time: now };
+                const isDoubleClick = last && last.id === clickKey && (now - last.time) <= 400;
+                lastNodeClickRef.current = isDoubleClick ? null : { id: clickKey, time: now };
                 if (isDoubleClick && selectGroupDescendants(node)) {
                     return;
                 }
