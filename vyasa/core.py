@@ -492,9 +492,19 @@ def _live_reload_roots():
     return roots or [get_root_folder()]
 
 
+def _kg_pack_for(path: Path):
+    """Return the enclosing `.kg` document directory for a changed inner file, else None."""
+    for parent in path.parents:
+        if parent.suffix.lower() == ".kg" and (parent / "kg.schema").is_file():
+            return parent
+    return None
+
+
 def _is_live_reload_path(path: Path):
     if any(part in set(get_config().get_reload_excludes()) for part in path.parts):
         return False
+    if _kg_pack_for(path):
+        return True
     return path.name == ".vyasa" or path.suffix in {".md", ".pdf", ".tree", ".css", ".js"}
 
 
@@ -509,10 +519,12 @@ def _live_reload_payload(changes):
         if path.name == ".vyasa" or path.suffix.lower() in {".css", ".js"}:
             hard_reload = True
             continue
-        slug = content_slug_for_path(path)
+        kg_pack = _kg_pack_for(path)
+        target = kg_pack or path
+        slug = content_slug_for_path(target)
         if slug:
             paths.append(slug)
-            if path.suffix.lower() in enabled_document_suffixes():
+            if kg_pack is not None or target.suffix.lower() in enabled_document_suffixes():
                 active_paths.append(slug)
     return {
         "paths": sorted(set(paths)),

@@ -5,7 +5,6 @@ import tempfile
 import threading
 import webbrowser
 from importlib.metadata import PackageNotFoundError, version as pkg_version
-from typing import Any
 from .config import get_config, reload_config
 from .extensions import refresh_extension_runtime
 from .logging import configure_logging
@@ -128,12 +127,11 @@ def cli():
     parser.add_argument('directory', nargs='?', help='Path to markdown files directory')
     parser.add_argument('--host', help='Server host (default: 127.0.0.1, use 0.0.0.0 for all interfaces)')
     parser.add_argument('--port', type=int, help='Server port (default: 5001)')
-    parser.add_argument('--no-reload', action='store_true', help='Disable auto-reload')
     parser.add_argument('--no-browser', action='store_true', help='Do not open the site in a browser')
     parser.add_argument('--user', help='Login username (overrides config/env)')
     parser.add_argument('--password', help='Login password (overrides config/env)')
     parser.add_argument('--show-hidden', action='store_true', help='Include hidden files and folders in listings')
-    parser.add_argument('--browser-reload', action='store_true', help='Reload browser on content file changes')
+    parser.add_argument('--no-browser-reload', action='store_true', help='Disable browser reload on content file changes (on by default)')
     parser.add_argument('--theme-debug', action='store_true', help='Show runtime theme preset switcher for debugging')
     parser.add_argument('--log-file', action='store_true', help='Write DEBUG logs to vyasa.log')
     
@@ -154,15 +152,9 @@ def cli():
     # Get host and port from arguments, config, or use defaults
     host = args.host or config.get_host()
     port = args.port or config.get_port()
-    reload = not args.no_reload
-    # The in-process git fetcher writes into .git on every cycle; under --reload
-    # the file watcher sees those writes and restarts the worker, which respawns
-    # the fetcher — a feedback loop that pins CPU/memory until the box dies. Flag
-    # reload so the fetcher refuses to start in that mode (see _start_git_fetcher).
-    if reload:
-        os.environ['VYASA_RELOAD'] = '1'
-    else:
-        os.environ.pop('VYASA_RELOAD', None)
+    # Server auto-reload is removed; the in-process git fetcher is always safe
+    # to run since the file watcher no longer restarts the worker.
+    os.environ.pop('VYASA_RELOAD', None)
 
     # Set login credentials from CLI if provided
     if args.user:
@@ -173,10 +165,9 @@ def cli():
         os.environ['VYASA_SHOW_HIDDEN'] = 'true'
         config = reload_config()
         refresh_extension_runtime(config.get_extensions_config())
-    if args.browser_reload:
-        os.environ['VYASA_BROWSER_RELOAD'] = 'true'
-        config = reload_config()
-        refresh_extension_runtime(config.get_extensions_config())
+    os.environ['VYASA_BROWSER_RELOAD'] = 'false' if args.no_browser_reload else 'true'
+    config = reload_config()
+    refresh_extension_runtime(config.get_extensions_config())
     theme_debug_enabled = args.theme_debug or str(os.environ.get('VYASA_THEME_DEBUG', '')).strip().lower() in {'true', '1', 'yes', 'on'}
     if theme_debug_enabled:
         os.environ['VYASA_THEME_DEBUG'] = 'true'
@@ -211,59 +202,13 @@ def cli():
         os.environ.pop('VYASA_BROWSER_SENTINEL', None)
     _browser_opened = False
     
-    # Configure reload to watch markdown and PDF files in the blog directory
-    reload_kwargs: dict[str, Any] = {}
-    if reload:
-        blog_root = config.get_root_folder()
-        source_dir = os.environ.get("VYASA_SOURCE_DIR", "").strip()
-        reload_dirs = [] if config.get_ignore_cwd_as_root() else [str(blog_root)]
-        reload_dirs.extend(str(path) for path in config.get_vyasa_roots())
-        if source_dir:
-            source_path = Path(source_dir).expanduser().resolve()
-            if source_path.exists():
-                reload_dirs.append(str(source_path))
-            else:
-                print(f"Warning: VYASA_SOURCE_DIR does not exist: {source_path}")
-        reload_excludes = [f"*/{name}/*" for name in config.get_reload_excludes()]
-        reload_excludes.append(".py[cod]")
-        reload_excludes.append(".sw.*")
-        reload_excludes.append("~*")
-        # Atomic sidecar writes drop a dot-prefixed temp next to the target; the
-        # ".*" include below would otherwise reload the server on every save.
-        reload_excludes.append("*.tmp")
-        # OS/editor junk that the ".*" include would otherwise pick up.
-        reload_excludes.extend([
-            ".DS_Store",
-            "*/.DS_Store",
-            ".git/*",
-            "*.swp",
-            "*.swo",
-            "Thumbs.db",
-        ])
-        reload_excludes.extend([
-            "*.db",
-            "*.db-journal",
-            "*.db-wal",
-            "*.db-shm",
-            ".vyasa-*.db",
-            ".vyasa-*.db-journal",
-            ".vyasa-*.db-wal",
-            ".vyasa-*.db-shm",
-        ])
-        reload_kwargs = {
-            "reload": True,
-            "reload_dirs": reload_dirs,
-            "reload_includes": ["*.py", "*.md", "*.pdf", "*.tree", "*.vyasa", ".vyasa", ".*"],
-            "reload_excludes": reload_excludes,
-        }
-    else:
-        reload_kwargs = {"reload": False}
-    print(f"Reload enabled: {reload} for directories: {reload_kwargs.get('reload_dirs', [])}")
-
+    # Server auto-reload is gone: all content refresh is handled by the
+    # in-process browser-reload SSE watcher (core.py). The server process
+    # never restarts on file changes; restart it manually to pick up code.
     _ensure_logging_configured()
     # Force-close lingering connections (e.g. the live-reload SSE stream) after
-    # a few seconds so --reload restarts don't hang on graceful shutdown.
-    uvicorn.run("vyasa.main:app", host=host, port=port, log_config=None, timeout_graceful_shutdown=3, **reload_kwargs)
+    # a few seconds so shutdown doesn't hang on graceful shutdown.
+    uvicorn.run("vyasa.main:app", host=host, port=port, log_config=None, timeout_graceful_shutdown=3, reload=False)
 
 if __name__ == "__main__":
     cli()
