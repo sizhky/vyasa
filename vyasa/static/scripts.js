@@ -875,6 +875,62 @@ function syncFoldAllButton(button, allOpen) {
         : '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 14 3-3 3 3"/></svg><span>Unfold all</span>';
 }
 
+function showVyasaToast(message) {
+    let toast = document.getElementById('vyasa-ui-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'vyasa-ui-toast';
+        toast.className = 'fixed top-6 right-6 z-[10000] text-xs bg-slate-900 text-white px-3 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.remove('opacity-0');
+    toast.classList.add('opacity-100');
+    clearTimeout(toast._vyasaTimer);
+    toast._vyasaTimer = setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+    }, 1600);
+}
+window.__vyasaToast = showVyasaToast;
+
+async function refreshVyasaRefSwitcher() {
+    const response = await fetch(`/_vyasa/ref-switcher?current_path=${encodeURIComponent(currentPostsSearchPath() || '')}`, { credentials: 'same-origin', cache: 'no-store' });
+    const current = document.querySelector('.vyasa-ref-switcher');
+    if (response.status === 204) {
+        current?.remove();
+        return;
+    }
+    if (!response.ok) return;
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = await response.text();
+    const next = wrapper.querySelector('.vyasa-ref-switcher');
+    if (current && next) current.replaceWith(next);
+}
+window.__vyasaRefreshRefSwitcher = refreshVyasaRefSwitcher;
+
+async function navigateVyasaRef(url) {
+    if (!url) return;
+    if (window.htmx?.ajax) {
+        await window.htmx.ajax('GET', url, { target: '#main-content', swap: 'outerHTML show:window:top settle:0.1s' });
+    } else {
+        const response = await fetch(url, { headers: { 'HX-Request': 'true' }, credentials: 'same-origin', cache: 'no-store' });
+        if (!response.ok) {
+            window.location.href = url;
+            return;
+        }
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = await response.text();
+        const nextMain = wrapper.querySelector('#main-content') || wrapper.firstElementChild;
+        const currentMain = document.getElementById('main-content');
+        if (nextMain && currentMain) currentMain.replaceWith(nextMain);
+    }
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (currentUrl !== url) window.history.pushState(null, '', url);
+    await softRefreshPostsSidebar({ reason: 'git-ref-change' });
+    await refreshVyasaRefSwitcher();
+}
+
 window.vyasaRefreshRefTree = async function(button, storageKey, refName, sidebarPath) {
     const icon = button?.querySelector?.('svg');
     icon?.classList?.add('animate-spin');
@@ -947,6 +1003,50 @@ async function softRefreshActiveContent(detail = {}) {
 window.__vyasaSoftRefreshActiveContent = softRefreshActiveContent;
 
 document.addEventListener('click', (event) => {
+    const refSelect = event.target.closest('[data-vyasa-ref-select="true"]');
+    if (refSelect) {
+        event.preventDefault();
+        event.stopPropagation();
+        const check = refSelect.querySelector('[data-ref-check]');
+        const spinner = refSelect.querySelector('[data-ref-spinner]');
+        if (check) check.style.display = 'none';
+        if (spinner) spinner.style.display = 'inline-flex';
+        try { localStorage.setItem(refSelect.dataset.storageKey || '', refSelect.dataset.refName || ''); } catch (error) {}
+        navigateVyasaRef(refSelect.dataset.refUrl || '').finally(() => {
+            if (spinner) spinner.style.display = 'none';
+            if (check) check.style.display = 'inline-flex';
+        });
+        return;
+    }
+    const refTreeRefresh = event.target.closest('[data-vyasa-ref-tree-refresh="true"]');
+    if (refTreeRefresh) {
+        event.preventDefault();
+        event.stopPropagation();
+        window.vyasaRefreshRefTree(refTreeRefresh, refTreeRefresh.dataset.storageKey || '', refTreeRefresh.dataset.refName || '', refTreeRefresh.dataset.sidebarPath || '')
+            .then(() => refreshVyasaRefSwitcher())
+            .then(() => showVyasaToast('Side tree updated'));
+        return;
+    }
+    const refRootRefresh = event.target.closest('[data-vyasa-ref-root-refresh="true"]');
+    if (refRootRefresh) {
+        event.preventDefault();
+        event.stopPropagation();
+        const icon = refRootRefresh.querySelector('svg');
+        icon?.classList?.add('animate-spin');
+        fetch(`/_vyasa/refresh-refs/root/${encodeURIComponent(refRootRefresh.dataset.root || '')}`, { method: 'GET', credentials: 'same-origin' })
+            .then(() => Promise.all([refreshVyasaRefSwitcher(), softRefreshPostsSidebar({ reason: 'git-ref-root-refresh' })]))
+            .then(() => showVyasaToast('Branches menu updated'))
+            .finally(() => icon?.classList?.remove('animate-spin'));
+        return;
+    }
+    const refHome = event.target.closest('[data-vyasa-ref-home="true"]');
+    if (refHome) {
+        event.preventDefault();
+        event.stopPropagation();
+        try { localStorage.removeItem(refHome.dataset.storageKey || ''); } catch (error) {}
+        navigateVyasaRef(refHome.dataset.refUrl || '');
+        return;
+    }
     const sidebarLocate = event.target.closest('[data-sidebar-locate-current="true"]');
     if (sidebarLocate) {
         event.preventDefault();

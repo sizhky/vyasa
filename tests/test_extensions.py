@@ -69,7 +69,7 @@ def test_extensions_default_preset_when_section_omitted(tmp_path, monkeypatch):
     assert plan.preset == "default"
     assert plan.selected_by_category["layout"] == ("default_layout",)
     assert plan.selected_by_category["render"] == ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "mdx", "html_viewer", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
-    assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "annotations", "bookmarks", "api_catalog", "filesystem_routes")
+    assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "git_refs", "annotations", "bookmarks", "api_catalog", "filesystem_routes")
     assert "annotations" in plan.enabled_ids
     assert plan.enabled_ids[-1] == "filesystem"
 
@@ -430,7 +430,7 @@ def test_disabled_pdf_viewer_removes_pdf_from_default_search(monkeypatch):
     set_extension_runtime(runtime)
     monkeypatch.setattr(
         "vyasa.extensions_builtin.default_search.search_file_records",
-        lambda query, mounts, suffixes, show_hidden, limit: seen.setdefault("suffixes", suffixes),
+        lambda query, mounts, suffixes, show_hidden, limit, exclude_paths=(): seen.setdefault("suffixes", suffixes),
     )
     try:
         assert find_default_search_matches("guide", limit=10) == (".md",)
