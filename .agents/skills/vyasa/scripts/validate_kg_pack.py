@@ -83,6 +83,52 @@ def parse_attr_refs(path):
     return node_refs, edge_refs
 
 
+def parse_display_attrs(path):
+    """Return the set of node-attr keys any view groups or colours by.
+
+    These are the dimensions a node must have a value for, or it drops out of
+    (or into a null bucket in) that view. Covers `group_by`, `color_by`, the
+    combined `group_by,color_by=`, and graph-level `default_color_by`. Edge
+    display keys (`edge_color_by`, `edge_label_from`) are intentionally skipped.
+    """
+    keys = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        m = re.match(r"([A-Za-z_,]+)\s*=\s*(\S+)", s)
+        if not m:
+            continue
+        lhs = m.group(1).split(",")
+        if any(k in ("group_by", "color_by", "default_color_by") for k in lhs):
+            keys.add(m.group(2))
+    return keys
+
+
+def parse_node_attr_coverage(path):
+    """Return {node_attr_key: set(node_ids assigned any value under it)}."""
+    cov, mode, key = {}, "node", None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        if s == "@node_attrs":
+            mode, key = "node", None
+            continue
+        if s == "@edge_attrs":
+            mode, key = "edge", None
+            continue
+        if s.startswith("@") or mode != "node":
+            continue
+        head, _, rest = s.partition(":")
+        if rest.strip() == "":
+            key = head.strip()
+            cov.setdefault(key, set())
+        elif key is not None:
+            cov[key].update(rest.split())
+    return cov
+
+
 def parse_schema(path):
     """Return (declared_relations, referenced_source_files, fold_mode)."""
     relations, sources, fold_mode = set(), {}, "union"
@@ -218,6 +264,17 @@ def main():
     orphans = sorted(node_ids - linked)
     for nid in orphans:
         warnings.append(f"node '{nid}' has no edges (orphan)")
+
+    # Coverage: a node missing a value for an attr some view groups/colours by
+    # silently drops out of that view. kgval was previously blind to this.
+    display_attrs = parse_display_attrs(need["kg.schema"])
+    attr_cov = parse_node_attr_coverage(need["kg.attrs"])
+    for key in sorted(display_attrs):
+        if key not in attr_cov:
+            continue
+        for nid in sorted(node_ids - attr_cov[key]):
+            warnings.append(f"node '{nid}' has no '{key}' value, but a view "
+                            f"groups/colours by '{key}' — it drops out of that view")
 
     for key in ("nodes", "edges", "attrs", "palette"):
         ref = sources.get(key)
