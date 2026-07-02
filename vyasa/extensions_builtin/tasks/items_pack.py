@@ -140,24 +140,52 @@ def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
     return graph
 
 
+def _fold_contexts(contexts: list[KgContext], active: KgContext, fold_mode: str) -> list[dict]:
+    """Fold every context up to (and including) the active seq into one edge set.
+
+    union: every asserted edge persists (lifecycle shown via node status, not removal).
+    delta: an ``op=-`` edge retracts the matching prior assertion.
+    Node attrs are folded separately by replaying ``_apply_context_attrs`` in seq order.
+    """
+    edges: dict[tuple[str, str, str], dict] = {}
+    for ctx in contexts:
+        if ctx.seq > active.seq:
+            continue
+        for edge in ctx.edges:
+            source = edge.get("source")
+            target = edge.get("target")
+            if not isinstance(source, str) or not isinstance(target, str):
+                continue
+            key = (source, str(edge.get("relation", "")), target)
+            if fold_mode == "delta" and edge.get("op") == "-":
+                edges.pop(key, None)
+            else:
+                edges[key] = edge
+    return list(edges.values())
+
+
 def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: str = "") -> dict[str, Any]:
     contexts = _discover_contexts(schema_path, schema.graph.get("contexts", ""))
     active = _default_context(contexts, context_id or schema.graph.get("default_context", "latest"))
+    fold_mode = schema.graph.get("fold_mode", "union")
+    folded = [ctx for ctx in contexts if ctx.seq <= active.seq]
+    edges = _fold_contexts(contexts, active, fold_mode)
     nodes_by_id = {node["id"]: node for node in read_nodes(_resolve(schema_path, schema.nodes))}
-    edges_by_id = {edge["id"]: edge for edge in active.edges}
+    edges_by_id = {edge["id"]: edge for edge in edges}
     index_attributes: list[str] = []
     if schema.attrs:
         indexed = apply_attrs(_resolve(schema_path, schema.attrs), nodes_by_id, edges_by_id)
         index_attributes.extend(indexed.get("node", []))
-    _apply_context_attrs(active, nodes_by_id)
-    _apply_status_defaults(schema, nodes_by_id, active.edges)
-    present = {node_id for edge in active.edges for node_id in (edge.get("source"), edge.get("target")) if node_id}
+    for ctx in folded:
+        _apply_context_attrs(ctx, nodes_by_id)
+    _apply_status_defaults(schema, nodes_by_id, edges)
+    present = {node_id for edge in edges for node_id in (edge.get("source"), edge.get("target")) if node_id}
     graph = {
         "id": schema.graph.get("id", ""),
         "title": schema.graph.get("title", ""),
         "groups": [],
         "tasks": [node for node_id, node in nodes_by_id.items() if node_id in present],
-        "dependency_edges": active.edges,
+        "dependency_edges": edges,
         "view_projections": [_projection(view) for view in schema.views],
         "slides": active.slides or schema.slides,
         "default_projection": schema.graph.get("initial_view", schema.views[0].id if schema.views else ""),
@@ -170,8 +198,9 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
     if active.palette or schema.palette:
         graph["color_palette_source"] = str(_resolve(schema_path, active.palette or schema.palette))
     graph["kg_schema"] = str(schema_path)
-    graph["kg_sources"] = {"base": {"context": active.id}}
-    graph["index_attributes"] = list(dict.fromkeys(index_attributes + list(active.node_attrs.keys()) + ["status"]))
+    graph["kg_sources"] = schema.sources or {"base": {"context": active.id}}
+    folded_attr_keys = [key for ctx in folded for key in ctx.node_attrs.keys()]
+    graph["index_attributes"] = list(dict.fromkeys(index_attributes + folded_attr_keys + ["status"]))
     graph["filter_attributes"] = graph["index_attributes"]
     return graph
 

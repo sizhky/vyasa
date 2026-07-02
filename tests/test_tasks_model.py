@@ -1,5 +1,6 @@
 import json
 
+from scripts.kg_query import Index, run
 from vyasa.extensions_builtin.tasks.model import parse_tasks_text
 from vyasa.extensions_builtin.tasks.layout import build_collapsed_graph
 
@@ -702,3 +703,61 @@ a1 -> b1
     collapsed = build_collapsed_graph(model)
 
     assert {"source": "alpha", "target": "beta", "kind": "collapsed-proxy"} in collapsed["edges"]
+
+
+def write_query_index(tmp_path):
+    path = tmp_path / "kg.index"
+    path.write_text(
+        "\n".join(
+            [
+                "e=@graph a=fold_mode v=delta",
+                "e=requires a=kind v=relation",
+                "e=uses a=kind v=relation",
+                "e=ships_in a=kind v=relation",
+                "e=day1 a=seq v=1 c=day1",
+                "e=day2 a=seq v=2 c=day2",
+                "e=day3 a=seq v=3 c=day3",
+                "e=password a=label v=Password",
+                "e=sso a=label v=SSO",
+                "e=loginForm a=label v=LoginForm",
+                "e=checkout a=label v=Checkout",
+                "e=mobileApp a=label v=MobileApp",
+                "e=adminApp a=label v=AdminApp",
+                "e=loginForm a=requires v=@password c=day1",
+                "e=checkout a=uses v=@loginForm c=day1",
+                "e=mobileApp a=ships_in v=@checkout c=day1",
+                "e=adminApp a=uses v=@loginForm c=day3",
+                "e=loginForm a=requires v=@password c=day2 op=-",
+                "e=loginForm a=requires v=@sso c=day2",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_kg_query_incoming_uses_folded_delta_edges(tmp_path):
+    rows = run(Index(write_query_index(tmp_path)), "nodes | where id=password | incoming requires | select id")
+
+    assert rows == []
+
+
+def test_kg_query_incoming_star_respects_asof_bound(tmp_path):
+    rows = run(Index(write_query_index(tmp_path)), "nodes asof day1 | where id=password | incoming* requires | select id")
+
+    assert rows == [{"id": "loginForm"}]
+
+
+def test_kg_query_impact_returns_breadth_layers_from_active_graph(tmp_path):
+    rows = run(
+        Index(write_query_index(tmp_path)),
+        "nodes | where id=sso | impact requires,uses,ships_in depth=3 | select id impact_depth impact_via",
+    )
+
+    assert rows == [
+        {"id": "loginForm", "impact_depth": 1, "impact_via": "requires"},
+        {"id": "adminApp", "impact_depth": 2, "impact_via": "uses"},
+        {"id": "checkout", "impact_depth": 2, "impact_via": "uses"},
+        {"id": "mobileApp", "impact_depth": 3, "impact_via": "ships_in"},
+    ]

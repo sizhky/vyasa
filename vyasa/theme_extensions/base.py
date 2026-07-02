@@ -25,14 +25,12 @@ def load_theme_toml(theme_name: str, base_dir: Path | None = None) -> dict[str, 
     if base_dir:
         preset_file = base_dir / ".vyasa-themes" / f"{name}.toml"
         if preset_file.exists():
-            with open(preset_file, "rb") as f:
-                theme = tomllib.load(f)
-                return {**theme, **normalize_theme_primary(theme.get("theme_primary", ""))}
+            theme = tomllib.loads(preset_file.read_text(encoding="utf-8"))
+            return {**normalize_theme_primary(theme.get("theme_primary", "")), **theme}
     package_file = resources.files("vyasa.themes").joinpath(f"{name}.toml")
     if package_file.is_file():
-        with package_file.open("rb") as f:
-            theme = tomllib.load(f)
-            return {**theme, **normalize_theme_primary(theme.get("theme_primary", ""))}
+        theme = tomllib.loads(package_file.read_text(encoding="utf-8"))
+        return {**normalize_theme_primary(theme.get("theme_primary", "")), **theme}
     return {}
 
 

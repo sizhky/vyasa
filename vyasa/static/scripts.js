@@ -903,6 +903,49 @@ window.vyasaRefreshRefTree = async function(button, storageKey, refName, sidebar
     }
 };
 
+async function softRefreshPostsSidebar(detail = {}) {
+    console.info('[vyasa] soft reload posts tree', detail);
+    const sidebarPath = currentPostsSearchPath();
+    const url = `/_sidebar/posts?current_path=${encodeURIComponent(sidebarPath || '')}`;
+    const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
+    if (!response.ok) return;
+    const html = await response.text();
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    const nextSidebar = wrapper.querySelector('#posts-sidebar');
+    const currentSidebar = document.getElementById('posts-sidebar');
+    if (nextSidebar && currentSidebar) currentSidebar.replaceWith(nextSidebar);
+    const mobileBody = document.querySelector('#mobile-posts-panel .vyasa-mobile-panel-body');
+    if (mobileBody && nextSidebar) mobileBody.innerHTML = nextSidebar.innerHTML;
+    initPostsSidebarAutoReveal();
+    initFolderChevronState();
+    initFolderHoverExpand(document);
+    syncPostsHoverToggleButtons(document);
+    window.__vyasaInitBookmarksButtons?.(document);
+}
+window.__vyasaSoftRefreshPostsSidebar = softRefreshPostsSidebar;
+
+async function softRefreshActiveContent(detail = {}) {
+    if (!window.location.pathname.startsWith('/posts/')) return;
+    const activePath = currentPostsSearchPath();
+    const changed = Array.isArray(detail.activePaths) ? detail.activePaths : [];
+    if (!changed.length || !changed.includes(activePath)) return;
+    console.info('[vyasa] soft reload active content', { activePath, detail });
+    if (window.htmx?.ajax) {
+        await window.htmx.ajax('GET', window.location.href, { target: '#main-content', swap: 'outerHTML show:window:top settle:0.1s' });
+        return;
+    }
+    const response = await fetch(window.location.href, { headers: { 'HX-Request': 'true' }, credentials: 'same-origin', cache: 'no-store' });
+    if (!response.ok) return;
+    const html = await response.text();
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    const nextMain = wrapper.querySelector('#main-content') || wrapper.firstElementChild;
+    const currentMain = document.getElementById('main-content');
+    if (nextMain && currentMain) currentMain.replaceWith(nextMain);
+}
+window.__vyasaSoftRefreshActiveContent = softRefreshActiveContent;
+
 document.addEventListener('click', (event) => {
     const sidebarLocate = event.target.closest('[data-sidebar-locate-current="true"]');
     if (sidebarLocate) {

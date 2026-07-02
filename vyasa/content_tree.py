@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Literal, Protocol
+from typing import Callable, Literal, Protocol, cast
 
 from .helpers import (
     _effective_abbreviations,
@@ -132,14 +133,14 @@ class ContentTree:
                 if not kind:
                     continue
                 doc_slug = self._slug_for_path(path)
-                return ResolvedDocument(doc_slug or clean_slug, path, kind, content_url_for_slug(doc_slug or clean_slug, prefix="/posts"))
+                return ResolvedDocument(doc_slug or clean_slug, path, cast(ContentKind, kind), content_url_for_slug(doc_slug or clean_slug, prefix="/posts"))
         folder_path = self._path_for_slug(clean_slug)
         if folder_path and folder_path.exists() and folder_path.is_dir():
             note = self.find_folder_note(clean_slug)
             if note:
                 note_slug = self._slug_for_path(note)
                 if note_slug:
-                    return ResolvedDocument(note_slug, note, document_kind_for_path(note) or "markdown", content_url_for_slug(note_slug), folder_note=note)
+                    return ResolvedDocument(note_slug, note, cast(ContentKind, document_kind_for_path(note) or "markdown"), content_url_for_slug(note_slug), folder_note=note)
             return ResolvedDocument(clean_slug, folder_path, "folder", content_url_for_slug(clean_slug))
         return None
 
@@ -164,12 +165,29 @@ class ContentTree:
         next_entry = entries[idx + 1] if idx < len(entries) - 1 else None
         return prev_entry, next_entry
 
-    def fingerprint(self) -> float:
+    def fingerprint(self) -> tuple[float, float, int]:
         mtimes: list[float] = []
+        dir_mtimes: list[float] = []
+        entry_count = 0
         for _, root in self._mounts():
+            root = Path(root)
+            for current, dirs, _files in os.walk(root):
+                current_path = Path(current)
+                dirs[:] = [
+                    name for name in dirs
+                    if not should_exclude_dir(name, self.excluded_dirs)
+                    and (self.show_hidden or not name.startswith("."))
+                ]
+                try:
+                    dir_mtimes.append(current_path.stat().st_mtime)
+                    entry_count += len(dirs)
+                except OSError:
+                    continue
             for suffix in (*self.allowed_suffixes, ".vyasa"):
-                mtimes.extend(p.stat().st_mtime for p in iter_visible_files(root, (suffix,), True))
-        return max(mtimes, default=0)
+                files = list(iter_visible_files(root, (suffix,), True))
+                entry_count += len(files)
+                mtimes.extend(p.stat().st_mtime for p in files)
+        return (max(mtimes, default=0), max(dir_mtimes, default=0), entry_count)
 
     def _folder_for_slug(self, slug: str | Path) -> Path | None:
         clean_slug = str(slug).strip("/")
@@ -228,7 +246,8 @@ class ContentTree:
             raise ValueError(f"unsupported document suffix: {path.suffix}")
         route = content_url_for_slug(slug, prefix="/posts")
         visible = self.visibility.can_read(route, roles)
-        return ContentEntry(slug, path, kind, self._title_for_file(path, kind), route, visible, False)
+        content_kind = cast(ContentKind, kind)
+        return ContentEntry(slug, path, content_kind, self._title_for_file(path, content_kind), route, visible, False)
 
     def _is_document_path(self, path: Path) -> bool:
         if path.suffix.lower() not in self.allowed_suffixes:
@@ -415,15 +434,15 @@ def _resolve_ref_blob_rel(backend, rel: str, ref: str) -> tuple[str, ContentKind
         suffix = rel[rel.rindex("."):].lower()
         kind = document_kind_for_suffix(suffix)
         if kind and backend.stat_kind(rel, ref) == "file":
-            return rel, kind
+            return rel, cast(ContentKind, kind)
         if suffix == ".kg" and kind and backend.stat_kind(rel, ref) == "dir" and backend.stat_kind(f"{rel}/kg.schema", ref) == "file":
-            return rel, kind
+            return rel, cast(ContentKind, kind)
     for suffix in enabled_document_suffixes():
         candidate = f"{rel}{suffix}"
         if backend.stat_kind(candidate, ref) == "file":
-            return candidate, document_kind_for_suffix(suffix) or "markdown"
+            return candidate, cast(ContentKind, document_kind_for_suffix(suffix) or "markdown")
         if suffix == ".kg" and backend.stat_kind(candidate, ref) == "dir" and backend.stat_kind(f"{candidate}/kg.schema", ref) == "file":
-            return candidate, document_kind_for_suffix(suffix) or "kg"
+            return candidate, cast(ContentKind, document_kind_for_suffix(suffix) or "kg")
     note = _git_folder_note(backend, rel, ref)
     if note:
         return note, "markdown"

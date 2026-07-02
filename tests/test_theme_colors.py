@@ -1,4 +1,5 @@
 from vyasa.theme_colors import normalize_theme_primary
+from vyasa.theme_extensions.base import load_theme_toml
 
 
 def test_normalize_theme_primary_sets_constant_lightness_band():
@@ -21,3 +22,11 @@ def test_normalize_theme_primary_picks_higher_contrast_text_for_muted_green():
     theme = normalize_theme_primary("#45655b")
 
     assert theme["theme_primary_text"] == "#f2f4f3"
+
+
+def test_true_amoled_black_preserves_explicit_black_dark_surfaces():
+    theme = load_theme_toml("true-amoled-black")
+
+    assert theme["theme_dark_paper"] == "#000000"
+    assert theme["theme_dark_paper_low"] == "#000000"
+    assert theme["theme_dark_code_bg"] == "#000000"
