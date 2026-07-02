@@ -7789,6 +7789,15 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             };
             const GroupHoverTooltip = () => {
+                const tooltipRef = window.React.useRef(null);
+                const [measuredSize, setMeasuredSize] = window.React.useState({ width: 0, height: 0 });
+                window.React.useLayoutEffect(() => {
+                    const rect = tooltipRef.current?.getBoundingClientRect?.();
+                    if (!rect) return;
+                    const width = Math.ceil(rect.width);
+                    const height = Math.ceil(rect.height);
+                    if (width !== measuredSize.width || height !== measuredSize.height) setMeasuredSize({ width, height });
+                }, [groupHoverTooltip, measuredSize.width, measuredSize.height]);
                 if (!groupHoverTooltip) return null;
                 const rows = Array.isArray(groupHoverTooltip.rows) ? groupHoverTooltip.rows : [];
                 const image = normalizeTasksNodeImageUrl(groupHoverTooltip.image);
@@ -7804,8 +7813,11 @@ async function renderTasksGraphs(rootElement = document) {
                 const wrapperWidth = Math.max(240, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().width || 0));
                 const wrapperHeight = Math.max(160, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().height || 0));
                 const maxWidth = Math.max(220, Math.min(panelWidth, wrapperWidth - 24));
-                const clampedLeft = Math.max(12, Math.min(groupHoverTooltip.x, wrapperWidth - maxWidth - 12));
-                const clampedTop = Math.max(12, Math.min(groupHoverTooltip.y, wrapperHeight - 24));
+                const maxHeight = Math.max(80, wrapperHeight - 24);
+                const tooltipWidth = Math.min(maxWidth, measuredSize.width || maxWidth);
+                const tooltipHeight = Math.min(maxHeight, measuredSize.height || maxHeight);
+                const clampedLeft = Math.max(12, Math.min(groupHoverTooltip.x, wrapperWidth - tooltipWidth - 12));
+                const clampedTop = Math.max(12, Math.min(groupHoverTooltip.y, wrapperHeight - tooltipHeight - 12));
                 const children = [
                     window.React.createElement('div', {
                         key: '__label__',
@@ -7827,6 +7839,7 @@ async function renderTasksGraphs(rootElement = document) {
                 ];
                 if (rows.length) children.push(renderTasksDetailEntries(window.React, rows, { fontSize: hoverFontSize, lineHeight: 1.35 }));
                 return window.React.createElement('div', {
+                    ref: tooltipRef,
                     style: {
                         position: 'absolute',
                         left: clampedLeft,
@@ -7834,6 +7847,8 @@ async function renderTasksGraphs(rootElement = document) {
                         zIndex: 2400,
                         pointerEvents: 'none',
                         width: `${maxWidth}px`,
+                        maxHeight: `${maxHeight}px`,
+                        overflowY: 'auto',
                         maxWidth: '100%',
                         minWidth: 'min(220px, 100%)',
                         boxSizing: 'border-box',
