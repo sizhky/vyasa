@@ -151,6 +151,7 @@ class ExtensionRuntime:
     search_result_row_decorators: list[Callable] = field(default_factory=list)
     sidebar_row_actions: list[Callable] = field(default_factory=list)
     search_result_row_actions: list[Callable] = field(default_factory=list)
+    navbar_control_providers: list[Callable] = field(default_factory=list)
     document_action_providers: list[Callable] = field(default_factory=list)
     content_mount_providers: list[Callable] = field(default_factory=list)
     content_root_resolvers: list[Callable] = field(default_factory=list)
@@ -397,6 +398,9 @@ class _NavigationRegistrar:
     def search_result_row_action(self, provider: Callable) -> None:
         self.runtime.search_result_row_actions.append(provider)
 
+    def navbar_control(self, provider: Callable) -> None:
+        self.runtime.navbar_control_providers.append(provider)
+
 
 class _DocumentRegistrar:
     def __init__(self, runtime: ExtensionRuntime, meta: ExtensionMeta, guard: _RegistrationGuard):
@@ -586,7 +590,7 @@ def default_preset_selection() -> dict[ExtensionCategory, tuple[str, ...]]:
         "home": ("blog_home",),
         "errors": ("default_errors",),
         "render": ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "mdx", "html_viewer", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon"),
-        "route": ("slides", "auth_rbac", "sidebar_routes", "annotations", "bookmarks", "api_catalog", "filesystem_routes"),
+        "route": ("slides", "auth_rbac", "sidebar_routes", "git_refs", "annotations", "bookmarks", "api_catalog", "filesystem_routes"),
         "content_source": ("filesystem",),
     }
 

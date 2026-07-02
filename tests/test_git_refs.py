@@ -303,7 +303,8 @@ def test_navbar_ref_switcher_discovers_all_git_roots(site):
         assert "repo" in html  # the git root is listed
         assert ">main<" in html and ">feature<" in html and ">v1<" in html
         assert "/posts/repo?ref=feature" in html  # ref target carries the ref as a query param
-        assert "/_vyasa/refresh-refs/root/repo" in html
+        assert 'data-vyasa-ref-root-refresh="true"' in html
+        assert 'data-root="repo"' in html
         assert "fetch('/_vyasa/refresh-refs',{method:'GET'})" not in html
     core._git_roots_with_refs.cache_clear()
 
@@ -335,7 +336,7 @@ def test_active_branch_ref_row_exposes_file_tree_refresh_action():
         "repo", "feature/tree", "repo@feature:tree/guide", True, "vyasa-ref:repo", ["feature"], frozenset(),
     )))
     assert "Refresh file tree for feature/tree" in html
-    assert "vyasaRefreshRefTree" in html
+    assert 'data-vyasa-ref-tree-refresh="true"' in html
     assert "repo@feature:tree" in html
 
 
@@ -390,14 +391,16 @@ def test_palette_source_full_slug_resolves_against_ref_root(site, tmp_path):
 
 def test_git_ref_debug_logs_are_present():
     core_source = Path("vyasa/core.py").read_text(encoding="utf-8")
+    extension_source = Path("vyasa/extensions_builtin/git_refs.py").read_text(encoding="utf-8")
+    git_refs_source = Path("vyasa/git_refs.py").read_text(encoding="utf-8")
 
-    assert '@rt("/_vyasa/refresh-refs/root/{root:path}")' in core_source
-    assert '@rt("/_vyasa/refresh-ref-tree/{path:path}")' in core_source
-    assert 'logger.info("git-ref refresh requested root={} url={}"' in core_source
-    assert 'logger.info("git-ref tree refresh root={} ref={}' in core_source
+    assert '@rt("/_vyasa/refresh-refs/root/{root:path}")' in extension_source
+    assert '@rt("/_vyasa/refresh-ref-tree/{path:path}")' in extension_source
+    assert 'logger.info("git-ref refresh requested root={} url={}"' in git_refs_source
+    assert 'logger.info("git-ref tree refresh root={} ref={}' in git_refs_source
     # clone-mount filtering now lives in git_fetcher.clone_mount_roots, shared
     # by the manual refresh handler and the background poller.
-    assert "fetch_clone_mounts(target_root)" in core_source
+    assert "fetch_clone_mounts(target_root)" in git_refs_source
     fetcher_source = Path("vyasa/git_fetcher.py").read_text(encoding="utf-8")
     assert "if target_root and alias != target_root:" in fetcher_source
     assert 'logger.info("git-ref sidebar build root=' in core_source
