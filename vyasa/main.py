@@ -5,6 +5,7 @@ import tempfile
 import threading
 import webbrowser
 from importlib.metadata import PackageNotFoundError, version as pkg_version
+from typing import Any
 from .config import get_config, reload_config
 from .extensions import refresh_extension_runtime
 from .logging import configure_logging
@@ -211,7 +212,7 @@ def cli():
     _browser_opened = False
     
     # Configure reload to watch markdown and PDF files in the blog directory
-    reload_kwargs = {}
+    reload_kwargs: dict[str, Any] = {}
     if reload:
         blog_root = config.get_root_folder()
         source_dir = os.environ.get("VYASA_SOURCE_DIR", "").strip()
@@ -252,7 +253,7 @@ def cli():
         reload_kwargs = {
             "reload": True,
             "reload_dirs": reload_dirs,
-            "reload_includes": ["*.py", "*.vyasa", ".vyasa", ".*"],
+            "reload_includes": ["*.py", "*.md", "*.pdf", "*.tree", "*.vyasa", ".vyasa", ".*"],
             "reload_excludes": reload_excludes,
         }
     else:

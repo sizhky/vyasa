@@ -270,6 +270,12 @@ hdrs = (
             window.__vyasaLiveReload = true;
             const reload = () => window.location.reload();
             const source = new EventSource("/_vyasa/reload");
+            source.addEventListener("refresh", (event) => {
+                let detail = {};
+                try { detail = JSON.parse(event.data || "{}"); } catch (error) {}
+                window.__vyasaSoftRefreshPostsSidebar?.(detail);
+                window.__vyasaSoftRefreshActiveContent?.(detail);
+            });
             source.addEventListener("reload", reload);
             source.onerror = () => setTimeout(() => fetch("/", { cache: "no-store" }).then(reload).catch(() => {}), 1000);
         })();
@@ -492,6 +498,30 @@ def _is_live_reload_path(path: Path):
     return path.name == ".vyasa" or path.suffix in {".md", ".pdf", ".tree", ".css", ".js"}
 
 
+def _live_reload_payload(changes):
+    paths = []
+    active_paths = []
+    hard_reload = False
+    for _, raw_path in changes:
+        path = Path(raw_path)
+        if not _is_live_reload_path(path):
+            continue
+        if path.name == ".vyasa" or path.suffix.lower() in {".css", ".js"}:
+            hard_reload = True
+            continue
+        slug = content_slug_for_path(path)
+        if slug:
+            paths.append(slug)
+            if path.suffix.lower() in enabled_document_suffixes():
+                active_paths.append(slug)
+    return {
+        "paths": sorted(set(paths)),
+        "activePaths": sorted(set(active_paths)),
+        "hardReload": hard_reload,
+        "revision": int(time.time() * 1000),
+    }
+
+
 async def _live_reload_events():
     yield "event: ready\ndata: ok\n\n"
     try:
@@ -502,7 +532,13 @@ async def _live_reload_events():
             yield ": keepalive\n\n"
     async for changes in awatch(*_live_reload_roots(), debounce=400):
         if any(_is_live_reload_path(Path(path)) for _, path in changes):
-            yield f"event: reload\ndata: {int(time.time())}\n\n"
+            payload = _live_reload_payload(changes)
+            if payload["hardReload"]:
+                logger.info("live reload hard revision={} paths={}", payload["revision"], payload["paths"])
+                yield f"event: reload\ndata: {payload['revision']}\n\n"
+            else:
+                logger.info("live reload soft revision={} paths={} active={}", payload["revision"], payload["paths"], payload["activePaths"])
+                yield f"event: refresh\ndata: {json.dumps(payload)}\n\n"
 
 
 @rt("/_vyasa/reload")
