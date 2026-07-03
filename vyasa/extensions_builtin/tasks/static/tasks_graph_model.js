@@ -90,7 +90,6 @@ export function normalizeTasksFilterQuery(filters) {
             not: Boolean(filters.not),
             rules: filters.rules,
         };
-        if (filters.muted) normalized.muted = true;
         return normalized;
     }
     return tasksFilterQueryFromLegacy(filters);
@@ -105,7 +104,6 @@ export function tasksFilterRuleIsActive(rule) {
 
 export function tasksFilterQueryHasRules(query) {
     const normalized = normalizeTasksFilterQuery(query);
-    if (normalized.muted) return false;
     return normalized.rules.some((rule) => {
         if (rule?.muted) return false;
         if (rule && Array.isArray(rule.rules)) return tasksFilterQueryHasRules(rule);
@@ -123,7 +121,6 @@ export function tasksFilterQueryHasAnyRules(query) {
 
 export function tasksCountFilterRules(query) {
     const normalized = normalizeTasksFilterQuery(query);
-    if (normalized.muted) return 0;
     return normalized.rules.reduce((count, rule) => {
         if (rule?.muted) return count;
         if (rule && Array.isArray(rule.rules)) return count + tasksCountFilterRules(rule);
@@ -458,4 +455,3 @@ export function parseTasksProjectionConfigText(text) {
     }
     return cfg;
 }
-

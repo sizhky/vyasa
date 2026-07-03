@@ -3531,17 +3531,26 @@ async function renderTasksGraphs(rootElement = document) {
                 return () => window.clearTimeout(timeoutId);
             }, [searchInputValue]);
             React.useEffect(() => {
-                if (egoMode || filtersCollapsed || !queryBuilderEnabled) return;
+                if (egoMode || filtersCollapsed || !queryBuilderEnabled) {
+                    logTasksDebug('queryBuilderLoadSkipped', { widgetId, egoMode, filtersCollapsed, queryBuilderEnabled });
+                    return;
+                }
                 if (window.VyasaTasksQueryBuilder?.QueryBuilder) {
+                    logTasksDebug('queryBuilderLoadReady', { widgetId, source: 'window' });
                     setQueryBuilderReady(true);
                     return;
                 }
                 let active = true;
+                logTasksDebug('queryBuilderLoadStart', { widgetId });
                 ensureTasksQueryBuilder()
                     .then((bundle) => {
+                        logTasksDebug('queryBuilderLoadFinish', { widgetId, active, ready: Boolean(bundle?.QueryBuilder) });
                         if (active && bundle?.QueryBuilder) setQueryBuilderReady(true);
                     })
-                    .catch((error) => console.error('[tasks] query builder load failed', error));
+                    .catch((error) => {
+                        logTasksDebug('queryBuilderLoadError', { widgetId, message: String(error?.message || error || '') });
+                        console.error('[tasks] query builder load failed', error);
+                    });
                 return () => { active = false; };
             }, [egoMode, filtersCollapsed, queryBuilderEnabled]);
             const effectiveQueryFilters = React.useMemo(
@@ -6069,7 +6078,11 @@ async function renderTasksGraphs(rootElement = document) {
                                     query: normalizeTasksFilterQuery(activeFilters),
                                     fields: queryBuilderFields,
                                     operators: queryBuilderOperators,
-                                    onQueryChange: (query) => setActiveFilters(normalizeTasksFilterQuery(query)),
+                                    onQueryChange: (query) => {
+                                        const normalized = normalizeTasksFilterQuery(query);
+                                        logTasksDebug('queryBuilderChange', { widgetId, rules: tasksCountFilterRules(normalized), query: normalized });
+                                        setActiveFilters(normalized);
+                                    },
                                     showNotToggle: true,
                                     showCloneButtons: false,
                                     showMuteButtons: true,

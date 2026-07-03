@@ -3,6 +3,7 @@ import html
 import json
 from pathlib import Path
 import re
+import subprocess
 from textwrap import dedent
 
 from vyasa.extensions_builtin.markdown.renderer import from_md
@@ -640,6 +641,19 @@ def test_tasks_query_builder_supports_inline_text_attrs_and_exists_operator():
     assert "if (rule.operator === 'notnull') return tasksNodeFilterAttributeExists(node, rule.field)" in source
     assert "if (rule.operator === 'matchesRegex')" in source
     assert ": null;" in core
+
+
+def test_tasks_filter_query_ignores_root_mute_but_keeps_rule_mute():
+    script = """
+        import { tasksCountFilterRules, tasksFilterQueryHasRules } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        const query = { combinator: 'and', muted: true, rules: [
+            { field: 'measure', operator: 'notnull', value: '', muted: false },
+            { field: 'status', operator: '=', value: 'todo', muted: true },
+        ] };
+        if (!tasksFilterQueryHasRules(query)) throw new Error('root mute disabled active rule');
+        if (tasksCountFilterRules(query) !== 1) throw new Error(`expected one active rule`);
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
 def test_tasks_source_supports_continuous_gradient_palettes():
