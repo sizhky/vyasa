@@ -333,6 +333,16 @@ test('drag rect selects task nodes and expanded groups', () => {
     assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 95, y1: 95, x2: 265, y2: 225 }), ['group-a', 'task-a']);
 });
 
+test('drag rect only selects group title when the whole group is covered', () => {
+    const nodes = [
+        { id: 'group-a', position: { x: 100, y: 100 }, style: { width: 160, height: 120 }, data: { __kind__: 'group' } },
+        { id: 'group-a__title', parentId: 'group-a', position: { x: 0, y: 0 }, style: { width: 160, height: 34 }, data: { __kind__: 'groupTitle', sourceGroupId: 'group-a' } },
+        { id: 'task-a', parentId: 'group-a', position: { x: 20, y: 60 }, style: { width: 80, height: 40 }, data: { __kind__: 'task' } },
+    ];
+    assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 95, y1: 95, x2: 265, y2: 140 }), []);
+    assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 95, y1: 95, x2: 265, y2: 225 }), ['group-a', 'task-a']);
+});
+
 test('polygon select requires freeform lasso to contain the whole node', () => {
     const nodes = [
         { id: 'left', position: { x: 40, y: 40 }, style: { width: 60, height: 40 }, data: { __kind__: 'task' } },

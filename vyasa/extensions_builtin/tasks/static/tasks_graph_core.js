@@ -126,6 +126,16 @@ function tasksGraphNodeAbsoluteRect(node, byId) {
     return { left: x, right: x + (Number(node?.style?.width ?? node?.width) || 0), top: y, bottom: y + (Number(node?.style?.height ?? node?.height) || 0) };
 }
 
+function tasksGraphSelectionNodeRect(node, byId) {
+    if (node?.data?.__kind__ !== 'groupTitle') return tasksGraphNodeAbsoluteRect(node, byId);
+    const sourceGroup = byId[String(node.data?.sourceGroupId || '')];
+    return sourceGroup ? tasksGraphNodeAbsoluteRect(sourceGroup, byId) : tasksGraphNodeAbsoluteRect(node, byId);
+}
+
+function tasksGraphSelectionNodeId(node) {
+    return node?.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node?.id;
+}
+
 export function selectTasksGraphNodeIdsInRect(nodes, rect) {
     const bounds = {
         left: Math.min(Number(rect?.x1) || 0, Number(rect?.x2) || 0),
@@ -134,11 +144,12 @@ export function selectTasksGraphNodeIdsInRect(nodes, rect) {
         bottom: Math.max(Number(rect?.y1) || 0, Number(rect?.y2) || 0),
     };
     const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
-    return (nodes || []).filter((node) => {
+    const ids = (nodes || []).filter((node) => {
         if (node?.data?.__kind__ !== 'task' && node?.data?.__kind__ !== 'group' && node?.data?.__kind__ !== 'groupTitle') return false;
-        const box = tasksGraphNodeAbsoluteRect(node, byId);
+        const box = tasksGraphSelectionNodeRect(node, byId);
         return box.left >= bounds.left && box.right <= bounds.right && box.top >= bounds.top && box.bottom <= bounds.bottom;
-    }).map((node) => node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id).filter(Boolean);
+    }).map(tasksGraphSelectionNodeId).filter(Boolean);
+    return Array.from(new Set(ids));
 }
 
 function pointInPolygon(point, polygon) {
@@ -159,16 +170,17 @@ export function selectTasksGraphNodeIdsInPolygon(nodes, points) {
     const polygon = Array.isArray(points) ? points.filter((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y)) : [];
     if (polygon.length < 3) return [];
     const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
-    return (nodes || []).filter((node) => {
+    const ids = (nodes || []).filter((node) => {
         if (node?.data?.__kind__ !== 'task' && node?.data?.__kind__ !== 'group' && node?.data?.__kind__ !== 'groupTitle') return false;
-        const box = tasksGraphNodeAbsoluteRect(node, byId);
+        const box = tasksGraphSelectionNodeRect(node, byId);
         return [
             { x: box.left, y: box.top },
             { x: box.right, y: box.top },
             { x: box.right, y: box.bottom },
             { x: box.left, y: box.bottom },
         ].every((point) => pointInPolygon(point, polygon));
-    }).map((node) => node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id).filter(Boolean);
+    }).map(tasksGraphSelectionNodeId).filter(Boolean);
+    return Array.from(new Set(ids));
 }
 
 export function tasksGraphStatsLabel(model) {

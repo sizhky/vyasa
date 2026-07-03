@@ -3399,6 +3399,7 @@ async function renderTasksGraphs(rootElement = document) {
             const transientGraphHoverActiveRef = React.useRef(false);
             const suppressNextGraphClickRef = React.useRef(false);
             const lastNodeClickRef = React.useRef(null);
+            const pendingNodeClickToggleTimerRef = React.useRef(null);
             const activeProjection = React.useMemo(() => {
                 const projections = Array.isArray(viewerState.model?.view_projections) ? viewerState.model.view_projections : [];
                 const id = String(activeProjectionId || '').trim();
@@ -3586,6 +3587,56 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 return filteredSelectionIds();
             }, [expanded, filteredSelectionIds]);
+            const currentHighlightedFitNodes = React.useCallback(() => {
+                const selectedIds = currentSelectionIds();
+                if (!selectedIds.size) return [];
+                const fitIds = new Set(selectedIds);
+                for (const selectedId of selectedIds) {
+                    for (const descendantId of collectTasksGroupDescendantIds(selectedId, model)) fitIds.add(descendantId);
+                }
+                return (graphBaseRef.current.nodes || []).filter((node) => (
+                    node?.id
+                    && node.data?.__kind__ !== 'groupTitle'
+                    && fitIds.has(node.id)
+                ));
+            }, [currentSelectionIds, model]);
+            const tasksFitDebugPayload = React.useCallback((reason, matchedNodes = []) => {
+                const selectedIds = currentSelectionIds();
+                const hasQueryFilters = tasksFilterQueryHasRules(effectiveQueryFilters);
+                const hasSwatchFilters = tasksFilterQueryHasRules(activeSwatchFilters);
+                const hasSearch = searchMatches.active && !searchMatches.error;
+                return {
+                    widgetId,
+                    reason,
+                    selectedNodeId: selectedNodeIdRef.current || '',
+                    selectedNodeIds: Array.from(selectedNodeIdsRef.current || []),
+                    currentSelectionIds: Array.from(selectedIds),
+                    hasQueryFilters,
+                    hasSwatchFilters,
+                    hasSearch,
+                    searchError: searchMatches.error || '',
+                    queryRuleCount: tasksCountFilterRules(effectiveQueryFilters),
+                    swatchRuleCount: tasksCountFilterRules(activeSwatchFilters),
+                    baseNodeCount: (graphBaseRef.current.nodes || []).length,
+                    matchedNodeCount: matchedNodes.length,
+                    matchedNodeIds: matchedNodes.map((node) => node.id).slice(0, 80),
+                };
+            }, [widgetId, currentSelectionIds, effectiveQueryFilters, activeSwatchFilters, searchMatches]);
+            const fitCurrentHighlight = React.useCallback((reactFlow, options = {}) => {
+                const reason = String(options.reason || 'manual-fit');
+                if (!reactFlow) return 0;
+                const matched = currentHighlightedFitNodes();
+                const duration = Number.isFinite(Number(options.duration)) ? Number(options.duration) : 200;
+                logTasksDebug('fitCurrentHighlight', {
+                    ...tasksFitDebugPayload(reason, matched),
+                    hasReactFlow: Boolean(reactFlow),
+                    duration,
+                });
+                reactFlow.fitView(matched.length
+                    ? { nodes: matched, duration, padding: options.highlightPadding ?? 0.25, includeHiddenNodes: true }
+                    : { duration, padding: options.padding ?? 0.2, includeHiddenNodes: true });
+                return matched.length;
+            }, [currentHighlightedFitNodes, tasksFitDebugPayload]);
             React.useEffect(() => {
                 const validFilterKeys = new Set(tasksFilterOptions(model).map((option) => option.key));
                 setActiveFilters((current) => tasksPruneFilterQueryFields(current, validFilterKeys));
@@ -4609,42 +4660,43 @@ async function renderTasksGraphs(rootElement = document) {
                 };
             }, [graphRevision, expanded]);
             React.useEffect(() => {
-                if (lastGraphRevisionCauseRef.current === 'visual') return;
                 if (!shouldAutoFitTasksOnFilter()) return;
                 const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters);
                 const hasSearch = searchMatches.active && !searchMatches.error;
                 if (!hasFilters && !hasSearch) return;
                 const reactFlow = reactFlowApiRef.current;
-                const matchedNodes = (graphBaseRef.current.nodes || []).filter((node) => {
-                    if (!node?.id || node.data?.__kind__ === 'groupTitle') return false;
-                    const filterHit = hasFilters ? tasksNodeMatchesAllFilters(node.data, effectiveQueryFilters, activeSwatchFilters) : true;
-                    const searchHit = hasSearch ? searchMatches.nodeIds.has(node.id) : true;
-                    return filterHit && searchHit;
+                const matchedNodes = currentHighlightedFitNodes();
+                logTasksDebug('fitFilterEffectCheck', {
+                    ...tasksFitDebugPayload('filter-effect', matchedNodes),
+                    hasReactFlow: Boolean(reactFlow),
+                    autoFitOnFilter: shouldAutoFitTasksOnFilter(),
                 });
                 if (!reactFlow || matchedNodes.length === 0) return;
                 let rafId = window.requestAnimationFrame(() => {
+                    logTasksDebug('fitFilterEffectRun', tasksFitDebugPayload('filter-effect-run', matchedNodes));
                     reactFlow.fitView({ nodes: matchedNodes, duration: 220, padding: 0.28, includeHiddenNodes: true });
                 });
                 return () => {
                     if (rafId !== null) window.cancelAnimationFrame(rafId);
                 };
-            }, [graphRevision, effectiveQueryFilters, activeSwatchFilters, searchMatches]);
+            }, [graphRevision, effectiveQueryFilters, activeSwatchFilters, searchMatches, currentHighlightedFitNodes]);
             React.useEffect(() => {
-                if (lastGraphRevisionCauseRef.current === 'visual') return;
                 if (!shouldAutoFitTasksOnFilter()) return;
                 if (selectedNodeId || !selectedNodeIds.size) return;
                 const reactFlow = reactFlowApiRef.current;
-                const matchedNodes = (graphBaseRef.current.nodes || []).filter((node) => (
-                    node?.id
-                    && node.data?.__kind__ !== 'groupTitle'
-                    && selectedNodeIds.has(node.id)
-                ));
+                const matchedNodes = currentHighlightedFitNodes();
+                logTasksDebug('fitMultiSelectionEffectCheck', {
+                    ...tasksFitDebugPayload('multi-selection-effect', matchedNodes),
+                    hasReactFlow: Boolean(reactFlow),
+                    autoFitOnFilter: shouldAutoFitTasksOnFilter(),
+                });
                 if (!reactFlow || matchedNodes.length === 0) return;
                 const rafId = window.requestAnimationFrame(() => {
+                    logTasksDebug('fitMultiSelectionEffectRun', tasksFitDebugPayload('multi-selection-effect-run', matchedNodes));
                     reactFlow.fitView({ nodes: matchedNodes, duration: 220, padding: 0.28, includeHiddenNodes: true });
                 });
                 return () => window.cancelAnimationFrame(rafId);
-            }, [graphRevision, selectedNodeId, selectedNodeIds]);
+            }, [graphRevision, selectedNodeId, selectedNodeIds, currentHighlightedFitNodes]);
             React.useEffect(() => {
                 let timeoutId = null;
                 const updateMinZoom = () => {
@@ -5195,13 +5247,7 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'f') {
                             event.preventDefault();
-                            const selectedIds = new Set([selectedNodeIdRef.current, ...selectedNodeIdsRef.current].filter(Boolean));
-                            const matched = selectedIds.size
-                                ? (graphBaseRef.current.nodes || []).filter((node) => node?.id && node.data?.__kind__ !== 'groupTitle' && selectedIds.has(node.id))
-                                : [];
-                            reactFlow.fitView(matched.length
-                                ? { nodes: matched, duration: 200, padding: 0.25, includeHiddenNodes: true }
-                                : { duration: 200, padding: 0.2, includeHiddenNodes: true });
+                            fitCurrentHighlight(reactFlow, { reason: 'shortcut-f' });
                             return;
                         }
                         if (event.key === '?' || (event.key === '/' && event.shiftKey)) {
@@ -5307,7 +5353,7 @@ async function renderTasksGraphs(rootElement = document) {
                     };
                     document.addEventListener('keydown', onKeyDown);
                     return () => document.removeEventListener('keydown', onKeyDown);
-                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, setFiltersCollapsedGuarded]);
+                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, setFiltersCollapsedGuarded, fitCurrentHighlight]);
                 return null;
             };
             const PanControls = () => {
@@ -5318,7 +5364,7 @@ async function renderTasksGraphs(rootElement = document) {
                     React.createElement('button', { type: 'button', onClick: () => panViewport(reactFlow, 0, 180), style: btn }, '↑'),
                     React.createElement('span'),
                     React.createElement('button', { type: 'button', onClick: () => panViewport(reactFlow, 180, 0), style: btn }, '←'),
-                    React.createElement('button', { type: 'button', onClick: () => reactFlow.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true }), style: btn }, '⌂'),
+                    React.createElement('button', { type: 'button', onClick: () => fitCurrentHighlight(reactFlow, { reason: 'pan-home' }), style: btn }, '⌂'),
                     React.createElement('button', { type: 'button', onClick: () => panViewport(reactFlow, -180, 0), style: btn }, '→'),
                     React.createElement('span'),
                     React.createElement('button', { type: 'button', onClick: () => panViewport(reactFlow, 0, -180), style: btn }, '↓'),
@@ -6262,10 +6308,21 @@ async function renderTasksGraphs(rootElement = document) {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
                 const groupId = kind === 'groupTitle' ? node.data?.sourceGroupId : node.id;
-                if (!groupId || !expanded.has(groupId)) return false;
-                const baseIds = new Set((graphBaseRef.current.nodes || []).map((n) => n.id));
-                if (!baseIds.has(groupId)) return false;
-                const ids = new Set([groupId, ...collectTasksGroupDescendantIds(groupId, model)].filter((id) => baseIds.has(id)));
+                const baseNodes = graphBaseRef.current.nodes || [];
+                const byId = Object.fromEntries(baseNodes.map((n) => [n.id, n]));
+                const groupNode = byId[groupId];
+                if (!groupId || !groupNode) return false;
+                let x = Number(groupNode.position?.x) || 0;
+                let y = Number(groupNode.position?.y) || 0;
+                let parent = groupNode.parentId ? byId[groupNode.parentId] : null;
+                while (parent) {
+                    x += Number(parent.position?.x) || 0;
+                    y += Number(parent.position?.y) || 0;
+                    parent = parent.parentId ? byId[parent.parentId] : null;
+                }
+                const width = Number(groupNode.style?.width ?? groupNode.width) || 0;
+                const height = Number(groupNode.style?.height ?? groupNode.height) || 0;
+                const ids = new Set(selectTasksGraphNodeIdsInRect(baseNodes, { x1: x, y1: y, x2: x + width, y2: y + height }));
                 logTasksDebug('selectionSetGroupDescendants', {
                     widgetId,
                     groupId,
@@ -6278,7 +6335,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId(null);
                 setSelectedNodeIds(ids);
                 return true;
-            }, [expanded, model]);
+            }, [widgetId]);
             const selectGraphNode = React.useCallback((_, node) => {
                 if (suppressNextGraphClickRef.current) {
                     suppressNextGraphClickRef.current = false;
@@ -6301,7 +6358,13 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
                 if (selectedNodeIdRef.current === sourceNodeId && selectedNodeIdsRef.current.size === 0) {
-                    clearSelection('nodeClickToggle');
+                    if (pendingNodeClickToggleTimerRef.current) window.clearTimeout(pendingNodeClickToggleTimerRef.current);
+                    pendingNodeClickToggleTimerRef.current = window.setTimeout(() => {
+                        if (selectedNodeIdRef.current === sourceNodeId && selectedNodeIdsRef.current.size === 0) {
+                            clearSelection('nodeClickToggle');
+                        }
+                        pendingNodeClickToggleTimerRef.current = null;
+                    }, 220);
                     return;
                 }
                 logTasksDebug('selectionSetNode', {
@@ -6318,6 +6381,16 @@ async function renderTasksGraphs(rootElement = document) {
                 setSelectedNodeIds(new Set());
                 setHoveredNodeId(null);
             }, [expanded, selectGroupDescendants]);
+            const doubleClickGraphNode = React.useCallback((event, node) => {
+                if (!selectGroupDescendants(node)) return;
+                if (pendingNodeClickToggleTimerRef.current) {
+                    window.clearTimeout(pendingNodeClickToggleTimerRef.current);
+                    pendingNodeClickToggleTimerRef.current = null;
+                }
+                lastNodeClickRef.current = null;
+                event.preventDefault();
+                event.stopPropagation();
+            }, [selectGroupDescendants]);
             const focusNeighborEdge = React.useCallback((_, node) => {
                 if (!node?.id) return;
                 if (!tasksGraphNodeAllowsHover(node, hoverInactiveNodes)) return;
@@ -6424,6 +6497,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, [dragSelection, expanded, extendLassoPoints]);
             React.useEffect(() => () => {
                 if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
+                if (pendingNodeClickToggleTimerRef.current) window.clearTimeout(pendingNodeClickToggleTimerRef.current);
             }, []);
             React.useEffect(() => {
                 const el = filterPanelRef.current;
@@ -6443,7 +6517,7 @@ async function renderTasksGraphs(rootElement = document) {
                 reactFlowApiRef.current = reactFlow;
                 React.useEffect(() => {
                     window.__vyasaTasksActions[widgetId] = {
-                        fit: () => reactFlow.fitView({ duration: 200, padding: 0.2, includeHiddenNodes: true }),
+                        fit: () => fitCurrentHighlight(reactFlow, { reason: 'header-fit-action' }),
                         dump: () => {
                             const payload = {
                                 latest: window.__vyasaTasksDebug.latest || {},
@@ -6538,7 +6612,7 @@ async function renderTasksGraphs(rootElement = document) {
                     return () => {
                         delete window.__vyasaTasksActions[widgetId];
                     };
-                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, activeColorBy]);
+                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, activeColorBy, fitCurrentHighlight]);
                 return null;
             };
             const FitOnNodesReady = () => {
@@ -6936,7 +7010,7 @@ async function renderTasksGraphs(rootElement = document) {
                     filterPanelElement,
                     SlideShow(),
                     window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
@@ -6954,7 +7028,7 @@ async function renderTasksGraphs(rootElement = document) {
             ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', gap: '12px', position: 'relative' } },
                 filterPanelElement,
                 window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                         window.React.createElement(rf.Controls),
                         window.React.createElement(PanControls),
