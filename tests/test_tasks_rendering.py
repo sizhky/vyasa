@@ -560,9 +560,17 @@ def test_tasks_filter_reset_button_stays_in_filter_card_header():
     panel_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
 
     assert "React.createElement('button', { type: 'button', onClick: resetProjectionControls" in panel_source
-    assert panel_source.index("activeCount ? `Filters (${activeCount})` : 'Filters'") < panel_source.index("onClick: resetProjectionControls")
-    assert panel_source.index("onClick: resetProjectionControls") < panel_source.index("'×'")
-    assert panel_source.index("onClick: resetProjectionControls") < panel_source.index("'Intensity'")
+    reset_index = panel_source.index("onClick: resetProjectionControls")
+    assert panel_source.index("activeCount ? `Filters (${activeCount})` : 'Filters'") < reset_index
+    assert reset_index < panel_source.index("'×'", reset_index)
+    assert reset_index < panel_source.index("'Intensity'")
+
+
+def test_tasks_projection_switch_preserves_filter_drawer_when_view_has_no_saved_state():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "setFiltersCollapsed((current) => (" in source
+    assert "typeof nextPrefs?.filtersCollapsed === 'boolean'\n                        ? nextPrefs.filtersCollapsed\n                        : current" in source
 
 
 def test_tasks_edge_animation_defaults_off_and_zero_cycles_smooth_then_tick():
