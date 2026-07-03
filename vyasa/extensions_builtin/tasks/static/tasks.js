@@ -34,7 +34,7 @@ const TASKS_EDGE_FOCUS_OUT_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 42%,
 const TASKS_EDGE_FOCUS_IN_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 40%, #22c55e 60%)';
 const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
 const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
-const TASKS_FILTER_PANEL_WIDTH = 320;
+const TASKS_FILTER_PANEL_WIDTH = 440;
 const TASKS_PROJECTION_GROUP_OPACITY_DEFAULT = 12;
 const TASKS_PROJECTION_UNSPECIFIED_GROUP_OPACITY_DEFAULT = 7;
 const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;
@@ -5672,7 +5672,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const QueryMuteToggle = (props) => React.createElement('label', {
                     className: props.className,
                     title: props.title,
-                    style: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', opacity: props.disabled ? 0.5 : 0.82, cursor: props.disabled ? 'not-allowed' : 'pointer' },
+                    style: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', opacity: props.disabled ? 0.5 : 0.82, cursor: props.disabled ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' },
                 },
                 React.createElement('input', {
                     type: 'checkbox',
@@ -5680,7 +5680,7 @@ async function renderTasksGraphs(rootElement = document) {
                     disabled: props.disabled,
                     onChange: (event) => props.handleOnClick?.(event),
                 }),
-                React.createElement('span', null, 'Enabled'));
+                React.createElement('span', null, 'Active'));
                 const isOpen = !filtersCollapsed;
                 const filterPanelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`;
                 return React.createElement('aside', {
@@ -6090,7 +6090,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     resetOnFieldChange: true,
                                     resetOnOperatorChange: true,
                                     listsAsArrays: true,
-                                    controlElements: { valueEditor: QueryValueEditor, muteRuleAction: QueryMuteToggle, muteGroupAction: QueryMuteToggle },
+                                    controlElements: { valueEditor: QueryValueEditor, muteRuleAction: QueryMuteToggle, muteGroupAction: null },
                                     controlClassnames: { queryBuilder: 'vyasa-tasks-query-builder' },
                                 })
                                     : React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.35 } }, 'Loading advanced filters...')

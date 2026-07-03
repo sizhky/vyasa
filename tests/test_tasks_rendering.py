@@ -358,12 +358,17 @@ def test_tasks_query_builder_can_be_disabled_per_projection():
 
 def test_tasks_query_builder_controls_use_filter_panel_css():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
-    assert ".vyasa-tasks-filter-card .betweenRules" in source
-    assert ".vyasa-tasks-filter-card .ruleGroup-notToggle" in source
-    assert ".vyasa-tasks-filter-card select" in source
-    assert ".vyasa-tasks-filter-card input[type=\"checkbox\"]" in source
-    assert "appearance: none;" in source
+    assert "const TASKS_FILTER_PANEL_WIDTH = 440;" in source
+    assert "muteGroupAction: null" in source
+    assert "React.createElement('span', null, 'Active')" in source
+    assert ".vyasa-tasks-filter-card .betweenRules" in css
+    assert ".vyasa-tasks-filter-card .ruleGroup-notToggle" in css
+    assert ".vyasa-tasks-filter-card .ruleGroup-mute" in css
+    assert ".vyasa-tasks-filter-card .rule-mute" in css
+    assert ".vyasa-tasks-filter-card input[type=\"checkbox\"]" in css
+    assert "appearance: none;" in css
 
 
 def test_tasks_source_retries_mount_after_swap_when_widget_size_is_zero():
