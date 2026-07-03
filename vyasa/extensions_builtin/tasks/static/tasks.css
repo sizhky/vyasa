@@ -281,6 +281,46 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
     min-width: 0;
     box-sizing: border-box;
 }
+.vyasa-tasks-filter-card select {
+    appearance: none;
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 34px 7px 10px !important;
+    border-color: color-mix(in srgb, var(--vyasa-primary) 28%, currentColor 12%) !important;
+    background:
+        linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
+        linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 13px) 50% / 6px 6px no-repeat,
+        color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%) !important;
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 18%, transparent),
+        0 1px 2px rgba(15, 23, 42, 0.08);
+    font-weight: 650;
+    line-height: 1.25;
+    cursor: pointer;
+}
+.vyasa-tasks-filter-card select:hover {
+    border-color: color-mix(in srgb, var(--vyasa-primary) 48%, currentColor 16%) !important;
+    background:
+        linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
+        linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 13px) 50% / 6px 6px no-repeat,
+        color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-primary) 12%) !important;
+}
+.vyasa-tasks-filter-card select:focus-visible {
+    outline: none;
+    border-color: color-mix(in srgb, var(--vyasa-primary) 72%, currentColor 12%) !important;
+    box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 24%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+}
+.vyasa-tasks-filter-card select:disabled {
+    cursor: not-allowed;
+    opacity: 0.56;
+}
+.dark .vyasa-tasks-filter-card select {
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
+        0 1px 2px rgba(0, 0, 0, 0.28);
+}
 .vyasa-tasks-filter-card input[type="checkbox"] {
     appearance: none;
     width: 16px;
