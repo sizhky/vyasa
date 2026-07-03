@@ -132,6 +132,7 @@ def cli():
     parser.add_argument('--password', help='Login password (overrides config/env)')
     parser.add_argument('--show-hidden', action='store_true', help='Include hidden files and folders in listings')
     parser.add_argument('--no-browser-reload', action='store_true', help='Disable browser reload on content file changes (on by default)')
+    parser.add_argument('--reload-source', action='store_true', help='Restart the server and reload connected browsers when Vyasa source files change')
     parser.add_argument('--theme-debug', action='store_true', help='Show runtime theme preset switcher for debugging')
     parser.add_argument('--log-file', action='store_true', help='Write DEBUG logs to vyasa.log')
     
@@ -152,9 +153,11 @@ def cli():
     # Get host and port from arguments, config, or use defaults
     host = args.host or config.get_host()
     port = args.port or config.get_port()
-    # Server auto-reload is removed; the in-process git fetcher is always safe
-    # to run since the file watcher no longer restarts the worker.
-    os.environ.pop('VYASA_RELOAD', None)
+    source_reload_enabled = bool(args.reload_source)
+    if source_reload_enabled:
+        os.environ['VYASA_RELOAD'] = 'true'
+    else:
+        os.environ.pop('VYASA_RELOAD', None)
 
     # Set login credentials from CLI if provided
     if args.user:
@@ -165,7 +168,7 @@ def cli():
         os.environ['VYASA_SHOW_HIDDEN'] = 'true'
         config = reload_config()
         refresh_extension_runtime(config.get_extensions_config())
-    os.environ['VYASA_BROWSER_RELOAD'] = 'false' if args.no_browser_reload else 'true'
+    os.environ['VYASA_BROWSER_RELOAD'] = 'true' if source_reload_enabled else ('false' if args.no_browser_reload else 'true')
     config = reload_config()
     refresh_extension_runtime(config.get_extensions_config())
     theme_debug_enabled = args.theme_debug or str(os.environ.get('VYASA_THEME_DEBUG', '')).strip().lower() in {'true', '1', 'yes', 'on'}
@@ -183,6 +186,7 @@ def cli():
     print(f"Blog title: {config.get_blog_title()}")
     print(f"Serving at: http://{host}:{port}")
     print(f"Browser reload enabled: {config.get_browser_reload_enabled()}")
+    print(f"Source reload enabled: {source_reload_enabled}")
     if host == '0.0.0.0':
         print(f"Server accessible from network at: http://<your-ip>:{port}")
 
@@ -202,13 +206,21 @@ def cli():
         os.environ.pop('VYASA_BROWSER_SENTINEL', None)
     _browser_opened = False
     
-    # Server auto-reload is gone: all content refresh is handled by the
-    # in-process browser-reload SSE watcher (core.py). The server process
-    # never restarts on file changes; restart it manually to pick up code.
+    source_root = Path(__file__).resolve().parent
+    reload_includes = ["*.py", "*.js", "*.css"]
     _ensure_logging_configured()
     # Force-close lingering connections (e.g. the live-reload SSE stream) after
     # a few seconds so shutdown doesn't hang on graceful shutdown.
-    uvicorn.run("vyasa.main:app", host=host, port=port, log_config=None, timeout_graceful_shutdown=3, reload=False)
+    uvicorn.run(
+        "vyasa.main:app",
+        host=host,
+        port=port,
+        log_config=None,
+        timeout_graceful_shutdown=3,
+        reload=source_reload_enabled,
+        reload_dirs=[str(source_root)] if source_reload_enabled else None,
+        reload_includes=reload_includes if source_reload_enabled else None,
+    )
 
 if __name__ == "__main__":
     cli()
