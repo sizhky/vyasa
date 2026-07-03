@@ -531,23 +531,131 @@ def _live_reload_payload(changes):
     }
 
 
+def _iter_watch_dirs():
+    """Directories to watch, with excluded names (`.venv`, `node_modules`, ...) pruned.
+
+    watchfiles registers an inotify watch per directory; a recursive watch over a
+    content root would register one for every `.venv`/`site-packages`/`__pycache__`
+    dir and blow past `fs.inotify.max_user_watches`. So we walk ourselves, prune the
+    excluded dir names, and watch the survivors non-recursively.
+    """
+    excludes = set(get_config().get_reload_excludes())
+    dirs = []
+    for root in _live_reload_roots():
+        root_str = str(root)
+        dirs.append(root_str)
+        for current, subdirs, _ in os.walk(root_str):
+            subdirs[:] = [d for d in subdirs if d not in excludes]
+            for d in subdirs:
+                dirs.append(os.path.join(current, d))
+    return dirs
+
+
+def _reload_event_str(changes):
+    """Build the SSE event payload for a change set, or None if nothing relevant."""
+    if not any(_is_live_reload_path(Path(path)) for _, path in changes):
+        return None
+    payload = _live_reload_payload(changes)
+    if payload["hardReload"]:
+        logger.info("live reload hard revision={} paths={}", payload["revision"], payload["paths"])
+        return f"event: reload\ndata: {payload['revision']}\n\n"
+    logger.info("live reload soft revision={} paths={} active={}", payload["revision"], payload["paths"], payload["activePaths"])
+    return f"event: refresh\ndata: {json.dumps(payload)}\n\n"
+
+
+def _changes_add_watchable_dir(changes):
+    """True if a change created a new, non-excluded directory (watch set is stale)."""
+    excludes = set(get_config().get_reload_excludes())
+    for change, path in changes:
+        # watchfiles.Change.added == 1
+        if int(change) != 1:
+            continue
+        p = Path(path)
+        if any(part in excludes for part in p.parts):
+            continue
+        if p.is_dir():
+            return True
+    return False
+
+
+class _ReloadHub:
+    """One shared file watcher fanning changes out to every SSE subscriber.
+
+    Previously each `/_vyasa/reload` connection started its own recursive `awatch`,
+    so N browser tabs meant N full watch sets over the content tree — the multiplier
+    that exhausted the inotify limit in prod. This keeps a single watcher alive while
+    anyone is subscribed.
+    """
+
+    def __init__(self):
+        self._subscribers = set()
+        self._task = None
+
+    def subscribe(self):
+        queue = asyncio.Queue()
+        self._subscribers.add(queue)
+        if self._task is None or self._task.done():
+            self._task = asyncio.create_task(self._run())
+        return queue
+
+    def unsubscribe(self, queue):
+        self._subscribers.discard(queue)
+        if not self._subscribers and self._task is not None:
+            self._task.cancel()
+            self._task = None
+
+    def _broadcast(self, message):
+        for queue in self._subscribers:
+            queue.put_nowait(message)
+
+    async def _run(self):
+        from watchfiles import awatch
+
+        while self._subscribers:
+            stop = asyncio.Event()
+            try:
+                async for changes in awatch(*_iter_watch_dirs(), debounce=400, recursive=False, stop_event=stop):
+                    message = _reload_event_str(changes)
+                    if message is not None:
+                        self._broadcast(message)
+                    if _changes_add_watchable_dir(changes):
+                        break  # new dir appeared; rebuild the watch set
+            except asyncio.CancelledError:
+                raise
+            except OSError as exc:
+                # e.g. still over the inotify limit; back off instead of crash-looping.
+                logger.error("live reload watcher failed: {}", exc)
+                await asyncio.sleep(30)
+
+
+_reload_hub = None
+
+
+def _get_reload_hub():
+    global _reload_hub
+    if _reload_hub is None:
+        _reload_hub = _ReloadHub()
+    return _reload_hub
+
+
 async def _live_reload_events():
     yield "event: ready\ndata: ok\n\n"
     try:
-        from watchfiles import awatch
+        import watchfiles  # noqa: F401
     except ImportError:
         while True:
             await asyncio.sleep(30)
             yield ": keepalive\n\n"
-    async for changes in awatch(*_live_reload_roots(), debounce=400):
-        if any(_is_live_reload_path(Path(path)) for _, path in changes):
-            payload = _live_reload_payload(changes)
-            if payload["hardReload"]:
-                logger.info("live reload hard revision={} paths={}", payload["revision"], payload["paths"])
-                yield f"event: reload\ndata: {payload['revision']}\n\n"
-            else:
-                logger.info("live reload soft revision={} paths={} active={}", payload["revision"], payload["paths"], payload["activePaths"])
-                yield f"event: refresh\ndata: {json.dumps(payload)}\n\n"
+    hub = _get_reload_hub()
+    queue = hub.subscribe()
+    try:
+        while True:
+            try:
+                yield await asyncio.wait_for(queue.get(), timeout=30)
+            except asyncio.TimeoutError:
+                yield ": keepalive\n\n"
+    finally:
+        hub.unsubscribe(queue)
 
 
 @rt("/_vyasa/reload")
