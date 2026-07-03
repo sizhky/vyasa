@@ -235,8 +235,9 @@ def parse_inline_node_attrs(path):
     `source_ref=...`, `measure=...`), as opposed to the columnar @node_attrs in
     kg.attrs. Both are node attributes; the grammar layer must see both, or a
     rule like measurable-claim-carries-measure would fire on a measure that lives
-    inline. Block scalars (`summary=|`) and their indented continuations are
-    skipped so prose containing `=` is not mistaken for an attr.
+    inline. A block scalar (`measure=|`) records its key as present (value "")
+    so a presence check still fires; its indented continuation lines are skipped
+    so prose containing `=` is not mistaken for an attr.
     """
     vals, cur, block_indent = {}, None, None
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -257,8 +258,9 @@ def parse_inline_node_attrs(path):
             continue
         k, v = m.group(1), m.group(2).strip()
         if v == "|":                                     # block scalar starts here
-            block_indent = indent
-            continue
+            vals.setdefault(k, {}).setdefault("", set()).add(cur)  # record presence; a
+            block_indent = indent                        # multiline inline attr (e.g.
+            continue                                      # measure=|) still counts as set
         vals.setdefault(k, {}).setdefault(v, set()).add(cur)
     return vals
 
