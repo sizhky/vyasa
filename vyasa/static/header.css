@@ -43,7 +43,10 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-emphasis-control-bg: color-mix(in srgb, var(--vyasa-primary-text) 18%, transparent);
     --vyasa-emphasis-control-bg-hover: color-mix(in srgb, var(--vyasa-primary-text) 26%, transparent);
     --vyasa-emphasis-control-border: color-mix(in srgb, var(--vyasa-primary-text) 20%, transparent);
-    --vyasa-emphasis-control-menu-bg: color-mix(in srgb, var(--vyasa-primary-dim) 64%, color-mix(in srgb, var(--vyasa-primary-text) 14%, black) 36%);
+    --vyasa-emphasis-control-menu-text: var(--vyasa-ink);
+    --vyasa-emphasis-control-menu-bg: color-mix(in srgb, var(--vyasa-paper-raised) 94%, var(--vyasa-primary) 6%);
+    --vyasa-emphasis-control-menu-border: color-mix(in srgb, var(--vyasa-ink) 12%, transparent);
+    --vyasa-emphasis-control-menu-option-hover: color-mix(in srgb, var(--vyasa-primary) 12%, transparent);
     --vyasa-selection-bg: var(--vyasa-primary);
     --vyasa-selection-fg: #f2f4f3;
     --vyasa-outline-ghost: rgba(90, 96, 96, 0.2);
@@ -610,8 +613,12 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
 }
 
 .vyasa-emphasis-control-menu {
+    --vyasa-emphasis-control-text: var(--vyasa-emphasis-control-menu-text);
+    --vyasa-emphasis-control-bg-hover: var(--vyasa-emphasis-control-menu-option-hover);
+    --vyasa-emphasis-control-border: var(--vyasa-emphasis-control-menu-border);
     border-radius: var(--vyasa-rect-radius);
     background: var(--vyasa-emphasis-control-menu-bg);
+    color: var(--vyasa-emphasis-control-menu-text);
     padding: 0.25rem;
     box-shadow: 0 10px 30px rgba(15,23,42,0.35);
     border: 1px solid var(--vyasa-emphasis-control-border);
