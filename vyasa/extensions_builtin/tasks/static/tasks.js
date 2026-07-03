@@ -1,6 +1,6 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
 import { bindPanZoomGestures } from '/static/viewport_core.js';
-import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksProjectionGroupByHierarchy } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
 import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksCountFilterRules, tasksEmptyFilterQuery, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksModalController } from '/static/extensions/tasks/tasks_modal.js';
@@ -3683,9 +3683,12 @@ async function renderTasksGraphs(rootElement = document) {
                 });
             }, [model, nodeNotes]);
             React.useEffect(() => {
-                const activeSwatchKeys = new Set(activeColorHierarchy.filter(Boolean));
+                const activeSwatchKeys = new Set([
+                    ...activeColorHierarchy.filter(Boolean),
+                    ...tasksIconFilterGroups(model).map((group) => group.key),
+                ]);
                 setActiveSwatchFilters((current) => tasksPruneFilterQueryFields(current, activeSwatchKeys));
-            }, [activeColorHierarchy]);
+            }, [activeColorHierarchy, model]);
             React.useEffect(() => {
                 if (lastPersistedProjectionIdRef.current !== activeProjectionId) {
                     lastPersistedProjectionIdRef.current = activeProjectionId;
@@ -5527,6 +5530,7 @@ async function renderTasksGraphs(rootElement = document) {
                 if (egoMode) return null;
                 const options = tasksFilterOptions(model);
                 const colorOptions = tasksColorOptions(model, nodeNotes);
+                const iconFilterGroups = tasksIconFilterGroups(model);
                 const groupByOptions = tasksGroupByOptions(sourceModel);
                 const activeProjectionOption = projectionOptions.find((projection) => (
                     viewMode === 'gantt'
@@ -5711,6 +5715,49 @@ async function renderTasksGraphs(rootElement = document) {
                                 }, '×') : null
                             ),
                             renderColorPalette(colorBy)
+                        )
+                    );
+                };
+                const renderIconFilterGroup = (group) => {
+                    const selectedValues = new Set(tasksFilterQuerySelectedValues(activeSwatchFilters, group.key));
+                    return React.createElement('div', {
+                        key: `icon-filter-${group.key}`,
+                        style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' },
+                    },
+                        React.createElement('span', { style: filterKeyStyle }, `${tasksNodeMetaLabel(group.key)} icons`),
+                        React.createElement('div', {
+                            style: {
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(34px, 1fr))',
+                                gap: '8px',
+                                alignItems: 'center',
+                            },
+                        },
+                            ...group.entries.map(([value, image]) => {
+                                const selected = selectedValues.has(value);
+                                return React.createElement('button', {
+                                    key: `${group.key}-${value}`,
+                                    type: 'button',
+                                    title: value,
+                                    'aria-label': `${tasksNodeMetaLabel(group.key)}: ${value}`,
+                                    'aria-pressed': selected,
+                                    onClick: () => toggleFilterValue(group.key, value, !selected),
+                                    style: {
+                                        width: '34px',
+                                        height: '34px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        borderRadius: '8px',
+                                        border: selected ? '1px solid var(--vyasa-primary)' : '1px solid color-mix(in srgb, currentColor 14%, transparent)',
+                                        background: selected ? 'color-mix(in srgb, var(--vyasa-primary) 14%, transparent)' : 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                        color: 'inherit',
+                                        cursor: 'pointer',
+                                        padding: '6px',
+                                    },
+                                },
+                                React.createElement('img', { src: image, alt: '', 'aria-hidden': 'true', loading: 'lazy', style: { width: '20px', height: '20px', objectFit: 'contain', display: 'block' } }));
+                            })
                         )
                     );
                 };
@@ -6191,6 +6238,7 @@ async function renderTasksGraphs(rootElement = document) {
                             )
                         ),
                         ...colorLevelSlots.map((colorBy, index) => renderColorLevel(colorBy, index)),
+                        ...iconFilterGroups.map(renderIconFilterGroup),
                         React.createElement('div', { style: { marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' } },
                             React.createElement('label', { className: 'vyasa-tasks-toggle-label', title: 'Show hover highlight on dimmed (inactive) nodes too' },
                                 React.createElement('input', {

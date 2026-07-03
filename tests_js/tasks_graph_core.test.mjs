@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 const { buildTasksProjectionConfigText, parseTasksProjectionConfigText, tasksCollectSearchMatches, tasksNodeMatchesAllFilters, tasksNodeMatchesFilters, tasksSelectionClickKey } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
 
 function fakeStorage(initial = {}) {
@@ -549,6 +549,29 @@ test('node image resolver prefers direct image over image_by palette', () => {
     assert.equal(resolveTasksNodeImage({ type: 'database' }, model), 'https://api.iconify.design/devicon/postgresql.svg');
     assert.equal(resolveTasksNodeImage({ type: 'database', image: 'https://cdn.example.com/custom.svg' }, model), 'https://cdn.example.com/custom.svg');
     assert.equal(resolveTasksNodeImage({ type: 'database', image: 'javascript:alert(1)' }, model), 'https://api.iconify.design/devicon/postgresql.svg');
+});
+
+test('icon filter groups expose present mdi palette values by attribute', () => {
+    const model = {
+        groups: [{ kind: 'api', owner: 'eng' }],
+        tasks: [{ kind: 'db', owner: 'design' }, { kind: 'api', owner: 'eng' }],
+        node_image_palettes: {
+            kind: {
+                api: 'iconify:mdi:api',
+                db: 'https://api.iconify.design/mdi/database.svg',
+                unused: 'iconify:mdi:ghost',
+                external: 'https://cdn.example.com/icon.svg',
+            },
+            owner: {
+                design: 'iconify:mdi:palette',
+                eng: 'iconify:devicon:go',
+            },
+        },
+    };
+    assert.deepEqual(tasksIconFilterGroups(model), [
+        { key: 'kind', entries: [['api', 'https://api.iconify.design/mdi/api.svg'], ['db', 'https://api.iconify.design/mdi/database.svg']] },
+        { key: 'owner', entries: [['design', 'https://api.iconify.design/mdi/palette.svg']] },
+    ]);
 });
 
 test('selected group edge filter includes edges internal to selected descendants', () => {

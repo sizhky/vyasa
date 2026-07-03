@@ -254,6 +254,42 @@ export function normalizeTasksNodeImageUrl(value) {
     return '';
 }
 
+function tasksNodeImagePaletteValues(value) {
+    const values = Array.isArray(value) ? value : [value];
+    return Array.from(new Set(values
+        .filter((entry) => typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean')
+        .map((entry) => String(entry ?? '').trim())
+        .filter(Boolean)));
+}
+
+function tasksIsMdiImage(value) {
+    const raw = String(value || '').trim();
+    const normalized = normalizeTasksNodeImageUrl(raw);
+    return raw.startsWith('iconify:mdi:') || /^https:\/\/api\.iconify\.design\/mdi\/[^/]+\.svg(?:\?.*)?$/i.test(normalized);
+}
+
+export function tasksIconFilterGroups(model) {
+    const palettes = model?.node_image_palettes && typeof model.node_image_palettes === 'object'
+        ? model.node_image_palettes
+        : {};
+    const nodes = [...(model?.groups || []), ...(model?.tasks || [])];
+    return Object.entries(palettes)
+        .map(([key, palette]) => {
+            const attr = String(key || '').trim();
+            if (!attr || !palette || typeof palette !== 'object') return null;
+            const presentValues = new Set(nodes.flatMap((node) => tasksNodeImagePaletteValues(node?.[attr])));
+            const entries = Object.entries(palette)
+                .map(([value, image]) => [String(value || '').trim(), String(image || '').trim()])
+                .filter(([value, image]) => value && presentValues.has(value) && tasksIsMdiImage(image))
+                .map(([value, image]) => [value, normalizeTasksNodeImageUrl(image)])
+                .filter(([, image]) => image)
+                .sort(([left], [right]) => left.localeCompare(right));
+            return entries.length ? { key: attr, entries } : null;
+        })
+        .filter(Boolean)
+        .sort((left, right) => left.key.localeCompare(right.key));
+}
+
 function normalizeStoredNodeNotes(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
     return Object.fromEntries(Object.entries(value)
