@@ -214,6 +214,10 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
 .vyasa-tasks-icon-filter-section,
 .vyasa-tasks-icon-filter-group {
     min-width: 0;
+    border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, currentColor 3%, transparent);
+    padding: 8px;
 }
 .vyasa-tasks-icon-filter-section > summary,
 .vyasa-tasks-icon-filter-group > summary {
@@ -247,9 +251,7 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
     margin-top: 8px;
 }
 .vyasa-tasks-icon-filter-group {
-    border-radius: 8px;
     background: color-mix(in srgb, currentColor 4%, transparent);
-    padding: 8px;
 }
 .vyasa-tasks-icon-filter-group > div {
     margin-top: 8px;
