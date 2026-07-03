@@ -185,19 +185,25 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
 }
 .vyasa-tasks-filter-card .queryBuilder {
     display: grid;
-    gap: 10px;
+    gap: 12px;
     font-size: 12px;
     max-width: 100%;
     overflow: hidden;
 }
 .vyasa-tasks-filter-card .ruleGroup {
-    border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
     border-radius: 12px;
     background: linear-gradient(180deg, color-mix(in srgb, var(--vyasa-paper) 98%, transparent), color-mix(in srgb, var(--vyasa-paper) 92%, var(--vyasa-primary) 8%));
     padding: 10px;
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
+}
+.vyasa-tasks-filter-card .ruleGroup .ruleGroup {
+    margin-top: 10px;
+    margin-left: 14px;
+    border-left: 3px solid color-mix(in srgb, var(--vyasa-primary) 42%, currentColor 18%);
+    background: color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%);
 }
 .vyasa-tasks-filter-card .ruleGroup-header,
 .vyasa-tasks-filter-card .betweenRules {
@@ -222,6 +228,13 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
 .vyasa-tasks-filter-card .rule {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+    border-left: 3px solid color-mix(in srgb, var(--vyasa-primary) 50%, currentColor 12%);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--vyasa-paper) 97%, transparent);
+    box-sizing: border-box;
 }
 .vyasa-tasks-filter-card .rule > * {
     min-width: 0;

@@ -367,6 +367,9 @@ def test_tasks_query_builder_controls_use_filter_panel_css():
     assert ".vyasa-tasks-filter-card .ruleGroup-notToggle" in css
     assert ".vyasa-tasks-filter-card .ruleGroup-mute" in css
     assert ".vyasa-tasks-filter-card .rule-mute" in css
+    assert ".vyasa-tasks-filter-card .ruleGroup .ruleGroup" in css
+    assert "border-left: 3px solid color-mix(in srgb, var(--vyasa-primary) 50%, currentColor 12%)" in css
+    assert "margin-left: 14px" in css
     assert ".vyasa-tasks-filter-card input[type=\"checkbox\"]" in css
     assert "appearance: none;" in css
 
