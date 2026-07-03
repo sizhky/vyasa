@@ -5992,7 +5992,22 @@ async function renderTasksGraphs(rootElement = document) {
                                                 ...groupByOptions
                                                     .filter((option) => option.key === displayedGroupByHierarchy[level] || !displayedGroupByHierarchy.includes(option.key))
                                                     .map((option) => React.createElement('option', { key: option.key, value: option.key }, option.label))
-                                            )
+                                            ),
+                                            React.createElement('button', {
+                                                type: 'button',
+                                                className: 'vyasa-tasks-group-by-clear',
+                                                title: 'Clear group level',
+                                                'aria-label': `Clear group level ${level + 1}`,
+                                                disabled: Boolean(activeProjectionId) || viewMode === 'gantt' || !selectedKey,
+                                                onClick: () => {
+                                                    const next = groupByHierarchy.slice();
+                                                    next[level] = '';
+                                                    setGroupByHierarchy(next.slice(0, level + 1).filter(Boolean));
+                                                    setActiveProjectionId('');
+                                                    setViewMode('graph');
+                                                    pendingFitActionRef.current = 'mode';
+                                                },
+                                            }, '×')
                                         );
                                     }),
                                     activeProjectionId || viewMode === 'gantt'

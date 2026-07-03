@@ -348,6 +348,33 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
     cursor: not-allowed;
     opacity: 0.56;
 }
+.vyasa-tasks-filter-card .vyasa-tasks-group-by-clear {
+    flex: 0 0 30px;
+    width: 30px;
+    min-height: 36px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%);
+    color: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+.vyasa-tasks-filter-card .vyasa-tasks-group-by-clear:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--vyasa-primary) 48%, currentColor 16%);
+    background: color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-primary) 12%);
+}
+.vyasa-tasks-filter-card .vyasa-tasks-group-by-clear:focus-visible {
+    outline: none;
+    border-color: color-mix(in srgb, var(--vyasa-primary) 72%, currentColor 12%);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 24%, transparent);
+}
+.vyasa-tasks-filter-card .vyasa-tasks-group-by-clear:disabled {
+    cursor: not-allowed;
+    opacity: 0.42;
+}
 .dark .vyasa-tasks-filter-card select {
     box-shadow:
         inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
