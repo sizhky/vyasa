@@ -79,6 +79,7 @@ const TASKS_GANTT_TOP = 86;
 const TASKS_GANTT_PROJECTION_ID = '__gantt__';
 const TASKS_PROJECTION_UNSPECIFIED_LABEL = 'Unspecified';
 const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity']);
+const TASKS_SPECIAL_COLOR_MODE_KEYS = new Set(['connectivity', 'rank']);
 const TASKS_SPACING_PRESETS = {
     compact: { nodeSpacing: 24, layerSpacing: 64, collisionGap: 56, groupPadding: 28, edgeLabelWidth: 220 },
     normal: { nodeSpacing: 44, layerSpacing: 96, collisionGap: 96, groupPadding: 40, edgeLabelWidth: 240 },
@@ -843,6 +844,10 @@ function tasksColorModeLabel(key) {
     return key === 'rank' ? 'Flow position' : tasksNodeMetaLabel(key);
 }
 
+function tasksIsSpecialColorMode(key) {
+    return TASKS_SPECIAL_COLOR_MODE_KEYS.has(String(key || '').toLowerCase());
+}
+
 function collectTasksGroupDescendants(nodeId, model) {
     if (!nodeId || !model) return { groups: [], tasks: [] };
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
@@ -1047,8 +1052,12 @@ function tasksColorOptions(model, nodeNotes = null) {
         .map((key) => ({
             key,
             label: tasksColorModeLabel(key),
+            special: tasksIsSpecialColorMode(key),
         }))
-        .sort((a, b) => a.label.localeCompare(b.label));
+        .sort((a, b) => {
+            if (a.special !== b.special) return a.special ? 1 : -1;
+            return a.label.localeCompare(b.label);
+        });
 }
 
 function tasksGroupByOptions(model) {
@@ -5511,9 +5520,12 @@ async function renderTasksGraphs(rootElement = document) {
                 };
                 const renderColorLevel = (colorBy, index) => {
                     const usedBefore = new Set(activeColorHierarchy.slice(0, index));
-                    const selectOptions = [{ key: '', label: 'None' }, ...colorOptions
+                    const selectableColorOptions = colorOptions
                         .filter((option) => option.key === colorBy || !usedBefore.has(option.key))
-                        .map((option) => ({ key: option.key, label: option.label }))];
+                        .map((option) => ({ key: option.key, label: option.label, special: option.special }));
+                    const normalColorOptions = selectableColorOptions.filter((option) => !option.special);
+                    const specialColorOptions = selectableColorOptions.filter((option) => option.special);
+                    const renderColorOption = (option) => React.createElement('option', { key: option.key || '__none__', value: option.key }, option.label);
                     return React.createElement('div', { key: `color-level-${index}`, style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                         React.createElement('span', { style: filterKeyStyle }, index === 0 ? 'Color by' : `Color ${index + 1}`),
                         React.createElement('div', { style: filterValueStackStyle },
@@ -5530,7 +5542,13 @@ async function renderTasksGraphs(rootElement = document) {
                                         background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
                                         color: 'inherit',
                                     },
-                                }, selectOptions.map((option) => React.createElement('option', { key: option.key || '__none__', value: option.key }, option.label))),
+                                },
+                                renderColorOption({ key: '', label: 'None' }),
+                                ...normalColorOptions.map(renderColorOption),
+                                specialColorOptions.length
+                                    ? React.createElement('option', { key: '__special_color_modes__', value: '__special_color_modes__', disabled: true }, '---')
+                                    : null,
+                                ...specialColorOptions.map(renderColorOption)),
                                 colorBy ? React.createElement('button', {
                                     type: 'button',
                                     title: 'Remove this color level',

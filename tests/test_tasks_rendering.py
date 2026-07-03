@@ -600,6 +600,19 @@ def test_tasks_color_picker_uses_cascading_level_dropdowns():
     assert "...colorLevelSlots.map((colorBy, index) => renderColorLevel(colorBy, index))" in source
 
 
+def test_tasks_color_picker_groups_special_modes_at_bottom():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const TASKS_SPECIAL_COLOR_MODE_KEYS = new Set(['connectivity', 'rank']);" in source
+    assert "function tasksIsSpecialColorMode(key)" in source
+    assert "if (a.special !== b.special) return a.special ? 1 : -1;" in source
+    assert "const normalColorOptions = selectableColorOptions.filter((option) => !option.special);" in source
+    assert "const specialColorOptions = selectableColorOptions.filter((option) => option.special);" in source
+    assert "React.createElement('option', { key: '__special_color_modes__', value: '__special_color_modes__', disabled: true }, '---')" in source
+    assert "...specialColorOptions.map(renderColorOption))" in source
+    assert "React.createElement('optgroup'" not in source
+
+
 def test_tasks_query_builder_supports_inline_text_attrs_and_exists_operator():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     core = Path("vyasa/extensions_builtin/tasks/static/tasks_graph_core.js").read_text()
