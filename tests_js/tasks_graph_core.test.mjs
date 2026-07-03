@@ -172,7 +172,7 @@ test('buildTaskEdgeAnchors uses full width when one role owns a side', () => {
     );
 });
 
-test('buildTaskEdgeAnchors splits top side into symmetric halves when roles mix', () => {
+test('buildTaskEdgeAnchors puts incoming handles before outgoing handles on same side', () => {
     const nodes = [
         { id: 'hub', position: { x: 0, y: 200 }, width: 220, height: 60 },
         { id: 'outA', position: { x: -220, y: 0 }, width: 220, height: 60 },
@@ -188,15 +188,15 @@ test('buildTaskEdgeAnchors splits top side into symmetric halves when roles mix'
     ]);
     assert.deepEqual(
         nodeHandles.hub.source.map((handle) => Math.round(handle.offsetPct)),
-        [18, 39],
+        [61, 82],
     );
     assert.deepEqual(
         nodeHandles.hub.target.map((handle) => Math.round(handle.offsetPct)),
-        [61, 82],
+        [18, 39],
     );
 });
 
-test('buildTaskEdgeAnchors spaces mixed top-side roles by total side traffic', () => {
+test('buildTaskEdgeAnchors keeps outgoing handles in the second half with mixed traffic', () => {
     const nodes = [
         { id: 'hub', position: { x: 0, y: 200 }, width: 220, height: 60 },
         { id: 'out', position: { x: 0, y: 0 }, width: 220, height: 60 },
@@ -210,11 +210,11 @@ test('buildTaskEdgeAnchors spaces mixed top-side roles by total side traffic', (
     ]);
     assert.deepEqual(
         nodeHandles.hub.source.map((handle) => Math.round(handle.offsetPct)),
-        [18],
+        [82],
     );
     assert.deepEqual(
         nodeHandles.hub.target.map((handle) => Math.round(handle.offsetPct)),
-        [50, 82],
+        [18, 50],
     );
 });
 
