@@ -600,6 +600,20 @@ def test_tasks_color_picker_uses_cascading_level_dropdowns():
     assert "...colorLevelSlots.map((colorBy, index) => renderColorLevel(colorBy, index))" in source
 
 
+def test_tasks_hierarchy_controls_are_drag_reorderable():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const reorderTasksHierarchyLevel = React.useCallback((items, fromIndex, toIndex) => {" in source
+    assert "const reorderActiveColorLevel = React.useCallback((fromIndex, toIndex) => {" in source
+    assert "const reorderGroupByLevel = React.useCallback((fromIndex, toIndex) => {" in source
+    assert "event.dataTransfer.setData('text/x-vyasa-color-level', String(index));" in source
+    assert "reorderActiveColorLevel(from, index);" in source
+    assert "event.dataTransfer.setData('text/x-vyasa-group-level', String(level));" in source
+    assert "reorderGroupByLevel(from, level);" in source
+    assert "'aria-label': 'Drag to reorder color level'" in source
+    assert "'aria-label': 'Drag to reorder group level'" in source
+
+
 def test_tasks_color_picker_groups_special_modes_at_bottom():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 

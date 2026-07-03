@@ -3405,6 +3405,27 @@ async function renderTasksGraphs(rootElement = document) {
                 return id ? (projections.find((p) => p && p.id === id) || null) : null;
             }, [viewerState.model, activeProjectionId]);
             const activeColorBy = activeColorHierarchy[0] || '';
+            const reorderTasksHierarchyLevel = React.useCallback((items, fromIndex, toIndex) => {
+                const next = (Array.isArray(items) ? items : []).map((entry) => String(entry || '').trim()).filter(Boolean);
+                if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= next.length || toIndex >= next.length) return next;
+                const [moved] = next.splice(fromIndex, 1);
+                next.splice(toIndex, 0, moved);
+                return next;
+            }, []);
+            const reorderActiveColorLevel = React.useCallback((fromIndex, toIndex) => {
+                setActiveColorHierarchy((current) => {
+                    const next = reorderTasksHierarchyLevel(current, fromIndex, toIndex);
+                    const normalized = normalizeTasksColorHierarchy(next, model, nodeNotes);
+                    const unchanged = normalized.length === current.length && normalized.every((entry, i) => entry === current[i]);
+                    return unchanged ? current : normalized;
+                });
+            }, [model, nodeNotes, reorderTasksHierarchyLevel]);
+            const reorderGroupByLevel = React.useCallback((fromIndex, toIndex) => {
+                setGroupByHierarchy((current) => reorderTasksHierarchyLevel(current, fromIndex, toIndex));
+                setActiveProjectionId('');
+                setViewMode('graph');
+                pendingFitActionRef.current = 'mode';
+            }, [reorderTasksHierarchyLevel]);
             const setActiveColorLevel = React.useCallback((index, value) => {
                 setActiveColorHierarchy((current) => {
                     const next = Array.isArray(current) ? current.slice() : [];
@@ -5526,10 +5547,36 @@ async function renderTasksGraphs(rootElement = document) {
                     const normalColorOptions = selectableColorOptions.filter((option) => !option.special);
                     const specialColorOptions = selectableColorOptions.filter((option) => option.special);
                     const renderColorOption = (option) => React.createElement('option', { key: option.key || '__none__', value: option.key }, option.label);
+                    const draggable = Boolean(colorBy);
                     return React.createElement('div', { key: `color-level-${index}`, style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                         React.createElement('span', { style: filterKeyStyle }, index === 0 ? 'Color by' : `Color ${index + 1}`),
                         React.createElement('div', { style: filterValueStackStyle },
-                            React.createElement('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } },
+                            React.createElement('div', {
+                                onDragOver: (event) => {
+                                    if (!draggable || !Array.from(event.dataTransfer.types || []).includes('text/x-vyasa-color-level')) return;
+                                    event.preventDefault();
+                                    event.dataTransfer.dropEffect = 'move';
+                                },
+                                onDrop: (event) => {
+                                    const from = Number.parseInt(event.dataTransfer.getData('text/x-vyasa-color-level'), 10);
+                                    if (Number.isInteger(from)) {
+                                        event.preventDefault();
+                                        reorderActiveColorLevel(from, index);
+                                    }
+                                },
+                                style: { display: 'flex', gap: '6px', alignItems: 'center' },
+                            },
+                                React.createElement('span', {
+                                    draggable,
+                                    title: 'Drag to reorder',
+                                    'aria-label': 'Drag to reorder color level',
+                                    onDragStart: (event) => {
+                                        if (!draggable) return;
+                                        event.dataTransfer.setData('text/x-vyasa-color-level', String(index));
+                                        event.dataTransfer.effectAllowed = 'move';
+                                    },
+                                    style: { flex: '0 0 auto', cursor: draggable ? 'grab' : 'default', opacity: draggable ? 0.7 : 0.25, fontWeight: 700, letterSpacing: '0.04em', userSelect: 'none' },
+                                }, '::'),
                                 React.createElement('select', {
                                     value: colorBy || '',
                                     onChange: (event) => setActiveColorLevel(index, event.target.value),
@@ -5836,33 +5883,63 @@ async function renderTasksGraphs(rootElement = document) {
                         React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                             React.createElement('span', { style: filterKeyStyle }, 'Group by'),
                             React.createElement('div', { style: filterValueStackStyle },
-                                    groupByLevels.map((selectedKey, level) => React.createElement('select', {
-                                        key: `group-by-${level}`,
-                                        value: selectedKey,
-                                        disabled: Boolean(activeProjectionId) || viewMode === 'gantt',
-                                        onChange: (event) => {
-                                            const next = groupByHierarchy.slice();
-                                            next[level] = event.target.value;
-                                            setGroupByHierarchy(next.slice(0, level + 1).filter(Boolean));
-                                            setActiveProjectionId('');
-                                            setViewMode('graph');
-                                            pendingFitActionRef.current = 'mode';
+                                    groupByLevels.map((selectedKey, level) => {
+                                        const draggable = customGroupingActive && Boolean(selectedKey);
+                                        return React.createElement('div', {
+                                            key: `group-by-${level}`,
+                                            onDragOver: (event) => {
+                                                if (!draggable || !Array.from(event.dataTransfer.types || []).includes('text/x-vyasa-group-level')) return;
+                                                event.preventDefault();
+                                                event.dataTransfer.dropEffect = 'move';
+                                            },
+                                            onDrop: (event) => {
+                                                const from = Number.parseInt(event.dataTransfer.getData('text/x-vyasa-group-level'), 10);
+                                                if (Number.isInteger(from)) {
+                                                    event.preventDefault();
+                                                    reorderGroupByLevel(from, level);
+                                                }
+                                            },
+                                            style: { display: 'flex', gap: '6px', alignItems: 'center' },
                                         },
-                                        style: {
-                                            width: '100%',
-                                            minWidth: 0,
-                                            border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
-                                            borderRadius: '8px',
-                                            padding: '6px 8px',
-                                            background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
-                                            color: 'inherit',
-                                        },
-                                    },
-                                        React.createElement('option', { value: '' }, level === 0 ? 'No custom grouping' : `Level ${level + 1}: none`),
-                                        ...groupByOptions
-                                            .filter((option) => option.key === displayedGroupByHierarchy[level] || !displayedGroupByHierarchy.includes(option.key))
-                                            .map((option) => React.createElement('option', { key: option.key, value: option.key }, option.label))
-                                    )),
+                                            React.createElement('span', {
+                                                draggable,
+                                                title: 'Drag to reorder',
+                                                'aria-label': 'Drag to reorder group level',
+                                                onDragStart: (event) => {
+                                                    if (!draggable) return;
+                                                    event.dataTransfer.setData('text/x-vyasa-group-level', String(level));
+                                                    event.dataTransfer.effectAllowed = 'move';
+                                                },
+                                                style: { flex: '0 0 auto', cursor: draggable ? 'grab' : 'default', opacity: draggable ? 0.7 : 0.25, fontWeight: 700, letterSpacing: '0.04em', userSelect: 'none' },
+                                            }, '::'),
+                                            React.createElement('select', {
+                                                value: selectedKey,
+                                                disabled: Boolean(activeProjectionId) || viewMode === 'gantt',
+                                                onChange: (event) => {
+                                                    const next = groupByHierarchy.slice();
+                                                    next[level] = event.target.value;
+                                                    setGroupByHierarchy(next.slice(0, level + 1).filter(Boolean));
+                                                    setActiveProjectionId('');
+                                                    setViewMode('graph');
+                                                    pendingFitActionRef.current = 'mode';
+                                                },
+                                                style: {
+                                                    flex: '1 1 auto',
+                                                    minWidth: 0,
+                                                    border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                                    borderRadius: '8px',
+                                                    padding: '6px 8px',
+                                                    background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                                    color: 'inherit',
+                                                },
+                                            },
+                                                React.createElement('option', { value: '' }, level === 0 ? 'No custom grouping' : `Level ${level + 1}: none`),
+                                                ...groupByOptions
+                                                    .filter((option) => option.key === displayedGroupByHierarchy[level] || !displayedGroupByHierarchy.includes(option.key))
+                                                    .map((option) => React.createElement('option', { key: option.key, value: option.key }, option.label))
+                                            )
+                                        );
+                                    }),
                                     activeProjectionId || viewMode === 'gantt'
                                         ? React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.3 } }, 'Custom grouping applies to Default view.')
                                         : null
