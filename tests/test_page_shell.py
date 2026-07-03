@@ -82,6 +82,10 @@ def test_git_ref_select_resets_button_alignment():
     assert "justify-content: flex-start" in css
     assert "appearance: none" in css
     assert "font: inherit" in css
+    assert "--vyasa-emphasis-control-menu-text: var(--vyasa-ink)" in css
+    assert "--vyasa-emphasis-control-menu-bg: color-mix(in srgb, var(--vyasa-paper-raised) 94%, var(--vyasa-primary) 6%)" in css
+    assert "--vyasa-emphasis-control-text: var(--vyasa-emphasis-control-menu-text)" in css
+    assert "--vyasa-emphasis-control-bg-hover: var(--vyasa-emphasis-control-menu-option-hover)" in css
 
 
 def test_toc_sidebar_defaults_closed_but_open_choice_persists():
