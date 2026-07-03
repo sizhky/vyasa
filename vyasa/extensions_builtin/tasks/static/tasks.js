@@ -2098,6 +2098,14 @@ async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layou
     const layoutEdges = reduceTransitiveEdges(graph.edges || []);
     const parentOf = {};
     const expandedGroupSizes = {};
+    const groupPadding = layoutConfig.groupPadding || 40;
+    const groupTopPadding = (groupNode, widthOverride = null) => {
+        const width = Math.max(80, Number(widthOverride || groupNode?.width || 250) - 16);
+        const titleHeight = sizeTaskNode(groupNode?.label || groupNode?.id || '', 'groupTitle', width, {
+            hasImage: Boolean(resolveTasksNodeImage(groupNode, model)),
+        }).height;
+        return groupPadding + titleHeight;
+    };
 
     for (const n of graph.nodes) {
         if (n.__kind__ === 'group' && expanded.has(n.id)) {
@@ -2118,7 +2126,7 @@ async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layou
                 'elk.direction': layoutConfig.elkDirection || 'DOWN',
                 'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
                 'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
-                'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`
+                'elk.padding': `[top=${groupTopPadding(n)},left=${groupPadding},bottom=${groupPadding},right=${groupPadding}]`
             };
         }
         return node;
@@ -2137,7 +2145,7 @@ async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layou
                 'elk.direction': layoutConfig.elkDirection || 'DOWN',
                 'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
                 'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
-                'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`
+                'elk.padding': `[top=${groupTopPadding(nodeMap[gid])},left=${groupPadding},bottom=${groupPadding},right=${groupPadding}]`
             },
             children: allChildren.map((cid) => {
                 const cn = nodeMap[cid];
@@ -2175,7 +2183,7 @@ async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layou
                 'elk.direction': layoutConfig.elkDirection || 'DOWN',
                 'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
                 'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
-                'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`
+                'elk.padding': `[top=${groupTopPadding(n, n?.width)},left=${groupPadding},bottom=${groupPadding},right=${groupPadding}]`
             };
         }
         return node;
@@ -2303,6 +2311,12 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
     const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
     const groupDirection = readTasksDirection(groupsById[groupId]?.layout_direction || groupsById[groupId]?.direction || layoutConfig.elkDirection);
+    const groupPadding = layoutConfig.groupPadding || 40;
+    const groupTitleWidth = Math.max(80, (childSizes[groupId]?.width || groupsById[groupId]?.width || 250) - 16);
+    const groupTitleHeight = sizeTaskNode(groupsById[groupId]?.label || groupId, 'groupTitle', groupTitleWidth, {
+        hasImage: Boolean(resolveTasksNodeImage(groupsById[groupId], model)),
+    }).height;
+    const groupPadTop = groupPadding + groupTitleHeight;
     const groupChildren = [
         ...(model.group_tree?.[groupId] || []).map((id) => {
             const source = groupsById[id] || {};
@@ -2332,7 +2346,7 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
                 'elk.direction': groupDirection,
                 'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
                 'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
-                'elk.padding': `[top=${(layoutConfig.groupPadding || 40) + 28},left=${layoutConfig.groupPadding || 40},bottom=${layoutConfig.groupPadding || 40},right=${layoutConfig.groupPadding || 40}]`,
+                'elk.padding': `[top=${groupPadTop},left=${groupPadding},bottom=${groupPadding},right=${groupPadding}]`,
             },
             children: groupChildren.map((child) => ({
                 id: child.id,
@@ -2361,9 +2375,9 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
     }
     const packedLayout = layoutDisconnectedTaskNodes(groupChildren, groupDirection, {
         gap: Math.max(layoutConfig.nodeSpacing || 72, layoutConfig.layerSpacing || 112),
-        padX: layoutConfig.groupPadding || 40,
-        padTop: (layoutConfig.groupPadding || 40) + 28,
-        padBottom: layoutConfig.groupPadding || 40,
+        padX: groupPadding,
+        padTop: groupPadTop,
+        padBottom: groupPadding,
     });
     const positions = {};
     for (const child of groupChildren) {
@@ -4989,12 +5003,12 @@ async function renderTasksGraphs(rootElement = document) {
                         onClickCapture: handleSelectedNodeToggleCapture,
                         style: {
                             width: '100%', height: '100%',
-                            boxSizing: 'border-box',
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            justifyContent: 'space-between',
-                            gap: '8px',
-                            padding: '8px 10px',
+	                            boxSizing: 'border-box',
+	                            display: 'flex',
+	                            alignItems: 'center',
+	                            justifyContent: 'space-between',
+	                            gap: '8px',
+	                            padding: '6px 10px',
                             fontWeight: '600',
                             fontSize: '16px',
                             position: 'relative',
@@ -5003,11 +5017,11 @@ async function renderTasksGraphs(rootElement = document) {
                         linkKinds.length ? renderTasksNodeLinkBadge(React, { right: '32px', kinds: linkKinds }) : null,
                         React.createElement('span', {
                             style: {
-                                minWidth: 0,
-                                overflow: 'hidden',
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: '7px',
+	                                minWidth: 0,
+	                                overflow: 'hidden',
+	                                display: 'flex',
+	                                alignItems: 'center',
+	                                gap: '7px',
                                 whiteSpace: 'pre-line',
                                 lineHeight: '1.28',
                                 overflowWrap: 'anywhere',
@@ -5967,6 +5981,7 @@ async function renderTasksGraphs(rootElement = document) {
                                             pendingFitActionRef.current = 'mode';
                                         },
                                     }),
+                                    React.createElement('span', { className: 'vyasa-tasks-switch-track', 'aria-hidden': 'true' }),
                                     React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, groupByEnabled ? 'On' : 'Off')
                                 )
                             ),
@@ -6148,6 +6163,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     checked: hoverInactiveNodes,
                                     onChange: (event) => setHoverInactiveNodes(event.target.checked),
                                 }),
+                                React.createElement('span', { className: 'vyasa-tasks-switch-track', 'aria-hidden': 'true' }),
                                 React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, 'Hover inactive nodes')
                             )
                         ),
@@ -6159,6 +6175,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     checked: queryBuilderEnabled,
                                     onChange: (event) => setQueryBuilderEnabled(event.target.checked),
                                 }),
+                                React.createElement('span', { className: 'vyasa-tasks-switch-track', 'aria-hidden': 'true' }),
                                 React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, 'Query builder')
                             ),
                             !queryBuilderEnabled && tasksFilterQueryHasRules(activeFilters)

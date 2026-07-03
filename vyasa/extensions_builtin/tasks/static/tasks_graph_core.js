@@ -29,7 +29,7 @@ const TASK_NODE_FONT = '600 16px ui-sans-serif, system-ui, -apple-system, BlinkM
 
 const TASK_NODE_SPECS = {
     group: { width: 250, minHeight: 80, padX: 32, padY: 28, reserveX: 34 },
-    groupTitle: { width: 250, minHeight: 34, padX: 20, padY: 12, reserveX: 28 },
+    groupTitle: { width: 250, minHeight: 34, padX: 20, padY: 8, reserveX: 28 },
     task: { width: 220, minHeight: 60, padX: 28, padY: 24, reserveX: 0 },
 };
 const TASK_NODE_IMAGE_SPECS = {

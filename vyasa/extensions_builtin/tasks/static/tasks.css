@@ -420,33 +420,50 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
     opacity: 0.58;
 }
 .vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input {
-    width: 34px;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+.vyasa-tasks-filter-card .vyasa-tasks-switch-track {
+    position: relative;
+    flex: 0 0 36px;
+    width: 36px;
     height: 20px;
+    border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
     border-radius: 999px;
     background: color-mix(in srgb, currentColor 12%, var(--vyasa-paper) 88%);
-    display: inline-flex;
-    align-items: center;
-    padding: 2px;
+    box-sizing: border-box;
     transition: background 120ms ease, border-color 120ms ease;
 }
-.vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input::before {
+.vyasa-tasks-filter-card .vyasa-tasks-switch-track::before {
     content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
     width: 14px;
     height: 14px;
-    border: 0;
     border-radius: 999px;
     background: color-mix(in srgb, currentColor 58%, var(--vyasa-paper) 42%);
     transform: translateX(0);
     transition: transform 120ms ease, background 120ms ease;
 }
-.vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:checked {
+.vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:checked + .vyasa-tasks-switch-track {
     border-color: color-mix(in srgb, var(--vyasa-primary) 78%, currentColor 22%);
     background: color-mix(in srgb, var(--vyasa-primary) 72%, white 28%);
 }
-.vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:checked::before {
-    border: 0;
+.vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:checked + .vyasa-tasks-switch-track::before {
     background: var(--vyasa-paper);
-    transform: translateX(14px);
+    transform: translateX(16px);
+}
+.vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:focus-visible + .vyasa-tasks-switch-track {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 24%, transparent);
+}
+.vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:disabled + .vyasa-tasks-switch-track {
+    cursor: not-allowed;
+    opacity: 0.58;
 }
 .vyasa-tasks-filter-card .rule button,
 .vyasa-tasks-filter-card .ruleGroup button {
