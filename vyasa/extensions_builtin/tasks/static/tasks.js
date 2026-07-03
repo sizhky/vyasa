@@ -742,6 +742,7 @@ function writeTasksPrefs(model, prefs) {
     const groupByHierarchy = Array.isArray(prefs?.groupByHierarchy)
         ? prefs.groupByHierarchy.map((entry) => String(entry || '').trim()).filter(Boolean)
         : [];
+    const groupByEnabled = typeof prefs?.groupByEnabled === 'boolean' ? prefs.groupByEnabled : groupByHierarchy.length > 0;
     const edgeOpacity = prefs?.edgeOpacity;
     const unspecifiedContentOpacity = prefs?.unspecifiedContentOpacity;
     const nodeStates = prefs?.nodeStates && typeof prefs.nodeStates === 'object' && !Array.isArray(prefs.nodeStates)
@@ -759,6 +760,7 @@ function writeTasksPrefs(model, prefs) {
         projectionId,
         edgeOpacity,
         unspecifiedContentOpacity,
+        groupByEnabled,
         groupByHierarchy,
         projectionPrefs,
         nodeStates,
@@ -3179,9 +3181,18 @@ async function renderTasksGraphs(rootElement = document) {
             const [groupByHierarchy, setGroupByHierarchy] = React.useState(() => (
                 Array.isArray(sourcePrefsRef.current?.groupByHierarchy) ? sourcePrefsRef.current.groupByHierarchy : []
             ));
+            const [groupByEnabled, setGroupByEnabled] = React.useState(() => (
+                typeof sourcePrefsRef.current?.groupByEnabled === 'boolean'
+                    ? sourcePrefsRef.current.groupByEnabled
+                    : (Array.isArray(sourcePrefsRef.current?.groupByHierarchy) && sourcePrefsRef.current.groupByHierarchy.some(Boolean))
+            ));
+            const activeGroupByHierarchy = React.useMemo(
+                () => groupByEnabled ? groupByHierarchy : [],
+                [groupByEnabled, groupByHierarchy]
+            );
             const projectionState = React.useMemo(
-                () => buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, groupByHierarchy),
-                [viewerState, activeProjectionId, viewMode, groupByHierarchy]
+                () => buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, activeGroupByHierarchy),
+                [viewerState, activeProjectionId, viewMode, activeGroupByHierarchy]
             );
             const model = projectionState.model;
             const effectiveDefaultOpenDepth = Number.parseInt(tasksModelSetting(model, 'default_open_depth', `${defaultOpenDepth}`), 10);
@@ -3684,6 +3695,7 @@ async function renderTasksGraphs(rootElement = document) {
                     projectionId: activeProjectionId,
                     edgeOpacity,
                     unspecifiedContentOpacity: projectionUnspecifiedContentOpacity,
+                    groupByEnabled,
                     groupByHierarchy,
                     projectionPrefs: nextProjectionPrefs,
                     nodeStates,
@@ -3697,6 +3709,7 @@ async function renderTasksGraphs(rootElement = document) {
                     projectionId: activeProjectionId,
                     edgeOpacity,
                     unspecifiedContentOpacity: projectionUnspecifiedContentOpacity,
+                    groupByEnabled,
                     groupByHierarchy,
                     projectionPrefs: nextProjectionPrefs,
                     nodeStates,
@@ -3704,7 +3717,7 @@ async function renderTasksGraphs(rootElement = document) {
                     slideNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByHierarchy, expanded, nodeStates, nodeNotes, slideNotes]);
+            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, expanded, nodeStates, nodeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
@@ -3729,6 +3742,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 if (!String(activeProjectionId || '').trim() && Array.isArray(cfg.groupBy)) {
                     setGroupByHierarchy(cfg.groupBy);
+                    setGroupByEnabled(cfg.groupBy.some(Boolean));
                     pendingFitActionRef.current = 'mode';
                 }
                 return true;
@@ -3924,6 +3938,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setSearchInputValue(defaultSearch);
                 setSearchQuery(defaultSearch);
                 setActiveColorHierarchy(resolveTasksPreferredColorHierarchy(model, activeProjectionId, defaults, nodeNotes));
+                setGroupByEnabled(false);
                 setGroupByHierarchy([]);
                 setExpanded(hydrateExpandedSet(defaults));
                 setFiltersCollapsed(
@@ -5492,12 +5507,13 @@ async function renderTasksGraphs(rootElement = document) {
                         ? projection.id === TASKS_GANTT_PROJECTION_ID
                         : projection.id === activeProjectionId
                 )) || null;
-                const customGroupingActive = !String(activeProjectionId || '').trim() && viewMode !== 'gantt';
+                const customGroupingAvailable = !String(activeProjectionId || '').trim() && viewMode !== 'gantt';
+                const groupByControlsEnabled = customGroupingAvailable && groupByEnabled;
                 const projectionGroupByHierarchy = viewMode === 'gantt' ? [] : tasksProjectionGroupByHierarchy(viewerState.model, activeProjectionId);
-                const displayedGroupByHierarchy = customGroupingActive ? groupByHierarchy : projectionGroupByHierarchy;
-                const activeGroupByCount = customGroupingActive ? groupByHierarchy.filter(Boolean).length : 0;
+                const displayedGroupByHierarchy = customGroupingAvailable ? groupByHierarchy : projectionGroupByHierarchy;
+                const activeGroupByCount = groupByControlsEnabled ? groupByHierarchy.filter(Boolean).length : 0;
                 const groupByLevels = displayedGroupByHierarchy.filter(Boolean);
-                if (customGroupingActive) groupByLevels.push('');
+                if (customGroupingAvailable && groupByEnabled) groupByLevels.push('');
                 if (!groupByLevels.length && viewMode !== 'gantt') groupByLevels.push('');
                 const activeCount = (queryBuilderEnabled ? tasksCountFilterRules(activeFilters) : 0) + tasksCountFilterRules(activeSwatchFilters) + activeColorHierarchy.length + (searchMatches.active ? 1 : 0) + activeGroupByCount;
                 const QueryBuilder = queryBuilderEnabled && queryBuilderReady ? window.VyasaTasksQueryBuilder?.QueryBuilder : null;
@@ -5936,10 +5952,27 @@ async function renderTasksGraphs(rootElement = document) {
                                 : null
                         ) : null,
                         React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('span', { style: filterKeyStyle }, 'Group by'),
+                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' } },
+                                React.createElement('span', { style: filterKeyStyle }, 'Group by'),
+                                React.createElement('label', { className: 'vyasa-tasks-toggle-label', title: 'Enable custom grouping' },
+                                    React.createElement('input', {
+                                        type: 'checkbox',
+                                        className: 'vyasa-tasks-switch-input',
+                                        checked: groupByEnabled,
+                                        disabled: !customGroupingAvailable,
+                                        onChange: (event) => {
+                                            setGroupByEnabled(event.target.checked);
+                                            setActiveProjectionId('');
+                                            setViewMode('graph');
+                                            pendingFitActionRef.current = 'mode';
+                                        },
+                                    }),
+                                    React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, groupByEnabled ? 'On' : 'Off')
+                                )
+                            ),
                             React.createElement('div', { style: filterValueStackStyle },
                                     groupByLevels.map((selectedKey, level) => {
-                                        const draggable = customGroupingActive && Boolean(selectedKey);
+                                        const draggable = groupByControlsEnabled && Boolean(selectedKey);
                                         return React.createElement('div', {
                                             key: `group-by-${level}`,
                                             onDragOver: (event) => {
@@ -5969,7 +6002,7 @@ async function renderTasksGraphs(rootElement = document) {
                                             }, '::'),
                                             React.createElement('select', {
                                                 value: selectedKey,
-                                                disabled: Boolean(activeProjectionId) || viewMode === 'gantt',
+                                                disabled: !groupByControlsEnabled,
                                                 onChange: (event) => {
                                                     const next = groupByHierarchy.slice();
                                                     next[level] = event.target.value;
@@ -5998,7 +6031,7 @@ async function renderTasksGraphs(rootElement = document) {
                                                 className: 'vyasa-tasks-group-by-clear',
                                                 title: 'Clear group level',
                                                 'aria-label': `Clear group level ${level + 1}`,
-                                                disabled: Boolean(activeProjectionId) || viewMode === 'gantt' || !selectedKey,
+                                                disabled: !groupByControlsEnabled || !selectedKey,
                                                 onClick: () => {
                                                     const next = groupByHierarchy.slice();
                                                     next[level] = '';
@@ -6108,9 +6141,10 @@ async function renderTasksGraphs(rootElement = document) {
                         ),
                         ...colorLevelSlots.map((colorBy, index) => renderColorLevel(colorBy, index)),
                         React.createElement('div', { style: { marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' } },
-                            React.createElement('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '7px', minWidth: 0, cursor: 'pointer' }, title: 'Show hover highlight on dimmed (inactive) nodes too' },
+                            React.createElement('label', { className: 'vyasa-tasks-toggle-label', title: 'Show hover highlight on dimmed (inactive) nodes too' },
                                 React.createElement('input', {
                                     type: 'checkbox',
+                                    className: 'vyasa-tasks-switch-input',
                                     checked: hoverInactiveNodes,
                                     onChange: (event) => setHoverInactiveNodes(event.target.checked),
                                 }),
@@ -6118,9 +6152,10 @@ async function renderTasksGraphs(rootElement = document) {
                             )
                         ),
                         React.createElement('div', { style: { marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '12px' } },
-                            React.createElement('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '7px', minWidth: 0 } },
+                            React.createElement('label', { className: 'vyasa-tasks-toggle-label' },
                                 React.createElement('input', {
                                     type: 'checkbox',
+                                    className: 'vyasa-tasks-switch-input',
                                     checked: queryBuilderEnabled,
                                     onChange: (event) => setQueryBuilderEnabled(event.target.checked),
                                 }),
@@ -6651,7 +6686,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const isActiveLive = viewMode !== 'gantt' && pid === String(activeProjectionId || '');
                 const defGroups = def ? (Array.isArray(def.groups_from) ? def.groups_from : [def.groups_from]) : [];
                 const fallbackGroups = defGroups.length ? defGroups : tasksProjectionGroupByHierarchy(viewerState.model, pid);
-                const groupBy = (isActiveLive && !pid) ? groupByHierarchy : fallbackGroups;
+                const groupBy = (isActiveLive && !pid) ? (groupByEnabled ? groupByHierarchy : []) : fallbackGroups;
                 return buildTasksProjectionConfigText({
                     id: pid || 'new-view',
                     source: def?.source || '',
