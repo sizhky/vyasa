@@ -47,6 +47,9 @@ chapter2:
 		owner: [Design, Eng]
 palette=kg.palette
 
+@grammar
+path=../shared/roadmap.grammar
+
 @relations
 unlocks color=relation.unlocks
 blocks color=relation.blocks
@@ -77,6 +80,7 @@ dependency:
 - Source nested `attrs:` selects nodes organically by indexed attr groups. Multiple attr keys are ANDed; listed values inside one key are ORed.
 - `base+dep` composes source aliases.
 - `@relations` is optional edge-type vocabulary. Use it to document relation ids, attach default presentation such as `color`, and let CLI validation catch typos. Relation label text defaults to the relation id.
+- `@grammar` is optional and names a declarative rules file (`path=` relative to the pack, or absolute) that layers *dialect* invariants on top of the generic structural checks. A grammar can enforce closed vocabularies (`closed_vocab`), directed spines over an ordered attr (`edge_direction`), relation cardinality (`edge_cardinality`), allowed endpoint kinds (`edge_endpoints`), and conditional attr presence (`requires_attr_when`). It stays out of the pack proper so one grammar is shared across many packs. No `@grammar` means structural checks only. See `scripts/validate_kg_pack.py` for the rule schema.
 - `@views` must have a real purpose through `caption`.
 - `group_by,color_by=status` expands to `group_by=status color_by=status`; `X,Y,Z=value` is valid for simple scalar values.
 - Projection display controls may live on views: `hover_attrs`, `edge_color_by`, `edge_label_from`, `aggregate_edges`, `default_open_depth`, and spacing/layout keys.
@@ -221,6 +225,7 @@ confidence:
 - Core mutations: `upsert_record`, `delete_record`, `bulk_set_attr`, `move_node`, `rename_id`, `upsert_edge`, `delete_edge`, palette updates, filter/hover policy updates, projection updates. The mutation surface is `scripts/kg_cli.py`.
 - `bulk_set_attr` means one key/value patch applied to a selected set of nodes or edges.
 - **Offline validation:** use `kgval <pack-or-mom-path>` when available; it aliases `scripts/validate_kg_pack.py <pack-or-mom-path>` and checks referential integrity without a running server — every edge endpoint and attr id resolves to a defined node, schema `@sources` files exist, the palette is valid JSON, and (when given a `.md`) the `items` fence points at the pack. Any consumer that emits KG Packs (e.g. the minutes-of-meeting skill) should call this rather than re-implementing format checks.
+- **Dialect grammar:** when a pack's schema names an `@grammar`, the validator also enforces that grammar's invariants; pass `--grammar <path>` to point at one explicitly or override the schema's. Structural failures are errors (the pack renders wrong); grammar violations are warnings (the pack renders, but tells a dishonest story). The rule schema (`closed_vocab`, `edge_direction`, `edge_cardinality`, `edge_endpoints`, `requires_attr_when`) is documented at the top of `check_grammar()` in the script.
 
 ## Compatibility
 

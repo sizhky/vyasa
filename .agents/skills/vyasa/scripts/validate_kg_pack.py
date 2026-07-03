@@ -130,8 +130,14 @@ def parse_node_attr_coverage(path):
 
 
 def parse_schema(path):
-    """Return (declared_relations, referenced_source_files, fold_mode)."""
-    relations, sources, fold_mode = set(), {}, "union"
+    """Return (declared_relations, referenced_source_files, fold_mode, grammar_ref).
+
+    grammar_ref is the path declared by an `@grammar path=...` line (or a
+    `grammar=...` line inside @sources), or None. A CLI `--grammar` flag overrides
+    it. The grammar is what layers dialect-specific invariants on top of the
+    generic structural checks; without one, only the structural checks run.
+    """
+    relations, sources, fold_mode, grammar_ref = set(), {}, "union", None
     section = ""
     for line in path.read_text(encoding="utf-8").splitlines():
         s = line.strip()
@@ -140,6 +146,10 @@ def parse_schema(path):
             fm = re.search(r"fold_mode\s*=\s*(\S+)", s)      # @graph ... fold_mode=delta
             if fm:
                 fold_mode = fm.group(1)
+            if section == "@grammar":                        # @grammar path=...
+                gm = re.search(r"\bpath\s*=\s*(\S+)", s)
+                if gm:
+                    grammar_ref = gm.group(1)
             continue
         if not s:
             continue
@@ -147,13 +157,20 @@ def parse_schema(path):
         if fm:
             fold_mode = fm.group(1)
             continue
-        if section == "@relations":
+        if section == "@grammar":
+            gm = re.match(r"path\s*=\s*(\S+)", s)             # @grammar on its own line
+            if gm:
+                grammar_ref = gm.group(1)
+        elif section == "@relations":
             relations.add(s.split()[0])
         elif section == "@sources":
-            m = re.match(r"(nodes|edges|attrs|palette|cache)\s*=\s*(\S+)", s)
+            m = re.match(r"(nodes|edges|attrs|palette|cache|grammar)\s*=\s*(\S+)", s)
             if m:
-                sources[m.group(1)] = m.group(2)
-    return relations, sources, fold_mode
+                if m.group(1) == "grammar":
+                    grammar_ref = m.group(2)
+                else:
+                    sources[m.group(1)] = m.group(2)
+    return relations, sources, fold_mode, grammar_ref
 
 
 def parse_context_edges(pack):
@@ -182,11 +199,162 @@ def parse_context_edges(pack):
     return out
 
 
+def parse_node_attr_values(path):
+    """Return {attr_key: {value: set(node_ids)}} for the @node_attrs section.
+
+    Unlike parse_node_attr_coverage (which collapses to nodes-per-key), this keeps
+    the value each node holds, so the grammar layer can check closed vocabularies,
+    stage ordering on edges, and conditional attribute presence.
+    """
+    vals, mode, key = {}, "node", None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        if s == "@node_attrs":
+            mode, key = "node", None
+            continue
+        if s == "@edge_attrs":
+            mode, key = "edge", None
+            continue
+        if s.startswith("@") or mode != "node":
+            continue
+        head, _, rest = s.partition(":")
+        if rest.strip() == "":
+            key = head.strip()
+            vals.setdefault(key, {})
+        elif key is not None:
+            vals[key].setdefault(head.strip(), set()).update(rest.split())
+    return vals
+
+
+def _node_value_map(values, attr):
+    """Invert {value: nodes} for one attr into {node: value} (last write wins)."""
+    out = {}
+    for value, nodes in values.get(attr, {}).items():
+        for n in nodes:
+            out[n] = value
+    return out
+
+
+def _order_index(value, order):
+    """Position of a stage value in an ordering. 'numeric' reads the leading int
+    (so '20-brd' and '20-business-requirements' both rank 20); a list looks up by
+    membership. Returns None when the value can't be placed."""
+    if value is None:
+        return None
+    if order == "numeric":
+        m = re.match(r"\s*(\d+)", value)
+        return int(m.group(1)) if m else None
+    if isinstance(order, list):
+        return order.index(value) if value in order else None
+    return None
+
+
+def check_grammar(grammar, node_ids, edges, values):
+    """Enforce a dialect grammar. Returns (errors, warnings).
+
+    Grammar violations are warnings, not errors: the structural checks decide
+    render-safety; the grammar decides dialect-honesty. A pack with a bad edge
+    direction still renders — it just tells the wrong story, which is worth a loud
+    warning but not a build-breaking failure.
+    """
+    errs, warns = [], []
+
+    for attr, allowed in grammar.get("closed_vocab", {}).items():
+        seen = set(values.get(attr, {}).keys())
+        for bad in sorted(seen - set(allowed)):
+            warns.append(f"grammar: '{attr}' value '{bad}' is not in the closed "
+                         f"vocabulary {allowed}")
+
+    for rel, spec in grammar.get("edge_direction", {}).items():
+        vmap = _node_value_map(values, spec["by"])
+        order, want = spec.get("order", "numeric"), spec.get("dir", "downhill")
+        for eid, src, tgt, r in edges:
+            if r != rel:
+                continue
+            si, ti = _order_index(vmap.get(src), order), _order_index(vmap.get(tgt), order)
+            if si is None or ti is None:
+                continue
+            uphill = si > ti
+            if (want == "downhill" and uphill) or (want == "uphill" and si < ti):
+                warns.append(f"grammar: edge {eid} '{rel}' runs {'uphill' if uphill else 'downhill'} "
+                             f"({vmap.get(src)} -> {vmap.get(tgt)}) but must flow {want}")
+
+    for rel, spec in grammar.get("edge_cardinality", {}).items():
+        into, out = {}, {}
+        for eid, src, tgt, r in edges:
+            if r != rel:
+                continue
+            into.setdefault(tgt, []).append(eid)
+            out.setdefault(src, []).append(eid)
+        if "into_max" in spec:
+            for n, es in into.items():
+                if len(es) > spec["into_max"]:
+                    warns.append(f"grammar: node '{n}' has {len(es)} '{rel}' edges into it "
+                                 f"({', '.join(es)}) but at most {spec['into_max']} allowed")
+        if "out_max" in spec:
+            for n, es in out.items():
+                if len(es) > spec["out_max"]:
+                    warns.append(f"grammar: node '{n}' has {len(es)} '{rel}' edges out of it "
+                                 f"({', '.join(es)}) but at most {spec['out_max']} allowed")
+
+    for rel, spec in grammar.get("edge_endpoints", {}).items():
+        for end in ("src", "tgt"):
+            for attr, allowed in spec.get(end, {}).items():
+                vmap = _node_value_map(values, attr)
+                for eid, src, tgt, r in edges:
+                    if r != rel:
+                        continue
+                    node = src if end == "src" else tgt
+                    val = vmap.get(node)
+                    if val is not None and val not in allowed:
+                        warns.append(f"grammar: edge {eid} '{rel}' {end} '{node}' has {attr}="
+                                     f"'{val}', but {end} must be one of {allowed}")
+
+    for rule in grammar.get("requires_attr_when", []):
+        cond, then = rule.get("if", {}), rule.get("then")
+        then_nodes = set().union(*values.get(then, {}).values()) if values.get(then) else set()
+        for attr, trigger_vals in cond.items():
+            vmap = _node_value_map(values, attr)
+            for n, v in vmap.items():
+                if v in trigger_vals and n not in then_nodes:
+                    warns.append(f"grammar: node '{n}' has {attr}='{v}' but carries no "
+                                 f"'{then}' value ({attr} in {trigger_vals} requires '{then}')")
+
+    return errs, warns
+
+
+def load_grammar(ref, pack, cli_override):
+    """Resolve and load a grammar JSON. CLI flag wins over the schema ref. Path is
+    tried as-is, then relative to the pack dir. Returns (grammar|None, note)."""
+    raw = cli_override or ref
+    if not raw:
+        return None, None
+    for cand in (Path(raw), pack / raw):
+        if cand.exists():
+            try:
+                return json.loads(cand.read_text(encoding="utf-8")), None
+            except json.JSONDecodeError as ex:
+                return None, f"grammar file {cand} is not valid JSON: {ex}"
+    return None, f"grammar file not found: {raw} (tried as-is and relative to {pack})"
+
+
 def main():
-    if len(sys.argv) != 2:
+    args = sys.argv[1:]
+    cli_grammar = None
+    if "--grammar" in args:
+        i = args.index("--grammar")
+        try:
+            cli_grammar = args[i + 1]
+        except IndexError:
+            print("ERROR: --grammar needs a path")
+            return 2
+        del args[i:i + 2]
+    if len(args) != 1:
         print(__doc__)
         return 2
-    target = Path(sys.argv[1])
+    target = Path(args[0])
     errors, warnings = [], []
 
     mom_md = None
@@ -220,7 +388,7 @@ def main():
     node_ids = parse_nodes(need["kg.nodes"])
     edge_ids, edges = parse_edges(need["kg.edges"])
     node_refs, edge_refs = parse_attr_refs(need["kg.attrs"])
-    relations, sources, fold_mode = parse_schema(need["kg.schema"])
+    relations, sources, fold_mode, grammar_ref = parse_schema(need["kg.schema"])
     ctx_edges = parse_context_edges(pack)
 
     if not node_ids:
@@ -288,6 +456,17 @@ def main():
         json.loads(palette_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as ex:
         errors.append(f"kg.palette is not valid JSON: {ex}")
+
+    # Dialect grammar (optional): layers claim-graph invariants over the generic
+    # structural checks above. Absent grammar => structural checks only.
+    grammar, gnote = load_grammar(grammar_ref, pack, cli_grammar)
+    if gnote:
+        warnings.append(gnote)
+    if grammar:
+        attr_values = parse_node_attr_values(need["kg.attrs"])
+        gerrs, gwarns = check_grammar(grammar, node_ids, edges, attr_values)
+        errors.extend(gerrs)
+        warnings.extend(gwarns)
 
     if mom_md and mom_md.exists():
         text = mom_md.read_text(encoding="utf-8")
