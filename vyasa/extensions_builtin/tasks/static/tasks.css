@@ -211,6 +211,56 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
 .vyasa-tasks-icon-filter-button {
     position: relative;
 }
+.vyasa-tasks-icon-filter-section,
+.vyasa-tasks-icon-filter-group {
+    min-width: 0;
+}
+.vyasa-tasks-icon-filter-section > summary,
+.vyasa-tasks-icon-filter-group > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    font-weight: 700;
+    opacity: 0.76;
+    list-style: none;
+}
+.vyasa-tasks-icon-filter-section > summary::-webkit-details-marker,
+.vyasa-tasks-icon-filter-group > summary::-webkit-details-marker {
+    display: none;
+}
+.vyasa-tasks-icon-filter-section > summary::before,
+.vyasa-tasks-icon-filter-group > summary::before {
+    content: "›";
+    flex: 0 0 auto;
+    transform: rotate(0deg);
+}
+.vyasa-tasks-icon-filter-section[open] > summary::before,
+.vyasa-tasks-icon-filter-group[open] > summary::before {
+    transform: rotate(90deg);
+}
+.vyasa-tasks-icon-filter-groups {
+    display: grid;
+    gap: 10px;
+    margin-top: 8px;
+}
+.vyasa-tasks-icon-filter-group {
+    border-radius: 8px;
+    background: color-mix(in srgb, currentColor 4%, transparent);
+    padding: 8px;
+}
+.vyasa-tasks-icon-filter-group > div {
+    margin-top: 8px;
+}
+.vyasa-tasks-icon-filter-count {
+    margin-left: auto;
+    border-radius: 999px;
+    padding: 1px 6px;
+    font-size: 10px;
+    background: color-mix(in srgb, var(--vyasa-primary) 18%, transparent);
+}
 .vyasa-tasks-icon-filter-glyph {
     width: 20px;
     height: 20px;

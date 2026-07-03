@@ -5720,11 +5720,14 @@ async function renderTasksGraphs(rootElement = document) {
                 };
                 const renderIconFilterGroup = (group) => {
                     const selectedValues = new Set(tasksFilterQuerySelectedValues(activeSwatchFilters, group.key));
-                    return React.createElement('div', {
+                    return React.createElement('details', {
                         key: `icon-filter-${group.key}`,
-                        style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' },
+                        className: 'vyasa-tasks-icon-filter-group',
                     },
-                        React.createElement('span', { style: filterKeyStyle }, `${tasksNodeMetaLabel(group.key)} icons`),
+                        React.createElement('summary', null,
+                            React.createElement('span', null, `${tasksNodeMetaLabel(group.key)} icons`),
+                            selectedValues.size ? React.createElement('span', { className: 'vyasa-tasks-icon-filter-count' }, String(selectedValues.size)) : null
+                        ),
                         React.createElement('div', {
                             style: {
                                 display: 'grid',
@@ -5759,6 +5762,22 @@ async function renderTasksGraphs(rootElement = document) {
                                 React.createElement('span', { className: 'vyasa-tasks-icon-filter-glyph', 'aria-hidden': 'true', style: { '--vyasa-tasks-icon-url': `url("${image}")` } }),
                                 React.createElement('span', { className: 'vyasa-tasks-icon-filter-tooltip', role: 'tooltip' }, value));
                             })
+                        )
+                    );
+                };
+                const renderIconFilters = () => {
+                    if (!iconFilterGroups.length) return null;
+                    const selectedIconCount = iconFilterGroups.reduce((count, group) => count + tasksFilterQuerySelectedValues(activeSwatchFilters, group.key).length, 0);
+                    return React.createElement('details', {
+                        className: 'vyasa-tasks-icon-filter-section',
+                        style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' },
+                    },
+                        React.createElement('summary', null,
+                            React.createElement('span', null, 'Icons'),
+                            selectedIconCount ? React.createElement('span', { className: 'vyasa-tasks-icon-filter-count' }, String(selectedIconCount)) : null
+                        ),
+                        React.createElement('div', { className: 'vyasa-tasks-icon-filter-groups' },
+                            ...iconFilterGroups.map(renderIconFilterGroup)
                         )
                     );
                 };
@@ -6239,7 +6258,7 @@ async function renderTasksGraphs(rootElement = document) {
                             )
                         ),
                         ...colorLevelSlots.map((colorBy, index) => renderColorLevel(colorBy, index)),
-                        ...iconFilterGroups.map(renderIconFilterGroup),
+                        renderIconFilters(),
                         React.createElement('div', { style: { marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' } },
                             React.createElement('label', { className: 'vyasa-tasks-toggle-label', title: 'Show hover highlight on dimmed (inactive) nodes too' },
                                 React.createElement('input', {
