@@ -208,6 +208,39 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
 .dark .vyasa-tasks-node-image--icon.vyasa-tasks-node-image--dimmed {
     filter: brightness(0) invert(1) grayscale(0.4);
 }
+.vyasa-tasks-icon-filter-button {
+    position: relative;
+}
+.vyasa-tasks-icon-filter-glyph {
+    width: 20px;
+    height: 20px;
+    display: block;
+    background: currentColor;
+    opacity: 0.88;
+    -webkit-mask: var(--vyasa-tasks-icon-url) center / contain no-repeat;
+    mask: var(--vyasa-tasks-icon-url) center / contain no-repeat;
+}
+.vyasa-tasks-icon-filter-tooltip {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 6px);
+    transform: translateX(-50%);
+    z-index: 30;
+    max-width: 180px;
+    padding: 4px 7px;
+    border-radius: 6px;
+    background: rgb(15 23 42);
+    color: white;
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+}
+.vyasa-tasks-icon-filter-button:hover .vyasa-tasks-icon-filter-tooltip,
+.vyasa-tasks-icon-filter-button:focus-visible .vyasa-tasks-icon-filter-tooltip {
+    opacity: 1;
+}
 .vyasa-tasks-filter-card {
     border: 4px solid rgb(226 232 240) !important;
     box-shadow: 0 10px 30px rgba(0,0,0,0.12) !important;

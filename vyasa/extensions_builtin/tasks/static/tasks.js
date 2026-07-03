@@ -5738,7 +5738,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 return React.createElement('button', {
                                     key: `${group.key}-${value}`,
                                     type: 'button',
-                                    title: value,
+                                    className: 'vyasa-tasks-icon-filter-button',
                                     'aria-label': `${tasksNodeMetaLabel(group.key)}: ${value}`,
                                     'aria-pressed': selected,
                                     onClick: () => toggleFilterValue(group.key, value, !selected),
@@ -5756,7 +5756,8 @@ async function renderTasksGraphs(rootElement = document) {
                                         padding: '6px',
                                     },
                                 },
-                                React.createElement('img', { src: image, alt: '', 'aria-hidden': 'true', loading: 'lazy', style: { width: '20px', height: '20px', objectFit: 'contain', display: 'block' } }));
+                                React.createElement('span', { className: 'vyasa-tasks-icon-filter-glyph', 'aria-hidden': 'true', style: { '--vyasa-tasks-icon-url': `url("${image}")` } }),
+                                React.createElement('span', { className: 'vyasa-tasks-icon-filter-tooltip', role: 'tooltip' }, value));
                             })
                         )
                     );
