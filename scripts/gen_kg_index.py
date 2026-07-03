@@ -64,14 +64,20 @@ def parse_nodes(path: Path, facts: list):
         return
     lines = path.read_text().splitlines()
     cur = None
+    stack = []  # (indent, id) — indented `id: label` is a child of the enclosing node
     for ln in lines:
         s = ln.strip()
         if not s or s.startswith("#"):
             continue
         m = NODE_RE.match(ln)
         if m and "=" not in m.group(2):  # id: label  (not a key=val)
-            cur = m.group(2)
+            cur, indent = m.group(2), len(m.group(1))
             facts.append(fact(cur, "label", m.group(3)))
+            while stack and stack[-1][0] >= indent:   # pop siblings/shallower
+                stack.pop()
+            if stack:                                  # containment: child -> @parent
+                facts.append(fact(cur, "parent", stack[-1][1], ref=True))
+            stack.append((indent, cur))
             continue
     # second pass for attrs (need block handling tied to current node)
     cur = None
@@ -188,6 +194,30 @@ def inline_attrs(s: str) -> dict:
             for m in re.finditer(r'(\w+)=(?:"([^"]*)"|(\S+))', s)}
 
 
+def parse_edges(path: Path, facts: list):
+    """kg.edges -> base relation facts (context-less), so DSL + renderer see one graph.
+
+    Line form: `<edge_id>: src -> tgt rel [k=v ...]`. The edge_id prefix is dropped;
+    `op=-` retracts. Mirrors the `@edges` handler in parse_context but at base context.
+    """
+    if not path.exists():
+        return
+    for ln in path.read_text().splitlines():
+        s = ln.split("#", 1)[0].strip()
+        if "->" not in s:
+            continue
+        if ":" in s.split("->", 1)[0]:                     # drop `e1:` edge-id prefix
+            s = s.split(":", 1)[1].strip()
+        left, right = s.split("->", 1)
+        src, parts = left.strip(), right.split()
+        if not src or not parts:
+            continue
+        tgt = parts[0]
+        rel = parts[1] if len(parts) > 1 else "rel"
+        op = inline_attrs(s).get("op")                     # op=- retracts this edge
+        facts.append(fact(src, rel, tgt, ref=True, op=op))
+
+
 def parse_context(path: Path, facts: list):
     """One *.context -> context-entity, status, presence, edge, and slide facts (c=<ctx>)."""
     lines = path.read_text().splitlines()
@@ -268,6 +298,7 @@ def main(argv):
     parse_schema(pack / "kg.schema", facts)
     parse_nodes(pack / "kg.nodes", facts)
     parse_attrs(pack / "kg.attrs", facts)
+    parse_edges(pack / "kg.edges", facts)
     for cf in sorted(pack.glob("*.context")):
         parse_context(cf, facts)
     out.write_text("\n".join(facts) + "\n")
