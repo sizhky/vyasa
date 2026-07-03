@@ -3,6 +3,7 @@ import html
 import json
 from pathlib import Path
 import re
+import subprocess
 from textwrap import dedent
 
 from vyasa.extensions_builtin.markdown.renderer import from_md
@@ -357,12 +358,20 @@ def test_tasks_query_builder_can_be_disabled_per_projection():
 
 def test_tasks_query_builder_controls_use_filter_panel_css():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
-    assert ".vyasa-tasks-filter-card .betweenRules" in source
-    assert ".vyasa-tasks-filter-card .ruleGroup-notToggle" in source
-    assert ".vyasa-tasks-filter-card select" in source
-    assert ".vyasa-tasks-filter-card input[type=\"checkbox\"]" in source
-    assert "appearance: none;" in source
+    assert "const TASKS_FILTER_PANEL_WIDTH = 440;" in source
+    assert "muteGroupAction: null" in source
+    assert "React.createElement('span', null, 'Active')" in source
+    assert ".vyasa-tasks-filter-card .betweenRules" in css
+    assert ".vyasa-tasks-filter-card .ruleGroup-notToggle" in css
+    assert ".vyasa-tasks-filter-card .ruleGroup-mute" in css
+    assert ".vyasa-tasks-filter-card .rule-mute" in css
+    assert ".vyasa-tasks-filter-card .ruleGroup .ruleGroup" in css
+    assert "border-left: 3px solid color-mix(in srgb, var(--vyasa-primary) 50%, currentColor 12%)" in css
+    assert "margin-left: 14px" in css
+    assert ".vyasa-tasks-filter-card input[type=\"checkbox\"]" in css
+    assert "appearance: none;" in css
 
 
 def test_tasks_source_retries_mount_after_swap_when_widget_size_is_zero():
@@ -551,9 +560,17 @@ def test_tasks_filter_reset_button_stays_in_filter_card_header():
     panel_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
 
     assert "React.createElement('button', { type: 'button', onClick: resetProjectionControls" in panel_source
-    assert panel_source.index("activeCount ? `Filters (${activeCount})` : 'Filters'") < panel_source.index("onClick: resetProjectionControls")
-    assert panel_source.index("onClick: resetProjectionControls") < panel_source.index("'×'")
-    assert panel_source.index("onClick: resetProjectionControls") < panel_source.index("'Intensity'")
+    reset_index = panel_source.index("onClick: resetProjectionControls")
+    assert panel_source.index("activeCount ? `Filters (${activeCount})` : 'Filters'") < reset_index
+    assert reset_index < panel_source.index("'×'", reset_index)
+    assert reset_index < panel_source.index("'Intensity'")
+
+
+def test_tasks_projection_switch_preserves_filter_drawer_when_view_has_no_saved_state():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "setFiltersCollapsed((current) => (" in source
+    assert "typeof nextPrefs?.filtersCollapsed === 'boolean'\n                        ? nextPrefs.filtersCollapsed\n                        : current" in source
 
 
 def test_tasks_edge_animation_defaults_off_and_zero_cycles_smooth_then_tick():
@@ -600,6 +617,20 @@ def test_tasks_color_picker_uses_cascading_level_dropdowns():
     assert "...colorLevelSlots.map((colorBy, index) => renderColorLevel(colorBy, index))" in source
 
 
+def test_tasks_hierarchy_controls_are_drag_reorderable():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const reorderTasksHierarchyLevel = React.useCallback((items, fromIndex, toIndex) => {" in source
+    assert "const reorderActiveColorLevel = React.useCallback((fromIndex, toIndex) => {" in source
+    assert "const reorderGroupByLevel = React.useCallback((fromIndex, toIndex) => {" in source
+    assert "event.dataTransfer.setData('text/x-vyasa-color-level', String(index));" in source
+    assert "reorderActiveColorLevel(from, index);" in source
+    assert "event.dataTransfer.setData('text/x-vyasa-group-level', String(level));" in source
+    assert "reorderGroupByLevel(from, level);" in source
+    assert "'aria-label': 'Drag to reorder color level'" in source
+    assert "'aria-label': 'Drag to reorder group level'" in source
+
+
 def test_tasks_color_picker_groups_special_modes_at_bottom():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
@@ -626,6 +657,19 @@ def test_tasks_query_builder_supports_inline_text_attrs_and_exists_operator():
     assert "if (rule.operator === 'notnull') return tasksNodeFilterAttributeExists(node, rule.field)" in source
     assert "if (rule.operator === 'matchesRegex')" in source
     assert ": null;" in core
+
+
+def test_tasks_filter_query_ignores_root_mute_but_keeps_rule_mute():
+    script = """
+        import { tasksCountFilterRules, tasksFilterQueryHasRules } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        const query = { combinator: 'and', muted: true, rules: [
+            { field: 'measure', operator: 'notnull', value: '', muted: false },
+            { field: 'status', operator: '=', value: 'todo', muted: true },
+        ] };
+        if (!tasksFilterQueryHasRules(query)) throw new Error('root mute disabled active rule');
+        if (tasksCountFilterRules(query) !== 1) throw new Error(`expected one active rule`);
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
 def test_tasks_source_supports_continuous_gradient_palettes():

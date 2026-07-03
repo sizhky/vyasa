@@ -23,6 +23,38 @@
 .vyasa-task-slide-description ol { list-style: decimal; padding-left: 1.35rem; margin: 0.2rem 0 0.6rem; }
 .vyasa-task-slide-description li { margin: 0.18rem 0; }
 .vyasa-task-slide-description li > p { margin: 0; }
+.vyasa-task-slide-nav select {
+    appearance: none;
+    padding: 0 34px 0 10px !important;
+    border-color: color-mix(in srgb, var(--vyasa-primary) 28%, currentColor 12%) !important;
+    background:
+        linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
+        linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 13px) 50% / 6px 6px no-repeat,
+        color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%) !important;
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 18%, transparent),
+        0 1px 2px rgba(15, 23, 42, 0.08);
+    cursor: pointer;
+}
+.vyasa-task-slide-nav select:hover {
+    border-color: color-mix(in srgb, var(--vyasa-primary) 48%, currentColor 16%) !important;
+    background:
+        linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
+        linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 13px) 50% / 6px 6px no-repeat,
+        color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-primary) 12%) !important;
+}
+.vyasa-task-slide-nav select:focus-visible {
+    outline: none;
+    border-color: color-mix(in srgb, var(--vyasa-primary) 72%, currentColor 12%) !important;
+    box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 24%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+}
+.dark .vyasa-task-slide-nav select {
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
+        0 1px 2px rgba(0, 0, 0, 0.28);
+}
 .vyasa-task-pill { display: inline-flex; width: max-content; margin-bottom: 0.14rem; padding: 0; border: 0; background: transparent; color: var(--vyasa-ink-soft); font: 600 0.63rem/1 var(--vyasa-font-ui); letter-spacing: 0.11em; text-transform: uppercase; opacity: 0.54; }
 .vyasa-task-copy { color: var(--vyasa-ink); font-size: 0.92rem; line-height: 1.34; font-style: normal; font-weight: 560; text-wrap: pretty; }
 .vyasa-task-card.is-done .vyasa-task-copy { text-decoration: line-through; text-decoration-thickness: 1.5px; text-decoration-color: color-mix(in srgb, var(--vyasa-callout-accent) 58%, currentColor); opacity: 0.72; }
@@ -176,6 +208,91 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
 .dark .vyasa-tasks-node-image--icon.vyasa-tasks-node-image--dimmed {
     filter: brightness(0) invert(1) grayscale(0.4);
 }
+.vyasa-tasks-icon-filter-button {
+    position: relative;
+}
+.vyasa-tasks-icon-filter-section,
+.vyasa-tasks-icon-filter-group {
+    min-width: 0;
+    border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, currentColor 3%, transparent);
+    padding: 8px;
+}
+.vyasa-tasks-icon-filter-section > summary,
+.vyasa-tasks-icon-filter-group > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    font-weight: 700;
+    opacity: 0.76;
+    list-style: none;
+}
+.vyasa-tasks-icon-filter-section > summary::-webkit-details-marker,
+.vyasa-tasks-icon-filter-group > summary::-webkit-details-marker {
+    display: none;
+}
+.vyasa-tasks-icon-filter-section > summary::before,
+.vyasa-tasks-icon-filter-group > summary::before {
+    content: "›";
+    flex: 0 0 auto;
+    transform: rotate(0deg);
+}
+.vyasa-tasks-icon-filter-section[open] > summary::before,
+.vyasa-tasks-icon-filter-group[open] > summary::before {
+    transform: rotate(90deg);
+}
+.vyasa-tasks-icon-filter-groups {
+    display: grid;
+    gap: 10px;
+    margin-top: 8px;
+}
+.vyasa-tasks-icon-filter-group {
+    background: color-mix(in srgb, currentColor 4%, transparent);
+}
+.vyasa-tasks-icon-filter-group > div {
+    margin-top: 8px;
+}
+.vyasa-tasks-icon-filter-count {
+    margin-left: auto;
+    border-radius: 999px;
+    padding: 1px 6px;
+    font-size: 10px;
+    background: color-mix(in srgb, var(--vyasa-primary) 18%, transparent);
+}
+.vyasa-tasks-icon-filter-glyph {
+    width: 20px;
+    height: 20px;
+    display: block;
+    background: currentColor;
+    opacity: 0.88;
+    -webkit-mask: var(--vyasa-tasks-icon-url) center / contain no-repeat;
+    mask: var(--vyasa-tasks-icon-url) center / contain no-repeat;
+}
+.vyasa-tasks-icon-filter-tooltip {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 6px);
+    transform: translateX(-50%);
+    z-index: 30;
+    max-width: 180px;
+    padding: 4px 7px;
+    border-radius: 6px;
+    background: rgb(15 23 42);
+    color: white;
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+}
+.vyasa-tasks-icon-filter-button:hover .vyasa-tasks-icon-filter-tooltip,
+.vyasa-tasks-icon-filter-button:focus-visible .vyasa-tasks-icon-filter-tooltip {
+    opacity: 1;
+}
 .vyasa-tasks-filter-card {
     border: 4px solid rgb(226 232 240) !important;
     box-shadow: 0 10px 30px rgba(0,0,0,0.12) !important;
@@ -185,25 +302,32 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
 }
 .vyasa-tasks-filter-card .queryBuilder {
     display: grid;
-    gap: 8px;
+    gap: 12px;
     font-size: 12px;
     max-width: 100%;
     overflow: hidden;
 }
 .vyasa-tasks-filter-card .ruleGroup {
-    border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--vyasa-paper) 96%, transparent);
-    padding: 8px;
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    border-radius: 12px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--vyasa-paper) 98%, transparent), color-mix(in srgb, var(--vyasa-paper) 92%, var(--vyasa-primary) 8%));
+    padding: 10px;
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
+}
+.vyasa-tasks-filter-card .ruleGroup .ruleGroup {
+    margin-top: 10px;
+    margin-left: 14px;
+    border-left: 3px solid color-mix(in srgb, var(--vyasa-primary) 42%, currentColor 18%);
+    background: color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%);
 }
 .vyasa-tasks-filter-card .ruleGroup-header,
 .vyasa-tasks-filter-card .betweenRules {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 .vyasa-tasks-filter-card .ruleGroup-notToggle {
     display: inline-flex;
@@ -213,24 +337,37 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
 }
 .vyasa-tasks-filter-card .rule,
 .vyasa-tasks-filter-card .ruleGroup-header {
-    gap: 6px;
+    gap: 8px;
     align-items: center;
     flex-wrap: wrap;
     min-width: 0;
 }
 .vyasa-tasks-filter-card .rule {
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+    border-left: 3px solid color-mix(in srgb, var(--vyasa-primary) 50%, currentColor 12%);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--vyasa-paper) 97%, transparent);
+    box-sizing: border-box;
 }
 .vyasa-tasks-filter-card .rule > * {
     min-width: 0;
 }
-.vyasa-tasks-filter-card .rule .rule-value,
-.vyasa-tasks-filter-card .rule .rule-remove {
-    grid-column: 1 / -1;
+.vyasa-tasks-filter-card .rule .rule-value {
+    grid-column: 1 / 3;
 }
 .vyasa-tasks-filter-card .rule .rule-remove {
-    justify-self: start;
+    justify-self: end;
+}
+.vyasa-tasks-filter-card .rule-mute {
+    min-height: 34px;
+    padding: 0 7px;
+    border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--vyasa-paper) 94%, transparent);
 }
 .vyasa-tasks-filter-card .vyasa-tasks-query-values {
     display: grid;
@@ -255,10 +392,78 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
     border-radius: 8px;
     background: color-mix(in srgb, var(--vyasa-paper) 96%, transparent);
     color: inherit;
-    padding: 5px 7px;
+    min-height: 34px;
+    padding: 5px 8px;
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
+}
+.vyasa-tasks-filter-card select {
+    appearance: none;
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 34px 7px 10px !important;
+    border-color: color-mix(in srgb, var(--vyasa-primary) 28%, currentColor 12%) !important;
+    background:
+        linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
+        linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 13px) 50% / 6px 6px no-repeat,
+        color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%) !important;
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 18%, transparent),
+        0 1px 2px rgba(15, 23, 42, 0.08);
+    font-weight: 650;
+    line-height: 1.25;
+    cursor: pointer;
+}
+.vyasa-tasks-filter-card select:hover {
+    border-color: color-mix(in srgb, var(--vyasa-primary) 48%, currentColor 16%) !important;
+    background:
+        linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
+        linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 13px) 50% / 6px 6px no-repeat,
+        color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-primary) 12%) !important;
+}
+.vyasa-tasks-filter-card select:focus-visible {
+    outline: none;
+    border-color: color-mix(in srgb, var(--vyasa-primary) 72%, currentColor 12%) !important;
+    box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 24%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+}
+.vyasa-tasks-filter-card select:disabled {
+    cursor: not-allowed;
+    opacity: 0.56;
+}
+.vyasa-tasks-filter-card .vyasa-tasks-group-by-clear {
+    flex: 0 0 30px;
+    width: 30px;
+    min-height: 36px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%);
+    color: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+.vyasa-tasks-filter-card .vyasa-tasks-group-by-clear:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--vyasa-primary) 48%, currentColor 16%);
+    background: color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-primary) 12%);
+}
+.vyasa-tasks-filter-card .vyasa-tasks-group-by-clear:focus-visible {
+    outline: none;
+    border-color: color-mix(in srgb, var(--vyasa-primary) 72%, currentColor 12%);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 24%, transparent);
+}
+.vyasa-tasks-filter-card .vyasa-tasks-group-by-clear:disabled {
+    cursor: not-allowed;
+    opacity: 0.42;
+}
+.dark .vyasa-tasks-filter-card select {
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
+        0 1px 2px rgba(0, 0, 0, 0.28);
 }
 .vyasa-tasks-filter-card input[type="checkbox"] {
     appearance: none;
@@ -273,6 +478,9 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
     flex: 0 0 auto;
     vertical-align: middle;
 }
+.vyasa-tasks-filter-card .ruleGroup-mute {
+    display: none !important;
+}
 .vyasa-tasks-filter-card input[type="checkbox"]:checked {
     border-color: color-mix(in srgb, var(--vyasa-primary) 78%, currentColor 22%);
     background: color-mix(in srgb, var(--vyasa-primary) 72%, white 28%);
@@ -284,6 +492,63 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
     border: solid var(--vyasa-paper);
     border-width: 0 2px 2px 0;
     transform: rotate(45deg) translateY(-1px);
+}
+.vyasa-tasks-filter-card .vyasa-tasks-toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    cursor: pointer;
+}
+.vyasa-tasks-filter-card .vyasa-tasks-toggle-label:has(input:disabled) {
+    cursor: not-allowed;
+    opacity: 0.58;
+}
+.vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+.vyasa-tasks-filter-card .vyasa-tasks-switch-track {
+    position: relative;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 20px;
+    border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, currentColor 12%, var(--vyasa-paper) 88%);
+    box-sizing: border-box;
+    transition: background 120ms ease, border-color 120ms ease;
+}
+.vyasa-tasks-filter-card .vyasa-tasks-switch-track::before {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: color-mix(in srgb, currentColor 58%, var(--vyasa-paper) 42%);
+    transform: translateX(0);
+    transition: transform 120ms ease, background 120ms ease;
+}
+.vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:checked + .vyasa-tasks-switch-track {
+    border-color: color-mix(in srgb, var(--vyasa-primary) 78%, currentColor 22%);
+    background: color-mix(in srgb, var(--vyasa-primary) 72%, white 28%);
+}
+.vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:checked + .vyasa-tasks-switch-track::before {
+    background: var(--vyasa-paper);
+    transform: translateX(16px);
+}
+.vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:focus-visible + .vyasa-tasks-switch-track {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 24%, transparent);
+}
+.vyasa-tasks-filter-card input[type="checkbox"].vyasa-tasks-switch-input:disabled + .vyasa-tasks-switch-track {
+    cursor: not-allowed;
+    opacity: 0.58;
 }
 .vyasa-tasks-filter-card .rule button,
 .vyasa-tasks-filter-card .ruleGroup button {

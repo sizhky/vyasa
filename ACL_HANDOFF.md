@@ -38,8 +38,8 @@ the locked model.
 Run after any pack edit:
 ```bash
 PY=/Users/yeshwanth/.venv/bin/python
-$PY scripts/gen_kg_index.py <pack-dir> <pack-dir>/kg.index
-$PY scripts/kg_query.py <pack-dir>/kg.index '<pipeline>'
+$PY .agents/skills/vyasa/scripts/gen_kg_index.py <pack-dir> <pack-dir>/kg.index
+$PY .agents/skills/vyasa/scripts/kg_query.py <pack-dir>/kg.index '<pipeline>'
 ```
 
 ## The ACL model (locked)

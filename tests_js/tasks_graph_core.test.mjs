@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 const { buildTasksProjectionConfigText, parseTasksProjectionConfigText, tasksCollectSearchMatches, tasksNodeMatchesAllFilters, tasksNodeMatchesFilters, tasksSelectionClickKey } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
 
 function fakeStorage(initial = {}) {
@@ -172,7 +172,7 @@ test('buildTaskEdgeAnchors uses full width when one role owns a side', () => {
     );
 });
 
-test('buildTaskEdgeAnchors splits top side into symmetric halves when roles mix', () => {
+test('buildTaskEdgeAnchors puts incoming handles before outgoing handles on same side', () => {
     const nodes = [
         { id: 'hub', position: { x: 0, y: 200 }, width: 220, height: 60 },
         { id: 'outA', position: { x: -220, y: 0 }, width: 220, height: 60 },
@@ -188,15 +188,15 @@ test('buildTaskEdgeAnchors splits top side into symmetric halves when roles mix'
     ]);
     assert.deepEqual(
         nodeHandles.hub.source.map((handle) => Math.round(handle.offsetPct)),
-        [18, 39],
+        [61, 82],
     );
     assert.deepEqual(
         nodeHandles.hub.target.map((handle) => Math.round(handle.offsetPct)),
-        [61, 82],
+        [18, 39],
     );
 });
 
-test('buildTaskEdgeAnchors spaces mixed top-side roles by total side traffic', () => {
+test('buildTaskEdgeAnchors keeps outgoing handles in the second half with mixed traffic', () => {
     const nodes = [
         { id: 'hub', position: { x: 0, y: 200 }, width: 220, height: 60 },
         { id: 'out', position: { x: 0, y: 0 }, width: 220, height: 60 },
@@ -210,11 +210,11 @@ test('buildTaskEdgeAnchors spaces mixed top-side roles by total side traffic', (
     ]);
     assert.deepEqual(
         nodeHandles.hub.source.map((handle) => Math.round(handle.offsetPct)),
-        [18],
+        [82],
     );
     assert.deepEqual(
         nodeHandles.hub.target.map((handle) => Math.round(handle.offsetPct)),
-        [50, 82],
+        [18, 50],
     );
 });
 
@@ -330,6 +330,16 @@ test('drag rect selects task nodes and expanded groups', () => {
         { id: 'task-b', position: { x: 360, y: 100 }, style: { width: 80, height: 40 }, data: { __kind__: 'task' } },
     ];
     assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 110, y1: 110, x2: 230, y2: 170 }), ['task-a']);
+    assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 95, y1: 95, x2: 265, y2: 225 }), ['group-a', 'task-a']);
+});
+
+test('drag rect only selects group title when the whole group is covered', () => {
+    const nodes = [
+        { id: 'group-a', position: { x: 100, y: 100 }, style: { width: 160, height: 120 }, data: { __kind__: 'group' } },
+        { id: 'group-a__title', parentId: 'group-a', position: { x: 0, y: 0 }, style: { width: 160, height: 34 }, data: { __kind__: 'groupTitle', sourceGroupId: 'group-a' } },
+        { id: 'task-a', parentId: 'group-a', position: { x: 20, y: 60 }, style: { width: 80, height: 40 }, data: { __kind__: 'task' } },
+    ];
+    assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 95, y1: 95, x2: 265, y2: 140 }), []);
     assert.deepEqual(selectTasksGraphNodeIdsInRect(nodes, { x1: 95, y1: 95, x2: 265, y2: 225 }), ['group-a', 'task-a']);
 });
 
@@ -539,6 +549,29 @@ test('node image resolver prefers direct image over image_by palette', () => {
     assert.equal(resolveTasksNodeImage({ type: 'database' }, model), 'https://api.iconify.design/devicon/postgresql.svg');
     assert.equal(resolveTasksNodeImage({ type: 'database', image: 'https://cdn.example.com/custom.svg' }, model), 'https://cdn.example.com/custom.svg');
     assert.equal(resolveTasksNodeImage({ type: 'database', image: 'javascript:alert(1)' }, model), 'https://api.iconify.design/devicon/postgresql.svg');
+});
+
+test('icon filter groups expose present mdi palette values by attribute', () => {
+    const model = {
+        groups: [{ kind: 'api', owner: 'eng' }],
+        tasks: [{ kind: 'db', owner: 'design' }, { kind: 'api', owner: 'eng' }],
+        node_image_palettes: {
+            kind: {
+                api: 'iconify:mdi:api',
+                db: 'https://api.iconify.design/mdi/database.svg',
+                unused: 'iconify:mdi:ghost',
+                external: 'https://cdn.example.com/icon.svg',
+            },
+            owner: {
+                design: 'iconify:mdi:palette',
+                eng: 'iconify:devicon:go',
+            },
+        },
+    };
+    assert.deepEqual(tasksIconFilterGroups(model), [
+        { key: 'kind', entries: [['api', 'https://api.iconify.design/mdi/api.svg'], ['db', 'https://api.iconify.design/mdi/database.svg']] },
+        { key: 'owner', entries: [['design', 'https://api.iconify.design/mdi/palette.svg']] },
+    ]);
 });
 
 test('selected group edge filter includes edges internal to selected descendants', () => {

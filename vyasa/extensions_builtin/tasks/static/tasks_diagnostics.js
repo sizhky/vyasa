@@ -24,20 +24,8 @@ if (!Array.isArray(window.__vyasaTasksDebug.watch) || window.__vyasaTasksDebug.w
 }
 
 export function renderTasksDebugOverlay() {
-    if (!window.__vyasaTasksDebug.enabled || typeof document === 'undefined') return;
-    let panel = document.getElementById('vyasa-tasks-debug-log');
-    if (!panel) {
-        panel = document.createElement('pre');
-        panel.id = 'vyasa-tasks-debug-log';
-        panel.style.cssText = 'position:fixed;left:16px;bottom:16px;z-index:4000;max-width:min(48rem,calc(100vw - 32px));max-height:40vh;overflow:auto;margin:0;padding:10px 12px;border-radius:10px;background:rgba(15,23,42,.94);color:#dbeafe;font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;box-shadow:0 12px 32px rgba(0,0,0,.35)';
-        document.body.appendChild(panel);
-    }
-    const recent = (window.__vyasaTasksDebug.events || []).slice(-14).map((event) => {
-        const payload = JSON.stringify(event.payload);
-        return `${event.label} ${payload.length > 220 ? `${payload.slice(0, 220)}...` : payload}`;
-    });
-    const watches = (window.__vyasaTasksDebug.watch || []).map((item) => `${item.source}->${item.target}`);
-    panel.textContent = `${watches.length ? `watch ${watches.join(', ')}\n` : ''}${recent.join('\n')}`;
+    if (typeof document === 'undefined') return;
+    document.getElementById('vyasa-tasks-debug-log')?.remove();
 }
 
 export function logTasksDebug(label, payload = {}) {

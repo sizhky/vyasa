@@ -35,7 +35,7 @@ install:
 preview:
 	# kill any existing process on port 21212
 	@lsof -ti:21212 | xargs -r kill -9
-	vyasa --port 21212 > /dev/null 2>&1 &
+	vyasa --port 21212 --reload-source > /dev/null 2>&1 &
 
 fetch:
 	vyasa-fetch --interval 30

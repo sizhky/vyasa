@@ -228,6 +228,43 @@ def parse_node_attr_values(path):
     return vals
 
 
+def parse_inline_node_attrs(path):
+    """Return {attr_key: {value: set(node_ids)}} for inline attrs in kg.nodes.
+
+    Inline attrs are `key=value` lines written directly on a node (e.g.
+    `source_ref=...`, `measure=...`), as opposed to the columnar @node_attrs in
+    kg.attrs. Both are node attributes; the grammar layer must see both, or a
+    rule like measurable-claim-carries-measure would fire on a measure that lives
+    inline. A block scalar (`measure=|`) records its key as present (value "")
+    so a presence check still fires; its indented continuation lines are skipped
+    so prose containing `=` is not mistaken for an attr.
+    """
+    vals, cur, block_indent = {}, None, None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.lstrip().startswith("@"):
+            continue
+        if not line[:1].isspace():                       # node header `id: Label`
+            m = NODE_ID.match(line) or NODE_ID_BARE.match(line)
+            cur, block_indent = (m.group(1) if m else None), None
+            continue
+        indent = len(line) - len(line.lstrip())
+        if block_indent is not None and indent > block_indent:
+            continue                                     # inside a block scalar
+        block_indent = None
+        if cur is None:
+            continue
+        m = re.match(r"([A-Za-z_]\w*)=(.*)$", line.strip())
+        if not m:
+            continue
+        k, v = m.group(1), m.group(2).strip()
+        if v == "|":                                     # block scalar starts here
+            vals.setdefault(k, {}).setdefault("", set()).add(cur)  # record presence; a
+            block_indent = indent                        # multiline inline attr (e.g.
+            continue                                      # measure=|) still counts as set
+        vals.setdefault(k, {}).setdefault(v, set()).add(cur)
+    return vals
+
+
 def _node_value_map(values, attr):
     """Invert {value: nodes} for one attr into {node: value} (last write wins)."""
     out = {}
@@ -464,6 +501,10 @@ def main():
         warnings.append(gnote)
     if grammar:
         attr_values = parse_node_attr_values(need["kg.attrs"])
+        for k, vmap in parse_inline_node_attrs(need["kg.nodes"]).items():
+            dst = attr_values.setdefault(k, {})
+            for v, ids in vmap.items():
+                dst.setdefault(v, set()).update(ids)
         gerrs, gwarns = check_grammar(grammar, node_ids, edges, attr_values)
         errors.extend(gerrs)
         warnings.extend(gwarns)

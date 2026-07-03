@@ -29,7 +29,7 @@ const TASK_NODE_FONT = '600 16px ui-sans-serif, system-ui, -apple-system, BlinkM
 
 const TASK_NODE_SPECS = {
     group: { width: 250, minHeight: 80, padX: 32, padY: 28, reserveX: 34 },
-    groupTitle: { width: 250, minHeight: 34, padX: 20, padY: 12, reserveX: 28 },
+    groupTitle: { width: 250, minHeight: 34, padX: 20, padY: 8, reserveX: 28 },
     task: { width: 220, minHeight: 60, padX: 28, padY: 24, reserveX: 0 },
 };
 const TASK_NODE_IMAGE_SPECS = {
@@ -126,6 +126,16 @@ function tasksGraphNodeAbsoluteRect(node, byId) {
     return { left: x, right: x + (Number(node?.style?.width ?? node?.width) || 0), top: y, bottom: y + (Number(node?.style?.height ?? node?.height) || 0) };
 }
 
+function tasksGraphSelectionNodeRect(node, byId) {
+    if (node?.data?.__kind__ !== 'groupTitle') return tasksGraphNodeAbsoluteRect(node, byId);
+    const sourceGroup = byId[String(node.data?.sourceGroupId || '')];
+    return sourceGroup ? tasksGraphNodeAbsoluteRect(sourceGroup, byId) : tasksGraphNodeAbsoluteRect(node, byId);
+}
+
+function tasksGraphSelectionNodeId(node) {
+    return node?.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node?.id;
+}
+
 export function selectTasksGraphNodeIdsInRect(nodes, rect) {
     const bounds = {
         left: Math.min(Number(rect?.x1) || 0, Number(rect?.x2) || 0),
@@ -134,11 +144,12 @@ export function selectTasksGraphNodeIdsInRect(nodes, rect) {
         bottom: Math.max(Number(rect?.y1) || 0, Number(rect?.y2) || 0),
     };
     const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
-    return (nodes || []).filter((node) => {
+    const ids = (nodes || []).filter((node) => {
         if (node?.data?.__kind__ !== 'task' && node?.data?.__kind__ !== 'group' && node?.data?.__kind__ !== 'groupTitle') return false;
-        const box = tasksGraphNodeAbsoluteRect(node, byId);
+        const box = tasksGraphSelectionNodeRect(node, byId);
         return box.left >= bounds.left && box.right <= bounds.right && box.top >= bounds.top && box.bottom <= bounds.bottom;
-    }).map((node) => node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id).filter(Boolean);
+    }).map(tasksGraphSelectionNodeId).filter(Boolean);
+    return Array.from(new Set(ids));
 }
 
 function pointInPolygon(point, polygon) {
@@ -159,16 +170,17 @@ export function selectTasksGraphNodeIdsInPolygon(nodes, points) {
     const polygon = Array.isArray(points) ? points.filter((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y)) : [];
     if (polygon.length < 3) return [];
     const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
-    return (nodes || []).filter((node) => {
+    const ids = (nodes || []).filter((node) => {
         if (node?.data?.__kind__ !== 'task' && node?.data?.__kind__ !== 'group' && node?.data?.__kind__ !== 'groupTitle') return false;
-        const box = tasksGraphNodeAbsoluteRect(node, byId);
+        const box = tasksGraphSelectionNodeRect(node, byId);
         return [
             { x: box.left, y: box.top },
             { x: box.right, y: box.top },
             { x: box.right, y: box.bottom },
             { x: box.left, y: box.bottom },
         ].every((point) => pointInPolygon(point, polygon));
-    }).map((node) => node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id).filter(Boolean);
+    }).map(tasksGraphSelectionNodeId).filter(Boolean);
+    return Array.from(new Set(ids));
 }
 
 export function tasksGraphStatsLabel(model) {
@@ -240,6 +252,42 @@ export function normalizeTasksNodeImageUrl(value) {
     if (/^https?:\/\//i.test(raw)) return raw;
     if (raw.startsWith('/') || raw.startsWith('./') || raw.startsWith('../')) return raw;
     return '';
+}
+
+function tasksNodeImagePaletteValues(value) {
+    const values = Array.isArray(value) ? value : [value];
+    return Array.from(new Set(values
+        .filter((entry) => typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean')
+        .map((entry) => String(entry ?? '').trim())
+        .filter(Boolean)));
+}
+
+function tasksIsMdiImage(value) {
+    const raw = String(value || '').trim();
+    const normalized = normalizeTasksNodeImageUrl(raw);
+    return raw.startsWith('iconify:mdi:') || /^https:\/\/api\.iconify\.design\/mdi\/[^/]+\.svg(?:\?.*)?$/i.test(normalized);
+}
+
+export function tasksIconFilterGroups(model) {
+    const palettes = model?.node_image_palettes && typeof model.node_image_palettes === 'object'
+        ? model.node_image_palettes
+        : {};
+    const nodes = [...(model?.groups || []), ...(model?.tasks || [])];
+    return Object.entries(palettes)
+        .map(([key, palette]) => {
+            const attr = String(key || '').trim();
+            if (!attr || !palette || typeof palette !== 'object') return null;
+            const presentValues = new Set(nodes.flatMap((node) => tasksNodeImagePaletteValues(node?.[attr])));
+            const entries = Object.entries(palette)
+                .map(([value, image]) => [String(value || '').trim(), String(image || '').trim()])
+                .filter(([value, image]) => value && presentValues.has(value) && tasksIsMdiImage(image))
+                .map(([value, image]) => [value, normalizeTasksNodeImageUrl(image)])
+                .filter(([, image]) => image)
+                .sort(([left], [right]) => left.localeCompare(right));
+            return entries.length ? { key: attr, entries } : null;
+        })
+        .filter(Boolean)
+        .sort((left, right) => left.key.localeCompare(right.key));
 }
 
 function normalizeStoredNodeNotes(value) {
@@ -605,7 +653,7 @@ export function buildTaskEdgeAnchors(nodes, edges) {
             const peerRole = role === 'source' ? 'target' : 'source';
             const peerEntries = peerGroups.get(`${nodeId}:${peerRole}:${side}`) || [];
             const slotCount = entries.length + peerEntries.length;
-            const slotOffset = role === 'source' ? 0 : peerEntries.length;
+            const slotOffset = role === 'source' ? peerEntries.length : 0;
             entries.sort((a, b) => (a.sortValue - b.sortValue) || (a.edge._anchorIndex - b.edge._anchorIndex));
             const handles = entries.map(({ edge }, index) => {
                 const handleId = `${role}-${side}-${index}`;

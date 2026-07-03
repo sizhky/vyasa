@@ -486,7 +486,21 @@ def _live_reload_roots():
     for _, root in get_content_mounts():
         if root.exists() and root not in roots:
             roots.append(root)
+    if os.environ.get("VYASA_RELOAD", "").strip().lower() in {"true", "1", "yes", "on"}:
+        source_root = Path(__file__).resolve().parent
+        if source_root.exists() and not any(source_root == root or source_root.is_relative_to(root) for root in roots):
+            roots.append(source_root)
     return roots or [get_root_folder()]
+
+
+def _is_source_reload_path(path: Path):
+    if os.environ.get("VYASA_RELOAD", "").strip().lower() not in {"true", "1", "yes", "on"}:
+        return False
+    try:
+        path.resolve().relative_to(Path(__file__).resolve().parent)
+    except ValueError:
+        return False
+    return path.suffix.lower() in {".py", ".js", ".css"}
 
 
 def _kg_pack_for(path: Path):
@@ -500,6 +514,8 @@ def _kg_pack_for(path: Path):
 def _is_live_reload_path(path: Path):
     if any(part in set(get_config().get_reload_excludes()) for part in path.parts):
         return False
+    if _is_source_reload_path(path):
+        return True
     if _kg_pack_for(path):
         return True
     return path.name == ".vyasa" or path.suffix in {".md", ".pdf", ".tree", ".css", ".js"}
@@ -513,7 +529,7 @@ def _live_reload_payload(changes):
         path = Path(raw_path)
         if not _is_live_reload_path(path):
             continue
-        if path.name == ".vyasa" or path.suffix.lower() in {".css", ".js"}:
+        if _is_source_reload_path(path) or path.name == ".vyasa" or path.suffix.lower() in {".css", ".js"}:
             hard_reload = True
             continue
         kg_pack = _kg_pack_for(path)
