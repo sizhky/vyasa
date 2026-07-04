@@ -1,10 +1,11 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { bindPanZoomGestures } from '/static/viewport_core.js';
-import { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
 import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksCountFilterRules, tasksEmptyFilterQuery, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksModalController } from '/static/extensions/tasks/tasks_modal.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
+
+window.__vyasaTasksPhaseLog?.('tasks-js:module-start');
 
 const tasksElk = new ELK();
 const TASKS_GROUP_PADDING = { top: 68, right: 40, bottom: 40, left: 40 };
@@ -1195,7 +1196,22 @@ function buildTasksGroupedState(sourceModel, groupByHierarchy) {
     };
     delete model.projection_models;
     delete model.view_projections;
-    return { model, graph: buildTasksCollapsedGraph(model), projectionId: '__custom_group_by__' };
+    const graph = buildTasksCollapsedGraph(model);
+    logTasksPerf('kg-projection', {
+        kind: 'custom-group-by',
+        sourceGraphId: sourceModel?.graph_id || '',
+        attrs,
+        sourceGroups: (sourceModel?.groups || []).length,
+        sourceTasks: (sourceModel?.tasks || []).length,
+        sourceEdges: (sourceModel?.dependency_edges || []).length,
+        groups: groups.length,
+        tasks: tasks.length,
+        edges: (model.dependency_edges || []).length,
+        collapsedNodes: (graph.nodes || []).length,
+        collapsedEdges: (graph.edges || []).length,
+        defaultOpenDepth: model.default_open_depth,
+    });
+    return { model, graph, projectionId: '__custom_group_by__' };
 }
 
 function buildTasksEgoState(sourceModel, sourceGraph, selectedIds, includeNeighbors = false, colorBy = '') {
@@ -3164,6 +3180,22 @@ async function renderTasksGraphs(rootElement = document) {
         const defaultViewMode = ganttEnabled && String(wrapper.dataset.tasksDefaultView || '').trim().toLowerCase() === 'gantt' ? 'gantt' : 'graph';
         const defaultFiltersOpen = String(wrapper.dataset.tasksOpenFiltersDefault || '').trim().toLowerCase() === 'true';
         const egoMode = String(wrapper.dataset.tasksEgo || '').trim().toLowerCase() === 'true';
+        logTasksPerf('kg-widget', {
+            widgetId,
+            title: wrapper.dataset.tasksTitle || '',
+            defaultOpenDepth,
+            defaultViewMode,
+            groups: (initialSourceModel.groups || []).length,
+            tasks: (initialSourceModel.tasks || []).length,
+            edges: (initialSourceModel.dependency_edges || []).length,
+            graphNodes: (initialSourceGraph.nodes || []).length,
+            graphEdges: (initialSourceGraph.edges || []).length,
+            defaultProjection: initialSourceModel.default_projection || '',
+            activeProjection: initialSourceModel.active_projection || '',
+            defaultColorBy: initialSourceModel.default_color_by || '',
+            projectionModels: Object.keys(initialSourceModel.projection_models || {}).length,
+            viewProjections: Object.keys(initialSourceModel.view_projections || {}).length,
+        });
         const TasksGraphApp = (props) => {
             const React = window.React;
             const Handle = rf.Handle;
@@ -3241,6 +3273,22 @@ async function renderTasksGraphs(rootElement = document) {
                 () => collectExpandedGroupsByDepth(model.group_tree, Number.isNaN(effectiveDefaultOpenDepth) ? 0 : effectiveDefaultOpenDepth),
                 [model, effectiveDefaultOpenDepth]
             );
+            React.useEffect(() => {
+                logTasksPerf('kg-expanded', {
+                    widgetId,
+                    graphId: model?.graph_id || '',
+                    activeProjectionId,
+                    viewMode,
+                    groupByEnabled,
+                    activeGroupByHierarchy,
+                    groups: (model.groups || []).length,
+                    tasks: (model.tasks || []).length,
+                    edges: (model.dependency_edges || []).length,
+                    defaultOpenDepth: effectiveDefaultOpenDepth,
+                    initialExpandedCount: initialExpandedSet.size,
+                    initialExpandedIds: Array.from(initialExpandedSet),
+                });
+            }, [model, activeProjectionId, viewMode, groupByEnabled, activeGroupByHierarchy, effectiveDefaultOpenDepth, initialExpandedSet]);
             const baseLayoutRef = React.useRef(null);
             const groupLayoutsRef = React.useRef({});
             const graphBaseRef = React.useRef({ nodes: [], edges: [] });
@@ -4031,6 +4079,7 @@ async function renderTasksGraphs(rootElement = document) {
                 return baseLayoutRef.current;
             }, [rawGraph, model, jitterConfig, layoutConfig]);
             const rebuildLayout = React.useCallback(async (expandedSet, mode = viewMode) => {
+                const layoutStart = tasksPerfNow();
                 const revisionKey = `${mode}|${String(model?.graph_id || '')}|${Array.from(expandedSet || []).sort().join(',')}`;
                 const revisionCause = lastLayoutRevisionKeyRef.current === revisionKey ? 'visual' : 'layout';
                 lastLayoutRevisionKeyRef.current = revisionKey;
@@ -4108,11 +4157,24 @@ async function renderTasksGraphs(rootElement = document) {
                     setNodes(anchoredNodes);
                     setEdges(edgesVisible ? baseEdges : []);
                     setGraphRevision((value) => value + 1);
+                    logTasksPerf('kg-layout', {
+                        widgetId,
+                        mode,
+                        graphId: model?.graph_id || '',
+                        expandedCount: expandedSet?.size || 0,
+                        rawNodes: (rawGraph.nodes || []).length,
+                        rawEdges: (rawGraph.edges || []).length,
+                        nodes: anchoredNodes.length,
+                        edges: baseEdges.length,
+                        totalMs: Math.round((tasksPerfNow() - layoutStart) * 10) / 10,
+                    });
                     return;
                 }
                 const effectiveExpandedSet = effectiveExpandedGroups(model, expandedSet);
                 const baseLayout = await ensureBaseLayout();
+                const baseDone = tasksPerfNow();
                 groupLayoutsRef.current = await layoutExpandedGroups(model, effectiveExpandedSet, jitterConfig, layoutConfig, true);
+                const groupsDone = tasksPerfNow();
                 const rootGroupIds = new Set(model.group_tree?.["null"] || []);
                 const rootTaskIds = new Set(model.task_children?.["null"] || []);
                 const rootNodeIds = new Set([...rootGroupIds, ...rootTaskIds]);
@@ -4124,6 +4186,7 @@ async function renderTasksGraphs(rootElement = document) {
                         enforceRootRank: false,
                     };
                 const derived = await deriveSquishedExpandedLayout(rootGraph, model, effectiveExpandedSet, baseLayout, groupLayoutsRef.current, layoutConfig);
+                const derivedDone = tasksPerfNow();
                 const derivedById = Object.fromEntries((derived.nodes || []).map((node) => [node.id, node]));
                 const egoSelectedIds = egoMode && Array.isArray(model.ego_selected_ids)
                     ? new Set(model.ego_selected_ids.map((id) => String(id || '').trim()).filter(Boolean))
@@ -4340,6 +4403,28 @@ async function renderTasksGraphs(rootElement = document) {
                 setNodes(anchoredNodes);
                 setEdges(edgesVisible ? baseEdges : []);
                 setGraphRevision((value) => value + 1);
+                logTasksPerf('kg-layout', {
+                    widgetId,
+                    mode,
+                    graphId: model?.graph_id || '',
+                    activeProjectionId,
+                    groups: (model.groups || []).length,
+                    tasks: (model.tasks || []).length,
+                    rawNodes: (rawGraph.nodes || []).length,
+                    rawEdges: (rawGraph.edges || []).length,
+                    expandedCount: expandedSet?.size || 0,
+                    effectiveExpandedCount: effectiveExpandedSet.size,
+                    rootGraphNodes: (rootGraph.nodes || []).length,
+                    rootGraphEdges: (rootGraph.edges || []).length,
+                    derivedNodes: (derived.nodes || []).length,
+                    derivedEdges: (derived.edges || []).length,
+                    nodes: anchoredNodes.length,
+                    edges: baseEdges.length,
+                    baseLayoutMs: Math.round((baseDone - layoutStart) * 10) / 10,
+                    groupLayoutsMs: Math.round((groupsDone - baseDone) * 10) / 10,
+                    deriveMs: Math.round((derivedDone - groupsDone) * 10) / 10,
+                    totalMs: Math.round((tasksPerfNow() - layoutStart) * 10) / 10,
+                });
             }, [ensureBaseLayout, model, sourceModel, activeColorBy, activeColorPalette, activeColorLevelSpecs, activeProjection, viewMode, edgesVisible, edgeOpacity, projectionUnspecifiedContentOpacity, egoNeighborOpacity, checkedNodeIdSet, nodeStates, nodeNotes, cardStates, defaultNodeColor]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,

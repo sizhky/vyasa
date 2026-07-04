@@ -1,7 +1,10 @@
 from pathlib import Path
+import json
+import time
 from types import SimpleNamespace
 
 from fasthtml.common import Div, NotStr
+from loguru import logger
 
 from ...assets import bundle_asset_nodes
 from ...document_pages import DocumentPage
@@ -9,7 +12,6 @@ from ...extensions import AssetBundle, DocumentType, ExtensionMeta, VyasaExtensi
 from ...helpers import content_slug_for_path
 from .api import register_tasks_routes
 from .render import render_tasks_block
-from .api import _compile_schema_payload
 
 
 class TasksExtension(VyasaExtensionBase):
@@ -21,7 +23,7 @@ class TasksExtension(VyasaExtensionBase):
         app.assets.bundle(AssetBundle(
             "tasks.runtime",
             css=("/static/extensions/tasks/tasks.css",),
-            js=("/static/extensions/tasks/tasks.js",),
+            js=("/static/extensions/tasks/tasks_probe.js", "/static/extensions/tasks/tasks.js"),
         ))
         app.assets.page(_page_bundles)
         items_handler = lambda code, context, attrs: (
@@ -45,19 +47,68 @@ def _kg_block(schema_path: Path) -> str:
 
 
 def _kg_title(schema_path: Path, fallback: str) -> str:
-    model, _graph = _compile_schema_payload(schema_path, fallback)
-    return str(model.get("title") or model.get("graph_id") or Path(fallback).name)
+    try:
+        for line in schema_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("@graph"):
+                continue
+            if "title=" in stripped:
+                title = stripped.split("title=", 1)[1].strip().strip("\"'")
+                if title:
+                    return title
+            for part in stripped.split():
+                if part.startswith("id=") and part[3:]:
+                    return part[3:]
+            break
+    except OSError:
+        pass
+    return Path(fallback).name
+
+
+def _kg_perf_enabled(context) -> bool:
+    request = getattr(context, "request", None)
+    query_params = getattr(request, "query_params", {}) if request is not None else {}
+    return "tasks_perf" in query_params or "tasks_debug" in query_params
+
+
+def _kg_perf_logger(context):
+    if not _kg_perf_enabled(context):
+        return lambda _phase, **_payload: None
+    started = time.perf_counter()
+    phase_started = started
+
+    def log_phase(phase: str, **payload):
+        nonlocal phase_started
+        now = time.perf_counter()
+        event = {
+            "path": getattr(context, "path", ""),
+            "phase": phase,
+            "phase_ms": round((now - phase_started) * 1000, 2),
+            "total_ms": round((now - started) * 1000, 2),
+            **payload,
+        }
+        phase_started = now
+        logger.info("[tasks_perf][kg-render] " + json.dumps(event, default=str, separators=(",", ":")))
+
+    return log_phase
 
 
 def render_kg_document(context):
+    log_phase = _kg_perf_logger(context)
     schema_path = _kg_schema_path(context.document.path)
+    log_phase("schema_path", schema_path=str(schema_path))
     title = _kg_title(schema_path, context.path)
+    log_phase("title", title=title)
     request_asset_bundle("tasks.runtime")
+    log_phase("request_asset_bundle")
+    block = render_tasks_block(_kg_block(schema_path), context.path, "items")
+    log_phase("render_tasks_block", block_bytes=len(block.encode("utf-8", "replace")))
     content = Div(
         context.breadcrumbs,
-        NotStr(render_tasks_block(_kg_block(schema_path), context.path, "items")),
+        NotStr(block),
     )
-    return DocumentPage(
+    log_phase("content_nodes")
+    page = DocumentPage(
         title,
         context.path,
         content,
@@ -66,9 +117,11 @@ def render_kg_document(context):
         full_width=True,
         no_scroll=True,
         extra_head_nodes=bundle_asset_nodes(("tasks.runtime",)),
-    ).render(
-        context.layout, htmx=context.htmx, blog_title=context.blog_title, auth=context.auth
     )
+    log_phase("document_page")
+    rendered = page.render(context.layout, htmx=context.htmx, blog_title=context.blog_title, auth=context.auth)
+    log_phase("document_page_render")
+    return rendered
 
 
 def render_static_kg_document(context):

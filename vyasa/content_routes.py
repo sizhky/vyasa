@@ -1,4 +1,5 @@
 import json
+import hashlib
 import re
 import time
 from pathlib import Path
@@ -24,6 +25,12 @@ from .extensions_builtin.markdown.renderer import _render_markdown_fragment
 from .extensions_builtin.slides.deck import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
 
 FALLBACK_HOME_SLUG = "__home__"
+
+
+def _tasks_perf_server_log_path(host, path):
+    safe_host = "".join(ch if ch.isalnum() or ch in ".-" else "-" for ch in str(host or "unknown"))[:80]
+    digest = hashlib.sha256(f"{host}\n{path}".encode("utf-8")).hexdigest()[:12]
+    return Path("/tmp") / f"vyasa-tasks-perf-{safe_host}-{digest}.server.ndjson"
 
 
 def _resolve_slide_width(metadata):
@@ -203,8 +210,38 @@ def _render_ref_other_kind(ref_doc, *, path, htmx, request, slug_to_title, layou
 def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbreviations, find_folder_note_file, slug_to_title, layout, get_blog_title, not_found, parse_frontmatter, resolve_markdown_title, from_md, logger, PathCls=Path):
     request_start = time.time()
     logger.info(f"\n[DEBUG] ########## REQUEST START: /posts/{path} ##########")
+    query_params = request.query_params if hasattr(request, "query_params") else {}
+    perf_enabled = "tasks_perf" in query_params or "tasks_debug" in query_params
+    phase_start = request_start
+    server_log_initialized = False
+    server_log_path = _tasks_perf_server_log_path(
+        request.headers.get("host", "") if hasattr(request, "headers") else "",
+        request.url.path if hasattr(request, "url") else f"/posts/{path}",
+    )
+
+    def log_phase(phase, **payload):
+        nonlocal phase_start, server_log_initialized
+        if not perf_enabled:
+            return
+        now = time.time()
+        event = {
+            "path": path,
+            "phase": phase,
+            "phase_ms": round((now - phase_start) * 1000, 2),
+            "total_ms": round((now - request_start) * 1000, 2),
+            **payload,
+        }
+        phase_start = now
+        if not server_log_initialized:
+            server_log_path.write_text("", encoding="utf-8")
+            server_log_initialized = True
+        with server_log_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"label": "post-render", "at": now, "payload": event}, default=str, separators=(",", ":")) + "\n")
+        logger.info("[tasks_perf][post-render] " + json.dumps(event, default=str, separators=(",", ":")))
+
     ref_override = request.query_params.get("ref", "") if hasattr(request, "query_params") else ""
     root_id, root_path, ref, relative = content_location(path, ref_override=ref_override)
+    log_phase("content_location", root_id=root_id, root_path=str(root_path) if root_path else "", ref=ref)
     if root_id and ref and "@" not in Path(path.strip("/")).parts[0]:
         # ref arrived as `?ref=` on a named root — fold it back into the
         # internal `alias@ref` slug so the render + sidebar pipeline is uniform.
@@ -227,14 +264,22 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
             path = (f"{root_id}/{rel}" if root_id else rel).strip("/")
     root, relative_path = content_root_and_relative(path)
     if root is None:
+        log_phase("not_found:root")
         return not_found(htmx, auth=request.scope.get("auth"))
     relative_slug = relative_path.as_posix()
     abbreviations = effective_abbreviations(root)
+    log_phase("effective_abbreviations", root=str(root), abbreviation_count=len(abbreviations or {}))
     document = ContentTree.from_runtime().resolve_document(path)
+    log_phase(
+        "resolve_document",
+        document_kind=getattr(document, "kind", "") if document else "",
+        document_path=str(getattr(document, "path", "") or "") if document else "",
+    )
     if not document:
         file_path = content_path_for_slug(path, ".md")
         document = SimpleNamespace(kind="markdown", path=file_path, folder_note=None, slug=path) if file_path and file_path.exists() else None
     if not document or document.kind == "folder":
+        log_phase("not_found:document", document_kind=getattr(document, "kind", "") if document else "")
         return not_found(htmx, auth=request.scope.get("auth"))
     if document.folder_note:
         from starlette.responses import RedirectResponse
@@ -244,9 +289,10 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         runtime = get_extension_runtime()
         if runtime is None:
             runtime = refresh_extension_runtime(get_config().get_extensions_config())
+        log_phase("extension_runtime", document_kind=document.kind, has_runtime=runtime is not None)
         renderer = runtime.document_renderers.get(document.kind) if runtime is not None else None
         if renderer:
-            return renderer(
+            rendered = renderer(
                 SimpleNamespace(
                     document=document,
                     path=path,
@@ -260,6 +306,9 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
                     abbreviations=abbreviations,
                 )
             )
+            log_phase("extension_renderer", document_kind=document.kind)
+            return rendered
+        log_phase("not_found:renderer", document_kind=document.kind)
         return not_found(htmx, auth=request.scope.get("auth"))
     assert isinstance(file_path, Path)
     metadata, raw_content = parse_frontmatter(file_path)

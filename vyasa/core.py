@@ -424,9 +424,18 @@ async def favicon_svg_icon():
 async def extension_static_asset(extension_id: str, asset_path: str):
     from .assets import extension_asset_path
 
+    start = time.perf_counter()
     path = extension_asset_path(extension_id, asset_path)
     if path.exists() and path.is_file():
-        return FileResponse(path)
+        response = FileResponse(path)
+        logger.info(
+            "extension static asset extension={} path={} bytes={} elapsed_ms={:.2f}",
+            extension_id,
+            asset_path,
+            path.stat().st_size,
+            (time.perf_counter() - start) * 1000,
+        )
+        return response
     return Response(status_code=404)
 
 

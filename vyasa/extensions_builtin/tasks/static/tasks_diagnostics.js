@@ -82,6 +82,10 @@ export function logTasksPerf(label, payload = {}) {
         && label !== 'hover-pointer'
         && label !== 'storage-error'
         && label !== 'state-transition'
+        && label !== 'kg-widget'
+        && label !== 'kg-projection'
+        && label !== 'kg-expanded'
+        && label !== 'kg-layout'
     ) return null;
     const event = { label, at: new Date().toISOString(), payload };
     tasksPostFileLog(label, event.at, payload);

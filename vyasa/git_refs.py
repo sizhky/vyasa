@@ -5,6 +5,7 @@ import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
+from urllib.parse import quote
 
 from fasthtml.common import Button, Details, Div, Li, Response, Span, Summary, Ul
 from monsterui.all import UkIcon
@@ -231,4 +232,20 @@ def navbar_ref_switcher(current_path=None, roles=None):
         Summary(UkIcon("git-branch", cls="w-4 h-4 shrink-0"), Span("Branches", cls="hidden sm:inline truncate"), UkIcon("chevron-down", cls="w-4 h-4 ml-1 shrink-0 opacity-70"), cls="vyasa-emphasis-control vyasa-emphasis-control-field flex items-center gap-2 cursor-pointer select-none rounded-md px-3 py-2 text-sm"),
         Div(Ul(*root_blocks), cls="vyasa-emphasis-control-menu absolute right-0 mt-2 z-[1100] max-h-[70vh] overflow-y-auto", style="width:26rem"),
         cls="vyasa-ref-switcher relative",
+    )
+
+
+def navbar_ref_switcher_placeholder(current_path=None, roles=None):
+    roots = _git_roots_with_refs(int(time.time() // 10))
+    if not roots:
+        return None
+    root_by_alias = {alias: root for alias, root in get_ref_content_mounts()}
+    if not any(ref_root_visible_to_roles(alias, root_by_alias.get(alias), roles) for alias, *_ in roots):
+        return None
+    return Details(
+        Summary(UkIcon("git-branch", cls="w-4 h-4 shrink-0"), Span("Branches", cls="hidden sm:inline truncate"), UkIcon("chevron-down", cls="w-4 h-4 ml-1 shrink-0 opacity-70"), cls="vyasa-emphasis-control vyasa-emphasis-control-field flex items-center gap-2 cursor-pointer select-none rounded-md px-3 py-2 text-sm"),
+        Div(Span("Loading branches…", cls="text-sm opacity-70"), cls="vyasa-emphasis-control-menu absolute right-0 mt-2 z-[1100] p-3", style="width:26rem"),
+        cls="vyasa-ref-switcher relative",
+        data_vyasa_ref_switcher_lazy="true",
+        data_vyasa_ref_switcher_url=f"/_vyasa/ref-switcher?current_path={quote(current_path or '', safe='')}",
     )

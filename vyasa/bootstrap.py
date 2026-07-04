@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 
 from fasthtml.common import Beforeware
 from starlette.staticfiles import StaticFiles
@@ -17,9 +18,24 @@ AUTH_SKIP_ROUTES = [
 
 class DevStaticFiles(StaticFiles):
     def file_response(self, full_path, stat_result, scope, status_code=200):
+        start = time.perf_counter()
         response = super().file_response(full_path, stat_result, scope, status_code)
         # Normal refresh should revalidate local dev assets instead of requiring hard refresh.
         response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
+        try:
+            path = scope.get("path", "")
+            if path.endswith("viewport_core.js") or "/extensions/tasks/" in path:
+                from loguru import logger
+
+                logger.info(
+                    "static asset path={} status={} bytes={} elapsed_ms={:.2f}",
+                    path,
+                    response.status_code,
+                    response.headers.get("content-length", ""),
+                    (time.perf_counter() - start) * 1000,
+                )
+        except Exception:
+            pass
         return response
 
 
