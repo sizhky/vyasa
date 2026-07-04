@@ -1,5 +1,6 @@
 import re
 import os
+import sys
 import json
 import base64
 import time
@@ -576,6 +577,25 @@ def _iter_watch_dirs():
     return dirs
 
 
+def _watch_targets():
+    """`(paths, recursive)` for the file watcher, chosen per platform.
+
+    macOS/Windows watch each root recursively: FSEvents / ReadDirectoryChangesW
+    recurse natively with one cheap watch per root, so registration is ~instant
+    regardless of tree size. Walking into a non-recursive per-dir watch set there
+    instead made registration scale with directory count — tens of seconds on a
+    large content tree (see `_ReloadHub`).
+
+    Linux keeps the walked, pruned, non-recursive set: a recursive inotify watch
+    registers one descriptor per subdir and blows past `fs.inotify.max_user_watches`.
+    Changes under excluded dirs still surface as events but are dropped by
+    `_reload_event_str`, so recursive watching adds no spurious reloads.
+    """
+    if sys.platform.startswith("linux"):
+        return _iter_watch_dirs(), False
+    return [str(root) for root in _live_reload_roots()], True
+
+
 def _reload_event_str(changes):
     """Build the SSE event payload for a change set, or None if nothing relevant."""
     if not any(_is_live_reload_path(Path(path)) for _, path in changes):
@@ -610,47 +630,57 @@ class _ReloadHub:
     so N browser tabs meant N full watch sets over the content tree — the multiplier
     that exhausted the inotify limit in prod. This keeps a single watcher alive while
     anyone is subscribed.
+
+    The watcher runs in a background OS thread, not an asyncio task: registering the
+    non-recursive watch set is a synchronous, per-directory syscall storm (a kqueue FD
+    per path on macOS) that froze the event loop for tens of seconds on large content
+    trees, starving every other request until it finished. Keeping it off the loop and
+    marshalling change batches back with `call_soon_threadsafe` fixes that.
     """
 
     def __init__(self):
         self._subscribers = set()
-        self._task = None
+        self._thread = None
+        self._stop = None
+        self._loop = None
 
     def subscribe(self):
         queue = asyncio.Queue()
         self._subscribers.add(queue)
-        if self._task is None or self._task.done():
-            self._task = asyncio.create_task(self._run())
+        if self._thread is None or not self._thread.is_alive():
+            self._loop = asyncio.get_running_loop()
+            self._stop = threading.Event()
+            self._thread = threading.Thread(target=self._run, args=(self._stop,), daemon=True)
+            self._thread.start()
         return queue
 
     def unsubscribe(self, queue):
         self._subscribers.discard(queue)
-        if not self._subscribers and self._task is not None:
-            self._task.cancel()
-            self._task = None
+        if not self._subscribers and self._stop is not None:
+            self._stop.set()  # watch() exits within its poll interval; thread then ends
+            self._thread = None
+            self._stop = None
 
     def _broadcast(self, message):
         for queue in self._subscribers:
             queue.put_nowait(message)
 
-    async def _run(self):
-        from watchfiles import awatch
+    def _run(self, stop):
+        from watchfiles import watch
 
-        while self._subscribers:
-            stop = asyncio.Event()
+        while not stop.is_set():
             try:
-                async for changes in awatch(*_iter_watch_dirs(), debounce=400, recursive=False, stop_event=stop):
+                paths, recursive = _watch_targets()
+                for changes in watch(*paths, debounce=400, recursive=recursive, stop_event=stop):
                     message = _reload_event_str(changes)
-                    if message is not None:
-                        self._broadcast(message)
-                    if _changes_add_watchable_dir(changes):
-                        break  # new dir appeared; rebuild the watch set
-            except asyncio.CancelledError:
-                raise
+                    if message is not None and self._loop is not None:
+                        self._loop.call_soon_threadsafe(self._broadcast, message)
+                    if not recursive and _changes_add_watchable_dir(changes):
+                        break  # non-recursive: a new dir isn't watched yet, rebuild the set
             except OSError as exc:
                 # e.g. still over the inotify limit; back off instead of crash-looping.
                 logger.error("live reload watcher failed: {}", exc)
-                await asyncio.sleep(30)
+                stop.wait(30)
 
 
 _reload_hub = None
