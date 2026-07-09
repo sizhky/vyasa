@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
 import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksCountFilterRules, tasksEmptyFilterQuery, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksModalController } from '/static/extensions/tasks/tasks_modal.js';
@@ -43,6 +43,9 @@ const TASKS_EDGE_OPACITY_MIN = 0.05;
 const TASKS_EDGE_OPACITY_MAX = 1;
 const TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT = 0.25;
 const TASKS_GRAPH_MIN_ZOOM = 0.05;
+// Do NOT reach for React Flow's onlyRenderVisibleElements here: group children
+// carry parentId-relative positions, so its visibility test culls them at the
+// wrong absolute coords and nodes vanish when zoomed out.
 const TASKS_DONE_ACCENT = '#22c55e';
 const TASKS_CARD_STATE_ATTR = 'card_state';
 const TASKS_HAS_NOTE_ATTR = 'has_note';
@@ -4581,6 +4584,15 @@ async function renderTasksGraphs(rootElement = document) {
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: 'currentColor' },
             }), [edgeOpacity]);
+            // Highlight passes rebuild every node/edge object; route them through
+            // tasksReuseGraphElements so unchanged elements keep their identity
+            // (memoized components skip) and a no-op pass skips the update.
+            const setNodesReusing = React.useCallback((nextNodes) => {
+                setNodes((prev) => tasksReuseGraphElements(prev, nextNodes));
+            }, []);
+            const setEdgesReusing = React.useCallback((nextEdges) => {
+                setEdges((prev) => tasksReuseGraphElements(prev, nextEdges));
+            }, []);
             const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null, selectedIds = new Set()) => {
                 const baseNodes = graphBaseRef.current.nodes || [];
                 const baseEdges = graphBaseRef.current.edges || [];
@@ -4597,7 +4609,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const hasNodeSelection = nodeId && baseNodes.some((node) => node.id === nodeId);
                 if (!hasNodeSelection && multiSelectedIds.size > 0) {
-                    setNodes(baseNodes.map((node) => {
+                    setNodesReusing(baseNodes.map((node) => {
                         const sourceGroupId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : null;
                         const selected = multiSelectedHighlightIds.has(node.id) || (sourceGroupId && multiSelectedHighlightIds.has(sourceGroupId));
                         const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette);
@@ -4617,7 +4629,7 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                         };
                     }));
-                    setEdges(edgesVisible ? baseEdges.map((edge) => {
+                    setEdgesReusing(edgesVisible ? baseEdges.map((edge) => {
                         const hit = multiSelectedHighlightIds.has(edge.source) && multiSelectedHighlightIds.has(edge.target);
                         const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
                         const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
@@ -4637,18 +4649,18 @@ async function renderTasksGraphs(rootElement = document) {
                     const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters);
                     const hasSearch = searchMatches.active && !searchMatches.error;
                     if (!hasFilters && !hasSearch) {
-                        setNodes(hoverCheckboxId
+                        setNodesReusing(hoverCheckboxId
                             ? baseNodes.map((node) => node.id === hoverCheckboxId
                                 ? { ...node, data: { ...node.data, __hover_checkbox__: true } }
                                 : node)
                             : baseNodes);
-                        setEdges(edgesVisible ? baseEdges : []);
+                        setEdgesReusing(edgesVisible ? baseEdges : []);
                         return;
                     }
                     const matchingIds = filteredSelectionIds();
                     const containerGroupIds = tasksGroupIdsContainingSelection(model, matchingIds);
                     const visibleSelectionIds = new Set([...matchingIds, ...containerGroupIds]);
-                    setNodes(baseNodes.map((node) => ({
+                    setNodesReusing(baseNodes.map((node) => ({
                         ...node,
                         data: { ...node.data, highlightMode: visibleSelectionIds.has(node.id) ? 'selected' : 'dim', __hover_checkbox__: node.id === hoverCheckboxId },
                         style: {
@@ -4656,7 +4668,7 @@ async function renderTasksGraphs(rootElement = document) {
                             opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (visibleSelectionIds.has(node.id) ? 1 : 0.18),
                         },
                     })));
-                    setEdges(edgesVisible ? baseEdges.map((edge) => {
+                    setEdgesReusing(edgesVisible ? baseEdges.map((edge) => {
                         const hit = (visibleSelectionIds.has(edge.source) && visibleSelectionIds.has(edge.target)) || searchMatches.edgeIds.has(edge.id);
                         const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
                         const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
@@ -4863,10 +4875,10 @@ async function renderTasksGraphs(rootElement = document) {
                     window.__vyasaTasksDebug.latestHighlight = debugPayload;
                     logTasksDebugVerbose('highlightState', debugPayload);
                 }
-                setNodes(nextNodes);
+                setNodesReusing(nextNodes);
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
-                setEdges(edgesVisible ? nextEdges : []);
+                setEdgesReusing(edgesVisible ? nextEdges : []);
             }, [effectiveQueryFilters, activeSwatchFilters, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeAnimationEnabled, edgeAnimationClassName, edgeOpacity, filteredSelectionIds]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
@@ -5009,8 +5021,57 @@ async function renderTasksGraphs(rootElement = document) {
                     observer?.disconnect();
                 };
             }, [graphRevision]);
-            const CustomEdge = React.memo((props) => {
+            // Prominent (focused) edge labels counter-scale against zoom, which
+            // needs rf.useViewport(). Subscribing to the viewport from inside
+            // CustomEdge re-rendered EVERY edge on each pan/zoom frame, so the
+            // subscription lives in this leaf that only focused edges mount.
+            const TasksProminentEdgeLabel = ({ labelX, labelY, labelZIndex, labelBgPadding, labelBgBorderRadius, labelMaxWidth, labelStyle, labelBgStyle, fullLabel, displayLabel }) => {
                 const viewport = typeof rf.useViewport === 'function' ? rf.useViewport() : { zoom: 1 };
+                const labelScale = Number.isFinite(viewport?.zoom) && viewport.zoom > 0 ? 1 / viewport.zoom : 1;
+                return React.createElement(rf.EdgeLabelRenderer, null,
+                    React.createElement('div', {
+                        style: {
+                            position: 'absolute',
+                            transform: `translate(${labelX}px, ${labelY}px)`,
+                            pointerEvents: 'none',
+                            zIndex: labelZIndex || TASKS_EDGE_LABEL_Z,
+                        },
+                        title: fullLabel,
+                    },
+                    React.createElement('div', {
+                        style: {
+                            transform: `translate(-50%, -50%) scale(${labelScale})`,
+                            transformOrigin: 'center center',
+                            padding: `${labelBgPadding?.[1] || 0}px ${labelBgPadding?.[0] || 0}px`,
+                            borderRadius: `${labelBgBorderRadius || 0}px`,
+                            position: 'relative',
+                        },
+                    },
+                    React.createElement('div', {
+                        style: {
+                            position: 'absolute',
+                            inset: 0,
+                            borderRadius: 'inherit',
+                            background: labelBgStyle.fill || 'transparent',
+                            opacity: labelBgStyle.fillOpacity ?? 1,
+                        },
+                    }),
+                    React.createElement('div', {
+                        style: {
+                            position: 'relative',
+                            color: labelStyle.fill || TASKS_EDGE_LABEL_TEXT,
+                            fontSize: tasksCssFontSize(labelStyle.fontSize),
+                            fontWeight: labelStyle.fontWeight || 600,
+                            whiteSpace: 'pre-line',
+                            textAlign: 'center',
+                            lineHeight: 1.35,
+                            maxWidth: `${labelMaxWidth || 240}px`,
+                            opacity: labelStyle.opacity ?? 1,
+                        },
+                    }, displayLabel)))
+                );
+            };
+            const CustomEdge = React.memo((props) => {
                 const [path, labelX, labelY] = rf.getBezierPath(props);
                 const fullLabel = String(props.label || '').replace(/\\n/g, '\n');
                 const labelLines = fullLabel.split(/\r?\n/);
@@ -5025,7 +5086,6 @@ async function renderTasksGraphs(rootElement = document) {
                     : '';
                 const showFullLabel = highlightMode !== 'dim' && highlightMode !== 'none';
                 const prominentLabel = highlightMode === 'focused-in' || highlightMode === 'focused-out';
-                const labelScale = prominentLabel && Number.isFinite(viewport?.zoom) && viewport.zoom > 0 ? 1 / viewport.zoom : 1;
                 const displayLabel = showFullLabel
                     ? fullLabel
                     : (labelLines.length > 1 ? `${labelLines[0]}...` : fullLabel);
@@ -5106,51 +5166,27 @@ async function renderTasksGraphs(rootElement = document) {
                         x: 0,
                         dy: index === 0 ? -((svgLabelLines.length - 1) * svgLineHeight) / 2 : svgLineHeight,
                     }, line)))),
-                    displayLabel && prominentLabel && React.createElement(rf.EdgeLabelRenderer, null,
-                        React.createElement('div', {
-                            style: {
-                                position: 'absolute',
-                                transform: `translate(${labelX}px, ${labelY}px)`,
-                                pointerEvents: 'none',
-                                zIndex: props.labelZIndex || TASKS_EDGE_LABEL_Z,
-                            },
-                            title: fullLabel,
-                        },
-                        React.createElement('div', {
-                            style: {
-                                transform: `translate(-50%, -50%) scale(${labelScale})`,
-                                transformOrigin: 'center center',
-                                padding: `${props.labelBgPadding?.[1] || 0}px ${props.labelBgPadding?.[0] || 0}px`,
-                                borderRadius: `${props.labelBgBorderRadius || 0}px`,
-                                position: 'relative',
-                            },
-                        },
-                        React.createElement('div', {
-                            style: {
-                                position: 'absolute',
-                                inset: 0,
-                                borderRadius: 'inherit',
-                                background: labelBgStyle.fill || 'transparent',
-                                opacity: labelBgStyle.fillOpacity ?? 1,
-                            },
-                        }),
-                        React.createElement('div', {
-                            style: {
-                                position: 'relative',
-                                color: labelStyle.fill || TASKS_EDGE_LABEL_TEXT,
-                                fontSize: tasksCssFontSize(labelStyle.fontSize),
-                                fontWeight: labelStyle.fontWeight || 600,
-                                whiteSpace: 'pre-line',
-                                textAlign: 'center',
-                                lineHeight: 1.35,
-                                maxWidth: `${props.labelMaxWidth || 240}px`,
-                                opacity: labelStyle.opacity ?? 1,
-                            },
-                        }, displayLabel)))
-                    )
+                    displayLabel && prominentLabel && React.createElement(TasksProminentEdgeLabel, {
+                        labelX,
+                        labelY,
+                        labelZIndex: props.labelZIndex,
+                        labelBgPadding: props.labelBgPadding,
+                        labelBgBorderRadius: props.labelBgBorderRadius,
+                        labelMaxWidth: props.labelMaxWidth,
+                        labelStyle,
+                        labelBgStyle,
+                        fullLabel,
+                        displayLabel,
+                    })
                 );
             });
-            const CustomNode = React.memo(({ data, id }) => {
+            // renderTasksCustomNode closes over per-render state (expanded,
+            // cardStates, model). It is re-created every render and published
+            // through renderTasksCustomNodeRef so the registered CustomNode
+            // component below can stay ONE identity forever - React Flow
+            // remounts every node whenever a nodeTypes entry changes identity,
+            // while a re-rendered node still reads current closures here.
+            const renderTasksCustomNode = ({ data, id }) => {
                 const handlePosition = (side) => ({
                     top: Position?.Top || 'top',
                     right: Position?.Right || 'right',
@@ -5460,14 +5496,17 @@ async function renderTasksGraphs(rootElement = document) {
                     }, isExpanded ? '−' : '+'),
                     ...renderHandles('source')
                 );
-            });
+            };
+            const renderTasksCustomNodeRef = React.useRef(renderTasksCustomNode);
+            renderTasksCustomNodeRef.current = renderTasksCustomNode;
+            const CustomNode = React.useMemo(() => React.memo((props) => renderTasksCustomNodeRef.current(props)), []);
             React.useEffect(() => {
                 rebuildLayout(expanded);
             }, [expanded, viewMode, rebuildLayout]);
             // Fit-on-mode-change is driven from inside ReactFlowProvider via
             // FitOnNodesReady below — it waits for useNodesInitialized() so the
             // fit lands after React Flow has finished measuring node rects.
-            const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [expanded, cardStates]);
+            const nodeTypes = React.useMemo(() => ({ vyasaTask: CustomNode }), [CustomNode]);
             const edgeTypes = React.useMemo(() => ({ vyasaEdge: CustomEdge }), []);
             const FitViewHotkey = () => {
                 const reactFlow = rf.useReactFlow();

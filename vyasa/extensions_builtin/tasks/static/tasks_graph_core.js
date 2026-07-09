@@ -801,3 +801,47 @@ export function buildTaskEdgeAnchors(nodes, edges) {
         nodeHandles,
     };
 }
+
+function tasksShallowObjectEquals(a, b) {
+    if (Object.is(a, b)) return true;
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+    if (Array.isArray(a) || Array.isArray(b)) return false;
+    const aKeys = Object.keys(a);
+    if (aKeys.length !== Object.keys(b).length) return false;
+    return aKeys.every((key) => Object.is(a[key], b[key]));
+}
+
+function tasksGraphElementEquals(a, b) {
+    if (Object.is(a, b)) return true;
+    if (!a || !b) return false;
+    for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+        if (Object.is(a[key], b[key])) continue;
+        // Nested style/data/position objects are rebuilt by highlight passes
+        // even when their values are unchanged; one level of value-compare is
+        // enough because deeper structures keep their base-graph references.
+        if (!tasksShallowObjectEquals(a[key], b[key])) return false;
+    }
+    return true;
+}
+
+// Reuse-or-replace pass for React Flow node/edge lists. Memoized node/edge
+// components re-render whenever their element's object identity changes, so a
+// highlight pass that clones every element forces a whole-graph re-render even
+// when only the hovered node's styling actually changed. Swapping each clone
+// back to its value-equal predecessor keeps identities stable, and returning
+// `prev` itself when nothing changed lets React skip the state update.
+export function tasksReuseGraphElements(prev, next) {
+    if (!Array.isArray(prev) || !prev.length || !Array.isArray(next)) return next;
+    const prevById = new Map(prev.map((element) => [element?.id, element]));
+    let unchanged = next.length === prev.length;
+    const merged = next.map((element, index) => {
+        const before = prevById.get(element?.id);
+        if (before && tasksGraphElementEquals(before, element)) {
+            if (before !== prev[index]) unchanged = false;
+            return before;
+        }
+        unchanged = false;
+        return element;
+    });
+    return unchanged ? prev : merged;
+}
