@@ -126,7 +126,8 @@ todo .deadline { margin-left: 0.45rem; }
 .react-flow__edgelabel-renderer {
     pointer-events: none;
 }
-button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
+button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"],
+button[data-vyasa-tasks-action="toggleHoverCards"][data-vyasa-hover-cards-off="true"] {
     color: #fecaca !important;
     border-color: #ef4444 !important;
     background: #991b1b !important;
@@ -145,6 +146,9 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
 }
 .vyasa-tasks-hovering-edge-labels .react-flow__edgelabel-renderer {
     z-index: 1600 !important;
+}
+html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:not(.vyasa-tasks-edge-label--active) {
+    display: none !important;
 }
 .react-flow__node.vyasa-tasks-node--background,
 .react-flow__node.vyasa-tasks-node--passive {

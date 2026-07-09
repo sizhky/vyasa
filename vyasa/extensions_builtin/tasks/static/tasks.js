@@ -1000,7 +1000,13 @@ function tasksGroupDetailEntries(nodeId, model) {
             value: String(sampleNodes.length),
         });
     }
-    for (const [key, stat] of Array.from(metrics.entries()).sort(([left], [right]) => left.localeCompare(right))) {
+    const declaredOrder = new Map(tasksActiveHoverAttrs(model, '').map((key, index) => [key, index]));
+    const byDeclaredOrder = ([left], [right]) => {
+        const leftOrder = declaredOrder.has(left) ? declaredOrder.get(left) : Number.MAX_SAFE_INTEGER;
+        const rightOrder = declaredOrder.has(right) ? declaredOrder.get(right) : Number.MAX_SAFE_INTEGER;
+        return (leftOrder - rightOrder) || left.localeCompare(right);
+    };
+    for (const [key, stat] of Array.from(metrics.entries()).sort(byDeclaredOrder)) {
         if (excludedDerivedKeys.has(String(key || '').toLowerCase())) continue;
         const label = tasksNodeMetaLabel(key);
         detailEntries.push({
@@ -1009,7 +1015,7 @@ function tasksGroupDetailEntries(nodeId, model) {
             value: `${formatTasksMetricValue(stat.min)} ≤ ${label} (μ ${formatTasksMetricValue(stat.sum / Math.max(stat.count, 1))}) ≤ ${formatTasksMetricValue(stat.max)}`,
         });
     }
-    for (const [key, counts] of Array.from(discreteColorCounts.entries()).sort(([left], [right]) => left.localeCompare(right))) {
+    for (const [key, counts] of Array.from(discreteColorCounts.entries()).sort(byDeclaredOrder)) {
         const summary = Array.from(counts.entries())
             .sort(([left], [right]) => left.localeCompare(right))
             .map(([value, count]) => `${value}: ${count}`)
@@ -1949,6 +1955,25 @@ function syncTasksEdgeToggleButtons(widgetId, edgesVisible) {
         } else {
             button.setAttribute('data-vyasa-edges-off', 'true');
             button.title = 'Edges are hidden (E)';
+        }
+    });
+}
+
+function syncTasksHoverCardToggleButtons(widgetId, hoverCardsEnabled) {
+    const id = String(widgetId || '');
+    document.querySelectorAll('button[data-vyasa-tasks-action="toggleHoverCards"], button[onclick*="toggleHoverCards"]').forEach((button) => {
+        const buttonWidgetId = button.getAttribute('data-vyasa-tasks-widget-id') || '';
+        const onclick = button.getAttribute('onclick') || '';
+        if (buttonWidgetId && buttonWidgetId !== id) return;
+        if (!buttonWidgetId && !onclick.includes(`'${id}'`)) return;
+        button.setAttribute('data-vyasa-tasks-widget-id', id);
+        button.setAttribute('data-vyasa-tasks-action', 'toggleHoverCards');
+        if (hoverCardsEnabled) {
+            button.removeAttribute('data-vyasa-hover-cards-off');
+            button.title = 'Toggle hover cards';
+        } else {
+            button.setAttribute('data-vyasa-hover-cards-off', 'true');
+            button.title = 'Hover cards are hidden (H)';
         }
     });
 }
@@ -3016,16 +3041,17 @@ function renderTasksNodeLinkBadge(React, options = {}) {
 
 function tasksActiveHoverAttrs(sourceModel, activeProjectionId) {
     const projections = Array.isArray(sourceModel?.view_projections) ? sourceModel.view_projections : [];
+    const normalize = (value) => (Array.isArray(value) ? value : String(value || '').split(','))
+        .map((attr) => String(attr || '').trim())
+        .filter(Boolean);
     const id = String(activeProjectionId || '').trim();
     if (id) {
         const projection = projections.find((p) => p && p.id === id);
-        if (projection && Array.isArray(projection.hover_attrs)) {
-            return projection.hover_attrs.map((attr) => String(attr || '').trim()).filter(Boolean);
+        if (projection?.hover_attrs) {
+            return normalize(projection.hover_attrs);
         }
     }
-    if (Array.isArray(sourceModel?.hover_attrs)) {
-        return sourceModel.hover_attrs.map((attr) => String(attr || '').trim()).filter(Boolean);
-    }
+    if (sourceModel?.hover_attrs) return normalize(sourceModel.hover_attrs);
     return [];
 }
 
@@ -3135,7 +3161,7 @@ function tasksHeaderControlsHtml(widgetId, includeFullscreen = false) {
     const fullscreen = includeFullscreen
         ? `<button onclick="openTasksFullscreen('${widgetId}')" data-vyasa-tasks-fullscreen-toggle="${widgetId}" class="vyasa-tasks-fullscreen-toggle px-1.5 py-1 text-xs border rounded inline-flex items-center justify-center text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen (Shift+F)" aria-label="Fullscreen (Shift+F)">${tasksFullscreenIconHtml(false)}</button>`
         : '';
-    return `${fullscreen}<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">${tasksHeaderButtonHtml(widgetId, 'toggleHelp', '?', 'Show graph shortcuts and gestures')}${tasksHeaderButtonHtml(widgetId, 'openEgo', 'EG', 'Open selected ego graph (G)')}${tasksHeaderButtonHtml(widgetId, 'openEgoNeighbors', 'EG+', 'Open selected ego graph with neighbors (Shift+G)')}${tasksHeaderButtonHtml(widgetId, 'fit', 'F', 'Fit view')}${tasksHeaderButtonHtml(widgetId, 'toggleFilters', 'S', 'Toggle filters')}${tasksHeaderButtonHtml(widgetId, 'expandDepth', 'I', 'Expand next group depth')}${tasksHeaderButtonHtml(widgetId, 'collapseDepth', 'O', 'Collapse deepest group depth')}${tasksHeaderButtonHtml(widgetId, 'expand', 'U', 'Unfold all groups')}${tasksHeaderButtonHtml(widgetId, 'collapse', 'P', 'Collapse all groups')}${tasksHeaderButtonHtml(widgetId, 'toggleEdges', 'E', 'Toggle edges')}</div>`;
+    return `${fullscreen}<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">${tasksHeaderButtonHtml(widgetId, 'toggleHelp', '?', 'Show graph shortcuts and gestures')}${tasksHeaderButtonHtml(widgetId, 'openEgo', 'EG', 'Open selected ego graph (G)')}${tasksHeaderButtonHtml(widgetId, 'openEgoNeighbors', 'EG+', 'Open selected ego graph with neighbors (Shift+G)')}${tasksHeaderButtonHtml(widgetId, 'fit', 'F', 'Fit view')}${tasksHeaderButtonHtml(widgetId, 'toggleFilters', 'S', 'Toggle filters')}${tasksHeaderButtonHtml(widgetId, 'expandDepth', 'I', 'Expand next group depth')}${tasksHeaderButtonHtml(widgetId, 'collapseDepth', 'O', 'Collapse deepest group depth')}${tasksHeaderButtonHtml(widgetId, 'expand', 'U', 'Unfold all groups')}${tasksHeaderButtonHtml(widgetId, 'collapse', 'P', 'Collapse all groups')}${tasksHeaderButtonHtml(widgetId, 'toggleHoverCards', 'H', 'Toggle hover cards')}${tasksHeaderButtonHtml(widgetId, 'toggleEdges', 'E', 'Toggle edges')}</div>`;
 }
 
 function syncTasksFullscreenButton(wrapper) {
@@ -3561,6 +3587,9 @@ async function renderTasksGraphs(rootElement = document) {
             const [hoverInactiveNodes, setHoverInactiveNodes] = React.useState(() => (
                 typeof projectionPrefs?.hoverInactiveNodes === 'boolean' ? projectionPrefs.hoverInactiveNodes : true
             ));
+            const [hoverCardsEnabled, setHoverCardsEnabled] = React.useState(() => (
+                typeof projectionPrefs?.hoverCardsEnabled === 'boolean' ? projectionPrefs.hoverCardsEnabled : true
+            ));
             const [edgeAnimationMode, setEdgeAnimationMode] = React.useState(() => (
                 normalizeTasksEdgeAnimationMode(projectionPrefs?.edgeAnimationMode, projectionPrefs?.edgeAnimationEnabled)
             ));
@@ -3575,6 +3604,10 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 syncTasksEdgeToggleButtons(widgetId, edgesVisible);
             }, [widgetId, edgesVisible]);
+            React.useEffect(() => {
+                syncTasksHoverCardToggleButtons(widgetId, hoverCardsEnabled);
+                if (!hoverCardsEnabled) setGroupHoverTooltip(null);
+            }, [widgetId, hoverCardsEnabled]);
             const defaultEdgeOpacity = React.useMemo(
                 () => tasksDefaultEdgeOpacity((sourceModel?.dependency_edges || []).length),
                 [sourceModel]
@@ -3632,7 +3665,6 @@ async function renderTasksGraphs(rootElement = document) {
             const reactFlowApiRef = React.useRef(null);
             const searchInputRef = React.useRef(null);
             const prevExpandedCountRef = React.useRef(0);
-            const hoverClearTimerRef = React.useRef(null);
             const groupToggleHoverIdRef = React.useRef('');
             const transientGraphHoverActiveRef = React.useRef(false);
             const suppressNextGraphClickRef = React.useRef(false);
@@ -3753,6 +3785,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setQueryBuilderEnabled(typeof nextPrefs?.queryBuilderEnabled === 'boolean' ? nextPrefs.queryBuilderEnabled : true);
                 setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
                 setHoverInactiveNodes(typeof nextPrefs?.hoverInactiveNodes === 'boolean' ? nextPrefs.hoverInactiveNodes : true);
+                setHoverCardsEnabled(typeof nextPrefs?.hoverCardsEnabled === 'boolean' ? nextPrefs.hoverCardsEnabled : true);
                 setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(nextPrefs?.edgeAnimationMode, nextPrefs?.edgeAnimationEnabled));
                 setEdgeAnimationTickSteps(clampTasksEdgeAnimationSteps(nextPrefs?.edgeAnimationTickSteps));
                 setEdgeAnimationTickDuration(clampTasksEdgeAnimationDuration(nextPrefs?.edgeAnimationTickDuration));
@@ -3911,6 +3944,7 @@ async function renderTasksGraphs(rootElement = document) {
                         filtersCollapsed,
                         edgesVisible,
                         hoverInactiveNodes,
+                        hoverCardsEnabled,
                         edgeAnimationEnabled,
                         edgeAnimationMode,
                         edgeAnimationTickSteps,
@@ -3949,7 +3983,7 @@ async function renderTasksGraphs(rootElement = document) {
                     slideNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
+            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
@@ -4659,7 +4693,23 @@ async function renderTasksGraphs(rootElement = document) {
                                 ? { ...node, data: { ...node.data, __hover_checkbox__: true } }
                                 : node)
                             : baseNodes);
-                        setEdgesReusing(edgesVisible ? baseEdges : []);
+                        setEdgesReusing(edgesVisible ? (hoveredNodeId
+                            ? baseEdges.map((edge) => {
+                                if (edge.source !== hoveredNodeId && edge.target !== hoveredNodeId) return edge;
+                                const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
+                                const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
+                                const strokeMode = edgeAnimationEnabled ? 'selected' : (edge.source === hoveredNodeId ? 'selected-out' : 'selected-in');
+                                return {
+                                    ...edge,
+                                    data: { ...edge.data, highlightMode: 'selected', strokeMode },
+                                    labelStyle: { ...(edge.labelStyle || {}), fill: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity },
+                                    labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.72 },
+                                    style: { ...edge.style, stroke: edgeColor, opacity: tasksApplyEdgeOpacity(0.98, edgeOpacity) * branchOpacity, strokeWidth: tasksEdgeStrokeWidthForMode(strokeMode, edgeAnimationEnabled), strokeLinecap: 'round' },
+                                    animated: edgeAnimationEnabled,
+                                    className: edgeAnimationClassName,
+                                };
+                            })
+                            : baseEdges) : []);
                         return;
                     }
                     const matchingIds = filteredSelectionIds();
@@ -5599,6 +5649,11 @@ async function renderTasksGraphs(rootElement = document) {
                         if (key === 'e') {
                             event.preventDefault();
                             setEdgesVisible((current) => !current);
+                            return;
+                        }
+                        if (key === 'h') {
+                            event.preventDefault();
+                            setHoverCardsEnabled((current) => !current);
                             return;
                         }
                         if (key === 't') {
@@ -6651,14 +6706,20 @@ async function renderTasksGraphs(rootElement = document) {
             const clearGroupHoverTooltip = React.useCallback(() => {
                 setGroupHoverTooltip(null);
             }, []);
-            const clearGraphHoverState = React.useCallback(() => {
+            const hoverTraceKeyRef = React.useRef('');
+            const logHoverCycle = React.useCallback((label, payload = {}) => {
+                logTasksDebug(label, payload);
+                logTasksPerf(label, payload);
+            }, []);
+            const clearGraphHoverState = React.useCallback((reason = 'unknown') => {
                 if (!transientGraphHoverActiveRef.current && !groupToggleHoverIdRef.current) return;
+                logHoverCycle('hover-cycle:clear-state', { reason });
                 transientGraphHoverActiveRef.current = false;
                 groupToggleHoverIdRef.current = '';
                 setTasksGroupToggleHover(flowWrapperRef.current, '');
                 clearGroupHoverTooltip();
                 setHoveredNodeId(null);
-            }, [clearGroupHoverTooltip]);
+            }, [clearGroupHoverTooltip, logHoverCycle]);
             const activeHoverAttrs = React.useMemo(
                 () => tasksActiveHoverAttrs(viewerState.model, activeProjectionId),
                 [viewerState.model, activeProjectionId]
@@ -6667,25 +6728,32 @@ async function renderTasksGraphs(rootElement = document) {
                 const reactFlow = reactFlowApiRef.current;
                 const wrapper = flowWrapperRef.current;
                 const graphBase = graphBaseRef.current || {};
-                markTasksFrameProbe(widgetId, wrapper, model, graphBase, 'pointermove', currentPerfViewState());
-                const perfContext = tasksPerfContext(widgetId, wrapper, model, graphBase);
-                const traceHoverFrame = (stage, extra = {}) => traceTasksInteractionFrame('pointermove', {
-                    ...perfContext,
-                    stage,
-                    ...extra,
-                    surface: tasksPerfSurfaceSnapshot(wrapper, event),
-                    scroll: tasksPerfScrollSnapshot(wrapper, event),
-                });
-                const perfStart = tasksPerfNow();
-                const finishPerf = (stage, extra = {}) => {
-                    const durationMs = Math.round((tasksPerfNow() - perfStart) * 10) / 10;
-                    if (durationMs >= 8) logTasksPerf('hover-pointer', { ...perfContext, stage, durationMs, ...extra });
+                const target = event.target instanceof Element ? event.target : null;
+                const domNode = target?.closest?.('.react-flow__node') || null;
+                const traceHoverHit = (stage, extra = {}) => {
+                    const key = [
+                        stage,
+                        extra.hitId || '',
+                        extra.kind || '',
+                        domNode?.getAttribute?.('data-id') || '',
+                    ].join('|');
+                    if (hoverTraceKeyRef.current === key) return;
+                    hoverTraceKeyRef.current = key;
+                    logHoverCycle('hover-cycle:pointer-hit', {
+                        widgetId,
+                        stage,
+                        x: Math.round(event.clientX),
+                        y: Math.round(event.clientY),
+                        targetClass: String(target?.className || '').slice(0, 96),
+                        domNodeId: domNode?.getAttribute?.('data-id') || '',
+                        hoveredNodeId: hoveredNodeId || '',
+                        ...extra,
+                    });
                 };
                 if (!reactFlow || !wrapper) return;
                 if (wrapper.querySelector('.react-flow__pane.dragging')) {
-                    clearGraphHoverState();
-                    traceHoverFrame('dragging', { scannedNodes: 0 });
-                    finishPerf('dragging', { scannedNodes: 0 });
+                    clearGraphHoverState('pointer-dragging');
+                    traceHoverHit('dragging');
                     return;
                 }
                 const point = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -6709,12 +6777,17 @@ async function renderTasksGraphs(rootElement = document) {
                     .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
                     .sort((a, b) => b.z - a.z)[0];
                 if (!hit) {
-                    clearGraphHoverState();
-                    traceHoverFrame('miss', { scannedNodes: baseNodes.length });
-                    finishPerf('miss', { scannedNodes: baseNodes.length });
+                    clearGraphHoverState('pointer-miss');
+                    traceHoverHit('miss', { flowX: Math.round(point.x), flowY: Math.round(point.y) });
                     return;
                 }
                 const nodeData = hit.node.data || {};
+                const edgePx = Math.round(Math.min(
+                    point.x - hit.rect.x,
+                    hit.rect.x + hit.rect.width - point.x,
+                    point.y - hit.rect.y,
+                    hit.rect.y + hit.rect.height - point.y
+                ));
                 const hoverGroupId = nodeData.__kind__ === 'group'
                     ? hit.node.id
                     : (nodeData.__kind__ === 'groupTitle' ? nodeData.sourceGroupId : '');
@@ -6727,9 +6800,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const liveNode = nodes.find((node) => node.id === hit.node.id) || hit.node;
                 if (!tasksGraphNodeAllowsHover(liveNode, hoverInactiveNodes)) {
                     clearGroupHoverTooltip();
-                    const blockedPayload = { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '', groupHoverChanged };
-                    traceHoverFrame('blocked', blockedPayload);
-                    finishPerf('blocked', blockedPayload);
+                    traceHoverHit('blocked', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
                 const rows = tasksHoverAttrRows(nodeData, activeHoverAttrs);
@@ -6738,25 +6809,40 @@ async function renderTasksGraphs(rootElement = document) {
                 const image = normalizeTasksNodeImageUrl(nodeData.__node_image__);
                 if (!label && !rows.length) {
                     clearGroupHoverTooltip();
-                    const emptyPayload = { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '', groupHoverChanged };
-                    traceHoverFrame('empty', emptyPayload);
-                    finishPerf('empty', emptyPayload);
+                    traceHoverHit('empty', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
                 const bounds = wrapper.getBoundingClientRect();
                 transientGraphHoverActiveRef.current = true;
-                setGroupHoverTooltip({
-                    label,
-                    nodeId,
-                    image,
-                    rows,
-                    x: event.clientX - bounds.left + 12,
-                    y: event.clientY - bounds.top + 18,
-                });
-                const hitPayload = { scannedNodes: baseNodes.length, hitId: hit.node.id, kind: nodeData.__kind__ || '', rows: rows.length, groupHoverChanged, tooltipX: Math.round(event.clientX - bounds.left + 12), tooltipY: Math.round(event.clientY - bounds.top + 18) };
-                traceHoverFrame('hit', hitPayload);
-                finishPerf('hit', hitPayload);
-            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, currentPerfViewState, hoverInactiveNodes]);
+                if (tasksGraphNodeAllowsHover(liveNode, hoverInactiveNodes) && isTasksGraphNodeSelectable(liveNode.data?.__kind__, expanded.has(liveNode.id))) {
+                    const sourceNodeId = liveNode.data?.__kind__ === 'groupTitle' ? liveNode.data?.sourceGroupId : liveNode.id;
+                    if (!selectedNodeId) {
+                        setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);
+                    } else {
+                        const baseEdges = graphBase.edges || [];
+                        const isNeighbor = baseEdges.some((edge) =>
+                            (edge.source === selectedNodeId && edge.target === sourceNodeId) ||
+                            (edge.source === sourceNodeId && edge.target === selectedNodeId)
+                        );
+                        if (hoverInactiveNodes || isNeighbor || sourceNodeId === selectedNodeId) {
+                            setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);
+                        }
+                    }
+                }
+                if (hoverCardsEnabled) {
+                    setGroupHoverTooltip({
+                        label,
+                        nodeId,
+                        image,
+                        rows,
+                        x: event.clientX - bounds.left + 12,
+                        y: event.clientY - bounds.top + 18,
+                    });
+                } else if (groupHoverTooltip) {
+                    clearGroupHoverTooltip();
+                }
+                traceHoverHit('hit', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx, groupHoverChanged });
+            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, hoverInactiveNodes, hoverCardsEnabled, groupHoverTooltip, hoveredNodeId, logHoverCycle, selectedNodeId]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -6844,43 +6930,6 @@ async function renderTasksGraphs(rootElement = document) {
                 event.preventDefault();
                 event.stopPropagation();
             }, [selectGroupDescendants]);
-            const focusNeighborEdge = React.useCallback((_, node) => {
-                if (!node?.id) return;
-                if (!tasksGraphNodeAllowsHover(node, hoverInactiveNodes)) return;
-                if (!isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id))) return;
-                const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
-                if (!selectedNodeId) {
-                    if (hoverClearTimerRef.current) {
-                        window.clearTimeout(hoverClearTimerRef.current);
-                        hoverClearTimerRef.current = null;
-                    }
-                    transientGraphHoverActiveRef.current = true;
-                    setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);
-                    return;
-                }
-                const baseEdges = graphBaseRef.current.edges || [];
-                const isNeighbor = baseEdges.some((edge) =>
-                    (edge.source === selectedNodeId && edge.target === sourceNodeId) ||
-                    (edge.source === sourceNodeId && edge.target === selectedNodeId)
-                );
-                if (!hoverInactiveNodes && !isNeighbor && sourceNodeId !== selectedNodeId) return;
-                if (hoverClearTimerRef.current) {
-                    window.clearTimeout(hoverClearTimerRef.current);
-                    hoverClearTimerRef.current = null;
-                }
-                transientGraphHoverActiveRef.current = true;
-                setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);
-            }, [expanded, selectedNodeId, hoverInactiveNodes]);
-            const clearNeighborEdgeFocus = React.useCallback((_, node) => {
-                if (!tasksGraphNodeAllowsHover(node, hoverInactiveNodes)) return;
-                if (!isTasksGraphNodeSelectable(node?.data?.__kind__, expanded.has(node?.id))) return;
-                clearGroupHoverTooltip();
-                if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
-                hoverClearTimerRef.current = window.setTimeout(() => {
-                    setHoveredNodeId(null);
-                    hoverClearTimerRef.current = null;
-                }, 90);
-            }, [expanded, hoverInactiveNodes]);
             const startDragSelection = React.useCallback((event) => {
                 const mode = event.metaKey ? 'lasso' : (event.shiftKey ? 'rect' : '');
                 if (!mode || (event.pointerType === 'mouse' && event.button !== 0)) return;
@@ -6949,7 +6998,6 @@ async function renderTasksGraphs(rootElement = document) {
                 event.stopPropagation();
             }, [dragSelection, expanded, extendLassoPoints]);
             React.useEffect(() => () => {
-                if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
                 if (pendingNodeClickToggleTimerRef.current) window.clearTimeout(pendingNodeClickToggleTimerRef.current);
             }, []);
             React.useEffect(() => {
@@ -7059,6 +7107,7 @@ async function renderTasksGraphs(rootElement = document) {
                         toggleFilters: () => setFiltersCollapsedGuarded((current) => !current, 'action-toggle-filters'),
                         openFilters: () => setFiltersCollapsedGuarded(false, 'action-open-filters'),
                         closeFilters: () => setFiltersCollapsedGuarded(true, 'action-close-filters'),
+                        toggleHoverCards: () => setHoverCardsEnabled((current) => !current),
                         toggleEdges: () => setEdgesVisible((current) => !current),
                         toggleHelp: () => setHelpOpen((current) => !current),
                     };
@@ -7284,6 +7333,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Shift + G', 'open EG+'),
                     row('S', 'toggle filters'),
                     row('E', 'toggle edges'),
+                    row('H', 'toggle hover cards'),
                     row('0', 'edge animation none / smooth / tick'),
                     row('T', 'toggle hovered group'),
                     row('I / O', 'expand / collapse one depth'),
@@ -7421,7 +7471,7 @@ async function renderTasksGraphs(rootElement = document) {
                     // click through to the pane (clearing the selection). The node
                     // click handler manages hover itself.
                     if (!event.shiftKey && !event.metaKey && !event.target?.closest?.('button, input, textarea, select, a, .react-flow__controls, .vyasa-tasks-filter-card, .react-flow__node')) {
-                        clearGraphHoverState();
+                        clearGraphHoverState('pointer-down');
                     }
                 },
                 onPointerDownCapture: startDragSelection,
@@ -7440,7 +7490,7 @@ async function renderTasksGraphs(rootElement = document) {
                 onPointerCancelCapture: finishDragSelection,
                 onPointerLeave: (event) => {
                     finishDragSelection(event);
-                    clearGraphHoverState();
+                    clearGraphHoverState('wrapper-pointer-leave');
                 },
             };
             const flowWrapperStyle = {
@@ -7463,7 +7513,7 @@ async function renderTasksGraphs(rootElement = document) {
                     filterPanelElement,
                     SlideShow(),
                     window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
@@ -7481,7 +7531,7 @@ async function renderTasksGraphs(rootElement = document) {
             ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', gap: '12px', position: 'relative' } },
                 filterPanelElement,
                 window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onNodeMouseEnter: focusNeighborEdge, onNodeMouseLeave: clearNeighborEdgeFocus, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                         window.React.createElement(rf.Controls),
                         window.React.createElement(PanControls),

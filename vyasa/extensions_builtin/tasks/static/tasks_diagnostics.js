@@ -74,6 +74,8 @@ function tasksPostFileLog(label, at, payload = {}) {
 export function logTasksPerf(label, payload = {}) {
     if (!window.__vyasaTasksPerf.enabled) return null;
     if (
+        !String(label || '').startsWith('hover-cycle:')
+        &&
         label !== 'frame-probe'
         && label !== 'longtask'
         && label !== 'render-context'
