@@ -14,6 +14,11 @@ const TASKS_ROOT_COLLISION_GAP = 96;
 const TASKS_GROUP_BG_Z = 10;
 const TASKS_EDGE_Z = 5;
 const TASKS_EDGE_LABEL_Z = 6;
+function tasksSetEdgeLabelsVisible(visible) {
+    document.documentElement.classList.toggle('vyasa-tasks-edge-labels-on', visible === true);
+    return visible === true;
+}
+window.tasksSetEdgeLabelsVisible = tasksSetEdgeLabelsVisible;
 const TASKS_EDGE_LABEL_FOCUS_Z = 1400;
 const TASKS_GROUP_Z = 180;
 const TASKS_TASK_Z = 1000;
@@ -5143,6 +5148,7 @@ async function renderTasksGraphs(rootElement = document) {
                     displayLabel && !prominentLabel && React.createElement('g', {
                         transform: `translate(${labelX}, ${labelY})`,
                         pointerEvents: 'none',
+                        className: showFullLabel ? 'vyasa-tasks-edge-label vyasa-tasks-edge-label--active' : 'vyasa-tasks-edge-label',
                     },
                     React.createElement('title', null, fullLabel),
                     (labelBgStyle.fillOpacity ?? 0) > 0 && React.createElement('rect', {
