@@ -5134,13 +5134,13 @@ async function renderTasksGraphs(rootElement = document) {
                 const strokeMode = props.data?.strokeMode || highlightMode;
                 const useTaper = !props.animated && ['focused-in', 'focused-out', 'selected', 'selected-in', 'selected-out'].includes(strokeMode);
                 const taperPath = useTaper
-                    ? tasksTaperedBezierPath(path, (Number(props.style?.strokeWidth) || 4) * 1.85, Math.max(1, (Number(props.style?.strokeWidth) || 4) * 0.26))
+                    ? tasksTaperedBezierPath(path, (Number(props.style?.strokeWidth) || 4) * 2.65, Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42))
                     : '';
                 const taperArrowPath = taperPath
-                    ? tasksTaperedArrowHeadPath(path, Math.max(8, (Number(props.style?.strokeWidth) || 4) * 2.4))
+                    ? tasksTaperedArrowHeadPath(path, Math.max(10, (Number(props.style?.strokeWidth) || 4) * 3.0))
                     : '';
                 const showFullLabel = highlightMode !== 'dim' && highlightMode !== 'none';
-                const prominentLabel = highlightMode === 'focused-in' || highlightMode === 'focused-out';
+                const prominentLabel = showFullLabel;
                 const displayLabel = showFullLabel
                     ? fullLabel
                     : (labelLines.length > 1 ? `${labelLines[0]}...` : fullLabel);
