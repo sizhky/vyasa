@@ -29,7 +29,8 @@ roadmap.kg/chapter-1.kg.edges  # optional story/topology edge source
 
 ```text
 @graph id=roadmap title=Roadmap
-initial_view=delivery
+group_by=status
+color_by=status
 hover_attrs=desc,built,where
 card_states="Not Done,Done,Deferred/Cancelled"
 
@@ -56,12 +57,8 @@ blocks color=relation.blocks
 explains
 
 @views
-delivery:
-	source=base
-	group_by,color_by=status
-	caption="Track delivery state"
 owners:
-	source=chapter2
+	source=base
 	group_by=owner
 	color_by=status
 	caption="Find ownership gaps"
@@ -72,7 +69,8 @@ dependency:
 	caption="Inspect flow"
 ```
 
-- `@graph` names the graph and can continue on following unindented lines for metadata like `initial_view`, `hover_attrs`, and `card_states`; there is no generic `Default` tab.
+- `@graph` names the graph and can continue on following unindented lines for default/base-view metadata like `group_by`, `color_by`, `hover_attrs`, and `card_states`.
+- The default view is the base graph plus graph-level display settings. Do not point default at a projection, and do not rely on the first `@views` entry.
 - Optional `card_states` defines the click-cycle for card completion state. Put it on its own line when you want the multiline graph header style.
 - Prefer folder packs and point markdown to `items_schema: roadmap.kg/kg.schema`.
 - Top-level `nodes=` and `attrs=` in `@sources` are common to every source.
@@ -81,7 +79,7 @@ dependency:
 - `base+dep` composes source aliases.
 - `@relations` is optional edge-type vocabulary. Use it to document relation ids, attach default presentation such as `color`, and let CLI validation catch typos. Relation label text defaults to the relation id.
 - `@grammar` is optional and names a declarative rules file (`path=` relative to the pack, or absolute) that layers *dialect* invariants on top of the generic structural checks. A grammar can enforce closed vocabularies (`closed_vocab`), directed spines over an ordered attr (`edge_direction`), relation cardinality (`edge_cardinality`), allowed endpoint kinds (`edge_endpoints`), and conditional attr presence (`requires_attr_when`). It stays out of the pack proper so one grammar is shared across many packs. No `@grammar` means structural checks only. See `scripts/validate_kg_pack.py` for the rule schema.
-- `@views` must have a real purpose through `caption`.
+- `@views` are named read-only projections for alternate cuts; do not use them to define the normal default view.
 - `group_by,color_by=status` expands to `group_by=status color_by=status`; `X,Y,Z=value` is valid for simple scalar values.
 - Projection display controls may live on views: `hover_attrs`, `edge_color_by`, `edge_label_from`, `aggregate_edges`, `default_open_depth`, and spacing/layout keys.
 

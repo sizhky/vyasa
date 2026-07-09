@@ -24,7 +24,7 @@ const TASKS_EDGE_FOCUS_Z = 1450;
 const TASKS_SELECTED_Z_BOOST = 520;
 const TASKS_NODE_BG = 'color-mix(in srgb, var(--vyasa-paper) 86%, var(--vyasa-primary) 14%)';
 const TASKS_GROUP_BG = 'color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-primary) 12%)';
-const TASKS_GROUP_EXPANDED_BG = 'color-mix(in srgb, var(--vyasa-primary) 7%, transparent)';
+const TASKS_GROUP_EXPANDED_BG = 'transparent';
 const TASKS_NODE_BORDER = '1px solid color-mix(in srgb, var(--vyasa-paper) 42%, var(--vyasa-primary) 58%)';
 const TASKS_GROUP_TITLE_BG = 'color-mix(in srgb, var(--vyasa-paper) 76%, var(--vyasa-primary) 24%)';
 const TASKS_EDGE_LABEL_BG = 'color-mix(in srgb, var(--vyasa-paper) 94%, var(--vyasa-primary) 6%)';
@@ -1196,7 +1196,7 @@ function buildTasksGroupedState(sourceModel, groupByHierarchy) {
         task_children: taskChildren,
         document_order: [...groups.map((group) => group.id), ...tasks.map((task) => task.id)],
         active_projection: '__custom_group_by__',
-        default_color_by: attrs[0] || sourceModel.default_color_by || '',
+        default_color_by: sourceModel.default_color_by || attrs[0] || '',
         default_open_depth: -1,
     };
     delete model.projection_models;
@@ -3335,23 +3335,30 @@ async function renderTasksGraphs(rootElement = document) {
             const storedProjectionPrefsRef = React.useRef(sourcePrefsRef.current?.projectionPrefs && typeof sourcePrefsRef.current.projectionPrefs === 'object'
                 ? sourcePrefsRef.current.projectionPrefs
                 : {});
+            const defaultGroupByHierarchy = React.useMemo(() => (
+                Array.isArray(sourceModel?.default_group_by)
+                    ? sourceModel.default_group_by.map((key) => String(key || '').trim()).filter(Boolean)
+                    : []
+            ), [sourceModel]);
             const initialProjectionId = React.useMemo(() => {
                 if (defaultViewMode === 'gantt') return TASKS_GANTT_PROJECTION_ID;
                 const saved = String(sourcePrefsRef.current?.projectionId || '').trim();
                 if (projectionOptions.some((option) => option.id === saved)) return saved;
-                const configured = String(sourceModel?.default_projection || '').trim();
-                return projectionOptions.some((option) => option.id === configured) ? configured : '';
-            }, [sourceModel, projectionOptions]);
+                return '';
+            }, [projectionOptions]);
             const initialGraphProjectionId = initialProjectionId === TASKS_GANTT_PROJECTION_ID ? '' : initialProjectionId;
             const [activeProjectionId, setActiveProjectionId] = React.useState(initialGraphProjectionId);
             const [viewMode, setViewMode] = React.useState(defaultViewMode);
             const [groupByHierarchy, setGroupByHierarchy] = React.useState(() => (
-                Array.isArray(sourcePrefsRef.current?.groupByHierarchy) ? sourcePrefsRef.current.groupByHierarchy : []
+                Array.isArray(sourcePrefsRef.current?.groupByHierarchy) ? sourcePrefsRef.current.groupByHierarchy : defaultGroupByHierarchy
             ));
             const [groupByEnabled, setGroupByEnabled] = React.useState(() => (
                 typeof sourcePrefsRef.current?.groupByEnabled === 'boolean'
                     ? sourcePrefsRef.current.groupByEnabled
-                    : (Array.isArray(sourcePrefsRef.current?.groupByHierarchy) && sourcePrefsRef.current.groupByHierarchy.some(Boolean))
+                    : (
+                        (Array.isArray(sourcePrefsRef.current?.groupByHierarchy) && sourcePrefsRef.current.groupByHierarchy.some(Boolean))
+                        || defaultGroupByHierarchy.some(Boolean)
+                    )
             ));
             const [groupByDisabledKeys, setGroupByDisabledKeys] = React.useState(() => normalizeTasksGroupByDisabledKeys(sourcePrefsRef.current?.groupByDisabledKeys));
             const groupByDisabledSet = React.useMemo(() => new Set(groupByDisabledKeys), [groupByDisabledKeys]);
@@ -3376,8 +3383,8 @@ async function renderTasksGraphs(rootElement = document) {
             const projectionGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(tasksModelSetting(model, 'projection-group-opacity', wrapper.dataset.tasksProjectionGroupOpacity || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`)) || TASKS_PROJECTION_GROUP_OPACITY_DEFAULT));
             const projectionUnspecifiedGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(tasksModelSetting(model, 'projection-unspecified-group-opacity', wrapper.dataset.tasksProjectionUnspecifiedGroupOpacity || `${TASKS_PROJECTION_UNSPECIFIED_GROUP_OPACITY_DEFAULT}`)) || TASKS_PROJECTION_UNSPECIFIED_GROUP_OPACITY_DEFAULT));
             const defaultProjectionUnspecifiedContentOpacity = clampTasksProjectionContentOpacity(tasksModelSetting(model, 'projection-unspecified-content-opacity', wrapper.dataset.tasksProjectionUnspecifiedContentOpacity || `${TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT}`));
-            const projectionGroupExpandedOpacity = Math.max(1, Math.min(projectionGroupOpacity, Math.round(projectionGroupOpacity * 0.5)));
-            const projectionUnspecifiedGroupExpandedOpacity = Math.max(1, Math.min(projectionUnspecifiedGroupOpacity, Math.round(projectionUnspecifiedGroupOpacity * 0.5)));
+            const projectionGroupExpandedOpacity = 0;
+            const projectionUnspecifiedGroupExpandedOpacity = 0;
             const rawGraph = React.useMemo(
                 () => normalizeTasksGraphNodes(projectionState.graph || { nodes: [], edges: [] }, model),
                 [projectionState, model]
@@ -3963,7 +3970,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setSourceGraph(nextGraph);
                 const wanted = projectionId === null ? activeProjectionId : String(projectionId || '');
                 const available = tasksProjectionOptions(nextModel, ganttEnabled).some((option) => option.id === wanted);
-                setActiveProjectionId(available ? wanted : String(nextModel?.default_projection || ''));
+                setActiveProjectionId(available ? wanted : '');
                 setViewMode('graph');
                 setSelectedNodeId(null);
                 setSelectedNodeIds(new Set());
@@ -4369,7 +4376,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const isUnspecifiedProjectionGroup = isTasksUnspecifiedProjectionGroup(n, TASKS_PROJECTION_UNSPECIFIED_LABEL);
                     const groupFillExpanded = isProjectionGroup
                         ? (isUnspecifiedProjectionGroup ? projectionUnspecifiedGroupExpandedOpacity : projectionGroupExpandedOpacity)
-                        : 7;
+                        : 0;
                     const groupFillCollapsed = isProjectionGroup
                         ? (isUnspecifiedProjectionGroup ? projectionUnspecifiedGroupOpacity : projectionGroupOpacity)
                         : 14;

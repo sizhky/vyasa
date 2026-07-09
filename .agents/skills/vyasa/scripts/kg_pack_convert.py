@@ -107,9 +107,20 @@ def _replacement_fence(fence_name: str, body: str, schema_name: str) -> str:
 
 def _schema_text(model: dict, nodes_name: str, edges_name: str, attrs_name: str, palette_name: str, cache_name: str) -> str:
     title = model.get("title") or "Knowledge Graph"
-    initial_view = model.get("default_projection") or _first_view_id(model) or "overview"
+    views = model.get("view_projections") or []
+    default_view = next((view for view in views if view.get("id") == model.get("default_projection")), None)
+    default_group_by = _default_group_by(model, default_view)
+    default_color_by = model.get("default_color_by") or (default_view or {}).get("default_color_by") or model.get("color_by") or (default_group_by[0] if default_group_by else "")
+    if default_color_by and not default_group_by:
+        default_group_by = [str(default_color_by)]
     lines = [
-        f"@graph id={_quote(model.get('persistence_id') or _slug(title))} title={_quote(title)} initial_view={_quote(initial_view)}",
+        f"@graph id={_quote(model.get('persistence_id') or _slug(title))} title={_quote(title)}",
+    ]
+    if default_group_by:
+        lines.append(f"group_by={_quote(_group_by_value(default_group_by))}")
+    if default_color_by:
+        lines.append(f"color_by={_quote(default_color_by)}")
+    lines.extend([
         "",
         "@sources",
         "base:",
@@ -120,21 +131,14 @@ def _schema_text(model: dict, nodes_name: str, edges_name: str, attrs_name: str,
         f"cache={_quote(cache_name)}",
         "",
         "@relations",
-    ]
+    ])
     for relation in _relations(model):
         color = _relation_color(model, relation)
         lines.append(f"{_quote(relation)} color={_quote(color)}" if color else _quote(relation))
-    lines.extend(["", "@views"])
-    views = model.get("view_projections") or []
     if views:
+        lines.extend(["", "@views"])
         for view in views:
-            lines.append(_view_line(view, initial_view))
-    else:
-        color_by = model.get("default_color_by") or model.get("color_by") or ""
-        if color_by:
-            lines.extend(["overview:", "\tsource=base", f"\tgroup_by,color_by={_quote(color_by)}", f"\tcaption={_quote('Understand the graph by ' + color_by)}"])
-        else:
-            lines.extend(["overview:", "\tsource=base", "\tcaption=\"Inspect the graph\""])
+            lines.append(_view_line(view))
     return "\n".join(lines) + "\n"
 
 
@@ -310,8 +314,8 @@ def _relation_color(model: dict, relation: str) -> str:
     return str((relation_palette or {}).get(relation, ""))
 
 
-def _view_line(view: dict, initial_view: str) -> str:
-    view_id = view.get("id") or initial_view
+def _view_line(view: dict) -> str:
+    view_id = view.get("id") or "view"
     parts = [f"{_safe_key(view_id)}:", "\tsource=base"]
     group_by = view.get("groups_from") or []
     if isinstance(group_by, str):
@@ -331,9 +335,15 @@ def _view_line(view: dict, initial_view: str) -> str:
     return "\n".join(parts)
 
 
-def _first_view_id(model: dict) -> str:
-    views = model.get("view_projections") or []
-    return str(views[0].get("id") or "") if views else ""
+def _default_group_by(model: dict, default_view: dict | None) -> list[str]:
+    raw = model.get("default_group_by") or model.get("group_by") or (default_view or {}).get("groups_from") or []
+    if isinstance(raw, str):
+        return [part.strip() for part in raw.split(",") if part.strip()]
+    return [str(part).strip() for part in raw if str(part).strip()]
+
+
+def _group_by_value(group_by: list[str]) -> str:
+    return group_by[0] if len(group_by) == 1 else ",".join(group_by)
 
 
 def _is_data_attr(key: str, value) -> bool:
