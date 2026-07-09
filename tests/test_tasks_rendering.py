@@ -1184,6 +1184,18 @@ def test_client_stats_label_counts_hierarchy_links_without_edges():
     assert "for (const [parent, items] of Object.entries(model?.task_children || {}))" in source
 
 
+def test_kg_palette_colors_are_contrast_adjusted_in_dark_mode():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "TASKS_DARK_PALETTE_CONTRAST = 3.2" in source
+    assert "function tasksDisplayPaletteColor(color)" in source
+    assert "document.documentElement?.classList?.contains('dark')" in source
+    assert "tasksChromaCappedOklab(tasksRgbToOklab(rgb))" in source
+    assert "tasksContrastRatio(candidate, paper) >= TASKS_DARK_PALETTE_CONTRAST" in source
+    assert "const displayColor = tasksDisplayPaletteColor(color);" in source
+    assert "return tasksDisplayPaletteColor(averageTasksHexColors(colors) || colors[0]?.trim() || '')" in source
+
+
 def test_react_flow_component_fills_flow_wrapper():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("const existing = document.getElementById", 1)[0]

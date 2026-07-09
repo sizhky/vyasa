@@ -49,10 +49,15 @@ const TASKS_HAS_NOTE_ATTR = 'has_note';
 const TASKS_FILTER_TEXT_VALUE_LIMIT = 24;
 const TASKS_FILTER_TEXT_VALUE_LENGTH = 48;
 const TASKS_HAS_NOTE_PALETTE = { yes: '#22c55e', no: 'rgba(220, 38, 38, 0.28)' };
+const TASKS_DARK_PALETTE_CONTRAST = 3.2;
+const TASKS_DARK_PALETTE_MIN_L = 0.68;
+const TASKS_DARK_PALETTE_MAX_L = 0.9;
+const TASKS_DARK_PALETTE_MAX_CHROMA = 0.19;
 const TASKS_DEFAULT_CARD_STATES = ['Not Done', 'Done'];
 const TASKS_STORAGE_WRITE_DELAY_MS = 180;
 const tasksStorageWriteCache = new Map();
 const tasksStorageWriteTimers = new Map();
+const tasksDisplayPaletteColorCache = new Map();
 const TASKS_SPECIAL_NODE_ATTRS = new Set([
     TASKS_CARD_STATE_ATTR,
     TASKS_HAS_NOTE_ATTR,
@@ -703,8 +708,8 @@ function tasksHasAnyNodeNote(nodeNotes) {
 
 function tasksCardStateColor(model, state) {
     const palette = model?.node_color_palettes?.[TASKS_CARD_STATE_ATTR];
-    if (palette && typeof palette === 'object' && state in palette) return palette[state];
-    return state === TASKS_DEFAULT_CARD_STATES[1] ? TASKS_DONE_ACCENT : '';
+    if (palette && typeof palette === 'object' && state in palette) return tasksDisplayPaletteColor(palette[state]);
+    return state === TASKS_DEFAULT_CARD_STATES[1] ? tasksDisplayPaletteColor(TASKS_DONE_ACCENT) : '';
 }
 
 function tasksCardStateForNode(model, nodeStates, nodeId, cardStates) {
@@ -1339,6 +1344,74 @@ function parseTasksHexColor(color) {
     };
 }
 
+function parseTasksRgbColor(color) {
+    const match = String(color || '').trim().match(/^rgba?\(\s*([\d.]+)(?:\s*,\s*|\s+)([\d.]+)(?:\s*,\s*|\s+)([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/i);
+    if (!match) return null;
+    const alphaText = match[4] || '';
+    const alpha = alphaText.endsWith('%') ? Number.parseFloat(alphaText) / 100 : Number.parseFloat(alphaText || '1');
+    if (Number.isFinite(alpha) && alpha < 1) return null;
+    return {
+        r: Math.max(0, Math.min(255, Math.round(Number.parseFloat(match[1])))),
+        g: Math.max(0, Math.min(255, Math.round(Number.parseFloat(match[2])))),
+        b: Math.max(0, Math.min(255, Math.round(Number.parseFloat(match[3])))),
+    };
+}
+
+function parseTasksDisplayColor(color) {
+    return parseTasksHexColor(color) || parseTasksRgbColor(color);
+}
+
+function tasksRgbToHex({ r, g, b }) {
+    return `#${[r, g, b].map((part) => Math.max(0, Math.min(255, Math.round(part))).toString(16).padStart(2, '0')).join('')}`;
+}
+
+function tasksSrgbToLinear(part) {
+    const value = Math.max(0, Math.min(1, part / 255));
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+}
+
+function tasksLinearToSrgb(part) {
+    const value = Math.max(0, Math.min(1, part));
+    return Math.round(255 * (value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055));
+}
+
+function tasksRgbToOklab({ r, g, b }) {
+    const lr = tasksSrgbToLinear(r);
+    const lg = tasksSrgbToLinear(g);
+    const lb = tasksSrgbToLinear(b);
+    const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
+    const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
+    const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+    return {
+        L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+        a: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+        b: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+    };
+}
+
+function tasksOklabToRgb({ L, a, b }) {
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+    const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+    return {
+        r: tasksLinearToSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+        g: tasksLinearToSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+        b: tasksLinearToSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
+    };
+}
+
+function tasksRelativeLuminance(rgb) {
+    return 0.2126 * tasksSrgbToLinear(rgb.r) + 0.7152 * tasksSrgbToLinear(rgb.g) + 0.0722 * tasksSrgbToLinear(rgb.b);
+}
+
+function tasksContrastRatio(a, b) {
+    const l1 = tasksRelativeLuminance(a);
+    const l2 = tasksRelativeLuminance(b);
+    const light = Math.max(l1, l2);
+    const dark = Math.min(l1, l2);
+    return (light + 0.05) / (dark + 0.05);
+}
+
 function interpolateTasksHexColor(startColor, endColor, ratio) {
     const start = parseTasksHexColor(startColor);
     const end = parseTasksHexColor(endColor);
@@ -1417,16 +1490,16 @@ function resolveTasksGradientColor(palette, value) {
     const domain = tasksGradientDomain(palette, stops);
     const normalized = normalizeTasksGradientValue(value, domain, Boolean(palette?.wrap));
     if (normalized === null) return '';
-    if (normalized <= stops[0].at) return stops[0].color;
+    if (normalized <= stops[0].at) return tasksDisplayPaletteColor(stops[0].color);
     for (let index = 1; index < stops.length; index += 1) {
         const prev = stops[index - 1];
         const current = stops[index];
         if (normalized > current.at) continue;
         const span = current.at - prev.at;
-        if (!Number.isFinite(span) || span <= 0) return current.color;
-        return interpolateTasksHexColor(prev.color, current.color, (normalized - prev.at) / span) || current.color;
+        if (!Number.isFinite(span) || span <= 0) return tasksDisplayPaletteColor(current.color);
+        return tasksDisplayPaletteColor(interpolateTasksHexColor(prev.color, current.color, (normalized - prev.at) / span) || current.color);
     }
-    return stops[stops.length - 1].color;
+    return tasksDisplayPaletteColor(stops[stops.length - 1].color);
 }
 
 function tasksColorPaletteFor(model, colorBy) {
@@ -1512,7 +1585,7 @@ function resolveTasksEdgeColor(edge, model, colorByOverride = null, paletteOverr
     const values = tasksAttrValues(edge[colorBy]);
     const paletteKeys = values.length ? values : tasksAttrValues(edge.label);
     const colors = paletteKeys.map((value) => palette[value]).filter((color) => typeof color === 'string' && color.trim());
-    return averageTasksHexColors(colors) || colors[0]?.trim() || '';
+    return tasksDisplayPaletteColor(averageTasksHexColors(colors) || colors[0]?.trim() || '');
 }
 
 function tasksGroupIdsContainingSelection(model, selectedIds) {
@@ -1544,7 +1617,7 @@ function resolveTasksProjectionGroupOwnColor(node, model, colorByOverride = null
     if (value === null || value === undefined || String(value).trim() === '') return '';
     if (isTasksGradientPalette(palette)) return resolveTasksGradientColor(palette, value);
     const color = palette[String(value)];
-    return typeof color === 'string' && color.trim() ? color.trim() : '';
+    return typeof color === 'string' && color.trim() ? tasksDisplayPaletteColor(color.trim()) : '';
 }
 
 function resolveTasksProjectionGroupDimensionColor(node, model) {
@@ -1563,7 +1636,7 @@ function resolveTasksProjectionGroupDimensionColor(node, model) {
             continue;
         }
         const color = palette[String(value)];
-        if (typeof color === 'string' && color.trim()) return color.trim();
+        if (typeof color === 'string' && color.trim()) return tasksDisplayPaletteColor(color.trim());
     }
     return '';
 }
@@ -1581,7 +1654,7 @@ function resolveTasksNodeOwnColor(node, model, colorByOverride = null, paletteOv
     if (colorBy) {
         if (colorBy === TASKS_HAS_NOTE_ATTR) {
             const value = node?.__has_note__ ? 'yes' : 'no';
-            return TASKS_HAS_NOTE_PALETTE[value] || '';
+            return tasksDisplayPaletteColor(TASKS_HAS_NOTE_PALETTE[value] || '');
         }
         const values = tasksAttrValues(node[colorBy]);
         if (values.length) {
@@ -1590,11 +1663,11 @@ function resolveTasksNodeOwnColor(node, model, colorByOverride = null, paletteOv
                 return numeric.length ? resolveTasksGradientColor(palette, numeric.reduce((sum, value) => sum + value, 0) / numeric.length) : '';
             }
             const colors = values.map((value) => palette[value]).filter((color) => typeof color === 'string' && color.trim());
-            return averageTasksHexColors(colors) || colors[0]?.trim() || '';
+            return tasksDisplayPaletteColor(averageTasksHexColors(colors) || colors[0]?.trim() || '');
         }
         return '';
     }
-    if (typeof node.color === 'string' && node.color.trim()) return node.color.trim();
+    if (typeof node.color === 'string' && node.color.trim()) return tasksDisplayPaletteColor(node.color.trim());
     return '';
 }
 
@@ -1640,17 +1713,57 @@ function resolveTasksCollapsedGroupColor(node, model, colorByOverride = null, pa
     );
 }
 
-function tasksMixedFill(color, colorMix) {
-    if (!color) return '';
-    return colorMix && colorMix.enabled
-        ? `color-mix(in srgb, var(--vyasa-paper) ${colorMix.paper}%, ${color} ${colorMix.intensity}%)`
-        : color;
-}
-
 function tasksResolvedThemeColor(varName, fallback) {
     if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') return fallback;
     const value = window.getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
     return value || fallback;
+}
+
+function tasksIsDarkMode() {
+    return typeof document !== 'undefined' && document.documentElement?.classList?.contains('dark');
+}
+
+function tasksChromaCappedOklab(lab) {
+    const chroma = Math.hypot(lab.a, lab.b);
+    if (!chroma || chroma <= TASKS_DARK_PALETTE_MAX_CHROMA) return lab;
+    const scale = TASKS_DARK_PALETTE_MAX_CHROMA / chroma;
+    return { ...lab, a: lab.a * scale, b: lab.b * scale };
+}
+
+function tasksDisplayPaletteColor(color) {
+    const raw = String(color || '').trim();
+    if (!raw || !tasksIsDarkMode()) return raw;
+    const paperColor = tasksResolvedThemeColor('--vyasa-paper', '#0f172a');
+    const cacheKey = `${paperColor}|${raw}`;
+    if (tasksDisplayPaletteColorCache.has(cacheKey)) return tasksDisplayPaletteColorCache.get(cacheKey);
+    const rgb = parseTasksDisplayColor(raw);
+    const paper = parseTasksDisplayColor(paperColor) || parseTasksHexColor('#0f172a');
+    if (!rgb || !paper) {
+        tasksDisplayPaletteColorCache.set(cacheKey, raw);
+        return raw;
+    }
+    const lab = tasksChromaCappedOklab(tasksRgbToOklab(rgb));
+    if (lab.L >= TASKS_DARK_PALETTE_MIN_L && tasksContrastRatio(rgb, paper) >= TASKS_DARK_PALETTE_CONTRAST) {
+        tasksDisplayPaletteColorCache.set(cacheKey, raw);
+        return raw;
+    }
+    let best = tasksOklabToRgb({ ...lab, L: Math.max(lab.L, TASKS_DARK_PALETTE_MIN_L) });
+    for (let L = Math.max(lab.L, TASKS_DARK_PALETTE_MIN_L); L <= TASKS_DARK_PALETTE_MAX_L; L += 0.015) {
+        const candidate = tasksOklabToRgb({ ...lab, L });
+        best = candidate;
+        if (tasksContrastRatio(candidate, paper) >= TASKS_DARK_PALETTE_CONTRAST) break;
+    }
+    const adjusted = tasksRgbToHex(best);
+    tasksDisplayPaletteColorCache.set(cacheKey, adjusted);
+    return adjusted;
+}
+
+function tasksMixedFill(color, colorMix) {
+    if (!color) return '';
+    const displayColor = tasksDisplayPaletteColor(color);
+    return colorMix && colorMix.enabled
+        ? `color-mix(in srgb, var(--vyasa-paper) ${colorMix.paper}%, ${displayColor} ${colorMix.intensity}%)`
+        : displayColor;
 }
 
 function tasksCompositeSweep(node, colorBy, palette, primaryColor = '', options = {}, colorMix = {}) {
@@ -5684,7 +5797,7 @@ async function renderTasksGraphs(rootElement = document) {
                                         const start = gradientDomain?.start ?? gradientStops[0]?.at ?? 0;
                                         const end = gradientDomain?.end ?? gradientStops[gradientStops.length - 1]?.at ?? 1;
                                         const span = Math.max(end - start, 1);
-                                        return `${stop.color} ${((stop.at - start) / span) * 100}%`;
+                                        return `${tasksDisplayPaletteColor(stop.color)} ${((stop.at - start) / span) * 100}%`;
                                     }).join(', ')})`,
                                 } }),
                                 React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' } },
@@ -5698,6 +5811,7 @@ async function renderTasksGraphs(rootElement = document) {
                     return React.createElement('div', { style: { flexBasis: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', background: 'color-mix(in srgb, currentColor 4%, transparent)' } },
                         React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '11px', lineHeight: 1.3, opacity: 0.8 } },
                             ...entries.map(([value, color]) => {
+                                const displayColor = tasksDisplayPaletteColor(color);
                                 const selected = selectedValues.has(value);
                                 return React.createElement('button', {
                                     key: `${colorBy}-${value}-label`,
@@ -5712,14 +5826,14 @@ async function renderTasksGraphs(rootElement = document) {
                                         width: '100%',
                                         padding: '4px 6px',
                                         borderRadius: '6px',
-                                        border: selected ? `1px solid ${color}` : '1px solid transparent',
-                                        background: selected ? `color-mix(in srgb, ${color} 16%, transparent)` : 'transparent',
+                                        border: selected ? `1px solid ${displayColor}` : '1px solid transparent',
+                                        background: selected ? `color-mix(in srgb, ${displayColor} 16%, transparent)` : 'transparent',
                                         cursor: 'pointer',
                                         textAlign: 'left',
                                         color: 'inherit',
                                     },
                                 },
-                                React.createElement('span', { style: { width: '12px', height: '12px', borderRadius: '999px', background: color, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)' } }),
+                                React.createElement('span', { style: { width: '12px', height: '12px', borderRadius: '999px', background: displayColor, border: '1px solid color-mix(in srgb, currentColor 20%, transparent)' } }),
                                 React.createElement('span', null, value));
                             })
                         )
