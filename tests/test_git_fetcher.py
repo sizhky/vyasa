@@ -2,9 +2,10 @@ import subprocess
 
 import pytest
 
+from vyasa import git_fetcher
 from vyasa.config import get_config, reload_config
 from vyasa.content_tree import resolve_ref_markdown
-from vyasa.git_fetcher import MirrorSpec, fetch_all, fetch_clone_remotes, fetch_mirror, main
+from vyasa.git_fetcher import MirrorSpec, fetch_all, fetch_clone_remotes, fetch_mirror, main, poll_forever
 
 
 def _git(cwd, *args):
@@ -83,3 +84,26 @@ def test_fetched_mirror_is_mounted_and_served_at_ref(tmp_path, upstream, monkeyp
         assert doc.title == "Doc A" and doc.body == "body a\n"
     finally:
         reload_config()
+
+
+def test_poll_forever_can_skip_clone_mount_fetch(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_fetch_all(specs, mirror_root, *, max_workers=4):
+        calls.append(("mirrors", max_workers))
+        return {}
+
+    def fail_fetch_clone_mounts(*args, **kwargs):
+        raise AssertionError("clone mounts should not be fetched")
+
+    def stop_after_cycle(interval):
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr(git_fetcher, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(git_fetcher, "fetch_clone_mounts", fail_fetch_clone_mounts)
+    monkeypatch.setattr(git_fetcher.time, "sleep", stop_after_cycle)
+
+    with pytest.raises(RuntimeError, match="stop"):
+        poll_forever([], tmp_path, interval=30, include_clone_mounts=False)
+
+    assert calls == [("mirrors", 4)]

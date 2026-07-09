@@ -69,11 +69,36 @@ def _safe_child(base: Path, relative: str | Path) -> Path | None:
         return None
     return target
 
+# (config generation, monotonic deadline, mounts). Mount resolution stats
+# every configured root on disk; per-fragment markdown rendering calls it
+# thousands of times per page, so a short TTL is the difference between 15s
+# and 5s on a large KG pack. The generation key invalidates immediately on
+# config reload; the TTL picks up roots appearing/vanishing on disk.
+_mounts_cache: tuple[int, float, list[tuple[str, Path]]] | None = None
+_MOUNTS_CACHE_TTL = 2.0
+
+
+def invalidate_content_mounts_cache() -> None:
+    """Drop the mounts cache now. For callers that just changed what's
+    mountable on disk (e.g. the fetcher creating a new mirror)."""
+    global _mounts_cache
+    _mounts_cache = None
+
+
 def _config_content_mounts() -> list[tuple[str, Path]]:
     """Return primary and configured content roots as URL slug mounts."""
-    from .config import get_config
+    import time
 
+    from .config import config_generation, get_config
+
+    global _mounts_cache
     cfg = get_config()
+    generation = config_generation()
+    now = time.monotonic()
+    if _mounts_cache is not None:
+        cached_generation, deadline, mounts = _mounts_cache
+        if cached_generation == generation and now < deadline:
+            return mounts
     primary = cfg.get_root_folder().resolve()
     ignore_primary = cfg.get_ignore_cwd_as_root()
     mounts = [] if ignore_primary else [("", primary)]
@@ -97,6 +122,7 @@ def _config_content_mounts() -> list[tuple[str, Path]]:
         if alias and alias not in aliases:
             aliases.add(alias)
             mounts.append((alias, path))
+    _mounts_cache = (generation, now + _MOUNTS_CACHE_TTL, mounts)
     return mounts
 
 

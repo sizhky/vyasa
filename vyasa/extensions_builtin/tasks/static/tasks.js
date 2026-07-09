@@ -1152,18 +1152,23 @@ function buildTasksGroupedState(sourceModel, groupByHierarchy) {
     const groupTree = { null: [] };
     const taskChildren = {};
     const tasks = [];
-    const valuePath = (task) => attrs.map((attr) => String(task?.[attr] ?? '').trim() || TASKS_PROJECTION_UNSPECIFIED_LABEL);
+    // Levels where a task has no value are skipped instead of pooled into a
+    // catch-all "Unspecified" group: the task attaches to its deepest valued
+    // ancestor, or stays boxless at the top level when it matches no group.
+    const valuePath = (task) => attrs
+        .map((attr) => [attr, String(task?.[attr] ?? '').trim()])
+        .filter(([, value]) => value);
+    const pathKey = (pairs) => pairs.map(([attr, value]) => `${attr}=${value}`).join('\u001f');
     for (const task of sourceModel.tasks || []) {
         const path = valuePath(task);
         for (let depth = 1; depth <= path.length; depth += 1) {
             const prefix = path.slice(0, depth);
-            const key = prefix.join('\u001f');
+            const key = pathKey(prefix);
             if (groupsByPath.has(key)) continue;
-            const parentKey = prefix.slice(0, -1).join('\u001f');
+            const parentKey = pathKey(prefix.slice(0, -1));
             const parentId = parentKey ? groupsByPath.get(parentKey)?.id : null;
-            const attr = attrs[depth - 1];
-            const value = prefix[prefix.length - 1];
-            const groupId = tasksSlug(['custom', ...prefix.map((part, index) => `${attrs[index]}-${part}`)].join('__'));
+            const [attr, value] = prefix[prefix.length - 1];
+            const groupId = tasksSlug(['custom', ...prefix.map(([partAttr, part]) => `${partAttr}-${part}`)].join('__'));
             const group = {
                 id: groupId,
                 label: tasksNodeMetaLabel(attr) + ' ›› ' + value,
@@ -1178,7 +1183,7 @@ function buildTasksGroupedState(sourceModel, groupByHierarchy) {
             if (!groupTree[parentTreeKey]) groupTree[parentTreeKey] = [];
             groupTree[parentTreeKey].push(groupId);
         }
-        const leaf = groupsByPath.get(path.join('\u001f'));
+        const leaf = groupsByPath.get(pathKey(path));
         const taskCopy = { ...task, group_id: leaf?.id || null };
         tasks.push(taskCopy);
         const childKey = taskCopy.group_id === null ? 'null' : taskCopy.group_id;
@@ -3394,6 +3399,28 @@ async function renderTasksGraphs(rootElement = document) {
                 [model, effectiveDefaultOpenDepth]
             );
             React.useEffect(() => {
+                logTasksDebug('kg-default-view-state', {
+                    widgetId,
+                    sourceDefaultGroupBy: Array.isArray(sourceModel?.default_group_by) ? sourceModel.default_group_by : [],
+                    defaultGroupByHierarchy,
+                    sourceDefaultColorBy: sourceModel?.default_color_by || '',
+                    storedProjectionId: sourcePrefsRef.current?.projectionId || '',
+                    storedGroupByEnabled: sourcePrefsRef.current?.groupByEnabled,
+                    storedGroupByHierarchy: Array.isArray(sourcePrefsRef.current?.groupByHierarchy) ? sourcePrefsRef.current.groupByHierarchy : null,
+                    activeProjectionId,
+                    viewMode,
+                    groupByEnabled,
+                    groupByHierarchy,
+                    groupByDisabledKeys,
+                    activeGroupByHierarchy,
+                    projectionStateId: projectionState.projectionId || '',
+                    modelActiveProjection: model?.active_projection || '',
+                    modelGroups: (model.groups || []).length,
+                    modelTasks: (model.tasks || []).length,
+                    modelDefaultColorBy: model?.default_color_by || '',
+                    graphNodes: (rawGraph.nodes || []).length,
+                    graphEdges: (rawGraph.edges || []).length,
+                });
                 logTasksPerf('kg-expanded', {
                     widgetId,
                     graphId: model?.graph_id || '',
@@ -4135,8 +4162,9 @@ async function renderTasksGraphs(rootElement = document) {
                 setSearchInputValue(defaultSearch);
                 setSearchQuery(defaultSearch);
                 setActiveColorHierarchy(resolveTasksPreferredColorHierarchy(model, activeProjectionId, defaults, nodeNotes));
-                setGroupByEnabled(false);
-                setGroupByHierarchy([]);
+                setGroupByEnabled(defaultGroupByHierarchy.some(Boolean));
+                setGroupByHierarchy(defaultGroupByHierarchy);
+                setGroupByDisabledKeys([]);
                 setExpanded(hydrateExpandedSet(defaults));
                 setFiltersCollapsed(
                     typeof defaults.filtersCollapsed === 'boolean'
@@ -4153,7 +4181,7 @@ async function renderTasksGraphs(rootElement = document) {
                         ? defaults.unspecifiedContentOpacity
                         : defaultProjectionUnspecifiedContentOpacity
                 );
-            }, [viewerState.model, activeProjectionId, model, nodeNotes, hydrateExpandedSet, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
+            }, [viewerState.model, activeProjectionId, model, nodeNotes, hydrateExpandedSet, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity, defaultGroupByHierarchy]);
             React.useEffect(() => {
                 setNoteInputValue(nodeNotes[selectedLogicalNodeId] || '');
                 setClearedNote(null);
@@ -4418,7 +4446,10 @@ async function renderTasksGraphs(rootElement = document) {
                             overflow: 'hidden',
                         },
                         zIndex: nodeZ,
-                        className: `vyasa-tasks-node--${hitArea}`,
+                        className: [
+                            `vyasa-tasks-node--${hitArea}`,
+                            isExpanded ? 'vyasa-tasks-node--expanded-group' : '',
+                        ].filter(Boolean).join(' '),
                         draggable: false,
                         selectable: isTasksGraphNodeSelectable(n.__kind__, isExpanded),
                     };

@@ -1108,17 +1108,24 @@ def _start_git_fetcher():
         from .git_fetcher import clone_mount_roots, poll_forever, specs_from_config
 
         specs, mirror_root = specs_from_config()
-        if not specs and not clone_mount_roots():
+        include_clone_mounts = get_config().get_git_fetch_clone_roots()
+        clone_roots = clone_mount_roots() if include_clone_mounts else []
+        if not specs and not clone_roots:
             return  # nothing fetchable; stay quiet
         _git_fetcher_started = True
         threading.Thread(
             target=poll_forever,
             args=(specs, mirror_root),
-            kwargs={"interval": interval},
+            kwargs={"interval": interval, "include_clone_mounts": include_clone_mounts},
             name="vyasa-git-fetcher",
             daemon=True,
         ).start()
-        logger.info("in-process git fetcher started interval={}s mirrors={}", interval, len(specs))
+        logger.info(
+            "in-process git fetcher started interval={}s mirrors={} clone_roots={}",
+            interval,
+            len(specs),
+            include_clone_mounts,
+        )
     except Exception as exc:
         logger.warning("failed to start in-process git fetcher: {}", exc)
 
