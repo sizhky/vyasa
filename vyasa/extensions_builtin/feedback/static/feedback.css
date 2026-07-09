@@ -41,10 +41,10 @@
 .vyasa-feedback-body code { font-family: var(--vyasa-font-mono, monospace); font-size: .78rem; }
 .vyasa-feedback-compose { display: grid; gap: .65rem; padding: .8rem 1rem 1rem; border-top: 1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent); }
 .vyasa-feedback-banner { padding: .55rem .65rem; border-radius: .45rem; color: #7b571e; background: #fff3d7; font-size: .72rem; }
-.vyasa-feedback-pills { display: flex; flex-wrap: wrap; gap: .35rem; }
-.vyasa-feedback-pill { display: inline-flex; max-width: 100%; align-items: center; gap: .35rem; padding: .38rem .5rem; border-radius: 999px; color: var(--vyasa-ink-soft); background: var(--vyasa-paper-low); font-size: .68rem; }
-.vyasa-feedback-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vyasa-feedback-pill button { border: 0; color: inherit; background: transparent; cursor: pointer; }
+.vyasa-feedback-pills { display: flex; flex-wrap: wrap; gap: .35rem; max-width: 100%; min-width: 0; }
+.vyasa-feedback-pill { display: inline-flex; box-sizing: border-box; max-width: 100%; min-width: 0; align-items: center; gap: .35rem; padding: .38rem .5rem; border-radius: 999px; color: var(--vyasa-ink-soft); background: var(--vyasa-paper-low); font-size: .68rem; }
+.vyasa-feedback-pill span { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vyasa-feedback-pill button { flex: 0 0 auto; border: 0; color: inherit; background: transparent; cursor: pointer; }
 .vyasa-feedback-input { width: 100%; min-height: 6rem; resize: vertical; padding: .7rem; border: 1px solid color-mix(in srgb, var(--vyasa-ink) 18%, transparent); border-radius: var(--vyasa-button-radius, .5rem); color: var(--vyasa-ink); background: var(--vyasa-paper); font: inherit; }
 .vyasa-feedback-actions { display: grid; gap: .5rem; }
 .vyasa-feedback-action { padding: .55rem .7rem; border: 0; border-radius: var(--vyasa-button-radius, .5rem); color: var(--vyasa-primary-text); background: var(--vyasa-primary); font-weight: 650; cursor: pointer; }

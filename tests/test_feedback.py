@@ -362,6 +362,8 @@ def test_feedback_review_lifts_lavish_capture_and_conversation_contract():
     assert "events: pendingPrompts().map" in client
     assert "body: JSON.stringify(feedbackPayload" in client
     assert "Your agent is not connected" in client
+    assert ".vyasa-feedback-pill span { min-width: 0; flex: 1 1 auto;" in css
+    assert ".vyasa-feedback-pill button { flex: 0 0 auto;" in css
     assert ".vyasa-feedback-actions { display: grid; gap: .5rem; }" in css
     assert "Conversation" in client
     assert "vyasa-feedback-sidebar" in client

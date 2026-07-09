@@ -187,6 +187,7 @@ def test_scroll_top_and_extensions_share_floating_action_rail():
     assert "vyasa-floating-bubble vyasa-scroll-top-button" in source
     assert "rail.appendChild(button)" in source
     assert ".vyasa-floating-actions" in css
+    assert "flex-direction: column" in css
     assert ".vyasa-floating-bubble" in css
 
 
