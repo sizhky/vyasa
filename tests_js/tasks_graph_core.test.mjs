@@ -49,6 +49,18 @@ test('Knowledge Graph search matches notes from only the supplied graph', () => 
     assert.deepEqual(Array.from(tasksCollectSearchMatches(nodes, [], 'Satyasri').nodeIds), ['current-node']);
 });
 
+test('Knowledge Graph boolean settings parse hover card placement flag', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function tasksModelSetting');
+    const end = source.indexOf('function readTasksLayoutConfigForModel');
+    const factory = new Function(source.slice(start, end) + '\nreturn tasksModelBooleanSetting;');
+    const read = factory();
+    assert.equal(read({ 'hover-card-right-rail': false }, 'hover-card-right-rail', true), false);
+    assert.equal(read({ 'hover-card-right-rail': 'off' }, 'hover-card-right-rail', true), false);
+    assert.equal(read({ 'hover-card-right-rail': 'yes' }, 'hover-card-right-rail', false), true);
+    assert.equal(read({}, 'hover-card-right-rail', true), true);
+});
+
 test('projection reset defaults include all authored sidebar parameters', () => {
     const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
     const start = source.indexOf('function tasksProjectionSchemaPrefs');
@@ -417,6 +429,14 @@ test('dimmed Knowledge Graph nodes do not accept hover behavior', () => {
     assert.equal(tasksGraphNodeAllowsHover({ data: { highlightMode: 'neighbor' } }), true);
     assert.equal(tasksGraphNodeAllowsHover({ data: { highlightMode: 'dim' } }), false);
     assert.equal(tasksGraphNodeAllowsHover({ data: {} }), true);
+});
+
+test('Knowledge Graph hover highlights connected endpoint nodes', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes('const hoverEndpointIds = new Set(hoveredNodeId ? [hoveredNodeId] : []);'));
+    assert.ok(source.includes('hoverEndpointIds.add(edge.source);'));
+    assert.ok(source.includes("highlightMode: isHoveredNode ? 'selected-focus' : 'neighbor'"));
+    assert.ok(source.includes("mode === 'neighbor'"));
 });
 
 test('expanded root group keeps collapsed top-left anchored', () => {

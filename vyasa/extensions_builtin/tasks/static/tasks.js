@@ -138,6 +138,15 @@ function tasksModelSetting(model, key, fallback = '') {
     return value;
 }
 
+function tasksModelBooleanSetting(model, key, fallback = false) {
+    const value = tasksModelSetting(model, key, fallback ? 'true' : 'false');
+    if (typeof value === 'boolean') return value;
+    const normalized = String(value || '').trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+    return fallback;
+}
+
 function readTasksLayoutConfigForModel(wrapper, model) {
     const presetName = String(tasksModelSetting(model, 'spacing', wrapper.dataset.tasksSpacing || 'normal')).trim().toLowerCase();
     const preset = TASKS_SPACING_PRESETS[presetName] || TASKS_SPACING_PRESETS.normal;
@@ -3417,6 +3426,7 @@ async function renderTasksGraphs(rootElement = document) {
             }), [model]);
             const layoutConfig = React.useMemo(() => readTasksLayoutConfigForModel(wrapper, model), [model]);
             const nodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '480px')).trim() || '480px';
+            const hoverCardRightRail = tasksModelBooleanSetting(model, 'hover-card-right-rail', true);
             const hoverFontSize = String(tasksModelSetting(model, 'hover-font-size', wrapper.dataset.tasksHoverFontSize || '12px')).trim() || '12px';
             const colorMix = readTasksColorMixConfigForModel(wrapper, model);
             const projectionGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(tasksModelSetting(model, 'projection-group-opacity', wrapper.dataset.tasksProjectionGroupOpacity || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`)) || TASKS_PROJECTION_GROUP_OPACITY_DEFAULT));
@@ -4688,10 +4698,49 @@ async function renderTasksGraphs(rootElement = document) {
                     const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters);
                     const hasSearch = searchMatches.active && !searchMatches.error;
                     if (!hasFilters && !hasSearch) {
-                        setNodesReusing(hoverCheckboxId
-                            ? baseNodes.map((node) => node.id === hoverCheckboxId
-                                ? { ...node, data: { ...node.data, __hover_checkbox__: true } }
-                                : node)
+                        const hoverEndpointIds = new Set(hoveredNodeId ? [hoveredNodeId] : []);
+                        if (hoveredNodeId) {
+                            for (const edge of baseEdges) {
+                                if (edge.source === hoveredNodeId || edge.target === hoveredNodeId) {
+                                    hoverEndpointIds.add(edge.source);
+                                    hoverEndpointIds.add(edge.target);
+                                }
+                            }
+                        }
+                        setNodesReusing(hoveredNodeId
+                            ? baseNodes.map((node) => {
+                                const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                                const highlighted = hoverEndpointIds.has(sourceNodeId);
+                                if (!highlighted && node.id !== hoverCheckboxId) return node;
+                                const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette);
+                                const collapsedGroupColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
+                                    ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
+                                    : '';
+                                const displayColor = collapsedGroupColor || nodeColor || 'var(--vyasa-primary)';
+                                const stateAccent = node.data?.__card_state_color__ || TASKS_DONE_ACCENT;
+                                const checkedShadow = node.data?.__checked__
+                                    ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
+                                    : 'none';
+                                const isHoveredNode = sourceNodeId === hoveredNodeId;
+                                const baseZIndex = Number.isFinite(Number(node.zIndex)) ? Number(node.zIndex) : Number(node.style?.zIndex || 0);
+                                const zIndex = baseZIndex + (isHoveredNode ? TASKS_SELECTED_Z_BOOST : TASKS_NEIGHBOR_Z_BOOST);
+                                return {
+                                    ...node,
+                                    data: { ...node.data, highlightMode: isHoveredNode ? 'selected-focus' : 'neighbor', __hover_checkbox__: node.id === hoverCheckboxId },
+                                    style: {
+                                        ...node.style,
+                                        zIndex,
+                                        opacity: 1,
+                                        background: tasksNodeIsOverlaid(node)
+                                            ? node.style.background
+                                            : (node.data?.__kind__ === 'group'
+                                                ? tasksGroupBackground(displayColor, '', TASKS_GROUP_BG_ACTIVE, { mode: 'transparent', intensity: isHoveredNode ? 12 : 8 })
+                                                : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG_ACTIVE, false)),
+                                        boxShadow: `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 ${isHoveredNode ? 2 : 1}px color-mix(in srgb, ${displayColor} ${isHoveredNode ? 70 : 58}%, transparent), 0 0 ${isHoveredNode ? 18 : 22}px ${isHoveredNode ? 4 : 5}px color-mix(in srgb, ${displayColor} ${isHoveredNode ? 40 : 34}%, transparent)`,
+                                    },
+                                    zIndex,
+                                };
+                            })
                             : baseNodes);
                         setEdgesReusing(edgesVisible ? (hoveredNodeId
                             ? baseEdges.map((edge) => {
@@ -4824,8 +4873,10 @@ async function renderTasksGraphs(rootElement = document) {
                             boxShadow: (mode === 'selected' || mode === 'selected-focus')
                                 ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
                                 : (mode === 'neighbor-focus'
-                                    ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 60%, transparent)`
-                                    : checkedShadow),
+                                    ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 60%, transparent), 0 0 20px 5px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 34%, transparent)`
+                                    : (mode === 'neighbor'
+                                        ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 1px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 54%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 26%, transparent)`
+                                        : checkedShadow)),
                         },
                         zIndex,
                     };
@@ -6811,19 +6862,22 @@ async function renderTasksGraphs(rootElement = document) {
                     }
                 }
                 if (hoverCardsEnabled) {
-                    setGroupHoverTooltip({
-                        label,
-                        nodeId,
-                        image,
-                        rows,
-                        x: event.clientX - bounds.left + 12,
-                        y: event.clientY - bounds.top + 18,
-                    });
+                    const hoverCard = { label, nodeId, image, rows };
+                    if (hoverCardRightRail) {
+                        setGroupHoverTooltip({ ...hoverCard, placement: 'rightRail' });
+                    } else {
+                        setGroupHoverTooltip({
+                            ...hoverCard,
+                            placement: 'cursor',
+                            x: event.clientX - bounds.left + 12,
+                            y: event.clientY - bounds.top + 18,
+                        });
+                    }
                 } else if (groupHoverTooltip) {
                     clearGroupHoverTooltip();
                 }
                 traceHoverHit('hit', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx, groupHoverChanged });
-            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, hoverInactiveNodes, hoverCardsEnabled, groupHoverTooltip, hoveredNodeId, logHoverCycle, selectedNodeId]);
+            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, hoverInactiveNodes, hoverCardsEnabled, hoverCardRightRail, groupHoverTooltip, hoveredNodeId, logHoverCycle, selectedNodeId]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -7230,8 +7284,13 @@ async function renderTasksGraphs(rootElement = document) {
                 const maxHeight = Math.max(80, wrapperHeight - 24);
                 const tooltipWidth = Math.min(maxWidth, measuredSize.width || maxWidth);
                 const tooltipHeight = Math.min(maxHeight, measuredSize.height || maxHeight);
-                const clampedLeft = Math.max(12, Math.min(groupHoverTooltip.x, wrapperWidth - tooltipWidth - 12));
-                const clampedTop = Math.max(12, Math.min(groupHoverTooltip.y, wrapperHeight - tooltipHeight - 12));
+                const rightRailPlacement = groupHoverTooltip.placement === 'rightRail';
+                const clampedLeft = rightRailPlacement
+                    ? Math.max(12, wrapperWidth - tooltipWidth - 12)
+                    : Math.max(12, Math.min(groupHoverTooltip.x, wrapperWidth - tooltipWidth - 12));
+                const clampedTop = rightRailPlacement
+                    ? 12
+                    : Math.max(12, Math.min(groupHoverTooltip.y, wrapperHeight - tooltipHeight - 12));
                 const children = [
                     window.React.createElement('div', {
                         key: '__label__',
