@@ -1,6 +1,6 @@
 from fasthtml.common import NotStr, Response, to_xml
 
-from ..extensions import ExtensionMeta, VyasaExtensionBase
+from ..extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 from ..runtime_services import get_runtime_services
 from .. import git_refs
 
@@ -9,10 +9,16 @@ class GitRefsExtension(VyasaExtensionBase):
     def register(self, app) -> None:
         app.routes.add("/_vyasa/refresh-refs", _register_git_ref_routes)
         app.navigation.navbar_control(_navbar_control)
+        app.assets.bundle(AssetBundle("git_refs.runtime", js=("/static/extensions/git_refs/git_refs.js",)))
+        app.assets.page(_page_bundles)
 
 
 def _navbar_control(context):
     return git_refs.navbar_ref_switcher_placeholder(context.get("current_path"), roles=context.get("roles"))
+
+
+def _page_bundles(context):
+    return ("git_refs.runtime",) if context.get("mode") != "static" and not context.get("slide_mode") else ()
 
 
 def _roles_from_request(request):
@@ -21,15 +27,15 @@ def _roles_from_request(request):
 
 
 def _register_git_ref_routes(rt, runtime) -> None:
-    @rt("/_vyasa/refresh-refs")
+    @rt("/_vyasa/refresh-refs", methods=["POST"])
     def refresh_refs(request=None):
         return git_refs.refresh_refs_for_root("", request)
 
-    @rt("/_vyasa/refresh-refs/root/{root:path}")
+    @rt("/_vyasa/refresh-refs/root/{root:path}", methods=["POST"])
     def refresh_refs_root(root: str, request=None):
         return git_refs.refresh_refs_for_root(root, request)
 
-    @rt("/_vyasa/refresh-ref-tree/{path:path}")
+    @rt("/_vyasa/refresh-ref-tree/{path:path}", methods=["POST"])
     def refresh_ref_tree(path: str, request=None):
         return git_refs.refresh_ref_tree(path, request)
 
@@ -43,7 +49,7 @@ EXTENSION = GitRefsExtension(
     ExtensionMeta(
         "git_refs",
         "route",
-        ("cap:route:git_refs", "cap:navigation:git_refs"),
+        ("cap:route:git_refs", "cap:navigation:git_refs", "bundle:git_refs.runtime"),
         route_prefixes=("/_vyasa/refresh-refs", "/_vyasa/refresh-refs/root", "/_vyasa/refresh-ref-tree", "/_vyasa/ref-switcher"),
         scope_disable=True,
     )

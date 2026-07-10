@@ -1,0 +1,89 @@
+{
+  "_doc": "Daksh claim-graph grammar. Mechanizable invariants from kg-grammar.md. The fuzzy ones (no-parallel-duplication, constrains-not-catch-all) stay human review \u2014 not encoded here.",
+  "closed_vocab": {
+    "claim_kind": [
+      "source",
+      "fact",
+      "decision",
+      "open",
+      "rule",
+      "backlog"
+    ],
+    "authority": [
+      "source",
+      "derived",
+      "ignored"
+    ],
+    "grounding": [
+      "given",
+      "observed",
+      "decided",
+      "undecided",
+      "needs_revalidation"
+    ]
+  },
+  "edge_direction": {
+    "informs": {
+      "by": "stage",
+      "order": "numeric",
+      "dir": "downhill",
+      "note": "the lineage spine flows downhill from source; informs never runs uphill"
+    },
+    "broken_by": {
+      "by": "stage",
+      "order": "numeric",
+      "dir": "downhill",
+      "note": "no relation may run from a higher-numbered stage to a lower one; same-stage is allowed"
+    },
+    "constrains": {
+      "by": "stage",
+      "order": "numeric",
+      "dir": "downhill",
+      "note": "no relation may run from a higher-numbered stage to a lower one; same-stage is allowed"
+    },
+    "blocks": {
+      "by": "stage",
+      "order": "numeric",
+      "dir": "downhill",
+      "note": "no relation may run from a higher-numbered stage to a lower one; same-stage is allowed"
+    }
+  },
+  "edge_cardinality": {
+    "supersedes": {
+      "into_max": 1,
+      "note": "one superseder per claim; the nearest successor supersedes, the rest reach through the spine"
+    }
+  },
+  "edge_endpoints": {
+    "broken_by": {
+      "tgt": {
+        "claim_kind": [
+          "fact"
+        ]
+      },
+      "note": "broken_by points FROM the requirement/ask DOWN to the observed fact that breaks it; the decision that responds is a sibling, not a source"
+    }
+  },
+  "requires_attr_when": [
+    {
+      "if": {
+        "form": [
+          "strategic-objective",
+          "non-functional-requirement",
+          "quality-attribute-scenario"
+        ]
+      },
+      "then": "measure",
+      "note": "a measurable claim carries a measure; a bare quality target is a wish, not a requirement"
+    },
+    {
+      "if": {
+        "form": [
+          "work-item"
+        ]
+      },
+      "then": "owner",
+      "note": "a work-item is a unit of work with an owner and DoD; ownerless work warns until onboarding names a person"
+    }
+  ]
+}

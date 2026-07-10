@@ -1,0 +1,60 @@
+@graph id=git-ref-reliability title=Git refs — first-class production content
+initial_view=lineage
+contexts=*.context
+default_context=latest
+fold_mode=delta
+hover_attrs=claim_kind,form,authority,grounding,source,measure,quality,stage,scope,status,frontier,owner,reports_to,source_ref,date,summary
+default_open_depth=-1
+group_by=stage,form
+color_by=stage
+edge_color_by=relation
+query_builder_enabled=true
+filters_collapsed=false
+edges_visible=true
+edge_animation_enabled=false
+edge_animation_mode=none
+edge_opacity=0.32141217326661253
+projection_unspecified_content_opacity=0.82
+
+@grammar
+path=daksh.grammar
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+palette=kg.palette
+
+@relations
+informs color=relation.informs
+supersedes color=relation.supersedes
+constrains color=relation.constrains
+broken_by color=relation.broken_by
+blocks color=relation.blocks
+
+@views
+# Paste under your @views section in kg.schema:
+greenfield:
+	group_by=form
+	color_by=claim_kind
+	edge_label_from=relation
+	caption="Claims grouped by form; colour shows claim kind."
+lineage:
+	group_by=stage
+	color_by=grounding
+	edge_label_from=relation
+	caption="Repository states flow from product vision into tested work items."
+provenance:
+	group_by=source
+	color_by=source
+	edge_label_from=relation
+	caption="Observed code facts, the unexpanded production frontier, and this delta."
+grounding:
+	group_by=grounding
+	color_by=claim_kind
+	edge_label_from=relation
+	caption="Given, observed, decided, and undecided claims."
+validation:
+	group_by=status
+	color_by=claim_kind
+	edge_label_from=relation
+	caption="Existing behavior, blocked frontier, and planned changes."

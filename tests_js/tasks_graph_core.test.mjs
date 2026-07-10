@@ -49,6 +49,18 @@ test('Knowledge Graph search matches notes from only the supplied graph', () => 
     assert.deepEqual(Array.from(tasksCollectSearchMatches(nodes, [], 'Satyasri').nodeIds), ['current-node']);
 });
 
+test('Knowledge Graph boolean settings parse hover card placement flag', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function tasksModelSetting');
+    const end = source.indexOf('function readTasksLayoutConfigForModel');
+    const factory = new Function(source.slice(start, end) + '\nreturn tasksModelBooleanSetting;');
+    const read = factory();
+    assert.equal(read({ 'hover-card-right-rail': false }, 'hover-card-right-rail', true), false);
+    assert.equal(read({ 'hover-card-right-rail': 'off' }, 'hover-card-right-rail', true), false);
+    assert.equal(read({ 'hover-card-right-rail': 'yes' }, 'hover-card-right-rail', false), true);
+    assert.equal(read({}, 'hover-card-right-rail', true), true);
+});
+
 test('projection reset defaults include all authored sidebar parameters', () => {
     const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
     const start = source.indexOf('function tasksProjectionSchemaPrefs');
@@ -417,6 +429,57 @@ test('dimmed Knowledge Graph nodes do not accept hover behavior', () => {
     assert.equal(tasksGraphNodeAllowsHover({ data: { highlightMode: 'neighbor' } }), true);
     assert.equal(tasksGraphNodeAllowsHover({ data: { highlightMode: 'dim' } }), false);
     assert.equal(tasksGraphNodeAllowsHover({ data: {} }), true);
+});
+
+test('Knowledge Graph hover highlights connected endpoint nodes', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes('const hoverEndpointIds = new Set(hoveredNodeId ? [hoveredNodeId] : []);'));
+    assert.ok(source.includes('hoverEndpointIds.add(edge.source);'));
+    assert.ok(source.includes("highlightMode: isHoveredNode ? 'selected-focus' : 'neighbor'"));
+    assert.ok(source.includes("mode === 'neighbor'"));
+});
+
+test('Knowledge Graph hover edges override faint global opacity', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes('opacity: tasksProminentEdgeOpacity() * branchOpacity, fontWeight: 800'));
+    assert.ok(source.includes('fillOpacity: 0.9'));
+    assert.ok(source.includes('strokeWidth: Math.max(4.75, tasksEdgeStrokeWidthForMode'));
+    assert.ok(source.includes('highlighted ? 0.86 : 0.04'));
+});
+
+test('Knowledge Graph prominent edge labels stop counter-scaling below node text size', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function tasksCssFontSize');
+    const end = source.indexOf('async function copyTasksText');
+    const factory = new Function('const TASKS_NODE_LABEL_FONT_SIZE = 16;\nconst TASKS_EDGE_LABEL_NODE_SIZE_RATIO = 1.35;\n' + source.slice(start, end) + '\nreturn tasksProminentEdgeLabelScale;');
+    const scale = factory();
+    assert.equal(scale(2, '12px'), 0.5);
+    assert.equal(scale(1, '12px'), 1);
+    assert.equal(scale(0.75, '12px'), 1 / 0.75);
+    assert.equal(scale(0.5, '12px'), (16 * 1.35) / 12);
+    assert.equal(scale(0.5, '16px', 16, true), 2);
+    assert.ok(source.includes('const fixedFocusedLabel = Boolean(isFocusedNeighbor && focused);'));
+    assert.ok(source.includes("counterScaleMode: fixedFocusedLabel ? 'fixed' : 'capped'"));
+});
+
+test('Knowledge Graph fit includes highlighted neighbors for selected node', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes('const fitEdgeEndpointIds = new Set(selectedScopeIds);'));
+    assert.ok(source.includes('if (selectedScopeIds.has(edge.source) || selectedScopeIds.has(edge.target))'));
+    assert.ok(source.includes('fitEdgeEndpointIds.add(edge.source);'));
+    assert.ok(source.includes('fitEdgeEndpointIds.add(edge.target);'));
+});
+
+test('Knowledge Graph right-rail hover card gets stronger shadow', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes('boxShadow: rightRailPlacement'));
+    assert.ok(source.includes('-18px 20px 50px rgba(0,0,0,0.24)'));
+});
+
+test('Knowledge Graph right-rail hover card suppresses selected card', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes("setGroupHoverTooltip({ ...hoverCard, placement: 'rightRail' });"));
+    assert.ok(source.includes("if (hoverCardRightRail && groupHoverTooltip?.placement === 'rightRail') return null;"));
 });
 
 test('expanded root group keeps collapsed top-left anchored', () => {

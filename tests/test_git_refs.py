@@ -1,3 +1,4 @@
+import json
 import subprocess
 from pathlib import Path
 
@@ -337,7 +338,7 @@ def test_ref_tree_uses_remote_icon_for_multi_remote_group():
     ]
     html = to_xml(Ul(*core._render_ref_nodes(
         core._build_ref_tree(branches),
-        "repo", "", "", False, "vyasa-ref:repo", [], frozenset({"origin", "backup"}),
+        "repo", "", "", False, [], frozenset({"origin", "backup"}),
     )))
     assert "radio-tower" in html
     assert ">origin<" in html and ">origin/<" not in html
@@ -351,11 +352,14 @@ def test_active_branch_ref_row_exposes_file_tree_refresh_action():
     branches = [("feature/tree", "branch", False, "")]
     html = to_xml(Ul(*core._render_ref_nodes(
         core._build_ref_tree(branches),
-        "repo", "feature/tree", "repo@feature:tree/guide", True, "vyasa-ref:repo", ["feature"], frozenset(),
+        "repo", "feature/tree", "repo@feature:tree/guide", True, ["feature"], frozenset(),
     )))
-    assert "Refresh file tree for feature/tree" in html
+    assert "Fetch and refresh feature/tree" in html
     assert 'data-vyasa-ref-tree-refresh="true"' in html
     assert "repo@feature:tree" in html
+    assert 'hx-boost="true"' in html
+    assert 'href="/posts/repo/guide?ref=feature/tree"' in html
+    assert "data-storage-key" not in html
 
 
 def test_inactive_branch_ref_rows_do_not_expose_file_tree_refresh_action():
@@ -365,9 +369,9 @@ def test_inactive_branch_ref_rows_do_not_expose_file_tree_refresh_action():
     branches = [("feature/tree", "branch", False, "")]
     html = to_xml(Ul(*core._render_ref_nodes(
         core._build_ref_tree(branches),
-        "repo", "", "", False, "vyasa-ref:repo", [], frozenset(),
+        "repo", "", "", False, [], frozenset(),
     )))
-    assert "Refresh file tree for feature/tree" not in html
+    assert "Fetch and refresh feature/tree" not in html
     assert "vyasaRefreshRefTree" not in html
 
 
@@ -377,9 +381,9 @@ def test_tag_ref_rows_do_not_expose_file_tree_refresh_action():
 
     html = to_xml(core._render_tags_group(
         [("v1", "tag", False, "")],
-        "repo", "", "", False, "vyasa-ref:repo",
+        "repo", "", "", False,
     ))
-    assert "Refresh file tree for v1" not in html
+    assert "Fetch and refresh v1" not in html
     assert "vyasaRefreshRefTree" not in html
 
 
@@ -407,22 +411,53 @@ def test_palette_source_full_slug_resolves_against_ref_root(site, tmp_path):
     assert resolved.ref == "feature" and resolved.root_id == "repo"
 
 
-def test_git_ref_debug_logs_are_present():
-    core_source = Path("vyasa/core.py").read_text(encoding="utf-8")
-    extension_source = Path("vyasa/extensions_builtin/git_refs.py").read_text(encoding="utf-8")
-    git_refs_source = Path("vyasa/git_refs.py").read_text(encoding="utf-8")
+def test_clone_refresh_returns_truthful_unchanged_result(site):
+    from vyasa import git_refs
 
-    assert '@rt("/_vyasa/refresh-refs/root/{root:path}")' in extension_source
-    assert '@rt("/_vyasa/refresh-ref-tree/{path:path}")' in extension_source
-    assert 'logger.info("git-ref refresh requested root={} url={}"' in git_refs_source
-    assert 'logger.info("git-ref tree refresh root={} ref={}' in git_refs_source
-    # clone-mount filtering now lives in git_fetcher.clone_mount_roots, shared
-    # by the manual refresh handler and the background poller.
-    assert "fetch_clone_mounts(target_root)" in git_refs_source
-    fetcher_source = Path("vyasa/git_fetcher.py").read_text(encoding="utf-8")
-    assert "if target_root and alias != target_root:" in fetcher_source
-    assert 'logger.info("git-ref sidebar build root=' in core_source
-    assert 'logger.info("git-ref posts tree requested current_path=' in core_source
+    payload, status = git_refs._refresh_refs_result("repo")
+
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["outcome"] == "unchanged"
+    assert payload["changed_refs"] == []
+
+
+def test_refresh_rejects_unknown_root(site):
+    from vyasa import git_refs
+
+    payload, status = git_refs._refresh_refs_result("missing")
+
+    assert status == 404
+    assert payload == {
+        "ok": False,
+        "root": "missing",
+        "outcome": "missing",
+        "message": "No fetch source configured for missing.",
+    }
+
+
+def test_refresh_returns_failure_when_fetch_fails(site, monkeypatch):
+    from vyasa import git_fetcher, git_refs
+
+    monkeypatch.setattr(git_fetcher, "fetch_clone_mounts", lambda target_root: {target_root: False})
+    payload, status = git_refs._refresh_refs_result("repo")
+
+    assert status == 502
+    assert payload["ok"] is False
+    assert payload["outcome"] == "failed"
+    assert payload["failed_roots"] == ["repo"]
+
+
+def test_selected_ref_refresh_fetches_root_and_reports_ref_outcome(site):
+    from vyasa import git_refs
+
+    response = git_refs.refresh_ref_tree("repo@feature/feat")
+    payload = json.loads(bytes(response.body))
+
+    assert response.status_code == 200
+    assert payload["root"] == "repo"
+    assert payload["ref"] == "feature"
+    assert payload["ref_outcome"] == "unchanged"
 
 
 def test_navbar_ref_switcher_hides_git_root_when_rbac_has_no_visible_path(site, monkeypatch):

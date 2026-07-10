@@ -1,0 +1,164 @@
+{
+  "default_image_by": "form",
+  "default_design_palette": "forms",
+  "design_palette": {
+    "forms": {
+      "images": {
+        "problem": "iconify:mdi:alert-circle-outline",
+        "opportunity": "iconify:mdi:lightbulb-on-outline",
+        "capability-gap": "iconify:mdi:arrow-expand-horizontal",
+        "strategic-objective": "iconify:mdi:target",
+        "change-strategy": "iconify:mdi:sign-direction",
+        "assumption": "iconify:mdi:help-circle-outline",
+        "constraint": "iconify:mdi:wall",
+        "risk": "iconify:mdi:alert-outline",
+        "concept-of-operations": "iconify:mdi:map-legend",
+        "business-goal": "iconify:mdi:flag-checkered",
+        "business-requirement": "iconify:mdi:file-document-outline",
+        "stakeholder": "iconify:mdi:account-group",
+        "business-process": "iconify:mdi:sitemap-outline",
+        "business-rule": "iconify:mdi:gavel",
+        "business-constraint": "iconify:mdi:timer-sand",
+        "environmental-factor": "iconify:mdi:earth",
+        "user-class": "iconify:mdi:account-multiple-outline",
+        "use-case": "iconify:mdi:flag-outline",
+        "operational-scenario": "iconify:mdi:script-text-outline",
+        "user-requirement": "iconify:mdi:account-check-outline",
+        "operational-constraint": "iconify:mdi:cellphone-cog",
+        "external-system": "iconify:mdi:server-network",
+        "functional-requirement": "iconify:mdi:cog-outline",
+        "non-functional-requirement": "iconify:mdi:gauge",
+        "system-interface": "iconify:mdi:api",
+        "data-model": "iconify:mdi:database-outline",
+        "data-entity": "iconify:mdi:table",
+        "system-mode": "iconify:mdi:state-machine",
+        "design-constraint": "iconify:mdi:ruler-square-compass",
+        "concern": "iconify:mdi:eye-outline",
+        "architecture-view": "iconify:mdi:floor-plan",
+        "architecture-decision": "iconify:mdi:vector-triangle",
+        "verification-item": "iconify:mdi:check-decagram-outline",
+        "system-element": "iconify:mdi:cube-outline",
+        "logical-interface": "iconify:mdi:cable-data",
+        "architectural-decision": "iconify:mdi:pillar",
+        "deployment-unit": "iconify:mdi:package-variant-closed",
+        "quality-attribute-scenario": "iconify:mdi:gauge-full",
+        "design-token": "iconify:mdi:palette-swatch-outline",
+        "atomic-control": "iconify:mdi:form-select",
+        "state-rule": "iconify:mdi:state-machine",
+        "layout-rule": "iconify:mdi:view-grid-outline",
+        "accessibility-rule": "iconify:mdi:human-wheelchair",
+        "primitive-decision": "iconify:mdi:shape-outline",
+        "design-task": "iconify:mdi:clipboard-edit-outline",
+        "state-coverage": "iconify:mdi:checkbox-multiple-marked-outline",
+        "reuse-plan": "iconify:mdi:recycle",
+        "design-acceptance-evidence": "iconify:mdi:clipboard-check-multiple-outline",
+        "screen-state": "iconify:mdi:monitor-screenshot",
+        "journey-path": "iconify:mdi:map-marker-path",
+        "secondary-component": "iconify:mdi:puzzle-outline",
+        "prototype-evidence": "iconify:mdi:image-check-outline",
+        "evaluation-finding": "iconify:mdi:clipboard-search-outline",
+        "context-of-use": "iconify:mdi:map-marker-radius-outline",
+        "persona": "iconify:mdi:account-outline",
+        "user-journey": "iconify:mdi:map-marker-path",
+        "ui-view": "iconify:mdi:monitor",
+        "interaction-flow": "iconify:mdi:arrow-decision-outline",
+        "prototype": "iconify:mdi:pencil-ruler",
+        "design-guidance": "iconify:mdi:compass-outline",
+        "usability-requirement": "iconify:mdi:thumb-up-outline",
+        "accessibility-requirement": "iconify:mdi:human",
+        "usability-evaluation": "iconify:mdi:clipboard-check-outline",
+        "technical-requirement": "iconify:mdi:file-cog-outline",
+        "api-endpoint": "iconify:mdi:api",
+        "verification-plan": "iconify:mdi:clipboard-list-outline",
+        "test-case": "iconify:mdi:test-tube",
+        "verification-report": "iconify:mdi:file-check-outline",
+        "acceptance-criteria": "iconify:mdi:check-all",
+        "work-item": "iconify:mdi:clipboard-text-outline",
+        "build-step": "iconify:mdi:stairs",
+        "dependency": "iconify:mdi:link-variant",
+        "code-unit": "iconify:mdi:code-braces",
+        "change-request": "iconify:mdi:source-pull",
+        "problem-report": "iconify:mdi:bug-outline",
+        "runtime-environment": "iconify:mdi:server-outline",
+        "delivery-pipeline": "iconify:mdi:transit-connection",
+        "operational-control": "iconify:mdi:monitor-dashboard",
+        "runtime-invariant": "iconify:mdi:shield-check-outline",
+        "term": "iconify:mdi:book-open-variant"
+      }
+    }
+  },
+  "node_color_palettes": {
+    "grounding": {
+      "given": "#7c3aed",
+      "observed": "#2563eb",
+      "decided": "#16a34a",
+      "undecided": "#f59e0b",
+      "needs_revalidation": "#94a3b8"
+    },
+    "claim_kind": {
+      "source": "#7c3aed",
+      "fact": "#2563eb",
+      "decision": "#16a34a",
+      "open": "#f59e0b",
+      "rule": "#0891b2",
+      "backlog": "#94a3b8"
+    },
+    "authority": {
+      "source": "#7c3aed",
+      "derived": "#2563eb",
+      "ignored": "#94a3b8"
+    },
+    "source": {
+      "observed": "#2563eb",
+      "inferred": "#f59e0b",
+      "assumed": "#ef4444",
+      "delta": "#16a34a"
+    },
+    "stage": {
+      "00-client-onboarding": "#6b7280",
+      "10-vision": "#1f77b4",
+      "20-business-requirements": "#ff7f0e",
+      "30a-solution": "#2ca02c",
+      "30b-system": "#d62728",
+      "30c-architecture": "#9467bd",
+      "40-design": "#8c564b",
+      "40a-primitives": "#a16207",
+      "40b-design-tasks": "#ca8a04",
+      "40c-design-execution": "#eab308",
+      "50-trd-test": "#e377c2",
+      "60-task-breakdown": "#bcbd22",
+      "80-execution": "#17becf",
+      "90-handbook": "#0f766e",
+      "backlog": "#7f7f7f"
+    },
+    "scope": {
+      "current": "#16a34a",
+      "backlog": "#94a3b8"
+    },
+    "status": {
+      "active": "#16a34a",
+      "retired": "#94a3b8",
+      "blocked": "#dc2626",
+      "deferred": "#64748b",
+      "todo": "#f59e0b"
+    },
+    "frontier": {
+      "expanded": "#16a34a",
+      "partial": "#f59e0b",
+      "unexpanded": "#94a3b8"
+    },
+    "date": {
+      "2026-07-03": "#0ea5e9",
+      "2026-07-08": "#0ea5e9"
+    }
+  },
+  "edge_color_palettes": {
+    "relation": {
+      "informs": "#16a34a",
+      "broken_by": "#dc2626",
+      "supersedes": "#f97316",
+      "blocks": "#dc2626",
+      "constrains": "#0891b2"
+    }
+  }
+}

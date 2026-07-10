@@ -1,0 +1,77 @@
+@node_attrs
+claim_kind:
+  source: ask-1
+  fact: gap-1 term-1 fr-1 fact-1 fact-2 fact-3 fact-4 fact-5 fact-6 el-1 el-2 el-3 el-4
+  open: open-1
+  decision: br-1 uc-1 uc-2 uc-3 fr-2 fr-3 fr-4 nfr-1 if-1 ad-1 design-1 api-1 tc-1 tc-2 tc-3 tc-4 tc-5 wi-1 wi-2 wi-3 wi-4
+  rule: dc-1 state-1 access-1 ac-1
+authority:
+  source: ask-1
+  derived: gap-1 open-1 term-1 br-1 uc-1 uc-2 uc-3 fr-1 fr-2 fr-3 fr-4 nfr-1 dc-1 fact-1 fact-2 fact-3 fact-4 fact-5 fact-6 el-1 el-2 el-3 el-4 if-1 ad-1 state-1 access-1 design-1 api-1 ac-1 tc-1 tc-2 tc-3 tc-4 tc-5 wi-1 wi-2 wi-3 wi-4
+grounding:
+  given: ask-1
+  observed: gap-1 term-1 fr-1 fact-1 fact-2 fact-3 fact-4 fact-5 fact-6 el-1 el-2 el-3 el-4
+  undecided: open-1
+  decided: br-1 uc-1 uc-2 uc-3 fr-2 fr-3 fr-4 nfr-1 dc-1 if-1 ad-1 state-1 access-1 design-1 api-1 ac-1 tc-1 tc-2 tc-3 tc-4 tc-5 wi-1 wi-2 wi-3 wi-4
+stage:
+  10-vision: ask-1 gap-1 open-1
+  20-business-requirements: br-1
+  30a-solution: uc-1 uc-2 uc-3
+  30b-system: term-1 fr-1 fr-2 fr-3 fr-4 nfr-1 dc-1 fact-1 fact-2 fact-3 fact-4
+  30c-architecture: el-1 el-2 el-3 el-4 if-1 ad-1
+  40a-primitives: fact-5 state-1 access-1
+  40b-design-tasks: design-1
+  50-trd-test: fact-6 api-1 ac-1 tc-1 tc-2 tc-3 tc-4 tc-5
+  60-task-breakdown: wi-1 wi-2 wi-3 wi-4
+source:
+  delta: ask-1 br-1 uc-1 uc-2 uc-3 fr-2 fr-3 fr-4 nfr-1 dc-1 if-1 ad-1 state-1 access-1 design-1 api-1 ac-1 tc-1 tc-2 tc-3 tc-4 tc-5 wi-1 wi-2 wi-3 wi-4
+  observed: gap-1 term-1 fr-1 fact-1 fact-2 fact-3 fact-4 fact-5 fact-6 el-1 el-2 el-3 el-4
+  assumed: open-1
+form:
+  strategic-objective: ask-1
+  problem: gap-1
+  assumption: open-1
+  term: term-1
+  business-requirement: br-1
+  use-case: uc-1 uc-2 uc-3
+  functional-requirement: fr-1 fr-2 fr-3 fr-4 fact-1 fact-3 fact-4
+  non-functional-requirement: nfr-1
+  design-constraint: dc-1
+  system-interface: fact-2 if-1
+  system-element: el-1 el-2 el-3 el-4
+  architectural-decision: ad-1
+  state-rule: fact-5 state-1
+  accessibility-rule: access-1
+  design-task: design-1
+  verification-plan: fact-6
+  api-endpoint: api-1
+  acceptance-criteria: ac-1
+  test-case: tc-1 tc-2 tc-3 tc-4 tc-5
+  work-item: wi-1 wi-2 wi-3 wi-4
+scope:
+  current: ask-1 gap-1 open-1 term-1 br-1 uc-1 uc-2 uc-3 fr-1 fr-2 fr-3 fr-4 nfr-1 dc-1 fact-1 fact-2 fact-3 fact-4 fact-5 fact-6 el-1 el-2 el-3 el-4 if-1 ad-1 state-1 access-1 design-1 api-1 ac-1 tc-1 tc-2 tc-3 tc-4 tc-5 wi-1 wi-2 wi-3 wi-4
+status:
+  active: gap-1 term-1 fr-1 fact-1 fact-2 fact-3 fact-4 fact-5 fact-6 el-1 el-2 el-3 el-4
+  blocked: open-1
+  todo: ask-1 br-1 uc-1 uc-2 uc-3 fr-2 fr-3 fr-4 nfr-1 dc-1 if-1 ad-1 state-1 access-1 design-1 api-1 ac-1 tc-1 tc-2 tc-3 tc-4 tc-5 wi-1 wi-2 wi-3 wi-4
+frontier:
+  partial: gap-1 fact-1 fact-2 fact-3 fact-4 fact-5 fact-6 el-1 el-2 el-3 el-4
+  expanded: ask-1 term-1 br-1 uc-1 uc-2 uc-3 fr-1 fr-2 fr-3 fr-4 nfr-1 dc-1 if-1 ad-1 state-1 access-1 design-1 api-1 ac-1 tc-1 tc-2 tc-3 tc-4 tc-5 wi-1 wi-2 wi-3 wi-4
+  unexpanded: open-1
+quality:
+  reliability: nfr-1
+build_order:
+  1: el-1
+  2: el-2
+  3: el-3
+  4: el-4
+module:
+  git_fetcher: ac-1 tc-1 tc-2 wi-1
+  git_refs: fact-6 api-1 tc-3 wi-2 wi-4
+  git_refs_browser: tc-4 tc-5 wi-3
+owner:
+  Yeshwanth: ask-1 gap-1 open-1 term-1 br-1 uc-1 uc-2 uc-3 fr-1 fr-2 fr-3 fr-4 nfr-1 dc-1 fact-1 fact-2 fact-3 fact-4 fact-5 fact-6 el-1 el-2 el-3 el-4 if-1 ad-1 state-1 access-1 design-1 api-1 ac-1 tc-1 tc-2 tc-3 tc-4 tc-5 wi-1 wi-2 wi-3 wi-4
+reports_to:
+  Yeshwanth: ask-1 gap-1 open-1 term-1 br-1 uc-1 uc-2 uc-3 fr-1 fr-2 fr-3 fr-4 nfr-1 dc-1 fact-1 fact-2 fact-3 fact-4 fact-5 fact-6 el-1 el-2 el-3 el-4 if-1 ad-1 state-1 access-1 design-1 api-1 ac-1 tc-1 tc-2 tc-3 tc-4 tc-5 wi-1 wi-2 wi-3 wi-4
+date:
+  2026-07-10: ask-1 gap-1 open-1 term-1 br-1 uc-1 uc-2 uc-3 fr-1 fr-2 fr-3 fr-4 nfr-1 dc-1 fact-1 fact-2 fact-3 fact-4 fact-5 fact-6 el-1 el-2 el-3 el-4 if-1 ad-1 state-1 access-1 design-1 api-1 ac-1 tc-1 tc-2 tc-3 tc-4 tc-5 wi-1 wi-2 wi-3 wi-4
