@@ -48,21 +48,44 @@ export function refResultMessage(payload, refName = '') {
     return payload.outcome === 'updated' ? `Updated ${count} ref${count === 1 ? '' : 's'}` : 'Refs already current';
 }
 
+function openGroupLabels(switcher) {
+    return new Set(Array.from(switcher.querySelectorAll('details[open]'))
+        .map((details) => details.querySelector(':scope > summary')?.textContent?.trim())
+        .filter(Boolean));
+}
+
+function restoreOpenGroups(switcher, labels) {
+    switcher.querySelectorAll('details').forEach((details) => {
+        const label = details.querySelector(':scope > summary')?.textContent?.trim();
+        if (label && labels.has(label)) details.open = true;
+    });
+}
+
+export function replaceRefSwitcherInstances(currentSwitchers, nextSwitcher) {
+    currentSwitchers.forEach((current, index) => {
+        const replacement = index === currentSwitchers.length - 1 ? nextSwitcher : nextSwitcher.cloneNode(true);
+        const openLabels = openGroupLabels(current);
+        replacement.open = current.open;
+        restoreOpenGroups(replacement, openLabels);
+        current.replaceWith(replacement);
+    });
+}
+
 async function refreshSwitcher() {
     const response = await fetch(`/_vyasa/ref-switcher?current_path=${encodeURIComponent(currentPath())}`, {
         credentials: 'same-origin',
         cache: 'no-store',
     });
-    const current = document.querySelector('.vyasa-ref-switcher');
+    const current = Array.from(document.querySelectorAll('.vyasa-ref-switcher'));
     if (response.status === 204) {
-        current?.remove();
+        current.forEach((switcher) => switcher.remove());
         return;
     }
     if (!response.ok) throw new Error(`Branches menu refresh failed (${response.status}).`);
     const wrapper = document.createElement('div');
     wrapper.innerHTML = await response.text();
     const next = wrapper.querySelector('.vyasa-ref-switcher');
-    if (current && next) current.replaceWith(next);
+    if (current.length && next) replaceRefSwitcherInstances(current, next);
 }
 
 async function loadLazySwitcher(details) {
