@@ -531,6 +531,16 @@ def test_default_search_extension_registers_search_providers():
     assert runtime.search_preview_match_finder is find_default_search_preview_matches
 
 
+def test_git_refs_extension_owns_its_browser_runtime():
+    runtime = build_extension_runtime({})
+    global_source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+    extension_source = Path("vyasa/extensions_builtin/git_refs/static/git_refs.js").read_text(encoding="utf-8")
+
+    assert runtime.bundles["git_refs.runtime"].js == ("/static/extensions/git_refs/git_refs.js",)
+    assert "data-vyasa-ref-root-refresh" not in global_source
+    assert "data-vyasa-ref-root-refresh" in extension_source
+
+
 def test_external_extension_can_be_added_without_replacing_default_routes(tmp_path):
     package = tmp_path / "sample_ext"
     package.mkdir()

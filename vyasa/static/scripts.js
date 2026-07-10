@@ -32,6 +32,7 @@ function currentPostsSearchPath() {
     if (!alias) return currentPath;
     return `${alias}@${ref.replace(/\//g, ':')}${parts.length ? `/${parts.join('/')}` : ''}`;
 }
+window.__vyasaCurrentPostsSearchPath = currentPostsSearchPath;
 
 function postsSearchUrl(query) {
     const params = new URLSearchParams();
@@ -875,15 +876,17 @@ function syncFoldAllButton(button, allOpen) {
         : '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-fold-all-icon"><path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h5"/><path d="m15 14 3-3 3 3"/></svg><span>Unfold all</span>';
 }
 
-function showVyasaToast(message) {
+function showVyasaToast(message, tone = 'info') {
     let toast = document.getElementById('vyasa-ui-toast');
     if (!toast) {
         toast = document.createElement('div');
         toast.id = 'vyasa-ui-toast';
-        toast.className = 'fixed top-6 right-6 z-[10000] text-xs bg-slate-900 text-white px-3 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300';
+        toast.className = 'fixed top-6 right-6 z-[10000] text-xs text-white px-3 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300';
         document.body.appendChild(toast);
     }
     toast.textContent = message;
+    toast.classList.remove('bg-slate-900', 'bg-emerald-700', 'bg-red-700');
+    toast.classList.add(tone === 'error' ? 'bg-red-700' : tone === 'success' ? 'bg-emerald-700' : 'bg-slate-900');
     toast.classList.remove('opacity-0');
     toast.classList.add('opacity-100');
     clearTimeout(toast._vyasaTimer);
@@ -893,90 +896,6 @@ function showVyasaToast(message) {
     }, 1600);
 }
 window.__vyasaToast = showVyasaToast;
-
-async function refreshVyasaRefSwitcher() {
-    const response = await fetch(`/_vyasa/ref-switcher?current_path=${encodeURIComponent(currentPostsSearchPath() || '')}`, { credentials: 'same-origin', cache: 'no-store' });
-    const current = document.querySelector('.vyasa-ref-switcher');
-    if (response.status === 204) {
-        current?.remove();
-        return;
-    }
-    if (!response.ok) return;
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = await response.text();
-    const next = wrapper.querySelector('.vyasa-ref-switcher');
-    if (current && next) current.replaceWith(next);
-}
-window.__vyasaRefreshRefSwitcher = refreshVyasaRefSwitcher;
-
-async function loadLazyRefSwitcher(details) {
-    if (!details || details.dataset.vyasaRefSwitcherLazy !== 'true') return;
-    if (details.dataset.vyasaRefSwitcherLoaded === 'loading') return;
-    details.dataset.vyasaRefSwitcherLoaded = 'loading';
-    try {
-        const response = await fetch(details.dataset.vyasaRefSwitcherUrl || `/_vyasa/ref-switcher?current_path=${encodeURIComponent(currentPostsSearchPath() || '')}`, { credentials: 'same-origin', cache: 'no-store' });
-        if (!response.ok) return;
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = (await response.text()).trim();
-        const next = wrapper.querySelector('.vyasa-ref-switcher');
-        if (!next) return;
-        next.open = true;
-        details.replaceWith(next);
-    } finally {
-        details.dataset.vyasaRefSwitcherLoaded = 'done';
-    }
-}
-window.__vyasaLoadRefSwitcher = loadLazyRefSwitcher;
-
-async function navigateVyasaRef(url) {
-    if (!url) return;
-    if (window.htmx?.ajax) {
-        await window.htmx.ajax('GET', url, { target: '#main-content', swap: 'outerHTML show:window:top settle:0.1s' });
-    } else {
-        const response = await fetch(url, { headers: { 'HX-Request': 'true' }, credentials: 'same-origin', cache: 'no-store' });
-        if (!response.ok) {
-            window.location.href = url;
-            return;
-        }
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = await response.text();
-        const nextMain = wrapper.querySelector('#main-content') || wrapper.firstElementChild;
-        const currentMain = document.getElementById('main-content');
-        if (nextMain && currentMain) currentMain.replaceWith(nextMain);
-    }
-    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    if (currentUrl !== url) window.history.pushState(null, '', url);
-    await softRefreshPostsSidebar({ reason: 'git-ref-change' });
-    await refreshVyasaRefSwitcher();
-}
-
-window.vyasaRefreshRefTree = async function(button, storageKey, refName, sidebarPath) {
-    const icon = button?.querySelector?.('svg');
-    icon?.classList?.add('animate-spin');
-    try {
-        localStorage.setItem(storageKey, refName);
-    } catch (error) {}
-    try {
-        await fetch(`/_vyasa/refresh-ref-tree/${encodeURIComponent(sidebarPath || '')}`, { method: 'GET', credentials: 'same-origin' });
-        const url = `/_sidebar/posts?current_path=${encodeURIComponent(sidebarPath || '')}`;
-        if (window.htmx?.ajax) {
-            await window.htmx.ajax('GET', url, { target: '#posts-sidebar', swap: 'outerHTML' });
-            return;
-        }
-        const response = await fetch(url, { credentials: 'same-origin' });
-        if (!response.ok) return;
-        const html = await response.text();
-        const sidebar = document.getElementById('posts-sidebar');
-        if (sidebar) {
-            sidebar.outerHTML = html;
-            initFolderChevronState();
-            initFolderHoverExpand(document);
-            syncPostsHoverToggleButtons(document);
-        }
-    } finally {
-        icon?.classList?.remove('animate-spin');
-    }
-};
 
 async function softRefreshPostsSidebar(detail = {}) {
     console.info('[vyasa] soft reload posts tree', detail);
@@ -1022,50 +941,6 @@ async function softRefreshActiveContent(detail = {}) {
 window.__vyasaSoftRefreshActiveContent = softRefreshActiveContent;
 
 document.addEventListener('click', (event) => {
-    const refSelect = event.target.closest('[data-vyasa-ref-select="true"]');
-    if (refSelect) {
-        event.preventDefault();
-        event.stopPropagation();
-        const check = refSelect.querySelector('[data-ref-check]');
-        const spinner = refSelect.querySelector('[data-ref-spinner]');
-        if (check) check.style.display = 'none';
-        if (spinner) spinner.style.display = 'inline-flex';
-        try { localStorage.setItem(refSelect.dataset.storageKey || '', refSelect.dataset.refName || ''); } catch (error) {}
-        navigateVyasaRef(refSelect.dataset.refUrl || '').finally(() => {
-            if (spinner) spinner.style.display = 'none';
-            if (check) check.style.display = 'inline-flex';
-        });
-        return;
-    }
-    const refTreeRefresh = event.target.closest('[data-vyasa-ref-tree-refresh="true"]');
-    if (refTreeRefresh) {
-        event.preventDefault();
-        event.stopPropagation();
-        window.vyasaRefreshRefTree(refTreeRefresh, refTreeRefresh.dataset.storageKey || '', refTreeRefresh.dataset.refName || '', refTreeRefresh.dataset.sidebarPath || '')
-            .then(() => refreshVyasaRefSwitcher())
-            .then(() => showVyasaToast('Side tree updated'));
-        return;
-    }
-    const refRootRefresh = event.target.closest('[data-vyasa-ref-root-refresh="true"]');
-    if (refRootRefresh) {
-        event.preventDefault();
-        event.stopPropagation();
-        const icon = refRootRefresh.querySelector('svg');
-        icon?.classList?.add('animate-spin');
-        fetch(`/_vyasa/refresh-refs/root/${encodeURIComponent(refRootRefresh.dataset.root || '')}`, { method: 'GET', credentials: 'same-origin' })
-            .then(() => Promise.all([refreshVyasaRefSwitcher(), softRefreshPostsSidebar({ reason: 'git-ref-root-refresh' })]))
-            .then(() => showVyasaToast('Branches menu updated'))
-            .finally(() => icon?.classList?.remove('animate-spin'));
-        return;
-    }
-    const refHome = event.target.closest('[data-vyasa-ref-home="true"]');
-    if (refHome) {
-        event.preventDefault();
-        event.stopPropagation();
-        try { localStorage.removeItem(refHome.dataset.storageKey || ''); } catch (error) {}
-        navigateVyasaRef(refHome.dataset.refUrl || '');
-        return;
-    }
     const sidebarLocate = event.target.closest('[data-sidebar-locate-current="true"]');
     if (sidebarLocate) {
         event.preventDefault();
@@ -1588,12 +1463,6 @@ function initMobileMenus() {
 
     if (!window.__vyasaMobileMenusBound) {
         document.addEventListener('click', (event) => {
-            const lazyRefSummary = event.target.closest('details[data-vyasa-ref-switcher-lazy="true"] > summary');
-            if (lazyRefSummary) {
-                event.preventDefault();
-                loadLazyRefSwitcher(lazyRefSummary.parentElement);
-                return;
-            }
             if (event.target.closest('#close-mobile-posts')) {
                 event.preventDefault();
                 const postsPanel = document.getElementById('mobile-posts-panel');

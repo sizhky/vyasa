@@ -86,6 +86,35 @@ def test_fetched_mirror_is_mounted_and_served_at_ref(tmp_path, upstream, monkeyp
         reload_config()
 
 
+def test_targeted_mirror_refresh_reports_changed_then_unchanged(tmp_path, upstream, monkeypatch):
+    from vyasa import git_refs
+
+    site = tmp_path / "site"
+    mirrors = tmp_path / "mirrors"
+    site.mkdir()
+    (site / ".vyasa").write_text(
+        f'git_mirror_root = "{mirrors.as_posix()}"\n'
+        f'git_repos = {{ proj = "{upstream.as_posix()}" }}\n'
+    )
+    monkeypatch.chdir(site)
+    reload_config(site / ".vyasa")
+    try:
+        assert main(["--once"]) == 0
+        (upstream / "a.md").write_text("# Doc A\n\nupdated\n")
+        _git(upstream, "add", "-A")
+        _git(upstream, "commit", "-qm", "c2")
+
+        updated, updated_status = git_refs._refresh_refs_result("proj")
+        unchanged, unchanged_status = git_refs._refresh_refs_result("proj")
+
+        assert updated_status == 200 and updated["outcome"] == "updated"
+        assert updated["changed_refs"] == ["main"]
+        assert unchanged_status == 200 and unchanged["outcome"] == "unchanged"
+    finally:
+        git_refs.clear_caches()
+        reload_config()
+
+
 def test_poll_forever_can_skip_clone_mount_fetch(monkeypatch, tmp_path):
     calls = []
 

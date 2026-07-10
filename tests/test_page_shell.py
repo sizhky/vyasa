@@ -75,7 +75,7 @@ def test_theme_toggle_icon_keeps_ink_color_on_focus():
     assert "stroke: currentColor !important" in css
 
 
-def test_git_ref_select_resets_button_alignment():
+def test_git_ref_select_resets_control_alignment():
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 
     assert ".vyasa-ref-select" in css
