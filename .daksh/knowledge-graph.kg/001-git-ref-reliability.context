@@ -1,0 +1,82 @@
+@context id=ctx001 seq=1 label="Git refs — first-class production content"
+caption=|
+	Git refs become first-class Vyasa content: discoverable, browsable, refreshable, and explicit about every outcome.
+	Stage 40c is silent because existing controls need state behavior, not new screens or prototypes.
+	Stage 80 stays in git; stage 90 waits until implementation is accepted.
+@slides
+vision: Why Git refs exist
+	nodes=ask-1,gap-1,br-1
+	desc=Repository history should read like live documentation, without changing a working tree.
+failure: What breaks trust today
+	nodes=fact-1,fact-2,fact-3,fact-4,fact-5,fact-6
+	desc=The scoped mirror path is inert, failures collapse into 204, browser chains trust every response, and tests lock wiring rather than behavior.
+contract: One truthful action contract
+	nodes=fr-2,fr-3,fr-4,nfr-1,if-1,state-1
+	desc=Every action has one result shape and five visible states: loading, updated, unchanged, viewing, or failed.
+architecture: Put behavior where it belongs
+	nodes=el-1,el-2,el-3,el-4,ad-1
+	desc=Fetcher reports facts, coordinator owns refresh, extension owns routes and assets, browser behavior leaves global scripts.
+delivery: Build and proof order
+	nodes=wi-1,wi-2,wi-3,wi-4,tc-1,tc-2,tc-3,tc-4,tc-5
+	desc=Server truth first, browser truth second, contract tests throughout.
+@attrs
+status:
+	active: gap-1 fr-1 fact-1 fact-2 fact-3 fact-4 fact-5 fact-6 el-1 el-2 el-3 el-4
+	blocked: open-1
+	todo: ask-1 br-1 uc-1 uc-2 uc-3 fr-2 fr-3 fr-4 nfr-1 dc-1 if-1 ad-1 state-1 access-1 design-1 api-1 ac-1 tc-1 tc-2 tc-3 tc-4 tc-5 wi-1 wi-2 wi-3 wi-4
+@edges
+	ask-1 -> gap-1 broken_by
+	ask-1 -> open-1 constrains
+	ask-1 -> br-1 informs
+	br-1 -> term-1 informs
+	br-1 -> fact-1 broken_by
+	br-1 -> fact-2 broken_by
+	br-1 -> fact-3 broken_by
+	br-1 -> fact-4 broken_by
+	br-1 -> fact-5 broken_by
+	br-1 -> fact-6 broken_by
+	br-1 -> uc-1 informs
+	br-1 -> uc-2 informs
+	br-1 -> uc-3 informs
+	uc-1 -> fr-1 informs
+	uc-2 -> fr-1 informs
+	uc-2 -> fr-4 informs
+	uc-3 -> fr-2 informs
+	uc-3 -> fr-3 informs
+	uc-3 -> nfr-1 informs
+	uc-3 -> dc-1 informs
+	fr-2 -> el-1 informs
+	fr-2 -> el-2 informs
+	fr-3 -> if-1 informs
+	fr-4 -> el-3 informs
+	nfr-1 -> el-4 informs
+	dc-1 -> if-1 constrains
+	el-1 -> api-1 informs
+	el-2 -> api-1 informs
+	el-3 -> api-1 informs
+	el-4 -> state-1 informs
+	if-1 -> api-1 informs
+	ad-1 -> el-3 informs
+	ad-1 -> el-4 informs
+	state-1 -> design-1 informs
+	access-1 -> design-1 constrains
+	api-1 -> tc-1 informs
+	api-1 -> tc-2 informs
+	api-1 -> tc-3 informs
+	ac-1 -> tc-1 informs
+	nfr-1 -> tc-2 informs
+	nfr-1 -> tc-3 informs
+	state-1 -> tc-4 informs
+	design-1 -> tc-4 informs
+	design-1 -> tc-5 informs
+	api-1 -> wi-2 informs
+	ac-1 -> wi-1 informs
+	tc-1 -> wi-1 informs
+	tc-2 -> wi-2 informs
+	tc-3 -> wi-2 informs
+	tc-4 -> wi-3 informs
+	tc-5 -> wi-3 informs
+	tc-5 -> wi-4 informs
+	wi-1 -> wi-2 blocks
+	wi-2 -> wi-3 blocks
+	wi-3 -> wi-4 blocks

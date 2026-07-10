@@ -1,0 +1,109 @@
+ask-1: Teams browse repository states as live documentation
+	measure=Git-ref journeys; baseline=1/3; target=3/3
+	source_ref=session:2026-07-10
+gap-1: Git refs are not dependable production content
+	summary=Discovering refs exists, but opening and refreshing them lacks trustworthy outcomes.
+	source_ref=session:2026-07-10
+open-1: Production runs the reviewed Git-ref implementation
+	summary=No production event trace or deployed revision was inspected during planning.
+	source_ref=frontier:production-runtime
+term-1: Git ref
+	summary=A named repository state—branch, tag, or remote ref—served from the repository object store.
+	source_ref=vyasa/content_backend.py:141
+br-1: Vyasa supports Git refs as first-class content
+	summary=People can discover, open, and refresh repository states through Vyasa without changing a working tree.
+	source_ref=session:2026-07-10
+uc-1: Discover available refs
+	source_ref=vyasa/git_refs.py:191
+uc-2: Open content from a ref
+	source_ref=vyasa/static/scripts.js:931
+uc-3: Refresh refs from upstream
+	source_ref=session:2026-07-10
+fr-1: Ref selection renders requested repository state
+	source_ref=vyasa/content_routes.py:242
+fr-2: Scoped refresh updates its configured mirror or clone
+	source_ref=vyasa/git_refs.py:30
+fr-3: Ref refresh reports changed or unchanged
+	source_ref=session:2026-07-10
+fr-4: Failed ref actions preserve the current view
+	source_ref=session:2026-07-10
+nfr-1: Ref action outcomes are observable
+	measure=Action paths with truthful visible outcomes; baseline=0/3; target=3/3
+	quality=reliability
+	source_ref=session:2026-07-10
+dc-1: Refresh requests cannot be served from cache
+	source_ref=vyasa/static/scripts.js:1055
+fact-1: Root-scoped refresh excludes configured mirrors
+	summary=The UI always supplies a root, while mirror fetching runs only without one.
+	source_ref=vyasa/git_refs.py:41
+fact-2: Refresh results are discarded
+	summary=Failures become warnings and every request returns an empty 204 response.
+	source_ref=vyasa/git_refs.py:43
+fact-3: Selected-ref refresh only clears caches
+	source_ref=vyasa/git_refs.py:54
+fact-4: Browser refresh chains do not check failures
+	source_ref=vyasa/static/scripts.js:1040
+fact-5: Ref selection records unused browser state
+	source_ref=vyasa/static/scripts.js:1033
+fact-6: Current tests assert wiring instead of actions
+	source_ref=tests/test_git_refs.py:410
+el-1: Git fetcher
+	summary=Fetches mirrors and clone remotes, returning root-to-success booleans.
+	source_ref=vyasa/git_fetcher.py:83
+el-2: Git-ref coordinator
+	summary=Discovers refs, coordinates refresh, clears caches, and renders ref controls.
+	source_ref=vyasa/git_refs.py:18
+el-3: Git-refs extension
+	summary=Registers ref routes and the navbar control.
+	source_ref=vyasa/extensions_builtin/git_refs.py:8
+el-4: Git-ref browser behavior
+	summary=Global scripts currently own navigation, refresh, spinner, and toast behavior.
+	source_ref=vyasa/static/scripts.js:897
+if-1: Ref action result
+	summary=One response shape carries root, ref, changed state, outcome, and failure details.
+	source_ref=delta:ref-action-result
+ad-1: Git-ref browser behavior ships with its extension
+	summary=Feature handlers leave global scripts and load through the existing extension asset contract.
+	source_ref=vyasa/extensions_builtin/bookmarks/__init__.py:15
+state-1: Ref controls show every action state
+	summary=Idle, loading, updated, unchanged, and failed each have visible feedback.
+	source_ref=session:2026-07-10
+access-1: Busy ref controls expose their state
+	summary=Buttons disable during work and publish aria-busy until the result arrives.
+	source_ref=delta:ref-control-state
+design-1: Define ref outcome copy
+	summary=Reuse the existing toast surface for viewing, updated, unchanged, and failed results.
+	source_ref=vyasa/static/scripts.js:878
+api-1: POST /_vyasa/refresh-refs/root/{root}
+	summary=Returns the ref action result with no-store; unknown roots and fetch failures are non-success responses.
+	source_ref=vyasa/extensions_builtin/git_refs.py:28
+ac-1: Targeted refresh reaches the selected content source
+	summary=Mirror aliases fetch only their matching spec; clone aliases fetch only their matching clone.
+	source_ref=vyasa/git_fetcher.py:93
+tc-1: Mirror refresh reports changed refs
+	summary=Advance an upstream branch, refresh its mirror alias, and assert before/after tips plus changed state.
+	source_ref=tests/test_git_fetcher.py:28
+tc-2: No-change refresh reports unchanged
+	summary=Refresh an up-to-date source and assert a successful unchanged result.
+	source_ref=tests/test_git_fetcher.py:28
+tc-3: Fetch failure reports failure
+	summary=Fail the source fetch and assert non-success response, failure log, and error toast contract.
+	source_ref=tests/test_git_fetcher.py:50
+tc-4: Ref selection commits navigation after content swap
+	summary=Assert content, URL, sidebar, active ref, success toast, and rollback on failure.
+	source_ref=vyasa/static/scripts.js:931
+tc-5: Ref controls share one interaction contract
+	summary=Fake fetch and DOM state in a millisecond JS test; no browser automation.
+	source_ref=tests_js:git-refs
+wi-1: Return detailed fetch results
+	summary=DoD: git_fetcher reports per-root success, failure, and before/after ref tips without losing isolated failures.
+	source_ref=vyasa/git_fetcher.py:83
+wi-2: Make refresh routes truthful
+	summary=DoD: scoped mirrors and clones fetch, caches clear after success, JSON reflects changed/unchanged/failure, and logs carry root/ref/outcome/duration.
+	source_ref=vyasa/git_refs.py:30
+wi-3: Consolidate ref browser behavior
+	summary=DoD: extension asset owns handlers, one helper checks responses, controls expose busy state, toasts show every outcome, and dead localStorage state is removed.
+	source_ref=vyasa/static/scripts.js:897
+wi-4: Lock ref action contracts
+	summary=DoD: server, route, and JS tests cover mirror, clone, changed, unchanged, failure, selection, and selected-ref refresh paths.
+	source_ref=tests/test_git_refs.py:290

@@ -1,0 +1,799 @@
+e="@graph" a=fold_mode v=delta
+e=informs a=kind v=relation
+e=supersedes a=kind v=relation
+e=constrains a=kind v=relation
+e=broken_by a=kind v=relation
+e=blocks a=kind v=relation
+e=ask-1 a=label v="Teams browse repository states as live documentation"
+e=gap-1 a=label v="Git refs are not dependable production content"
+e=open-1 a=label v="Production runs the reviewed Git-ref implementation"
+e=term-1 a=label v="Git ref"
+e=br-1 a=label v="Vyasa supports Git refs as first-class content"
+e=uc-1 a=label v="Discover available refs"
+e=uc-2 a=label v="Open content from a ref"
+e=uc-3 a=label v="Refresh refs from upstream"
+e=fr-1 a=label v="Ref selection renders requested repository state"
+e=fr-2 a=label v="Scoped refresh updates its configured mirror or clone"
+e=fr-3 a=label v="Ref refresh reports changed or unchanged"
+e=fr-4 a=label v="Failed ref actions preserve the current view"
+e=nfr-1 a=label v="Ref action outcomes are observable"
+e=dc-1 a=label v="Refresh requests cannot be served from cache"
+e=fact-1 a=label v="Root-scoped refresh excludes configured mirrors"
+e=fact-2 a=label v="Refresh results are discarded"
+e=fact-3 a=label v="Selected-ref refresh only clears caches"
+e=fact-4 a=label v="Browser refresh chains do not check failures"
+e=fact-5 a=label v="Ref selection records unused browser state"
+e=fact-6 a=label v="Current tests assert wiring instead of actions"
+e=el-1 a=label v="Git fetcher"
+e=el-2 a=label v="Git-ref coordinator"
+e=el-3 a=label v="Git-refs extension"
+e=el-4 a=label v="Git-ref browser behavior"
+e=if-1 a=label v="Ref action result"
+e=ad-1 a=label v="Git-ref browser behavior ships with its extension"
+e=state-1 a=label v="Ref controls show every action state"
+e=access-1 a=label v="Busy ref controls expose their state"
+e=design-1 a=label v="Define ref outcome copy"
+e=api-1 a=label v="POST /_vyasa/refresh-refs/root/{root}"
+e=ac-1 a=label v="Targeted refresh reaches the selected content source"
+e=tc-1 a=label v="Mirror refresh reports changed refs"
+e=tc-2 a=label v="No-change refresh reports unchanged"
+e=tc-3 a=label v="Fetch failure reports failure"
+e=tc-4 a=label v="Ref selection commits navigation after content swap"
+e=tc-5 a=label v="Ref controls share one interaction contract"
+e=wi-1 a=label v="Return detailed fetch results"
+e=wi-2 a=label v="Make refresh routes truthful"
+e=wi-3 a=label v="Consolidate ref browser behavior"
+e=wi-4 a=label v="Lock ref action contracts"
+e=ask-1 a=measure v="Git-ref journeys; baseline=1/3; target=3/3"
+e=ask-1 a=source_ref v=session:2026-07-10
+e=gap-1 a=summary v="Discovering refs exists, but opening and refreshing them lacks trustworthy outcomes."
+e=gap-1 a=source_ref v=session:2026-07-10
+e=open-1 a=summary v="No production event trace or deployed revision was inspected during planning."
+e=open-1 a=source_ref v=frontier:production-runtime
+e=term-1 a=summary v="A named repository state—branch, tag, or remote ref—served from the repository object store."
+e=term-1 a=source_ref v=vyasa/content_backend.py:141
+e=br-1 a=summary v="People can discover, open, and refresh repository states through Vyasa without changing a working tree."
+e=br-1 a=source_ref v=session:2026-07-10
+e=uc-1 a=source_ref v=vyasa/git_refs.py:191
+e=uc-2 a=source_ref v=vyasa/static/scripts.js:931
+e=uc-3 a=source_ref v=session:2026-07-10
+e=fr-1 a=source_ref v=vyasa/content_routes.py:242
+e=fr-2 a=source_ref v=vyasa/git_refs.py:30
+e=fr-3 a=source_ref v=session:2026-07-10
+e=fr-4 a=source_ref v=session:2026-07-10
+e=nfr-1 a=measure v="Action paths with truthful visible outcomes; baseline=0/3; target=3/3"
+e=nfr-1 a=quality v=reliability
+e=nfr-1 a=source_ref v=session:2026-07-10
+e=dc-1 a=source_ref v=vyasa/static/scripts.js:1055
+e=fact-1 a=summary v="The UI always supplies a root, while mirror fetching runs only without one."
+e=fact-1 a=source_ref v=vyasa/git_refs.py:41
+e=fact-2 a=summary v="Failures become warnings and every request returns an empty 204 response."
+e=fact-2 a=source_ref v=vyasa/git_refs.py:43
+e=fact-3 a=source_ref v=vyasa/git_refs.py:54
+e=fact-4 a=source_ref v=vyasa/static/scripts.js:1040
+e=fact-5 a=source_ref v=vyasa/static/scripts.js:1033
+e=fact-6 a=source_ref v=tests/test_git_refs.py:410
+e=el-1 a=summary v="Fetches mirrors and clone remotes, returning root-to-success booleans."
+e=el-1 a=source_ref v=vyasa/git_fetcher.py:83
+e=el-2 a=summary v="Discovers refs, coordinates refresh, clears caches, and renders ref controls."
+e=el-2 a=source_ref v=vyasa/git_refs.py:18
+e=el-3 a=summary v="Registers ref routes and the navbar control."
+e=el-3 a=source_ref v=vyasa/extensions_builtin/git_refs.py:8
+e=el-4 a=summary v="Global scripts currently own navigation, refresh, spinner, and toast behavior."
+e=el-4 a=source_ref v=vyasa/static/scripts.js:897
+e=if-1 a=summary v="One response shape carries root, ref, changed state, outcome, and failure details."
+e=if-1 a=source_ref v=delta:ref-action-result
+e=ad-1 a=summary v="Feature handlers leave global scripts and load through the existing extension asset contract."
+e=ad-1 a=source_ref v=vyasa/extensions_builtin/bookmarks/__init__.py:15
+e=state-1 a=summary v="Idle, loading, updated, unchanged, and failed each have visible feedback."
+e=state-1 a=source_ref v=session:2026-07-10
+e=access-1 a=summary v="Buttons disable during work and publish aria-busy until the result arrives."
+e=access-1 a=source_ref v=delta:ref-control-state
+e=design-1 a=summary v="Reuse the existing toast surface for viewing, updated, unchanged, and failed results."
+e=design-1 a=source_ref v=vyasa/static/scripts.js:878
+e=api-1 a=summary v="Returns the ref action result with no-store; unknown roots and fetch failures are non-success responses."
+e=api-1 a=source_ref v=vyasa/extensions_builtin/git_refs.py:28
+e=ac-1 a=summary v="Mirror aliases fetch only their matching spec; clone aliases fetch only their matching clone."
+e=ac-1 a=source_ref v=vyasa/git_fetcher.py:93
+e=tc-1 a=summary v="Advance an upstream branch, refresh its mirror alias, and assert before/after tips plus changed state."
+e=tc-1 a=source_ref v=tests/test_git_fetcher.py:28
+e=tc-2 a=summary v="Refresh an up-to-date source and assert a successful unchanged result."
+e=tc-2 a=source_ref v=tests/test_git_fetcher.py:28
+e=tc-3 a=summary v="Fail the source fetch and assert non-success response, failure log, and error toast contract."
+e=tc-3 a=source_ref v=tests/test_git_fetcher.py:50
+e=tc-4 a=summary v="Assert content, URL, sidebar, active ref, success toast, and rollback on failure."
+e=tc-4 a=source_ref v=vyasa/static/scripts.js:931
+e=tc-5 a=summary v="Fake fetch and DOM state in a millisecond JS test; no browser automation."
+e=tc-5 a=source_ref v=tests_js:git-refs
+e=wi-1 a=summary v="DoD: git_fetcher reports per-root success, failure, and before/after ref tips without losing isolated failures."
+e=wi-1 a=source_ref v=vyasa/git_fetcher.py:83
+e=wi-2 a=summary v="DoD: scoped mirrors and clones fetch, caches clear after success, JSON reflects changed/unchanged/failure, and logs carry root/ref/outcome/duration."
+e=wi-2 a=source_ref v=vyasa/git_refs.py:30
+e=wi-3 a=summary v="DoD: extension asset owns handlers, one helper checks responses, controls expose busy state, toasts show every outcome, and dead localStorage state is removed."
+e=wi-3 a=source_ref v=vyasa/static/scripts.js:897
+e=wi-4 a=summary v="DoD: server, route, and JS tests cover mirror, clone, changed, unchanged, failure, selection, and selected-ref refresh paths."
+e=wi-4 a=source_ref v=tests/test_git_refs.py:290
+e=ask-1 a=claim_kind v=source
+e=gap-1 a=claim_kind v=fact
+e=term-1 a=claim_kind v=fact
+e=fr-1 a=claim_kind v=fact
+e=fact-1 a=claim_kind v=fact
+e=fact-2 a=claim_kind v=fact
+e=fact-3 a=claim_kind v=fact
+e=fact-4 a=claim_kind v=fact
+e=fact-5 a=claim_kind v=fact
+e=fact-6 a=claim_kind v=fact
+e=el-1 a=claim_kind v=fact
+e=el-2 a=claim_kind v=fact
+e=el-3 a=claim_kind v=fact
+e=el-4 a=claim_kind v=fact
+e=open-1 a=claim_kind v=open
+e=br-1 a=claim_kind v=decision
+e=uc-1 a=claim_kind v=decision
+e=uc-2 a=claim_kind v=decision
+e=uc-3 a=claim_kind v=decision
+e=fr-2 a=claim_kind v=decision
+e=fr-3 a=claim_kind v=decision
+e=fr-4 a=claim_kind v=decision
+e=nfr-1 a=claim_kind v=decision
+e=if-1 a=claim_kind v=decision
+e=ad-1 a=claim_kind v=decision
+e=design-1 a=claim_kind v=decision
+e=api-1 a=claim_kind v=decision
+e=tc-1 a=claim_kind v=decision
+e=tc-2 a=claim_kind v=decision
+e=tc-3 a=claim_kind v=decision
+e=tc-4 a=claim_kind v=decision
+e=tc-5 a=claim_kind v=decision
+e=wi-1 a=claim_kind v=decision
+e=wi-2 a=claim_kind v=decision
+e=wi-3 a=claim_kind v=decision
+e=wi-4 a=claim_kind v=decision
+e=dc-1 a=claim_kind v=rule
+e=state-1 a=claim_kind v=rule
+e=access-1 a=claim_kind v=rule
+e=ac-1 a=claim_kind v=rule
+e=ask-1 a=authority v=source
+e=gap-1 a=authority v=derived
+e=open-1 a=authority v=derived
+e=term-1 a=authority v=derived
+e=br-1 a=authority v=derived
+e=uc-1 a=authority v=derived
+e=uc-2 a=authority v=derived
+e=uc-3 a=authority v=derived
+e=fr-1 a=authority v=derived
+e=fr-2 a=authority v=derived
+e=fr-3 a=authority v=derived
+e=fr-4 a=authority v=derived
+e=nfr-1 a=authority v=derived
+e=dc-1 a=authority v=derived
+e=fact-1 a=authority v=derived
+e=fact-2 a=authority v=derived
+e=fact-3 a=authority v=derived
+e=fact-4 a=authority v=derived
+e=fact-5 a=authority v=derived
+e=fact-6 a=authority v=derived
+e=el-1 a=authority v=derived
+e=el-2 a=authority v=derived
+e=el-3 a=authority v=derived
+e=el-4 a=authority v=derived
+e=if-1 a=authority v=derived
+e=ad-1 a=authority v=derived
+e=state-1 a=authority v=derived
+e=access-1 a=authority v=derived
+e=design-1 a=authority v=derived
+e=api-1 a=authority v=derived
+e=ac-1 a=authority v=derived
+e=tc-1 a=authority v=derived
+e=tc-2 a=authority v=derived
+e=tc-3 a=authority v=derived
+e=tc-4 a=authority v=derived
+e=tc-5 a=authority v=derived
+e=wi-1 a=authority v=derived
+e=wi-2 a=authority v=derived
+e=wi-3 a=authority v=derived
+e=wi-4 a=authority v=derived
+e=ask-1 a=grounding v=given
+e=gap-1 a=grounding v=observed
+e=term-1 a=grounding v=observed
+e=fr-1 a=grounding v=observed
+e=fact-1 a=grounding v=observed
+e=fact-2 a=grounding v=observed
+e=fact-3 a=grounding v=observed
+e=fact-4 a=grounding v=observed
+e=fact-5 a=grounding v=observed
+e=fact-6 a=grounding v=observed
+e=el-1 a=grounding v=observed
+e=el-2 a=grounding v=observed
+e=el-3 a=grounding v=observed
+e=el-4 a=grounding v=observed
+e=open-1 a=grounding v=undecided
+e=br-1 a=grounding v=decided
+e=uc-1 a=grounding v=decided
+e=uc-2 a=grounding v=decided
+e=uc-3 a=grounding v=decided
+e=fr-2 a=grounding v=decided
+e=fr-3 a=grounding v=decided
+e=fr-4 a=grounding v=decided
+e=nfr-1 a=grounding v=decided
+e=dc-1 a=grounding v=decided
+e=if-1 a=grounding v=decided
+e=ad-1 a=grounding v=decided
+e=state-1 a=grounding v=decided
+e=access-1 a=grounding v=decided
+e=design-1 a=grounding v=decided
+e=api-1 a=grounding v=decided
+e=ac-1 a=grounding v=decided
+e=tc-1 a=grounding v=decided
+e=tc-2 a=grounding v=decided
+e=tc-3 a=grounding v=decided
+e=tc-4 a=grounding v=decided
+e=tc-5 a=grounding v=decided
+e=wi-1 a=grounding v=decided
+e=wi-2 a=grounding v=decided
+e=wi-3 a=grounding v=decided
+e=wi-4 a=grounding v=decided
+e=ask-1 a=stage v=10-vision
+e=gap-1 a=stage v=10-vision
+e=open-1 a=stage v=10-vision
+e=br-1 a=stage v=20-business-requirements
+e=uc-1 a=stage v=30a-solution
+e=uc-2 a=stage v=30a-solution
+e=uc-3 a=stage v=30a-solution
+e=term-1 a=stage v=30b-system
+e=fr-1 a=stage v=30b-system
+e=fr-2 a=stage v=30b-system
+e=fr-3 a=stage v=30b-system
+e=fr-4 a=stage v=30b-system
+e=nfr-1 a=stage v=30b-system
+e=dc-1 a=stage v=30b-system
+e=fact-1 a=stage v=30b-system
+e=fact-2 a=stage v=30b-system
+e=fact-3 a=stage v=30b-system
+e=fact-4 a=stage v=30b-system
+e=el-1 a=stage v=30c-architecture
+e=el-2 a=stage v=30c-architecture
+e=el-3 a=stage v=30c-architecture
+e=el-4 a=stage v=30c-architecture
+e=if-1 a=stage v=30c-architecture
+e=ad-1 a=stage v=30c-architecture
+e=fact-5 a=stage v=40a-primitives
+e=state-1 a=stage v=40a-primitives
+e=access-1 a=stage v=40a-primitives
+e=design-1 a=stage v=40b-design-tasks
+e=fact-6 a=stage v=50-trd-test
+e=api-1 a=stage v=50-trd-test
+e=ac-1 a=stage v=50-trd-test
+e=tc-1 a=stage v=50-trd-test
+e=tc-2 a=stage v=50-trd-test
+e=tc-3 a=stage v=50-trd-test
+e=tc-4 a=stage v=50-trd-test
+e=tc-5 a=stage v=50-trd-test
+e=wi-1 a=stage v=60-task-breakdown
+e=wi-2 a=stage v=60-task-breakdown
+e=wi-3 a=stage v=60-task-breakdown
+e=wi-4 a=stage v=60-task-breakdown
+e=ask-1 a=source v=delta
+e=br-1 a=source v=delta
+e=uc-1 a=source v=delta
+e=uc-2 a=source v=delta
+e=uc-3 a=source v=delta
+e=fr-2 a=source v=delta
+e=fr-3 a=source v=delta
+e=fr-4 a=source v=delta
+e=nfr-1 a=source v=delta
+e=dc-1 a=source v=delta
+e=if-1 a=source v=delta
+e=ad-1 a=source v=delta
+e=state-1 a=source v=delta
+e=access-1 a=source v=delta
+e=design-1 a=source v=delta
+e=api-1 a=source v=delta
+e=ac-1 a=source v=delta
+e=tc-1 a=source v=delta
+e=tc-2 a=source v=delta
+e=tc-3 a=source v=delta
+e=tc-4 a=source v=delta
+e=tc-5 a=source v=delta
+e=wi-1 a=source v=delta
+e=wi-2 a=source v=delta
+e=wi-3 a=source v=delta
+e=wi-4 a=source v=delta
+e=gap-1 a=source v=observed
+e=term-1 a=source v=observed
+e=fr-1 a=source v=observed
+e=fact-1 a=source v=observed
+e=fact-2 a=source v=observed
+e=fact-3 a=source v=observed
+e=fact-4 a=source v=observed
+e=fact-5 a=source v=observed
+e=fact-6 a=source v=observed
+e=el-1 a=source v=observed
+e=el-2 a=source v=observed
+e=el-3 a=source v=observed
+e=el-4 a=source v=observed
+e=open-1 a=source v=assumed
+e=ask-1 a=form v=strategic-objective
+e=gap-1 a=form v=problem
+e=open-1 a=form v=assumption
+e=term-1 a=form v=term
+e=br-1 a=form v=business-requirement
+e=uc-1 a=form v=use-case
+e=uc-2 a=form v=use-case
+e=uc-3 a=form v=use-case
+e=fr-1 a=form v=functional-requirement
+e=fr-2 a=form v=functional-requirement
+e=fr-3 a=form v=functional-requirement
+e=fr-4 a=form v=functional-requirement
+e=fact-1 a=form v=functional-requirement
+e=fact-3 a=form v=functional-requirement
+e=fact-4 a=form v=functional-requirement
+e=nfr-1 a=form v=non-functional-requirement
+e=dc-1 a=form v=design-constraint
+e=fact-2 a=form v=system-interface
+e=if-1 a=form v=system-interface
+e=el-1 a=form v=system-element
+e=el-2 a=form v=system-element
+e=el-3 a=form v=system-element
+e=el-4 a=form v=system-element
+e=ad-1 a=form v=architectural-decision
+e=fact-5 a=form v=state-rule
+e=state-1 a=form v=state-rule
+e=access-1 a=form v=accessibility-rule
+e=design-1 a=form v=design-task
+e=fact-6 a=form v=verification-plan
+e=api-1 a=form v=api-endpoint
+e=ac-1 a=form v=acceptance-criteria
+e=tc-1 a=form v=test-case
+e=tc-2 a=form v=test-case
+e=tc-3 a=form v=test-case
+e=tc-4 a=form v=test-case
+e=tc-5 a=form v=test-case
+e=wi-1 a=form v=work-item
+e=wi-2 a=form v=work-item
+e=wi-3 a=form v=work-item
+e=wi-4 a=form v=work-item
+e=ask-1 a=scope v=current
+e=gap-1 a=scope v=current
+e=open-1 a=scope v=current
+e=term-1 a=scope v=current
+e=br-1 a=scope v=current
+e=uc-1 a=scope v=current
+e=uc-2 a=scope v=current
+e=uc-3 a=scope v=current
+e=fr-1 a=scope v=current
+e=fr-2 a=scope v=current
+e=fr-3 a=scope v=current
+e=fr-4 a=scope v=current
+e=nfr-1 a=scope v=current
+e=dc-1 a=scope v=current
+e=fact-1 a=scope v=current
+e=fact-2 a=scope v=current
+e=fact-3 a=scope v=current
+e=fact-4 a=scope v=current
+e=fact-5 a=scope v=current
+e=fact-6 a=scope v=current
+e=el-1 a=scope v=current
+e=el-2 a=scope v=current
+e=el-3 a=scope v=current
+e=el-4 a=scope v=current
+e=if-1 a=scope v=current
+e=ad-1 a=scope v=current
+e=state-1 a=scope v=current
+e=access-1 a=scope v=current
+e=design-1 a=scope v=current
+e=api-1 a=scope v=current
+e=ac-1 a=scope v=current
+e=tc-1 a=scope v=current
+e=tc-2 a=scope v=current
+e=tc-3 a=scope v=current
+e=tc-4 a=scope v=current
+e=tc-5 a=scope v=current
+e=wi-1 a=scope v=current
+e=wi-2 a=scope v=current
+e=wi-3 a=scope v=current
+e=wi-4 a=scope v=current
+e=gap-1 a=status v=active
+e=term-1 a=status v=active
+e=fr-1 a=status v=active
+e=fact-1 a=status v=active
+e=fact-2 a=status v=active
+e=fact-3 a=status v=active
+e=fact-4 a=status v=active
+e=fact-5 a=status v=active
+e=fact-6 a=status v=active
+e=el-1 a=status v=active
+e=el-2 a=status v=active
+e=el-3 a=status v=active
+e=el-4 a=status v=active
+e=open-1 a=status v=blocked
+e=ask-1 a=status v=todo
+e=br-1 a=status v=todo
+e=uc-1 a=status v=todo
+e=uc-2 a=status v=todo
+e=uc-3 a=status v=todo
+e=fr-2 a=status v=todo
+e=fr-3 a=status v=todo
+e=fr-4 a=status v=todo
+e=nfr-1 a=status v=todo
+e=dc-1 a=status v=todo
+e=if-1 a=status v=todo
+e=ad-1 a=status v=todo
+e=state-1 a=status v=todo
+e=access-1 a=status v=todo
+e=design-1 a=status v=todo
+e=api-1 a=status v=todo
+e=ac-1 a=status v=todo
+e=tc-1 a=status v=todo
+e=tc-2 a=status v=todo
+e=tc-3 a=status v=todo
+e=tc-4 a=status v=todo
+e=tc-5 a=status v=todo
+e=wi-1 a=status v=todo
+e=wi-2 a=status v=todo
+e=wi-3 a=status v=todo
+e=wi-4 a=status v=todo
+e=gap-1 a=frontier v=partial
+e=fact-1 a=frontier v=partial
+e=fact-2 a=frontier v=partial
+e=fact-3 a=frontier v=partial
+e=fact-4 a=frontier v=partial
+e=fact-5 a=frontier v=partial
+e=fact-6 a=frontier v=partial
+e=el-1 a=frontier v=partial
+e=el-2 a=frontier v=partial
+e=el-3 a=frontier v=partial
+e=el-4 a=frontier v=partial
+e=ask-1 a=frontier v=expanded
+e=term-1 a=frontier v=expanded
+e=br-1 a=frontier v=expanded
+e=uc-1 a=frontier v=expanded
+e=uc-2 a=frontier v=expanded
+e=uc-3 a=frontier v=expanded
+e=fr-1 a=frontier v=expanded
+e=fr-2 a=frontier v=expanded
+e=fr-3 a=frontier v=expanded
+e=fr-4 a=frontier v=expanded
+e=nfr-1 a=frontier v=expanded
+e=dc-1 a=frontier v=expanded
+e=if-1 a=frontier v=expanded
+e=ad-1 a=frontier v=expanded
+e=state-1 a=frontier v=expanded
+e=access-1 a=frontier v=expanded
+e=design-1 a=frontier v=expanded
+e=api-1 a=frontier v=expanded
+e=ac-1 a=frontier v=expanded
+e=tc-1 a=frontier v=expanded
+e=tc-2 a=frontier v=expanded
+e=tc-3 a=frontier v=expanded
+e=tc-4 a=frontier v=expanded
+e=tc-5 a=frontier v=expanded
+e=wi-1 a=frontier v=expanded
+e=wi-2 a=frontier v=expanded
+e=wi-3 a=frontier v=expanded
+e=wi-4 a=frontier v=expanded
+e=open-1 a=frontier v=unexpanded
+e=nfr-1 a=quality v=reliability
+e=el-1 a=build_order v=1
+e=el-2 a=build_order v=2
+e=el-3 a=build_order v=3
+e=el-4 a=build_order v=4
+e=ac-1 a=module v=git_fetcher
+e=tc-1 a=module v=git_fetcher
+e=tc-2 a=module v=git_fetcher
+e=wi-1 a=module v=git_fetcher
+e=fact-6 a=module v=git_refs
+e=api-1 a=module v=git_refs
+e=tc-3 a=module v=git_refs
+e=wi-2 a=module v=git_refs
+e=wi-4 a=module v=git_refs
+e=tc-4 a=module v=git_refs_browser
+e=tc-5 a=module v=git_refs_browser
+e=wi-3 a=module v=git_refs_browser
+e=ask-1 a=owner v=Yeshwanth
+e=gap-1 a=owner v=Yeshwanth
+e=open-1 a=owner v=Yeshwanth
+e=term-1 a=owner v=Yeshwanth
+e=br-1 a=owner v=Yeshwanth
+e=uc-1 a=owner v=Yeshwanth
+e=uc-2 a=owner v=Yeshwanth
+e=uc-3 a=owner v=Yeshwanth
+e=fr-1 a=owner v=Yeshwanth
+e=fr-2 a=owner v=Yeshwanth
+e=fr-3 a=owner v=Yeshwanth
+e=fr-4 a=owner v=Yeshwanth
+e=nfr-1 a=owner v=Yeshwanth
+e=dc-1 a=owner v=Yeshwanth
+e=fact-1 a=owner v=Yeshwanth
+e=fact-2 a=owner v=Yeshwanth
+e=fact-3 a=owner v=Yeshwanth
+e=fact-4 a=owner v=Yeshwanth
+e=fact-5 a=owner v=Yeshwanth
+e=fact-6 a=owner v=Yeshwanth
+e=el-1 a=owner v=Yeshwanth
+e=el-2 a=owner v=Yeshwanth
+e=el-3 a=owner v=Yeshwanth
+e=el-4 a=owner v=Yeshwanth
+e=if-1 a=owner v=Yeshwanth
+e=ad-1 a=owner v=Yeshwanth
+e=state-1 a=owner v=Yeshwanth
+e=access-1 a=owner v=Yeshwanth
+e=design-1 a=owner v=Yeshwanth
+e=api-1 a=owner v=Yeshwanth
+e=ac-1 a=owner v=Yeshwanth
+e=tc-1 a=owner v=Yeshwanth
+e=tc-2 a=owner v=Yeshwanth
+e=tc-3 a=owner v=Yeshwanth
+e=tc-4 a=owner v=Yeshwanth
+e=tc-5 a=owner v=Yeshwanth
+e=wi-1 a=owner v=Yeshwanth
+e=wi-2 a=owner v=Yeshwanth
+e=wi-3 a=owner v=Yeshwanth
+e=wi-4 a=owner v=Yeshwanth
+e=ask-1 a=reports_to v=Yeshwanth
+e=gap-1 a=reports_to v=Yeshwanth
+e=open-1 a=reports_to v=Yeshwanth
+e=term-1 a=reports_to v=Yeshwanth
+e=br-1 a=reports_to v=Yeshwanth
+e=uc-1 a=reports_to v=Yeshwanth
+e=uc-2 a=reports_to v=Yeshwanth
+e=uc-3 a=reports_to v=Yeshwanth
+e=fr-1 a=reports_to v=Yeshwanth
+e=fr-2 a=reports_to v=Yeshwanth
+e=fr-3 a=reports_to v=Yeshwanth
+e=fr-4 a=reports_to v=Yeshwanth
+e=nfr-1 a=reports_to v=Yeshwanth
+e=dc-1 a=reports_to v=Yeshwanth
+e=fact-1 a=reports_to v=Yeshwanth
+e=fact-2 a=reports_to v=Yeshwanth
+e=fact-3 a=reports_to v=Yeshwanth
+e=fact-4 a=reports_to v=Yeshwanth
+e=fact-5 a=reports_to v=Yeshwanth
+e=fact-6 a=reports_to v=Yeshwanth
+e=el-1 a=reports_to v=Yeshwanth
+e=el-2 a=reports_to v=Yeshwanth
+e=el-3 a=reports_to v=Yeshwanth
+e=el-4 a=reports_to v=Yeshwanth
+e=if-1 a=reports_to v=Yeshwanth
+e=ad-1 a=reports_to v=Yeshwanth
+e=state-1 a=reports_to v=Yeshwanth
+e=access-1 a=reports_to v=Yeshwanth
+e=design-1 a=reports_to v=Yeshwanth
+e=api-1 a=reports_to v=Yeshwanth
+e=ac-1 a=reports_to v=Yeshwanth
+e=tc-1 a=reports_to v=Yeshwanth
+e=tc-2 a=reports_to v=Yeshwanth
+e=tc-3 a=reports_to v=Yeshwanth
+e=tc-4 a=reports_to v=Yeshwanth
+e=tc-5 a=reports_to v=Yeshwanth
+e=wi-1 a=reports_to v=Yeshwanth
+e=wi-2 a=reports_to v=Yeshwanth
+e=wi-3 a=reports_to v=Yeshwanth
+e=wi-4 a=reports_to v=Yeshwanth
+e=ask-1 a=date v=2026-07-10
+e=gap-1 a=date v=2026-07-10
+e=open-1 a=date v=2026-07-10
+e=term-1 a=date v=2026-07-10
+e=br-1 a=date v=2026-07-10
+e=uc-1 a=date v=2026-07-10
+e=uc-2 a=date v=2026-07-10
+e=uc-3 a=date v=2026-07-10
+e=fr-1 a=date v=2026-07-10
+e=fr-2 a=date v=2026-07-10
+e=fr-3 a=date v=2026-07-10
+e=fr-4 a=date v=2026-07-10
+e=nfr-1 a=date v=2026-07-10
+e=dc-1 a=date v=2026-07-10
+e=fact-1 a=date v=2026-07-10
+e=fact-2 a=date v=2026-07-10
+e=fact-3 a=date v=2026-07-10
+e=fact-4 a=date v=2026-07-10
+e=fact-5 a=date v=2026-07-10
+e=fact-6 a=date v=2026-07-10
+e=el-1 a=date v=2026-07-10
+e=el-2 a=date v=2026-07-10
+e=el-3 a=date v=2026-07-10
+e=el-4 a=date v=2026-07-10
+e=if-1 a=date v=2026-07-10
+e=ad-1 a=date v=2026-07-10
+e=state-1 a=date v=2026-07-10
+e=access-1 a=date v=2026-07-10
+e=design-1 a=date v=2026-07-10
+e=api-1 a=date v=2026-07-10
+e=ac-1 a=date v=2026-07-10
+e=tc-1 a=date v=2026-07-10
+e=tc-2 a=date v=2026-07-10
+e=tc-3 a=date v=2026-07-10
+e=tc-4 a=date v=2026-07-10
+e=tc-5 a=date v=2026-07-10
+e=wi-1 a=date v=2026-07-10
+e=wi-2 a=date v=2026-07-10
+e=wi-3 a=date v=2026-07-10
+e=wi-4 a=date v=2026-07-10
+e=ctx001 a=seq v=1 c=ctx001
+e=ctx001 a=label v="Git refs — first-class production content" c=ctx001
+e=ctx001 a=kind v=context c=ctx001
+e=ctx001 a=caption v="Git refs become first-class Vyasa content: discoverable, browsable, refreshable, and explicit about every outcome.\nStage 40c is silent because existing controls need state behavior, not new screens or prototypes.\nStage 80 stays in git; stage 90 waits until implementation is accepted." c=ctx001
+e=ctx001:vision a=kind v=slide c=ctx001
+e=ctx001:vision a=slide_of v=@ctx001 c=ctx001
+e=ctx001:vision a=title v="Why Git refs exist" c=ctx001
+e=ctx001:vision a=shows v=@ask-1 c=ctx001
+e=ctx001:vision a=shows v=@gap-1 c=ctx001
+e=ctx001:vision a=shows v=@br-1 c=ctx001
+e=ctx001:vision a=desc v="Repository history should read like live documentation, without changing a working tree." c=ctx001
+e=ctx001:failure a=kind v=slide c=ctx001
+e=ctx001:failure a=slide_of v=@ctx001 c=ctx001
+e=ctx001:failure a=title v="What breaks trust today" c=ctx001
+e=ctx001:failure a=shows v=@fact-1 c=ctx001
+e=ctx001:failure a=shows v=@fact-2 c=ctx001
+e=ctx001:failure a=shows v=@fact-3 c=ctx001
+e=ctx001:failure a=shows v=@fact-4 c=ctx001
+e=ctx001:failure a=shows v=@fact-5 c=ctx001
+e=ctx001:failure a=shows v=@fact-6 c=ctx001
+e=ctx001:failure a=desc v="The scoped mirror path is inert, failures collapse into 204, browser chains trust every response, and tests lock wiring rather than behavior." c=ctx001
+e=ctx001:contract a=kind v=slide c=ctx001
+e=ctx001:contract a=slide_of v=@ctx001 c=ctx001
+e=ctx001:contract a=title v="One truthful action contract" c=ctx001
+e=ctx001:contract a=shows v=@fr-2 c=ctx001
+e=ctx001:contract a=shows v=@fr-3 c=ctx001
+e=ctx001:contract a=shows v=@fr-4 c=ctx001
+e=ctx001:contract a=shows v=@nfr-1 c=ctx001
+e=ctx001:contract a=shows v=@if-1 c=ctx001
+e=ctx001:contract a=shows v=@state-1 c=ctx001
+e=ctx001:contract a=desc v="Every action has one result shape and five visible states: loading, updated, unchanged, viewing, or failed." c=ctx001
+e=ctx001:architecture a=kind v=slide c=ctx001
+e=ctx001:architecture a=slide_of v=@ctx001 c=ctx001
+e=ctx001:architecture a=title v="Put behavior where it belongs" c=ctx001
+e=ctx001:architecture a=shows v=@el-1 c=ctx001
+e=ctx001:architecture a=shows v=@el-2 c=ctx001
+e=ctx001:architecture a=shows v=@el-3 c=ctx001
+e=ctx001:architecture a=shows v=@el-4 c=ctx001
+e=ctx001:architecture a=shows v=@ad-1 c=ctx001
+e=ctx001:architecture a=desc v="Fetcher reports facts, coordinator owns refresh, extension owns routes and assets, browser behavior leaves global scripts." c=ctx001
+e=ctx001:delivery a=kind v=slide c=ctx001
+e=ctx001:delivery a=slide_of v=@ctx001 c=ctx001
+e=ctx001:delivery a=title v="Build and proof order" c=ctx001
+e=ctx001:delivery a=shows v=@wi-1 c=ctx001
+e=ctx001:delivery a=shows v=@wi-2 c=ctx001
+e=ctx001:delivery a=shows v=@wi-3 c=ctx001
+e=ctx001:delivery a=shows v=@wi-4 c=ctx001
+e=ctx001:delivery a=shows v=@tc-1 c=ctx001
+e=ctx001:delivery a=shows v=@tc-2 c=ctx001
+e=ctx001:delivery a=shows v=@tc-3 c=ctx001
+e=ctx001:delivery a=shows v=@tc-4 c=ctx001
+e=ctx001:delivery a=shows v=@tc-5 c=ctx001
+e=ctx001:delivery a=desc v="Server truth first, browser truth second, contract tests throughout." c=ctx001
+e=gap-1 a=status v=active c=ctx001
+e=fr-1 a=status v=active c=ctx001
+e=fact-1 a=status v=active c=ctx001
+e=fact-2 a=status v=active c=ctx001
+e=fact-3 a=status v=active c=ctx001
+e=fact-4 a=status v=active c=ctx001
+e=fact-5 a=status v=active c=ctx001
+e=fact-6 a=status v=active c=ctx001
+e=el-1 a=status v=active c=ctx001
+e=el-2 a=status v=active c=ctx001
+e=el-3 a=status v=active c=ctx001
+e=el-4 a=status v=active c=ctx001
+e=open-1 a=status v=blocked c=ctx001
+e=ask-1 a=status v=todo c=ctx001
+e=br-1 a=status v=todo c=ctx001
+e=uc-1 a=status v=todo c=ctx001
+e=uc-2 a=status v=todo c=ctx001
+e=uc-3 a=status v=todo c=ctx001
+e=fr-2 a=status v=todo c=ctx001
+e=fr-3 a=status v=todo c=ctx001
+e=fr-4 a=status v=todo c=ctx001
+e=nfr-1 a=status v=todo c=ctx001
+e=dc-1 a=status v=todo c=ctx001
+e=if-1 a=status v=todo c=ctx001
+e=ad-1 a=status v=todo c=ctx001
+e=state-1 a=status v=todo c=ctx001
+e=access-1 a=status v=todo c=ctx001
+e=design-1 a=status v=todo c=ctx001
+e=api-1 a=status v=todo c=ctx001
+e=ac-1 a=status v=todo c=ctx001
+e=tc-1 a=status v=todo c=ctx001
+e=tc-2 a=status v=todo c=ctx001
+e=tc-3 a=status v=todo c=ctx001
+e=tc-4 a=status v=todo c=ctx001
+e=tc-5 a=status v=todo c=ctx001
+e=wi-1 a=status v=todo c=ctx001
+e=wi-2 a=status v=todo c=ctx001
+e=wi-3 a=status v=todo c=ctx001
+e=wi-4 a=status v=todo c=ctx001
+e=ask-1 a=broken_by v=@gap-1 c=ctx001
+e=ask-1 a=constrains v=@open-1 c=ctx001
+e=ask-1 a=informs v=@br-1 c=ctx001
+e=br-1 a=informs v=@term-1 c=ctx001
+e=br-1 a=broken_by v=@fact-1 c=ctx001
+e=br-1 a=broken_by v=@fact-2 c=ctx001
+e=br-1 a=broken_by v=@fact-3 c=ctx001
+e=br-1 a=broken_by v=@fact-4 c=ctx001
+e=br-1 a=broken_by v=@fact-5 c=ctx001
+e=br-1 a=broken_by v=@fact-6 c=ctx001
+e=br-1 a=informs v=@uc-1 c=ctx001
+e=br-1 a=informs v=@uc-2 c=ctx001
+e=br-1 a=informs v=@uc-3 c=ctx001
+e=uc-1 a=informs v=@fr-1 c=ctx001
+e=uc-2 a=informs v=@fr-1 c=ctx001
+e=uc-2 a=informs v=@fr-4 c=ctx001
+e=uc-3 a=informs v=@fr-2 c=ctx001
+e=uc-3 a=informs v=@fr-3 c=ctx001
+e=uc-3 a=informs v=@nfr-1 c=ctx001
+e=uc-3 a=informs v=@dc-1 c=ctx001
+e=fr-2 a=informs v=@el-1 c=ctx001
+e=fr-2 a=informs v=@el-2 c=ctx001
+e=fr-3 a=informs v=@if-1 c=ctx001
+e=fr-4 a=informs v=@el-3 c=ctx001
+e=nfr-1 a=informs v=@el-4 c=ctx001
+e=dc-1 a=constrains v=@if-1 c=ctx001
+e=el-1 a=informs v=@api-1 c=ctx001
+e=el-2 a=informs v=@api-1 c=ctx001
+e=el-3 a=informs v=@api-1 c=ctx001
+e=el-4 a=informs v=@state-1 c=ctx001
+e=if-1 a=informs v=@api-1 c=ctx001
+e=ad-1 a=informs v=@el-3 c=ctx001
+e=ad-1 a=informs v=@el-4 c=ctx001
+e=state-1 a=informs v=@design-1 c=ctx001
+e=access-1 a=constrains v=@design-1 c=ctx001
+e=api-1 a=informs v=@tc-1 c=ctx001
+e=api-1 a=informs v=@tc-2 c=ctx001
+e=api-1 a=informs v=@tc-3 c=ctx001
+e=ac-1 a=informs v=@tc-1 c=ctx001
+e=nfr-1 a=informs v=@tc-2 c=ctx001
+e=nfr-1 a=informs v=@tc-3 c=ctx001
+e=state-1 a=informs v=@tc-4 c=ctx001
+e=design-1 a=informs v=@tc-4 c=ctx001
+e=design-1 a=informs v=@tc-5 c=ctx001
+e=api-1 a=informs v=@wi-2 c=ctx001
+e=ac-1 a=informs v=@wi-1 c=ctx001
+e=tc-1 a=informs v=@wi-1 c=ctx001
+e=tc-2 a=informs v=@wi-2 c=ctx001
+e=tc-3 a=informs v=@wi-2 c=ctx001
+e=tc-4 a=informs v=@wi-3 c=ctx001
+e=tc-5 a=informs v=@wi-3 c=ctx001
+e=tc-5 a=informs v=@wi-4 c=ctx001
+e=wi-1 a=blocks v=@wi-2 c=ctx001
+e=wi-2 a=blocks v=@wi-3 c=ctx001
+e=wi-3 a=blocks v=@wi-4 c=ctx001
+e=ac-1 a=present v=true c=ctx001
+e=access-1 a=present v=true c=ctx001
+e=ad-1 a=present v=true c=ctx001
+e=api-1 a=present v=true c=ctx001
+e=ask-1 a=present v=true c=ctx001
+e=br-1 a=present v=true c=ctx001
+e=dc-1 a=present v=true c=ctx001
+e=design-1 a=present v=true c=ctx001
+e=el-1 a=present v=true c=ctx001
+e=el-2 a=present v=true c=ctx001
+e=el-3 a=present v=true c=ctx001
+e=el-4 a=present v=true c=ctx001
+e=fact-1 a=present v=true c=ctx001
+e=fact-2 a=present v=true c=ctx001
+e=fact-3 a=present v=true c=ctx001
+e=fact-4 a=present v=true c=ctx001
+e=fact-5 a=present v=true c=ctx001
+e=fact-6 a=present v=true c=ctx001
+e=fr-1 a=present v=true c=ctx001
+e=fr-2 a=present v=true c=ctx001
+e=fr-3 a=present v=true c=ctx001
+e=fr-4 a=present v=true c=ctx001
+e=gap-1 a=present v=true c=ctx001
+e=if-1 a=present v=true c=ctx001
+e=nfr-1 a=present v=true c=ctx001
+e=open-1 a=present v=true c=ctx001
+e=state-1 a=present v=true c=ctx001
+e=tc-1 a=present v=true c=ctx001
+e=tc-2 a=present v=true c=ctx001
+e=tc-3 a=present v=true c=ctx001
+e=tc-4 a=present v=true c=ctx001
+e=tc-5 a=present v=true c=ctx001
+e=term-1 a=present v=true c=ctx001
+e=uc-1 a=present v=true c=ctx001
+e=uc-2 a=present v=true c=ctx001
+e=uc-3 a=present v=true c=ctx001
+e=wi-1 a=present v=true c=ctx001
+e=wi-2 a=present v=true c=ctx001
+e=wi-3 a=present v=true c=ctx001
+e=wi-4 a=present v=true c=ctx001
