@@ -4,11 +4,13 @@ import re
 import time
 from functools import lru_cache
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Iterable
 from urllib.parse import quote
 
-from fasthtml.common import Button, Details, Div, Li, Response, Span, Summary, Ul
+from fasthtml.common import A, Button, Details, Div, Li, Span, Summary, Ul
 from monsterui.all import UkIcon
+from starlette.responses import JSONResponse
 
 from .config import get_config
 from .helpers import content_location, content_url_for_slug, get_ref_content_mounts
@@ -27,42 +29,121 @@ def clear_caches() -> None:
         pass
 
 
-def refresh_refs_for_root(target_root: str = "", request=None):
+def _ref_snapshot(target_root: str = "") -> dict[str, dict[str, str]]:
+    from .content_backend import classify_root, git_backend_for
+
+    snapshot: dict[str, dict[str, str]] = {}
+    for alias, root in get_ref_content_mounts():
+        if target_root and alias != target_root:
+            continue
+        rc = classify_root(root)
+        if rc.kind == "plain" or rc.git_dir is None:
+            continue
+        try:
+            backend = git_backend_for(rc.git_dir, alias)
+            snapshot[alias] = {
+                ref.name: backend.resolve_ref(ref.name) or ""
+                for ref in backend.list_refs()
+            }
+        except Exception:
+            if target_root:
+                raise
+            continue
+    return snapshot
+
+
+def _changed_refs(before: dict[str, dict[str, str]], after: dict[str, dict[str, str]], target_root: str) -> tuple[list[str], list[str], list[str]]:
+    def display(alias: str, ref: str) -> str:
+        return ref if target_root else f"{alias}:{ref}"
+
+    changed: list[str] = []
+    added: list[str] = []
+    removed: list[str] = []
+    for alias in sorted(set(before) | set(after)):
+        old_refs = before.get(alias, {})
+        new_refs = after.get(alias, {})
+        changed.extend(display(alias, ref) for ref in sorted(set(old_refs) & set(new_refs)) if old_refs[ref] != new_refs[ref])
+        added.extend(display(alias, ref) for ref in sorted(set(new_refs) - set(old_refs)))
+        removed.extend(display(alias, ref) for ref in sorted(set(old_refs) - set(new_refs)))
+    return changed, added, removed
+
+
+def _refresh_refs_result(target_root: str = "") -> tuple[dict[str, Any], int]:
     target_root = (target_root or "").strip()
-    raw_url = str(getattr(request, "url", "")) if request is not None else ""
     from .core import logger
 
-    logger.info("git-ref refresh requested root={} url={}", target_root or "*", raw_url or "-")
-    clear_caches()
+    root_label = target_root or "*"
+    started = perf_counter()
+    logger.info("git-ref action start operation=refresh root={}", root_label)
     try:
         from .git_fetcher import fetch_all, fetch_clone_mounts, specs_from_config
 
+        before = _ref_snapshot(target_root)
         specs, mirror_root = specs_from_config()
-        if specs and not target_root:
-            logger.info("git-ref refreshing configured mirrors count={} root={}", len(specs), mirror_root)
-            fetch_all(specs, mirror_root)
-        clones = fetch_clone_mounts(target_root)
-        if clones:
-            logger.info("git-ref refreshing clone mounts count={} root={}", len(clones), target_root or "*")
+        selected_specs = [spec for spec in specs if not target_root or spec.name == target_root]
+        results = fetch_all(selected_specs, mirror_root)
+        results.update(fetch_clone_mounts(target_root))
+        clear_caches()
+        after = _ref_snapshot(target_root)
     except Exception as exc:
-        logger.warning("git-ref refresh failed: {}", exc)
-    clear_caches()
-    logger.info("git-ref refresh complete root={}", target_root or "*")
-    return Response(status_code=204)
+        elapsed_ms = (perf_counter() - started) * 1000
+        logger.warning("git-ref action result operation=refresh root={} outcome=failed elapsed_ms={:.1f} error={}", root_label, elapsed_ms, exc)
+        return {"ok": False, "root": root_label, "outcome": "failed", "message": "Refresh failed."}, 500
+
+    if target_root and target_root not in results:
+        elapsed_ms = (perf_counter() - started) * 1000
+        logger.warning("git-ref action result operation=refresh root={} outcome=missing elapsed_ms={:.1f}", root_label, elapsed_ms)
+        return {"ok": False, "root": root_label, "outcome": "missing", "message": f"No fetch source configured for {target_root}."}, 404
+
+    failed = sorted(alias for alias, ok in results.items() if not ok)
+    changed, added, removed = _changed_refs(before, after, target_root)
+    outcome = "failed" if failed else ("updated" if changed or added or removed else "unchanged")
+    elapsed_ms = round((perf_counter() - started) * 1000, 1)
+    payload: dict[str, Any] = {
+        "ok": not failed,
+        "root": root_label,
+        "outcome": outcome,
+        "changed_refs": changed,
+        "added_refs": added,
+        "removed_refs": removed,
+        "failed_roots": failed,
+        "elapsed_ms": elapsed_ms,
+    }
+    payload["message"] = "Refresh failed." if failed else ("Refs updated." if outcome == "updated" else "Refs already current.")
+    log = logger.warning if failed else logger.info
+    log(
+        "git-ref action result operation=refresh root={} outcome={} changed={} added={} removed={} failed={} elapsed_ms={}",
+        root_label, outcome, len(changed), len(added), len(removed), failed, elapsed_ms,
+    )
+    return payload, 502 if failed else 200
 
 
-def refresh_ref_tree(path: str, request=None):
+def refresh_refs_for_root(target_root: str = "", request: Any = None) -> JSONResponse:
+    payload, status = _refresh_refs_result(target_root)
+    return JSONResponse(payload, status_code=status, headers={"Cache-Control": "no-store"})
+
+
+def refresh_ref_tree(path: str, request: Any = None) -> JSONResponse:
     from .core import logger
 
     parsed = ref_from_current_path(path)
     raw_url = str(getattr(request, "url", "")) if request is not None else ""
     if not parsed:
-        logger.info("git-ref tree refresh skipped path={} url={} reason=no-ref", path, raw_url or "-")
-        return Response(status_code=204)
+        logger.info("git-ref action result operation=refresh-ref path={} outcome=invalid url={}", path, raw_url or "-")
+        return JSONResponse({"ok": False, "outcome": "invalid", "message": "No ref selected."}, status_code=400, headers={"Cache-Control": "no-store"})
     root_id, ref, active_parts = parsed
-    logger.info("git-ref tree refresh root={} ref={} active_parts={} url={}", root_id, ref, active_parts, raw_url or "-")
-    clear_caches()
-    return Response(status_code=204)
+    logger.info("git-ref action start operation=refresh-ref root={} ref={} active_parts={} url={}", root_id, ref, active_parts, raw_url or "-")
+    payload, status = _refresh_refs_result(root_id)
+    payload["ref"] = ref
+    if payload.get("ok"):
+        changed = set(payload.get("changed_refs", ())) | set(payload.get("added_refs", ()))
+        payload["ref_outcome"] = "updated" if ref in changed else "unchanged"
+    log = logger.info if payload.get("ok") else logger.warning
+    log(
+        "git-ref action result operation=refresh-ref root={} ref={} outcome={} status={}",
+        root_id, ref, payload.get("ref_outcome", payload.get("outcome", "failed")), status,
+    )
+    return JSONResponse(payload, status_code=status, headers={"Cache-Control": "no-store"})
 
 
 @lru_cache(maxsize=2)
@@ -105,29 +186,30 @@ def _ref_row_style(depth: int) -> str:
     return f"padding-left:{0.5 + depth * 0.9:.3f}rem"
 
 
-def _ref_leaf(name: str, kind: str, is_default: bool, alias: str, current: str, current_path: str | None, active: bool, storage_key: str, depth: int):
+def _ref_leaf(name: str, kind: str, is_default: bool, alias: str, current: str, current_path: str | None, active: bool, depth: int):
     url = _ref_target_url(alias, name, current_path if active else "")
     refresh = Button(
         UkIcon("refresh-cw", cls="w-3 h-3"),
         type="button",
-        title=f"Refresh file tree for {name}",
-        aria_label=f"Refresh file tree for {name}",
+        title=f"Fetch and refresh {name}",
+        aria_label=f"Fetch and refresh {name}",
         data_vyasa_ref_tree_refresh="true",
-        data_storage_key=storage_key,
         data_ref_name=name,
         data_sidebar_path=sidebar_path(alias, name),
         cls="vyasa-ref-refresh shrink-0",
     ) if kind == "branch" and active and name == current else ""
     return Li(Div(
-        Button(
+        A(
             Span(Span("✓" if name == current else "", data_ref_check="true"), Span(UkIcon("loader", cls="w-3 h-3 animate-spin"), data_ref_spinner="true", style="display:none"), cls="shrink-0", style="width:0.75rem;display:inline-flex;align-items:center;justify-content:center"),
             Span(name.split("/")[-1], cls="truncate"), Span(" (default)" if is_default else "", cls="opacity-60 text-xs"),
             UkIcon("tag", cls="w-3 h-3 opacity-50 ml-auto") if kind == "tag" else "",
-            type="button",
+            href=url,
+            hx_boost="true",
+            hx_target="#main-content",
+            hx_swap="outerHTML show:window:top settle:0.1s",
+            hx_push_url="true",
             data_vyasa_ref_select="true",
-            data_storage_key=storage_key,
             data_ref_name=name,
-            data_ref_url=url,
             data_sidebar_path=sidebar_path(alias, name),
             cls="vyasa-ref-select min-w-0 flex flex-1 items-center gap-2",
         ),
@@ -141,10 +223,10 @@ def _version_sort_key(name):
     return [(0, int(p)) if p.isdigit() else (1, p.lower()) for p in re.split(r"(\d+)", name) if p]
 
 
-def _render_tags_group(tags, alias, current, current_path, active, storage_key, depth=1):
+def _render_tags_group(tags, alias, current, current_path, active, depth=1):
     tags = sorted(tags, key=lambda t: _version_sort_key(t[0]), reverse=True)
     is_open = active and any(t[0] == current for t in tags)
-    items = [_ref_leaf(t[0], t[1], t[2], alias, current, current_path, active, storage_key, depth + 1) for t in tags]
+    items = [_ref_leaf(t[0], t[1], t[2], alias, current, current_path, active, depth + 1) for t in tags]
     return Li(Details(
         Summary(UkIcon("tags", cls="w-3.5 h-3.5 opacity-60 shrink-0"), Span("Tags", cls="truncate"), Span(str(len(tags)), cls="opacity-50 text-xs ml-auto"), cls="vyasa-ref-row vyasa-emphasis-control-option", style=_ref_row_style(depth)),
         Ul(*items),
@@ -152,7 +234,7 @@ def _render_tags_group(tags, alias, current, current_path, active, storage_key, 
     ))
 
 
-def _render_ref_nodes(node, alias, current, current_path, active, storage_key, open_parts, source_groups=frozenset(), depth=1):
+def _render_ref_nodes(node, alias, current, current_path, active, open_parts, source_groups=frozenset(), depth=1):
     out = []
     for seg in sorted(k for k in node if k != "_leaves"):
         is_open = bool(open_parts) and open_parts[0] == seg
@@ -160,11 +242,11 @@ def _render_ref_nodes(node, alias, current, current_path, active, storage_key, o
         icon = "hard-drive" if seg == "local" else ("radio-tower" if is_source else "folder")
         out.append(Li(Details(
             Summary(UkIcon(icon, cls="w-3.5 h-3.5 opacity-60 shrink-0"), Span(seg if is_source else f"{seg}/", cls="truncate"), cls="vyasa-ref-row vyasa-emphasis-control-option", style=_ref_row_style(depth)),
-            Ul(*_render_ref_nodes(node[seg], alias, current, current_path, active, storage_key, open_parts[1:] if is_open else [], source_groups, depth + 1)),
+            Ul(*_render_ref_nodes(node[seg], alias, current, current_path, active, open_parts[1:] if is_open else [], source_groups, depth + 1)),
             open=is_open,
         )))
     for item in node["_leaves"]:
-        out.append(_ref_leaf(item[0], item[1], item[2], alias, current, current_path, active, storage_key, depth))
+        out.append(_ref_leaf(item[0], item[1], item[2], alias, current, current_path, active, depth))
     return out
 
 
@@ -203,14 +285,13 @@ def navbar_ref_switcher(current_path=None, roles=None):
             continue
         active = alias == cur_root_id
         current = (cur_ref if active else "") or current_branch or default
-        storage_key = f"vyasa-ref:{alias}"
         open_parts = current.split("/")[:-1] if active else []
         branches = [r for r in refs if r[1] == "branch"]
         tags = [r for r in refs if r[1] == "tag"]
         source_groups = frozenset(r[3] for r in branches if len(r) > 3 and r[3])
-        ref_items = _render_ref_nodes(_build_ref_tree(branches), alias, current, current_path, active, storage_key, open_parts, source_groups)
+        ref_items = _render_ref_nodes(_build_ref_tree(branches), alias, current, current_path, active, open_parts, source_groups)
         if tags:
-            ref_items.append(_render_tags_group(tags, alias, current, current_path, active, storage_key))
+            ref_items.append(_render_tags_group(tags, alias, current, current_path, active))
         refresh_btn = Button(UkIcon("refresh-cw", cls="w-3.5 h-3.5"), type="button", title="Fetch & refresh branches", data_vyasa_ref_root_refresh="true", data_root=alias, cls="vyasa-ref-refresh shrink-0")
         home_btn = ""
         if current_branch:
@@ -219,7 +300,18 @@ def navbar_ref_switcher(current_path=None, roles=None):
                 relp = content_location(current_path)[3].as_posix()
                 rel = relp if relp and relp != "." else ""
             home_url = content_url_for_slug(f"{alias}/{rel}" if rel else alias)
-            home_btn = Button(UkIcon("house", cls="w-3.5 h-3.5"), type="button", title=f"Working tree ({current_branch})", data_vyasa_ref_home="true", data_storage_key=storage_key, data_ref_url=home_url, cls="vyasa-ref-refresh shrink-0")
+            home_btn = A(
+                UkIcon("house", cls="w-3.5 h-3.5"),
+                href=home_url,
+                title=f"Working tree ({current_branch})",
+                hx_boost="true",
+                hx_target="#main-content",
+                hx_swap="outerHTML show:window:top settle:0.1s",
+                hx_push_url="true",
+                data_vyasa_ref_select="true",
+                data_ref_name=f"working tree ({current_branch})",
+                cls="vyasa-ref-refresh shrink-0",
+            )
         root_blocks.append(Li(Details(
             Summary(UkIcon("folder-git-2", cls="w-3.5 h-3.5 opacity-60 shrink-0"), Span(alias or "(primary)", cls="truncate"), refresh_btn, home_btn, Span(current, cls="opacity-60 ml-auto truncate", style="max-width:10rem"), cls="vyasa-ref-row vyasa-emphasis-control-option", style=_ref_row_style(0)),
             Ul(*ref_items),

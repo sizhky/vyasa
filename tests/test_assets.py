@@ -7,6 +7,7 @@ def test_route_bundle_names_select_route_bundles():
     assert route_bundle_names(show_sidebar=True) == (
         "default_search.runtime",
         "bookmarks.runtime",
+        "git_refs.runtime",
     )
     assert route_bundle_names(
         show_sidebar=True,
@@ -16,6 +17,7 @@ def test_route_bundle_names_select_route_bundles():
         "default_search.runtime",
         "bookmarks.runtime",
         "annotations.runtime",
+        "git_refs.runtime",
     )
     assert route_bundle_names(slide_mode=True) == ("slides.runtime",)
 
@@ -70,6 +72,8 @@ def test_runtime_and_static_request_annotations_when_enabled():
     assert "annotations.runtime" not in disabled_bundles
     assert "annotations.runtime" in runtime_bundles
     assert "annotations.runtime" in static_bundles
+    assert "git_refs.runtime" in runtime_bundles
+    assert "git_refs.runtime" not in static_bundles
 
 
 def test_static_build_copies_extension_assets_and_references_requested_bundles(tmp_path):
@@ -90,6 +94,8 @@ def test_static_build_copies_extension_assets_and_references_requested_bundles(t
     assert "/static/extensions/tasks/tasks.js" in html
     assert "/static/extensions/annotations/annotations.css" in html
     assert "/static/extensions/annotations/annotations.js" in html
+    assert "/static/extensions/git_refs/git_refs.js" not in html
     assert (output / "static" / "extensions" / "blog_home" / "blog_home.css").exists()
     assert (output / "static" / "extensions" / "mermaid" / "mermaid.js").exists()
     assert (output / "static" / "extensions" / "tasks" / "tasks.js").exists()
+    assert (output / "static" / "extensions" / "git_refs" / "git_refs.js").exists()
