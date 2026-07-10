@@ -38,6 +38,9 @@ const TASKS_NODE_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-paper) 74%, var(--v
 const TASKS_GROUP_BG_ACTIVE = 'color-mix(in srgb, var(--vyasa-primary) 10%, transparent)';
 const TASKS_EDGE_FOCUS_OUT_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 42%, #ef4444 58%)';
 const TASKS_EDGE_FOCUS_IN_COLOR = 'color-mix(in srgb, var(--vyasa-primary) 40%, #22c55e 60%)';
+const TASKS_NODE_LABEL_FONT_SIZE = 16;
+const TASKS_EDGE_LABEL_NODE_SIZE_RATIO = 1.35;
+const TASKS_EDGE_LABEL_FOCUS_FONT_SIZE = 16;
 const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
 const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
 const TASKS_FILTER_PANEL_WIDTH = 440;
@@ -171,6 +174,18 @@ function tasksCssFontSize(value, fallback = '11px') {
     if (typeof value === 'number' && Number.isFinite(value)) return `${value}px`;
     if (typeof value === 'string' && value.trim()) return value.trim();
     return fallback;
+}
+
+function tasksProminentEdgeLabelScale(zoom, edgeFontSize, nodeFontSize = TASKS_NODE_LABEL_FONT_SIZE, fixed = false) {
+    const z = Number(zoom);
+    if (!Number.isFinite(z) || z <= 0) return 1;
+    if (fixed) return 1 / z;
+    const edgePx = Number.parseFloat(tasksCssFontSize(edgeFontSize, '12px'));
+    const nodePx = Number(nodeFontSize);
+    const maxCounterScale = Number.isFinite(edgePx) && edgePx > 0 && Number.isFinite(nodePx) && nodePx > 0
+        ? (nodePx * TASKS_EDGE_LABEL_NODE_SIZE_RATIO) / edgePx
+        : 1;
+    return Math.min(1 / z, maxCounterScale);
 }
 
 async function copyTasksText(text) {
@@ -3871,9 +3886,24 @@ async function renderTasksGraphs(rootElement = document) {
             const currentHighlightedFitNodes = React.useCallback(() => {
                 const selectedIds = currentSelectionIds();
                 if (!selectedIds.size) return [];
+                const baseEdges = graphBaseRef.current.edges || [];
                 const fitIds = new Set(selectedIds);
                 for (const selectedId of selectedIds) {
                     for (const descendantId of collectTasksGroupDescendantIds(selectedId, model)) fitIds.add(descendantId);
+                }
+                if (selectedNodeIdRef.current && selectedIds.has(selectedNodeIdRef.current)) {
+                    const selectedScopeIds = new Set([selectedNodeIdRef.current, ...collectTasksGroupDescendantIds(selectedNodeIdRef.current, model)]);
+                    const fitEdgeEndpointIds = new Set(selectedScopeIds);
+                    for (const edge of baseEdges) {
+                        if (selectedScopeIds.has(edge.source) || selectedScopeIds.has(edge.target)) {
+                            fitEdgeEndpointIds.add(edge.source);
+                            fitEdgeEndpointIds.add(edge.target);
+                        }
+                    }
+                    for (const endpointId of Array.from(fitEdgeEndpointIds)) {
+                        fitIds.add(endpointId);
+                        for (const descendantId of collectTasksGroupDescendantIds(endpointId, model)) fitIds.add(descendantId);
+                    }
                 }
                 return (graphBaseRef.current.nodes || []).filter((node) => (
                     node?.id
@@ -4886,6 +4916,8 @@ async function renderTasksGraphs(rootElement = document) {
                         ? focusedEdgeModes.get(edge.id)
                         : (highlightedEdgeIds.has(edge.id) ? 'selected' : 'dim');
                     const highlighted = mode !== 'dim';
+                    const focused = mode === 'focused-in' || mode === 'focused-out';
+                    const fixedFocusedLabel = Boolean(isFocusedNeighbor && focused);
                     const focusColor = mode === 'focused-in' ? TASKS_EDGE_FOCUS_IN_COLOR : TASKS_EDGE_FOCUS_OUT_COLOR;
                     const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
                     const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
@@ -4901,17 +4933,19 @@ async function renderTasksGraphs(rootElement = document) {
                     return {
                         ...edge,
                         data: { ...edge.data, highlightMode: mode, strokeMode },
-                        zIndex: mode === 'focused-in' || mode === 'focused-out' ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
+                        zIndex: focused ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
                         labelZIndex: tasksEdgeLabelZForMode(mode, TASKS_EDGE_LABEL_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_FOCUS_Z),
                         labelStyle: {
                             ...(edge.labelStyle || {}),
-                            fill: mode === 'focused-in' || mode === 'focused-out'
+                            fill: focused
                                 ? focusColor
                                 : (highlighted ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)'),
                             opacity: activeOpacity * (hoverDimsLabels
-                                ? ((mode === 'focused-in' || mode === 'focused-out') ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.05, edgeOpacity))
-                                : ((mode === 'focused-in' || mode === 'focused-out') ? tasksProminentEdgeOpacity() : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.18, edgeOpacity)))),
-                            fontWeight: (mode === 'focused-in' || mode === 'focused-out') ? 850 : (highlighted ? 750 : 600),
+                                ? (focused ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.05, edgeOpacity))
+                                : (focused ? tasksProminentEdgeOpacity() : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.18, edgeOpacity)))),
+                            fontSize: fixedFocusedLabel ? `${TASKS_EDGE_LABEL_FOCUS_FONT_SIZE}px` : (edge.labelStyle?.fontSize || hoverFontSize),
+                            counterScaleMode: fixedFocusedLabel ? 'fixed' : 'capped',
+                            fontWeight: focused ? 850 : (highlighted ? 750 : 600),
                         },
                         labelBgStyle: {
                             ...(edge.labelBgStyle || {}),
@@ -5133,7 +5167,7 @@ async function renderTasksGraphs(rootElement = document) {
             // subscription lives in this leaf that only focused edges mount.
             const TasksProminentEdgeLabel = ({ labelX, labelY, labelZIndex, labelBgPadding, labelBgBorderRadius, labelMaxWidth, labelStyle, labelBgStyle, fullLabel, displayLabel }) => {
                 const viewport = typeof rf.useViewport === 'function' ? rf.useViewport() : { zoom: 1 };
-                const labelScale = Number.isFinite(viewport?.zoom) && viewport.zoom > 0 ? 1 / viewport.zoom : 1;
+                const labelScale = tasksProminentEdgeLabelScale(viewport?.zoom, labelStyle.fontSize, TASKS_NODE_LABEL_FONT_SIZE, labelStyle.counterScaleMode === 'fixed');
                 return React.createElement(rf.EdgeLabelRenderer, null,
                     React.createElement('div', {
                         style: {
@@ -5540,7 +5574,7 @@ async function renderTasksGraphs(rootElement = document) {
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: nodeImage ? '10px' : undefined,
-                        fontSize: '16px',
+                        fontSize: `${TASKS_NODE_LABEL_FONT_SIZE}px`,
                         fontWeight: '600',
                         fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
                         textAlign: 'center',
@@ -7202,6 +7236,7 @@ async function renderTasksGraphs(rootElement = document) {
             };
             const RightRail = () => {
                 if (!selectedNodeId) return null;
+                if (hoverCardRightRail && groupHoverTooltip?.placement === 'rightRail') return null;
                 return window.React.createElement('div', {
                     style: {
                         position: 'absolute',
@@ -7328,7 +7363,9 @@ async function renderTasksGraphs(rootElement = document) {
                         borderRadius: '12px',
                         border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)',
                         background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
-                        boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
+                        boxShadow: rightRailPlacement
+                            ? '-18px 20px 50px rgba(0,0,0,0.24), 0 4px 16px rgba(0,0,0,0.16)'
+                            : '0 10px 30px rgba(0,0,0,0.12)',
                         backdropFilter: 'blur(8px)',
                         padding: '12px',
                     },
