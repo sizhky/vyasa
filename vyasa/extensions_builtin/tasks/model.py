@@ -56,7 +56,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                 continue
             key = line[:key_index].strip()
             value = line[key_index + 1:].strip()
-            if key in {"id", "title", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "kg_context_id", "default_open_depth"}:
+            if key in {"id", "title", "group_by", "default_group_by", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "kg_context_id", "default_open_depth"}:
                 config[key] = _read_string(value)
                 cursor += 1
                 continue
@@ -688,7 +688,7 @@ def _parse_items_graph(body: str) -> dict:
         if indent == 0 and _find_unquoted(line, ":") > 0 and _find_unquoted(line, "->") < 0:
             key, value = line.split(":", 1)
             key = key.strip()
-            if key in {"id", "title", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "kg_context_id"}:
+            if key in {"id", "title", "group_by", "default_group_by", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "kg_context_id"}:
                 graph[key] = _read_string(value.strip())
                 index += 1
                 continue
@@ -1028,7 +1028,7 @@ def _apply_kg_schema(graph: dict, current_path: str | Path | None) -> None:
         return
     schema_path = _resolve_required_source(current_path, schema_source)
     compiled = read_kg_pack(schema_path, str(graph.get("kg_context_id") or ""))
-    for key in ("id", "title", "default_projection", "view_projections", "slides", "hover_attrs", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "kg_context", "kg_contexts", "index_attributes", "filter_attributes", "card_states", "acl"):
+    for key in ("id", "title", "default_projection", "default_group_by", "default_color_by", "default_secondary_color_by", "default_open_depth", "edge_color_by", "edge_label_from", "view_projections", "slides", "hover_attrs", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "kg_context", "kg_contexts", "index_attributes", "filter_attributes", "card_states", "acl"):
         if compiled.get(key) and not graph.get(key):
             graph[key] = compiled[key]
     graph["groups"].extend(compiled.get("groups", []))
@@ -1133,6 +1133,9 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         graph["title"] = config["title"]
     if "default_color_by" in config and "default_color_by" not in graph:
         graph["default_color_by"] = config["default_color_by"]
+    group_by_config = config.get("default_group_by") or config.get("group_by")
+    if group_by_config and "default_group_by" not in graph:
+        graph["default_group_by"] = _read_string_list(group_by_config)
     if "default_secondary_color_by" in config and "default_secondary_color_by" not in graph:
         graph["default_secondary_color_by"] = config["default_secondary_color_by"]
     if "secondary_color_by" in config and "secondary_color_by" not in graph:
@@ -1211,6 +1214,8 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
             graph["edge_kinds"] = {**edge_kinds, **graph.get("edge_kinds", {})}
     _apply_palette_source(graph, current_path, "color_palette_source", "color_palette", "node_color_palettes", "color_by")
     _apply_palette_source(graph, current_path, "edge_color_palette_source", "edge_color_palette", "edge_color_palettes", "edge_color_by")
+    if graph.get("group_by") and not graph.get("default_group_by"):
+        graph["default_group_by"] = _read_string_list(str(graph["group_by"]))
     _apply_default_design_palette(graph)
     apply_edge_kind_defaults(graph)
     apply_edge_label_fallbacks(graph)
@@ -1237,6 +1242,7 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "frozen": graph.get("frozen", {}),
         "color_by": graph.get("color_by", ""),
         "default_color_by": graph.get("default_color_by", ""),
+        "default_group_by": graph.get("default_group_by", []),
         "default_secondary_color_by": graph.get("default_secondary_color_by", "") or graph.get("secondary_color_by", ""),
         "image_by": graph.get("image_by", ""),
         "default_image_by": graph.get("default_image_by", ""),

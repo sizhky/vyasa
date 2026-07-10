@@ -915,3 +915,49 @@ yolo:
     assert.equal(exactPaste.edgeAnimationTickSteps, 14);
     assert.equal(exactPaste.edgeAnimationTickDuration, 1.8);
 });
+
+test('tasksReuseGraphElements returns prev array when nothing changed', async () => {
+    const { tasksReuseGraphElements } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+    const handleLayout = { source: [], target: [] };
+    const prev = [
+        { id: 'a', data: { label: 'A', handleLayout, highlightMode: 'dim' }, style: { opacity: 0.2 }, zIndex: 1 },
+        { id: 'b', data: { label: 'B', handleLayout, highlightMode: 'selected' }, style: { opacity: 1 }, zIndex: 2 },
+    ];
+    const next = prev.map((node) => ({ ...node, data: { ...node.data }, style: { ...node.style } }));
+    assert.equal(tasksReuseGraphElements(prev, next), prev);
+});
+
+test('tasksReuseGraphElements keeps identity for unchanged elements only', async () => {
+    const { tasksReuseGraphElements } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+    const prev = [
+        { id: 'a', data: { highlightMode: 'dim' }, style: { opacity: 0.2 } },
+        { id: 'b', data: { highlightMode: 'dim' }, style: { opacity: 0.2 } },
+    ];
+    const next = [
+        { id: 'a', data: { highlightMode: 'dim' }, style: { opacity: 0.2 } },
+        { id: 'b', data: { highlightMode: 'selected' }, style: { opacity: 1 } },
+    ];
+    const merged = tasksReuseGraphElements(prev, next);
+    assert.notEqual(merged, prev);
+    assert.equal(merged[0], prev[0]);
+    assert.equal(merged[1], next[1]);
+});
+
+test('tasksReuseGraphElements treats reorders and deep changes as changes', async () => {
+    const { tasksReuseGraphElements } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+    const prev = [
+        { id: 'a', data: { nested: { x: 1 } } },
+        { id: 'b', data: { nested: { x: 2 } } },
+    ];
+    const reordered = [prev[1], prev[0]];
+    const mergedReorder = tasksReuseGraphElements(prev, reordered);
+    assert.notEqual(mergedReorder, prev);
+    assert.equal(mergedReorder[0], prev[1]);
+    // Same values but a fresh nested object ref one level below data: must NOT reuse.
+    const deepChanged = [{ id: 'a', data: { nested: { x: 1 } } }, prev[1]];
+    const mergedDeep = tasksReuseGraphElements(prev, deepChanged);
+    assert.equal(mergedDeep[0], deepChanged[0]);
+    // Length changes fall through to next as-is.
+    assert.equal(tasksReuseGraphElements(prev, [prev[0]])[0], prev[0]);
+    assert.equal(tasksReuseGraphElements([], reordered), reordered);
+});

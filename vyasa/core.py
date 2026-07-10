@@ -1,5 +1,6 @@
 import re
 import os
+import sys
 import json
 import base64
 import time
@@ -424,9 +425,18 @@ async def favicon_svg_icon():
 async def extension_static_asset(extension_id: str, asset_path: str):
     from .assets import extension_asset_path
 
+    start = time.perf_counter()
     path = extension_asset_path(extension_id, asset_path)
     if path.exists() and path.is_file():
-        return FileResponse(path)
+        response = FileResponse(path)
+        logger.info(
+            "extension static asset extension={} path={} bytes={} elapsed_ms={:.2f}",
+            extension_id,
+            asset_path,
+            path.stat().st_size,
+            (time.perf_counter() - start) * 1000,
+        )
+        return response
     return Response(status_code=404)
 
 
@@ -567,6 +577,25 @@ def _iter_watch_dirs():
     return dirs
 
 
+def _watch_targets():
+    """`(paths, recursive)` for the file watcher, chosen per platform.
+
+    macOS/Windows watch each root recursively: FSEvents / ReadDirectoryChangesW
+    recurse natively with one cheap watch per root, so registration is ~instant
+    regardless of tree size. Walking into a non-recursive per-dir watch set there
+    instead made registration scale with directory count — tens of seconds on a
+    large content tree (see `_ReloadHub`).
+
+    Linux keeps the walked, pruned, non-recursive set: a recursive inotify watch
+    registers one descriptor per subdir and blows past `fs.inotify.max_user_watches`.
+    Changes under excluded dirs still surface as events but are dropped by
+    `_reload_event_str`, so recursive watching adds no spurious reloads.
+    """
+    if sys.platform.startswith("linux"):
+        return _iter_watch_dirs(), False
+    return [str(root) for root in _live_reload_roots()], True
+
+
 def _reload_event_str(changes):
     """Build the SSE event payload for a change set, or None if nothing relevant."""
     if not any(_is_live_reload_path(Path(path)) for _, path in changes):
@@ -601,47 +630,57 @@ class _ReloadHub:
     so N browser tabs meant N full watch sets over the content tree — the multiplier
     that exhausted the inotify limit in prod. This keeps a single watcher alive while
     anyone is subscribed.
+
+    The watcher runs in a background OS thread, not an asyncio task: registering the
+    non-recursive watch set is a synchronous, per-directory syscall storm (a kqueue FD
+    per path on macOS) that froze the event loop for tens of seconds on large content
+    trees, starving every other request until it finished. Keeping it off the loop and
+    marshalling change batches back with `call_soon_threadsafe` fixes that.
     """
 
     def __init__(self):
         self._subscribers = set()
-        self._task = None
+        self._thread = None
+        self._stop = None
+        self._loop = None
 
     def subscribe(self):
         queue = asyncio.Queue()
         self._subscribers.add(queue)
-        if self._task is None or self._task.done():
-            self._task = asyncio.create_task(self._run())
+        if self._thread is None or not self._thread.is_alive():
+            self._loop = asyncio.get_running_loop()
+            self._stop = threading.Event()
+            self._thread = threading.Thread(target=self._run, args=(self._stop,), daemon=True)
+            self._thread.start()
         return queue
 
     def unsubscribe(self, queue):
         self._subscribers.discard(queue)
-        if not self._subscribers and self._task is not None:
-            self._task.cancel()
-            self._task = None
+        if not self._subscribers and self._stop is not None:
+            self._stop.set()  # watch() exits within its poll interval; thread then ends
+            self._thread = None
+            self._stop = None
 
     def _broadcast(self, message):
         for queue in self._subscribers:
             queue.put_nowait(message)
 
-    async def _run(self):
-        from watchfiles import awatch
+    def _run(self, stop):
+        from watchfiles import watch
 
-        while self._subscribers:
-            stop = asyncio.Event()
+        while not stop.is_set():
             try:
-                async for changes in awatch(*_iter_watch_dirs(), debounce=400, recursive=False, stop_event=stop):
+                paths, recursive = _watch_targets()
+                for changes in watch(*paths, debounce=400, recursive=recursive, stop_event=stop):
                     message = _reload_event_str(changes)
-                    if message is not None:
-                        self._broadcast(message)
-                    if _changes_add_watchable_dir(changes):
-                        break  # new dir appeared; rebuild the watch set
-            except asyncio.CancelledError:
-                raise
+                    if message is not None and self._loop is not None:
+                        self._loop.call_soon_threadsafe(self._broadcast, message)
+                    if not recursive and _changes_add_watchable_dir(changes):
+                        break  # non-recursive: a new dir isn't watched yet, rebuild the set
             except OSError as exc:
                 # e.g. still over the inotify limit; back off instead of crash-looping.
                 logger.error("live reload watcher failed: {}", exc)
-                await asyncio.sleep(30)
+                stop.wait(30)
 
 
 _reload_hub = None
@@ -1069,17 +1108,24 @@ def _start_git_fetcher():
         from .git_fetcher import clone_mount_roots, poll_forever, specs_from_config
 
         specs, mirror_root = specs_from_config()
-        if not specs and not clone_mount_roots():
+        include_clone_mounts = get_config().get_git_fetch_clone_roots()
+        clone_roots = clone_mount_roots() if include_clone_mounts else []
+        if not specs and not clone_roots:
             return  # nothing fetchable; stay quiet
         _git_fetcher_started = True
         threading.Thread(
             target=poll_forever,
             args=(specs, mirror_root),
-            kwargs={"interval": interval},
+            kwargs={"interval": interval, "include_clone_mounts": include_clone_mounts},
             name="vyasa-git-fetcher",
             daemon=True,
         ).start()
-        logger.info("in-process git fetcher started interval={}s mirrors={}", interval, len(specs))
+        logger.info(
+            "in-process git fetcher started interval={}s mirrors={} clone_roots={}",
+            interval,
+            len(specs),
+            include_clone_mounts,
+        )
     except Exception as exc:
         logger.warning("failed to start in-process git fetcher: {}", exc)
 

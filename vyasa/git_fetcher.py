@@ -48,6 +48,10 @@ def ensure_mirror(spec: MirrorSpec, mirror_root: Path) -> bool:
     ok, msg = _run_git("clone", "--mirror", spec.url, str(path))
     if not ok:
         logger.warning("git mirror clone failed for {}: {}", spec.name, msg)
+    else:
+        from .helpers import invalidate_content_mounts_cache
+
+        invalidate_content_mounts_cache()  # the new mirror is mountable now
     return ok
 
 
@@ -117,14 +121,22 @@ def fetch_clone_mounts(target_root: str = "", *, max_workers: int = 4) -> dict[s
         return dict(results)
 
 
-def poll_forever(specs: list[MirrorSpec], mirror_root: Path, *, interval: float = 30.0, max_workers: int = 4) -> None:
+def poll_forever(
+    specs: list[MirrorSpec],
+    mirror_root: Path,
+    *,
+    interval: float = 30.0,
+    max_workers: int = 4,
+    include_clone_mounts: bool = True,
+) -> None:
     """Run non-overlapping fetch cycles. The next cycle starts `interval`
     seconds after the previous one *finishes*, so slow fetches never stack."""
     logger.info("git fetcher polling {} mirror(s) every {}s -> {}", len(specs), interval, mirror_root)
     while True:
         started = time.time()
         results = fetch_all(specs, mirror_root, max_workers=max_workers)
-        results.update(fetch_clone_mounts(max_workers=max_workers))
+        if include_clone_mounts:
+            results.update(fetch_clone_mounts(max_workers=max_workers))
         failed = [name for name, ok in results.items() if not ok]
         logger.info("fetch cycle done in {:.1f}s ({} ok, {} failed)", time.time() - started, len(results) - len(failed), len(failed))
         time.sleep(interval)
@@ -156,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         results = fetch_all(specs, mirror_root, max_workers=args.workers)
         results.update(fetch_clone_mounts(max_workers=args.workers))
         return 0 if all(results.values()) else 1
-    poll_forever(specs, mirror_root, interval=args.interval, max_workers=args.workers)
+    poll_forever(specs, mirror_root, interval=args.interval, max_workers=args.workers, include_clone_mounts=True)
     return 0
 
 

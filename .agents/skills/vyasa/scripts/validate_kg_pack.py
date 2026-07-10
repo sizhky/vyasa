@@ -173,30 +173,61 @@ def parse_schema(path):
     return relations, sources, fold_mode, grammar_ref
 
 
-def parse_context_edges(pack):
-    """Scan *.context @edges blocks -> list of (ctx, src, tgt, rel, op)."""
+def parse_contexts(pack):
+    """Scan *.context files -> list of context dicts, ordered by seq.
+
+    Each dict: {file, id, seq, edges: [(src, tgt, rel, op)], attrs: {key: {value:
+    set(node_ids)}}}. Mirrors the renderer's _read_context closely enough for
+    integrity + grammar checks; captions and slides are ignored. A pack may be
+    pure-context (no kg.edges at all) — contexts then carry every edge.
+    """
     out = []
     for cf in sorted(pack.glob("*.context")):
-        ctx, section = cf.stem, None
+        ctx = {"file": cf.name, "id": cf.stem, "seq": None, "edges": [], "attrs": {}}
+        section, akey = None, None
         for line in cf.read_text(encoding="utf-8").splitlines():
             s = line.strip()
             if not s or s.startswith("#"):
                 continue
             if s.startswith("@context"):
                 m = re.search(r"\bid\s*=\s*(\S+)", s)
-                ctx, section = (m.group(1) if m else ctx), "@context"
+                if m:
+                    ctx["id"] = m.group(1)
+                m = re.search(r"\bseq\s*=\s*(\d+)", s)
+                if m:
+                    ctx["seq"] = int(m.group(1))
+                section = "@context"
                 continue
             if s.startswith("@"):
-                section = s.split()[0]
+                section, akey = s.split()[0], None
                 continue
             if section == "@edges" and "->" in s:
                 left, right = s.split("->", 1)
                 parts = right.split()
                 src, tgt = left.strip(), parts[0]
-                rel = parts[1] if len(parts) > 1 else "rel"
+                rel = parts[1] if len(parts) > 1 and "=" not in parts[1] else "rel"
                 op = re.search(r"\bop\s*=\s*(\S+)", s)
-                out.append((ctx, src, tgt, rel, op.group(1) if op else "+"))
-    return out
+                ctx["edges"].append((src, tgt, rel, op.group(1) if op else "+"))
+            elif section == "@attrs":
+                # header `status:` is unindented; value lines `todo: id id` follow
+                if not line[:1].isspace() and s.endswith(":"):
+                    akey = s[:-1].strip()
+                    ctx["attrs"].setdefault(akey, {})
+                elif akey and ":" in s:
+                    val, ids = s.split(":", 1)
+                    ctx["attrs"][akey].setdefault(val.strip(), set()).update(ids.split())
+        out.append(ctx)
+    # order by seq (missing seq sorts last; flagged as an error in main)
+    return sorted(out, key=lambda c: (c["seq"] is None, c["seq"] or 0))
+
+
+def _override_attr_value(attr_values, key, node, value):
+    """Move `node` to `value` under `key`, dropping any prior value — a context's
+    @attrs assignment overrides the base kg.attrs value, it does not add to it."""
+    buckets = attr_values.setdefault(key, {})
+    for ids in buckets.values():
+        ids.discard(node)
+    buckets.setdefault(value, set()).add(node)
 
 
 def parse_node_attr_values(path):
@@ -409,11 +440,16 @@ def main():
         print(f"ERROR: KG pack directory not found: {pack}")
         return 1
 
+    contexts = parse_contexts(pack)
+
+    # kg.edges is optional for a pure-context pack (all edges live in *.context);
+    # a pack with neither kg.edges nor contexts has no edge source at all.
     need = {"kg.schema": pack / "kg.schema",
             "kg.nodes": pack / "kg.nodes",
-            "kg.edges": pack / "kg.edges",
             "kg.attrs": pack / "kg.attrs",
             "kg.palette": pack / "kg.palette"}
+    if not contexts:
+        need["kg.edges"] = pack / "kg.edges"
     for name, p in need.items():
         if not p.exists():
             errors.append(f"missing pack file: {name}")
@@ -423,10 +459,29 @@ def main():
         return 1
 
     node_ids = parse_nodes(need["kg.nodes"])
-    edge_ids, edges = parse_edges(need["kg.edges"])
+    edges_path = pack / "kg.edges"
+    edge_ids, edges = parse_edges(edges_path) if edges_path.exists() else (set(), [])
     node_refs, edge_refs = parse_attr_refs(need["kg.attrs"])
     relations, sources, fold_mode, grammar_ref = parse_schema(need["kg.schema"])
-    ctx_edges = parse_context_edges(pack)
+
+    # context sanity: every context needs a unique integer seq (renderer orders
+    # by seq); @attrs assignments must point at pool nodes
+    seqs = {}
+    for c in contexts:
+        if c["seq"] is None:
+            errors.append(f"context '{c['file']}': @context line missing seq=")
+        elif c["seq"] in seqs:
+            errors.append(f"context '{c['file']}': duplicate seq={c['seq']} "
+                          f"(also used by {seqs[c['seq']]})")
+        else:
+            seqs[c["seq"]] = c["file"]
+        for key, vals in c["attrs"].items():
+            for value, ids in vals.items():
+                for nid in sorted(ids - node_ids):
+                    errors.append(f"context '{c['id']}' @attrs: {key} '{value}' "
+                                  f"references undefined node '{nid}'")
+    ctx_edges = [(c["id"], src, tgt, rel, op)
+                 for c in contexts for src, tgt, rel, op in c["edges"]]
 
     if not node_ids:
         errors.append("kg.nodes defines no nodes")
@@ -439,8 +494,11 @@ def main():
         if relations and rel not in relations:
             warnings.append(f"edge {eid}: relation '{rel}' is not declared in @relations")
 
-    # context edges: referential integrity + retraction sanity (fold_mode=delta)
+    # context edges: referential integrity + retraction sanity (fold_mode=delta).
+    # `folded` replays base + every context in seq order — the edge set the
+    # renderer shows at the latest context, so grammar can be checked on it.
     asserted = {(s, r, t) for _, s, t, r in edges}          # base assertions
+    folded = set(asserted)
     for ctx, src, tgt, rel, op in ctx_edges:
         if src not in node_ids:
             errors.append(f"context '{ctx}' edge: source '{src}' is not a defined node")
@@ -456,8 +514,11 @@ def main():
             if (src, rel, tgt) not in asserted:
                 errors.append(f"context '{ctx}': op=- retracts {src}-{rel}->{tgt} "
                               f"which was never asserted (dangling retraction)")
+            if fold_mode == "delta":
+                folded.discard((src, rel, tgt))
         else:
             asserted.add((src, rel, tgt))                   # later contexts can retract this
+            folded.add((src, rel, tgt))
 
     for nid in sorted(node_refs - node_ids):
         errors.append(f"kg.attrs references undefined node '{nid}'")
@@ -505,7 +566,19 @@ def main():
             dst = attr_values.setdefault(k, {})
             for v, ids in vmap.items():
                 dst.setdefault(v, set()).update(ids)
-        gerrs, gwarns = check_grammar(grammar, node_ids, edges, attr_values)
+        # fold context @attrs over the base in seq order (last write wins) and
+        # check grammar on the folded edge set — the law must hold at the fold
+        # the renderer shows, not just on kg.edges
+        if contexts:
+            for c in contexts:
+                for key, vals in c["attrs"].items():
+                    for value, ids in vals.items():
+                        for nid in ids:
+                            _override_attr_value(attr_values, key, nid, value)
+            grammar_edges = [(f"{s}->{t}", s, t, r) for (s, r, t) in sorted(folded)]
+        else:
+            grammar_edges = edges
+        gerrs, gwarns = check_grammar(grammar, node_ids, grammar_edges, attr_values)
         errors.extend(gerrs)
         warnings.extend(gwarns)
 
@@ -524,7 +597,9 @@ def main():
     if errors:
         print(f"\nFAILED: {len(errors)} error(s), {len(warnings)} warning(s).")
         return 1
-    print(f"OK: {len(node_ids)} nodes, {len(edge_ids)} edges, "
+    ctx_note = (f", {len(contexts)} context(s) folding to {len(folded)} edges"
+                if contexts else "")
+    print(f"OK: {len(node_ids)} nodes, {len(edge_ids)} edges{ctx_note}, "
           f"{len(relations)} relations. {len(warnings)} warning(s).")
     return 0
 

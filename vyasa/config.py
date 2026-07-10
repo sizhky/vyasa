@@ -11,7 +11,7 @@ Priority: .vyasa file > environment variables > defaults
 import os
 import hashlib
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from .helpers import slug_to_title
 from .theme_colors import normalize_theme_primary
 from .theme_extensions import (
@@ -100,7 +100,7 @@ class VyasaConfig:
                 self._config = {}
                 self._loaded_config_path = None
     
-    def get(self, key: str, env_var: str, default: any = None) -> any:
+    def get(self, key: str, env_var: str, default: Any = None) -> Any:
         """Get configuration value with priority: config file > env var > default.
         
         Args:
@@ -173,6 +173,18 @@ class VyasaConfig:
             return float(raw)
         except (TypeError, ValueError):
             return 30.0
+
+    def get_git_fetch_clone_roots(self) -> bool:
+        """Whether the in-process fetcher should fetch working-clone roots.
+
+        Keep this off by default: fetching a live working tree from the web
+        process can starve request handling on local/dev servers. Use
+        `vyasa-fetch` as a sidecar for clone roots that need automatic updates.
+        """
+        value = self.get('git_fetch_clone_roots', 'VYASA_GIT_FETCH_CLONE_ROOTS', False)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
 
     def get_git_repos(self) -> list[tuple[str, str]]:
         """Upstream repos to mirror, as (name, url). Accepts a TOML table

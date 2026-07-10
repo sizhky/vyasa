@@ -1,6 +1,6 @@
 ---
 org:
-  - "[[Divami]]"
+  - "[[Personal]]"
 projects:
-  - "[[US-Bank]]"
+  - "[[Vyasa]]"
 ---

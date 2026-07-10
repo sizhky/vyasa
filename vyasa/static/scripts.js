@@ -909,6 +909,25 @@ async function refreshVyasaRefSwitcher() {
 }
 window.__vyasaRefreshRefSwitcher = refreshVyasaRefSwitcher;
 
+async function loadLazyRefSwitcher(details) {
+    if (!details || details.dataset.vyasaRefSwitcherLazy !== 'true') return;
+    if (details.dataset.vyasaRefSwitcherLoaded === 'loading') return;
+    details.dataset.vyasaRefSwitcherLoaded = 'loading';
+    try {
+        const response = await fetch(details.dataset.vyasaRefSwitcherUrl || `/_vyasa/ref-switcher?current_path=${encodeURIComponent(currentPostsSearchPath() || '')}`, { credentials: 'same-origin', cache: 'no-store' });
+        if (!response.ok) return;
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = (await response.text()).trim();
+        const next = wrapper.querySelector('.vyasa-ref-switcher');
+        if (!next) return;
+        next.open = true;
+        details.replaceWith(next);
+    } finally {
+        details.dataset.vyasaRefSwitcherLoaded = 'done';
+    }
+}
+window.__vyasaLoadRefSwitcher = loadLazyRefSwitcher;
+
 async function navigateVyasaRef(url) {
     if (!url) return;
     if (window.htmx?.ajax) {
@@ -1479,6 +1498,8 @@ document.body.addEventListener('htmx:afterSwap', async function(event) {
     }
     if (event.target?.id === 'posts-sidebar') {
         window.__vyasaPostsSidebarWasOpen = false;
+        const mobileBody = document.querySelector('#mobile-posts-panel .vyasa-mobile-panel-body');
+        if (mobileBody) mobileBody.innerHTML = event.target.innerHTML;
     }
     initFolderChevronState();
     initFolderHoverExpand(event.target || document);
@@ -1567,6 +1588,12 @@ function initMobileMenus() {
 
     if (!window.__vyasaMobileMenusBound) {
         document.addEventListener('click', (event) => {
+            const lazyRefSummary = event.target.closest('details[data-vyasa-ref-switcher-lazy="true"] > summary');
+            if (lazyRefSummary) {
+                event.preventDefault();
+                loadLazyRefSwitcher(lazyRefSummary.parentElement);
+                return;
+            }
             if (event.target.closest('#close-mobile-posts')) {
                 event.preventDefault();
                 const postsPanel = document.getElementById('mobile-posts-panel');

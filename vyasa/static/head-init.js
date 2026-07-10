@@ -1,4 +1,56 @@
 (function () {
+    function phaseLog(label, payload = {}) {
+        const params = new URLSearchParams(window.location.search || '');
+        if (!params.has('tasks_perf') && !params.has('tasks_debug')) return;
+        window.__vyasaTasksPerf = window.__vyasaTasksPerf || {};
+        window.__vyasaTasksPerf.fileLogReset = window.__vyasaTasksPerf.fileLogReset || new Set();
+        const host = window.location.host;
+        const path = window.location.pathname;
+        const key = `${host}${path}`;
+        const reset = !window.__vyasaTasksPerf.fileLogReset.has(key);
+        window.__vyasaTasksPerf.fileLogReset.add(key);
+        const body = JSON.stringify({
+            label,
+            at: new Date().toISOString(),
+            host,
+            path,
+            reset,
+            payload: { now: Math.round(performance.now()), readyState: document.readyState, ...payload },
+        });
+        fetch('/api/tasks/perf-log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+            keepalive: body.length < 60000,
+        }).catch(() => {});
+    }
+
+    function resourceSnapshot() {
+        const resources = performance.getEntriesByType?.('resource') || [];
+        const origin = window.location.origin;
+        return resources
+            .filter((entry) => {
+                const name = entry.name || '';
+                if (/\/api\/tasks\/perf-log/.test(name)) return false;
+                return name.startsWith(origin) || /cdn\.jsdelivr|unpkg|esm\.sh|cdnjs/.test(name);
+            })
+            .slice(-40)
+            .map((entry) => ({
+                name: String(entry.name || '').replace(origin, ''),
+                initiatorType: entry.initiatorType || '',
+                start: Math.round(entry.startTime || 0),
+                fetchStart: Math.round(entry.fetchStart || 0),
+                requestStart: Math.round(entry.requestStart || 0),
+                responseStart: Math.round(entry.responseStart || 0),
+                responseEnd: Math.round(entry.responseEnd || 0),
+                duration: Math.round(entry.duration || 0),
+                transferSize: entry.transferSize || 0,
+            }));
+    }
+
+    window.__vyasaTasksPhaseLog = phaseLog;
+    phaseLog('head-init:start');
+
     function applyStoredThemePreset(franken) {
         const presets = window.__VYASA_THEME_PRESETS__ || {};
         const meta = window.__VYASA_THEME_EXTENSION_META__ || {};
@@ -83,4 +135,14 @@
     }
 
     localStorage.setItem('__FRANKEN__', JSON.stringify(franken));
+    phaseLog('head-init:end', { resources: resourceSnapshot() });
+    document.addEventListener('readystatechange', () => {
+        phaseLog(`document:${document.readyState}`, { resources: resourceSnapshot() });
+    });
+    window.addEventListener('load', () => {
+        phaseLog('window:load', {
+            navigation: performance.getEntriesByType?.('navigation')?.[0]?.toJSON?.() || null,
+            resources: resourceSnapshot(),
+        });
+    }, { once: true });
 })();

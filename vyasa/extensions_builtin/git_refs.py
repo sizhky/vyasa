@@ -12,7 +12,7 @@ class GitRefsExtension(VyasaExtensionBase):
 
 
 def _navbar_control(context):
-    return git_refs.navbar_ref_switcher(context.get("current_path"), roles=context.get("roles"))
+    return git_refs.navbar_ref_switcher_placeholder(context.get("current_path"), roles=context.get("roles"))
 
 
 def _roles_from_request(request):

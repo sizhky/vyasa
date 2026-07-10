@@ -309,6 +309,24 @@ def test_navbar_ref_switcher_discovers_all_git_roots(site):
     core._git_roots_with_refs.cache_clear()
 
 
+def test_navbar_ref_switcher_placeholder_defers_ref_rows(site):
+    import vyasa.core as core
+    from fasthtml.common import to_xml
+    from vyasa import git_refs
+
+    work = site.parent / "repo"
+    _git(work, "tag", "v1")
+    core._git_roots_with_refs.cache_clear()
+
+    html = to_xml(git_refs.navbar_ref_switcher_placeholder("repo/docs/page"))
+
+    assert 'data-vyasa-ref-switcher-lazy="true"' in html
+    assert "/_vyasa/ref-switcher?current_path=repo%2Fdocs%2Fpage" in html
+    assert "Loading branches" in html
+    assert ">feature<" not in html and ">v1<" not in html
+    core._git_roots_with_refs.cache_clear()
+
+
 def test_ref_tree_uses_remote_icon_for_multi_remote_group():
     import vyasa.core as core
     from fasthtml.common import Ul, to_xml

@@ -9,6 +9,7 @@ Use this when graph is small enough to live comfortably inside fenced `items` or
 ---
 title: Sprint Slice
 default_open_depth: -1
+default_group_by: status
 default_color_by: status
 width: 80vw
 height: 70vh
@@ -36,7 +37,7 @@ T-002, T-010 -> T-003
 ## Frontmatter
 
 - Frontmatter is optional YAML at the top of the fence.
-- Supported renderer keys include `title`, `default_open_depth`, `default_color_by`, `default_projection`, `base_view_label`, `width`, `min_height`, `height`, `node-card-width`, `hover-font-size`, `color_by`, `color_palette_source`, `filter_attributes`, `filter_whitelist`, `filter_blacklist`, `hover_attrs`, `view_projections`, `edge_color_by`, `edge_color_palette`, `edge_label_from`, and `items_schema`.
+- Supported renderer keys include `title`, `default_open_depth`, `default_group_by`, `group_by`, `default_color_by`, `base_view_label`, `width`, `min_height`, `height`, `node-card-width`, `hover-font-size`, `color_by`, `color_palette_source`, `filter_attributes`, `filter_whitelist`, `filter_blacklist`, `hover_attrs`, `view_projections`, `edge_color_by`, `edge_color_palette`, `edge_label_from`, and `items_schema`.
 - Size keys should use full CSS lengths such as `760px`, `70vh`, `80vw`, or `calc(85vh - 57px)`.
 - Do not use bare numbers like `height: 760`.
 - `default_open_depth` is an integer: `0` folds all groups, `1` opens root groups, larger values open deeper levels, `-1` opens all groups.
@@ -49,7 +50,8 @@ T-002, T-010 -> T-003
 ## Projection Views
 
 ```yaml
-default_projection: city
+default_group_by: city
+default_color_by: city
 view_projections:
   - id: city
     label: City View
@@ -65,9 +67,9 @@ view_projections:
 ```
 
 - `groups_from` accepts one attr or a list for nested groups.
-- `default_projection` picks the initial projection tab; invalid ids fall back to the base view.
+- The default view is the authored base graph plus `default_group_by` / `group_by` and `default_color_by`.
 - `base_view_label` renames the authored non-projection tab. Omit it and UI uses `Default`.
-- Projection groups are synthesized from item attrs.
+- Projection views are read-only named alternatives; projection groups are synthesized from item attrs.
 
 ## Body Syntax
 

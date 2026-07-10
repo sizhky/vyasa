@@ -1,5 +1,6 @@
 .uk-list-bullet .vyasa-task-card::before, .uk-list-decimal .vyasa-task-card::before { content: none !important; }
 .vyasa-task-card { --vyasa-task-surface: color-mix(in srgb, var(--vyasa-paper-low) 96%, var(--vyasa-callout-accent) 4%); --vyasa-task-outline: color-mix(in srgb, var(--vyasa-outline-ghost) 84%, var(--vyasa-callout-accent) 16%); list-style: none; margin: 0.26rem 0; padding: 0.42rem 0.78rem 0.62rem; border: 1px solid var(--vyasa-task-outline); border-radius: 10px !important; background: var(--vyasa-task-surface); box-shadow: 0 8px 18px -24px color-mix(in srgb, var(--vyasa-ink) 28%, transparent); position: relative; }
+.react-flow__node.vyasa-tasks-node--expanded-group { background: transparent !important; background-color: transparent !important; background-image: none !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--vyasa-ink) 52%, transparent), 0 24px 64px color-mix(in srgb, var(--vyasa-primary) 10%, transparent) !important; }
 .dark .vyasa-task-card { --vyasa-task-surface: color-mix(in srgb, var(--vyasa-paper-low) 90%, var(--vyasa-callout-accent) 10%); }
 .vyasa-task-card::after { content: ""; position: absolute; inset: 0; border-left: 1.5px solid color-mix(in srgb, var(--vyasa-callout-accent) 34%, transparent); border-radius: inherit; pointer-events: none; opacity: 0.85; }
 .vyasa-task-link-badge { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.14rem; min-width: 0.8rem; height: 0.8rem; color: color-mix(in srgb, currentColor 58%, transparent); pointer-events: none; opacity: 0.72; }
@@ -125,7 +126,8 @@ todo .deadline { margin-left: 0.45rem; }
 .react-flow__edgelabel-renderer {
     pointer-events: none;
 }
-button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
+button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"],
+button[data-vyasa-tasks-action="toggleHoverCards"][data-vyasa-hover-cards-off="true"] {
     color: #fecaca !important;
     border-color: #ef4444 !important;
     background: #991b1b !important;
@@ -145,12 +147,16 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"] {
 .vyasa-tasks-hovering-edge-labels .react-flow__edgelabel-renderer {
     z-index: 1600 !important;
 }
+html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:not(.vyasa-tasks-edge-label--active) {
+    display: none !important;
+}
 .react-flow__node.vyasa-tasks-node--background,
 .react-flow__node.vyasa-tasks-node--passive {
     pointer-events: none;
 }
+.react-flow__node.vyasa-tasks-node--expanded-group[data-vyasa-group-toggle-hover="true"],
 .react-flow__node[data-vyasa-group-toggle-hover="true"] {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--vyasa-ink) 52%, transparent), 0 24px 64px color-mix(in srgb, var(--vyasa-primary) 10%, transparent) !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-ink) 64%, transparent), 0 24px 72px color-mix(in srgb, var(--vyasa-primary) 16%, transparent) !important;
 }
 .react-flow__node.vyasa-tasks-node--passive [data-vyasa-task-control="true"] {
     pointer-events: auto;

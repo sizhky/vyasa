@@ -21,6 +21,7 @@ from vyasa.config import reload_config
 import sys
 import json
 from pathlib import Path
+from typing import cast
 
 SKILL_SCRIPT_DIR = Path(__file__).resolve().parents[1] / ".agents/skills/vyasa/scripts"
 if str(SKILL_SCRIPT_DIR) not in sys.path:
@@ -47,7 +48,7 @@ def test_kg_pack_names_are_stable():
 
 def test_kg_pack_bulk_attr_patch_is_single_kv_for_many_records():
     patch = BulkAttrPatch(
-        selector=RecordSelector(kind=RecordKind.NODE, ids=("a", "b")),
+        selector=RecordSelector(kind=cast(RecordKind, RecordKind.NODE), ids=("a", "b")),
         key="status",
         value="done",
     )
@@ -131,7 +132,8 @@ n-api -> n-ui | relation: enables
     assert "nodes=kg.nodes" in conversion.schema_text
     assert "attrs=kg.attrs" in conversion.schema_text
     assert "\tedges=kg.edges" in conversion.schema_text
-    assert "overview:\n\tsource=base\n\tgroup_by,color_by=status" in conversion.schema_text
+    assert "group_by=status\ncolor_by=status" in conversion.schema_text
+    assert "overview:" not in conversion.schema_text
     assert conversion.nodes_text.startswith("n1: API")
     assert "status:\n  done: n1" in conversion.attrs_text
     assert "owner:\n  eng: n1" in conversion.attrs_text
@@ -140,7 +142,7 @@ n-api -> n-ui | relation: enables
 
 def test_items_parser_loads_kg_schema_pack(tmp_path):
     (tmp_path / "roadmap.kg.schema").write_text(
-        """@graph id=roadmap title=Roadmap initial_view=delivery hover_attrs=owner,status card_states="Not Done,Done,Deferred/Cancelled"
+        """@graph id=roadmap title=Roadmap initial_view=delivery group_by=owner,status color_by=owner hover_attrs=owner,status card_states="Not Done,Done,Deferred/Cancelled"
 
 @sources
 nodes=roadmap.kg.nodes
@@ -220,7 +222,9 @@ items_schema: roadmap.kg.schema
     assert model["filter_attributes"] == ["status", "owner"]
     assert model["node_color_palettes"]["status"] == {"todo": "#f00", "done": "#0f0"}
     assert model["view_projections"][0]["caption"] == "Track delivery"
-    assert model["default_projection"] == "delivery"
+    assert model["default_projection"] == ""
+    assert model["default_group_by"] == ["owner", "status"]
+    assert model["default_color_by"] == "owner"
     assert model["card_states"] == ["Not Done", "Done", "Deferred/Cancelled"]
 
 
@@ -247,7 +251,7 @@ delivery:
 
     graph = read_kg_pack(tmp_path / "roadmap.kg.schema")
 
-    assert graph["default_projection"] == "delivery"
+    assert graph["default_projection"] == ""
     assert graph["hover_attrs"] == ["owner", "status"]
 
 
