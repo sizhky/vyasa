@@ -5453,25 +5453,8 @@ async function renderTasksGraphs(rootElement = document) {
                     style: { border: 'none', background: 'transparent', padding: 0, width: '10px', height: '10px', cursor: 'pointer' },
                 })) : null;
                 const noteBadge = data?.__has_note__
-                    ? renderTasksNodeLinkBadge(React, { kinds: ['note'], title: 'Has note', top: 'auto', bottom: isChecked ? '30px' : '8px', right: isChecked ? '8px' : (canExpand ? '34px' : '8px') })
+                    ? renderTasksNodeLinkBadge(React, { kinds: ['note'], title: 'Has note', top: 'auto', bottom: '8px', right: canExpand ? '34px' : '8px' })
                     : null;
-                const doneBadge = isChecked ? React.createElement('div', {
-                    style: {
-                        position: 'absolute',
-                        right: canExpand ? '34px' : '8px',
-                        bottom: '8px',
-                        padding: '2px 6px',
-                        borderRadius: '999px',
-                        background: `color-mix(in srgb, ${taskStateColor} 76%, white 24%)`,
-                        color: '#052e16',
-                        fontSize: '9px',
-                        fontWeight: 800,
-                        letterSpacing: '0.08em',
-                        textTransform: 'uppercase',
-                        boxShadow: `0 0 0 1px color-mix(in srgb, ${taskStateColor} 36%, transparent)`,
-                        zIndex: 2,
-                    },
-                }, taskStateLabel) : null;
                 const handleExpand = (e) => {
                     e.stopPropagation();
                     if (egoMode) return;
@@ -5490,7 +5473,6 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                     },
                         checkboxControl,
-                        doneBadge,
                         noteBadge,
                         ...renderHandles('target'),
                         React.createElement('div', { style: { flex: 1, minHeight: '48px', position: 'relative' } }),
@@ -5520,7 +5502,6 @@ async function renderTasksGraphs(rootElement = document) {
                 },
                     tasksColorOverlay(React, data?.__color_levels__, data?.width, data?.height),
                     checkboxControl,
-                    doneBadge,
                     noteBadge,
                     linkKinds.length ? renderTasksNodeLinkBadge(React, { right: canExpand ? '32px' : '10px', kinds: linkKinds }) : null,
                     ...renderHandles('target'),
@@ -5614,7 +5595,7 @@ async function renderTasksGraphs(rootElement = document) {
                             return;
                         }
                         if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName))) return;
-                        if (!widgetFocused && !(key === 't' && groupToggleHoverIdRef.current)) return;
+                        if (!widgetFocused && !(key === 't' && groupToggleHoverIdRef.current) && key !== 'h') return;
                         if (key === 'f' && event.shiftKey) {
                             event.preventDefault();
                             window.openTasksFullscreen?.(widgetId);

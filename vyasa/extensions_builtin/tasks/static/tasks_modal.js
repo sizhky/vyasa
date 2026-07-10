@@ -115,7 +115,7 @@ export function createTasksModalController({
         const topRightControls = document.createElement('div');
         topRightControls.className = 'absolute top-2 right-2 z-10 flex items-center gap-1';
         topRightControls.innerHTML = options.ego
-            ? `<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">${tasksHeaderButtonHtml(fullscreenId, 'toggleHelp', '?', 'Show graph shortcuts and gestures')}${tasksHeaderButtonHtml(fullscreenId, 'fit', 'F', 'Fit view')}${tasksHeaderButtonHtml(fullscreenId, 'toggleEdges', 'E', 'Toggle edges')}</div>`
+            ? `<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">${tasksHeaderButtonHtml(fullscreenId, 'toggleHelp', '?', 'Show graph shortcuts and gestures')}${tasksHeaderButtonHtml(fullscreenId, 'fit', 'F', 'Fit view')}${tasksHeaderButtonHtml(fullscreenId, 'toggleHoverCards', 'H', 'Toggle hover cards')}${tasksHeaderButtonHtml(fullscreenId, 'toggleEdges', 'E', 'Toggle edges')}</div>`
             : tasksHeaderControlsHtml(fullscreenId, false);
         const closeBtn = document.createElement('button');
         closeBtn.type = 'button';
