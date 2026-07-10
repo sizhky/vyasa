@@ -439,6 +439,14 @@ test('Knowledge Graph hover highlights connected endpoint nodes', () => {
     assert.ok(source.includes("mode === 'neighbor'"));
 });
 
+test('Knowledge Graph hover edges override faint global opacity', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes('opacity: tasksProminentEdgeOpacity() * branchOpacity, fontWeight: 800'));
+    assert.ok(source.includes('fillOpacity: 0.9'));
+    assert.ok(source.includes('strokeWidth: Math.max(4.75, tasksEdgeStrokeWidthForMode'));
+    assert.ok(source.includes('highlighted ? 0.86 : 0.04'));
+});
+
 test('expanded root group keeps collapsed top-left anchored', () => {
     const rect = tasksExpandedRootRect({ x: 100, y: 200, width: 250, height: 80 }, { width: 650, height: 280 });
     assert.deepEqual(rect, { x: 100, y: 200, width: 650, height: 280, baseWidth: 250, baseHeight: 80 });

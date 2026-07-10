@@ -4736,7 +4736,7 @@ async function renderTasksGraphs(rootElement = document) {
                                             : (node.data?.__kind__ === 'group'
                                                 ? tasksGroupBackground(displayColor, '', TASKS_GROUP_BG_ACTIVE, { mode: 'transparent', intensity: isHoveredNode ? 12 : 8 })
                                                 : tasksNodeBackground(nodeColor, '', colorMix, TASKS_NODE_BG_ACTIVE, false)),
-                                        boxShadow: `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 ${isHoveredNode ? 2 : 1}px color-mix(in srgb, ${displayColor} ${isHoveredNode ? 70 : 58}%, transparent), 0 0 ${isHoveredNode ? 18 : 22}px ${isHoveredNode ? 4 : 5}px color-mix(in srgb, ${displayColor} ${isHoveredNode ? 40 : 34}%, transparent)`,
+                                        boxShadow: `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 ${isHoveredNode ? 3 : 2}px color-mix(in srgb, ${displayColor} ${isHoveredNode ? 76 : 68}%, transparent), 0 0 ${isHoveredNode ? 24 : 32}px ${isHoveredNode ? 6 : 8}px color-mix(in srgb, ${displayColor} ${isHoveredNode ? 48 : 46}%, transparent)`,
                                     },
                                     zIndex,
                                 };
@@ -4751,9 +4751,9 @@ async function renderTasksGraphs(rootElement = document) {
                                 return {
                                     ...edge,
                                     data: { ...edge.data, highlightMode: 'selected', strokeMode },
-                                    labelStyle: { ...(edge.labelStyle || {}), fill: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity },
-                                    labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.72 },
-                                    style: { ...edge.style, stroke: edgeColor, opacity: tasksApplyEdgeOpacity(0.98, edgeOpacity) * branchOpacity, strokeWidth: tasksEdgeStrokeWidthForMode(strokeMode, edgeAnimationEnabled), strokeLinecap: 'round' },
+                                    labelStyle: { ...(edge.labelStyle || {}), fill: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, fontWeight: 800 },
+                                    labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.9 },
+                                    style: { ...edge.style, stroke: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, strokeWidth: Math.max(4.75, tasksEdgeStrokeWidthForMode(strokeMode, edgeAnimationEnabled)), strokeLinecap: 'round' },
                                     animated: edgeAnimationEnabled,
                                     className: edgeAnimationClassName,
                                 };
@@ -4873,9 +4873,9 @@ async function renderTasksGraphs(rootElement = document) {
                             boxShadow: (mode === 'selected' || mode === 'selected-focus')
                                 ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
                                 : (mode === 'neighbor-focus'
-                                    ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 60%, transparent), 0 0 20px 5px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 34%, transparent)`
+                                    ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 3px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 72%, transparent), 0 0 30px 8px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 46%, transparent)`
                                     : (mode === 'neighbor'
-                                        ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 1px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 54%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 26%, transparent)`
+                                        ? `${checkedShadow !== 'none' ? `${checkedShadow}, ` : ''}0 0 0 2px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 66%, transparent), 0 0 28px 7px color-mix(in srgb, ${displayColor || nodeColor || 'var(--vyasa-primary)'} 40%, transparent)`
                                         : checkedShadow)),
                         },
                         zIndex,
@@ -4911,7 +4911,7 @@ async function renderTasksGraphs(rootElement = document) {
                             opacity: activeOpacity * (hoverDimsLabels
                                 ? ((mode === 'focused-in' || mode === 'focused-out') ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.05, edgeOpacity))
                                 : ((mode === 'focused-in' || mode === 'focused-out') ? tasksProminentEdgeOpacity() : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.18, edgeOpacity)))),
-                            fontWeight: (mode === 'focused-in' || mode === 'focused-out') ? 800 : 600,
+                            fontWeight: (mode === 'focused-in' || mode === 'focused-out') ? 850 : (highlighted ? 750 : 600),
                         },
                         labelBgStyle: {
                             ...(edge.labelBgStyle || {}),
@@ -4921,8 +4921,8 @@ async function renderTasksGraphs(rootElement = document) {
                                     ? 'color-mix(in srgb, var(--vyasa-paper) 80%, #ef4444 20%)'
                                     : TASKS_EDGE_LABEL_BG),
                             fillOpacity: hoverDimsLabels
-                                ? ((mode === 'focused-in' || mode === 'focused-out') ? 0.96 : (highlighted ? 0.72 : 0.04))
-                                : ((mode === 'focused-in' || mode === 'focused-out') ? 0.96 : (highlighted ? 0.72 : 0.04)),
+                                ? ((mode === 'focused-in' || mode === 'focused-out') ? 1 : (highlighted ? 0.86 : 0.04))
+                                : ((mode === 'focused-in' || mode === 'focused-out') ? 1 : (highlighted ? 0.86 : 0.04)),
                         },
                         style: {
                             ...edge.style,
