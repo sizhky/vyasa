@@ -1,0 +1,5 @@
+e1: n1 -> n3 voices
+e2: n3 -> n2 addresses
+e3: n3 -> n4 asks-about
+e4: n3 -> n5 asks-about
+e5: n3 -> n6 asks-about

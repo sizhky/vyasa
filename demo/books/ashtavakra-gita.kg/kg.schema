@@ -1,0 +1,18 @@
+@graph id=ashtavakra-gita title="Ashtavakra Gita"
+default_color_by=kind
+edge_color_by=relation
+edge_label_from=label
+hover_attrs=kind,text
+default_open_depth=-1
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+base:
+	edges=kg.edges
+palette=kg.palette
+
+@relations
+voices label=voices
+addresses label=addresses
+asks-about label="asks about"

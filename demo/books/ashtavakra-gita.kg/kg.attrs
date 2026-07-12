@@ -1,0 +1,5 @@
+@node_attrs
+kind:
+  person: n1 n2
+  verse: n3
+  subject: n4 n5 n6
