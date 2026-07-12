@@ -1374,7 +1374,10 @@ document.body.addEventListener('htmx:afterSwap', async function(event) {
     if (event.target?.id === 'posts-sidebar') {
         window.__vyasaPostsSidebarWasOpen = false;
         const mobileBody = document.querySelector('#mobile-posts-panel .vyasa-mobile-panel-body');
-        if (mobileBody) mobileBody.innerHTML = event.target.innerHTML;
+        if (mobileBody) {
+            mobileBody.innerHTML = event.target.innerHTML;
+            window.htmx?.process(mobileBody);
+        }
     }
     initFolderChevronState();
     initFolderHoverExpand(event.target || document);

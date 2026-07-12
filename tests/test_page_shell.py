@@ -66,6 +66,12 @@ def test_sidebar_title_click_hides_docked_sidebar_and_pulses_nav_icon():
     assert 'data_sidebar="toc"' in toc_source
 
 
+def test_mobile_sidebar_processes_copied_htmx_controls():
+    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+
+    assert "window.htmx?.process(mobileBody)" in source
+
+
 def test_theme_toggle_icon_keeps_ink_color_on_focus():
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 
