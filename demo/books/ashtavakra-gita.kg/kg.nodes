@@ -1,7 +1,43 @@
-n1: Janaka
-n2: Ashtavakra
-n3: Janaka's opening inquiry
-	text="Teach me this, O Lord! how can Knowledge be acquired? How can Liberation come? How is renunciation achieved?"
-n4: Knowledge
-n5: Liberation
-n6: renunciation
+q1: Janaka asks how Knowledge can be acquired
+q2: Janaka asks how Liberation can come
+q3: Janaka asks how renunciation can be achieved
+q4: Aspiring for Liberation calls for rejecting objects of the senses as poison
+q5: Aspiring for Liberation calls for seeking forgiveness, straightforwardness, kindness, cheerfulness, and truth as nectar
+q6: You are neither earth, water, fire, air, nor space
+q7: Freedom is attained by knowing Self as witness of all these and embodiment of pure Consciousness
+q8: Detaching from body and abiding in Consciousness makes you immediately happy, peaceful, and free from bondage
+q9: You belong to neither Brāhmaṇa, caste, nor station in life (āśrama)
+q10: You are not perceivable by the senses
+q11: Being unattached, formless, and witness of all, be happy
+c1: Knowledge
+c2: Liberation
+c3: renunciation
+c4: objects of the senses
+c5: poison
+c6: forgiveness
+c7: straightforwardness
+c8: kindness
+c9: cheerfulness
+c10: truth
+c11: nectar
+c12: earth
+c13: water
+c14: fire
+c15: air
+c16: space
+c17: freedom
+c18: Self
+c19: witness
+c20: all these
+c21: Consciousness
+c22: body
+c23: happy
+c24: peaceful
+c25: bondage
+c26: Brāhmaṇa
+c27: caste
+c28: station in life (āśrama)
+c29: senses
+c30: unattached
+c31: formless
+c32: all
