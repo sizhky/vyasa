@@ -822,19 +822,31 @@ function bindFolderHoverExpand(details) {
         return;
     }
     details.dataset.hoverExpandBound = 'true';
+    let enterTimer = null;
     let leaveTimer = null;
     details.addEventListener('mouseenter', () => {
         if (!postsHoverExpandEnabled()) return;
+        if (enterTimer) {
+            window.clearTimeout(enterTimer);
+        }
         if (leaveTimer) {
             window.clearTimeout(leaveTimer);
             leaveTimer = null;
         }
-        details.dataset.hoverOpened = 'true';
-        details.open = true;
-        loadSidebarFolderBranch(details);
+        enterTimer = window.setTimeout(() => {
+            enterTimer = null;
+            if (!details.matches(':hover') || !postsHoverExpandEnabled()) return;
+            details.dataset.hoverOpened = 'true';
+            details.open = true;
+            loadSidebarFolderBranch(details);
+        }, 600);
     });
     details.addEventListener('mouseleave', () => {
         if (!postsHoverExpandEnabled()) return;
+        if (enterTimer) {
+            window.clearTimeout(enterTimer);
+            enterTimer = null;
+        }
         leaveTimer = window.setTimeout(() => {
             if (details.matches(':hover')) return;
             if (details.dataset.hoverOpened === 'true') {
