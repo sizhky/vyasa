@@ -716,11 +716,11 @@ def get_adjacent_posts(root: Path, current_path: str | Path, abbreviations=None)
         return None, None
 
     def _item(path: Path):
-        rel = path.relative_to(root).with_suffix("")
+        slug = content_slug_for_path(path) or path.relative_to(root).with_suffix("").as_posix()
         return {
             "title": get_post_title(path, abbreviations=abbreviations),
-            "href": content_url_for_slug(rel.as_posix()),
-            "static_href": content_url_for_slug(rel.as_posix(), suffix=".html"),
+            "href": content_url_for_slug(slug),
+            "static_href": content_url_for_slug(slug, suffix=".html"),
         }
 
     prev_item = _item(siblings[idx - 1]) if idx > 0 else None

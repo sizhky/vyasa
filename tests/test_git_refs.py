@@ -288,6 +288,24 @@ def test_slide_runtime_caches_swapped_ref_pages():
     assert "cacheCurrentSlide();" in source[source.index("window.history.pushState(null, '', href);") :]
 
 
+def test_slide_runtime_supports_vim_navigation_and_delayed_first_reveal():
+    source = Path("vyasa/extensions_builtin/slides/static/present.js").read_text(encoding="utf-8")
+
+    assert "key === 'h' && follow('left')" in source
+    assert "key === 'j' && (revealNextUnit() || follow('right'))" in source
+    assert "key === 'k' && (hidePreviousUnit() || follow('left'))" in source
+    assert "key === 'l' && follow('right')" in source
+    assert "revealTimers.push(window.setTimeout(() =>" in source
+    assert "if (!units.some((unit) => unit.dataset.revealState === 'visible')) revealNextUnit(root);" in source
+    assert "slideDebug('keydown'" in source
+    assert "slideDebug('table-snapshot'" in source
+    assert "syncSlideProgressBar" in source
+    assert "units[0]?.dataset.revealKind === 'heading' ? units.slice(1) : units" in source
+    assert "vyasa-zen-slide-progress" in Path("vyasa/content_routes.py").read_text(encoding="utf-8")
+    init_source = source.split("const initReveal =", 1)[1].split("const follow =", 1)[0]
+    assert init_source.index("if (body.dataset.revealInitialized === '1')") < init_source.index("clearRevealTimers();")
+
+
 def test_navbar_ref_switcher_discovers_all_git_roots(site):
     import vyasa.core as core
     from fasthtml.common import to_xml

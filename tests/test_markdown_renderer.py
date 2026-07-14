@@ -7,7 +7,8 @@ from vyasa.extensions import refresh_extension_runtime
 from fasthtml.common import to_xml
 
 from vyasa.config import reload_config
-from vyasa.extensions_builtin.markdown.renderer import MarkdownRenderer, RenderContext, from_md
+from vyasa.extensions_builtin.markdown.renderer import MarkdownRenderer, RenderContext, _render_markdown_fragment, from_md
+from vyasa.extensions_builtin.slides.deck import present_href_for_anchor
 from vyasa.helpers import expand_markdown_includes_for_reading
 
 
@@ -91,6 +92,22 @@ def test_rendered_heading_emits_doc_heading_class():
     html = to_xml(from_md("## Cave\n\ntext"))
 
     assert 'class="vyasa-doc-heading' in html
+
+
+def test_present_heading_link_keeps_exact_deck_offset():
+    markdown = "# Deck\n\nIntro\n\n## First\n\nBody\n\n## Second\n\nBody"
+
+    assert present_href_for_anchor(markdown, "deck", "deck") == "/slides/deck/slide-2"
+    assert present_href_for_anchor(markdown, "deck", "second") == "/slides/deck/slide-4"
+
+
+def test_slide_tables_keep_post_table_typography():
+    css = Path("vyasa/extensions_builtin/slides/static/present.css").read_text(encoding="utf-8")
+
+    assert ".vyasa-zen-slide-body table," in css
+    assert ".vyasa-zen-slide-body .uk-table { font-size: 1.15rem !important; }" in css
+    assert ".vyasa-zen-slide-body .uk-list-bullet > li::before { display: none !important; }" in css
+    assert 'class="uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle my-6"' in _render_markdown_fragment("| A |\n|---|\n| B |")
 
 
 def test_relative_markdown_link_preserves_fragment():

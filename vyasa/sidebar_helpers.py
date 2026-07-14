@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from typing import Any
 
 from fasthtml.common import *
 from monsterui.all import *
@@ -84,8 +85,8 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
                 type="button",
                 cls="vyasa-sidebar-action-button vyasa-sidebar-hover-toggle",
                 data_sidebar_hover_toggle="true",
-                data_tooltip="Toggle folder hover expand",
-                aria_label="Toggle folder hover expand",
+                data_tooltip="Toggle folder hover expand (Shift+1)",
+                aria_label="Toggle folder hover expand (Shift+1)",
                 onclick="event.preventDefault(); event.stopPropagation(); window.togglePostsHoverExpand && window.togglePostsHoverExpand(); return false;",
             )
         )
@@ -102,7 +103,7 @@ def collapsible_sidebar(icon, title, items_list, is_open=False, data_sidebar=Non
     return Details(Summary(*summary_content, cls=summary_classes, style="margin: 0 0 0.5rem 0;"), Div(*extra_content, list_node, cls=content_classes, id=content_id, style="will-change: auto;"), open=is_open, data_sidebar=data_sidebar, cls=f"vyasa-sidebar-card vyasa-sidebar-card-{sidebar_kind}", style="will-change: auto;")
 
 
-def sidebar_section(title, *content, is_open=True, data_section=None, body_cls="pt-2", title_suffix=None):
+def sidebar_section(title, *content, is_open=True, data_section=None, body_cls="pt-2", title_suffix: Any = None):
     section_kind = (data_section or title or "section").strip().lower().replace(" ", "-")
     return Details(
         Summary(

@@ -10,6 +10,7 @@ from vyasa.helpers import (
     _unique_anchor,
     content_path_for_slug,
     content_slug_for_path,
+    get_adjacent_posts,
     get_content_mounts,
     text_to_anchor,
 )
@@ -101,6 +102,7 @@ def test_ignore_cwd_as_root_exposes_only_vyasa_roots(monkeypatch, tmp_path):
     (root / "notes").mkdir()
     (root / "local.md").write_text("# Local\n", encoding="utf-8")
     (extra / "page.md").write_text("# Page\n", encoding="utf-8")
+    (extra / "z-next.md").write_text("# Next\n", encoding="utf-8")
     (root / ".vyasa").write_text(
         'ignore_cwd_as_root = true\nvyasa_roots = ["../notes"]\n',
         encoding="utf-8",
@@ -114,6 +116,10 @@ def test_ignore_cwd_as_root_exposes_only_vyasa_roots(monkeypatch, tmp_path):
     assert content_path_for_slug("notes/page", ".md") == (extra / "page.md").resolve()
     assert extra.resolve() in get_tree_entries(root, root, True, set(), (".md",))
     assert root / "local.md" not in get_tree_entries(root, root, True, set(), (".md",))
+    _, next_item = get_adjacent_posts(extra, "page")
+    assert next_item is not None
+    assert next_item["href"] == "/posts/notes/z-next"
+    assert next_item["static_href"] == "/posts/notes/z-next.html"
 
 
 def test_heading_permalink_and_explicit_id_are_used_in_html_and_toc():

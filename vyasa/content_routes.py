@@ -501,6 +501,11 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
                     )
                     for index, unit in enumerate(reveal_units)
                 ],
+                Div(
+                    Div(cls="vyasa-zen-slide-progress-track", aria_hidden="true"),
+                    cls="vyasa-zen-slide-progress", role="progressbar",
+                    aria_label="Slide segments revealed", aria_value_min="0", aria_live="polite",
+                ),
                 cls="vyasa-zen-slide-body",
                 data_reveal_mode="stagger",
                 data_reveal_policy=reveal_config.policy,

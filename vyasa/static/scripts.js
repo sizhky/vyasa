@@ -687,9 +687,12 @@ function syncPostsHoverToggleButtons(root = document) {
     root.querySelectorAll?.('[data-sidebar-hover-toggle="true"]').forEach((button) => {
         button.dataset.hoverExpandEnabled = enabled ? 'true' : 'false';
         button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-        const tooltip = enabled ? 'Disable folder hover expand' : 'Enable folder hover expand';
+        const tooltip = `${enabled ? 'Disable' : 'Enable'} folder hover expand (Shift+1)`;
         button.dataset.tooltip = tooltip;
         button.setAttribute('aria-label', tooltip);
+    });
+    root.querySelectorAll?.('[data-folder-pin="true"]').forEach((button) => {
+        button.hidden = !enabled;
     });
 }
 
@@ -702,6 +705,51 @@ function togglePostsHoverExpand(root = document) {
     syncPostsHoverToggleButtons(root || document);
 }
 window.togglePostsHoverExpand = togglePostsHoverExpand;
+
+function readPinnedFolderPaths() {
+    try {
+        return new Set(JSON.parse(localStorage.getItem('vyasa:pinnedFolders') || '[]'));
+    } catch (err) {
+        return new Set();
+    }
+}
+
+function syncFolderPins(root = document) {
+    const pins = readPinnedFolderPaths();
+    root.querySelectorAll?.('details[data-folder="true"][data-folder-path]').forEach((folder) => {
+        const path = folder.dataset.folderPath;
+        const pinned = pins.has(path);
+        const hasPinnedChild = Array.from(pins).some((pin) => pin.startsWith(`${path}/`));
+        folder.dataset.folderPinned = pinned ? 'true' : 'false';
+        folder.dataset.folderPinnedChild = hasPinnedChild ? 'true' : 'false';
+        const button = folder.querySelector(':scope > summary [data-folder-pin="true"]');
+        button?.setAttribute('aria-pressed', pinned ? 'true' : 'false');
+        button?.setAttribute('aria-label', pinned ? 'Unpin folder' : 'Pin folder open');
+        if (pinned || hasPinnedChild) {
+            folder.open = true;
+            loadSidebarFolderBranch(folder);
+        }
+    });
+}
+
+function pulseControl(button) {
+    button.classList.remove('vyasa-sidebar-toggle-pulse');
+    void button.offsetWidth;
+    button.classList.add('vyasa-sidebar-toggle-pulse');
+    window.setTimeout(() => button.classList.remove('vyasa-sidebar-toggle-pulse'), 1600);
+}
+
+function toggleFolderPin(button) {
+    const details = button?.closest?.('details[data-folder="true"]');
+    const path = details?.dataset.folderPath;
+    if (!details || !path) return;
+    const pins = readPinnedFolderPaths();
+    pins.has(path) ? pins.delete(path) : pins.add(path);
+    try { localStorage.setItem('vyasa:pinnedFolders', JSON.stringify(Array.from(pins))); } catch (err) {}
+    syncFolderPins(details.closest('#posts-sidebar') || document);
+    pulseControl(button);
+}
+window.toggleFolderPin = toggleFolderPin;
 
 function initPostsSidebarAutoReveal() {
     const postSidebars = document.querySelectorAll('details[data-sidebar="posts"]');
@@ -822,22 +870,42 @@ function bindFolderHoverExpand(details) {
         return;
     }
     details.dataset.hoverExpandBound = 'true';
+    const hoverTarget = details.querySelector(':scope > summary .vyasa-tree-link');
+    if (!hoverTarget) return;
+    let enterTimer = null;
     let leaveTimer = null;
-    details.addEventListener('mouseenter', () => {
+    hoverTarget.addEventListener('mouseenter', () => {
         if (!postsHoverExpandEnabled()) return;
+        if (enterTimer) {
+            window.clearTimeout(enterTimer);
+        }
         if (leaveTimer) {
             window.clearTimeout(leaveTimer);
             leaveTimer = null;
         }
-        details.dataset.hoverOpened = 'true';
-        details.open = true;
-        loadSidebarFolderBranch(details);
+        enterTimer = window.setTimeout(() => {
+            enterTimer = null;
+            if (!hoverTarget.matches(':hover') || !postsHoverExpandEnabled()) return;
+            details.dataset.hoverOpened = 'true';
+            details.open = true;
+            loadSidebarFolderBranch(details);
+        }, 600);
+    });
+    hoverTarget.addEventListener('mouseleave', () => {
+        if (enterTimer) {
+            window.clearTimeout(enterTimer);
+            enterTimer = null;
+        }
     });
     details.addEventListener('mouseleave', () => {
         if (!postsHoverExpandEnabled()) return;
+        if (enterTimer) {
+            window.clearTimeout(enterTimer);
+            enterTimer = null;
+        }
         leaveTimer = window.setTimeout(() => {
             if (details.matches(':hover')) return;
-            if (details.dataset.hoverOpened === 'true') {
+            if (details.dataset.hoverOpened === 'true' && details.dataset.folderPinned !== 'true' && details.dataset.folderPinnedChild !== 'true') {
                 details.open = false;
             }
         }, 120);
@@ -846,8 +914,11 @@ function bindFolderHoverExpand(details) {
 
 function initFolderHoverExpand(root = document) {
     const postsSidebar = root?.id === 'posts-sidebar' ? root : root?.querySelector?.('#posts-sidebar') || document.getElementById('posts-sidebar');
-    if (!postsSidebar || !postsHoverExpandEnabled()) return;
+    if (!postsSidebar) return;
+    syncFolderPins(postsSidebar);
+    if (!postsHoverExpandEnabled()) return;
     postsSidebar.querySelectorAll('details[data-folder="true"]').forEach(bindFolderHoverExpand);
+    syncPostsHoverToggleButtons(postsSidebar);
 }
 
 document.addEventListener('toggle', (event) => {
@@ -861,6 +932,9 @@ document.addEventListener('toggle', (event) => {
     }
     if (!details.matches('details[data-folder="true"], details[data-section]')) {
         return;
+    }
+    if (!details.open && (details.dataset.folderPinned === 'true' || details.dataset.folderPinnedChild === 'true')) {
+        details.open = true;
     }
     details.classList.toggle('is-open', details.open);
 }, true);
@@ -1374,7 +1448,10 @@ document.body.addEventListener('htmx:afterSwap', async function(event) {
     if (event.target?.id === 'posts-sidebar') {
         window.__vyasaPostsSidebarWasOpen = false;
         const mobileBody = document.querySelector('#mobile-posts-panel .vyasa-mobile-panel-body');
-        if (mobileBody) mobileBody.innerHTML = event.target.innerHTML;
+        if (mobileBody) {
+            mobileBody.innerHTML = event.target.innerHTML;
+            window.htmx?.process(mobileBody);
+        }
     }
     initFolderChevronState();
     initFolderHoverExpand(event.target || document);
@@ -1519,6 +1596,13 @@ function initKeyboardShortcuts() {
             return;
         }
         if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+        if (e.shiftKey && e.code === 'Digit1') {
+            e.preventDefault();
+            togglePostsHoverExpand(document);
+            document.querySelectorAll('[data-sidebar-hover-toggle="true"]').forEach(pulseControl);
+            return;
+        }
         
         // Z: Toggle posts panel
         if (e.key === 'z' || e.key === 'Z') {
@@ -1537,6 +1621,14 @@ function initKeyboardShortcuts() {
             if (!foldToggle) return;
             e.preventDefault();
             foldToggle.click();
+        }
+
+        if (e.key === '1') {
+            const folders = Array.from(document.querySelectorAll('details[data-folder="true"]:hover'));
+            const pin = folders.at(-1)?.querySelector(':scope > summary [data-folder-pin="true"]');
+            if (!pin || pin.hidden) return;
+            e.preventDefault();
+            toggleFolderPin(pin);
         }
     });
 }

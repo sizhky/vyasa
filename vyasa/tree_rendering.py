@@ -1,7 +1,7 @@
 import time
 from urllib.parse import quote
 
-from fasthtml.common import A, Details, Li, Span, Summary, Ul
+from fasthtml.common import A, Button, Details, Li, Span, Summary, Ul
 from monsterui.all import UkIcon
 from .helpers import content_slug_for_path, content_url_for_slug, document_icon_for_path, document_title_for_path, enabled_document_suffixes, is_document_path
 from .nav_views import FOLDER_ROW_CLASSES, FILE_ROW_CLASSES, NavigationRow, navigation_row_view
@@ -16,6 +16,12 @@ def _folder_summary(title_node, branch_href=None):
         Span(Span(cls="folder-chevron"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
         Span(UkIcon("folder", cls="text-current w-4 h-4"), cls="w-4 mr-2 flex items-center justify-center shrink-0"),
         title_node,
+        Button(
+            UkIcon("pin", cls="w-3.5 h-3.5"), type="button", hidden=True,
+            cls="vyasa-folder-pin vyasa-sidebar-tree-action vyasa-row-action ml-auto shrink-0", data_folder_pin="true",
+            aria_label="Pin folder open", aria_pressed="false",
+            onclick="event.preventDefault(); event.stopPropagation(); window.toggleFolderPin && window.toggleFolderPin(this); return false;",
+        ),
         cls=FOLDER_ROW_CLASSES,
         **kwargs,
     )
@@ -78,12 +84,12 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
                 title_node = _decorate_row(note_link, note_slug, folder_title, row_decorators, context="tree-inline") if note_allowed else note_link
                 if should_expand:
                     sub_items = build_post_tree_render(item, roles=roles, max_depth=0 if not child_active else None, active_parts=child_active, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, effective_abbreviations=effective_abbreviations, should_exclude_dir_fn=should_exclude_dir_fn, slug_to_title_fn=slug_to_title_fn, find_folder_note_file_fn=find_folder_note_file_fn, is_allowed_fn=is_allowed_fn, parse_frontmatter_fn=parse_frontmatter_fn, rbac_rules=rbac_rules, logger=logger, suppress_note_file=True, row_decorators=row_decorators)
-                    items.append(Li(Details(_folder_summary(title_node), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true", open=True), cls="my-1"))
+                    items.append(Li(Details(_folder_summary(title_node), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true", data_folder_path=rel_folder, open=True), cls="my-1"))
                     continue
                 if not folder_has_visible_descendant(item, roles, 3, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, is_allowed_fn=is_allowed_fn, rbac_rules=rbac_rules):
                     continue
                 branch_href = f"/_sidebar/posts/branch?path={quote(rel_folder, safe='')}"
-                items.append(Li(Details(_folder_summary(title_node, branch_href=branch_href), Ul(cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true"), cls="my-1"))
+                items.append(Li(Details(_folder_summary(title_node, branch_href=branch_href), Ul(cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true", data_folder_path=rel_folder), cls="my-1"))
                 continue
             sub_items = build_post_tree_render(item, roles=roles, max_depth=None if should_expand else (None if max_depth is None else max_depth - 1), active_parts=child_active, root=root, show_hidden=show_hidden, excluded_dirs=excluded_dirs, get_nav_entries=get_nav_entries, effective_abbreviations=effective_abbreviations, should_exclude_dir_fn=should_exclude_dir_fn, slug_to_title_fn=slug_to_title_fn, find_folder_note_file_fn=find_folder_note_file_fn, is_allowed_fn=is_allowed_fn, parse_frontmatter_fn=parse_frontmatter_fn, rbac_rules=rbac_rules, logger=logger, suppress_note_file=True, row_decorators=row_decorators)
             note_file = find_folder_note_file_fn(item)
@@ -102,7 +108,7 @@ def build_post_tree_render(folder, roles=None, max_depth=None, active_parts=(), 
             title_slug = note_slug if note_allowed else rel_folder
             title_node = _decorate_row(title_base, title_slug, folder_title, row_decorators, context="tree-inline")
             if sub_items:
-                items.append(Li(Details(_folder_summary(title_node), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true", open=should_expand), cls="my-1"))
+                items.append(Li(Details(_folder_summary(title_node), Ul(*sub_items, cls="ml-4 pl-2 space-y-1 border-l border-slate-100 dark:border-slate-800"), data_folder="true", data_folder_path=rel_folder, open=should_expand), cls="my-1"))
             elif note_slug:
                 folder_link = navigation_row_view(
                     NavigationRow(slug=note_slug, title=folder_title, label=folder_title, href=note_href, icon="folder", kind="folder", folder_note=True),
