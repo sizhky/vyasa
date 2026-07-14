@@ -8,6 +8,7 @@ from vyasa.document_pages import copy_raw_button, copy_raw_nodes, copy_text_butt
 from vyasa.core import _row_action_decorator
 from vyasa.extensions import ActionRegistry, NavigationAction
 from vyasa.nav_views import FILE_ROW_CLASSES, NavigationRow, TREE_ACTION_BUTTON_CLASSES, navigation_row_view
+from vyasa.tree_rendering import _folder_summary
 
 
 def test_static_layout_uses_shared_shell_hooks():
@@ -143,6 +144,26 @@ def test_sidebar_row_actions_use_shared_button_class():
 
     for class_name in TREE_ACTION_BUTTON_CLASSES.split():
         assert class_name in html
+
+
+def test_folder_rows_expose_hover_pin_control():
+    html = to_xml(_folder_summary("Guides"))
+    script = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+
+    assert 'data-folder-pin="true"' in html
+    assert 'aria-label="Pin folder open"' in html
+    assert "details.dataset.folderPinned !== 'true'" in script
+    assert "details.dataset.folderPinnedChild !== 'true'" in script
+    assert "if (e.key === '1')" in script
+    assert "e.shiftKey && e.code === 'Digit1'" in script
+    assert "folder hover expand (Shift+1)" in script
+    assert "localStorage.getItem('vyasa:pinnedFolders')" in script
+    assert "data_folder_path=rel_folder" in Path("vyasa/tree_rendering.py").read_text(encoding="utf-8")
+    assert '.vyasa-folder-pin > uk-icon { transform: rotate(-45deg)' in css
+    assert 'details[data-folder-pinned-child="true"] > summary > .vyasa-folder-pin' in css
+    assert "hoverTarget = details.querySelector(':scope > summary .vyasa-tree-link')" in script
+    assert "hoverTarget.addEventListener('mouseenter'" in script
 
 
 def test_bookmark_js_uses_tree_row_shell_contract():

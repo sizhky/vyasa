@@ -283,7 +283,9 @@ html[data-vyasa-hide-posts-sidebar] #posts-sidebar,
 html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     display: none !important;
 }
-[data-vyasa-sidebar-toggle].vyasa-sidebar-toggle-pulse {
+[data-vyasa-sidebar-toggle].vyasa-sidebar-toggle-pulse,
+.vyasa-sidebar-hover-toggle.vyasa-sidebar-toggle-pulse,
+.vyasa-folder-pin.vyasa-sidebar-toggle-pulse {
     animation: vyasa-sidebar-toggle-pulse 1.9s ease-out;
 }
 @keyframes vyasa-sidebar-toggle-pulse {
@@ -778,6 +780,21 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
 }
 
 details.is-open > summary .folder-chevron { transform: rotate(45deg); }
+.vyasa-folder-pin {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease, color 120ms ease;
+}
+.vyasa-folder-pin[hidden] { display: none !important; }
+.vyasa-folder-pin > uk-icon { transform: rotate(-45deg); transition: transform 160ms ease; }
+.vyasa-folder-pin[aria-pressed="true"] > uk-icon { transform: rotate(0deg); }
+.vyasa-tree-row:hover > .vyasa-folder-pin,
+.vyasa-folder-pin[aria-pressed="true"],
+details[data-folder-pinned-child="true"] > summary > .vyasa-folder-pin {
+    opacity: 1;
+    pointer-events: auto;
+}
+.vyasa-folder-pin[aria-pressed="true"] { color: var(--vyasa-primary) !important; }
 details { border: none !important; box-shadow: none !important; }
 h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
 
