@@ -181,7 +181,7 @@ def _render_markdown_fragment(body, img_dir=None, current_path=None, slide_mode=
             slide_mode=slide_mode,
             asset_collector=asset_collector,
             emit_bundle_nodes=False,
-            apply_class_mods=False,
+            apply_class_mods=True,
         )
     )
     rendered = re.sub(r'^<div class="w-full">\s*', "", rendered)

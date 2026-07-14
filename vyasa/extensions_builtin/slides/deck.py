@@ -396,8 +396,7 @@ def slide_slug(index):
 
 def present_href_for_anchor(markdown_text, doc_path, target_anchor):
     deck = ZenSlideDeck(markdown_text)
-    anchors = deck.anchors[1:] if len(deck.anchors) > 1 and deck.anchors[0] else deck.anchors
-    for index, anchor in enumerate(anchors, start=2):
+    for index, anchor in enumerate(deck.anchors, start=2):
         if anchor == target_anchor:
             return content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index)}")
     return content_url_for_slug(doc_path, prefix="/slides", suffix="/slide-2")

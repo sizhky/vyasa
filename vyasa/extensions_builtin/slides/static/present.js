@@ -1,7 +1,22 @@
+window.__vyasaSlideDebug = window.__vyasaSlideDebug || ((label, payload = {}) => {
+  window.__vyasaTasksPhaseLog?.(`slides:${label}`, payload);
+});
+window.__vyasaSlideDebug('asset-eval', { bound: Boolean(window.__vyasaZenBound), url: location.href });
+if (!window.__vyasaSlideCaptureLogBound) {
+  window.__vyasaSlideCaptureLogBound = true;
+  window.addEventListener('keydown', (event) => window.__vyasaSlideDebug('keydown-capture', {
+    key: event.key, code: event.code, defaultPrevented: event.defaultPrevented,
+    target: event.target?.tagName || '', active: document.activeElement?.tagName || '',
+  }), true);
+}
 if (!window.__vyasaZenBound) {
   window.__vyasaZenBound = true;
   let revealTimers = [];
-  const revealLog = (...args) => console.info('[vyasa:reveal]', ...args);
+  const slideDebug = window.__vyasaSlideDebug;
+  const revealLog = (label, payload = {}) => {
+    console.info('[vyasa:reveal]', label, payload);
+    slideDebug(label, payload);
+  };
   let pendingRevealDirection = null;
   let pendingSlideBottomScroll = false;
   const slidePageCache = new Map();
@@ -40,6 +55,18 @@ if (!window.__vyasaZenBound) {
     const units = getStepUnits(root);
     const headingCount = units.filter((unit) => unit.dataset.revealKind === 'heading').length;
     return headingCount > 0 ? headingCount : Math.min(1, units.length);
+  };
+
+  const syncSlideProgressBar = (root = document) => {
+    const body = getRevealBody(root);
+    const bar = body?.querySelector('.vyasa-zen-slide-progress');
+    if (!bar) return;
+    const units = getStepUnits(root);
+    const progressUnits = units[0]?.dataset.revealKind === 'heading' ? units.slice(1) : units;
+    const visible = progressUnits.filter((unit) => unit.dataset.revealState === 'visible').length;
+    bar.style.setProperty('--vyasa-slide-progress', `${progressUnits.length ? visible / progressUnits.length * 100 : 100}%`);
+    bar.setAttribute('aria-valuemax', String(progressUnits.length));
+    bar.setAttribute('aria-valuenow', String(visible));
   };
 
   const revealNextUnit = (root = document) => {
@@ -145,9 +172,23 @@ if (!window.__vyasaZenBound) {
         if (typeof window.refreshVyasaTableScrollShadows === 'function') {
           window.refreshVyasaTableScrollShadows(unit);
         }
+        if (delay === 220) slideDebug('table-snapshot', { reason: 'revealed', tables: tableSnapshot(unit) });
       }, delay);
     });
   };
+
+  const tableSnapshot = (root = document) => Array.from(root.querySelectorAll('.vyasa-table-scroll')).map((wrap) => {
+    const table = wrap.querySelector('table');
+    const th = table?.querySelector('th');
+    const td = table?.querySelector('td');
+    const rect = wrap.getBoundingClientRect();
+    return {
+      wrap: { width: Math.round(rect.width), scrollWidth: wrap.scrollWidth, cls: wrap.className },
+      table: { width: table?.scrollWidth || 0, fontSize: table ? getComputedStyle(table).fontSize : '' },
+      th: th ? { fontSize: getComputedStyle(th).fontSize, padding: getComputedStyle(th).padding } : null,
+      td: td ? { fontSize: getComputedStyle(td).fontSize, padding: getComputedStyle(td).padding } : null,
+    };
+  });
 
   const showUnit = (unit, { keepVisible = true } = {}) => {
     unit.dataset.revealState = 'entering';
@@ -157,6 +198,7 @@ if (!window.__vyasaZenBound) {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         unit.dataset.revealState = 'visible';
+        syncSlideProgressBar();
         if (keepVisible) {
           window.requestAnimationFrame(() => keepUnitInView(unit));
         }
@@ -189,13 +231,13 @@ if (!window.__vyasaZenBound) {
       10,
     );
     unit.dataset.revealState = 'leaving';
+    syncSlideProgressBar();
     window.setTimeout(() => {
       unit.dataset.revealState = 'hidden';
     }, Number.isFinite(duration) ? duration : 420);
   };
 
   const initReveal = (root = document) => {
-    clearRevealTimers();
     const body = root.querySelector('.vyasa-zen-slide-body[data-reveal-mode="stagger"]');
     if (!body) {
       revealLog('initReveal: no reveal body on page', { url: location.href });
@@ -205,6 +247,7 @@ if (!window.__vyasaZenBound) {
       revealLog('initReveal: already initialized, skipping', { url: location.href });
       return;
     }
+    clearRevealTimers();
     const readMs = (value, fallback) => {
       const parsed = parseInt(String(value || '').replace(/ms$/, ''), 10);
       return Number.isFinite(parsed) ? parsed : fallback;
@@ -223,7 +266,7 @@ if (!window.__vyasaZenBound) {
         unit.dataset.revealState = 'visible';
         return;
       }
-      if (unit.dataset.revealState !== 'visible') {
+      if (navDirection !== 'back') {
         unit.dataset.revealState = 'hidden';
       }
       const delay = readMs(unit.dataset.revealDelay, baseDelay + index * stagger);
@@ -255,7 +298,9 @@ if (!window.__vyasaZenBound) {
       }
     }
     if (!backNavMode && policy === 'step' && !units.some((unit) => unit.dataset.revealState === 'visible')) {
-      revealNextUnit(root);
+      revealTimers.push(window.setTimeout(() => {
+        if (!units.some((unit) => unit.dataset.revealState === 'visible')) revealNextUnit(root);
+      }, baseDelay));
     }
     body.dataset.revealInitialized = '1';
     const state = units.map((unit) => ({
@@ -272,6 +317,8 @@ if (!window.__vyasaZenBound) {
       state,
     };
     revealLog('initReveal complete', window.__vyasaRevealDebug);
+    syncSlideProgressBar(root);
+    slideDebug('table-snapshot', { reason: 'init', tables: tableSnapshot(root) });
   };
 
   const follow = (side) => {
@@ -281,8 +328,19 @@ if (!window.__vyasaZenBound) {
     return followHref(href, side === 'left' ? 'back' : 'forward');
   };
 
+  const retainDebugQuery = (href) => {
+    const current = new URLSearchParams(location.search);
+    const target = new URL(href, location.href);
+    ['tasks_debug', 'tasks_perf'].forEach((key) => {
+      if (current.has(key)) target.searchParams.set(key, current.get(key) || '');
+    });
+    return `${target.pathname}${target.search}${target.hash}`;
+  };
+
   const followHref = (href, direction = 'forward') => {
     if (!href) return false;
+    href = retainDebugQuery(href);
+    slideDebug('followHref', { href, direction });
     pendingRevealDirection = direction;
     pendingSlideBottomScroll = direction === 'back';
     cacheCurrentSlide();
@@ -358,10 +416,22 @@ if (!window.__vyasaZenBound) {
   });
 
   document.addEventListener('keydown', (event) => {
+    slideDebug('keydown', {
+      key: event.key, code: event.code, defaultPrevented: event.defaultPrevented,
+      modifiers: { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey },
+      target: event.target?.tagName || '', active: document.activeElement?.tagName || '',
+    });
     if (event.defaultPrevented) return;
     if (event.key === 'Escape') {
       document.getElementById('slide-overview')?.classList.add('hidden');
     }
+    if (event.metaKey || event.ctrlKey || event.altKey
+      || event.target?.matches?.('input, textarea, select') || event.target?.isContentEditable) return;
+    const key = event.key.toLowerCase();
+    if (key === 'h' && follow('left')) event.preventDefault();
+    if (key === 'j' && (revealNextUnit() || follow('right'))) event.preventDefault();
+    if (key === 'k' && (hidePreviousUnit() || follow('left'))) event.preventDefault();
+    if (key === 'l' && follow('right')) event.preventDefault();
     if (event.key === 'ArrowLeft' && (hidePreviousUnit() || follow('left'))) {
       revealLog('keydown ArrowLeft handled');
       event.preventDefault();
