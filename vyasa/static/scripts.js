@@ -1588,37 +1588,50 @@ function initMobileMenus() {
     }
 }
 
-let documentScrollTarget = null;
 let documentScrollFrame = null;
-const DOCUMENT_SCROLL_STEP = 140;
+let documentScrollDirection = 0;
+let documentScrollVelocity = 0;
+let documentScrollLastTime = null;
+const DOCUMENT_SCROLL_INITIAL_SPEED = 0.24;
+const DOCUMENT_SCROLL_MAX_SPEED = 1.4;
+const DOCUMENT_SCROLL_ACCELERATION = 0.0025;
+const DOCUMENT_SCROLL_FRICTION = 0.012;
 
-function scrollDocumentBy(delta) {
-    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-    documentScrollTarget = Math.min(maxScroll, Math.max(0, (documentScrollTarget ?? window.scrollY) + delta));
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        window.scrollTo({ top: documentScrollTarget });
-        documentScrollTarget = null;
-        return;
+function stopDocumentScroll() {
+    if (documentScrollFrame !== null) window.cancelAnimationFrame(documentScrollFrame);
+    documentScrollFrame = null;
+    documentScrollDirection = 0;
+    documentScrollVelocity = 0;
+    documentScrollLastTime = null;
+}
+
+function animateDocumentScroll(now) {
+    const elapsed = documentScrollLastTime === null ? 16 : Math.min(32, now - documentScrollLastTime);
+    documentScrollLastTime = now;
+    if (documentScrollDirection) {
+        const speed = Math.min(DOCUMENT_SCROLL_MAX_SPEED, Math.max(DOCUMENT_SCROLL_INITIAL_SPEED, Math.abs(documentScrollVelocity) + DOCUMENT_SCROLL_ACCELERATION * elapsed));
+        documentScrollVelocity = documentScrollDirection * speed;
+    } else {
+        documentScrollVelocity *= Math.exp(-DOCUMENT_SCROLL_FRICTION * elapsed);
+        if (Math.abs(documentScrollVelocity) < 0.02) return stopDocumentScroll();
     }
-    if (documentScrollFrame !== null) return;
+    const before = window.scrollY;
+    window.scrollBy({ top: documentScrollVelocity * elapsed });
+    if (window.scrollY === before) return stopDocumentScroll();
+    documentScrollFrame = window.requestAnimationFrame(animateDocumentScroll);
+}
 
-    const animate = () => {
-        const remaining = documentScrollTarget - window.scrollY;
-        if (Math.abs(remaining) < 0.5) {
-            window.scrollTo({ top: documentScrollTarget });
-            documentScrollTarget = null;
-            documentScrollFrame = null;
-            return;
-        }
-        window.scrollBy({ top: remaining * 0.2 });
-        documentScrollFrame = window.requestAnimationFrame(animate);
-    };
-    documentScrollFrame = window.requestAnimationFrame(animate);
+function startDocumentScroll(direction) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return window.scrollBy({ top: direction * 40 });
+    if (documentScrollDirection !== direction) documentScrollVelocity = direction * Math.max(DOCUMENT_SCROLL_INITIAL_SPEED, Math.abs(documentScrollVelocity) * 0.35);
+    documentScrollDirection = direction;
+    if (documentScrollFrame === null) documentScrollFrame = window.requestAnimationFrame(animateDocumentScroll);
 }
 
 // Keyboard shortcuts for document navigation
 function initKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
+        if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key)) stopDocumentScroll();
         // Skip if user is typing in an input field
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
             return;
@@ -1628,7 +1641,7 @@ function initKeyboardShortcuts() {
         const mainContent = document.getElementById('main-content');
         if ((e.key === 'j' || e.key === 'k') && !mainContent?.classList.contains('vyasa-zen-present')) {
             e.preventDefault();
-            scrollDocumentBy(e.key === 'j' ? DOCUMENT_SCROLL_STEP : -DOCUMENT_SCROLL_STEP);
+            startDocumentScroll(e.key === 'j' ? 1 : -1);
             return;
         }
 
@@ -1666,6 +1679,12 @@ function initKeyboardShortcuts() {
             toggleFolderPin(pin);
         }
     });
+    document.addEventListener('keyup', (e) => {
+        const direction = e.key === 'j' ? 1 : e.key === 'k' ? -1 : 0;
+        if (direction === documentScrollDirection) documentScrollDirection = 0;
+    });
+    ['wheel', 'touchstart', 'pointerdown', 'htmx:beforeSwap'].forEach((type) => document.addEventListener(type, stopDocumentScroll, { passive: true }));
+    window.addEventListener('blur', stopDocumentScroll);
 }
 
 function syncPdfFocusButtons(root = document) {
