@@ -196,6 +196,17 @@ def test_fold_all_script_keeps_tooltip_in_sync_with_button_state():
     assert "syncFoldAllButton(toggle, shouldOpen);" in source
 
 
+def test_document_keyboard_shortcuts_scroll_with_j_and_k():
+    source = Path("vyasa/static/scripts.js").read_text()
+
+    assert "(e.key === 'j' || e.key === 'k')" in source
+    assert "const DOCUMENT_SCROLL_STEP = 40" in source
+    assert "e.key === 'j' ? DOCUMENT_SCROLL_STEP : -DOCUMENT_SCROLL_STEP" in source
+    assert "remaining * 0.2" in source
+    assert "prefers-reduced-motion: reduce" in source
+    assert "!mainContent?.classList.contains('vyasa-zen-present')" in source
+
+
 def test_copy_markdown_button_keeps_raw_content_out_of_searchable_dom():
     button_html = to_xml(copy_raw_button("Copy Markdown", "# Heading\nbody", "raw-md-toast"))
     aux_html = "".join(to_xml(node) for node in copy_raw_nodes("# Heading\nbody"))
