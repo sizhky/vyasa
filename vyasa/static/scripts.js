@@ -1588,7 +1588,35 @@ function initMobileMenus() {
     }
 }
 
-// Keyboard shortcuts for toggling sidebars
+let documentScrollTarget = null;
+let documentScrollFrame = null;
+const DOCUMENT_SCROLL_STEP = 140;
+
+function scrollDocumentBy(delta) {
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    documentScrollTarget = Math.min(maxScroll, Math.max(0, (documentScrollTarget ?? window.scrollY) + delta));
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        window.scrollTo({ top: documentScrollTarget });
+        documentScrollTarget = null;
+        return;
+    }
+    if (documentScrollFrame !== null) return;
+
+    const animate = () => {
+        const remaining = documentScrollTarget - window.scrollY;
+        if (Math.abs(remaining) < 0.5) {
+            window.scrollTo({ top: documentScrollTarget });
+            documentScrollTarget = null;
+            documentScrollFrame = null;
+            return;
+        }
+        window.scrollBy({ top: remaining * 0.2 });
+        documentScrollFrame = window.requestAnimationFrame(animate);
+    };
+    documentScrollFrame = window.requestAnimationFrame(animate);
+}
+
+// Keyboard shortcuts for document navigation
 function initKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
         // Skip if user is typing in an input field
@@ -1596,6 +1624,13 @@ function initKeyboardShortcuts() {
             return;
         }
         if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+        const mainContent = document.getElementById('main-content');
+        if ((e.key === 'j' || e.key === 'k') && !mainContent?.classList.contains('vyasa-zen-present')) {
+            e.preventDefault();
+            scrollDocumentBy(e.key === 'j' ? DOCUMENT_SCROLL_STEP : -DOCUMENT_SCROLL_STEP);
+            return;
+        }
 
         if (e.shiftKey && e.code === 'Digit1') {
             e.preventDefault();
