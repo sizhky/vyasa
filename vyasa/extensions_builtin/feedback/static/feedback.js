@@ -212,6 +212,18 @@ const feedbackAssetVersion = new URL(import.meta.url).search;
     renderQueue();
   }
 
+  function revealQueued(prompt) {
+    if (!prompt.selector) return;
+    const message = { type: 'lavish:revealTarget', selector: prompt.selector };
+    const frame = document.querySelector('#main-content iframe[src*=".html"]');
+    if (prompt._lavishFrame === true) frame?.contentWindow?.postMessage(message, '*');
+    else if (prompt._lavishFrame === false) window.postMessage(message, '*');
+    else {
+      window.postMessage(message, '*');
+      frame?.contentWindow?.postMessage(message, '*');
+    }
+  }
+
   function renderQueue() {
     pills.replaceChildren(...queued.map((prompt, index) => {
       const pill = document.createElement('div');
@@ -220,6 +232,15 @@ const feedbackAssetVersion = new URL(import.meta.url).search;
       pill.className = 'vyasa-feedback-pill';
       text.textContent = prompt.prompt;
       text.title = `${prompt.selector || 'Document'}\n${prompt.prompt}`;
+      if (prompt.selector) {
+        pill.tabIndex = 0;
+        pill.setAttribute('role', 'button');
+        pill.setAttribute('aria-label', `Show feedback location: ${prompt.prompt}`);
+        pill.onclick = () => revealQueued(prompt);
+        pill.onkeydown = (event) => {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); revealQueued(prompt); }
+        };
+      }
       remove.type = 'button';
       remove.textContent = '×';
       remove.setAttribute('aria-label', 'Remove queued feedback');
@@ -358,10 +379,13 @@ const feedbackAssetVersion = new URL(import.meta.url).search;
   }
 
   async function copyListener() {
-    const command = `vyasa feedback poll ${JSON.stringify(location.href)}`;
+    const documentUrl = new URL(location.href);
+    documentUrl.hash = '';
+    const command = `vyasa feedback poll ${JSON.stringify(documentUrl.href)}`;
+    const instruction = `Literally run \`${command}\` to listen for feedback and answer my questions about this document.`;
     const button = sidebar.querySelector('[data-copy-listener]');
-    try { await navigator.clipboard.writeText(command); button.textContent = 'Copied'; }
-    catch (_) { banner.hidden = false; banner.textContent = command; }
+    try { await navigator.clipboard.writeText(instruction); button.textContent = 'Copied'; }
+    catch (_) { banner.hidden = false; banner.textContent = instruction; }
     setTimeout(() => { button.textContent = 'Copy command to start agent'; }, 1500);
   }
 
@@ -397,7 +421,7 @@ const feedbackAssetVersion = new URL(import.meta.url).search;
   window.addEventListener('message', (event) => {
     if (event.source !== window && event.source !== document.querySelector('#main-content iframe[src*=".html"]')?.contentWindow) return;
     const message = event.data || {};
-    if (message.type === 'lavish:queuePrompt') enqueue(message.prompt);
+    if (message.type === 'lavish:queuePrompt') enqueue({ ...message.prompt, _lavishFrame: event.source !== window });
     if (message.type === 'lavish:sendQueuedPrompts') requestSnapshotAndSend();
     if (message.type === 'lavish:snapshot') { snapshot = String(message.snapshot || ''); submitQueued(); }
   });

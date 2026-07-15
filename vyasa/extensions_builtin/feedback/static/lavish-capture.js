@@ -269,6 +269,24 @@ function createArtifactSdk(deriveQueueKey, isNativeInteractive = isNativeInterac
     if (el) el.style.outline = "";
   }
 
+  function revealTarget(selectorValue) {
+    let target;
+    try { target = document.querySelector(String(selectorValue || "")); } catch (_) { return; }
+    if (!target) return;
+    let style = document.getElementById("lavish-reveal-style");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "lavish-reveal-style";
+      style.textContent = "@keyframes lavish-boom-boom{0%,100%{outline-color:transparent;box-shadow:0 0 0 0 transparent}18%,58%{outline-color:#f4c95d;box-shadow:0 0 0 7px rgb(244 201 93 / .3)}35%,75%{outline-color:#f4c95d;box-shadow:0 0 0 2px rgb(244 201 93 / .5)}}.lavish-reveal-target{outline:2px solid transparent;outline-offset:3px;animation:lavish-boom-boom 900ms ease-out}@media(prefers-reduced-motion:reduce){.lavish-reveal-target{animation:none;outline-color:#f4c95d}}";
+      document.head.appendChild(style);
+    }
+    target.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+    target.classList.remove("lavish-reveal-target");
+    void target.offsetWidth;
+    target.classList.add("lavish-reveal-target");
+    window.setTimeout(() => target.classList.remove("lavish-reveal-target"), 950);
+  }
+
   function clearTextHighlight() {
     if (!shadow) return;
     for (const el of [...shadow.querySelectorAll(".lavish-text-highlight")]) el.remove();
@@ -812,6 +830,7 @@ function createArtifactSdk(deriveQueueKey, isNativeInteractive = isNativeInterac
     if (msg.type === "lavish:restoreScroll") {
       window.scrollTo(Number(msg.x) || 0, Number(msg.y) || 0);
     }
+    if (msg.type === "lavish:revealTarget") revealTarget(msg.selector);
   });
   window.addEventListener("keydown", suspendPageShortcuts, true);
 

@@ -43,6 +43,8 @@
 .vyasa-feedback-banner { padding: .55rem .65rem; border-radius: .45rem; color: #7b571e; background: #fff3d7; font-size: .72rem; }
 .vyasa-feedback-pills { display: flex; flex-wrap: wrap; gap: .35rem; max-width: 100%; min-width: 0; }
 .vyasa-feedback-pill { display: inline-flex; box-sizing: border-box; max-width: 100%; min-width: 0; align-items: center; gap: .35rem; padding: .38rem .5rem; border-radius: 999px; color: var(--vyasa-ink-soft); background: var(--vyasa-paper-low); font-size: .68rem; }
+.vyasa-feedback-pill[role="button"] { cursor: pointer; }
+.vyasa-feedback-pill[role="button"]:focus-visible { outline: 2px solid var(--vyasa-primary); outline-offset: 2px; }
 .vyasa-feedback-pill span { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vyasa-feedback-pill button { flex: 0 0 auto; border: 0; color: inherit; background: transparent; cursor: pointer; }
 .vyasa-feedback-input { width: 100%; min-height: 6rem; resize: vertical; padding: .7rem; border: 1px solid color-mix(in srgb, var(--vyasa-ink) 18%, transparent); border-radius: var(--vyasa-button-radius, .5rem); color: var(--vyasa-ink); background: var(--vyasa-paper); font: inherit; }
