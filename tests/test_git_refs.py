@@ -283,25 +283,34 @@ def test_slide_runtime_caches_swapped_ref_pages():
     source = Path("vyasa/extensions_builtin/slides/static/present.js").read_text(encoding="utf-8")
 
     assert "const slidePageCache = new Map();" in source
+    assert "if (useSegmentCache) {" in source
     assert "if (restoreCachedSlide(href)) return true;" in source
     assert "window.history.pushState(null, '', href);" in source
-    assert "cacheCurrentSlide();" in source[source.index("window.history.pushState(null, '', href);") :]
+    assert "pendingRevealDirection = null;" in source[source.index("window.history.pushState(null, '', href);") :]
 
 
 def test_slide_runtime_supports_vim_navigation_and_delayed_first_reveal():
     source = Path("vyasa/extensions_builtin/slides/static/present.js").read_text(encoding="utf-8")
+    styles = Path("vyasa/extensions_builtin/slides/static/present.css").read_text(encoding="utf-8")
 
-    assert "key === 'h' && follow('left')" in source
+    assert "key === 'h' && follow('left', true)" in source
     assert "key === 'j' && (revealNextUnit() || follow('right'))" in source
     assert "key === 'k' && (hidePreviousUnit() || follow('left'))" in source
-    assert "key === 'l' && follow('right')" in source
+    assert "key === 'l' && follow('right', true)" in source
     assert "revealTimers.push(window.setTimeout(() =>" in source
-    assert "if (!units.some((unit) => unit.dataset.revealState === 'visible')) revealNextUnit(root);" in source
+    assert "const headingCount = leadingHeadingCount(units);" in source
+    assert "const initialUnits = units.slice(0, Math.min(units.length, headingCount + 1));" in source
+    assert "revealLog('initial reveal timer fired'" in source
     assert "slideDebug('keydown'" in source
     assert "slideDebug('table-snapshot'" in source
     assert "syncSlideProgressBar" in source
-    assert "units[0]?.dataset.revealKind === 'heading' ? units.slice(1) : units" in source
+    assert "units.slice(leadingHeadingCount(units))" in source
+    assert "endRule.dataset.revealState = visible === progressUnits.length ? 'visible' : 'hidden';" in source
     assert "vyasa-zen-slide-progress" in Path("vyasa/content_routes.py").read_text(encoding="utf-8")
+    assert "vyasa-zen-slide-end-rule-line" in styles
+    assert 'UkIcon("zap"' in Path("vyasa/content_routes.py").read_text(encoding="utf-8")
+    state_source = Path("vyasa/content_routes.py").read_text(encoding="utf-8").split("data_reveal_state=", 1)[1].split("data_reveal_kind=", 1)[0]
+    assert 'reveal_config.policy == "step"' not in state_source
     init_source = source.split("const initReveal =", 1)[1].split("const follow =", 1)[0]
     assert init_source.index("if (body.dataset.revealInitialized === '1')") < init_source.index("clearRevealTimers();")
 

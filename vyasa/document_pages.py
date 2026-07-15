@@ -129,8 +129,8 @@ def meta_line(source_text: str, file_path=None, meta_extra=None):
     return P(*items, cls="vyasa-read-time text-sm text-slate-500 dark:text-slate-400 mt-2 flex flex-wrap items-center gap-2")
 
 
-def _copy_payload_attrs(text: str):
-    return {"data_copy_payload": base64.b64encode(text.encode("utf-8")).decode("ascii")}
+def _encoded_copy_payload(text: str) -> str:
+    return base64.b64encode(text.encode("utf-8")).decode("ascii")
 
 
 def copy_raw_button(label: str, raw_content: str, toast_id: str):
@@ -143,26 +143,25 @@ def copy_raw_button(label: str, raw_content: str, toast_id: str):
         cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
         data_tooltip=tooltip,
         aria_label=tooltip,
-        **_copy_payload_attrs(raw_content),
+        data_copy_payload=_encoded_copy_payload(raw_content),
     )
 
 
-def copy_text_button(label: str, text: str, target_id: str, toast_id: str, *, alternate_text: str | None = None):
-    payload_attrs = _copy_payload_attrs(text)
-    if alternate_text is not None:
-        payload_attrs["data_copy_alternate_payload"] = base64.b64encode(alternate_text.encode("utf-8")).decode("ascii")
-        payload_attrs["data_tooltip"] = "Click: relative path. Shift-click: absolute path."
+def copy_text_button(label: str, text: str, target_id: str, toast_id: str, *, alternate_text: str | None = None, icon_only: bool = False, extra_cls: str = ""):
     return (
         Button(
             action_icon("file-edit"),
-            Span(label, cls="text-sm font-medium"),
+            Span(label, cls="sr-only" if icon_only else "text-sm font-medium"),
             Span(". Shift-click copies absolute path.", cls="sr-only") if alternate_text is not None else None,
             type="button",
             onclick=COPY_TEXT_PAYLOAD_JS % toast_id,
             cls="vyasa-page-action-button inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm"
-            + (" vyasa-page-action-tooltip" if alternate_text is not None else ""),
+            + (" vyasa-page-action-tooltip" if alternate_text is not None else "")
+            + (f" {extra_cls}" if extra_cls else ""),
             aria_label=f"{label}. Shift-click copies absolute path." if alternate_text is not None else None,
-            **payload_attrs,
+            data_copy_payload=_encoded_copy_payload(text),
+            data_copy_alternate_payload=_encoded_copy_payload(alternate_text) if alternate_text is not None else None,
+            data_tooltip="Click: relative path. Shift-click: absolute path." if alternate_text is not None else None,
         ),
         Div(f"Copied {label.lower()}!", id=toast_id, cls="fixed top-6 right-6 bg-slate-900 text-white text-sm px-4 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300"),
         Textarea(text, id=target_id, cls="absolute left-[-9999px] top-0 opacity-0 pointer-events-none"),

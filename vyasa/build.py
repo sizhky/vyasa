@@ -391,6 +391,7 @@ def generate_static_html(title, body_content, blog_title, favicon_href, extra_he
     <!-- Static assets -->
     <link rel="icon" href="{favicon_href}">
     <link rel="stylesheet" href="{_asset_url('/static/sidenote.css')}">
+    <link rel="stylesheet" href="{_asset_url('/static/linux-libertine.css')}">
     
     {static_css}
     {extra_head_html}

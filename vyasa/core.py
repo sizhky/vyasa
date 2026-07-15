@@ -281,6 +281,7 @@ hdrs = (
     )] if get_config().get_browser_reload_enabled() else []),
     Link(rel="stylesheet", href=_asset_url("/static/header.css")),
     Link(rel="stylesheet", href=_asset_url("/static/kbd.css")),
+    Link(rel="stylesheet", href=_asset_url("/static/linux-libertine.css")),
     Style(
         """
         .vyasa-table-scroll { width: 100%; max-width: 100%; position: static; left: auto; transform: none; margin: 1.5rem 0; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-gutter: stable both-edges; box-shadow: none; transition: box-shadow 160ms ease; }

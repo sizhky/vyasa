@@ -315,6 +315,25 @@
 }
 .vyasa-zen-slide-progress-track { flex: 1; height: 0.15rem; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--vyasa-ink-soft) 12%, transparent); }
 .vyasa-zen-slide-progress-track::after { content: ""; display: block; width: var(--vyasa-slide-progress, 0%); height: 100%; border-radius: inherit; background: var(--vyasa-primary); transition: width 220ms ease; }
+.vyasa-zen-slide-end-rule {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: min(24rem, 75%);
+  margin-right: auto;
+  margin-left: auto;
+  color: var(--vyasa-primary);
+  opacity: 0;
+  transform: translateY(0.35rem);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+.vyasa-zen-slide-end-rule-line { flex: 1; height: 0.2rem; border-radius: 999px; background: currentColor; }
+.vyasa-zen-slide-end-rule-icon { width: 1.15rem; height: 1.15rem; }
+.vyasa-zen-slide-end-rule[data-reveal-state="visible"] { opacity: 0.58; transform: translateY(0); }
+.vyasa-zen-breadcrumb-copy { width: 1.5rem; height: 1.5rem; padding: 0.2rem; opacity: 0; pointer-events: none; }
+.vyasa-breadcrumbs:hover .vyasa-zen-breadcrumb-copy,
+.vyasa-zen-breadcrumb-copy:focus-visible { opacity: 0.72; pointer-events: auto; }
+.vyasa-zen-breadcrumb-copy .vyasa-page-action-icon { width: 0.85rem; height: 0.85rem; }
 .vyasa-reveal-unit:has(.vyasa-table-scroll) {
   transform: none !important;
   filter: none !important;

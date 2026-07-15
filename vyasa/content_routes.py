@@ -14,6 +14,7 @@ from .document_pages import (
     DocumentActionContext,
     DocumentPage,
     document_header,
+    copy_text_button,
     frontmatter_error_nodes,
     frontmatter_metadata_block,
     resolve_document_actions,
@@ -63,7 +64,7 @@ def _prev_next_nav(root, current_path, abbreviations):
     return Div(prev_link, next_link, cls="vyasa-prev-next")
 
 
-def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, include_current=False, current_anchor=None):
+def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, include_current=False, current_anchor=None, copy_path=None, copy_absolute_path=None):
     parts = [part for part in str(path).split("/") if part]
     if len(parts) < 2:
         return None
@@ -101,6 +102,12 @@ def _breadcrumbs(path, slug_to_title, abbreviations, *, disable_boost=False, inc
                 cls="inline-flex min-w-0 items-center gap-2",
             )
         )
+    if copy_path and copy_absolute_path:
+        copy_button, copy_toast, copy_target = copy_text_button(
+            "Copy Path", copy_path, "slide-path-clipboard", "slide-path-toast",
+            alternate_text=copy_absolute_path, icon_only=True, extra_cls="vyasa-zen-breadcrumb-copy",
+        )
+        items.extend((copy_button, copy_toast, copy_target))
     return Div(*items, cls="vyasa-breadcrumbs mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400")
 
 
@@ -397,6 +404,8 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             metadata, raw_content = ref_doc.metadata, ref_doc.body
             abbreviations = {}
             title, render_content = ref_doc.title, ref_doc.body
+            slide_relative_path = getattr(ref_doc.vpath, "slug", None) or ref_doc.relative
+            slide_absolute_path = str((root_path / ref_doc.relative).resolve()) if root_path else slide_relative_path
         else:
             root, _ = content_root_and_relative(doc_path)
             if root is None:
@@ -407,6 +416,8 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             metadata, raw_content = parse_frontmatter(file_path)
             abbreviations = effective_abbreviations(root)
             title, render_content = resolve_markdown_title(file_path, abbreviations=abbreviations)
+            slide_relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
+            slide_absolute_path = str(file_path.resolve())
         reveal_config = resolve_slide_reveal_config(metadata)
         slide_width = _resolve_slide_width(metadata)
         deck = ZenSlideDeck(render_content or "")
@@ -481,15 +492,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
                         data_reveal_index=str(index),
                         data_reveal_state=(
                             "visible"
-                            if (
-                                (unit.get("style") or reveal_config.style) in {"none", "instant"}
-                                or (reveal_config.policy == "step" and unit.get("kind") == "heading")
-                                or (
-                                    reveal_config.policy == "step"
-                                    and not any(u.get("kind") == "heading" for u in reveal_units)
-                                    and index == 0
-                                )
-                            )
+                            if (unit.get("style") or reveal_config.style) in {"none", "instant"}
                             else "hidden"
                         ),
                         data_reveal_kind=str(unit.get("kind") or "content"),
@@ -501,6 +504,12 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
                     )
                     for index, unit in enumerate(reveal_units)
                 ],
+                Div(
+                    Span(cls="vyasa-zen-slide-end-rule-line"),
+                    UkIcon("zap", cls="vyasa-zen-slide-end-rule-icon"),
+                    Span(cls="vyasa-zen-slide-end-rule-line"),
+                    cls="vyasa-zen-slide-end-rule", data_reveal_state="hidden", aria_hidden="true",
+                ),
                 Div(
                     Div(cls="vyasa-zen-slide-progress-track", aria_hidden="true"),
                     cls="vyasa-zen-slide-progress", role="progressbar",
@@ -530,7 +539,11 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
                 rendered_slide = from_md(slide_markdown, current_path=doc_path, slide_mode=True)
             slide_body = Div(rendered_slide, cls="vyasa-zen-slide-body")
         content = Div(
-            _breadcrumbs(doc_path, slug_to_title, abbreviations, disable_boost=True, include_current=True, current_anchor=deck.anchor(slide_num - 1)),
+            _breadcrumbs(
+                doc_path, slug_to_title, abbreviations, disable_boost=True, include_current=True,
+                current_anchor=deck.anchor(slide_num - 1), copy_path=slide_relative_path,
+                copy_absolute_path=slide_absolute_path,
+            ),
             Div(H1(title, cls="vyasa-zen-deck-title"), cls="flex justify-center"),
             Div(nav, cls="flex justify-center"),
             slide_body,
