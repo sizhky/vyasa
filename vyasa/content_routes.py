@@ -552,7 +552,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             cls="vyasa-zen-content w-full mx-auto space-y-8",
             style=f"--vyasa-zen-slide-max-width: {slide_width};" if slide_width else None,
         )
-    return layout(content, htmx=htmx, title=f"{title} - Zen", show_sidebar=False, toc_content=None, current_path=doc_path, show_toc=False, auth=request.scope.get("auth"), htmx_nav=False, show_footer=False, slide_mode=True)
+    return layout(content, htmx=htmx, title=f"{title} - Zen", show_sidebar=False, toc_content=None, current_path=doc_path, show_toc=False, auth=request.scope.get("auth"), htmx_nav=False, show_footer=False, slide_mode=True, full_width=True)
 
 
 def find_index_file(get_root_folder):
