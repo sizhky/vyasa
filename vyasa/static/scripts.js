@@ -1,3 +1,5 @@
+import { ensureFloatingActions, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
+
 function switchTab(tabsId, index) {
     const container = document.querySelector(`.tabs-container[data-tabs-id="${tabsId}"]`);
     if (!container) return;
@@ -544,6 +546,7 @@ function initCommandPalette() {
         if (event.target === palette) close();
     });
     document.addEventListener('keydown', (event) => {
+        if (shortcutsSuspended()) return;
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
             event.preventDefault();
             open();
@@ -1186,20 +1189,23 @@ function initScrollTopButton(root = document) {
     const button = document.createElement('button');
     button.type = 'button';
     button.id = 'vyasa-scroll-top';
-    button.className = 'vyasa-scroll-top-button';
+    button.className = 'vyasa-floating-bubble vyasa-scroll-top-button';
     button.setAttribute('aria-label', 'Go to top');
     button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-scroll-top-icon"><path d="M12 19V7"/><path d="m6.75 12.25 5.25-5.25 5.25 5.25"/></svg>';
     button.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    document.body.appendChild(button);
+    const rail = ensureFloatingActions();
+    rail.appendChild(button);
     const sync = () => {
         const main = document.getElementById('main-content');
         const rect = main?.getBoundingClientRect();
         if (rect) {
-            const left = Math.max(16, rect.right - button.offsetWidth);
-            button.style.left = `${left}px`;
+            rail.style.left = Math.max(16, rect.right) + 'px';
+            rail.style.right = 'auto';
+            rail.style.transform = 'translateX(-100%)';
         }
         button.classList.toggle('is-visible', window.scrollY > 0);
     };
+    registerFloatingActionSync(sync);
     window.addEventListener('scroll', sync, { passive: true });
     window.addEventListener('resize', sync, { passive: true });
     sync();
@@ -1475,6 +1481,12 @@ function initMobileMenus() {
             window.setTimeout(() => button.classList.remove('vyasa-sidebar-toggle-pulse'), 1600);
         });
     };
+    const syncContentResize = () => {
+        requestAnimationFrame(() => {
+            window.dispatchEvent(new Event('resize'));
+            syncFloatingActions();
+        });
+    };
 
     const toggleDockedSidebar = (kind) => {
         const sidebar = document.getElementById(`${kind}-sidebar`);
@@ -1487,6 +1499,7 @@ function initMobileMenus() {
             if (hidden) localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '1');
             else localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '0');
         } catch (_) {}
+        syncContentResize();
         return true;
     };
 
@@ -1632,10 +1645,9 @@ function startDocumentScroll(direction) {
 function initKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
         if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key)) stopDocumentScroll();
-        // Skip if user is typing in an input field
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
-            return;
-        }
+        if (shortcutsSuspended()) return;
+        // composedPath sees editors inside shadow DOM; event.target only sees the shadow host.
+        if (isEditableShortcutEvent(e)) return;
         if (e.metaKey || e.ctrlKey || e.altKey) return;
 
         const mainContent = document.getElementById('main-content');
@@ -1857,6 +1869,7 @@ function renderMathSafely(root) {
     walker.currentNode = root;
     while ((node = walker.nextNode())) if (node.nodeValue && node.nodeValue.includes(marker)) node.nodeValue = node.nodeValue.split(marker).join('$');
 }
+registerMarkdownHydrator(renderMathSafely);
 
 function ensureFragmentStylesheets(root = document) {
     const scope = root instanceof Element || root instanceof Document ? root : document;

@@ -18,6 +18,7 @@ class RuntimeAccess(Protocol):
     def can_read_post(self, path: str, request) -> bool: ...
     def auth_for_request(self, request) -> dict: ...
     def current_rbac_rules(self): ...
+    def render_markdown(self, content: str, **kwargs): ...
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,7 @@ class RuntimeContext:
     rbac_cfg: Any
     google_oauth_cfg: Any
     logger: Any
+    markdown_renderer: Any
 
     def _value(self, item):
         return item() if callable(item) else item
@@ -55,6 +57,9 @@ class RuntimeContext:
 
     def current_rbac_rules(self):
         return self._value(self.rbac_rules)
+
+    def render_markdown(self, content: str, **kwargs):
+        return self.markdown_renderer(content, **kwargs)
 
 
 @contextmanager

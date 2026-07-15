@@ -18,6 +18,7 @@ def load_builtin_extensions():
     from . import filesystem
     from . import filesystem_routes
     from . import git_refs
+    from . import feedback
     from . import html_viewer
     from . import code_tools
     from . import link_preview
@@ -63,6 +64,7 @@ def load_builtin_extensions():
         sidebar_routes.EXTENSION,
         git_refs.EXTENSION,
         annotations.EXTENSION,
+        feedback.EXTENSION,
         bookmarks.EXTENSION,
         api_catalog.EXTENSION,
         rbac_admin.EXTENSION,

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fasthtml.common import to_xml
+import pytest
 
 from vyasa.config import reload_config
 from vyasa.extensions import (
@@ -70,6 +71,7 @@ def test_extensions_default_preset_when_section_omitted(tmp_path, monkeypatch):
     assert plan.selected_by_category["layout"] == ("default_layout",)
     assert plan.selected_by_category["render"] == ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "mdx", "html_viewer", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
     assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "git_refs", "annotations", "bookmarks", "api_catalog", "filesystem_routes")
+    assert "feedback" not in plan.enabled_ids
     assert "annotations" in plan.enabled_ids
     assert plan.enabled_ids[-1] == "filesystem"
 
@@ -85,6 +87,19 @@ def test_extensions_minimal_preset_keeps_only_minimal_surface():
     assert plan.selected_by_category["home"] == ()
     assert plan.selected_by_category["render"] == ()
     assert plan.selected_by_category["route"] == ()
+
+
+@pytest.mark.parametrize("source", ["config", "env", "cli"])
+def test_feedback_extension_is_opt_in(tmp_path, monkeypatch, source):
+    root = tmp_path / "site"
+    root.mkdir()
+    if source == "config":
+        (root / ".vyasa").write_text("feedback_enabled = true\n", encoding="utf-8")
+    else:
+        monkeypatch.setenv("VYASA_FEEDBACK_ENABLED" if source == "env" else "VYASA_FEEDBACK_CLI", "true")
+    monkeypatch.chdir(root)
+    config = reload_config()
+    assert "feedback" in config.resolve_extensions().enabled_ids
 
 
 def test_extensions_minimal_preset_boots_cleanly():
@@ -115,6 +130,23 @@ def test_extension_cannot_register_undeclared_route_prefix(tmp_path):
         assert "undeclared route prefix" in str(exc)
     else:
         raise AssertionError("expected route guard validation failure")
+
+
+def test_extension_cannot_register_undeclared_storage_namespace(tmp_path):
+    package = tmp_path / "bad_storage_ext"
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        "from vyasa.extensions import ExtensionMeta, VyasaExtensionBase\n"
+        "class Bad(VyasaExtensionBase):\n"
+        "    def register(self, app): app.storage.namespace('undeclared')\n"
+        "EXTENSION = Bad(ExtensionMeta('bad_storage', 'route', ('cap:route:bad_storage',)))\n"
+    )
+
+    with pytest.raises(ExtensionConfigError, match="undeclared storage namespace"):
+        build_extension_runtime({
+            "external": [{"path": str(tmp_path), "module": "bad_storage_ext"}],
+            "routes_add": ["bad_storage"],
+        })
 
 
 def test_extension_cannot_register_undeclared_document_type(tmp_path):
@@ -246,7 +278,9 @@ def test_default_route_extensions_include_annotations():
     assert "/api/bookmarks" in prefixes
     assert "/api/catalog" in prefixes
     assert "/api/annotations" in prefixes
+    assert "/api/feedback" not in prefixes
     assert "annotations" in runtime.storage_namespaces
+    assert "feedback" not in runtime.storage_namespaces
     assert "bookmarks" in runtime.storage_namespaces
 
 

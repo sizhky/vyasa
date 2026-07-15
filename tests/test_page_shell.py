@@ -208,6 +208,19 @@ def test_document_keyboard_shortcuts_scroll_with_j_and_k():
     assert "!mainContent?.classList.contains('vyasa-zen-present')" in source
 
 
+def test_sidebars_bound_main_content_width():
+    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+
+    assert ".vyasa-content-grid {\n    min-width: 0;" in css
+    assert "overflow: clip;" in css
+    assert "#content-with-sidebars .tasks-container:not([data-tasks-maximized=\"true\"])" in css
+    assert "#content-with-sidebars .vyasa-main-shell img" in css
+    assert "#content-with-sidebars .vyasa-main-shell svg" not in css
+    assert "width: 100% !important;" in css
+    assert "window.dispatchEvent(new Event('resize'));" in source
+
+
 def test_copy_markdown_button_keeps_raw_content_out_of_searchable_dom():
     button_html = to_xml(copy_raw_button("Copy Markdown", "# Heading\nbody", "raw-md-toast"))
     aux_html = "".join(to_xml(node) for node in copy_raw_nodes("# Heading\nbody"))

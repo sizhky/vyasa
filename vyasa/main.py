@@ -5,7 +5,7 @@ import tempfile
 import threading
 import webbrowser
 from importlib.metadata import PackageNotFoundError, version as pkg_version
-from .config import get_config, reload_config
+from .config import reload_config
 from .extensions import refresh_extension_runtime
 from .logging import configure_logging
 
@@ -81,13 +81,16 @@ def build_command():
     parser.add_argument('directory', nargs='?', help='Path to markdown files directory')
     parser.add_argument('-o', '--output', help='Output directory (default: ./dist)', default='dist')
     parser.add_argument('--show-hidden', action='store_true', help='Include hidden files and folders in listings')
+    parser.add_argument('--feedback', action='store_true', help='Enable the feedback extension')
     
     args = parser.parse_args(sys.argv[2:])  # Skip 'vyasa' and 'build'
     if args.show_hidden:
         os.environ['VYASA_SHOW_HIDDEN'] = 'true'
+    if args.feedback:
+        os.environ['VYASA_FEEDBACK_CLI'] = 'true'
     
     try:
-        output_dir = build_static_site(input_dir=args.directory, output_dir=args.output)
+        build_static_site(input_dir=args.directory, output_dir=args.output)
         return 0
     except Exception as e:
         print(f"Error building static site: {e}", file=sys.stderr)
@@ -122,6 +125,10 @@ def cli():
     # Check if first argument is 'build'
     if len(sys.argv) > 1 and sys.argv[1] == 'build':
         sys.exit(build_command())
+    if len(sys.argv) > 1 and sys.argv[1] == 'feedback':
+        from .extensions_builtin.feedback.cli import feedback_command
+
+        sys.exit(feedback_command(sys.argv[2:]))
     
     parser = argparse.ArgumentParser(description='Run Vyasa server')
     parser.add_argument('directory', nargs='?', help='Path to markdown files directory')
@@ -135,8 +142,11 @@ def cli():
     parser.add_argument('--reload-source', action='store_true', help='Restart the server and reload connected browsers when Vyasa source files change')
     parser.add_argument('--theme-debug', action='store_true', help='Show runtime theme preset switcher for debugging')
     parser.add_argument('--log-file', action='store_true', help='Write DEBUG logs to vyasa.log')
+    parser.add_argument('--feedback', action='store_true', help='Enable the feedback extension')
     
     args = parser.parse_args()
+    if args.feedback:
+        os.environ['VYASA_FEEDBACK_CLI'] = 'true'
     
     # Set root folder from arguments or environment
     if args.directory:
@@ -181,7 +191,7 @@ def cli():
         config = reload_config()
         refresh_extension_runtime(config.get_extensions_config())
 
-    print(f"Starting Vyasa server...")
+    print("Starting Vyasa server...")
     print(f"Blog root: {config.get_root_folder()}")
     print(f"Blog title: {config.get_blog_title()}")
     print(f"Serving at: http://{host}:{port}")

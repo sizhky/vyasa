@@ -473,7 +473,13 @@ class VyasaConfig:
 
     def get_extensions_config(self) -> dict:
         value = self._config.get('extensions', {})
-        return value if isinstance(value, dict) else {}
+        section = dict(value) if isinstance(value, dict) else {}
+        cli_enabled = os.getenv('VYASA_FEEDBACK_CLI', '').lower() in ('true', '1', 'yes', 'on')
+        enabled = self.get('feedback_enabled', 'VYASA_FEEDBACK_ENABLED', False)
+        if cli_enabled or (str(enabled).lower() in ('true', '1', 'yes', 'on')):
+            routes = self._coerce_list(section.get('routes_add', []))
+            section['routes_add'] = list(dict.fromkeys([*routes, 'feedback']))
+        return section
 
     def resolve_extensions(self):
         from .extensions import resolve_extension_plan

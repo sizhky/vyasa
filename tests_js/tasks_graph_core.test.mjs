@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReviewTarget, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 const { buildTasksProjectionConfigText, parseTasksProjectionConfigText, tasksCollectSearchMatches, tasksNodeMatchesAllFilters, tasksNodeMatchesFilters, tasksSelectionClickKey } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
 
 function fakeStorage(initial = {}) {
@@ -16,6 +16,12 @@ function fakeStorage(initial = {}) {
         setItem(key, value) { values.set(key, value); },
     };
 }
+
+test('Knowledge Graph publishes review targets without React Flow details', () => {
+    assert.deepEqual(tasksReviewTarget({ __kind__: 'groupTitle', sourceGroupId: 'g1', label: 'Group' }, 'g1__title', 'w1'), {
+        kind: 'node', id: 'g1', label: 'Group', node_kind: 'groupTitle', widget_id: 'w1',
+    });
+});
 
 test('Knowledge Graph notes backup round-trips one graph preference record', () => {
     const graphKey = 'vyasa:tasks:prefs:doc::graph-a';
