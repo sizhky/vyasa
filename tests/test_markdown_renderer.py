@@ -105,7 +105,9 @@ def test_slide_tables_keep_post_table_typography():
     css = Path("vyasa/extensions_builtin/slides/static/present.css").read_text(encoding="utf-8")
 
     assert ".vyasa-zen-slide-body table," in css
-    assert ".vyasa-zen-slide-body .uk-table { font-size: 1.15rem !important; }" in css
+    assert "--vyasa-zen-font-bump: 6px" in css
+    assert "--vyasa-zen-slide-max-width: 88rem" in css
+    assert ".vyasa-zen-slide-body .uk-table { font-size: calc(1.15rem + var(--vyasa-zen-font-bump)) !important; }" in css
     assert ".vyasa-zen-slide-body .uk-list-bullet > li::before { display: none !important; }" in css
     assert 'class="uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle my-6"' in _render_markdown_fragment("| A |\n|---|\n| B |")
 

@@ -4,7 +4,8 @@
   --vyasa-zen-font-title: var(--vyasa-font-heading);
   --vyasa-zen-font-body: var(--vyasa-font-body);
   --vyasa-zen-font-ui: var(--vyasa-font-ui);
-  --vyasa-zen-title-size: clamp(2.75rem, 5vw, 4rem);
+  --vyasa-zen-font-bump: 6px;
+  --vyasa-zen-title-size: calc(clamp(2.75rem, 5vw, 4rem) + var(--vyasa-zen-font-bump));
   --vyasa-zen-title-line-height: 1.05;
   --vyasa-zen-title-weight: 700;
 }
@@ -14,7 +15,7 @@
 .vyasa-zen-content .vyasa-heading-launch,
 .vyasa-zen-content .vyasa-heading-permalink { display: none !important; }
 .vyasa-zen-content {
-  --vyasa-zen-slide-max-width: 78rem;
+  --vyasa-zen-slide-max-width: 88rem;
   width: 100%;
   max-width: min(var(--vyasa-zen-slide-max-width), calc(100vw - 2rem));
   min-width: 0;
@@ -56,7 +57,7 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  font-size: 2.7em;
+  font-size: calc(2.7em + var(--vyasa-zen-font-bump));
   font-family: var(--vyasa-zen-font-body);
   --vyasa-zen-block-gap: 1.15rem;
   --vyasa-zen-list-gap: 0.55rem;
@@ -121,14 +122,14 @@
   border-radius: 0.08em;
   padding: 0 0.04em 0.02em;
 }
-.vyasa-zen-slide-body h1 { font-size: 2.6rem !important; }
-.vyasa-zen-slide-body h2 { font-size: 2.2rem !important; }
-.vyasa-zen-slide-body h3 { font-size: 1.8rem !important; }
-.vyasa-zen-slide-body h4 { font-size: 1.45rem !important; }
-.vyasa-zen-slide-body h5 { font-size: 1.2rem !important; }
-.vyasa-zen-slide-body h6 { font-size: 1.05rem !important; }
+.vyasa-zen-slide-body h1 { font-size: calc(2.6rem + var(--vyasa-zen-font-bump)) !important; }
+.vyasa-zen-slide-body h2 { font-size: calc(2.2rem + var(--vyasa-zen-font-bump)) !important; }
+.vyasa-zen-slide-body h3 { font-size: calc(1.8rem + var(--vyasa-zen-font-bump)) !important; }
+.vyasa-zen-slide-body h4 { font-size: calc(1.45rem + var(--vyasa-zen-font-bump)) !important; }
+.vyasa-zen-slide-body h5 { font-size: calc(1.2rem + var(--vyasa-zen-font-bump)) !important; }
+.vyasa-zen-slide-body h6 { font-size: calc(1.05rem + var(--vyasa-zen-font-bump)) !important; }
 .vyasa-zen-slide-body table,
-.vyasa-zen-slide-body .uk-table { font-size: 1.15rem !important; }
+.vyasa-zen-slide-body .uk-table { font-size: calc(1.15rem + var(--vyasa-zen-font-bump)) !important; }
 .vyasa-zen-slide-body p,
 .vyasa-zen-slide-body li,
 .vyasa-zen-slide-body blockquote,
@@ -136,7 +137,7 @@
 .vyasa-zen-slide-body summary,
 .vyasa-zen-slide-body .vyasa-callout,
 .vyasa-zen-slide-body .tabs-container {
-  font-size: 1.15rem !important;
+  font-size: calc(1.15rem + var(--vyasa-zen-font-bump)) !important;
   line-height: 1.65 !important;
 }
 .vyasa-zen-slide-body details {
@@ -166,7 +167,7 @@
 .vyasa-zen-slide-body .tab-button {
   border-radius: calc(var(--vyasa-rect-radius) * 0.9) !important;
   padding: 0.75rem 1rem;
-  font-size: 0.88rem;
+  font-size: calc(0.88rem + var(--vyasa-zen-font-bump));
   letter-spacing: 0.08em;
   color: color-mix(in srgb, var(--vyasa-ink-soft) 82%, var(--vyasa-ink) 18%);
 }
@@ -308,7 +309,7 @@
   padding: 0.25rem 0;
   color: var(--vyasa-ink-soft);
   font-family: var(--vyasa-zen-font-ui);
-  font-size: 0.65rem;
+  font-size: calc(0.65rem + var(--vyasa-zen-font-bump));
   opacity: 0.58;
   pointer-events: none;
   transform: translateX(-50%);
@@ -397,7 +398,7 @@
     0 10px 24px -20px color-mix(in srgb, var(--vyasa-ink) 32%, transparent);
   color: var(--vyasa-ink-soft);
   font-family: var(--vyasa-zen-font-ui);
-  font-size: 0.95rem;
+  font-size: calc(0.95rem + var(--vyasa-zen-font-bump));
   font-weight: 800;
   line-height: 1;
 }
