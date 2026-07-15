@@ -37,6 +37,13 @@ def test_libertine_manuscript_uses_bundled_font_families():
 
     assert theme["theme_body_font"].startswith('"Linux Libertine O"')
     assert theme["theme_ui_font"].startswith('"Linux Biolinum O"')
+    assert theme["theme_body_stroke_width"] == "0.14px"
+    assert theme["theme_body_font_weight"] == "400"
+    assert theme["theme_heading_letter_spacing"] == "-0.032em"
+    assert theme["theme_heading_font_weight"] == "700"
+    assert theme["theme_heading_content_gap"] == "0.15rem"
+    assert theme["theme_content_font_size"] == "18px"
+    assert theme["theme_list_item_gap"] == "0.25rem"
 
 
 def test_gentium_charter_uses_gentium_plus():

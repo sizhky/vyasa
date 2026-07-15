@@ -222,6 +222,29 @@ summary {
 #main-content .sidenote {
     font-family: var(--vyasa-font-body);
 }
+#main-content {
+    font-size: var(--vyasa-content-font-size, 18px);
+    letter-spacing: var(--vyasa-body-letter-spacing, normal);
+    line-height: var(--vyasa-body-line-height, 1.6);
+    -webkit-text-stroke: var(--vyasa-body-stroke-width, 0) currentColor;
+}
+#main-content p.text-base,
+#main-content li.text-base,
+#main-content ul.text-base,
+#main-content ol.text-base {
+    font-size: var(--vyasa-content-font-size, 1rem);
+    font-weight: var(--vyasa-body-font-weight, 400);
+}
+#main-content .uk-list > li + li {
+    margin-top: var(--vyasa-list-item-gap, 0.5rem) !important;
+}
+#main-content h1, #main-content h2, #main-content h3,
+#main-content h4, #main-content h5, #main-content h6 {
+    letter-spacing: var(--vyasa-heading-letter-spacing, -0.02em);
+    font-weight: var(--vyasa-heading-font-weight, inherit);
+    margin-bottom: var(--vyasa-heading-content-gap, 1rem);
+    -webkit-text-stroke: var(--vyasa-heading-stroke-width, 0) currentColor;
+}
 /* Off-canvas slide-in panels (translate-x-full) must not widen the page;
    hidden is the fallback for Safari < 16 which lacks overflow clip */
 html { overflow-x: hidden; overflow-x: clip; }
@@ -1043,7 +1066,7 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .vyasa-heading-fold-summary > h1, .vyasa-heading-fold-summary > h2, .vyasa-heading-fold-summary > h3, .vyasa-heading-fold-summary > h4, .vyasa-heading-fold-summary > h5, .vyasa-heading-fold-summary > h6 { margin: 0; flex: 1; order: 2; }
 .vyasa-heading-fold-chevron { display: none; }
 .vyasa-heading-fold-body { padding-left: 0.4rem; }
-.vyasa-heading-fold-body > :first-child { margin-top: 0.95rem; }
+.vyasa-heading-fold-body > :first-child { margin-top: var(--vyasa-heading-content-gap, 0.95rem); }
 .vyasa-heading-fold-body ul,
 .vyasa-heading-fold-body ol { margin-top: 0.95rem; margin-bottom: 0.95rem; }
 .vyasa-heading-fold-body li > p { margin: 0; }
