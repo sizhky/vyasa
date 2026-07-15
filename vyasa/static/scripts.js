@@ -1590,7 +1590,7 @@ function initMobileMenus() {
 
 let documentScrollTarget = null;
 let documentScrollFrame = null;
-const DOCUMENT_SCROLL_STEP = 40;
+const DOCUMENT_SCROLL_STEP = 140;
 
 function scrollDocumentBy(delta) {
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
