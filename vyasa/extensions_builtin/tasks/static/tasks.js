@@ -1,9 +1,10 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReviewTarget } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
 import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksCountFilterRules, tasksEmptyFilterQuery, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksModalController } from '/static/extensions/tasks/tasks_modal.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
+import { shortcutsSuspended } from '/static/page_shell.js';
 
 window.__vyasaTasksPhaseLog?.('tasks-js:module-start');
 
@@ -5073,6 +5074,9 @@ async function renderTasksGraphs(rootElement = document) {
                 const isDimmed = highlightMode === 'dim';
                 const sourceNodeId = data?.__kind__ === 'groupTitle' ? data?.sourceGroupId : id;
                 const logicalNodeId = tasksLogicalNodeId(data, sourceNodeId);
+                const reviewAttrs = {
+                    'data-vyasa-review-target': JSON.stringify(tasksReviewTarget(data, id, widgetId)),
+                };
                 const isChecked = data?.__checked__ === true;
                 const taskStateLabel = String(data?.__card_state__ || (isChecked ? TASKS_DEFAULT_CARD_STATES[1] : TASKS_DEFAULT_CARD_STATES[0]));
                 const taskStateColor = data?.__card_state_color__ || TASKS_DONE_ACCENT;
@@ -5149,6 +5153,7 @@ async function renderTasksGraphs(rootElement = document) {
                         setExpanded(next);
                     };
                     return React.createElement('div', {
+                        ...reviewAttrs,
                         onClickCapture: handleSelectedNodeToggleCapture,
                         style: {
                             width: '100%', height: '100%',
@@ -5189,6 +5194,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const labelContent = renderTasksInlineLinks(data?.label || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick });
                 if (data?.__gantt) {
                     return React.createElement('div', {
+                        ...reviewAttrs,
                         className: 'vyasa-task-node-body',
                         onClickCapture: handleSelectedNodeToggleCapture,
                         style: {
@@ -5288,6 +5294,7 @@ async function renderTasksGraphs(rootElement = document) {
                 };
                 if (isExpanded) {
                     return React.createElement('div', {
+                        ...reviewAttrs,
                         onClickCapture: handleSelectedNodeToggleCapture,
                         style: {
                             width: '100%', height: '100%',
@@ -5304,6 +5311,7 @@ async function renderTasksGraphs(rootElement = document) {
                     );
                 }
                 return React.createElement('div', {
+                    ...reviewAttrs,
                     className: 'vyasa-task-node-body',
                     onClickCapture: handleSelectedNodeToggleCapture,
                     style: {
@@ -5371,7 +5379,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const reactFlow = rf.useReactFlow();
                 React.useEffect(() => {
                     const onKeyDown = (event) => {
-                        if (window.__vyasaShortcutsSuspended) return;
+                        if (shortcutsSuspended()) return;
                         if (event.defaultPrevented || event.repeat) return;
                         if (event.metaKey || event.ctrlKey || event.altKey) return;
                         const flowWrapper = flowWrapperRef.current;

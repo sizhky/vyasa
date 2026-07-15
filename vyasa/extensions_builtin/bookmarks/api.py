@@ -6,24 +6,24 @@ from typing import Callable, Protocol
 
 from starlette.responses import Response
 
-from .store import bookmark_owner_from_auth
+from .store import BookmarkRow, bookmark_owner_from_auth
 from ...helpers import _effective_abbreviations, content_path_for_slug, content_url_for_slug, parse_frontmatter, slug_to_title
 from ...runtime_context import RuntimeAccess
 
 
 class BookmarkStoreAdapter(Protocol):
-    def list(self, owner: str): ...
+    def list(self, owner: str) -> list[BookmarkRow]: ...
     def upsert(self, owner: str, path: str) -> None: ...
     def delete(self, owner: str, path: str) -> bool: ...
 
 
 @dataclass(frozen=True)
 class CallableBookmarkStore:
-    list_rows: Callable[[str], list]
+    list_rows: Callable[[str], list[BookmarkRow]]
     upsert_row: Callable[[str, str], None]
     delete_row: Callable[[str, str], bool]
 
-    def list(self, owner: str):
+    def list(self, owner: str) -> list[BookmarkRow]:
         return self.list_rows(owner)
 
     def upsert(self, owner: str, path: str) -> None:

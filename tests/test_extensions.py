@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fasthtml.common import to_xml
+import pytest
 
 from vyasa.config import reload_config
 from vyasa.extensions import (
@@ -115,6 +116,23 @@ def test_extension_cannot_register_undeclared_route_prefix(tmp_path):
         assert "undeclared route prefix" in str(exc)
     else:
         raise AssertionError("expected route guard validation failure")
+
+
+def test_extension_cannot_register_undeclared_storage_namespace(tmp_path):
+    package = tmp_path / "bad_storage_ext"
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        "from vyasa.extensions import ExtensionMeta, VyasaExtensionBase\n"
+        "class Bad(VyasaExtensionBase):\n"
+        "    def register(self, app): app.storage.namespace('undeclared')\n"
+        "EXTENSION = Bad(ExtensionMeta('bad_storage', 'route', ('cap:route:bad_storage',)))\n"
+    )
+
+    with pytest.raises(ExtensionConfigError, match="undeclared storage namespace"):
+        build_extension_runtime({
+            "external": [{"path": str(tmp_path), "module": "bad_storage_ext"}],
+            "routes_add": ["bad_storage"],
+        })
 
 
 def test_extension_cannot_register_undeclared_document_type(tmp_path):

@@ -95,6 +95,27 @@ class AssetCollector:
 
 
 @dataclass(frozen=True)
+class StorageNamespace:
+    name: str
+    root: Path
+    legacy_root: Path
+
+    def file(self, filename: str, *, legacy_name: str | None = None) -> Path:
+        relative = Path(filename)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(f"Storage filename must stay inside namespace {self.name}")
+        target = self.root / relative
+        if legacy_name:
+            legacy_relative = Path(legacy_name)
+            if legacy_relative.is_absolute() or ".." in legacy_relative.parts:
+                raise ValueError(f"Legacy storage filename must stay inside namespace {self.name}")
+            legacy = self.legacy_root / legacy_relative
+            if legacy.is_file():
+                return legacy
+        return target
+
+
+@dataclass(frozen=True)
 class NavigationAction:
     id: str
     label: str
@@ -152,7 +173,7 @@ class ExtensionRuntime:
     config_defaults: dict[str, object] = field(default_factory=dict)
     startup_hooks: list[Callable] = field(default_factory=list)
     shutdown_hooks: list[Callable] = field(default_factory=list)
-    storage_namespaces: dict[str, Path | None] = field(default_factory=dict)
+    storage_namespaces: dict[str, StorageNamespace] = field(default_factory=dict)
     sidebar_section_providers: list[Callable] = field(default_factory=list)
     sidebar_row_decorators: list[Callable] = field(default_factory=list)
     search_result_row_decorators: list[Callable] = field(default_factory=list)
@@ -243,7 +264,7 @@ class _RegistrationGuard:
             )
 
     def require_storage(self, namespace: str) -> None:
-        if self.meta.storage_namespaces and namespace not in self.meta.storage_namespaces:
+        if namespace not in self.meta.storage_namespaces:
             raise ExtensionConfigError(
                 f"Extension {self.meta.id} attempted to register undeclared storage namespace {namespace}"
             )
@@ -381,9 +402,19 @@ class _StorageRegistrar:
         self.runtime = runtime
         self.guard = guard
 
-    def namespace(self, name: str, root: Path | None = None) -> None:
+    def namespace(self, name: str, root: Path | None = None) -> StorageNamespace:
         self.guard.require_storage(name)
-        self.runtime.storage_namespaces[name] = root
+        if root is None:
+            from .config import get_config
+
+            root = get_config().get_root_folder()
+        namespace = StorageNamespace(
+            name=name,
+            root=root / ".vyasa-storage" / name,
+            legacy_root=root,
+        )
+        self.runtime.storage_namespaces[name] = namespace
+        return namespace
 
 
 class _NavigationRegistrar:

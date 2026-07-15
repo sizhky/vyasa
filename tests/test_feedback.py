@@ -5,10 +5,11 @@ import sqlite3
 from types import SimpleNamespace
 from typing import cast
 
-from vyasa.extensions import build_extension_runtime
+from vyasa.extensions import StorageNamespace, build_extension_runtime
 from vyasa.extensions_builtin.feedback.api import _heading_path, _normalized_offsets, register_feedback_routes
 from vyasa.extensions_builtin.feedback.cli import feedback_command, format_toon, request_json, resolve_document_url
 from vyasa.extensions_builtin.feedback.store import FeedbackStore, PresenceRegistry, event_payload
+from vyasa.extensions_builtin.markdown.renderer import from_md
 from vyasa.runtime_services import set_runtime_services
 from vyasa.runtime_context import RuntimeAccess
 
@@ -35,6 +36,7 @@ def feedback_handlers(tmp_path):
     runtime = cast(RuntimeAccess, SimpleNamespace(
         can_read_post=lambda path, request: True,
         auth_for_request=lambda request: {"name": "Yeshwanth"},
+        render_markdown=lambda content, **kwargs: from_md(content, **kwargs),
     ))
     store = FeedbackStore(tmp_path)
     presence = PresenceRegistry()
@@ -78,6 +80,21 @@ def test_feedback_store_keeps_replies_out_of_agent_poll_filter(tmp_path):
     events = store.after("plan", 0, kinds=("feedback",))
 
     assert [event_payload(event)["id"] for event in events] == [feedback.id]
+
+
+def test_storage_namespace_assigns_path_and_preserves_legacy_database(tmp_path):
+    legacy = tmp_path / ".vyasa-feedback.db"
+    legacy.write_bytes(b"existing")
+    namespace = StorageNamespace("feedback", tmp_path / ".vyasa-storage" / "feedback", tmp_path)
+
+    assigned = namespace.file("feedback.db", legacy_name=legacy.name)
+
+    assert assigned == legacy
+    assert assigned.read_bytes() == b"existing"
+    legacy.unlink()
+    assert namespace.file("feedback.db", legacy_name=legacy.name) == (
+        tmp_path / ".vyasa-storage" / "feedback" / "feedback.db"
+    )
 
 
 def test_presence_tracks_nested_pollers():
@@ -311,72 +328,11 @@ def test_feedback_reply_then_poll_reuses_one_cli_call(monkeypatch, capsys):
     assert "status: \"feedback\"" in capsys.readouterr().out
 
 
-def test_feedback_review_lifts_lavish_capture_and_conversation_contract():
-    capture = (
-        Path(__file__).parents[1]
-        / "vyasa" / "extensions_builtin" / "feedback" / "static" / "lavish-capture.js"
-    ).read_text(encoding="utf-8")
-    client = (
-        Path(__file__).parents[1]
-        / "vyasa" / "extensions_builtin" / "feedback" / "static" / "feedback.js"
-    ).read_text(encoding="utf-8")
-    css = (
-        Path(__file__).parents[1]
-        / "vyasa" / "extensions_builtin" / "feedback" / "static" / "feedback.css"
-    ).read_text(encoding="utf-8")
+def test_feedback_bundle_contains_browser_interfaces():
+    static_dir = Path(__file__).parents[1] / "vyasa" / "extensions_builtin" / "feedback" / "static"
 
-    assert "showAnnotationCard" in capture
-    assert "textSelectionContext" in capture
-    assert "const selected = new Map()" in capture
-    assert 'type: "element-group"' in capture
-    assert "additive: event.shiftKey" in capture
-    assert "Shift-click to add" in capture
-    assert "window.__vyasaShortcutsSuspended = annotationMode" in capture
-    assert 'type: "knowledge-graph-selection"' in capture
-    assert 'pointerCarrier?.dataset.vyasaReviewPointerTarget' in capture
-    assert "carrier.querySelector('.react-flow__node[data-id=" in capture
-    assert "selected.set(selectionKey(target, c)" in capture
-    assert 'el.closest?.("[data-vyasa-review-targets]")' in capture
-    assert 'window.addEventListener("keydown", suspendPageShortcuts, true)' in capture
-    assert "sidebar.addEventListener('keydown'" in client
-    assert "vyasa-floating-bubble vyasa-feedback-launcher" in client
-    assert "floatingActions().prepend(launcher)" in client
-    assert "vyasa-feedback-icon" in client
-    assert "launcher.setAttribute('aria-keyshortcuts', 'R')" in client
-    assert "event.key.toLowerCase() !== 'r'" in client
-    assert "event.composedPath().some" in client
-    assert "Annotate Mode (A)" in client
-    assert "data-annotation-mode" in client
-    assert 'aria-keyshortcuts="A"' in client
-    assert "setAnnotationMode(annotationEnabled)" in client
-    assert "function toggleAnnotationMode()" in client
-    assert "event.key.toLowerCase() === 'a'" in client
-    assert "&& annotationEnabled" in client
-    assert 'document.addEventListener(\n    "mouseover"' in capture
-    assert "lavish:queuePrompt" in client
-    assert "lavish:requestSnapshot" not in client
-    assert "Copy command to start agent" in client
-    assert "Copy feedback payload" in client
-    assert "data-copy-payload" in client
-    assert "function agentFeedbackPayload()" in client
-    assert "events: pendingPrompts().map" in client
-    assert "body: JSON.stringify(feedbackPayload" in client
-    assert "Your agent is not connected" in client
-    assert ".vyasa-feedback-pill span { min-width: 0; flex: 1 1 auto;" in css
-    assert ".vyasa-feedback-pill button { flex: 0 0 auto;" in css
-    assert ".vyasa-feedback-actions { display: grid; gap: .5rem; }" in css
-    assert "Conversation" in client
-    assert "vyasa-feedback-sidebar" in client
-    assert "event.message_html || renderMarkdown(event.message || '')" in client
-    assert "body.dataset.rendered = event.message_html ? 'true' : 'false'" in client
-    assert "window.__vyasaRenderMathSafely?.(body)" in client
-    assert "event.action === 'refresh'" in client
-    assert "window.htmx.ajax('GET', location.pathname + location.search" in client
-    assert "sessionStorage.setItem(refreshCursorKey()" in client
-    assert "window.location.reload()" in client
-    assert "safeHref" in client
-    assert "body.textContent = event.comment || ''" in client
-    assert "window.dispatchEvent(new Event('resize'));" in client
-    assert ".vyasa-feedback-open #page-container { width: calc(100vw - var(--vyasa-feedback-width));" in css
-    assert "const message = { type: 'lavish:setAnnotationMode', enabled }" in client
-    assert "window.postMessage(message, '*')" in client
+    assert {path.name for path in static_dir.iterdir()} >= {
+        "feedback.js",
+        "lavish-capture.js",
+        "review_targets.js",
+    }

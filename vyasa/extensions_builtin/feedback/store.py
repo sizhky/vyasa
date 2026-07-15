@@ -21,8 +21,8 @@ class FeedbackEvent:
 
 
 class FeedbackStore:
-    def __init__(self, root: Path):
-        self.path = root / ".vyasa-feedback.db"
+    def __init__(self, path: Path):
+        self.path = path if path.suffix == ".db" else path / ".vyasa-feedback.db"
         self._initialized = False
         self._init_lock = Lock()
 

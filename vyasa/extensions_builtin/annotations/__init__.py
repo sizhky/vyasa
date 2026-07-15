@@ -1,4 +1,5 @@
 from pathlib import Path
+from functools import partial
 
 from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 from ...runtime_services import get_runtime_services
@@ -8,8 +9,8 @@ from .store import delete_annotation, list_annotations, upsert_annotation
 
 class AnnotationsExtension(VyasaExtensionBase):
     def register(self, app) -> None:
-        app.storage.namespace("annotations")
-        app.routes.add("/api/annotations", _register_annotations_routes)
+        storage = app.storage.namespace("annotations")
+        app.routes.add("/api/annotations", partial(_register_annotations_routes, storage=storage))
         app.assets.page(_page_bundles)
         app.layout.main_attrs(_main_attrs)
         app.assets.bundle(
@@ -22,19 +23,18 @@ class AnnotationsExtension(VyasaExtensionBase):
         )
 
 
-def _register_annotations_routes(rt, runtime):
-    from ...config import get_config
-
+def _register_annotations_routes(rt, runtime, *, storage):
     cache = {"db": None, "tbl": None}
+    db_path = storage.file("annotations.db", legacy_name=".vyasa-annotations.db")
 
     def _db_list(path: str):
-        return list_annotations(get_config().get_root_folder(), cache, path)
+        return list_annotations(db_path, cache, path)
 
     def _db_upsert(row):
-        upsert_annotation(get_config().get_root_folder(), cache, row)
+        upsert_annotation(db_path, cache, row)
 
     def _db_delete(annotation_id: str):
-        return delete_annotation(get_config().get_root_folder(), cache, annotation_id)
+        return delete_annotation(db_path, cache, annotation_id)
 
     register_annotations_routes(
         rt,

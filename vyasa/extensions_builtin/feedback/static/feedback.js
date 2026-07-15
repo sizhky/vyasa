@@ -1,4 +1,8 @@
 // Review interaction model derived from lavish-axi. See ../LAVISH_LICENSE.
+import { ensureFloatingActions, hydrateMarkdown, isEditableShortcutEvent, syncFloatingActions } from '/static/page_shell.js';
+
+const feedbackAssetVersion = new URL(import.meta.url).search;
+
 (function () {
   let documentPath = '';
   let apiDocument = '';
@@ -47,7 +51,7 @@
       <div class="vyasa-feedback-chat"></div>
       <div class="vyasa-feedback-compose"><div class="vyasa-feedback-banner">Your agent is not connected. Copy the command, run it in a terminal, then send feedback.</div><div class="vyasa-feedback-pills"></div><textarea class="vyasa-feedback-input" placeholder="Write a message for the agent..."></textarea><div class="vyasa-feedback-actions"><button class="vyasa-feedback-action secondary" type="button" data-copy-listener>Copy command to start agent</button><button class="vyasa-feedback-action secondary" type="button" data-copy-payload>Copy feedback payload</button><button class="vyasa-feedback-action" type="button" data-send>Send to Agent</button></div></div>`;
     document.body.appendChild(sidebar);
-    floatingActions().prepend(launcher);
+    ensureFloatingActions().prepend(launcher);
     chat = sidebar.querySelector('.vyasa-feedback-chat');
     input = sidebar.querySelector('.vyasa-feedback-input');
     pills = sidebar.querySelector('.vyasa-feedback-pills');
@@ -74,24 +78,12 @@
     input.addEventListener('input', renderQueue);
   }
 
-  function floatingActions() {
-    const shared = window.__vyasaEnsureFloatingActions?.();
-    if (shared) return shared;
-    const existing = document.getElementById('vyasa-floating-actions');
-    if (existing) return existing;
-    const rail = document.createElement('div');
-    rail.id = 'vyasa-floating-actions';
-    rail.className = 'vyasa-floating-actions';
-    document.body.appendChild(rail);
-    return rail;
-  }
-
   function openReview() {
     loadCapture();
     document.body.classList.add('vyasa-feedback-open');
     requestAnimationFrame(() => {
       window.dispatchEvent(new Event('resize'));
-      window.__vyasaSyncFloatingActions?.();
+      syncFloatingActions();
     });
     launcher.setAttribute('aria-expanded', 'true');
     setAnnotationMode(annotationEnabled);
@@ -103,7 +95,7 @@
     document.body.classList.remove('vyasa-feedback-open');
     requestAnimationFrame(() => {
       window.dispatchEvent(new Event('resize'));
-      window.__vyasaSyncFloatingActions?.();
+      syncFloatingActions();
     });
     launcher.setAttribute('aria-expanded', 'false');
     setAnnotationMode(false);
@@ -125,7 +117,8 @@
     if (captureLoaded || document.querySelector('script[data-vyasa-lavish-capture]')) return;
     captureLoaded = true;
     const script = document.createElement('script');
-    script.src = '/static/extensions/feedback/lavish-capture.js?v=af721003';
+    script.type = 'module';
+    script.src = `/static/extensions/feedback/lavish-capture.js${feedbackAssetVersion}`;
     script.dataset.vyasaLavishCapture = 'true';
     script.onload = () => {
       setAnnotationMode(document.body.classList.contains('vyasa-feedback-open') && annotationEnabled);
@@ -142,7 +135,8 @@
         const doc = frame.contentDocument;
         if (!doc || doc.querySelector('script[data-vyasa-lavish-capture]')) return;
         const script = doc.createElement('script');
-        script.src = '/static/extensions/feedback/lavish-capture.js?v=af721003';
+        script.type = 'module';
+        script.src = `/static/extensions/feedback/lavish-capture.js${feedbackAssetVersion}`;
         script.dataset.vyasaLavishCapture = 'true';
         script.onload = () => frame.contentWindow?.postMessage({
           type: 'lavish:setAnnotationMode',
@@ -204,63 +198,8 @@
     } catch (_) {}
   }
 
-  function escapeHtml(value) {
-    return String(value || '').replace(/[&<>"']/g, (char) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    }[char]));
-  }
-
-  function safeHref(value) {
-    const href = String(value || '').trim();
-    return /^(https?:|mailto:|\/|#)/i.test(href) ? href : '#';
-  }
-
-  function renderInlineMarkdown(value) {
-    const links = [];
-    const linked = String(value || '').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_match, label, href) => {
-      links.push({ label, href });
-      return `@@LAVISH_LINK_${links.length - 1}@@`;
-    });
-    return escapeHtml(linked)
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
-      .replace(/@@LAVISH_LINK_(\d+)@@/g, (_match, index) => {
-        const link = links[Number(index)] || {};
-        return `<a href="${escapeHtml(safeHref(link.href))}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.label)}</a>`;
-      });
-  }
-
-  function renderMarkdown(value) {
-    const lines = String(value || '').split(/\r?\n/);
-    const html = [];
-    let list = '';
-    let inCode = false;
-    for (const line of lines) {
-      if (line.trim().startsWith('```')) {
-        if (list) { html.push(`</${list}>`); list = ''; }
-        html.push(inCode ? '</code></pre>' : '<pre><code>');
-        inCode = !inCode;
-      } else if (inCode) html.push(`${escapeHtml(line)}\n`);
-      else {
-        const item = line.match(/^(\s*)([-*]|\d+\.)\s+(.+)$/);
-        if (item) {
-          const tag = /^\d+\./.test(item[2]) ? 'ol' : 'ul';
-          if (list !== tag) { if (list) html.push(`</${list}>`); html.push(`<${tag}>`); list = tag; }
-          html.push(`<li>${renderInlineMarkdown(item[3])}</li>`);
-        } else {
-          if (list) { html.push(`</${list}>`); list = ''; }
-          if (line.trim()) html.push(`<p>${renderInlineMarkdown(line)}</p>`);
-        }
-      }
-    }
-    if (list) html.push(`</${list}>`);
-    if (inCode) html.push('</code></pre>');
-    return html.join('');
-  }
-
   function hydrateReply(body) {
-    window.__vyasaRenderMathSafely?.(body);
+    hydrateMarkdown(body);
   }
 
   function enqueue(prompt) {
@@ -306,8 +245,8 @@
       label.textContent = role === 'agent' ? 'Agent' : 'You';
       body.className = 'vyasa-feedback-body';
       if (role === 'agent') {
-        body.innerHTML = event.message_html || renderMarkdown(event.message || '');
-        body.dataset.rendered = event.message_html ? 'true' : 'false';
+        if (event.message_html) body.innerHTML = event.message_html;
+        else body.textContent = event.message || '';
         hydrateReply(body);
       }
       else body.textContent = event.comment || '';
@@ -388,7 +327,7 @@
   function surface() {
     if (document.querySelector('.vyasa-mdx-payload')) return 'mdx';
     if (document.querySelector('.pdf-viewer')) return 'pdf';
-    if (document.querySelector('[data-vyasa-review-surface="knowledge-graph"], [data-node-id], [data-edge-id]')) return 'knowledge-graph';
+    if (document.querySelector('[data-vyasa-review-surface="knowledge-graph"]')) return 'knowledge-graph';
     if (document.querySelector('#main-content iframe[src*=".html"]')) return 'html';
     return 'markdown';
   }
@@ -464,10 +403,7 @@
   });
   window.addEventListener('keydown', (event) => {
     const open = document.body.classList.contains('vyasa-feedback-open');
-    const editing = event.composedPath().some((node) => (
-      node instanceof Element
-      && (node.matches('input, textarea, select') || node.isContentEditable || node.closest('[data-lavish-ui] input, [data-lavish-ui] textarea, [data-lavish-ui] select'))
-    ));
+    const editing = isEditableShortcutEvent(event);
     if (event.key === 'Escape' && open) {
       event.preventDefault();
       event.stopImmediatePropagation();

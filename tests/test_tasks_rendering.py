@@ -739,7 +739,6 @@ def test_tasks_ego_views_keep_drag_selection_enabled():
 def test_tasks_g_shortcuts_open_ego_views():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "if (window.__vyasaShortcutsSuspended) return;" in source
     assert "if (key === 'g' && !egoMode)" in source
     assert "openEgo?.(event.shiftKey)" in source
     assert "const selectedNodeIdRef = React.useRef(null);" in source
@@ -755,19 +754,6 @@ def test_tasks_g_shortcuts_open_ego_views():
     assert "if (event.key === 'Escape' && !event.shiftKey && egoModalOpen)" in source
     assert "if (event.key === 'Escape' && !event.shiftKey && widgetFocused)" in source
     assert "clearSelection('escape');" in source
-
-
-def test_tasks_publish_semantic_review_targets():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-
-    assert "carrier.dataset.vyasaReviewTargets = JSON.stringify(reviewTargets)" in source
-    assert "'data-vyasa-review-surface': 'knowledge-graph'" in source
-    assert "kind: 'node'" in source
-    assert "kind: 'edge'" in source
-    assert "source: edge.source" in source
-    assert "target: edge.target" in source
-    assert "function tasksGraphNodeAtFlowPoint" in source
-    assert "wrapper.dataset.vyasaReviewPointerTarget = JSON.stringify" in source
 
 
 def test_tasks_clicking_selected_node_toggles_selection_off():

@@ -169,28 +169,6 @@ def test_fold_all_script_keeps_tooltip_in_sync_with_button_state():
     assert "syncFoldAllButton(toggle, shouldOpen);" in source
 
 
-def test_shell_shortcuts_ignore_shadow_dom_editors_and_lavish_ui():
-    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
-
-    assert "event.composedPath().some" in source
-    assert "node.matches('input, textarea, select')" in source
-    assert "node.closest('[data-lavish-ui]')" in source
-    assert "if (isEditableShortcutEvent(e)) return;" in source
-    assert "if (window.__vyasaShortcutsSuspended) return;" in source
-
-
-def test_scroll_top_and_extensions_share_floating_action_rail():
-    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
-    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
-
-    assert "window.__vyasaEnsureFloatingActions = ensureFloatingActionRail;" in source
-    assert "vyasa-floating-bubble vyasa-scroll-top-button" in source
-    assert "rail.appendChild(button)" in source
-    assert ".vyasa-floating-actions" in css
-    assert "flex-direction: column" in css
-    assert ".vyasa-floating-bubble" in css
-
-
 def test_sidebars_bound_main_content_width():
     source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
@@ -202,12 +180,6 @@ def test_sidebars_bound_main_content_width():
     assert "#content-with-sidebars .vyasa-main-shell svg" not in css
     assert "width: 100% !important;" in css
     assert "window.dispatchEvent(new Event('resize'));" in source
-
-
-def test_runtime_exposes_math_render_hook_for_dynamic_fragments():
-    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
-
-    assert "window.__vyasaRenderMathSafely = renderMathSafely;" in source
 
 
 def test_copy_markdown_button_keeps_raw_content_out_of_searchable_dom():

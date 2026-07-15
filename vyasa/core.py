@@ -451,6 +451,7 @@ _runtime = RuntimeContext(
     rbac_cfg=lambda: _rbac_cfg,
     google_oauth_cfg=lambda: _google_oauth_cfg,
     logger=logger,
+    markdown_renderer=from_md,
 )
 set_runtime_context(_runtime)
 

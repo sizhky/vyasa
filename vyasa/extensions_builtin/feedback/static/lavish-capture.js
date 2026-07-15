@@ -1,6 +1,9 @@
 // Derived from lavish-axi at af721003dc99d7be260868ec8577c96e05cee312. See ../LAVISH_LICENSE.
 /* global CSS, Element, ResizeObserver, document, getComputedStyle, parent, window */
 
+import { reviewTargetElement, reviewTargets } from './review_targets.js';
+import { setShortcutsSuspended } from '/static/page_shell.js';
+
 const LAVISH_INTERNAL_QUEUE_KEY = "_lavishQueueKey";
 
 // Derive the browser-only replacement key used to collapse unsent updates for the same input.
@@ -154,60 +157,20 @@ function createArtifactSdk(deriveQueueKey, isNativeInteractive = isNativeInterac
   }
 
   function context(el) {
-    const graphElement = el.closest?.(
-      "[data-node-id], [data-edge-id], .react-flow__node[data-id], .react-flow__edge[data-id]",
-    );
-    const graphId = graphElement?.getAttribute("data-node-id")
-      || graphElement?.getAttribute("data-edge-id")
-      || graphElement?.getAttribute("data-id");
-    let reviewTargets = [];
-    const reviewCarrier = el.closest?.("[data-vyasa-review-targets]");
-    const pointerCarrier = el.closest?.("[data-vyasa-review-pointer-target]");
-    if (!graphId && pointerCarrier?.dataset.vyasaReviewPointerTarget) {
-      try {
-        const parsed = JSON.parse(pointerCarrier.dataset.vyasaReviewPointerTarget);
-        if (parsed && parsed.id) reviewTargets = [parsed];
-      } catch (_) {}
-    } else if (!graphId && reviewCarrier?.dataset.vyasaReviewTargets) {
-      try {
-        const parsed = JSON.parse(reviewCarrier.dataset.vyasaReviewTargets);
-        if (Array.isArray(parsed)) reviewTargets = parsed.filter((item) => item && item.id);
-      } catch (_) {}
-    }
-    if (graphId) {
-      reviewTargets = [{
-        kind: graphElement.matches("[data-edge-id], .react-flow__edge") ? "edge" : "node",
-        id: graphId,
-        label: (graphElement.innerText || graphElement.textContent || "").trim().replace(/\s+/g, " ").slice(0, 240),
-      }];
-    }
-    const semanticText = reviewTargets.map((item) => item.label || item.id).filter(Boolean).join(" | ").slice(0, 240);
+    const targets = reviewTargets(el);
+    const semanticText = targets.map((item) => item.label || item.id).filter(Boolean).join(" | ").slice(0, 240);
     return {
       uid: uid(el),
       selector: selector(el),
       tag: (el.tagName || "").toLowerCase(),
       text: (el.innerText || el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 240) || semanticText,
-      graph: reviewTargets.length === 1 ? reviewTargets[0] : undefined,
-      target: reviewTargets.length ? { type: "knowledge-graph-selection", items: reviewTargets } : undefined,
+      graph: targets.length === 1 ? targets[0] : undefined,
+      target: targets.length ? { type: "knowledge-graph-selection", items: targets } : undefined,
     };
   }
 
   function annotationTarget(el) {
-    const direct = el.closest?.(
-      "[data-node-id], [data-edge-id], .react-flow__node[data-id], .react-flow__edge[data-id]",
-    );
-    if (direct) return direct;
-    const carrier = el.closest?.("[data-vyasa-review-surface]");
-    if (carrier?.dataset.vyasaReviewPointerTarget) {
-      try {
-        const pointer = JSON.parse(carrier.dataset.vyasaReviewPointerTarget);
-        const semanticNode = pointer?.kind === "node" && pointer.id
-          ? carrier.querySelector('.react-flow__node[data-id="' + CSS.escape(String(pointer.id)) + '"]')
-          : null;
-        if (semanticNode) return semanticNode;
-      } catch (_) {}
-    }
-    return carrier || el;
+    return reviewTargetElement(el);
   }
 
   function selectionKey(el, itemContext) {
@@ -328,7 +291,7 @@ function createArtifactSdk(deriveQueueKey, isNativeInteractive = isNativeInterac
 
   function setAnnotationMode(enabled) {
     annotationMode = !!enabled;
-    window.__vyasaShortcutsSuspended = annotationMode;
+    setShortcutsSuspended('feedback', annotationMode);
     let style = document.getElementById("lavish-cursor-style");
     if (annotationMode && !style) {
       style = document.createElement("style");

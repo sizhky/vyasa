@@ -1,6 +1,8 @@
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from vyasa.config import reload_config
 
 
@@ -28,3 +30,18 @@ def test_reload_source_flag_configures_uvicorn_reloader(tmp_path, monkeypatch):
         assert "*.css" in kwargs["reload_includes"]
     finally:
         reload_config()
+
+
+def test_feedback_subcommand_dispatches_once(monkeypatch):
+    from vyasa import main
+    from vyasa.extensions_builtin.feedback import cli as feedback_cli
+
+    calls = []
+    monkeypatch.setattr(feedback_cli, "feedback_command", lambda argv: calls.append(argv) or 7)
+    monkeypatch.setattr(sys, "argv", ["vyasa", "feedback", "poll", "plan"])
+
+    with pytest.raises(SystemExit) as stopped:
+        main.cli()
+
+    assert stopped.value.code == 7
+    assert calls == [["poll", "plan"]]

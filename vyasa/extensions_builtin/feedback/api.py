@@ -150,8 +150,10 @@ def _delivered_event(event, current_revision: str) -> dict:
     return payload
 
 
-def _event_summary(event) -> dict:
+def _event_summary(event, runtime: RuntimeAccess, document: str) -> dict:
     payload = event_payload(event)
+    if payload.get("kind") == "reply" and payload.get("message") and not payload.get("message_html"):
+        payload["message_html"] = _render_reply_html(str(payload["message"]), document, runtime)
     keys = ("cursor", "id", "kind", "created_at", "comment", "message", "message_html", "action", "author", "revision", "surface")
     return {key: payload[key] for key in keys if key in payload}
 
@@ -168,11 +170,9 @@ def _context_size(payload: dict) -> int:
     return len(json.dumps({"target": payload.get("target"), "snapshot": payload.get("snapshot")}).encode("utf-8"))
 
 
-def _render_reply_html(message: str, document: str) -> str:
+def _render_reply_html(message: str, document: str, runtime: RuntimeAccess) -> str:
     try:
-        from ..markdown.renderer import from_md
-
-        rendered = from_md(
+        rendered = runtime.render_markdown(
             message,
             current_path=document,
             emit_bundle_nodes=False,
@@ -226,7 +226,7 @@ def register_feedback_routes(
             "revision": _revision(document),
             "presence": _presence(document, store, presence),
             "ack_cursor": store.acknowledged_cursor(document),
-            "events": [_event_summary(event) for event in store.recent(document)],
+            "events": [_event_summary(event, runtime, document) for event in store.recent(document)],
         })
 
     @publish_api(
@@ -355,7 +355,7 @@ def register_feedback_routes(
                 store.acknowledge(document, int(ack_cursor))
             except (TypeError, ValueError):
                 return _json({"error": "ack_cursor must be an integer"}, 400)
-        reply_payload = {"message": message, "message_html": _render_reply_html(message, document), "revision": _revision(document)}
+        reply_payload = {"message": message, "message_html": _render_reply_html(message, document, runtime), "revision": _revision(document)}
         if bool((payload or {}).get("refresh")):
             reply_payload["action"] = "refresh"
         event = store.append(

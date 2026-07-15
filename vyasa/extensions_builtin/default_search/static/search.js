@@ -1,3 +1,5 @@
+import { shortcutsSuspended } from '/static/page_shell.js';
+
 function initSearchPlaceholderCycle(rootElement = document) {
     const inputs = rootElement.querySelectorAll('input[data-placeholder-cycle]');
     inputs.forEach((input) => {
@@ -536,7 +538,7 @@ function initCommandPalette() {
         if (event.target === palette) close();
     });
     document.addEventListener('keydown', (event) => {
-        if (window.__vyasaShortcutsSuspended) return;
+        if (shortcutsSuspended()) return;
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
             event.preventDefault();
             open();

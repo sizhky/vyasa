@@ -1,14 +1,16 @@
+from functools import partial
+
 from ...extensions import AssetBundle, ExtensionMeta, NavigationAction, VyasaExtensionBase
 
 from .api import CallableBookmarkStore, register_bookmarks_routes
-from .store import delete_bookmark, list_bookmarks, upsert_bookmark
+from .store import BookmarkRow, delete_bookmark, list_bookmarks, upsert_bookmark
 from .views import bookmarks_block
 
 
 class BookmarksExtension(VyasaExtensionBase):
     def register(self, app) -> None:
-        app.storage.namespace("bookmarks")
-        app.routes.add("/api/bookmarks", _register_bookmarks_routes)
+        storage = app.storage.namespace("bookmarks")
+        app.routes.add("/api/bookmarks", partial(_register_bookmarks_routes, storage=storage))
         app.navigation.sidebar_section(_bookmarks_sidebar_section)
         app.navigation.sidebar_row_action(_bookmark_row_action)
         app.navigation.search_result_row_action(_bookmark_row_action)
@@ -22,33 +24,32 @@ class BookmarksExtension(VyasaExtensionBase):
         app.assets.page(_page_bundles)
 
 
-def _register_bookmarks_routes(rt, runtime):
+def _register_bookmarks_routes(rt, runtime, *, storage):
     from datetime import datetime
 
-    from ...config import get_config
-
     cache = {"db": None, "tbl": None}
+    db_path = storage.file("bookmarks.db", legacy_name=".vyasa-bookmarks.db")
 
-    def _db_list(owner: str):
-        return list_bookmarks(get_config().get_root_folder(), cache, owner)
+    def _db_list(owner: str) -> list[BookmarkRow]:
+        return list_bookmarks(db_path, cache, owner)
 
-    def _db_upsert(owner: str, path: str):
+    def _db_upsert(owner: str, path: str) -> None:
         upsert_bookmark(
-            get_config().get_root_folder(),
+            db_path,
             cache,
             owner,
             path,
             datetime.utcnow().isoformat(),
         )
 
-    def _db_delete(owner: str, path: str):
-        return delete_bookmark(get_config().get_root_folder(), cache, owner, path)
+    def _db_delete(owner: str, path: str) -> bool:
+        return delete_bookmark(db_path, cache, owner, path)
 
     register_bookmarks_routes(
         rt,
         runtime,
         CallableBookmarkStore(_db_list, _db_upsert, _db_delete),
-        root_folder=get_config().get_root_folder,
+        root_folder=runtime.config.get_root_folder,
     )
 
 

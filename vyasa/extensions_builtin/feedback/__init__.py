@@ -1,4 +1,5 @@
 from pathlib import Path
+from functools import partial
 
 from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 from .api import register_feedback_routes
@@ -7,8 +8,8 @@ from .store import FeedbackStore, PresenceRegistry
 
 class FeedbackExtension(VyasaExtensionBase):
     def register(self, app) -> None:
-        app.storage.namespace("feedback")
-        app.routes.add("/api/feedback", _register_feedback_routes)
+        storage = app.storage.namespace("feedback")
+        app.routes.add("/api/feedback", partial(_register_feedback_routes, storage=storage))
         app.assets.page(_page_bundles)
         app.layout.main_attrs(_main_attrs)
         app.assets.bundle(
@@ -21,13 +22,11 @@ class FeedbackExtension(VyasaExtensionBase):
         )
 
 
-def _register_feedback_routes(rt, runtime) -> None:
-    from ...config import get_config
-
+def _register_feedback_routes(rt, runtime, *, storage) -> None:
     register_feedback_routes(
         rt,
         runtime,
-        store=FeedbackStore(get_config().get_root_folder()),
+        store=FeedbackStore(storage.file("feedback.db", legacy_name=".vyasa-feedback.db")),
         presence=PresenceRegistry(),
     )
 
@@ -55,6 +54,7 @@ EXTENSION = FeedbackExtension(
         "route",
         ("cap:route:feedback", "bundle:feedback.runtime", "cap:layout:main_attrs"),
         route_prefixes=("/api/feedback",),
+        requires=("cap:markdown_pipeline",),
         storage_namespaces=("feedback",),
         scope_disable=True,
         description="Durable, context-rich human-to-agent feedback for every rendered document.",
