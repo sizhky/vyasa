@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import threading
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -15,6 +16,37 @@ from starlette.responses import JSONResponse
 from .config import get_config
 from .helpers import content_location, content_url_for_slug, get_ref_content_mounts
 from .ref_address import ref_from_current_path, sidebar_path, target_url
+
+
+_request_refresh_locks: dict[str, threading.Lock] = {}
+_request_refresh_lock = threading.Lock()
+_request_refresh_completed: dict[str, float] = {}
+
+
+def refresh_requested_ref(path: str, request: Any) -> None:
+    """Fetch one ref root before a full-page request reads its commit."""
+    ref = request.query_params.get("ref", "") if hasattr(request, "query_params") else ""
+    headers = request.headers if hasattr(request, "headers") else {}
+    if not ref or str(headers.get("HX-Request", headers.get("hx-request", ""))).lower() == "true":
+        return
+    root_id, root_path, _, _ = content_location(path, ref_override=ref)
+    if root_path is None:
+        return
+    key = str(root_path.resolve())
+    started = perf_counter()
+    with _request_refresh_lock:
+        lock = _request_refresh_locks.setdefault(key, threading.Lock())
+    with lock:
+        if _request_refresh_completed.get(key, 0.0) >= started:
+            return
+        if root_id:
+            _refresh_refs_result(root_id)
+        else:
+            from .git_fetcher import fetch_clone_remotes
+
+            if fetch_clone_remotes(root_path):
+                clear_caches()
+        _request_refresh_completed[key] = perf_counter()
 
 
 def clear_caches() -> None:

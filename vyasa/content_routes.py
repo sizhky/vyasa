@@ -247,6 +247,9 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         logger.info("[tasks_perf][post-render] " + json.dumps(event, default=str, separators=(",", ":")))
 
     ref_override = request.query_params.get("ref", "") if hasattr(request, "query_params") else ""
+    if ref_override:
+        from .git_refs import refresh_requested_ref
+        refresh_requested_ref(path, request)
     root_id, root_path, ref, relative = content_location(path, ref_override=ref_override)
     log_phase("content_location", root_id=root_id, root_path=str(root_path) if root_path else "", ref=ref)
     if root_id and ref and "@" not in Path(path.strip("/")).parts[0]:
