@@ -424,19 +424,33 @@ def test_tasks_source_renders_hover_checkbox_and_done_badge():
     assert "taskStateLabel" in source
 
 
-def test_tasks_active_node_pulse_is_shared_and_switchable():
+def test_tasks_active_node_pulse_uses_continuous_shared_glow_clock():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+    pulse_css = css_source.split("@keyframes vyasa-tasks-active-pulse", 1)[1].split("@media", 1)[0]
+    active_node_css = css_source.split(
+        '.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"])',
+        1,
+    )[1].split("@keyframes", 1)[0]
 
     assert "'data-vyasa-highlight-active': !['none', 'dim'].includes(highlightMode)" in source
     assert "'vyasa-tasks-active-pulse'" in source
     assert "activePulseEnabled" not in source
     assert "Pulse active nodes" not in source
-    assert '.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"])' in css_source
+    assert "@property --vyasa-tasks-pulse-near-opacity" in css_source
     assert "@keyframes vyasa-tasks-active-pulse" in css_source
     assert "animation: vyasa-tasks-active-pulse 5s" in css_source
-    assert "brightness(0.75)" in css_source
-    assert "brightness(1)" in css_source
+    assert "animation:" not in active_node_css
+    assert active_node_css.count("drop-shadow(") == 2
+    assert "'--vyasa-tasks-active-border'" in source
+    assert "var(--vyasa-tasks-active-border" in active_node_css
+    assert "--vyasa-tasks-pulse-near-opacity: 50%" in pulse_css
+    assert "--vyasa-tasks-pulse-far-opacity: 25%" in pulse_css
+    assert pulse_css.count("--vyasa-tasks-pulse-near-opacity: 100%") == 1
+    assert pulse_css.count("--vyasa-tasks-pulse-far-opacity: 100%") == 1
+    assert "border-color:" not in pulse_css
+    assert "brightness(" not in pulse_css
+    assert "saturate(" not in pulse_css
     assert "@media (prefers-reduced-motion: reduce)" in css_source
 
 
