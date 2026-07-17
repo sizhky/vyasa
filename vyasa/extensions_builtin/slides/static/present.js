@@ -1,3 +1,5 @@
+import { ensureShortcutHelp } from '/static/page_shell.js';
+
 window.__vyasaSlideDebug = window.__vyasaSlideDebug || ((label, payload = {}) => {
   window.__vyasaTasksPhaseLog?.(`slides:${label}`, payload);
 });
@@ -11,6 +13,14 @@ if (!window.__vyasaSlideCaptureLogBound) {
 }
 if (!window.__vyasaZenBound) {
   window.__vyasaZenBound = true;
+  const slideShortcutHelp = ensureShortcutHelp({
+    title: 'Slide shortcuts',
+    groups: [
+      ['Exit', [['Shift+Esc', 'Document']]],
+      ['Slides', [['M', 'Overview'], ['?', 'Shortcuts'], ['J / K', 'Reveal / Rewind'], ['H / L', 'Previous / Next']]],
+      ['Overview', [['J / K', 'Move Selection'], ['H / L', 'Collapse / Expand'], ['Enter', 'Open Slide'], ['Esc', 'Close']]],
+    ],
+  });
   let revealTimers = [];
   const slideDebug = window.__vyasaSlideDebug;
   const revealLog = (label, payload = {}) => {
@@ -74,6 +84,13 @@ if (!window.__vyasaZenBound) {
     bar.style.setProperty('--vyasa-slide-progress', `${progressUnits.length ? visible / progressUnits.length * 100 : 100}%`);
     bar.setAttribute('aria-valuemax', String(progressUnits.length));
     bar.setAttribute('aria-valuenow', String(visible));
+    const deckBar = body.querySelector('.vyasa-zen-deck-progress');
+    const offset = Number(deckBar?.dataset.segmentOffset || 0);
+    const total = Number(deckBar?.dataset.segmentTotal || 0);
+    const deckVisible = Math.min(total, offset + visible);
+    deckBar?.style.setProperty('--vyasa-deck-progress', `${total ? deckVisible / total * 100 : 100}%`);
+    deckBar?.setAttribute('aria-valuemax', String(total));
+    deckBar?.setAttribute('aria-valuenow', String(deckVisible));
     const endRule = body.querySelector('.vyasa-zen-slide-end-rule');
     if (endRule) endRule.dataset.revealState = visible === progressUnits.length ? 'visible' : 'hidden';
   };
@@ -398,13 +415,92 @@ if (!window.__vyasaZenBound) {
   const toggleOverview = () => {
     const panel = document.getElementById('slide-overview');
     if (!panel) return;
+    slideShortcutHelp.close();
     panel.classList.toggle('hidden');
+  };
+  const overviewIsOpen = () =>
+    !document.getElementById('slide-overview')?.classList.contains('hidden');
+  const overviewRows = () =>
+    Array.from(document.querySelectorAll('#slide-overview [data-zen-overview-node]'));
+  const refreshOverviewVisibility = () => {
+    const collapsedDepths = [];
+    overviewRows().forEach((row) => {
+      const depth = Number(row.dataset.depth);
+      while (collapsedDepths.length && collapsedDepths.at(-1) >= depth) collapsedDepths.pop();
+      row.hidden = collapsedDepths.length > 0;
+      if (!row.hidden && row.dataset.collapsed === 'true') collapsedDepths.push(depth);
+    });
+  };
+  const moveOverviewSelection = (delta) => {
+    const links = overviewRows()
+      .filter((row) => !row.hidden)
+      .map((row) => row.querySelector('[data-zen-overview-focus]'));
+    if (!links.length) return false;
+    const activeIndex = links.indexOf(document.activeElement);
+    const nextIndex = Math.max(0, Math.min(
+      links.length - 1,
+      activeIndex < 0 ? (delta > 0 ? 0 : links.length - 1) : activeIndex + delta,
+    ));
+    links[nextIndex].focus({ preventScroll: true });
+    const row = links[nextIndex].closest('tr');
+    row?.scrollIntoView({ block: 'center' });
+    window.setTimeout(() => {
+      const card = document.querySelector('#slide-overview .vyasa-zen-overview-card');
+      const rowRect = row?.getBoundingClientRect();
+      const cardRect = card?.getBoundingClientRect();
+      slideDebug('overview-selection', {
+        index: nextIndex,
+        rowCenter: rowRect ? Math.round(rowRect.top + rowRect.height / 2) : null,
+        cardCenter: cardRect ? Math.round(cardRect.top + cardRect.height / 2) : null,
+        scrollTop: card?.scrollTop ?? null,
+        scrollHeight: card?.scrollHeight ?? null,
+        clientHeight: card?.clientHeight ?? null,
+      });
+    }, 0);
+    return true;
+  };
+  const moveOverviewBranch = (direction) => {
+    const rows = overviewRows();
+    const row = document.activeElement?.closest('[data-zen-overview-node]');
+    if (!row) return moveOverviewSelection(direction === 'l' ? 1 : -1);
+    const index = rows.indexOf(row);
+    const depth = Number(row.dataset.depth);
+    const hasChildren = row.dataset.hasChildren === 'true';
+    if (direction === 'l' && hasChildren && row.dataset.collapsed === 'true') {
+      row.dataset.collapsed = 'false';
+      row.setAttribute('aria-expanded', 'true');
+      refreshOverviewVisibility();
+      return true;
+    }
+    if (direction === 'h' && hasChildren && row.dataset.collapsed === 'false') {
+      row.dataset.collapsed = 'true';
+      row.setAttribute('aria-expanded', 'false');
+      refreshOverviewVisibility();
+      return true;
+    }
+    const target = direction === 'l'
+      ? rows[index + 1]
+      : rows.slice(0, index).reverse().find((candidate) =>
+          !candidate.hidden && Number(candidate.dataset.depth) < depth);
+    if (target && !target.hidden && (direction === 'h' || Number(target.dataset.depth) > depth)) {
+      target.querySelector('[data-zen-overview-focus]')?.focus({ preventScroll: true });
+      target.scrollIntoView({ block: 'center' });
+    }
+    return true;
   };
   document.addEventListener('click', (event) => {
     const toggle = event.target.closest('[data-zen-overview-toggle="true"]');
     if (toggle) {
       event.preventDefault();
       toggleOverview();
+      return;
+    }
+    const branchToggle = event.target.closest('[data-zen-overview-toggle-branch]');
+    if (branchToggle) {
+      branchToggle.focus({ preventScroll: true });
+      const row = branchToggle.closest('[data-zen-overview-node]');
+      moveOverviewBranch(row?.dataset.collapsed === 'true' ? 'l' : 'h');
+      event.preventDefault();
       return;
     }
     const nav = event.target.closest('[data-zen-nav]');
@@ -441,12 +537,29 @@ if (!window.__vyasaZenBound) {
       target: event.target?.tagName || '', active: document.activeElement?.tagName || '',
     });
     if (event.defaultPrevented) return;
+    if (event.key === 'Escape' && event.shiftKey && window.__vyasaZen?.post) {
+      window.location.href = window.__vyasaZen.post;
+      event.preventDefault();
+      return;
+    }
     if (event.key === 'Escape') {
       document.getElementById('slide-overview')?.classList.add('hidden');
     }
     if (event.metaKey || event.ctrlKey || event.altKey
       || event.target?.matches?.('input, textarea, select') || event.target?.isContentEditable) return;
     const key = event.key.toLowerCase();
+    if (overviewIsOpen() && (key === 'h' || key === 'l')) {
+      if (moveOverviewBranch(key)) event.preventDefault();
+      return;
+    }
+    if (overviewIsOpen() && (key === 'j' || key === 'k')) {
+      if (moveOverviewSelection(key === 'j' ? 1 : -1)) event.preventDefault();
+      return;
+    }
+    if (key === 'm') {
+      toggleOverview();
+      event.preventDefault();
+    }
     if (key === 'h' && follow('left', true)) event.preventDefault();
     if (key === 'j' && (revealNextUnit() || follow('right'))) event.preventDefault();
     if (key === 'k' && (hidePreviousUnit() || follow('left'))) event.preventDefault();

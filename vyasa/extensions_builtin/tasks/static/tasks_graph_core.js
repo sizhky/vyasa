@@ -2,6 +2,17 @@ export function clampScale(value, maxScale = 55) {
     return Math.min(Math.max(0.1, value), maxScale);
 }
 
+export function tasksReviewTarget(data, id, widgetId) {
+    const sourceNodeId = data?.__kind__ === 'groupTitle' ? data?.sourceGroupId : id;
+    return {
+        kind: 'node',
+        id: sourceNodeId,
+        label: String(data?.label || sourceNodeId).slice(0, 240),
+        node_kind: data?.__kind__ || '',
+        widget_id: widgetId,
+    };
+}
+
 export function nextWheelState(state, rect, point, deltaY, maxScale = 55) {
     const mouseX = point.x - rect.left - rect.width / 2;
     const mouseY = point.y - rect.top - rect.height / 2;

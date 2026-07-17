@@ -73,6 +73,32 @@ def test_mobile_sidebar_processes_copied_htmx_controls():
     assert "window.htmx?.process(mobileBody)" in source
 
 
+def test_mobile_panels_fill_dynamic_viewport_without_page_overflow():
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+
+    assert "height: 100dvh" in css
+    assert ".vyasa-mobile-panel-body {" in css
+    assert "flex: 1 1 auto" in css
+    assert "overscroll-behavior-y: contain" in css
+    assert ".vyasa-mobile-panel-body > .vyasa-sidebar-card::details-content" in css
+    assert ".vyasa-mobile-panel-body > .vyasa-sidebar-card .vyasa-sidebar-body" in css
+    assert "max-height: none !important" in css
+
+
+def test_floating_actions_honor_page_inline_inset():
+    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+
+    assert "--vyasa-floating-actions-inline-inset" in source
+
+
+def test_posts_and_slides_share_shortcut_help():
+    shell = Path("vyasa/static/page_shell.js").read_text(encoding="utf-8")
+    scripts = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+
+    assert "export function ensureShortcutHelp" in shell
+    assert "title: 'Document shortcuts'" in scripts
+
+
 def test_theme_toggle_icon_keeps_ink_color_on_focus():
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 
@@ -185,6 +211,7 @@ def test_document_action_buttons_render_inline_icons():
     assert html.count("vyasa-page-action-tooltip") == 3
     assert 'data-tooltip="Fold all sections (C)"' in html
     assert 'data-tooltip="Present document"' in html
+    assert 'data-vyasa-present-document="true"' in html
     assert 'data-tooltip="Copy raw markdown"' in html
 
 
@@ -206,6 +233,29 @@ def test_document_keyboard_shortcuts_scroll_with_j_and_k():
     assert "['wheel', 'touchstart', 'pointerdown', 'htmx:beforeSwap']" in source
     assert "prefers-reduced-motion: reduce" in source
     assert "!mainContent?.classList.contains('vyasa-zen-present')" in source
+
+
+def test_sidebars_bound_main_content_width():
+    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+
+    assert ".vyasa-content-grid {\n    min-width: 0;" in css
+    assert "overflow: clip;" in css
+    assert "#content-with-sidebars .tasks-container:not([data-tasks-maximized=\"true\"])" in css
+    assert "#content-with-sidebars .vyasa-main-shell img" in css
+    assert "#content-with-sidebars .vyasa-main-shell svg" not in css
+    assert "width: 100% !important;" in css
+    assert "window.dispatchEvent(new Event('resize'));" in source
+
+
+def test_document_heading_spacing_uses_shared_before_and_after_gaps():
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+
+    assert "--vyasa-heading-before-gap: 1rem;" in css
+    assert "--vyasa-heading-after-gap: 0.7rem;" in css
+    assert "#main-content .vyasa-doc-heading {" in css
+    assert "#main-content .vyasa-heading-fold {" in css
+    assert "#main-content .vyasa-heading-fold-body > :last-child {" in css
 
 
 def test_copy_markdown_button_keeps_raw_content_out_of_searchable_dom():

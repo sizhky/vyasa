@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from fastsql import Database
 
 
@@ -37,9 +38,10 @@ def _annotation_payload(row):
     )
 
 
-def get_annotations_table(root_folder, cache, create_if_missing=True):
+def get_annotations_table(db_path: Path, cache, create_if_missing: bool = True):
     if cache["db"] is None:
-        db_path = root_folder / ".vyasa-annotations.db"
+        if db_path.suffix != ".db":
+            db_path = db_path / ".vyasa-annotations.db"
         if not create_if_missing and not db_path.exists():
             return None, None
         db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -54,16 +56,17 @@ def get_annotations_table(root_folder, cache, create_if_missing=True):
     return cache["db"], cache["tbl"]
 
 
-def list_annotations(root_folder, cache, path):
-    _, tbl = get_annotations_table(root_folder, cache, create_if_missing=False)
+def list_annotations(db_path: Path, cache, path: str) -> list[AnnotationRow]:
+    _, tbl = get_annotations_table(db_path, cache, create_if_missing=False)
     if tbl is None:
         return []
     normalized_path = _normalize_annotation_path(path)
     return sorted(tbl(where="path = :path", path=normalized_path), key=lambda row: (row.created_at, row.id))
 
 
-def upsert_annotation(root_folder, cache, row):
-    _, tbl = get_annotations_table(root_folder, cache)
+def upsert_annotation(db_path: Path, cache, row: AnnotationRow) -> None:
+    _, tbl = get_annotations_table(db_path, cache)
+    assert tbl is not None
     existing = {item.id for item in tbl(where="id = :id", id=row.id)}
     payload = _annotation_payload(row)
     if row.id in existing:
@@ -72,8 +75,8 @@ def upsert_annotation(root_folder, cache, row):
         tbl.insert(AnnotationRow(**payload))
 
 
-def delete_annotation(root_folder, cache, annotation_id):
-    _, tbl = get_annotations_table(root_folder, cache, create_if_missing=False)
+def delete_annotation(db_path: Path, cache, annotation_id: str) -> bool:
+    _, tbl = get_annotations_table(db_path, cache, create_if_missing=False)
     if tbl is None:
         return False
     existing = list(tbl(where="id = :id", id=annotation_id))

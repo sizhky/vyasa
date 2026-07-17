@@ -269,6 +269,25 @@ def build_slide_reveal_units(markdown_text, *, render_fragment, current_path, co
         pending = {}
     return [unit for unit in units if unit.get("html", "").strip()]
 
+
+def count_slide_progress_segments(markdown_text, *, render_fragment, current_path, config):
+    counter_render = render_fragment if config.unit == "top-level-blocks" else (
+        lambda text, current_path=None, slide_mode=False: text
+    )
+    units = build_slide_reveal_units(
+        markdown_text, render_fragment=counter_render, current_path=current_path, config=config,
+    )
+    step_units = [
+        unit for unit in units
+        if (unit.get("style") or config.style) not in {"none", "instant"}
+    ]
+    first_content = next(
+        (index for index, unit in enumerate(step_units) if unit.get("kind") != "heading"),
+        len(step_units),
+    )
+    return len(step_units[first_content:])
+
+
 class ZenSlideDeck:
     def __init__(self, markdown_text):
         self.slides = list(iter_zen_slides(markdown_text)) or [["# Empty deck"]]
@@ -301,17 +320,31 @@ class ZenSlideDeck:
 
     def outline(self, doc_path):
         items = []
+        paths = {}
         for index, slide in enumerate(self.slides, start=1):
             crumbs = []
             for block in slide:
                 match = re.match(r"^(#{1,6})\s+(.+)$", block, re.MULTILINE)
                 if match:
                     crumbs.append(match.group(2).strip())
-            items.append({
-                "index": index + 1,
-                "text": "✦ > " + " > ".join(crumbs) if crumbs else "✦",
-                "href": content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index + 1)}"),
-            })
+            if not crumbs:
+                items.append({
+                    "index": index + 1, "label": f"Slide {index + 1}", "depth": 1,
+                    "href": content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index + 1)}"),
+                })
+                continue
+            for depth in range(1, len(crumbs) + 1):
+                path = tuple(crumbs[:depth])
+                item = paths.get(path)
+                if item is None:
+                    item = {"index": None, "label": crumbs[depth - 1], "depth": depth, "href": None}
+                    paths[path] = item
+                    items.append(item)
+                if depth == len(crumbs):
+                    item["index"] = index + 1
+                    item["href"] = content_url_for_slug(
+                        doc_path, prefix="/slides", suffix=f"/{slide_slug(index + 1)}",
+                    )
         return items
 
     def _build_anchors(self):

@@ -37,6 +37,8 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-tree-row-action-pad: 0.12rem;
     --vyasa-tree-row-state-gap: 0.1rem;
     --vyasa-tree-item-gap: 0rem;
+    --vyasa-heading-before-gap: 1rem;
+    --vyasa-heading-after-gap: 0.7rem;
     --vyasa-link: color-mix(in srgb, var(--vyasa-primary) 68%, var(--vyasa-ink) 32%);
     --vyasa-link-hover: color-mix(in srgb, var(--vyasa-primary-dim) 58%, var(--vyasa-ink) 42%);
     --vyasa-emphasis-control-text: var(--vyasa-primary-text);
@@ -247,8 +249,25 @@ summary {
 }
 /* Off-canvas slide-in panels (translate-x-full) must not widen the page;
    hidden is the fallback for Safari < 16 which lacks overflow clip */
-html { overflow-x: hidden; overflow-x: clip; }
-.vyasa-content-grid { overflow: visible; }
+html,
+body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-x: clip;
+}
+.vyasa-content-grid {
+    min-width: 0;
+    max-width: 100%;
+    overflow: clip;
+}
+#page-container,
+#content-with-sidebars,
+.vyasa-main-shell,
+#content-with-sidebars > .layout-container {
+    min-width: 0;
+    box-sizing: border-box;
+}
 .vyasa-posts-sidebar {
     width: var(--vyasa-posts-sidebar-width, var(--vyasa-sidebar-width, 22rem));
     margin-right: min(0px, calc(var(--vyasa-sidebar-width, 22rem) - var(--vyasa-posts-sidebar-width, var(--vyasa-sidebar-width, 22rem))));
@@ -257,10 +276,31 @@ html { overflow-x: hidden; overflow-x: clip; }
     width: var(--vyasa-toc-sidebar-width, var(--vyasa-sidebar-width, 22rem));
     margin-left: min(0px, calc(var(--vyasa-sidebar-width, 22rem) - var(--vyasa-toc-sidebar-width, var(--vyasa-sidebar-width, 22rem))));
 }
+#content-with-sidebars .vyasa-main-shell > *,
+#content-with-sidebars .tasks-container,
+#content-with-sidebars .mermaid-container,
+#content-with-sidebars .d2-container,
+#content-with-sidebars .code-block,
+#content-with-sidebars .vyasa-tree-doc,
+#content-with-sidebars .vyasa-table-scroll {
+    max-width: 100% !important;
+    box-sizing: border-box;
+}
+#content-with-sidebars .vyasa-main-shell img,
+#content-with-sidebars .vyasa-main-shell video,
+#content-with-sidebars .vyasa-main-shell iframe,
+#content-with-sidebars .vyasa-main-shell canvas {
+    max-width: 100%;
+}
+#content-with-sidebars .tasks-container:not([data-tasks-maximized="true"]) {
+    width: 100% !important;
+    left: auto !important;
+    transform: none !important;
+}
 .vyasa-sidebar-docked {
     position: fixed !important;
     top: var(--vyasa-navbar-height, 3.75rem) !important;
-    height: calc(100vh - var(--vyasa-navbar-height, 3.75rem)) !important;
+    height: calc(100dvh - var(--vyasa-navbar-height, 3.75rem)) !important;
     z-index: 1000;
     background: color-mix(in srgb, var(--vyasa-paper) 55%, transparent);
     backdrop-filter: blur(10px);
@@ -681,6 +721,53 @@ html[data-vyasa-hide-toc-sidebar] #toc-sidebar {
     backdrop-filter: blur(12px);
 }
 
+.vyasa-mobile-panel {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    box-sizing: border-box;
+    overflow: hidden;
+    overscroll-behavior: contain;
+}
+
+.vyasa-mobile-panel-header {
+    flex: 0 0 auto;
+    padding-top: max(0.5rem, env(safe-area-inset-top)) !important;
+}
+
+.vyasa-mobile-panel-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+    overflow: hidden;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.vyasa-mobile-panel-body > .vyasa-sidebar-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+.vyasa-mobile-panel-body > .vyasa-sidebar-card::details-content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.vyasa-mobile-panel-body > .vyasa-sidebar-card .vyasa-sidebar-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none !important;
+    overflow-y: auto;
+}
+
 .vyasa-sidebar-toggle,
 .vyasa-sidebar-body {
     border-radius: var(--vyasa-rect-radius) !important;
@@ -983,7 +1070,12 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .vyasa-heading-action-children[data-subtree-state="collapse"] .vyasa-heading-icon-collapse { display: inline-flex; }
 .vyasa-doc-heading:hover .vyasa-heading-action, .vyasa-doc-heading:hover .vyasa-heading-permalink, .vyasa-heading-action:hover, .vyasa-heading-action:focus, .vyasa-heading-permalink:hover, .vyasa-heading-permalink:focus { opacity: 1; }
 .vyasa-heading-action:hover, .vyasa-heading-action:focus, .vyasa-heading-permalink:hover, .vyasa-heading-permalink:focus { color: var(--vyasa-primary) !important; }
-.vyasa-heading-fold { margin: 1.15rem 0; }
+#main-content .vyasa-doc-heading {
+    margin-block: var(--vyasa-heading-before-gap) var(--vyasa-heading-after-gap) !important;
+}
+#main-content .vyasa-heading-fold {
+    margin-block: var(--vyasa-heading-before-gap) !important;
+}
 .vyasa-page-action-button,
 .vyasa-fold-all-button {
     display: inline-flex;
@@ -1056,17 +1148,32 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 
 .vyasa-page-action-icon,
 .vyasa-fold-all-icon { width: 1rem; height: 1rem; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
-.vyasa-scroll-top-button { position: fixed; bottom: 1.25rem; width: 3.15rem; height: 3.15rem; display: inline-flex; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--vyasa-primary) 38%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--vyasa-paper) 82%, var(--vyasa-primary) 18%); color: var(--vyasa-primary); box-shadow: 0 18px 34px -20px rgba(15, 23, 42, 0.42); backdrop-filter: blur(10px); opacity: 0; pointer-events: none; transform: translateY(0.4rem) scale(0.96); transition: opacity 160ms ease, transform 160ms ease, background 160ms ease; z-index: 30; }
-.vyasa-scroll-top-button.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
-.vyasa-scroll-top-button:hover { background: color-mix(in srgb, var(--vyasa-paper) 70%, var(--vyasa-primary) 30%); }
+.vyasa-floating-actions { --vyasa-floating-actions-inline-inset: 20px; position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 0.65rem; }
+.vyasa-floating-bubble { width: 3.15rem; height: 3.15rem; padding: 0; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--vyasa-primary) 38%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--vyasa-paper) 82%, var(--vyasa-primary) 18%); color: var(--vyasa-primary); box-shadow: 0 18px 34px -20px rgba(15, 23, 42, 0.42); backdrop-filter: blur(10px); transition: opacity 160ms ease, transform 160ms ease, background 160ms ease; cursor: pointer; }
+.vyasa-floating-bubble:hover { background: color-mix(in srgb, var(--vyasa-paper) 70%, var(--vyasa-primary) 30%); }
+.vyasa-shortcuts-launcher { order: -1; opacity: 1; }
+.vyasa-shortcuts { position: fixed; inset: 0; z-index: 1700; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+.vyasa-shortcuts.hidden { display: none; }
+.vyasa-shortcuts-card { width: min(34rem, calc(100vw - 3rem)); max-height: calc(100vh - 3rem); overflow-y: auto; padding: 2rem; border: 1px solid color-mix(in srgb, var(--vyasa-ink-soft) 22%, transparent); border-radius: .75rem; color: var(--vyasa-ink); background: color-mix(in srgb, var(--vyasa-paper) 68%, transparent); box-shadow: 0 1.5rem 4rem color-mix(in srgb, black 32%, transparent); backdrop-filter: blur(.75rem) saturate(1.1); font-family: var(--vyasa-font-ui); }
+.vyasa-shortcuts-card h2 { margin: 0 0 1.5rem; font-size: 1.25rem; font-weight: 650; }
+.vyasa-shortcuts-card section + section { margin-top: 1.5rem; }
+.vyasa-shortcuts-card small { color: var(--vyasa-ink-soft); font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; }
+.vyasa-shortcuts-card section > div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: 1.25rem; align-items: center; margin-top: .75rem; }
+.vyasa-shortcuts-card kbd { display: inline-flex; min-width: 2.5rem; min-height: 2rem; align-items: center; justify-content: center; justify-self: start; padding: 0 .65rem; border: 1px solid color-mix(in srgb, var(--vyasa-ink-soft) 22%, transparent); border-radius: .55rem; color: var(--vyasa-ink-soft); background: color-mix(in srgb, var(--vyasa-paper-raised) 88%, transparent); font: 700 .8rem/1 var(--vyasa-font-ui); }
+.vyasa-scroll-top-button { position: absolute; visibility: hidden; opacity: 0; pointer-events: none; transform: translateY(0.4rem) scale(0.96); }
+.vyasa-scroll-top-button.is-visible { position: relative; visibility: visible; opacity: 1; pointer-events: auto; transform: translateY(0); }
 .vyasa-scroll-top-icon { width: 1.4rem; height: 1.4rem; stroke: currentColor; stroke-width: 1.9; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .vyasa-heading-fold-summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 0.1rem; }
 .vyasa-heading-fold-summary::-webkit-details-marker { display: none; }
 .vyasa-heading-fold-summary::marker { content: ""; }
-.vyasa-heading-fold-summary > h1, .vyasa-heading-fold-summary > h2, .vyasa-heading-fold-summary > h3, .vyasa-heading-fold-summary > h4, .vyasa-heading-fold-summary > h5, .vyasa-heading-fold-summary > h6 { margin: 0; flex: 1; order: 2; }
+.vyasa-heading-fold-summary > h1, .vyasa-heading-fold-summary > h2, .vyasa-heading-fold-summary > h3, .vyasa-heading-fold-summary > h4, .vyasa-heading-fold-summary > h5, .vyasa-heading-fold-summary > h6 { margin: 0 !important; flex: 1; order: 2; }
 .vyasa-heading-fold-chevron { display: none; }
 .vyasa-heading-fold-body { padding-left: 0.4rem; }
-.vyasa-heading-fold-body > :first-child { margin-top: var(--vyasa-heading-content-gap, 0.95rem); }
+#main-content .vyasa-heading-fold-body > :first-child { margin-top: var(--vyasa-heading-after-gap) !important; }
+#main-content .vyasa-heading-fold-body > :last-child { margin-bottom: 0 !important; }
+#main-content :where(p, ul, ol, blockquote):has(+ :is(.vyasa-doc-heading, .vyasa-heading-fold)) {
+    margin-bottom: 0 !important;
+}
 .vyasa-heading-fold-body ul,
 .vyasa-heading-fold-body ol { margin-top: 0.95rem; margin-bottom: 0.95rem; }
 .vyasa-heading-fold-body li > p { margin: 0; }

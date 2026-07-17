@@ -294,6 +294,20 @@ def test_slide_runtime_supports_vim_navigation_and_delayed_first_reveal():
     styles = Path("vyasa/extensions_builtin/slides/static/present.css").read_text(encoding="utf-8")
 
     assert "key === 'h' && follow('left', true)" in source
+    assert "key === 'm'" in source
+    assert "event.key === 'Escape' && event.shiftKey" in source
+    assert "window.location.href = window.__vyasaZen.post" in source
+    assert "ensureShortcutHelp({" in source
+    assert "title: 'Slide shortcuts'" in source
+    assert "toggleOverview();" in source
+    assert "overviewIsOpen() && (key === 'j' || key === 'k')" in source
+    assert "querySelectorAll('#slide-overview [data-zen-overview-node]')" in source
+    assert "querySelector('[data-zen-overview-focus]')" in source
+    assert "overviewIsOpen() && (key === 'h' || key === 'l')" in source
+    assert "refreshOverviewVisibility()" in source
+    assert "moveOverviewSelection(key === 'j' ? 1 : -1)" in source
+    assert "scrollIntoView({ block: 'center' })" in source
+    assert "vyasa-zen-overview-margin" in Path("vyasa/content_routes.py").read_text(encoding="utf-8")
     assert "key === 'j' && (revealNextUnit() || follow('right'))" in source
     assert "key === 'k' && (hidePreviousUnit() || follow('left'))" in source
     assert "key === 'l' && follow('right', true)" in source

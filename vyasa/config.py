@@ -454,6 +454,13 @@ class VyasaConfig:
             return value.lower() in ('true', '1', 'yes', 'on')
         return bool(value)
 
+    def get_source_reload_enabled(self) -> bool:
+        """Get whether Vyasa source changes should restart the server."""
+        value = self.get('reload_source', 'VYASA_RELOAD_SOURCE', False)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
+
     def get_log_file_enabled(self) -> bool:
         """Get whether file logging to vyasa.log should be enabled."""
         value = self.get('log_file', 'VYASA_LOG_FILE', False)
@@ -473,7 +480,13 @@ class VyasaConfig:
 
     def get_extensions_config(self) -> dict:
         value = self._config.get('extensions', {})
-        return value if isinstance(value, dict) else {}
+        section = dict(value) if isinstance(value, dict) else {}
+        cli_enabled = os.getenv('VYASA_FEEDBACK_CLI', '').lower() in ('true', '1', 'yes', 'on')
+        enabled = self.get('feedback_enabled', 'VYASA_FEEDBACK_ENABLED', False)
+        if cli_enabled or (str(enabled).lower() in ('true', '1', 'yes', 'on')):
+            routes = self._coerce_list(section.get('routes_add', []))
+            section['routes_add'] = list(dict.fromkeys([*routes, 'feedback']))
+        return section
 
     def resolve_extensions(self):
         from .extensions import resolve_extension_plan

@@ -1,0 +1,931 @@
+// Derived from lavish-axi at af721003dc99d7be260868ec8577c96e05cee312. See ../LAVISH_LICENSE.
+/* global CSS, Element, ResizeObserver, document, getComputedStyle, parent, window */
+
+import { reviewTargetElement, reviewTargets } from './review_targets.js';
+import { setShortcutsSuspended } from '/static/page_shell.js';
+
+const LAVISH_INTERNAL_QUEUE_KEY = "_lavishQueueKey";
+
+// Derive the browser-only replacement key used to collapse unsent updates for the same input.
+// The key is stripped by the chrome before prompts are sent to the server or returned by poll.
+function deriveLavishQueueKey(element, options = {}) {
+  function stringValue(value) {
+    return value === null || value === undefined ? "" : String(value);
+  }
+
+  function attributeValue(el, name) {
+    if (!el) return "";
+    if (el.getAttribute) {
+      const value = el.getAttribute(name);
+      if (value !== null && value !== undefined) return value;
+    }
+    return el[name] || "";
+  }
+
+  function tagName(el) {
+    return stringValue(el?.tagName || el?.nodeName).toLowerCase();
+  }
+
+  function closestElementMatching(el, selector) {
+    return el && el.closest ? el.closest(selector) : null;
+  }
+
+  function elementPath(el) {
+    const parts = [];
+    let node = el;
+    while (node && node.nodeType === 1 && parts.length < 6) {
+      let part = tagName(node) || "element";
+      const id = stringValue(attributeValue(node, "id") || node.id).trim();
+      if (id) {
+        part += `#${id}`;
+        parts.unshift(part);
+        break;
+      }
+
+      const parent = node.parentElement;
+      if (parent && parent.children) {
+        const siblings = [...parent.children].filter((child) => tagName(child) === tagName(node));
+        if (siblings.length > 1) part += `:nth-of-type(${siblings.indexOf(node) + 1})`;
+      }
+      parts.unshift(part);
+      node = parent;
+    }
+    return parts.join(" > ");
+  }
+
+  function scopeKey(el) {
+    const scope = closestElementMatching(el, "form,fieldset") || el?.parentElement || el;
+    const tag = tagName(scope) || "scope";
+    const explicit = stringValue(
+      attributeValue(scope, "data-lavish-question") || attributeValue(scope, "id") || attributeValue(scope, "name"),
+    ).trim();
+    if (explicit) return `${tag}:${explicit}`;
+    return elementPath(scope) || tag;
+  }
+
+  function controlIdentity(el) {
+    const identity = stringValue(attributeValue(el, "name") || attributeValue(el, "id") || el?.name).trim();
+    if (identity) return identity;
+    return elementPath(el);
+  }
+
+  function isKeyedInputType(type) {
+    return !new Set(["button", "submit", "reset", "file", "image", "hidden", "radio", "checkbox"]).has(type);
+  }
+
+  if (Object.hasOwn(options, "queueKey")) {
+    return stringValue(options.queueKey).trim();
+  }
+
+  const question = closestElementMatching(element, "[data-lavish-question]");
+  const questionKey = stringValue(attributeValue(question, "data-lavish-question")).trim();
+  if (questionKey) return `question:${questionKey}`;
+
+  const tag = tagName(element);
+  const type = stringValue(attributeValue(element, "type") || element?.type).toLowerCase();
+  const scope = scopeKey(element);
+
+  if (tag === "input" && type === "radio") {
+    const name = stringValue(attributeValue(element, "name") || element?.name).trim();
+    if (name) return `radio:${scope}:${name}`;
+    return "";
+  }
+
+  if (tag === "input" && type === "checkbox") {
+    const identity = controlIdentity(element);
+    const explicitValue = stringValue(element?.getAttribute ? element.getAttribute("value") : "").trim();
+    const option = explicitValue || stringValue(attributeValue(element, "id") || elementPath(element)).trim();
+    if (identity) return `checkbox:${scope}:${identity}:${option}`;
+    return "";
+  }
+
+  if (tag === "select" || tag === "textarea" || (tag === "input" && isKeyedInputType(type))) {
+    const identity = controlIdentity(element);
+    if (identity) return `field:${scope}:${identity}`;
+  }
+
+  return "";
+}
+
+function isNativeInteractiveControl(el) {
+  return !!(
+    el &&
+    el.closest &&
+    el.closest(
+      "button,input,select,textarea,option,optgroup,label,summary,[contenteditable]:not([contenteditable='false'])",
+    )
+  );
+}
+
+function createArtifactSdk(deriveQueueKey, isNativeInteractive = isNativeInteractiveControl) {
+  let annotationMode = true;
+  let hovered = null;
+  const selected = new Map();
+  let ignoreNextClick = false;
+  let shadow = null;
+  let counter = 0;
+  const ids = new WeakMap();
+
+  function uid(el) {
+    if (!ids.has(el)) ids.set(el, String(++counter));
+    return ids.get(el);
+  }
+
+  function selector(el) {
+    if (!el || !el.tagName) return "";
+
+    const parts = [];
+    let node = el;
+    while (node && node.nodeType === 1 && parts.length < 5) {
+      let part = node.tagName.toLowerCase();
+      if (node.id) {
+        part += "#" + CSS.escape(node.id);
+        parts.unshift(part);
+        break;
+      }
+
+      const parent = node.parentElement;
+      if (parent) {
+        const same = [...parent.children].filter((x) => x.tagName === node.tagName);
+        if (same.length > 1) part += ":nth-of-type(" + (same.indexOf(node) + 1) + ")";
+      }
+      parts.unshift(part);
+      node = parent;
+    }
+
+    return parts.join(" > ");
+  }
+
+  function context(el) {
+    const targets = reviewTargets(el);
+    const semanticText = targets.map((item) => item.label || item.id).filter(Boolean).join(" | ").slice(0, 240);
+    return {
+      uid: uid(el),
+      selector: selector(el),
+      tag: (el.tagName || "").toLowerCase(),
+      text: (el.innerText || el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 240) || semanticText,
+      graph: targets.length === 1 ? targets[0] : undefined,
+      target: targets.length ? { type: "knowledge-graph-selection", items: targets } : undefined,
+    };
+  }
+
+  function annotationTarget(el) {
+    return reviewTargetElement(el);
+  }
+
+  function selectionKey(el, itemContext) {
+    const semanticItems = itemContext.target?.items;
+    if (Array.isArray(semanticItems) && semanticItems.length) {
+      return "semantic:" + semanticItems.map((item) => (item.kind || "item") + ":" + (item.id || "")).join("|");
+    }
+    return "element:" + (itemContext.selector || uid(el));
+  }
+
+  function isSelectedElement(el) {
+    return [...selected.values()].some((entry) => entry.element === el);
+  }
+
+  function closestElement(node) {
+    if (!node) return document.body;
+    if (node.nodeType === 1) return node;
+    return node.parentElement || document.body;
+  }
+
+  function nodePath(node, root) {
+    const path = [];
+    let current = node;
+    while (current && current !== root) {
+      const parentNode = current.parentNode;
+      if (!parentNode) break;
+      path.unshift([...parentNode.childNodes].indexOf(current));
+      current = parentNode;
+    }
+    return path;
+  }
+
+  function rangeBoundary(node, offset) {
+    const el = closestElement(node);
+    return {
+      selector: selector(el),
+      path: nodePath(node, el),
+      offset: Number(offset) || 0,
+    };
+  }
+
+  function textSelectionContext(selection) {
+    if (!selection || selection.rangeCount === 0) return null;
+
+    const range = selection.getRangeAt(0);
+    const text = selection.toString().trim().replace(/\s+/g, " ");
+    if (range.collapsed || !text) return null;
+
+    const ancestor = closestElement(range.commonAncestorContainer);
+    if (isLavishUi(ancestor) || isLavishAction(ancestor) || isInteractiveControl(ancestor)) return null;
+
+    const commonAncestorSelector = selector(ancestor);
+    const target = {
+      type: "text-range",
+      text,
+      selector: commonAncestorSelector,
+      commonAncestorSelector,
+      start: rangeBoundary(range.startContainer, range.startOffset),
+      end: rangeBoundary(range.endContainer, range.endOffset),
+    };
+
+    return {
+      uid: "",
+      selector: commonAncestorSelector,
+      tag: "text",
+      text: text.slice(0, 240),
+      target,
+      element: ancestor,
+      range: range.cloneRange(),
+    };
+  }
+
+  function isLavishUi(el) {
+    return !!(el && el.closest && el.closest("[data-lavish-ui]"));
+  }
+
+  function isLavishAction(el) {
+    return !!(el && el.closest && el.closest("[data-lavish-action]"));
+  }
+
+  // Native interactive controls (radios, checkboxes, inputs, selects, buttons,
+  // labels, disclosure summaries, editable regions) should toggle/focus/type
+  // natively instead of triggering annotation, just like elements marked with
+  // data-lavish-action.
+  function isInteractiveControl(el) {
+    return isNativeInteractive(el);
+  }
+
+  function highlightElement(el) {
+    if (!el) return;
+    el.style.outline = "var(--lavish-annotate-outline,2px solid #f4c95d)";
+    el.style.outlineOffset = "var(--lavish-annotate-offset,2px)";
+  }
+
+  function clearHighlight(el) {
+    if (el) el.style.outline = "";
+  }
+
+  function revealTarget(selectorValue) {
+    let target;
+    try { target = document.querySelector(String(selectorValue || "")); } catch (_) { return; }
+    if (!target) return;
+    let style = document.getElementById("lavish-reveal-style");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "lavish-reveal-style";
+      style.textContent = "@keyframes lavish-boom-boom{0%,100%{outline-color:transparent;box-shadow:0 0 0 0 transparent}18%,58%{outline-color:#f4c95d;box-shadow:0 0 0 7px rgb(244 201 93 / .3)}35%,75%{outline-color:#f4c95d;box-shadow:0 0 0 2px rgb(244 201 93 / .5)}}.lavish-reveal-target{outline:2px solid transparent;outline-offset:3px;animation:lavish-boom-boom 900ms ease-out}@media(prefers-reduced-motion:reduce){.lavish-reveal-target{animation:none;outline-color:#f4c95d}}";
+      document.head.appendChild(style);
+    }
+    target.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+    target.classList.remove("lavish-reveal-target");
+    void target.offsetWidth;
+    target.classList.add("lavish-reveal-target");
+    window.setTimeout(() => target.classList.remove("lavish-reveal-target"), 950);
+  }
+
+  function clearTextHighlight() {
+    if (!shadow) return;
+    for (const el of [...shadow.querySelectorAll(".lavish-text-highlight")]) el.remove();
+  }
+
+  function highlightTextRange(range) {
+    clearTextHighlight();
+    const root = ensureShadow();
+    for (const rect of [...range.getClientRects()]) {
+      if (rect.width <= 0 || rect.height <= 0) continue;
+      const mark = document.createElement("div");
+      mark.className = "lavish-text-highlight";
+      mark.style.left = rect.left + "px";
+      mark.style.top = rect.top + "px";
+      mark.style.width = rect.width + "px";
+      mark.style.height = rect.height + "px";
+      root.appendChild(mark);
+    }
+  }
+
+  function setAnnotationMode(enabled) {
+    annotationMode = !!enabled;
+    setShortcutsSuspended('feedback', annotationMode);
+    let style = document.getElementById("lavish-cursor-style");
+    if (annotationMode && !style) {
+      style = document.createElement("style");
+      style.id = "lavish-cursor-style";
+      style.textContent =
+        ":root{--lavish-accent:#f4c95d;--lavish-annotate-outline:2px solid var(--lavish-accent);--lavish-annotate-offset:2px}*{cursor:default!important}[data-lavish-action],[data-lavish-action] *{cursor:pointer!important}input,textarea,[contenteditable]:not([contenteditable='false']){cursor:text!important}button,select,label,option,input[type='button'],input[type='submit'],input[type='reset'],input[type='checkbox'],input[type='radio'],input[type='file'],input[type='color'],input[type='range'],input[type='image']{cursor:pointer!important}";
+      document.head.appendChild(style);
+    }
+    if (!annotationMode && style) style.remove();
+    if (!annotationMode) closeCard();
+  }
+
+  function suspendPageShortcuts(event) {
+    if (!annotationMode) return;
+    const path = event.composedPath();
+    if (path.some((node) => node instanceof Element && isLavishUi(node))) return;
+    const target = path.find((node) => node instanceof Element);
+    if (!isInteractiveControl(target) && !event.metaKey && !event.ctrlKey && !event.altKey) event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
+  function queuePrompt(prompt, options = {}) {
+    const originElement = options.element || document.activeElement || document.body;
+    /** @type {{ uid: string, prompt: string, selector: string, tag: string, text: string, target?: unknown, _lavishQueueKey?: string }} */
+    const item = {
+      ...context(originElement),
+      prompt: String(prompt || ""),
+    };
+    const queueKey = typeof deriveQueueKey === "function" ? deriveQueueKey(originElement, options) : "";
+    if (queueKey) item._lavishQueueKey = String(queueKey);
+
+    if (options.uid) item.uid = String(options.uid);
+    if (options.selector) item.selector = String(options.selector);
+    if (options.tag) item.tag = String(options.tag);
+    if (options.text) item.text = String(options.text);
+    if (options.target) item.target = options.target;
+    if (options.data) item.prompt += "\n\nContext data:\n" + JSON.stringify(options.data, null, 2);
+
+    parent.postMessage({ type: "lavish:queuePrompt", prompt: item }, "*");
+  }
+
+  function sendQueuedPrompts() {
+    parent.postMessage({ type: "lavish:sendQueuedPrompts" }, "*");
+  }
+
+  function endSession() {
+    parent.postMessage({ type: "lavish:endSession" }, "*");
+  }
+
+  function snapshot() {
+    const lines = [];
+
+    function walk(el, depth) {
+      if (!(el instanceof Element) || depth > 6 || isLavishUi(el)) return;
+
+      const c = context(el);
+      const name = c.text ? ' "' + c.text.slice(0, 80).replace(/"/g, "'") + '"' : "";
+      lines.push("  ".repeat(depth) + "uid=" + c.uid + " " + c.tag + name);
+      for (const child of el.children) walk(child, depth + 1);
+    }
+
+    walk(document.body, 0);
+    return lines.join("\n");
+  }
+
+  const layoutAuditOverflowEpsilon = 1;
+  const layoutAuditErrorOverflowPx = 4;
+  const layoutAuditSettleMs = 180;
+  const layoutAuditMaxWaitMs = 2000;
+  let layoutAuditTimer = 0;
+  let layoutAuditRun = 0;
+  let lastLayoutAuditSignature = null;
+
+  function toPixelNumber(value) {
+    const parsed = Number.parseFloat(String(value || "0"));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function roundedOverflowPx(value) {
+    return Math.round(Math.max(0, value) * 10) / 10;
+  }
+
+  function overflowSeverity(overflowPx) {
+    return overflowPx > layoutAuditErrorOverflowPx ? "error" : "warning";
+  }
+
+  function elementText(el) {
+    return String(el?.innerText || el?.textContent || "")
+      .trim()
+      .replace(/\s+/g, " ");
+  }
+
+  function hasReadableText(el) {
+    return elementText(el).length > 0;
+  }
+
+  function rectArea(rect) {
+    return Math.max(0, rect.width) * Math.max(0, rect.height);
+  }
+
+  function intersectionArea(a, b) {
+    const width = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+    const height = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+    return width * height;
+  }
+
+  function isVisibleForLayoutAudit(el, rect = el.getBoundingClientRect()) {
+    if (!el || isLavishUi(el) || rect.width <= 0 || rect.height <= 0) return false;
+    const style = getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+  }
+
+  function isIntentionalHorizontalScroller(el) {
+    if (!el || el === document.body || el === document.documentElement) return false;
+    const overflowX = getComputedStyle(el).overflowX;
+    return overflowX === "auto" || overflowX === "scroll";
+  }
+
+  function hasIntentionalHorizontalScrollerAncestor(el) {
+    let node = el;
+    while (node && node.nodeType === 1 && node !== document.body && node !== document.documentElement) {
+      if (isIntentionalHorizontalScroller(node)) return true;
+      node = node.parentElement;
+    }
+    return false;
+  }
+
+  function contentBoxRect(el) {
+    const rect = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    const borderLeft = toPixelNumber(style.borderLeftWidth);
+    const borderRight = toPixelNumber(style.borderRightWidth);
+    const borderTop = toPixelNumber(style.borderTopWidth);
+    const borderBottom = toPixelNumber(style.borderBottomWidth);
+    const paddingLeft = toPixelNumber(style.paddingLeft);
+    const paddingRight = toPixelNumber(style.paddingRight);
+    const paddingTop = toPixelNumber(style.paddingTop);
+    const paddingBottom = toPixelNumber(style.paddingBottom);
+    return {
+      left: rect.left + borderLeft + paddingLeft,
+      right: rect.right - borderRight - paddingRight,
+      top: rect.top + borderTop + paddingTop,
+      bottom: rect.bottom - borderBottom - paddingBottom,
+    };
+  }
+
+  function collectLayoutAuditElements() {
+    const elements = [];
+
+    function walk(el) {
+      if (!(el instanceof Element) || isLavishUi(el)) return;
+      if (isIntentionalHorizontalScroller(el)) return;
+      elements.push(el);
+      for (const child of el.children) walk(child);
+    }
+
+    if (document.body) walk(document.body);
+    return elements;
+  }
+
+  function pushLayoutFinding(findings, seen, finding) {
+    const selectorValue = finding.selector || "";
+    const key = `${finding.kind}:${selectorValue}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    findings.push({
+      selector: selectorValue,
+      kind: String(finding.kind || "layout-warning"),
+      overflowPx: roundedOverflowPx(finding.overflowPx),
+      viewportWidth: Math.round(Number(finding.viewportWidth) || window.innerWidth || 0),
+      severity: finding.severity === "warning" ? "warning" : "error",
+    });
+  }
+
+  function isIntentionalTextTruncation(style) {
+    return style.textOverflow === "ellipsis" || Number.parseInt(style.webkitLineClamp || "0", 10) > 0;
+  }
+
+  function auditElementOverflow(el, viewportWidth, findings, seen) {
+    if (el === document.body || el === document.documentElement || hasIntentionalHorizontalScrollerAncestor(el)) return;
+
+    const rect = el.getBoundingClientRect();
+    if (!isVisibleForLayoutAudit(el, rect)) return;
+
+    const style = getComputedStyle(el);
+    const scrollOverflowPx = el.clientWidth > 0 ? el.scrollWidth - el.clientWidth : 0;
+    if (scrollOverflowPx > layoutAuditOverflowEpsilon) {
+      const clipsText =
+        hasReadableText(el) &&
+        (style.overflowX === "hidden" || style.overflowX === "clip") &&
+        !isIntentionalTextTruncation(style);
+      pushLayoutFinding(findings, seen, {
+        selector: selector(el),
+        kind: clipsText ? "clipped-text" : "element-scroll-overflow",
+        overflowPx: scrollOverflowPx,
+        viewportWidth,
+        severity: clipsText ? "error" : overflowSeverity(scrollOverflowPx),
+      });
+    }
+
+    const verticalClipPx = el.clientHeight > 0 ? el.scrollHeight - el.clientHeight : 0;
+    if (
+      verticalClipPx > layoutAuditOverflowEpsilon &&
+      hasReadableText(el) &&
+      (style.overflowY === "hidden" || style.overflowY === "clip") &&
+      !isIntentionalTextTruncation(style)
+    ) {
+      pushLayoutFinding(findings, seen, {
+        selector: selector(el),
+        kind: "clipped-text",
+        overflowPx: verticalClipPx,
+        viewportWidth,
+        severity: "error",
+      });
+    }
+
+    const parent = el.parentElement;
+    if (!parent || parent === document.body || parent === document.documentElement) return;
+    if (hasIntentionalHorizontalScrollerAncestor(parent)) return;
+
+    const parentBox = contentBoxRect(parent);
+    const parentOverflowPx = rect.right - parentBox.right;
+    if (parentOverflowPx > layoutAuditOverflowEpsilon && rectArea(rect) > 1) {
+      const positionedOffCanvas =
+        style.position === "absolute" || style.position === "fixed" || style.position === "sticky";
+      pushLayoutFinding(findings, seen, {
+        selector: selector(el),
+        kind: "element-parent-overflow",
+        overflowPx: parentOverflowPx,
+        viewportWidth,
+        severity: positionedOffCanvas ? "warning" : overflowSeverity(parentOverflowPx),
+      });
+    }
+  }
+
+  function auditOverlappingText(elements, viewportWidth, findings, seen) {
+    const candidates = elements
+      .filter((el) => el.children.length === 0 && hasReadableText(el))
+      .filter((el) => isVisibleForLayoutAudit(el))
+      .slice(0, 200);
+
+    for (const el of candidates) {
+      const rect = el.getBoundingClientRect();
+      if (rectArea(rect) < 16) continue;
+      const points = [
+        { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        { x: rect.left + Math.min(4, rect.width / 2), y: rect.top + Math.min(4, rect.height / 2) },
+        { x: rect.right - Math.min(4, rect.width / 2), y: rect.bottom - Math.min(4, rect.height / 2) },
+      ];
+      for (const point of points) {
+        if (point.x < 0 || point.y < 0 || point.x > viewportWidth || point.y > window.innerHeight) continue;
+        const top = document.elementFromPoint(point.x, point.y);
+        if (!(top instanceof Element) || top === el || el.contains(top) || top.contains(el) || isLavishUi(top))
+          continue;
+        if (hasIntentionalHorizontalScrollerAncestor(top)) continue;
+        const elPosition = getComputedStyle(el).position;
+        const topPosition = getComputedStyle(top).position;
+        if (elPosition !== "static" || topPosition !== "static") continue;
+        const topRect = top.getBoundingClientRect();
+        const overlapArea = intersectionArea(rect, topRect);
+        if (overlapArea < Math.min(rectArea(rect) * 0.25, 24)) continue;
+        pushLayoutFinding(findings, seen, {
+          selector: selector(el),
+          kind: "overlapping-text",
+          overflowPx: 0,
+          viewportWidth,
+          severity: "error",
+        });
+        break;
+      }
+    }
+  }
+
+  function auditLayout() {
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const findings = [];
+    const seen = new Set();
+    const pageOverflowPx = document.documentElement.scrollWidth - viewportWidth;
+    if (pageOverflowPx > layoutAuditOverflowEpsilon) {
+      pushLayoutFinding(findings, seen, {
+        selector: "html",
+        kind: "page-horizontal-overflow",
+        overflowPx: pageOverflowPx,
+        viewportWidth,
+        severity: overflowSeverity(pageOverflowPx),
+      });
+    }
+
+    const elements = collectLayoutAuditElements();
+    for (const el of elements) auditElementOverflow(el, viewportWidth, findings, seen);
+    auditOverlappingText(elements, viewportWidth, findings, seen);
+    return findings;
+  }
+
+  function waitForDocumentFontsReady() {
+    try {
+      if (document.fonts?.ready) return document.fonts.ready.catch(() => {});
+    } catch {
+      // Ignore font readiness failures. The ResizeObserver settle below is still a safety net.
+    }
+    return Promise.resolve();
+  }
+
+  function waitForAnimationFrames(count) {
+    return new Promise((resolve) => {
+      function step(remaining) {
+        if (remaining <= 0) {
+          resolve();
+          return;
+        }
+        const next = () => step(remaining - 1);
+        if (window.requestAnimationFrame) {
+          window.requestAnimationFrame(next);
+        } else {
+          window.setTimeout(next, 16);
+        }
+      }
+      step(count);
+    });
+  }
+
+  function waitForResizeObserverSettle() {
+    return new Promise((resolve) => {
+      let observer = null;
+      let settleTimer = 0;
+      let maxTimer = 0;
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        if (settleTimer) window.clearTimeout(settleTimer);
+        if (maxTimer) window.clearTimeout(maxTimer);
+        if (observer) observer.disconnect();
+        resolve();
+      };
+      const scheduleFinish = () => {
+        if (settleTimer) window.clearTimeout(settleTimer);
+        settleTimer = window.setTimeout(finish, layoutAuditSettleMs);
+      };
+
+      if (typeof ResizeObserver !== "undefined") {
+        observer = new ResizeObserver(scheduleFinish);
+        const observed = [document.documentElement, document.body, ...[...(document.body?.querySelectorAll("*") || [])]]
+          .filter(Boolean)
+          .slice(0, 800);
+        for (const el of observed) observer.observe(el);
+      }
+
+      scheduleFinish();
+      maxTimer = window.setTimeout(finish, layoutAuditMaxWaitMs);
+    });
+  }
+
+  async function runLayoutAudit(runId) {
+    await waitForDocumentFontsReady();
+    await waitForResizeObserverSettle();
+    await waitForAnimationFrames(2);
+    if (runId !== layoutAuditRun) return;
+    const layout_warnings = auditLayout();
+    const signature = JSON.stringify(layout_warnings);
+    if (signature === lastLayoutAuditSignature) return;
+    lastLayoutAuditSignature = signature;
+    parent.postMessage({ type: "lavish:layoutWarnings", layout_warnings }, "*");
+  }
+
+  function scheduleLayoutAudit() {
+    if (layoutAuditTimer) window.clearTimeout(layoutAuditTimer);
+    const runId = ++layoutAuditRun;
+    layoutAuditTimer = window.setTimeout(() => {
+      runLayoutAudit(runId).catch(() => {});
+    }, 50);
+  }
+
+  function startLayoutAudit() {
+    scheduleLayoutAudit();
+    window.addEventListener("load", scheduleLayoutAudit, { once: true });
+    window.addEventListener("resize", scheduleLayoutAudit, { passive: true });
+  }
+
+  function ensureShadow() {
+    if (shadow) return shadow;
+
+    const host = document.createElement("div");
+    host.className = "lavish-annotation-root";
+    host.setAttribute("data-lavish-ui", "annotation-root");
+    host.addEventListener("keydown", (event) => event.stopPropagation());
+    document.documentElement.appendChild(host);
+
+    shadow = host.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    style.textContent = `:host{all:initial;position:fixed;z-index:2147483647;left:0;top:0;color-scheme:dark;--ink-900:#0f1115;--ink-800:#11141a;--ink-700:#171a21;--ink-600:#1c212b;--steel-700:#2a2f3a;--steel-600:#303745;--steel-500:#3c4557;--steel-400:#8c96aa;--steel-300:#aeb6c6;--steel-200:#b9c0cf;--steel-100:#d8deea;--cream-50:#fffbf3;--cream-100:#f7f3ea;--cream-200:#e8e1cf;--brass-500:#f4c95d;--brass-400:#ffd877;--brass-ink:#17130a;--bg:var(--ink-900);--bg-panel:var(--ink-800);--bg-elevated:var(--ink-600);--fg:var(--cream-100);--fg-faint:var(--steel-300);--border:var(--steel-600);--accent:#f4c95d;--accent-hover:#ffd877;--font-sans:Geist,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--radius-md:10px;--radius-xl:14px;--shadow-floating:0 20px 70px rgba(0,0,0,.35);font-family:var(--font-sans)}*{box-sizing:border-box}:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.lavish-text-highlight{position:fixed;pointer-events:none;background:rgba(244,201,93,.28);border-radius:2px;box-shadow:0 0 0 1px rgba(244,201,93,.45)}.lavish-annotation-card{position:fixed;width:min(320px,calc(100vw - 24px));padding:12px;border-radius:var(--radius-xl);background:var(--bg-panel);color:var(--fg);border:1px solid var(--accent);box-shadow:var(--shadow-floating);font:14px/1.4 var(--font-sans)}.lavish-heading{font-weight:700;margin-bottom:6px}.lavish-annotation-card textarea{width:100%;min-height:86px;resize:vertical;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--bg);color:var(--fg);padding:9px;font:inherit;font-family:var(--font-sans)}.lavish-annotation-card textarea::placeholder{color:var(--fg-faint)}.lavish-annotation-card .lavish-hint{margin-top:6px;font-size:11px;color:var(--fg-faint)}.lavish-annotation-card .lavish-row{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}.lavish-annotation-card button{border:0;border-radius:var(--radius-md);padding:8px 10px;font-family:var(--font-sans);font-size:13px;font-weight:700;cursor:pointer}.lavish-annotation-card button:active{opacity:.85}.lavish-annotation-card .lavish-send{background:var(--accent);color:var(--brass-ink)}.lavish-annotation-card .lavish-send:hover{background:var(--accent-hover)}.lavish-annotation-card .lavish-cancel{background:var(--steel-700);color:var(--fg)}`;
+    shadow.appendChild(style);
+    return shadow;
+  }
+
+  function closeCard() {
+    if (shadow) {
+      for (const el of [...shadow.querySelectorAll(".lavish-annotation-card")]) el.remove();
+    }
+    clearHighlight(hovered);
+    for (const entry of selected.values()) clearHighlight(entry.element);
+    selected.clear();
+    hovered = null;
+    clearTextHighlight();
+  }
+
+  function showAnnotationCard(target, options = {}) {
+    const root = ensureShadow();
+    const additive = !!options.additive && !options.range;
+    const existingTextarea = shadow?.querySelector(".lavish-annotation-card textarea");
+    const draft = additive && existingTextarea instanceof HTMLTextAreaElement ? existingTextarea.value : "";
+    if (!additive) closeCard();
+    else for (const card of [...root.querySelectorAll(".lavish-annotation-card")]) card.remove();
+
+    let c = options.context || context(target);
+    if (options.range) {
+      highlightTextRange(options.range);
+    } else {
+      selected.set(selectionKey(target, c), { element: target, context: c });
+      for (const entry of selected.values()) highlightElement(entry.element);
+    }
+    const selectedContexts = [...selected.values()].map((entry) => entry.context);
+    const allGraphTargets = selectedContexts.length > 1
+      && selectedContexts.every((item) => item.target?.type === "knowledge-graph-selection");
+    const groupedTarget = selectedContexts.length > 1 ? (allGraphTargets ? {
+      type: "knowledge-graph-selection",
+      items: selectedContexts.flatMap((item) => item.target.items),
+    } : {
+      type: "element-group",
+      items: selectedContexts.map((item) => ({
+        kind: "element",
+        uid: item.uid,
+        tag: item.tag,
+        graph: item.graph,
+        target: item.target,
+        locator: { selector: item.selector },
+        quote: item.text,
+      })),
+    }) : null;
+    if (groupedTarget) {
+      c = {
+        ...c,
+        selector: "",
+        tag: "group",
+        text: selectedContexts.map((item) => item.text).filter(Boolean).join(" | ").slice(0, 240),
+        target: groupedTarget,
+      };
+    }
+
+    const rect = options.range ? options.range.getBoundingClientRect() : target.getBoundingClientRect();
+    const card = document.createElement("div");
+    card.className = "lavish-annotation-card";
+    const heading = groupedTarget
+      ? "Annotate " + selectedContexts.length + " elements"
+      : c.tag === "text" ? "Annotate text" : "Annotate &lt;" + c.tag + "&gt;";
+    const placeholder =
+      c.tag === "text"
+        ? "Tell the agent what to change about this text..."
+        : groupedTarget
+          ? "Tell the agent what to change about these elements..."
+          : "Tell the agent what to change about this element...";
+    card.innerHTML =
+      '<div class="lavish-heading">' +
+      heading +
+      '</div><textarea placeholder="' +
+      placeholder +
+      '"></textarea><div class="lavish-hint">' +
+      (selectedContexts.length ? "Shift-click to add &middot; " + selectedContexts.length + " selected &middot; " : "") +
+      'Enter to queue &middot; ' +
+      (/Mac|iP(hone|ad|od)/.test(navigator.platform) ? "⌘" : "Ctrl") +
+      '+Enter to send now</div><div class="lavish-row"><button class="lavish-cancel" type="button">Cancel</button><button class="lavish-send" type="button">Queue</button></div>';
+    root.appendChild(card);
+
+    const left = Math.min(Math.max(12, rect.left), window.innerWidth - card.offsetWidth - 12);
+    const top = Math.min(Math.max(12, rect.bottom + 8), window.innerHeight - card.offsetHeight - 12);
+    card.style.left = left + "px";
+    card.style.top = top + "px";
+
+    const textarea = /** @type {HTMLTextAreaElement | null} */ (card.querySelector("textarea"));
+    const cancelButton = /** @type {HTMLButtonElement | null} */ (card.querySelector(".lavish-cancel"));
+    const sendButton = /** @type {HTMLButtonElement | null} */ (card.querySelector(".lavish-send"));
+    if (!textarea || !cancelButton || !sendButton) return;
+    textarea.value = draft;
+
+    cancelButton.onclick = closeCard;
+    sendButton.onclick = () => {
+      const prompt = textarea.value.trim();
+      if (prompt) queuePrompt(prompt, { ...c, target: c.target, queueKey: "" });
+      closeCard();
+    };
+    textarea.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        const sendNow = (event.ctrlKey || event.metaKey) && !!textarea.value.trim();
+        sendButton.click();
+        // postMessage delivery is ordered, so the queued prompt lands before the send.
+        if (sendNow) sendQueuedPrompts();
+      }
+    });
+    setTimeout(() => textarea.focus(), 0);
+  }
+
+  /** @type {Window & { lavish?: unknown }} */ (window).lavish = {
+    queuePrompt,
+    sendQueuedPrompts,
+    endSession,
+    getQueuedPrompts: () => [],
+    setStatus: (message) => parent.postMessage({ type: "lavish:status", message: String(message) }, "*"),
+    snapshot,
+  };
+
+  window.addEventListener("message", (event) => {
+    const msg = event.data || {};
+    if (msg.type === "lavish:setAnnotationMode") setAnnotationMode(msg.enabled);
+    if (msg.type === "lavish:requestSnapshot") {
+      parent.postMessage({ type: "lavish:snapshot", snapshot: snapshot() }, "*");
+    }
+    if (msg.type === "lavish:restoreScroll") {
+      window.scrollTo(Number(msg.x) || 0, Number(msg.y) || 0);
+    }
+    if (msg.type === "lavish:revealTarget") revealTarget(msg.selector);
+  });
+  window.addEventListener("keydown", suspendPageShortcuts, true);
+
+  // Report scroll position to the chrome so it can be restored across hot reloads.
+  // The iframe is sandboxed without same-origin, so the chrome can't read scrollY directly.
+  let scrollFrame = 0;
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (scrollFrame) return;
+      scrollFrame = window.requestAnimationFrame(() => {
+        scrollFrame = 0;
+        parent.postMessage({ type: "lavish:scroll", x: window.scrollX, y: window.scrollY }, "*");
+      });
+    },
+    { passive: true },
+  );
+
+  document.addEventListener(
+    "mouseover",
+    (event) => {
+      if (
+        !annotationMode ||
+        isLavishUi(event.target) ||
+        isLavishAction(event.target) ||
+        isInteractiveControl(event.target)
+      )
+        return;
+      const target = annotationTarget(event.target);
+      if (isSelectedElement(target)) return;
+      if (hovered && !isSelectedElement(hovered)) clearHighlight(hovered);
+      hovered = target;
+      highlightElement(hovered);
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "mouseout",
+    () => {
+      if (hovered && !isSelectedElement(hovered)) {
+        clearHighlight(hovered);
+        hovered = null;
+      }
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "mouseup",
+    (event) => {
+      if (
+        !annotationMode ||
+        isLavishUi(event.target) ||
+        isLavishAction(event.target) ||
+        isInteractiveControl(event.target)
+      )
+        return;
+
+      const c = textSelectionContext(document.getSelection());
+      if (!c) return;
+
+      ignoreNextClick = true;
+      showAnnotationCard(c.element, { context: c, range: c.range });
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (
+        !annotationMode ||
+        isLavishUi(event.target) ||
+        isLavishAction(event.target) ||
+        isInteractiveControl(event.target)
+      )
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (ignoreNextClick) {
+        ignoreNextClick = false;
+        return;
+      }
+      showAnnotationCard(annotationTarget(event.target), { additive: event.shiftKey });
+    },
+    true,
+  );
+
+  setAnnotationMode(annotationMode);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startLayoutAudit, { once: true });
+  } else {
+    startLayoutAudit();
+  }
+}
+
+createArtifactSdk(deriveLavishQueueKey, isNativeInteractiveControl);

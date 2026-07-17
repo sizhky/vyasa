@@ -1,3 +1,5 @@
+import { ensureFloatingActions, ensureShortcutHelp, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
+
 function switchTab(tabsId, index) {
     const container = document.querySelector(`.tabs-container[data-tabs-id="${tabsId}"]`);
     if (!container) return;
@@ -544,6 +546,7 @@ function initCommandPalette() {
         if (event.target === palette) close();
     });
     document.addEventListener('keydown', (event) => {
+        if (shortcutsSuspended()) return;
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
             event.preventDefault();
             open();
@@ -1186,20 +1189,42 @@ function initScrollTopButton(root = document) {
     const button = document.createElement('button');
     button.type = 'button';
     button.id = 'vyasa-scroll-top';
-    button.className = 'vyasa-scroll-top-button';
+    button.className = 'vyasa-floating-bubble vyasa-scroll-top-button';
     button.setAttribute('aria-label', 'Go to top');
     button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="vyasa-scroll-top-icon"><path d="M12 19V7"/><path d="m6.75 12.25 5.25-5.25 5.25 5.25"/></svg>';
     button.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    document.body.appendChild(button);
+    const rail = ensureFloatingActions();
+    rail.appendChild(button);
     const sync = () => {
         const main = document.getElementById('main-content');
         const rect = main?.getBoundingClientRect();
         if (rect) {
-            const left = Math.max(16, rect.right - button.offsetWidth);
-            button.style.left = `${left}px`;
+            const inlineInset = parseFloat(
+                getComputedStyle(rail).getPropertyValue('--vyasa-floating-actions-inline-inset')
+            ) || 0;
+            rail.style.left = Math.max(16, rect.right - inlineInset) + 'px';
+            rail.style.right = 'auto';
+            rail.style.transform = 'translateX(-100%)';
+        }
+        const footerRect = document.getElementById('site-footer')?.getBoundingClientRect();
+        if (footerRect && footerRect.top < window.innerHeight) {
+            const railRect = rail.getBoundingClientRect();
+            const signature = `${Math.round(footerRect.top / 20) * 20}:${Math.round(railRect.bottom)}`;
+            if (rail.dataset.footerDebug !== signature) {
+                rail.dataset.footerDebug = signature;
+                window.__vyasaTasksPhaseLog?.('floating-actions:footer-geometry', {
+                    viewportHeight: window.innerHeight,
+                    footerTop: Math.round(footerRect.top),
+                    footerBottom: Math.round(footerRect.bottom),
+                    railTop: Math.round(railRect.top),
+                    railBottom: Math.round(railRect.bottom),
+                    overlap: Math.max(0, Math.round(railRect.bottom - footerRect.top)),
+                });
+            }
         }
         button.classList.toggle('is-visible', window.scrollY > 0);
     };
+    registerFloatingActionSync(sync);
     window.addEventListener('scroll', sync, { passive: true });
     window.addEventListener('resize', sync, { passive: true });
     sync();
@@ -1475,6 +1500,12 @@ function initMobileMenus() {
             window.setTimeout(() => button.classList.remove('vyasa-sidebar-toggle-pulse'), 1600);
         });
     };
+    const syncContentResize = () => {
+        requestAnimationFrame(() => {
+            window.dispatchEvent(new Event('resize'));
+            syncFloatingActions();
+        });
+    };
 
     const toggleDockedSidebar = (kind) => {
         const sidebar = document.getElementById(`${kind}-sidebar`);
@@ -1487,6 +1518,7 @@ function initMobileMenus() {
             if (hidden) localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '1');
             else localStorage.setItem(`vyasa-${kind}-sidebar-hidden`, '0');
         } catch (_) {}
+        syncContentResize();
         return true;
     };
 
@@ -1628,17 +1660,36 @@ function startDocumentScroll(direction) {
     if (documentScrollFrame === null) documentScrollFrame = window.requestAnimationFrame(animateDocumentScroll);
 }
 
+function initDocumentShortcutHelp() {
+    const main = document.getElementById('main-content');
+    if (!main || main.classList.contains('vyasa-zen-present')) return;
+    ensureShortcutHelp({
+        title: 'Document shortcuts',
+        groups: [
+            ['Document', [['P', 'Slides'], ['J / K', 'Scroll'], ['C', 'Fold / Unfold'], ['?', 'Shortcuts']]],
+            ['Panels', [['Z', 'Posts'], ['X', 'Contents'], ['Shift+1', 'Expand Posts'], ['R', 'Review']]],
+        ],
+    });
+}
+
 // Keyboard shortcuts for document navigation
 function initKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
         if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key)) stopDocumentScroll();
-        // Skip if user is typing in an input field
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
-            return;
-        }
+        if (shortcutsSuspended()) return;
+        // composedPath sees editors inside shadow DOM; event.target only sees the shadow host.
+        if (isEditableShortcutEvent(e)) return;
         if (e.metaKey || e.ctrlKey || e.altKey) return;
 
         const mainContent = document.getElementById('main-content');
+        if (e.key.toLowerCase() === 'p') {
+            const presentLink = mainContent?.querySelector('[data-vyasa-present-document="true"]');
+            if (presentLink) {
+                e.preventDefault();
+                window.location.href = presentLink.href;
+                return;
+            }
+        }
         if ((e.key === 'j' || e.key === 'k') && !mainContent?.classList.contains('vyasa-zen-present')) {
             e.preventDefault();
             startDocumentScroll(e.key === 'j' ? 1 : -1);
@@ -1857,6 +1908,7 @@ function renderMathSafely(root) {
     walker.currentNode = root;
     while ((node = walker.nextNode())) if (node.nodeValue && node.nodeValue.includes(marker)) node.nodeValue = node.nodeValue.split(marker).join('$');
 }
+registerMarkdownHydrator(renderMathSafely);
 
 function ensureFragmentStylesheets(root = document) {
     const scope = root instanceof Element || root instanceof Document ? root : document;
@@ -2147,6 +2199,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFolderChevronState();
     window.__vyasaInitCommandPalette?.();
     initKeyboardShortcuts();
+    initDocumentShortcutHelp();
     initPdfFocusToggle();
     initIframeFullscreenToggle();
     initJsonFocusToggle();
@@ -2175,6 +2228,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
         return;
     }
     initHeadingFolds(event.target);
+    initDocumentShortcutHelp();
     syncHeadingActionStates(document);
     initScrollTopButton(document);
     initSidebarResizers(event.target || document);

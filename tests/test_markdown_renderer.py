@@ -119,6 +119,13 @@ def test_relative_markdown_link_preserves_fragment():
     assert 'href="/posts/docs/glossary%23goal"' not in html
 
 
+def test_internal_file_link_escapes_main_content_htmx_boost():
+    html = to_xml(from_md("[PDF](/posts/library/guide.pdf)"))
+
+    assert 'href="/posts/library/guide.pdf"' in html
+    assert 'hx-boost="false"' in html
+
+
 def test_markdown_include_renders_native_markdown_lines(tmp_path, monkeypatch):
     root = tmp_path / "site"
     root.mkdir()
