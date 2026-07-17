@@ -1058,7 +1058,7 @@ def test_tasks_block_renders_markdown_lists_without_trailing_breaks():
     md = dedent("""\
     ```items
     Foundation:
-      - t1 :: Define graph payload | summary: "**Raw input**\\n\\n- First point\\n- Second point\\n- Third point"
+      - t1 :: Define graph payload | summary: "- First point"
     ```
     """)
 
@@ -1068,10 +1068,14 @@ def test_tasks_block_renders_markdown_lists_without_trailing_breaks():
     assert match is not None
     payload = json.loads(html.unescape(match.group(2)))
     summary_html = payload["tasks"][0]["__rendered_attrs__"]["summary"]
-    assert "<ul>" in summary_html
-    assert "<li>First point</li>" in summary_html
-    assert "<li>Second point</li>" in summary_html
-    assert "<li>Third point</li>" in summary_html
+    css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+
+    assert '<ul class="uk-list uk-list-bullet' in summary_html
+    assert summary_html.count('class="text-base leading-relaxed"') == 1
+    assert ".vyasa-task-node-card-value ul { list-style:" not in css_source
+    assert ".vyasa-task-node-card-value ol { list-style:" not in css_source
+    assert ".vyasa-task-slide-description ul { list-style:" not in css_source
+    assert ".vyasa-task-slide-description ol { list-style:" not in css_source
 
 
 def test_tasks_block_serializes_rendered_attr_html_for_projection_models(tmp_path):

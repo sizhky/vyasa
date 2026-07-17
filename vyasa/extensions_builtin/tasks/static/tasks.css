@@ -7,10 +7,6 @@
 .vyasa-task-link-badge svg { width: 0.8rem; height: 0.8rem; stroke: currentColor !important; fill: none !important; }
 .vyasa-task-node-card-value > :first-child { margin-top: 0 !important; }
 .vyasa-task-node-card-value > :last-child { margin-bottom: 0 !important; }
-.vyasa-task-node-card-value ul { list-style: disc; padding-left: 1.1rem; margin-left: 0; }
-.vyasa-task-node-card-value ol { list-style: decimal; padding-left: 1.2rem; margin-left: 0; }
-.vyasa-task-node-card-value li { margin: 0.12rem 0; }
-.vyasa-task-node-card-value li > p { margin: 0; }
 .vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }
 .vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }
 .vyasa-task-node-card-row:hover .vyasa-task-node-card-copy,
@@ -20,10 +16,6 @@
 .vyasa-task-slide-description { display: block; min-width: 0; max-width: 100%; white-space: normal; }
 .vyasa-task-slide-description > :first-child { margin-top: 0 !important; }
 .vyasa-task-slide-description > :last-child { margin-bottom: 0 !important; }
-.vyasa-task-slide-description ul { list-style: disc; padding-left: 1.25rem; margin: 0.2rem 0 0.6rem; }
-.vyasa-task-slide-description ol { list-style: decimal; padding-left: 1.35rem; margin: 0.2rem 0 0.6rem; }
-.vyasa-task-slide-description li { margin: 0.18rem 0; }
-.vyasa-task-slide-description li > p { margin: 0; }
 .vyasa-task-slide-nav select {
     appearance: none;
     padding: 0 34px 0 10px !important;
