@@ -1,3 +1,5 @@
+import { ensureShortcutHelp } from '/static/page_shell.js';
+
 window.__vyasaSlideDebug = window.__vyasaSlideDebug || ((label, payload = {}) => {
   window.__vyasaTasksPhaseLog?.(`slides:${label}`, payload);
 });
@@ -11,6 +13,14 @@ if (!window.__vyasaSlideCaptureLogBound) {
 }
 if (!window.__vyasaZenBound) {
   window.__vyasaZenBound = true;
+  const slideShortcutHelp = ensureShortcutHelp({
+    title: 'Slide shortcuts',
+    groups: [
+      ['Exit', [['Shift+Esc', 'Document']]],
+      ['Slides', [['M', 'Overview'], ['?', 'Shortcuts'], ['J / K', 'Reveal / Rewind'], ['H / L', 'Previous / Next']]],
+      ['Overview', [['J / K', 'Move Selection'], ['H / L', 'Collapse / Expand'], ['Enter', 'Open Slide'], ['Esc', 'Close']]],
+    ],
+  });
   let revealTimers = [];
   const slideDebug = window.__vyasaSlideDebug;
   const revealLog = (label, payload = {}) => {
@@ -405,12 +415,26 @@ if (!window.__vyasaZenBound) {
   const toggleOverview = () => {
     const panel = document.getElementById('slide-overview');
     if (!panel) return;
+    slideShortcutHelp.close();
     panel.classList.toggle('hidden');
   };
   const overviewIsOpen = () =>
     !document.getElementById('slide-overview')?.classList.contains('hidden');
+  const overviewRows = () =>
+    Array.from(document.querySelectorAll('#slide-overview [data-zen-overview-node]'));
+  const refreshOverviewVisibility = () => {
+    const collapsedDepths = [];
+    overviewRows().forEach((row) => {
+      const depth = Number(row.dataset.depth);
+      while (collapsedDepths.length && collapsedDepths.at(-1) >= depth) collapsedDepths.pop();
+      row.hidden = collapsedDepths.length > 0;
+      if (!row.hidden && row.dataset.collapsed === 'true') collapsedDepths.push(depth);
+    });
+  };
   const moveOverviewSelection = (delta) => {
-    const links = Array.from(document.querySelectorAll('#slide-overview [data-zen-overview-href] a'));
+    const links = overviewRows()
+      .filter((row) => !row.hidden)
+      .map((row) => row.querySelector('[data-zen-overview-focus]'));
     if (!links.length) return false;
     const activeIndex = links.indexOf(document.activeElement);
     const nextIndex = Math.max(0, Math.min(
@@ -435,11 +459,48 @@ if (!window.__vyasaZenBound) {
     }, 0);
     return true;
   };
+  const moveOverviewBranch = (direction) => {
+    const rows = overviewRows();
+    const row = document.activeElement?.closest('[data-zen-overview-node]');
+    if (!row) return moveOverviewSelection(direction === 'l' ? 1 : -1);
+    const index = rows.indexOf(row);
+    const depth = Number(row.dataset.depth);
+    const hasChildren = row.dataset.hasChildren === 'true';
+    if (direction === 'l' && hasChildren && row.dataset.collapsed === 'true') {
+      row.dataset.collapsed = 'false';
+      row.setAttribute('aria-expanded', 'true');
+      refreshOverviewVisibility();
+      return true;
+    }
+    if (direction === 'h' && hasChildren && row.dataset.collapsed === 'false') {
+      row.dataset.collapsed = 'true';
+      row.setAttribute('aria-expanded', 'false');
+      refreshOverviewVisibility();
+      return true;
+    }
+    const target = direction === 'l'
+      ? rows[index + 1]
+      : rows.slice(0, index).reverse().find((candidate) =>
+          !candidate.hidden && Number(candidate.dataset.depth) < depth);
+    if (target && !target.hidden && (direction === 'h' || Number(target.dataset.depth) > depth)) {
+      target.querySelector('[data-zen-overview-focus]')?.focus({ preventScroll: true });
+      target.scrollIntoView({ block: 'center' });
+    }
+    return true;
+  };
   document.addEventListener('click', (event) => {
     const toggle = event.target.closest('[data-zen-overview-toggle="true"]');
     if (toggle) {
       event.preventDefault();
       toggleOverview();
+      return;
+    }
+    const branchToggle = event.target.closest('[data-zen-overview-toggle-branch]');
+    if (branchToggle) {
+      branchToggle.focus({ preventScroll: true });
+      const row = branchToggle.closest('[data-zen-overview-node]');
+      moveOverviewBranch(row?.dataset.collapsed === 'true' ? 'l' : 'h');
+      event.preventDefault();
       return;
     }
     const nav = event.target.closest('[data-zen-nav]');
@@ -476,12 +537,21 @@ if (!window.__vyasaZenBound) {
       target: event.target?.tagName || '', active: document.activeElement?.tagName || '',
     });
     if (event.defaultPrevented) return;
+    if (event.key === 'Escape' && event.shiftKey && window.__vyasaZen?.post) {
+      window.location.href = window.__vyasaZen.post;
+      event.preventDefault();
+      return;
+    }
     if (event.key === 'Escape') {
       document.getElementById('slide-overview')?.classList.add('hidden');
     }
     if (event.metaKey || event.ctrlKey || event.altKey
       || event.target?.matches?.('input, textarea, select') || event.target?.isContentEditable) return;
     const key = event.key.toLowerCase();
+    if (overviewIsOpen() && (key === 'h' || key === 'l')) {
+      if (moveOverviewBranch(key)) event.preventDefault();
+      return;
+    }
     if (overviewIsOpen() && (key === 'j' || key === 'k')) {
       if (moveOverviewSelection(key === 'j' ? 1 : -1)) event.preventDefault();
       return;

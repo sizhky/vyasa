@@ -187,6 +187,7 @@ def present_button(slug: str):
         "Present",
         href=content_url_for_slug(slug, prefix="/slides", suffix="/slide-1"),
         hx_boost="false",
+        data_vyasa_present_document="true",
         data_tooltip="Present document",
         aria_label="Present document",
         cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",

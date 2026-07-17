@@ -1141,9 +1141,18 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 
 .vyasa-page-action-icon,
 .vyasa-fold-all-icon { width: 1rem; height: 1rem; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
-.vyasa-floating-actions { position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 0.65rem; }
+.vyasa-floating-actions { --vyasa-floating-actions-inline-inset: 20px; position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 0.65rem; }
 .vyasa-floating-bubble { width: 3.15rem; height: 3.15rem; padding: 0; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--vyasa-primary) 38%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--vyasa-paper) 82%, var(--vyasa-primary) 18%); color: var(--vyasa-primary); box-shadow: 0 18px 34px -20px rgba(15, 23, 42, 0.42); backdrop-filter: blur(10px); transition: opacity 160ms ease, transform 160ms ease, background 160ms ease; cursor: pointer; }
 .vyasa-floating-bubble:hover { background: color-mix(in srgb, var(--vyasa-paper) 70%, var(--vyasa-primary) 30%); }
+.vyasa-shortcuts-launcher { order: -1; opacity: 1; }
+.vyasa-shortcuts { position: fixed; inset: 0; z-index: 1700; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+.vyasa-shortcuts.hidden { display: none; }
+.vyasa-shortcuts-card { width: min(34rem, calc(100vw - 3rem)); max-height: calc(100vh - 3rem); overflow-y: auto; padding: 2rem; border: 1px solid color-mix(in srgb, var(--vyasa-ink-soft) 22%, transparent); border-radius: .75rem; color: var(--vyasa-ink); background: color-mix(in srgb, var(--vyasa-paper) 68%, transparent); box-shadow: 0 1.5rem 4rem color-mix(in srgb, black 32%, transparent); backdrop-filter: blur(.75rem) saturate(1.1); font-family: var(--vyasa-font-ui); }
+.vyasa-shortcuts-card h2 { margin: 0 0 1.5rem; font-size: 1.25rem; font-weight: 650; }
+.vyasa-shortcuts-card section + section { margin-top: 1.5rem; }
+.vyasa-shortcuts-card small { color: var(--vyasa-ink-soft); font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; }
+.vyasa-shortcuts-card section > div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: 1.25rem; align-items: center; margin-top: .75rem; }
+.vyasa-shortcuts-card kbd { display: inline-flex; min-width: 2.5rem; min-height: 2rem; align-items: center; justify-content: center; justify-self: start; padding: 0 .65rem; border: 1px solid color-mix(in srgb, var(--vyasa-ink-soft) 22%, transparent); border-radius: .55rem; color: var(--vyasa-ink-soft); background: color-mix(in srgb, var(--vyasa-paper-raised) 88%, transparent); font: 700 .8rem/1 var(--vyasa-font-ui); }
 .vyasa-scroll-top-button { position: absolute; visibility: hidden; opacity: 0; pointer-events: none; transform: translateY(0.4rem) scale(0.96); }
 .vyasa-scroll-top-button.is-visible { position: relative; visibility: visible; opacity: 1; pointer-events: auto; transform: translateY(0); }
 .vyasa-scroll-top-icon { width: 1.4rem; height: 1.4rem; stroke: currentColor; stroke-width: 1.9; fill: none; stroke-linecap: round; stroke-linejoin: round; }

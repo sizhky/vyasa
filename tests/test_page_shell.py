@@ -85,6 +85,20 @@ def test_mobile_panels_fill_dynamic_viewport_without_page_overflow():
     assert "max-height: none !important" in css
 
 
+def test_floating_actions_honor_page_inline_inset():
+    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+
+    assert "--vyasa-floating-actions-inline-inset" in source
+
+
+def test_posts_and_slides_share_shortcut_help():
+    shell = Path("vyasa/static/page_shell.js").read_text(encoding="utf-8")
+    scripts = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+
+    assert "export function ensureShortcutHelp" in shell
+    assert "title: 'Document shortcuts'" in scripts
+
+
 def test_theme_toggle_icon_keeps_ink_color_on_focus():
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 
@@ -197,6 +211,7 @@ def test_document_action_buttons_render_inline_icons():
     assert html.count("vyasa-page-action-tooltip") == 3
     assert 'data-tooltip="Fold all sections (C)"' in html
     assert 'data-tooltip="Present document"' in html
+    assert 'data-vyasa-present-document="true"' in html
     assert 'data-tooltip="Copy raw markdown"' in html
 
 

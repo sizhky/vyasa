@@ -343,27 +343,66 @@
 #slide-overview .vyasa-zen-overview-title {
   margin: 0;
   color: var(--vyasa-ink);
-  font-size: clamp(2.25rem, 6vw, 5rem);
+  font-size: clamp(1.5rem, 3vw, 2.75rem);
   text-align: center;
   opacity: 0.38;
 }
+#slide-overview .vyasa-zen-overview-heading {
+  text-align: center;
+}
+#slide-overview .vyasa-zen-overview-subtitle {
+  display: block;
+  margin-top: 0.75rem;
+  color: var(--vyasa-ink-soft);
+  font-family: var(--vyasa-zen-font-ui);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.58;
+}
+#slide-overview [data-zen-overview-node] td:last-child {
+  padding-left: calc(1rem + (var(--vyasa-overview-depth) - 1) * 1.5rem);
+}
+#slide-overview .vyasa-zen-overview-label {
+  color: var(--vyasa-link) !important;
+  font-weight: 400 !important;
+}
+#slide-overview .vyasa-zen-overview-chevron,
+#slide-overview .vyasa-zen-overview-chevron-space {
+  display: inline-block;
+  width: 1.25rem;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+#slide-overview .vyasa-zen-overview-chevron::before {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-top: 0.12rem solid currentColor;
+  border-right: 0.12rem solid currentColor;
+  content: "";
+  opacity: 0.55;
+  transform: rotate(45deg);
+}
+#slide-overview [data-collapsed="false"] .vyasa-zen-overview-chevron::before {
+  transform: rotate(135deg);
+}
 #slide-overview tr:focus-within td {
-  background: color-mix(in srgb, var(--vyasa-primary) 8%, transparent);
-  color: var(--vyasa-ink);
-  transition: background 140ms ease, color 140ms ease;
+  background: color-mix(in srgb, var(--vyasa-primary) 13%, var(--vyasa-paper-raised));
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--vyasa-primary) 24%, transparent),
+    inset 0 -1px color-mix(in srgb, var(--vyasa-primary) 24%, transparent);
+  transition: background 140ms ease, box-shadow 140ms ease;
 }
-#slide-overview tr:focus-within td:first-child {
-  color: var(--vyasa-primary);
-  opacity: 1 !important;
+#slide-overview [data-zen-overview-toggle-branch] {
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: transparent;
 }
-#slide-overview td:first-child > span {
-  transform-origin: center;
-  transition: transform 140ms ease;
-}
-#slide-overview tr:focus-within td:first-child > span {
-  transform: scale(1.2);
-}
-#slide-overview tr:focus-within a:focus-visible {
+#slide-overview tr:focus-within [data-zen-overview-focus]:focus-visible {
   color: inherit;
   outline: none;
   text-decoration: none;

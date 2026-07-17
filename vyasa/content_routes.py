@@ -429,7 +429,7 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         slide_num = max(1, min(slide_num, total))
         doc_href = content_url_for_slug(doc_path) if slide_num == 1 else deck.doc_href(doc_path, len(deck.slides) if slide_num == total else slide_num - 1)
     nav_link = lambda label, href, side: Button(Kbd(label, cls="vyasa-zen-nav-kbd"), type="button", data_zen_nav=side, data_zen_href=href, cls="vyasa-zen-nav-key")
-    nav_state = {"index": slide_num, "total": total, "left": content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(slide_num - 1)}"), "right": content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(slide_num + 1)}")}
+    nav_state = {"index": slide_num, "total": total, "left": content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(slide_num - 1)}"), "right": content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(slide_num + 1)}"), "post": doc_href}
     left_control = nav_link("←", nav_state["left"], "left") if nav_state["index"] > 1 else Kbd("←", cls="vyasa-zen-nav-kbd opacity-30 pointer-events-none")
     right_control = nav_link("→", nav_state["right"], "right") if nav_state["index"] < nav_state["total"] else Kbd("→", cls="vyasa-zen-nav-kbd opacity-30 pointer-events-none")
     nav = Div(
@@ -438,13 +438,47 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         right_control,
         cls="inline-flex items-center gap-4",
     )
-    overview_rows = [
-        f'<tr data-zen-overview-href="{item["href"]}" class="cursor-pointer"><td class="pr-4 align-top whitespace-nowrap opacity-70"><span class="inline-flex items-center gap-1">{to_xml(UkIcon("file-text", cls="w-4 h-4"))}<span>{item["index"]}</span></span></td>'
-        f'<td class="align-top"><a href="{item["href"]}" hx-get="{item["href"]}" hx-target="#main-content" '
-        f'hx-swap="outerHTML show:window:top settle:0.1s" hx-push-url="true">{item["text"]}</a></td></tr>'
-        for item in overview
-    ]
-    overview_title = to_xml(H1(f"{title} slides", cls="vyasa-zen-overview-title"))
+    overview_rows = []
+    for position, item in enumerate(overview):
+        depth = item["depth"]
+        has_children = position + 1 < len(overview) and overview[position + 1]["depth"] > depth
+        tree_state = (
+            ' data-has-children="true" data-collapsed="true" aria-expanded="false"'
+            if has_children else ""
+        )
+        hidden = " hidden" if depth > 1 else ""
+        label = to_xml(Span(item["label"], cls="vyasa-zen-overview-label"))
+        if has_children:
+            focus_attr = " data-zen-overview-focus" if not item["href"] else ""
+            chevron = (
+                f'<button type="button" class="vyasa-zen-overview-chevron" '
+                f'data-zen-overview-toggle-branch{focus_attr} aria-label="Toggle section"></button>'
+            )
+        else:
+            chevron = '<span class="vyasa-zen-overview-chevron-space" aria-hidden="true"></span>'
+        if item["href"]:
+            row_href = f' data-zen-overview-href="{item["href"]}"'
+            index_control = f'{to_xml(UkIcon("file-text", cls="w-4 h-4"))}<span>{item["index"]}</span>'
+            label_control = (
+                f'<a data-zen-overview-focus href="{item["href"]}" hx-get="{item["href"]}" '
+                f'hx-target="#main-content" hx-swap="outerHTML show:window:top settle:0.1s" '
+                f'hx-push-url="true">{label}</a>'
+            )
+        else:
+            row_href = ""
+            index_control = to_xml(UkIcon("folder", cls="w-4 h-4"))
+            label_control = label
+        overview_rows.append(
+            f'<tr data-zen-overview-node{row_href} data-depth="{depth}"{tree_state}{hidden} '
+            f'style="--vyasa-overview-depth:{depth}" class="cursor-pointer">'
+            f'<td class="pr-4 align-top whitespace-nowrap"><span class="inline-flex items-center gap-1 opacity-70">'
+            f'{index_control}</span></td><td class="align-top">{chevron}{label_control}</td></tr>'
+        )
+    overview_title = to_xml(Div(
+        H1(title, cls="vyasa-zen-overview-title"),
+        Span("Navigate by section", cls="vyasa-zen-overview-subtitle"),
+        cls="vyasa-zen-overview-heading",
+    ))
     overview_top_margin = f'<tr class="vyasa-zen-overview-margin" aria-hidden="true"><td colspan="2">{overview_title}</td></tr>'
     overview_bottom_margin = '<tr class="vyasa-zen-overview-margin" aria-hidden="true"><td colspan="2"></td></tr>'
     overview_panel = Div(

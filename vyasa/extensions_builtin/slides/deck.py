@@ -320,17 +320,31 @@ class ZenSlideDeck:
 
     def outline(self, doc_path):
         items = []
+        paths = {}
         for index, slide in enumerate(self.slides, start=1):
             crumbs = []
             for block in slide:
                 match = re.match(r"^(#{1,6})\s+(.+)$", block, re.MULTILINE)
                 if match:
                     crumbs.append(match.group(2).strip())
-            items.append({
-                "index": index + 1,
-                "text": "✦ > " + " > ".join(crumbs) if crumbs else "✦",
-                "href": content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index + 1)}"),
-            })
+            if not crumbs:
+                items.append({
+                    "index": index + 1, "label": f"Slide {index + 1}", "depth": 1,
+                    "href": content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(index + 1)}"),
+                })
+                continue
+            for depth in range(1, len(crumbs) + 1):
+                path = tuple(crumbs[:depth])
+                item = paths.get(path)
+                if item is None:
+                    item = {"index": None, "label": crumbs[depth - 1], "depth": depth, "href": None}
+                    paths[path] = item
+                    items.append(item)
+                if depth == len(crumbs):
+                    item["index"] = index + 1
+                    item["href"] = content_url_for_slug(
+                        doc_path, prefix="/slides", suffix=f"/{slide_slug(index + 1)}",
+                    )
         return items
 
     def _build_anchors(self):

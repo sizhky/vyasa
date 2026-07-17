@@ -1,4 +1,4 @@
-import { ensureFloatingActions, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
+import { ensureFloatingActions, ensureShortcutHelp, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
 
 function switchTab(tabsId, index) {
     const container = document.querySelector(`.tabs-container[data-tabs-id="${tabsId}"]`);
@@ -1199,9 +1199,28 @@ function initScrollTopButton(root = document) {
         const main = document.getElementById('main-content');
         const rect = main?.getBoundingClientRect();
         if (rect) {
-            rail.style.left = Math.max(16, rect.right) + 'px';
+            const inlineInset = parseFloat(
+                getComputedStyle(rail).getPropertyValue('--vyasa-floating-actions-inline-inset')
+            ) || 0;
+            rail.style.left = Math.max(16, rect.right - inlineInset) + 'px';
             rail.style.right = 'auto';
             rail.style.transform = 'translateX(-100%)';
+        }
+        const footerRect = document.getElementById('site-footer')?.getBoundingClientRect();
+        if (footerRect && footerRect.top < window.innerHeight) {
+            const railRect = rail.getBoundingClientRect();
+            const signature = `${Math.round(footerRect.top / 20) * 20}:${Math.round(railRect.bottom)}`;
+            if (rail.dataset.footerDebug !== signature) {
+                rail.dataset.footerDebug = signature;
+                window.__vyasaTasksPhaseLog?.('floating-actions:footer-geometry', {
+                    viewportHeight: window.innerHeight,
+                    footerTop: Math.round(footerRect.top),
+                    footerBottom: Math.round(footerRect.bottom),
+                    railTop: Math.round(railRect.top),
+                    railBottom: Math.round(railRect.bottom),
+                    overlap: Math.max(0, Math.round(railRect.bottom - footerRect.top)),
+                });
+            }
         }
         button.classList.toggle('is-visible', window.scrollY > 0);
     };
@@ -1641,6 +1660,18 @@ function startDocumentScroll(direction) {
     if (documentScrollFrame === null) documentScrollFrame = window.requestAnimationFrame(animateDocumentScroll);
 }
 
+function initDocumentShortcutHelp() {
+    const main = document.getElementById('main-content');
+    if (!main || main.classList.contains('vyasa-zen-present')) return;
+    ensureShortcutHelp({
+        title: 'Document shortcuts',
+        groups: [
+            ['Document', [['P', 'Slides'], ['J / K', 'Scroll'], ['C', 'Fold / Unfold'], ['?', 'Shortcuts']]],
+            ['Panels', [['Z', 'Posts'], ['X', 'Contents'], ['Shift+1', 'Expand Posts'], ['R', 'Review']]],
+        ],
+    });
+}
+
 // Keyboard shortcuts for document navigation
 function initKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
@@ -1651,6 +1682,14 @@ function initKeyboardShortcuts() {
         if (e.metaKey || e.ctrlKey || e.altKey) return;
 
         const mainContent = document.getElementById('main-content');
+        if (e.key.toLowerCase() === 'p') {
+            const presentLink = mainContent?.querySelector('[data-vyasa-present-document="true"]');
+            if (presentLink) {
+                e.preventDefault();
+                window.location.href = presentLink.href;
+                return;
+            }
+        }
         if ((e.key === 'j' || e.key === 'k') && !mainContent?.classList.contains('vyasa-zen-present')) {
             e.preventDefault();
             startDocumentScroll(e.key === 'j' ? 1 : -1);
@@ -2160,6 +2199,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFolderChevronState();
     window.__vyasaInitCommandPalette?.();
     initKeyboardShortcuts();
+    initDocumentShortcutHelp();
     initPdfFocusToggle();
     initIframeFullscreenToggle();
     initJsonFocusToggle();
@@ -2188,6 +2228,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
         return;
     }
     initHeadingFolds(event.target);
+    initDocumentShortcutHelp();
     syncHeadingActionStates(document);
     initScrollTopButton(document);
     initSidebarResizers(event.target || document);
