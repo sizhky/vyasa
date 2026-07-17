@@ -299,7 +299,7 @@
 }
 .vyasa-zen-slide-progress {
   position: fixed;
-  bottom: 0.75rem;
+  bottom: 1.55rem;
   left: 50%;
   z-index: 10;
   display: flex;
@@ -310,12 +310,64 @@
   color: var(--vyasa-ink-soft);
   font-family: var(--vyasa-zen-font-ui);
   font-size: calc(0.65rem + var(--vyasa-zen-font-bump));
-  opacity: 0.58;
+  opacity: 0.72;
   pointer-events: none;
   transform: translateX(-50%);
 }
-.vyasa-zen-slide-progress-track { flex: 1; height: 0.15rem; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--vyasa-ink-soft) 12%, transparent); }
-.vyasa-zen-slide-progress-track::after { content: ""; display: block; width: var(--vyasa-slide-progress, 0%); height: 100%; border-radius: inherit; background: var(--vyasa-primary); transition: width 220ms ease; }
+.vyasa-zen-slide-progress-track { flex: 1; height: 0.3rem; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--vyasa-ink-soft) 18%, transparent); }
+.vyasa-zen-slide-progress-track::after { content: ""; display: block; width: var(--vyasa-slide-progress, 0%); height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--vyasa-primary) 85%, white); transition: width 220ms ease; }
+.vyasa-zen-deck-progress {
+  position: fixed; bottom: 0.75rem; left: 50%; z-index: 10;
+  width: min(var(--vyasa-zen-slide-max-width), calc(100vw - 2rem));
+  opacity: 0.72; pointer-events: none; transform: translateX(-50%);
+}
+.vyasa-zen-deck-progress-track { width: 100%; height: 0.3rem; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--vyasa-ink-soft) 18%, transparent); }
+.vyasa-zen-deck-progress-track::after { content: ""; display: block; width: var(--vyasa-deck-progress, 0%); height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--vyasa-primary) 85%, white); transition: width 220ms ease; }
+#slide-overview .vyasa-zen-overview-card {
+  background: color-mix(in srgb, var(--vyasa-paper) 68%, transparent);
+  border-color: color-mix(in srgb, var(--vyasa-ink-soft) 22%, transparent);
+  box-shadow: 0 1.5rem 4rem color-mix(in srgb, black 32%, transparent);
+  backdrop-filter: blur(0.75rem) saturate(1.1);
+  -webkit-backdrop-filter: blur(0.75rem) saturate(1.1);
+}
+#slide-overview .vyasa-zen-overview-margin {
+  height: calc(35vh - 3rem);
+  pointer-events: none;
+}
+#slide-overview .vyasa-zen-overview-margin > td {
+  padding: 0;
+  border: 0;
+  background: transparent !important;
+  vertical-align: middle;
+}
+#slide-overview .vyasa-zen-overview-title {
+  margin: 0;
+  color: var(--vyasa-ink);
+  font-size: clamp(2.25rem, 6vw, 5rem);
+  text-align: center;
+  opacity: 0.38;
+}
+#slide-overview tr:focus-within td {
+  background: color-mix(in srgb, var(--vyasa-primary) 8%, transparent);
+  color: var(--vyasa-ink);
+  transition: background 140ms ease, color 140ms ease;
+}
+#slide-overview tr:focus-within td:first-child {
+  color: var(--vyasa-primary);
+  opacity: 1 !important;
+}
+#slide-overview td:first-child > span {
+  transform-origin: center;
+  transition: transform 140ms ease;
+}
+#slide-overview tr:focus-within td:first-child > span {
+  transform: scale(1.2);
+}
+#slide-overview tr:focus-within a:focus-visible {
+  color: inherit;
+  outline: none;
+  text-decoration: none;
+}
 .vyasa-zen-slide-end-rule {
   display: flex;
   align-items: center;

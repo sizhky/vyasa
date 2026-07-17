@@ -74,6 +74,13 @@ if (!window.__vyasaZenBound) {
     bar.style.setProperty('--vyasa-slide-progress', `${progressUnits.length ? visible / progressUnits.length * 100 : 100}%`);
     bar.setAttribute('aria-valuemax', String(progressUnits.length));
     bar.setAttribute('aria-valuenow', String(visible));
+    const deckBar = body.querySelector('.vyasa-zen-deck-progress');
+    const offset = Number(deckBar?.dataset.segmentOffset || 0);
+    const total = Number(deckBar?.dataset.segmentTotal || 0);
+    const deckVisible = Math.min(total, offset + visible);
+    deckBar?.style.setProperty('--vyasa-deck-progress', `${total ? deckVisible / total * 100 : 100}%`);
+    deckBar?.setAttribute('aria-valuemax', String(total));
+    deckBar?.setAttribute('aria-valuenow', String(deckVisible));
     const endRule = body.querySelector('.vyasa-zen-slide-end-rule');
     if (endRule) endRule.dataset.revealState = visible === progressUnits.length ? 'visible' : 'hidden';
   };
@@ -400,6 +407,34 @@ if (!window.__vyasaZenBound) {
     if (!panel) return;
     panel.classList.toggle('hidden');
   };
+  const overviewIsOpen = () =>
+    !document.getElementById('slide-overview')?.classList.contains('hidden');
+  const moveOverviewSelection = (delta) => {
+    const links = Array.from(document.querySelectorAll('#slide-overview [data-zen-overview-href] a'));
+    if (!links.length) return false;
+    const activeIndex = links.indexOf(document.activeElement);
+    const nextIndex = Math.max(0, Math.min(
+      links.length - 1,
+      activeIndex < 0 ? (delta > 0 ? 0 : links.length - 1) : activeIndex + delta,
+    ));
+    links[nextIndex].focus({ preventScroll: true });
+    const row = links[nextIndex].closest('tr');
+    row?.scrollIntoView({ block: 'center' });
+    window.setTimeout(() => {
+      const card = document.querySelector('#slide-overview .vyasa-zen-overview-card');
+      const rowRect = row?.getBoundingClientRect();
+      const cardRect = card?.getBoundingClientRect();
+      slideDebug('overview-selection', {
+        index: nextIndex,
+        rowCenter: rowRect ? Math.round(rowRect.top + rowRect.height / 2) : null,
+        cardCenter: cardRect ? Math.round(cardRect.top + cardRect.height / 2) : null,
+        scrollTop: card?.scrollTop ?? null,
+        scrollHeight: card?.scrollHeight ?? null,
+        clientHeight: card?.clientHeight ?? null,
+      });
+    }, 0);
+    return true;
+  };
   document.addEventListener('click', (event) => {
     const toggle = event.target.closest('[data-zen-overview-toggle="true"]');
     if (toggle) {
@@ -447,6 +482,14 @@ if (!window.__vyasaZenBound) {
     if (event.metaKey || event.ctrlKey || event.altKey
       || event.target?.matches?.('input, textarea, select') || event.target?.isContentEditable) return;
     const key = event.key.toLowerCase();
+    if (overviewIsOpen() && (key === 'j' || key === 'k')) {
+      if (moveOverviewSelection(key === 'j' ? 1 : -1)) event.preventDefault();
+      return;
+    }
+    if (key === 'm') {
+      toggleOverview();
+      event.preventDefault();
+    }
     if (key === 'h' && follow('left', true)) event.preventDefault();
     if (key === 'j' && (revealNextUnit() || follow('right'))) event.preventDefault();
     if (key === 'k' && (hidePreviousUnit() || follow('left'))) event.preventDefault();

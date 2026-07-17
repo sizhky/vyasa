@@ -269,6 +269,25 @@ def build_slide_reveal_units(markdown_text, *, render_fragment, current_path, co
         pending = {}
     return [unit for unit in units if unit.get("html", "").strip()]
 
+
+def count_slide_progress_segments(markdown_text, *, render_fragment, current_path, config):
+    counter_render = render_fragment if config.unit == "top-level-blocks" else (
+        lambda text, current_path=None, slide_mode=False: text
+    )
+    units = build_slide_reveal_units(
+        markdown_text, render_fragment=counter_render, current_path=current_path, config=config,
+    )
+    step_units = [
+        unit for unit in units
+        if (unit.get("style") or config.style) not in {"none", "instant"}
+    ]
+    first_content = next(
+        (index for index, unit in enumerate(step_units) if unit.get("kind") != "heading"),
+        len(step_units),
+    )
+    return len(step_units[first_content:])
+
+
 class ZenSlideDeck:
     def __init__(self, markdown_text):
         self.slides = list(iter_zen_slides(markdown_text)) or [["# Empty deck"]]

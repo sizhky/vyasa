@@ -23,7 +23,7 @@ from .extensions import get_extension_runtime, refresh_extension_runtime
 from .helpers import content_location, content_path_for_slug, content_root_and_relative, content_slug_for_path, content_url_for_slug, expand_markdown_includes_for_reading, get_adjacent_posts, strip_more_marker
 from .runtime_context import traced
 from .extensions_builtin.markdown.renderer import _render_markdown_fragment
-from .extensions_builtin.slides.deck import ZenSlideDeck, build_slide_reveal_units, resolve_slide_reveal_config, slide_slug
+from .extensions_builtin.slides.deck import ZenSlideDeck, build_slide_reveal_units, count_slide_progress_segments, resolve_slide_reveal_config, slide_slug
 
 FALLBACK_HOME_SLUG = "__home__"
 
@@ -444,10 +444,13 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
         f'hx-swap="outerHTML show:window:top settle:0.1s" hx-push-url="true">{item["text"]}</a></td></tr>'
         for item in overview
     ]
+    overview_title = to_xml(H1(f"{title} slides", cls="vyasa-zen-overview-title"))
+    overview_top_margin = f'<tr class="vyasa-zen-overview-margin" aria-hidden="true"><td colspan="2">{overview_title}</td></tr>'
+    overview_bottom_margin = '<tr class="vyasa-zen-overview-margin" aria-hidden="true"><td colspan="2"></td></tr>'
     overview_panel = Div(
         Div(
-            NotStr('<table class="uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle w-full"><tbody>' + "".join(overview_rows) + '</tbody></table>'),
-            cls="w-[min(78rem,calc(100vw-3rem))] max-h-[70vh] overflow-y-auto rounded-xl border bg-white/95 dark:bg-slate-900/95 p-4 shadow-2xl pointer-events-auto",
+            NotStr('<table class="uk-table uk-table-striped uk-table-hover uk-table-divider uk-table-middle w-full"><tbody>' + overview_top_margin + "".join(overview_rows) + overview_bottom_margin + '</tbody></table>'),
+            cls="vyasa-zen-overview-card w-[min(78rem,calc(100vw-3rem))] max-h-[70vh] overflow-y-auto rounded-xl border p-4 shadow-2xl pointer-events-auto",
         ),
         id="slide-overview",
         cls="hidden fixed inset-0 z-30 flex items-center justify-center p-6 pointer-events-none",
@@ -479,6 +482,13 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
                     return _render_markdown_fragment(body, current_path=current_path, slide_mode=slide_mode, asset_collector=asset_collector)
             return _render_markdown_fragment(body, current_path=current_path, slide_mode=slide_mode, asset_collector=asset_collector)
 
+        segment_counts = [
+            count_slide_progress_segments(
+                deck.body(index), render_fragment=render_slide_fragment,
+                current_path=doc_path, config=reveal_config,
+            )
+            for index in range(1, len(deck.slides) + 1)
+        ]
         reveal_units = build_slide_reveal_units(
             slide_markdown,
             render_fragment=render_slide_fragment,
@@ -517,6 +527,13 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
                     Div(cls="vyasa-zen-slide-progress-track", aria_hidden="true"),
                     cls="vyasa-zen-slide-progress", role="progressbar",
                     aria_label="Slide segments revealed", aria_value_min="0", aria_live="polite",
+                ),
+                Div(
+                    Div(cls="vyasa-zen-deck-progress-track", aria_hidden="true"),
+                    cls="vyasa-zen-deck-progress", role="progressbar",
+                    aria_label="Deck segments revealed", aria_value_min="0",
+                    data_segment_offset=str(sum(segment_counts[:slide_num - 2])),
+                    data_segment_total=str(sum(segment_counts)),
                 ),
                 cls="vyasa-zen-slide-body",
                 data_reveal_mode="stagger",
