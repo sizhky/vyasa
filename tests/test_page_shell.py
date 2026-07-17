@@ -248,6 +248,16 @@ def test_sidebars_bound_main_content_width():
     assert "window.dispatchEvent(new Event('resize'));" in source
 
 
+def test_document_heading_spacing_uses_shared_before_and_after_gaps():
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+
+    assert "--vyasa-heading-before-gap: 1rem;" in css
+    assert "--vyasa-heading-after-gap: 0.7rem;" in css
+    assert "#main-content .vyasa-doc-heading {" in css
+    assert "#main-content .vyasa-heading-fold {" in css
+    assert "#main-content .vyasa-heading-fold-body > :last-child {" in css
+
+
 def test_copy_markdown_button_keeps_raw_content_out_of_searchable_dom():
     button_html = to_xml(copy_raw_button("Copy Markdown", "# Heading\nbody", "raw-md-toast"))
     aux_html = "".join(to_xml(node) for node in copy_raw_nodes("# Heading\nbody"))

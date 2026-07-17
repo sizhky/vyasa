@@ -37,6 +37,8 @@ code, pre { font-family: var(--vyasa-font-mono); }
     --vyasa-tree-row-action-pad: 0.12rem;
     --vyasa-tree-row-state-gap: 0.1rem;
     --vyasa-tree-item-gap: 0rem;
+    --vyasa-heading-before-gap: 1rem;
+    --vyasa-heading-after-gap: 0.7rem;
     --vyasa-link: color-mix(in srgb, var(--vyasa-primary) 68%, var(--vyasa-ink) 32%);
     --vyasa-link-hover: color-mix(in srgb, var(--vyasa-primary-dim) 58%, var(--vyasa-ink) 42%);
     --vyasa-emphasis-control-text: var(--vyasa-primary-text);
@@ -1068,7 +1070,12 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .vyasa-heading-action-children[data-subtree-state="collapse"] .vyasa-heading-icon-collapse { display: inline-flex; }
 .vyasa-doc-heading:hover .vyasa-heading-action, .vyasa-doc-heading:hover .vyasa-heading-permalink, .vyasa-heading-action:hover, .vyasa-heading-action:focus, .vyasa-heading-permalink:hover, .vyasa-heading-permalink:focus { opacity: 1; }
 .vyasa-heading-action:hover, .vyasa-heading-action:focus, .vyasa-heading-permalink:hover, .vyasa-heading-permalink:focus { color: var(--vyasa-primary) !important; }
-.vyasa-heading-fold { margin: 1.15rem 0; }
+#main-content .vyasa-doc-heading {
+    margin-block: var(--vyasa-heading-before-gap) var(--vyasa-heading-after-gap) !important;
+}
+#main-content .vyasa-heading-fold {
+    margin-block: var(--vyasa-heading-before-gap) !important;
+}
 .vyasa-page-action-button,
 .vyasa-fold-all-button {
     display: inline-flex;
@@ -1159,10 +1166,14 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .vyasa-heading-fold-summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 0.1rem; }
 .vyasa-heading-fold-summary::-webkit-details-marker { display: none; }
 .vyasa-heading-fold-summary::marker { content: ""; }
-.vyasa-heading-fold-summary > h1, .vyasa-heading-fold-summary > h2, .vyasa-heading-fold-summary > h3, .vyasa-heading-fold-summary > h4, .vyasa-heading-fold-summary > h5, .vyasa-heading-fold-summary > h6 { margin: 0; flex: 1; order: 2; }
+.vyasa-heading-fold-summary > h1, .vyasa-heading-fold-summary > h2, .vyasa-heading-fold-summary > h3, .vyasa-heading-fold-summary > h4, .vyasa-heading-fold-summary > h5, .vyasa-heading-fold-summary > h6 { margin: 0 !important; flex: 1; order: 2; }
 .vyasa-heading-fold-chevron { display: none; }
 .vyasa-heading-fold-body { padding-left: 0.4rem; }
-.vyasa-heading-fold-body > :first-child { margin-top: var(--vyasa-heading-content-gap, 0.95rem); }
+#main-content .vyasa-heading-fold-body > :first-child { margin-top: var(--vyasa-heading-after-gap) !important; }
+#main-content .vyasa-heading-fold-body > :last-child { margin-bottom: 0 !important; }
+#main-content :where(p, ul, ol, blockquote):has(+ :is(.vyasa-doc-heading, .vyasa-heading-fold)) {
+    margin-bottom: 0 !important;
+}
 .vyasa-heading-fold-body ul,
 .vyasa-heading-fold-body ol { margin-top: 0.95rem; margin-bottom: 0.95rem; }
 .vyasa-heading-fold-body li > p { margin: 0; }
