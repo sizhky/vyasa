@@ -4304,6 +4304,7 @@ async function renderTasksGraphs(rootElement = document) {
                         : !tasksDefaultFiltersOpen(defaultFiltersOpen)
                 );
                 setEdgesVisible(typeof defaults.edgesVisible === 'boolean' ? defaults.edgesVisible : true);
+                setActivePulseEnabled(true);
                 setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(defaults.edgeAnimationMode, defaults.edgeAnimationEnabled));
                 setEdgeAnimationTickSteps(clampTasksEdgeAnimationSteps(defaults.edgeAnimationTickSteps));
                 setEdgeAnimationTickDuration(clampTasksEdgeAnimationDuration(defaults.edgeAnimationTickDuration));
@@ -5404,6 +5405,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const logicalNodeId = tasksLogicalNodeId(data, sourceNodeId);
                 const reviewAttrs = {
                     'data-vyasa-review-target': JSON.stringify(tasksReviewTarget(data, id, widgetId)),
+                    'data-vyasa-highlight-active': !['none', 'dim'].includes(highlightMode) ? 'true' : undefined,
                 };
                 const isChecked = data?.__checked__ === true;
                 const taskStateLabel = String(data?.__card_state__ || (isChecked ? TASKS_DEFAULT_CARD_STATES[1] : TASKS_DEFAULT_CARD_STATES[0]));
@@ -7250,7 +7252,10 @@ async function renderTasksGraphs(rootElement = document) {
                 }, [reactFlow, graphRevision, viewMode]);
                 return null;
             };
-            const flowWrapperClassName = hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '';
+            const flowWrapperClassName = [
+                hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '',
+                'vyasa-tasks-active-pulse',
+            ].filter(Boolean).join(' ');
             const buildProjectionConfigText = (projection) => {
                 const pid = String(projection?.id || '');
                 const def = (Array.isArray(viewerState.model?.view_projections) ? viewerState.model.view_projections : []).find((p) => p && p.id === pid) || null;

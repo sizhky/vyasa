@@ -424,6 +424,22 @@ def test_tasks_source_renders_hover_checkbox_and_done_badge():
     assert "taskStateLabel" in source
 
 
+def test_tasks_active_node_pulse_is_shared_and_switchable():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+
+    assert "'data-vyasa-highlight-active': !['none', 'dim'].includes(highlightMode)" in source
+    assert "'vyasa-tasks-active-pulse'" in source
+    assert "activePulseEnabled" not in source
+    assert "Pulse active nodes" not in source
+    assert '.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"])' in css_source
+    assert "@keyframes vyasa-tasks-active-pulse" in css_source
+    assert "animation: vyasa-tasks-active-pulse 5s" in css_source
+    assert "brightness(0.75)" in css_source
+    assert "brightness(1)" in css_source
+    assert "@media (prefers-reduced-motion: reduce)" in css_source
+
+
 def test_tasks_source_supports_configurable_card_states():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 

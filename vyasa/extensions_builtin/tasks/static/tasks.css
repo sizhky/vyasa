@@ -158,6 +158,20 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 .react-flow__node[data-vyasa-group-toggle-hover="true"] {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-ink) 64%, transparent), 0 24px 72px color-mix(in srgb, var(--vyasa-primary) 16%, transparent) !important;
 }
+.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"]) {
+    animation: vyasa-tasks-active-pulse 5s ease-in-out infinite alternate;
+    will-change: filter;
+}
+@keyframes vyasa-tasks-active-pulse {
+    from { filter: brightness(0.75) saturate(0.94); }
+    to { filter: brightness(1) saturate(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"]) {
+        animation: none;
+        will-change: auto;
+    }
+}
 .react-flow__node.vyasa-tasks-node--passive [data-vyasa-task-control="true"] {
     pointer-events: auto;
 }
