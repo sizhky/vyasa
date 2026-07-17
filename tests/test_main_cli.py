@@ -32,6 +32,28 @@ def test_reload_source_flag_configures_uvicorn_reloader(tmp_path, monkeypatch):
         reload_config()
 
 
+def test_reload_source_env_configures_uvicorn_reloader(tmp_path, monkeypatch):
+    site = tmp_path / "site"
+    site.mkdir()
+    calls = {}
+
+    monkeypatch.setenv("VYASA_RELOAD_SOURCE", "true")
+    monkeypatch.setitem(
+        sys.modules, "uvicorn",
+        SimpleNamespace(run=lambda *args, **kwargs: calls.update(kwargs)),
+    )
+    monkeypatch.setattr(sys, "argv", ["vyasa", str(site), "--no-browser"])
+
+    from vyasa import main
+
+    try:
+        main.cli()
+        assert calls["reload"] is True
+        assert str(main.Path(main.__file__).resolve().parent) in calls["reload_dirs"]
+    finally:
+        reload_config()
+
+
 def test_feedback_subcommand_dispatches_once(monkeypatch):
     from vyasa import main
     from vyasa.extensions_builtin.feedback import cli as feedback_cli

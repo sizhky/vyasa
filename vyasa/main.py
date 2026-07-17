@@ -111,6 +111,7 @@ def cli():
         VYASA_ROOT: Path to markdown files
         VYASA_HOST: Server host (default: 127.0.0.1)
         VYASA_PORT: Server port (default: 5001)
+        VYASA_RELOAD_SOURCE: Restart server when Vyasa source changes
         
     Configuration file:
         Create a .vyasa file (TOML format) in your blog directory
@@ -163,7 +164,7 @@ def cli():
     # Get host and port from arguments, config, or use defaults
     host = args.host or config.get_host()
     port = args.port or config.get_port()
-    source_reload_enabled = bool(args.reload_source)
+    source_reload_enabled = bool(args.reload_source or config.get_source_reload_enabled())
     if source_reload_enabled:
         os.environ['VYASA_RELOAD'] = 'true'
     else:

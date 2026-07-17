@@ -454,6 +454,13 @@ class VyasaConfig:
             return value.lower() in ('true', '1', 'yes', 'on')
         return bool(value)
 
+    def get_source_reload_enabled(self) -> bool:
+        """Get whether Vyasa source changes should restart the server."""
+        value = self.get('reload_source', 'VYASA_RELOAD_SOURCE', False)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
+
     def get_log_file_enabled(self) -> bool:
         """Get whether file logging to vyasa.log should be enabled."""
         value = self.get('log_file', 'VYASA_LOG_FILE', False)
