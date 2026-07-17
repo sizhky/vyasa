@@ -73,6 +73,18 @@ def test_mobile_sidebar_processes_copied_htmx_controls():
     assert "window.htmx?.process(mobileBody)" in source
 
 
+def test_mobile_panels_fill_dynamic_viewport_without_page_overflow():
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+
+    assert "height: 100dvh" in css
+    assert ".vyasa-mobile-panel-body {" in css
+    assert "flex: 1 1 auto" in css
+    assert "overscroll-behavior-y: contain" in css
+    assert ".vyasa-mobile-panel-body > .vyasa-sidebar-card::details-content" in css
+    assert ".vyasa-mobile-panel-body > .vyasa-sidebar-card .vyasa-sidebar-body" in css
+    assert "max-height: none !important" in css
+
+
 def test_theme_toggle_icon_keeps_ink_color_on_focus():
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 
