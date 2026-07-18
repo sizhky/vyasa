@@ -130,32 +130,25 @@ def parse_node_attr_coverage(path):
 
 
 def parse_schema(path):
-    """Return (declared_relations, referenced_source_files, fold_mode, grammar_ref).
+    """Return (declared_relations, referenced_source_files, grammar_ref).
 
     grammar_ref is the path declared by an `@grammar path=...` line (or a
     `grammar=...` line inside @sources), or None. A CLI `--grammar` flag overrides
     it. The grammar is what layers dialect-specific invariants on top of the
     generic structural checks; without one, only the structural checks run.
     """
-    relations, sources, fold_mode, grammar_ref = set(), {}, "union", None
+    relations, sources, grammar_ref = set(), {}, None
     section = ""
     for line in path.read_text(encoding="utf-8").splitlines():
         s = line.strip()
         if s.startswith("@"):
             section = s.split()[0]
-            fm = re.search(r"fold_mode\s*=\s*(\S+)", s)      # @graph ... fold_mode=delta
-            if fm:
-                fold_mode = fm.group(1)
             if section == "@grammar":                        # @grammar path=...
                 gm = re.search(r"\bpath\s*=\s*(\S+)", s)
                 if gm:
                     grammar_ref = gm.group(1)
             continue
         if not s:
-            continue
-        fm = re.match(r"fold_mode\s*=\s*(\S+)", s)            # standalone line form
-        if fm:
-            fold_mode = fm.group(1)
             continue
         if section == "@grammar":
             gm = re.match(r"path\s*=\s*(\S+)", s)             # @grammar on its own line
@@ -170,20 +163,20 @@ def parse_schema(path):
                     grammar_ref = m.group(2)
                 else:
                     sources[m.group(1)] = m.group(2)
-    return relations, sources, fold_mode, grammar_ref
+    return relations, sources, grammar_ref
 
 
 def parse_contexts(pack):
     """Scan *.context files -> list of context dicts, ordered by seq.
 
-    Each dict: {file, id, seq, edges: [(src, tgt, rel, op)], attrs: {key: {value:
+    Each dict: {file, id, seq, edges: [(src, tgt, rel)], attrs: {key: {value:
     set(node_ids)}}}. Mirrors the renderer's _read_context closely enough for
     integrity + grammar checks; captions and slides are ignored. A pack may be
     pure-context (no kg.edges at all) — contexts then carry every edge.
     """
     out = []
     for cf in sorted(pack.glob("*.context")):
-        ctx = {"file": cf.name, "id": cf.stem, "seq": None, "edges": [], "attrs": {}}
+        ctx = {"file": cf.name, "id": cf.stem, "seq": None, "edges": [], "attrs": {}, "mechanics": []}
         section, akey = None, None
         for line in cf.read_text(encoding="utf-8").splitlines():
             s = line.strip()
@@ -206,8 +199,9 @@ def parse_contexts(pack):
                 parts = right.split()
                 src, tgt = left.strip(), parts[0]
                 rel = parts[1] if len(parts) > 1 and "=" not in parts[1] else "rel"
-                op = re.search(r"\bop\s*=\s*(\S+)", s)
-                ctx["edges"].append((src, tgt, rel, op.group(1) if op else "+"))
+                if re.search(r"\bop\s*=", s):
+                    ctx["mechanics"].append(s)
+                ctx["edges"].append((src, tgt, rel))
             elif section == "@attrs":
                 # header `status:` is unindented; value lines `todo: id id` follow
                 if not line[:1].isspace() and s.endswith(":"):
@@ -462,7 +456,9 @@ def main():
     edges_path = pack / "kg.edges"
     edge_ids, edges = parse_edges(edges_path) if edges_path.exists() else (set(), [])
     node_refs, edge_refs = parse_attr_refs(need["kg.attrs"])
-    relations, sources, fold_mode, grammar_ref = parse_schema(need["kg.schema"])
+    relations, sources, grammar_ref = parse_schema(need["kg.schema"])
+    if re.search(r"\bfold_mode\s*=", need["kg.schema"].read_text(encoding="utf-8")):
+        errors.append("kg.schema: fold_mode is not allowed; every context is a complete snapshot")
 
     # context sanity: every context needs a unique integer seq (renderer orders
     # by seq); @attrs assignments must point at pool nodes
@@ -475,13 +471,15 @@ def main():
                           f"(also used by {seqs[c['seq']]})")
         else:
             seqs[c["seq"]] = c["file"]
+        for edge_line in c["mechanics"]:
+            errors.append(f"context '{c['id']}': change mechanics are not allowed in snapshots: {edge_line}")
         for key, vals in c["attrs"].items():
             for value, ids in vals.items():
                 for nid in sorted(ids - node_ids):
                     errors.append(f"context '{c['id']}' @attrs: {key} '{value}' "
                                   f"references undefined node '{nid}'")
-    ctx_edges = [(c["id"], src, tgt, rel, op)
-                 for c in contexts for src, tgt, rel, op in c["edges"]]
+    ctx_edges = [(c["id"], src, tgt, rel)
+                 for c in contexts for src, tgt, rel in c["edges"]]
 
     if not node_ids:
         errors.append("kg.nodes defines no nodes")
@@ -494,31 +492,14 @@ def main():
         if relations and rel not in relations:
             warnings.append(f"edge {eid}: relation '{rel}' is not declared in @relations")
 
-    # context edges: referential integrity + retraction sanity (fold_mode=delta).
-    # `folded` replays base + every context in seq order — the edge set the
-    # renderer shows at the latest context, so grammar can be checked on it.
-    asserted = {(s, r, t) for _, s, t, r in edges}          # base assertions
-    folded = set(asserted)
-    for ctx, src, tgt, rel, op in ctx_edges:
+    # Every context is a complete edge snapshot. Earlier contexts never affect it.
+    for ctx, src, tgt, rel in ctx_edges:
         if src not in node_ids:
             errors.append(f"context '{ctx}' edge: source '{src}' is not a defined node")
         if tgt not in node_ids:
             errors.append(f"context '{ctx}' edge: target '{tgt}' is not a defined node")
         if relations and rel not in relations:
             warnings.append(f"context '{ctx}' edge: relation '{rel}' is not declared in @relations")
-        if op == "-":
-            if fold_mode != "delta":
-                warnings.append(f"context '{ctx}': edge {src}-{rel}->{tgt} has op=- but "
-                                f"fold_mode is '{fold_mode}' — retraction is IGNORED "
-                                f"(set fold_mode=delta in @graph)")
-            if (src, rel, tgt) not in asserted:
-                errors.append(f"context '{ctx}': op=- retracts {src}-{rel}->{tgt} "
-                              f"which was never asserted (dangling retraction)")
-            if fold_mode == "delta":
-                folded.discard((src, rel, tgt))
-        else:
-            asserted.add((src, rel, tgt))                   # later contexts can retract this
-            folded.add((src, rel, tgt))
 
     for nid in sorted(node_refs - node_ids):
         errors.append(f"kg.attrs references undefined node '{nid}'")
@@ -526,7 +507,7 @@ def main():
         errors.append(f"kg.attrs references undefined edge '{eid}'")
 
     linked = ({s for _, s, _, _ in edges} | {t for _, _, t, _ in edges}
-              | {s for _, s, _, _, _ in ctx_edges} | {t for _, _, t, _, _ in ctx_edges})
+              | {s for _, s, _, _ in ctx_edges} | {t for _, _, t, _ in ctx_edges})
     orphans = sorted(node_ids - linked)
     for nid in orphans:
         warnings.append(f"node '{nid}' has no edges (orphan)")
@@ -566,21 +547,24 @@ def main():
             dst = attr_values.setdefault(k, {})
             for v, ids in vmap.items():
                 dst.setdefault(v, set()).update(ids)
-        # fold context @attrs over the base in seq order (last write wins) and
-        # check grammar on the folded edge set — the law must hold at the fold
-        # the renderer shows, not just on kg.edges
         if contexts:
             for c in contexts:
+                context_attrs = {
+                    key: {value: set(ids) for value, ids in values.items()}
+                    for key, values in attr_values.items()
+                }
                 for key, vals in c["attrs"].items():
                     for value, ids in vals.items():
                         for nid in ids:
-                            _override_attr_value(attr_values, key, nid, value)
-            grammar_edges = [(f"{s}->{t}", s, t, r) for (s, r, t) in sorted(folded)]
+                            _override_attr_value(context_attrs, key, nid, value)
+                grammar_edges = [(f"{s}->{t}", s, t, r) for s, t, r in c["edges"]]
+                gerrs, gwarns = check_grammar(grammar, node_ids, grammar_edges, context_attrs)
+                errors.extend(f"context '{c['id']}': {error}" for error in gerrs)
+                warnings.extend(f"context '{c['id']}': {warning}" for warning in gwarns)
         else:
-            grammar_edges = edges
-        gerrs, gwarns = check_grammar(grammar, node_ids, grammar_edges, attr_values)
-        errors.extend(gerrs)
-        warnings.extend(gwarns)
+            gerrs, gwarns = check_grammar(grammar, node_ids, edges, attr_values)
+            errors.extend(gerrs)
+            warnings.extend(gwarns)
 
     if mom_md and mom_md.exists():
         text = mom_md.read_text(encoding="utf-8")
@@ -597,7 +581,7 @@ def main():
     if errors:
         print(f"\nFAILED: {len(errors)} error(s), {len(warnings)} warning(s).")
         return 1
-    ctx_note = (f", {len(contexts)} context(s) folding to {len(folded)} edges"
+    ctx_note = (f", {len(contexts)} standalone context(s)"
                 if contexts else "")
     print(f"OK: {len(node_ids)} nodes, {len(edge_ids)} edges{ctx_note}, "
           f"{len(relations)} relations. {len(warnings)} warning(s).")

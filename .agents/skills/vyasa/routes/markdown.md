@@ -8,6 +8,7 @@ Read only the drawer needed:
 - `topics/markdown/toc-headings-math.md`
 - `topics/markdown/callouts.md`
 - `topics/markdown/items-graphs.md`
+- `topics/markdown/items-query.md` for read-only Knowledge Graph questions, context comparison, and traversal paths.
 - `topics/markdown/items-graphs-lite.md` for small inline `items` / `tasks` docs that do not need sidecars.
 - `topics/markdown/items-behavior.md`
 - `topics/story-telling-with-graphs/SKILL.md`
