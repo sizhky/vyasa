@@ -125,6 +125,22 @@ def test_traversal_is_isolated_and_can_explain_paths(context_pack):
     ]
 
 
+def test_chained_traversals_keep_the_full_path(context_pack):
+    rows = KnowledgeGraphQuery(context_pack).run(
+        "nodes at day2 | where id=jira | incoming allocates_to | incoming allocates_to | paths | select id path"
+    )
+
+    assert rows == [
+        {
+            "id": "new",
+            "path": [
+                {"source": "claim", "relation": "allocates_to", "target": "jira"},
+                {"source": "new", "relation": "allocates_to", "target": "claim"},
+            ],
+        }
+    ]
+
+
 def test_traversal_rejects_undeclared_relation(context_pack):
     with pytest.raises(QueryError, match="Undeclared KG relation: blocks"):
         KnowledgeGraphQuery(context_pack).run("nodes | follow blocks")

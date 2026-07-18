@@ -62,4 +62,5 @@ explain
 ```
 
 Separate stages with `|`. Commas mean OR for one `where` field; `_none` checks absence; `~` matches text.
-Traversal accepts only relations declared under `@relations`. Add `paths` or `explain` when the answer needs reviewable evidence.
+Traversal accepts only relations declared under `@relations`. Chained traversal stages append to one path in stage order.
+Add `paths` or `explain` when the answer needs every connecting edge for review.

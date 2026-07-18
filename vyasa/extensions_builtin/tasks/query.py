@@ -171,10 +171,18 @@ class KnowledgeGraphQuery:
         for values in adjacency.values():
             values.sort(key=lambda item: (item[0], _stable(item[1])))
 
-        seeds = sorted({str(row["id"]) for row in rows if row.get("id") is not None})
+        seed_paths: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            if row.get("id") is None:
+                continue
+            seed = str(row["id"])
+            path = list(row.get("__path__", []))
+            if seed not in seed_paths or _stable(path) < _stable(seed_paths[seed]):
+                seed_paths[seed] = path
+        seeds = sorted(seed_paths)
         seed_set = set(seeds)
         paths: dict[str, list[dict[str, Any]]] = {}
-        frontier = [(seed, []) for seed in seeds]
+        frontier = [(seed, seed_paths[seed]) for seed in seeds]
         seen = set(seeds)
         while frontier:
             current, path = frontier.pop(0)
