@@ -4304,6 +4304,7 @@ async function renderTasksGraphs(rootElement = document) {
                         : !tasksDefaultFiltersOpen(defaultFiltersOpen)
                 );
                 setEdgesVisible(typeof defaults.edgesVisible === 'boolean' ? defaults.edgesVisible : true);
+                setActivePulseEnabled(true);
                 setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(defaults.edgeAnimationMode, defaults.edgeAnimationEnabled));
                 setEdgeAnimationTickSteps(clampTasksEdgeAnimationSteps(defaults.edgeAnimationTickSteps));
                 setEdgeAnimationTickDuration(clampTasksEdgeAnimationDuration(defaults.edgeAnimationTickDuration));
@@ -4746,12 +4747,14 @@ async function renderTasksGraphs(rootElement = document) {
                             ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
                             : '';
                         const displayColor = collapsedGroupColor || nodeColor || 'var(--vyasa-primary)';
+                        const activeBorderColor = node.data?.__checked__ ? (node.data?.__card_state_color__ || TASKS_DONE_ACCENT) : displayColor;
                         return {
                             ...node,
                             data: { ...node.data, highlightMode: selected ? 'selected' : 'dim', __hover_checkbox__: node.id === hoverCheckboxId },
                             style: {
                             ...node.style,
                                 opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (selected ? 1 : 0.18),
+                                '--vyasa-tasks-active-border': selected ? activeBorderColor : undefined,
                                 boxShadow: selected
                                     ? `0 0 0 2px color-mix(in srgb, ${displayColor} 70%, transparent), 0 0 18px 4px color-mix(in srgb, ${displayColor} 34%, transparent)`
                                     : node.style.boxShadow,
@@ -4798,6 +4801,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     : '';
                                 const displayColor = collapsedGroupColor || nodeColor || 'var(--vyasa-primary)';
                                 const stateAccent = node.data?.__card_state_color__ || TASKS_DONE_ACCENT;
+                                const activeBorderColor = node.data?.__checked__ ? stateAccent : displayColor;
                                 const checkedShadow = node.data?.__checked__
                                     ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
                                     : 'none';
@@ -4811,6 +4815,7 @@ async function renderTasksGraphs(rootElement = document) {
                                         ...node.style,
                                         zIndex,
                                         opacity: 1,
+                                        '--vyasa-tasks-active-border': activeBorderColor,
                                         background: tasksNodeIsOverlaid(node)
                                             ? node.style.background
                                             : (node.data?.__kind__ === 'group'
@@ -4844,14 +4849,24 @@ async function renderTasksGraphs(rootElement = document) {
                     const matchingIds = filteredSelectionIds();
                     const containerGroupIds = tasksGroupIdsContainingSelection(model, matchingIds);
                     const visibleSelectionIds = new Set([...matchingIds, ...containerGroupIds]);
-                    setNodesReusing(baseNodes.map((node) => ({
-                        ...node,
-                        data: { ...node.data, highlightMode: visibleSelectionIds.has(node.id) ? 'selected' : 'dim', __hover_checkbox__: node.id === hoverCheckboxId },
-                        style: {
-                            ...node.style,
-                            opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (visibleSelectionIds.has(node.id) ? 1 : 0.18),
-                        },
-                    })));
+                    setNodesReusing(baseNodes.map((node) => {
+                        const selected = visibleSelectionIds.has(node.id);
+                        const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette);
+                        const collapsedGroupColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
+                            ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
+                            : '';
+                        const displayColor = collapsedGroupColor || nodeColor || 'var(--vyasa-primary)';
+                        const activeBorderColor = node.data?.__checked__ ? (node.data?.__card_state_color__ || TASKS_DONE_ACCENT) : displayColor;
+                        return {
+                            ...node,
+                            data: { ...node.data, highlightMode: selected ? 'selected' : 'dim', __hover_checkbox__: node.id === hoverCheckboxId },
+                            style: {
+                                ...node.style,
+                                opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (selected ? 1 : 0.18),
+                                '--vyasa-tasks-active-border': selected ? activeBorderColor : undefined,
+                            },
+                        };
+                    }));
                     setEdgesReusing(edgesVisible ? baseEdges.map((edge) => {
                         const hit = (visibleSelectionIds.has(edge.source) && visibleSelectionIds.has(edge.target)) || searchMatches.edgeIds.has(edge.id);
                         const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
@@ -4928,6 +4943,7 @@ async function renderTasksGraphs(rootElement = document) {
                         : '';
                     const displayColor = collapsedGroupColor || nodeColor;
                     const stateAccent = node.data?.__card_state_color__ || TASKS_DONE_ACCENT;
+                    const activeBorderColor = node.data?.__checked__ ? stateAccent : (displayColor || nodeColor || 'var(--vyasa-primary)');
                     const checkedShadow = node.data?.__checked__
                         ? `inset 0 0 0 2px color-mix(in srgb, ${stateAccent} 24%, transparent), 0 0 0 2px color-mix(in srgb, ${stateAccent} 34%, transparent)`
                         : 'none';
@@ -4944,6 +4960,7 @@ async function renderTasksGraphs(rootElement = document) {
                         style: {
                             ...node.style,
                             zIndex,
+                            '--vyasa-tasks-active-border': mode === 'dim' ? undefined : activeBorderColor,
                             background: mode === 'dim'
                                 ? node.style.background
                                 : (node.data?.__kind__ === 'group'
@@ -5404,6 +5421,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const logicalNodeId = tasksLogicalNodeId(data, sourceNodeId);
                 const reviewAttrs = {
                     'data-vyasa-review-target': JSON.stringify(tasksReviewTarget(data, id, widgetId)),
+                    'data-vyasa-highlight-active': !['none', 'dim'].includes(highlightMode) ? 'true' : undefined,
                 };
                 const isChecked = data?.__checked__ === true;
                 const taskStateLabel = String(data?.__card_state__ || (isChecked ? TASKS_DEFAULT_CARD_STATES[1] : TASKS_DEFAULT_CARD_STATES[0]));
@@ -7250,7 +7268,10 @@ async function renderTasksGraphs(rootElement = document) {
                 }, [reactFlow, graphRevision, viewMode]);
                 return null;
             };
-            const flowWrapperClassName = hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '';
+            const flowWrapperClassName = [
+                hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '',
+                'vyasa-tasks-active-pulse',
+            ].filter(Boolean).join(' ');
             const buildProjectionConfigText = (projection) => {
                 const pid = String(projection?.id || '');
                 const def = (Array.isArray(viewerState.model?.view_projections) ? viewerState.model.view_projections : []).find((p) => p && p.id === pid) || null;

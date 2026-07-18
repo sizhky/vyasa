@@ -7,10 +7,6 @@
 .vyasa-task-link-badge svg { width: 0.8rem; height: 0.8rem; stroke: currentColor !important; fill: none !important; }
 .vyasa-task-node-card-value > :first-child { margin-top: 0 !important; }
 .vyasa-task-node-card-value > :last-child { margin-bottom: 0 !important; }
-.vyasa-task-node-card-value ul { list-style: disc; padding-left: 1.1rem; margin-left: 0; }
-.vyasa-task-node-card-value ol { list-style: decimal; padding-left: 1.2rem; margin-left: 0; }
-.vyasa-task-node-card-value li { margin: 0.12rem 0; }
-.vyasa-task-node-card-value li > p { margin: 0; }
 .vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }
 .vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }
 .vyasa-task-node-card-row:hover .vyasa-task-node-card-copy,
@@ -20,10 +16,6 @@
 .vyasa-task-slide-description { display: block; min-width: 0; max-width: 100%; white-space: normal; }
 .vyasa-task-slide-description > :first-child { margin-top: 0 !important; }
 .vyasa-task-slide-description > :last-child { margin-bottom: 0 !important; }
-.vyasa-task-slide-description ul { list-style: disc; padding-left: 1.25rem; margin: 0.2rem 0 0.6rem; }
-.vyasa-task-slide-description ol { list-style: decimal; padding-left: 1.35rem; margin: 0.2rem 0 0.6rem; }
-.vyasa-task-slide-description li { margin: 0.18rem 0; }
-.vyasa-task-slide-description li > p { margin: 0; }
 .vyasa-task-slide-nav select {
     appearance: none;
     padding: 0 34px 0 10px !important;
@@ -157,6 +149,58 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 .react-flow__node.vyasa-tasks-node--expanded-group[data-vyasa-group-toggle-hover="true"],
 .react-flow__node[data-vyasa-group-toggle-hover="true"] {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-ink) 64%, transparent), 0 24px 72px color-mix(in srgb, var(--vyasa-primary) 16%, transparent) !important;
+}
+@property --vyasa-tasks-pulse-near-opacity {
+    syntax: "<percentage>";
+    inherits: true;
+    initial-value: 50%;
+}
+@property --vyasa-tasks-pulse-far-opacity {
+    syntax: "<percentage>";
+    inherits: true;
+    initial-value: 25%;
+}
+@property --vyasa-tasks-pulse-near-blur {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 5px;
+}
+@property --vyasa-tasks-pulse-far-blur {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 9px;
+}
+.vyasa-tasks-active-pulse {
+    animation: vyasa-tasks-active-pulse 5s ease-in-out infinite alternate;
+}
+.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"]) {
+    filter:
+        drop-shadow(0 0 var(--vyasa-tasks-pulse-near-blur) color-mix(in srgb, var(--vyasa-tasks-active-border, var(--vyasa-primary)) var(--vyasa-tasks-pulse-near-opacity), transparent))
+        drop-shadow(0 0 var(--vyasa-tasks-pulse-far-blur) color-mix(in srgb, var(--vyasa-tasks-active-border, var(--vyasa-primary)) var(--vyasa-tasks-pulse-far-opacity), transparent));
+    will-change: filter;
+}
+@keyframes vyasa-tasks-active-pulse {
+    from {
+        --vyasa-tasks-pulse-near-opacity: 50%;
+        --vyasa-tasks-pulse-far-opacity: 25%;
+        --vyasa-tasks-pulse-near-blur: 5px;
+        --vyasa-tasks-pulse-far-blur: 9px;
+    }
+    to {
+        --vyasa-tasks-pulse-near-opacity: 100%;
+        --vyasa-tasks-pulse-far-opacity: 100%;
+        --vyasa-tasks-pulse-near-blur: 10px;
+        --vyasa-tasks-pulse-far-blur: 18px;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .vyasa-tasks-active-pulse {
+        animation: none;
+    }
+    .vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"]) {
+        filter: none;
+        will-change: auto;
+    }
 }
 .react-flow__node.vyasa-tasks-node--passive [data-vyasa-task-control="true"] {
     pointer-events: auto;

@@ -3,7 +3,7 @@
   opacity: 1; pointer-events: auto; transform: translateY(0);
 }
 .vyasa-feedback-icon { width: 1.4rem; height: 1.4rem; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.vyasa-feedback-open .vyasa-feedback-launcher { opacity: 0; pointer-events: none; transform: translateY(.4rem) scale(.96); }
+.vyasa-feedback-open .vyasa-feedback-launcher { display: none; opacity: 0; pointer-events: none; transform: translateY(.4rem) scale(.96); }
 .vyasa-feedback-sidebar {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 1600;
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto;

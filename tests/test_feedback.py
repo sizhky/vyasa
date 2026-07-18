@@ -336,3 +336,20 @@ def test_feedback_bundle_contains_browser_interfaces():
         "lavish-capture.js",
         "review_targets.js",
     }
+
+
+def test_open_review_removes_launcher_from_floating_actions_layout():
+    css = (
+        Path(__file__).parents[1]
+        / "vyasa"
+        / "extensions_builtin"
+        / "feedback"
+        / "static"
+        / "feedback.css"
+    ).read_text(encoding="utf-8")
+
+    open_rule = css.split(
+        ".vyasa-feedback-open .vyasa-feedback-launcher {", 1
+    )[1].split("}", 1)[0]
+
+    assert "display: none" in open_rule
