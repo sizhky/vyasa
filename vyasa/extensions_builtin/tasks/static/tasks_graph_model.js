@@ -369,6 +369,9 @@ export function buildTasksProjectionConfigText(config) {
     if (typeof cfg.queryBuilderEnabled === 'boolean') {
         lines.push(`\tquery_builder_enabled=${cfg.queryBuilderEnabled ? 'true' : 'false'}`);
     }
+    if (typeof cfg.searchEnabled === 'boolean') {
+        lines.push(`\tsearch_enabled=${cfg.searchEnabled ? 'true' : 'false'}`);
+    }
     add('search', cfg.searchQuery);
     if (typeof cfg.filtersCollapsed === 'boolean') lines.push(`\tfilters_collapsed=${cfg.filtersCollapsed ? 'true' : 'false'}`);
     if (typeof cfg.edgesVisible === 'boolean') lines.push(`\tedges_visible=${cfg.edgesVisible ? 'true' : 'false'}`);
@@ -431,6 +434,7 @@ export function parseTasksProjectionConfigText(text) {
         if (key === 'filter_query') {
             try { cfg.filterQuery = normalizeTasksFilterQuery(JSON.parse(value)); } catch { /* ignore bad paste */ }
         } else if (key === 'query_builder_enabled') cfg.queryBuilderEnabled = value === 'true';
+        else if (key === 'search_enabled') cfg.searchEnabled = value === 'true';
         else if (key === 'search') cfg.searchQuery = value;
         else if (key === 'filters_collapsed') cfg.filtersCollapsed = value === 'true';
         else if (key === 'edges_visible') cfg.edgesVisible = value !== 'false';

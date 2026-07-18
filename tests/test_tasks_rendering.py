@@ -356,6 +356,14 @@ def test_tasks_query_builder_can_be_disabled_per_projection():
     assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, 'Query builder')" in source
 
 
+def test_tasks_search_can_be_disabled_per_projection():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "searchEnabled" in source
+    assert "searchEnabled ? searchQuery : ''" in source
+    assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, 'Search')" in source
+
+
 def test_tasks_query_builder_controls_use_filter_panel_css():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()

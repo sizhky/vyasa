@@ -39,6 +39,7 @@ class KgView:
     aggregate_edges: dict[str, str | bool] = field(default_factory=dict)
     filter_query: dict[str, Any] = field(default_factory=dict)
     query_builder_enabled: bool | None = None
+    search_enabled: bool | None = None
     search: str = ""
     filters_collapsed: bool | None = None
     edges_visible: bool | None = None
@@ -641,7 +642,7 @@ def _update_view(view: KgView, payload: dict[str, str]) -> None:
     consumed = {
         "source", "where", "filter", "group_by", "color_by", "secondary_color_by",
         "edge_color_by", "edge_label_from", "hover_attrs", "aggregate_edges",
-        "filter_query", "query_builder_enabled", "search", "filters_collapsed",
+        "filter_query", "query_builder_enabled", "search_enabled", "search", "filters_collapsed",
         "edges_visible", "edge_animation_enabled", "edge_animation_mode",
         "edge_animation_tick_steps", "edge_animation_tick_duration", "edge_opacity",
         "projection_unspecified_content_opacity", "caption",
@@ -671,6 +672,9 @@ def _update_view(view: KgView, payload: dict[str, str]) -> None:
     if "query_builder_enabled" in payload:
         value = _typed_scalar(payload["query_builder_enabled"])
         view.query_builder_enabled = value if isinstance(value, bool) else None
+    if "search_enabled" in payload:
+        value = _typed_scalar(payload["search_enabled"])
+        view.search_enabled = value if isinstance(value, bool) else None
     if "search" in payload:
         view.search = payload["search"]
     if "filters_collapsed" in payload:
@@ -714,6 +718,7 @@ def _projection(view: KgView) -> dict[str, Any]:
         "aggregate_edges": view.aggregate_edges,
         "filter_query": view.filter_query,
         "query_builder_enabled": view.query_builder_enabled,
+        "search_enabled": view.search_enabled,
         "search": view.search,
         "filters_collapsed": view.filters_collapsed,
         "edges_visible": view.edges_visible,

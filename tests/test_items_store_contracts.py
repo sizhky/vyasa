@@ -171,6 +171,7 @@ ownership:
     aggregate_edges="when_collapsed=true by=relation"
     filter_query='{"combinator":"or","rules":[{"field":"status","operator":"=","value":"todo","muted":true}],"not":true}'
     query_builder_enabled=false
+    search_enabled=false
     search="login"
     filters_collapsed=false
     edges_visible=false
@@ -207,6 +208,7 @@ items_schema: roadmap.kg.schema
     assert model["view_projections"][1]["aggregate_edges"] == {"when_collapsed": True, "by": "relation"}
     assert model["view_projections"][1]["filter_query"]["rules"][0]["muted"] is True
     assert model["view_projections"][1]["query_builder_enabled"] is False
+    assert model["view_projections"][1]["search_enabled"] is False
     assert model["view_projections"][1]["search"] == "login"
     assert model["view_projections"][1]["filters_collapsed"] is False
     assert model["view_projections"][1]["edges_visible"] is False

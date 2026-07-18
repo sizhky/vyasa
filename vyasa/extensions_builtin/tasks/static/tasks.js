@@ -662,6 +662,7 @@ function tasksProjectionSchemaPrefs(model, projectionId) {
         prefs.filters = normalizeTasksFilterQuery(projection.filter_query);
     }
     if (typeof projection.query_builder_enabled === 'boolean') prefs.queryBuilderEnabled = projection.query_builder_enabled;
+    if (typeof projection.search_enabled === 'boolean') prefs.searchEnabled = projection.search_enabled;
     if (typeof projection.search === 'string') prefs.searchQuery = projection.search;
     if (typeof projection.default_color_by === 'string') prefs.colorBy = projection.default_color_by;
     if (typeof projection.default_secondary_color_by === 'string') prefs.secondaryColorBy = projection.default_secondary_color_by;
@@ -3627,6 +3628,9 @@ async function renderTasksGraphs(rootElement = document) {
             const [queryBuilderEnabled, setQueryBuilderEnabled] = React.useState(() => (
                 typeof projectionPrefs?.queryBuilderEnabled === 'boolean' ? projectionPrefs.queryBuilderEnabled : true
             ));
+            const [searchEnabled, setSearchEnabled] = React.useState(() => (
+                typeof projectionPrefs?.searchEnabled === 'boolean' ? projectionPrefs.searchEnabled : true
+            ));
             const [edgesVisible, setEdgesVisible] = React.useState(() => (
                 typeof projectionPrefs?.edgesVisible === 'boolean' ? projectionPrefs.edgesVisible : true
             ));
@@ -3858,6 +3862,7 @@ async function renderTasksGraphs(rootElement = document) {
                         : current
                 ));
                 setQueryBuilderEnabled(typeof nextPrefs?.queryBuilderEnabled === 'boolean' ? nextPrefs.queryBuilderEnabled : true);
+                setSearchEnabled(typeof nextPrefs?.searchEnabled === 'boolean' ? nextPrefs.searchEnabled : true);
                 setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
                 setHoverInactiveNodes(typeof nextPrefs?.hoverInactiveNodes === 'boolean' ? nextPrefs.hoverInactiveNodes : true);
                 setHoverCardsEnabled(typeof nextPrefs?.hoverCardsEnabled === 'boolean' ? nextPrefs.hoverCardsEnabled : true);
@@ -3905,8 +3910,8 @@ async function renderTasksGraphs(rootElement = document) {
                 [queryBuilderEnabled, activeFilters]
             );
             const searchMatches = React.useMemo(
-                () => tasksCollectSearchMatches(graphBaseRef.current.nodes || [], graphBaseRef.current.edges || [], searchQuery, nodeNotes),
-                [graphRevision, searchQuery, nodeNotes]
+                () => tasksCollectSearchMatches(graphBaseRef.current.nodes || [], graphBaseRef.current.edges || [], searchEnabled ? searchQuery : '', nodeNotes),
+                [graphRevision, searchEnabled, searchQuery, nodeNotes]
             );
             const filteredSelectionIds = React.useCallback(() => {
                 const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters);
@@ -4027,6 +4032,7 @@ async function renderTasksGraphs(rootElement = document) {
                         filters: activeFilters,
                         swatchFilters: activeSwatchFilters,
                         queryBuilderEnabled,
+                        searchEnabled,
                         searchQuery,
                         colorBy: activeColorBy,
                         secondaryColorBy: activeColorHierarchy[1] || '',
@@ -4073,11 +4079,12 @@ async function renderTasksGraphs(rootElement = document) {
                     slideNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
+            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
                 if (typeof cfg.queryBuilderEnabled === 'boolean') setQueryBuilderEnabled(cfg.queryBuilderEnabled);
+                if (typeof cfg.searchEnabled === 'boolean') setSearchEnabled(cfg.searchEnabled);
                 if (typeof cfg.searchQuery === 'string') {
                     setSearchQuery(cfg.searchQuery);
                     setSearchInputValue(cfg.searchQuery);
@@ -4291,6 +4298,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setActiveFilters(normalizeTasksFilterQuery(defaults.filters));
                 setActiveSwatchFilters(tasksEmptyFilterQuery());
                 setQueryBuilderEnabled(typeof defaults.queryBuilderEnabled === 'boolean' ? defaults.queryBuilderEnabled : true);
+                setSearchEnabled(typeof defaults.searchEnabled === 'boolean' ? defaults.searchEnabled : true);
                 setSearchInputValue(defaultSearch);
                 setSearchQuery(defaultSearch);
                 setActiveColorHierarchy(resolveTasksPreferredColorHierarchy(model, activeProjectionId, defaults, nodeNotes));
@@ -6685,13 +6693,23 @@ async function renderTasksGraphs(rootElement = document) {
                             )
                         ),
                         React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('span', { style: filterKeyStyle }, 'Search'),
+                            React.createElement('label', { className: 'vyasa-tasks-toggle-label', style: filterKeyStyle },
+                                React.createElement('input', {
+                                    type: 'checkbox',
+                                    className: 'vyasa-tasks-switch-input',
+                                    checked: searchEnabled,
+                                    onChange: (event) => setSearchEnabled(event.target.checked),
+                                }),
+                                React.createElement('span', { className: 'vyasa-tasks-switch-track', 'aria-hidden': 'true' }),
+                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, 'Search')
+                            ),
                             React.createElement('div', { style: filterValueStackStyle },
                                     React.createElement('div', { style: { position: 'relative' } },
                                         React.createElement('input', {
                                             ref: searchInputRef,
                                             type: 'text',
                                             value: searchInputValue,
+                                            disabled: !searchEnabled,
                                             placeholder: 'text or /regex/i',
                                             onChange: (e) => setSearchInputValue(e.target.value),
                                             style: {
@@ -6731,7 +6749,9 @@ async function renderTasksGraphs(rootElement = document) {
                                             }, '×')
                                             : null
                                     ),
-                                    searchMatches.error
+                                    !searchEnabled
+                                        ? React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.35 } }, 'Search disabled.')
+                                        : searchMatches.error
                                         ? React.createElement('div', { style: { fontSize: '11px', color: '#fca5a5', lineHeight: 1.3 } }, `Regex error: ${searchMatches.error}`)
                                         : React.createElement('div', { style: { fontSize: '11px', opacity: 0.72, lineHeight: 1.3 } }, searchMatches.active ? `${searchMatches.nodeIds.size} nodes matched` : 'Matches node id, label, text attrs, and matching edge text.')
                             )
@@ -7295,6 +7315,7 @@ async function renderTasksGraphs(rootElement = document) {
                     where: def?.where || {},
                     filterQuery: isActiveLive ? activeFilters : (def?.filter_query || {}),
                     queryBuilderEnabled: isActiveLive ? queryBuilderEnabled : def?.query_builder_enabled,
+                    searchEnabled: isActiveLive ? searchEnabled : def?.search_enabled,
                     searchQuery: isActiveLive ? searchQuery : (def?.search || ''),
                     filtersCollapsed: isActiveLive ? filtersCollapsed : def?.filters_collapsed,
                     edgesVisible: isActiveLive ? edgesVisible : def?.edges_visible,

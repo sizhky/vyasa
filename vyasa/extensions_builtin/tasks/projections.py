@@ -141,6 +141,7 @@ def normalize_projections(value) -> list[dict]:
             "where": _normalize_where(raw.get("where")),
             "filter_query": _normalize_filter_query(raw.get("filter_query")),
             "query_builder_enabled": _normalize_bool_or_none(raw.get("query_builder_enabled")),
+            "search_enabled": _normalize_bool_or_none(raw.get("search_enabled")),
             "search": _normalize_string(raw.get("search")),
             "filters_collapsed": _normalize_bool_or_none(raw.get("filters_collapsed")),
             "edges_visible": _normalize_bool_or_none(raw.get("edges_visible")),
