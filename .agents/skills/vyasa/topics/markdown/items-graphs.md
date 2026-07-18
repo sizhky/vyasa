@@ -219,6 +219,7 @@ confidence:
 
 - `roadmap.kg.cache` is generated, disposable lookup state. Do not hand edit it.
 - LLM tools should query and mutate through the KG CLI/cache instead of reading every sidecar for small changes.
+- For read-only questions across complete contexts, read `items-query.md` and use `vyasa kg-query <kg.schema> '<query>'`.
 - Core queries: `get`, `neighbors`, `incoming`, `outgoing`, `list_by_attr`, `color_modes`, `filter_policy`, `hover_policy`, `projections`, `projection_groups`, `validate`, `compile`.
 - Core mutations: `upsert_record`, `delete_record`, `bulk_set_attr`, `move_node`, `rename_id`, `upsert_edge`, `delete_edge`, palette updates, filter/hover policy updates, projection updates. The mutation surface is `scripts/kg_cli.py`.
 - `bulk_set_attr` means one key/value patch applied to a selected set of nodes or edges.
