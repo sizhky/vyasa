@@ -5,7 +5,7 @@ import tempfile
 import threading
 import webbrowser
 from importlib.metadata import PackageNotFoundError, version as pkg_version
-from .config import reload_config
+from .config import reload_config, theme_preset_for_working_directory
 from .extensions import refresh_extension_runtime
 from .logging import configure_logging
 
@@ -160,6 +160,11 @@ def cli():
             print(f"Error: Directory {root} does not exist")
             sys.exit(1)
         os.environ['VYASA_ROOT'] = str(root)
+    theme_debug_enabled = args.theme_debug or str(os.environ.get('VYASA_THEME_DEBUG', '')).strip().lower() in {'true', '1', 'yes', 'on'}
+    if theme_debug_enabled:
+        os.environ['VYASA_THEME_DEBUG'] = 'true'
+        root = Path(os.environ.get('VYASA_ROOT') or Path.cwd()).resolve()
+        os.environ['VYASA_THEME_PRESET'] = theme_preset_for_working_directory(root)
     
     # Initialize config after CLI/env overrides are in place.
     config = reload_config()
@@ -186,11 +191,6 @@ def cli():
     os.environ['VYASA_BROWSER_RELOAD'] = 'true' if source_reload_enabled else ('false' if args.no_browser_reload else 'true')
     config = reload_config()
     refresh_extension_runtime(config.get_extensions_config())
-    theme_debug_enabled = args.theme_debug or str(os.environ.get('VYASA_THEME_DEBUG', '')).strip().lower() in {'true', '1', 'yes', 'on'}
-    if theme_debug_enabled:
-        os.environ['VYASA_THEME_DEBUG'] = 'true'
-        config = reload_config()
-        refresh_extension_runtime(config.get_extensions_config())
     if args.log_file:
         os.environ['VYASA_LOG_FILE'] = 'true'
         config = reload_config()
