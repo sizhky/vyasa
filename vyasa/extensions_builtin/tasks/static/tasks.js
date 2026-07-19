@@ -1,7 +1,7 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
 import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
-import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksCountFilterRules, tasksEmptyFilterQuery, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
+import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksModalController } from '/static/extensions/tasks/tasks_modal.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
 import { shortcutsSuspended } from '/static/page_shell.js';
@@ -2104,6 +2104,7 @@ function appendProjectedEdge(edges, seen, source, target, label = '', attrs = {}
         if (label && !existing.labels.has(label)) {
             existing.labels.add(label);
             existing.edge.label = Array.from(existing.labels).join(', ');
+            existing.edge.__edge_types__ = Array.from(existing.labels);
         }
         for (const [attrKey, attrValue] of Object.entries(attrs || {})) {
             if (existing.edge[attrKey] === undefined && attrValue !== undefined && attrValue !== '') {
@@ -2114,6 +2115,7 @@ function appendProjectedEdge(edges, seen, source, target, label = '', attrs = {}
     }
     const edge = { ...attrs, source, target };
     if (label) edge.label = label;
+    edge.__edge_types__ = tasksEdgeTypeValues(edge);
     edges.push(edge);
     seen.set(key, { edge, labels: new Set(label ? [label] : []) });
 }
@@ -3654,6 +3656,13 @@ async function renderTasksGraphs(rootElement = document) {
                     ? normalizeTasksFilterQuery(projectionPrefs.swatchFilters)
                     : tasksEmptyFilterQuery()
             ));
+            const [activeEdgeTypes, setActiveEdgeTypes] = React.useState(() => egoMode ? [] : (
+                Array.isArray(projectionPrefs?.edgeTypes)
+                    ? projectionPrefs.edgeTypes.map(String).filter(Boolean)
+                    : []
+            ));
+            const [edgeTypeQuery, setEdgeTypeQuery] = React.useState('');
+            const [edgeTypeMenuOpen, setEdgeTypeMenuOpen] = React.useState(false);
             React.useEffect(() => {
                 selectedNodeIdRef.current = selectedNodeId;
             }, [selectedNodeId]);
@@ -3816,6 +3825,25 @@ async function renderTasksGraphs(rootElement = document) {
                 const id = String(activeProjectionId || '').trim();
                 return id ? (projections.find((p) => p && p.id === id) || null) : null;
             }, [viewerState.model, activeProjectionId]);
+            const edgeTypeOptions = React.useMemo(() => Array.from(new Set(
+                (model?.dependency_edges || [])
+                    .map((edge) => resolveTasksEdgeLabel(edge, model, activeProjection))
+                    .filter(Boolean)
+            )).sort((a, b) => a.localeCompare(b)), [model, activeProjection]);
+            const edgeTypeColors = React.useMemo(() => {
+                const palette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
+                const colors = {};
+                for (const edge of model?.dependency_edges || []) {
+                    const type = resolveTasksEdgeLabel(edge, model, activeProjection);
+                    if (!type || colors[type]) continue;
+                    colors[type] = resolveTasksEdgeColor(edge, model, model?.edge_color_by, palette) || 'currentColor';
+                }
+                return colors;
+            }, [model, activeProjection]);
+            React.useEffect(() => {
+                const valid = new Set(edgeTypeOptions);
+                setActiveEdgeTypes((current) => current.filter((type) => valid.has(type)));
+            }, [edgeTypeOptions]);
             const activeColorBy = activeColorHierarchy[0] || '';
             const reorderTasksHierarchyLevel = React.useCallback((items, fromIndex, toIndex) => {
                 const next = (Array.isArray(items) ? items : []).map((entry) => String(entry || '').trim()).filter(Boolean);
@@ -3915,6 +3943,8 @@ async function renderTasksGraphs(rootElement = document) {
                 const nextPrefs = readTasksProjectionPrefsForModel(sourceModel, { projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
                 setActiveFilters(egoMode ? tasksEmptyFilterQuery() : normalizeTasksFilterQuery(nextPrefs?.filters));
                 setActiveSwatchFilters(egoMode ? tasksEmptyFilterQuery() : normalizeTasksFilterQuery(nextPrefs?.swatchFilters));
+                setActiveEdgeTypes(egoMode || !Array.isArray(nextPrefs?.edgeTypes) ? [] : nextPrefs.edgeTypes.map(String).filter(Boolean));
+                setEdgeTypeQuery('');
                 setSearchQuery(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
                 setSearchInputValue(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
                 setActiveColorHierarchy(resolveTasksPreferredColorHierarchy(model, activeProjectionId, nextPrefs, nodeNotes));
@@ -3977,17 +4007,22 @@ async function renderTasksGraphs(rootElement = document) {
             );
             const filteredSelectionIds = React.useCallback(() => {
                 const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters);
+                const hasEdgeFilters = activeEdgeTypes.length > 0;
                 const hasSearch = searchMatches.active && !searchMatches.error;
-                if (!hasFilters && !hasSearch) return new Set();
+                if (!hasFilters && !hasEdgeFilters && !hasSearch) return new Set();
+                const edgeNodeIds = hasEdgeFilters
+                    ? tasksEdgeFilterNodeIds(graphBaseRef.current.edges || [], activeEdgeTypes)
+                    : null;
                 return new Set((graphBaseRef.current.nodes || [])
                     .filter((node) => node?.id && node.data?.__kind__ !== 'groupTitle')
                     .filter((node) => {
                         const filterHit = hasFilters ? tasksNodeMatchesAllFilters(node.data, effectiveQueryFilters, activeSwatchFilters) : true;
+                        const edgeHit = edgeNodeIds ? edgeNodeIds.has(node.id) : true;
                         const searchHit = hasSearch ? searchMatches.nodeIds.has(node.id) : true;
-                        return filterHit && searchHit;
+                        return filterHit && edgeHit && searchHit;
                     })
                     .map((node) => node.id));
-            }, [effectiveQueryFilters, activeSwatchFilters, searchMatches]);
+            }, [effectiveQueryFilters, activeSwatchFilters, activeEdgeTypes, searchMatches]);
             const currentSelectionIds = React.useCallback(() => {
                 if (selectedNodeIdRef.current) return new Set([selectedNodeIdRef.current]);
                 if (selectedNodeIdsRef.current.size) {
@@ -4003,7 +4038,7 @@ async function renderTasksGraphs(rootElement = document) {
             const currentHighlightedFitNodes = React.useCallback(() => {
                 const selectedIds = currentSelectionIds();
                 if (!selectedIds.size) return [];
-                const baseEdges = graphBaseRef.current.edges || [];
+                const baseEdges = tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], activeEdgeTypes);
                 const fitIds = new Set(selectedIds);
                 for (const selectedId of selectedIds) {
                     for (const descendantId of collectTasksGroupDescendantIds(selectedId, model)) fitIds.add(descendantId);
@@ -4027,11 +4062,12 @@ async function renderTasksGraphs(rootElement = document) {
                     && node.data?.__kind__ !== 'groupTitle'
                     && fitIds.has(node.id)
                 ));
-            }, [currentSelectionIds, model]);
+            }, [currentSelectionIds, model, activeEdgeTypes]);
             const tasksFitDebugPayload = React.useCallback((reason, matchedNodes = []) => {
                 const selectedIds = currentSelectionIds();
                 const hasQueryFilters = tasksFilterQueryHasRules(effectiveQueryFilters);
                 const hasSwatchFilters = tasksFilterQueryHasRules(activeSwatchFilters);
+                const hasEdgeFilters = activeEdgeTypes.length > 0;
                 const hasSearch = searchMatches.active && !searchMatches.error;
                 return {
                     widgetId,
@@ -4041,6 +4077,8 @@ async function renderTasksGraphs(rootElement = document) {
                     currentSelectionIds: Array.from(selectedIds),
                     hasQueryFilters,
                     hasSwatchFilters,
+                    hasEdgeFilters,
+                    edgeTypes: activeEdgeTypes,
                     hasSearch,
                     searchError: searchMatches.error || '',
                     queryRuleCount: tasksCountFilterRules(effectiveQueryFilters),
@@ -4049,7 +4087,7 @@ async function renderTasksGraphs(rootElement = document) {
                     matchedNodeCount: matchedNodes.length,
                     matchedNodeIds: matchedNodes.map((node) => node.id).slice(0, 80),
                 };
-            }, [widgetId, currentSelectionIds, effectiveQueryFilters, activeSwatchFilters, searchMatches]);
+            }, [widgetId, currentSelectionIds, effectiveQueryFilters, activeSwatchFilters, activeEdgeTypes, searchMatches]);
             const fitCurrentHighlight = React.useCallback((reactFlow, options = {}) => {
                 const reason = String(options.reason || 'manual-fit');
                 if (!reactFlow) return 0;
@@ -4093,6 +4131,7 @@ async function renderTasksGraphs(rootElement = document) {
                     [projectionKey]: {
                         filters: activeFilters,
                         swatchFilters: activeSwatchFilters,
+                        edgeTypes: activeEdgeTypes,
                         queryBuilderEnabled,
                         searchEnabled,
                         searchQuery,
@@ -4141,7 +4180,7 @@ async function renderTasksGraphs(rootElement = document) {
                     slideNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [sourceModel, activeFilters, activeSwatchFilters, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
+            }, [sourceModel, activeFilters, activeSwatchFilters, activeEdgeTypes, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
@@ -4359,6 +4398,8 @@ async function renderTasksGraphs(rootElement = document) {
                 const defaultSearch = typeof defaults.searchQuery === 'string' ? defaults.searchQuery : '';
                 setActiveFilters(normalizeTasksFilterQuery(defaults.filters));
                 setActiveSwatchFilters(tasksEmptyFilterQuery());
+                setActiveEdgeTypes([]);
+                setEdgeTypeQuery('');
                 setQueryBuilderEnabled(typeof defaults.queryBuilderEnabled === 'boolean' ? defaults.queryBuilderEnabled : true);
                 setSearchEnabled(typeof defaults.searchEnabled === 'boolean' ? defaults.searchEnabled : true);
                 setSearchInputValue(defaultSearch);
@@ -4801,7 +4842,7 @@ async function renderTasksGraphs(rootElement = document) {
                     if ((node.data?.__context_diff__ === true) === changed) return node;
                     return { ...node, data: { ...node.data, __context_diff__: changed } };
                 });
-                const baseEdges = graphBaseRef.current.edges || [];
+                const baseEdges = tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], activeEdgeTypes);
                 // When no single node is selected, hovering a node should still reveal
                 // its checkbox. Carry it as a data flag (not the closure) so the
                 // memoized node updates without forcing the per-hover remount.
@@ -4854,7 +4895,7 @@ async function renderTasksGraphs(rootElement = document) {
                     return;
                 }
                 if (!hasNodeSelection) {
-                    const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters);
+                    const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters) || activeEdgeTypes.length > 0;
                     const hasSearch = searchMatches.active && !searchMatches.error;
                     if (!hasFilters && !hasSearch) {
                         const hoverEndpointIds = new Set(hoveredNodeId ? [hoveredNodeId] : []);
@@ -5162,7 +5203,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdgesReusing(edgesVisible ? nextEdges : []);
-            }, [effectiveQueryFilters, activeSwatchFilters, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeAnimationEnabled, edgeAnimationClassName, edgeOpacity, filteredSelectionIds, contextDiffNodeIds]);
+            }, [effectiveQueryFilters, activeSwatchFilters, activeEdgeTypes, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeAnimationEnabled, edgeAnimationClassName, edgeOpacity, filteredSelectionIds, contextDiffNodeIds]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -5236,7 +5277,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, [graphRevision, expanded]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnFilter()) return;
-                const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters);
+                const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters) || activeEdgeTypes.length > 0;
                 const hasSearch = searchMatches.active && !searchMatches.error;
                 if (!hasFilters && !hasSearch) return;
                 const reactFlow = reactFlowApiRef.current;
@@ -5254,7 +5295,7 @@ async function renderTasksGraphs(rootElement = document) {
                 return () => {
                     if (rafId !== null) window.cancelAnimationFrame(rafId);
                 };
-            }, [graphRevision, effectiveQueryFilters, activeSwatchFilters, searchMatches, currentHighlightedFitNodes]);
+            }, [graphRevision, effectiveQueryFilters, activeSwatchFilters, activeEdgeTypes, searchMatches, currentHighlightedFitNodes]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnFilter()) return;
                 if (selectedNodeId || !selectedNodeIds.size) return;
@@ -6100,7 +6141,11 @@ async function renderTasksGraphs(rootElement = document) {
                 const groupByLevels = displayedGroupByHierarchy.filter(Boolean);
                 if (customGroupingAvailable && groupByEnabled) groupByLevels.push('');
                 if (!groupByLevels.length && viewMode !== 'gantt') groupByLevels.push('');
-                const activeCount = (queryBuilderEnabled ? tasksCountFilterRules(activeFilters) : 0) + tasksCountFilterRules(activeSwatchFilters) + activeColorHierarchy.length + (searchMatches.active ? 1 : 0) + activeGroupByCount;
+                const activeCount = (queryBuilderEnabled ? tasksCountFilterRules(activeFilters) : 0) + tasksCountFilterRules(activeSwatchFilters) + activeEdgeTypes.length + activeColorHierarchy.length + (searchMatches.active ? 1 : 0) + activeGroupByCount;
+                const normalizedEdgeTypeQuery = edgeTypeQuery.trim().toLowerCase();
+                const visibleEdgeTypeOptions = edgeTypeOptions.filter((type) => (
+                    !normalizedEdgeTypeQuery || type.toLowerCase().includes(normalizedEdgeTypeQuery)
+                ));
                 const QueryBuilder = queryBuilderEnabled && queryBuilderReady ? window.VyasaTasksQueryBuilder?.QueryBuilder : null;
                 const filterSectionStyle = { display: 'grid', gap: '8px', fontSize: '12px' };
                 const filterInlineControlStyle = { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '12px', alignItems: 'start', minWidth: 0 };
@@ -6843,6 +6888,107 @@ async function renderTasksGraphs(rootElement = document) {
                                         : React.createElement('div', { style: { fontSize: '11px', opacity: 0.72, lineHeight: 1.3 } }, searchMatches.active ? `${searchMatches.nodeIds.size} nodes matched` : 'Matches node id, label, text attrs, and matching edge text.')
                             )
                         ),
+                        edgeTypeOptions.length ? React.createElement('div', {
+                            style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' },
+                        },
+                            React.createElement('span', { style: filterKeyStyle }, 'Edge types'),
+                            React.createElement('div', { style: { position: 'relative' } },
+                                React.createElement('input', {
+                                    type: 'text',
+                                    value: edgeTypeQuery,
+                                    placeholder: 'Search edge types',
+                                    'aria-label': 'Search edge types',
+                                    'aria-expanded': edgeTypeMenuOpen,
+                                    'aria-controls': `${widgetId}-edge-type-options`,
+                                    onFocus: () => setEdgeTypeMenuOpen(true),
+                                    onBlur: () => window.setTimeout(() => setEdgeTypeMenuOpen(false), 120),
+                                    onChange: (event) => {
+                                        setEdgeTypeQuery(event.target.value);
+                                        setEdgeTypeMenuOpen(true);
+                                    },
+                                    style: {
+                                        width: '100%',
+                                        minWidth: 0,
+                                        border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                        borderRadius: '8px',
+                                        padding: '7px 9px',
+                                        background: 'color-mix(in srgb, var(--vyasa-paper) 96%, transparent)',
+                                        color: 'inherit',
+                                        boxSizing: 'border-box',
+                                    },
+                                }),
+                                edgeTypeMenuOpen ? React.createElement('div', {
+                                    id: `${widgetId}-edge-type-options`,
+                                    role: 'listbox',
+                                    'aria-label': 'Available edge types',
+                                    onMouseDown: (event) => event.preventDefault(),
+                                    style: {
+                                        position: 'absolute',
+                                        zIndex: 3,
+                                        top: 'calc(100% + 4px)',
+                                        left: 0,
+                                        right: 0,
+                                        maxHeight: '180px',
+                                        overflowY: 'auto',
+                                        display: 'grid',
+                                        gap: '4px',
+                                        padding: '6px',
+                                        border: '1px solid color-mix(in srgb, currentColor 16%, transparent)',
+                                        borderRadius: '8px',
+                                        background: 'var(--vyasa-paper)',
+                                        boxShadow: '0 8px 24px color-mix(in srgb, black 18%, transparent)',
+                                    },
+                                },
+                                    visibleEdgeTypeOptions.length
+                                        ? visibleEdgeTypeOptions.map((type) => {
+                                            const edgeColor = edgeTypeColors[type] || 'currentColor';
+                                            return React.createElement('label', {
+                                                key: type,
+                                                role: 'option',
+                                                'aria-selected': activeEdgeTypes.includes(type),
+                                                className: 'vyasa-tasks-query-value-option',
+                                            },
+                                                React.createElement('input', {
+                                                    type: 'checkbox',
+                                                    checked: activeEdgeTypes.includes(type),
+                                                    onChange: (event) => {
+                                                        const enabled = event.target.checked;
+                                                        setActiveEdgeTypes((current) => enabled
+                                                            ? Array.from(new Set([...current, type]))
+                                                            : current.filter((entry) => entry !== type));
+                                                        logTasksDebug('edgeTypeFilterChange', { widgetId, type, enabled });
+                                                    },
+                                                }),
+                                                React.createElement('span', {
+                                                    'aria-hidden': 'true',
+                                                    style: { width: '18px', height: '3px', flex: '0 0 18px', borderRadius: '999px', background: edgeColor },
+                                                }),
+                                                React.createElement('span', null, type)
+                                            );
+                                        })
+                                        : React.createElement('div', { style: { padding: '5px 7px', fontSize: '11px', opacity: 0.68 } }, 'No matching edge types')
+                                ) : null
+                            ),
+                            activeEdgeTypes.length ? React.createElement('div', {
+                                style: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
+                            },
+                                ...activeEdgeTypes.map((type) => React.createElement('button', {
+                                    key: type,
+                                    type: 'button',
+                                    title: `Remove ${type}`,
+                                    onClick: () => setActiveEdgeTypes((current) => current.filter((entry) => entry !== type)),
+                                    style: {
+                                        border: `1px solid ${edgeTypeColors[type] || 'currentColor'}`,
+                                        borderRadius: '999px',
+                                        padding: '3px 7px',
+                                        background: `color-mix(in srgb, ${edgeTypeColors[type] || 'currentColor'} 14%, transparent)`,
+                                        color: 'inherit',
+                                        cursor: 'pointer',
+                                        fontSize: '11px',
+                                    },
+                                }, `${type} ×`))
+                            ) : React.createElement('div', { style: { fontSize: '11px', opacity: 0.7 } }, 'Select one or more; matches any selected type.'),
+                        ) : null,
                         ...colorLevelSlots.map((colorBy, index) => renderColorLevel(colorBy, index)),
                         renderIconFilters(),
                         React.createElement('div', { style: { marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' } },

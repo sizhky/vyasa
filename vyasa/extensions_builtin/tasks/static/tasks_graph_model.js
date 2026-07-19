@@ -234,6 +234,32 @@ export function tasksNodeMatchesAllFilters(node, queryFilters, swatchFilters) {
     return tasksNodeMatchesFilters(node, queryFilters) && tasksNodeMatchesFilters(node, swatchFilters);
 }
 
+export function tasksEdgeTypeValues(edge) {
+    const explicit = Array.isArray(edge?.__edge_types__) ? edge.__edge_types__ : [];
+    return Array.from(new Set([
+        ...explicit,
+        edge?.relation,
+        edge?.label,
+    ].map((value) => String(value || '').trim()).filter(Boolean)));
+}
+
+export function tasksEdgesMatchingTypes(edges, edgeTypes) {
+    const selected = new Set((edgeTypes || []).map(String).filter(Boolean));
+    if (!selected.size) return edges || [];
+    return (edges || []).filter((edge) => tasksEdgeTypeValues(edge).some((type) => selected.has(type)));
+}
+
+export function tasksEdgeFilterNodeIds(edges, edgeTypes) {
+    const selected = new Set((edgeTypes || []).map(String).filter(Boolean));
+    const nodeIds = new Set();
+    if (!selected.size) return nodeIds;
+    for (const edge of tasksEdgesMatchingTypes(edges, edgeTypes)) {
+        nodeIds.add(edge.source);
+        nodeIds.add(edge.target);
+    }
+    return nodeIds;
+}
+
 function tasksSearchNormalizeText(value) {
     return String(value ?? '').replace(/\s+/g, ' ').trim();
 }

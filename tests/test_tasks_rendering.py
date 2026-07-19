@@ -716,6 +716,43 @@ def test_tasks_filter_query_ignores_root_mute_but_keeps_rule_mute():
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
+def test_tasks_edge_type_filter_uses_or_and_returns_endpoints():
+    script = """
+        import { tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        const edges = [
+            { source: 'a', target: 'b', label: 'owns' },
+            { source: 'b', target: 'c', label: 'blocks' },
+            { source: 'a', target: 'c', label: 'ignores' },
+        ];
+        const nodeIds = tasksEdgeFilterNodeIds(edges, ['owns', 'blocks']);
+        if ([...nodeIds].sort().join(',') !== 'a,b,c') throw new Error('edge types did not use OR');
+        const visibleEdges = tasksEdgesMatchingTypes(edges, ['owns', 'blocks']);
+        if (visibleEdges.length !== 2 || visibleEdges.some((edge) => edge.label === 'ignores')) throw new Error('unmatched edges remained visible');
+        const aggregate = tasksEdgeFilterNodeIds([
+            { source: 'a', target: 'c', label: 'owns, blocks', __edge_types__: ['owns', 'blocks'] },
+        ], ['blocks']);
+        if (![...aggregate].includes('c')) throw new Error('aggregated edge lost its original types');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_tasks_edge_type_filter_is_searchable_persisted_and_applied():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "placeholder: 'Search edge types'" in source
+    assert "'aria-label': 'Available edge types'" in source
+    assert "const edgeTypeColors = React.useMemo" in source
+    assert "background: edgeColor" in source
+    assert "border: `1px solid ${edgeTypeColors[type] || 'currentColor'}`" in source
+    assert "edgeTypes: activeEdgeTypes" in source
+    assert "tasksEdgeFilterNodeIds(graphBaseRef.current.edges || [], activeEdgeTypes)" in source
+    assert "tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], activeEdgeTypes)" in source
+    assert "const matchingIds = filteredSelectionIds();" in source
+    assert "graphBaseRef.current = { nodes: anchoredNodes, edges: baseEdges }" in source
+    assert "tasksFilterGraphByEdgeTypes" not in source
+    assert "setActiveEdgeTypes(egoMode || !Array.isArray(nextPrefs?.edgeTypes)" in source
+
+
 def test_tasks_source_supports_continuous_gradient_palettes():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
