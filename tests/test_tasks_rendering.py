@@ -438,34 +438,31 @@ def test_tasks_source_keeps_hover_highlight_while_panning():
     assert "clearGraphHoverState('pointer-dragging')" not in source
 
 
-def test_tasks_active_node_pulse_uses_continuous_shared_glow_clock():
+def test_tasks_graph_highlights_use_static_outlines():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
-    pulse_css = css_source.split("@keyframes vyasa-tasks-active-pulse", 1)[1].split("@media", 1)[0]
     active_node_css = css_source.split(
         '.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"])',
         1,
-    )[1].split("@keyframes", 1)[0]
+    )[1].split(".react-flow__node.vyasa-tasks-node--passive", 1)[0]
 
     assert "'data-vyasa-highlight-active': !['none', 'dim'].includes(highlightMode)" in source
+    assert "'data-vyasa-hover-outline': data?.__hover_outline__ === true ? 'true' : undefined" in source
     assert "'vyasa-tasks-active-pulse'" in source
-    assert "activePulseEnabled" not in source
-    assert "Pulse active nodes" not in source
-    assert "@property --vyasa-tasks-pulse-near-opacity" in css_source
-    assert "@keyframes vyasa-tasks-active-pulse" in css_source
-    assert "animation: vyasa-tasks-active-pulse 5s" in css_source
-    assert "animation:" not in active_node_css
-    assert active_node_css.count("drop-shadow(") == 2
+    assert "@property --vyasa-tasks-pulse" not in css_source
+    assert "@keyframes vyasa-tasks-active-pulse" not in css_source
+    assert "animation: vyasa-tasks-active-pulse" not in css_source
+    assert "filter:" not in active_node_css
+    assert "box-shadow: none !important" in active_node_css
+    assert "outline: 4px solid" in css_source
+    assert "outline: 4px solid" in active_node_css
+    assert '[data-vyasa-hover-outline="true"]' in active_node_css
+    assert "outline: 12px solid var(--vyasa-tasks-active-border, var(--vyasa-primary)) !important" in active_node_css
+    assert ':has([data-vyasa-highlight-mode="selected-focus"])' not in active_node_css
+    assert "if (hoveredNodeId) hoverOutlineIds.add(nodeId);" in source
     assert "'--vyasa-tasks-active-border'" in source
     assert "var(--vyasa-tasks-active-border" in active_node_css
-    assert "--vyasa-tasks-pulse-near-opacity: 50%" in pulse_css
-    assert "--vyasa-tasks-pulse-far-opacity: 25%" in pulse_css
-    assert pulse_css.count("--vyasa-tasks-pulse-near-opacity: 100%") == 1
-    assert pulse_css.count("--vyasa-tasks-pulse-far-opacity: 100%") == 1
-    assert "border-color:" not in pulse_css
-    assert "brightness(" not in pulse_css
-    assert "saturate(" not in pulse_css
-    assert "@media (prefers-reduced-motion: reduce)" in css_source
+    assert "--vyasa-tasks-glow-" not in css_source
 
 
 def test_tasks_source_supports_configurable_card_states():
@@ -1339,11 +1336,8 @@ def test_context_graphs_have_day_switch_contract():
     assert "'data-vyasa-context-diff': data?.__context_diff__ === true ? 'true' : undefined" in source
     assert '[data-vyasa-context-diff="true"]' in css
     assert ':not(:has([data-vyasa-highlight-active="true"]))' in css
-    assert "--vyasa-tasks-glow-color: var(--vyasa-primary)" in css
-    assert "--vyasa-tasks-glow-near-opacity: max(75%, var(--vyasa-tasks-pulse-near-opacity))" in css
-    assert "--vyasa-tasks-glow-far-opacity: max(75%, var(--vyasa-tasks-pulse-far-opacity))" in css
-    assert "var(--vyasa-tasks-pulse-near-blur)" in css
-    assert "var(--vyasa-tasks-pulse-far-opacity)" in css
+    assert "outline: 4px solid color-mix(in srgb, var(--vyasa-primary) 82%, transparent)" in css
+    assert "outline-offset: 3px" in css
     assert source.index("'Context'") < source.index("'View'")
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
     assert "const renderColorLevel = (colorBy, index) => {" in source

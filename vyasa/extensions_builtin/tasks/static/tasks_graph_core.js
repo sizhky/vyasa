@@ -537,6 +537,12 @@ export function isTasksEdgeLabelHoverDimmingActive(selectedNodeId, hoveredNodeId
     return Boolean(selected && hovered && selected !== hovered);
 }
 
+export function isTasksEdgeLabelVisible(mode, hoverDimmingActive = false) {
+    if (mode === 'dim' || mode === 'none') return false;
+    if (!hoverDimmingActive) return true;
+    return mode === 'focused-in' || mode === 'focused-out';
+}
+
 export function tasksEdgeLabelZForMode(mode, baseZ, selectedZ, focusZ) {
     if (mode === 'focused-in' || mode === 'focused-out') return focusZ;
     if (mode === 'selected') return selectedZ;

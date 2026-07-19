@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
 import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksModalController } from '/static/extensions/tasks/tasks_modal.js';
@@ -4967,7 +4967,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 const focusStyle = tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderColor, checkedShadow, colorMix, isHoveredNode);
                                 return {
                                     ...node,
-                                    data: { ...node.data, highlightMode: isHoveredNode ? 'selected-focus' : 'neighbor', __hover_checkbox__: node.id === hoverCheckboxId },
+                                    data: { ...node.data, highlightMode: isHoveredNode ? 'selected-focus' : 'neighbor', __hover_checkbox__: node.id === hoverCheckboxId, __hover_outline__: highlighted },
                                     style: { ...node.style, ...focusStyle },
                                     zIndex: focusStyle.zIndex,
                                 };
@@ -5007,7 +5007,7 @@ async function renderTasksGraphs(rootElement = document) {
                             : (selected ? 'selected' : 'dim');
                         return {
                             ...node,
-                            data: { ...node.data, highlightMode, __hover_checkbox__: node.id === hoverCheckboxId },
+                            data: { ...node.data, highlightMode, __hover_checkbox__: node.id === hoverCheckboxId, __hover_outline__: focused },
                             style: {
                                 ...node.style,
                                 opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (selected ? 1 : 0.18),
@@ -5068,6 +5068,8 @@ async function renderTasksGraphs(rootElement = document) {
                         directEndpointIds.add(descendantId);
                     }
                 }
+                const hoverOutlineIds = tasksFilterHoverFocus(directEndpointIds, baseEdges, hoveredNodeId).nodeIds;
+                if (hoveredNodeId) hoverOutlineIds.add(nodeId);
                 const focusedEdgeModes = new Map();
                 if (isFocusedPrimary) {
                     for (const edge of baseEdges) {
@@ -5109,7 +5111,7 @@ async function renderTasksGraphs(rootElement = document) {
                         : (mode === 'neighbor' ? baseZIndex + TASKS_NEIGHBOR_Z_BOOST : baseZIndex);
                     return {
                         ...node,
-                        data: { ...node.data, highlightMode: mode },
+                        data: { ...node.data, highlightMode: mode, __hover_outline__: hoverOutlineIds.has(sourceNodeId) },
                         style: {
                             ...node.style,
                             zIndex,
@@ -5152,7 +5154,7 @@ async function renderTasksGraphs(rootElement = document) {
                         : mode;
                     return {
                         ...edge,
-                        data: { ...edge.data, highlightMode: mode, strokeMode },
+                        data: { ...edge.data, highlightMode: mode, strokeMode, hoverDimsLabels },
                         zIndex: focused ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
                         labelZIndex: tasksEdgeLabelZForMode(mode, TASKS_EDGE_LABEL_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_FOCUS_Z),
                         labelStyle: {
@@ -5174,9 +5176,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 : (mode === 'focused-out'
                                     ? 'color-mix(in srgb, var(--vyasa-paper) 80%, #ef4444 20%)'
                                     : TASKS_EDGE_LABEL_BG),
-                            fillOpacity: hoverDimsLabels
-                                ? ((mode === 'focused-in' || mode === 'focused-out') ? 1 : (highlighted ? 0.86 : 0.04))
-                                : ((mode === 'focused-in' || mode === 'focused-out') ? 1 : (highlighted ? 0.86 : 0.04)),
+                        fillOpacity: (mode === 'focused-in' || mode === 'focused-out') ? 1 : (highlighted ? 0.86 : 0.04),
                         },
                         style: {
                             ...edge.style,
@@ -5444,7 +5444,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const taperArrowPath = taperPath
                     ? tasksTaperedArrowHeadPath(path, Math.max(10, (Number(props.style?.strokeWidth) || 4) * 3.0))
                     : '';
-                const showFullLabel = highlightMode !== 'dim' && highlightMode !== 'none';
+                const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
                 const prominentLabel = showFullLabel;
                 const displayLabel = showFullLabel
                     ? fullLabel
@@ -5575,6 +5575,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const reviewAttrs = {
                     'data-vyasa-review-target': JSON.stringify(tasksReviewTarget(data, id, widgetId)),
                     'data-vyasa-highlight-active': !['none', 'dim'].includes(highlightMode) ? 'true' : undefined,
+                    'data-vyasa-hover-outline': data?.__hover_outline__ === true ? 'true' : undefined,
                     'data-vyasa-context-diff': data?.__context_diff__ === true ? 'true' : undefined,
                 };
                 const isChecked = data?.__checked__ === true;
