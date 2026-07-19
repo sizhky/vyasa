@@ -26,6 +26,14 @@ def test_single_newlines_follow_soft_break_behavior():
     assert "<p" in html
 
 
+def test_markdown_task_list_loads_its_card_styles_without_tasks_runtime():
+    rendered = to_xml(from_md("- [ ] Add a stage to all nodes"))
+
+    assert 'class="vyasa-task-card' in rendered
+    assert 'href="/static/markdown.css?' in rendered
+    assert "tasks.js" not in rendered
+
+
 def test_disabled_render_extensions_fall_back_to_plain_code():
     refresh_extension_runtime({})
     try:

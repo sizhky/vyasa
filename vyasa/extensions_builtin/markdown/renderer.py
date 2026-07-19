@@ -912,7 +912,10 @@ def from_md(content: str, img_dir: str | None = None, current_path: str | None =
         html_out = _render_todo_html(html_out)
         html_out = _render_double_rules(html_out)
         html_out = _wrap_tables(html_out, get_config().get_table_col_max_width() or "")
-    bundle_nodes = [Link(rel="stylesheet", href=_asset_url("/static/sidenote.css"))] if emit_bundle_nodes else []
+    bundle_nodes = [
+        Link(rel="stylesheet", href=_asset_url(path))
+        for path in ("/static/sidenote.css", "/static/markdown.css")
+    ] if emit_bundle_nodes else []
     if emit_bundle_nodes and asset_collector:
         bundle_nodes.extend(bundle_asset_nodes_for_collector(asset_collector, runtime=runtime))
     rendered_html = apply_classes(html_out, class_map_mods=mods) if apply_class_mods else html_out
