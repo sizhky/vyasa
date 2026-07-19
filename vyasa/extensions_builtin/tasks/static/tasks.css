@@ -144,10 +144,21 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 .vyasa-tasks-active-pulse {
     animation: vyasa-tasks-active-pulse 5s ease-in-out infinite alternate;
 }
+.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-context-diff="true"]):not(:has([data-vyasa-highlight-active="true"])) {
+    --vyasa-tasks-glow-color: var(--vyasa-primary);
+    --vyasa-tasks-glow-near-opacity: max(75%, var(--vyasa-tasks-pulse-near-opacity));
+    --vyasa-tasks-glow-far-opacity: max(75%, var(--vyasa-tasks-pulse-far-opacity));
+}
+.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"]) {
+    --vyasa-tasks-glow-color: var(--vyasa-tasks-active-border, var(--vyasa-primary));
+    --vyasa-tasks-glow-near-opacity: var(--vyasa-tasks-pulse-near-opacity);
+    --vyasa-tasks-glow-far-opacity: var(--vyasa-tasks-pulse-far-opacity);
+}
+.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-context-diff="true"]):not(:has([data-vyasa-highlight-active="true"])),
 .vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"]) {
     filter:
-        drop-shadow(0 0 var(--vyasa-tasks-pulse-near-blur) color-mix(in srgb, var(--vyasa-tasks-active-border, var(--vyasa-primary)) var(--vyasa-tasks-pulse-near-opacity), transparent))
-        drop-shadow(0 0 var(--vyasa-tasks-pulse-far-blur) color-mix(in srgb, var(--vyasa-tasks-active-border, var(--vyasa-primary)) var(--vyasa-tasks-pulse-far-opacity), transparent));
+        drop-shadow(0 0 var(--vyasa-tasks-pulse-near-blur) color-mix(in srgb, var(--vyasa-tasks-glow-color) var(--vyasa-tasks-glow-near-opacity), transparent))
+        drop-shadow(0 0 var(--vyasa-tasks-pulse-far-blur) color-mix(in srgb, var(--vyasa-tasks-glow-color) var(--vyasa-tasks-glow-far-opacity), transparent));
     will-change: filter;
 }
 @keyframes vyasa-tasks-active-pulse {

@@ -10,6 +10,7 @@ from starlette.responses import Response
 from .layout import build_collapsed_graph
 from .items_pack import _tmp_view_sidecar_dir
 from .model import parse_tasks_text
+from .query import KnowledgeGraphQuery
 from .render import _attach_rendered_node_attrs, _attach_rendered_slide_attrs
 
 ALNUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -77,6 +78,22 @@ def _perf_log_path(host: str, path: str) -> Path:
 
 
 def register_tasks_routes(rt, runtime) -> None:
+    @rt("/api/tasks/context-diff", methods=["POST"])
+    async def context_diff(request):
+        try:
+            payload = json.loads((await request.body()).decode("utf-8"))
+            schema_path = _safe_schema_path(runtime, str(payload.get("schema_path") or ""))
+            context_id = str(payload.get("context_id") or "").strip()
+            if not context_id:
+                return Response("Missing context id", status_code=400)
+            diff = KnowledgeGraphQuery(schema_path).previous_context_diff(context_id)
+        except ValueError as exc:
+            return Response(str(exc), status_code=400)
+        except Exception as exc:
+            runtime.logger.exception("[tasks] failed to compare contexts")
+            return Response(str(exc), status_code=500)
+        return Response(json.dumps({"ok": True, **diff}), media_type="application/json", headers={"Cache-Control": "no-store"})
+
     @rt("/api/tasks/views", methods=["POST"])
     async def save_tmp_view(request):
         try:

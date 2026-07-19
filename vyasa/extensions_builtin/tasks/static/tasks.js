@@ -271,6 +271,17 @@ async function loadTasksContext({ schemaPath, currentPath, contextId }) {
     return response.json();
 }
 
+async function loadTasksContextDiff({ schemaPath, contextId }) {
+    const response = await fetch('/api/tasks/context-diff', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schema_path: schemaPath, context_id: contextId }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+}
+
 function tasksFilterPanelMaxHeight(wrapper) {
     if (!wrapper) return '100%';
     const bounds = wrapper.getBoundingClientRect();
@@ -512,6 +523,13 @@ function showTasksToast(message) {
         toast.classList.remove('opacity-100');
         toast.classList.add('opacity-0');
     }, 1800);
+}
+
+function tasksMatchedSlideNodes(slides, slideIndex, graphNodes) {
+    const slide = slideIndex >= 0 ? slides[slideIndex] : null;
+    if (!slide) return [];
+    const ids = new Set((slide.nodes || []).map((id) => String(id || '').trim()).filter(Boolean));
+    return (graphNodes || []).filter((node) => node?.id && ids.has(node.id));
 }
 
 function buildTasksNodeNotesBackup(model, nodeNotes, nodeStates, slideNotes = {}) {
@@ -3416,7 +3434,43 @@ async function renderTasksGraphs(rootElement = document) {
                 Array.isArray(sourceModel?.kg_contexts) ? sourceModel.kg_contexts.filter((item) => item && item.id) : []
             ), [sourceModel]);
             const activeContextId = String(sourceModel?.kg_context?.id || '').trim();
+            const activeContextIndex = contextOptions.findIndex((context) => context.id === activeContextId);
             const [contextLoading, setContextLoading] = React.useState(false);
+            const [contextDiffEnabled, setContextDiffEnabled] = React.useState(false);
+            const [contextDiffLoading, setContextDiffLoading] = React.useState(false);
+            const [contextDiff, setContextDiff] = React.useState({ from: '', to: '', node_ids: [] });
+            const contextDiffNodeIds = React.useMemo(() => (
+                contextDiffEnabled && contextDiff.to === activeContextId
+                    ? new Set((contextDiff.node_ids || []).map((id) => String(id)))
+                    : new Set()
+            ), [contextDiffEnabled, contextDiff, activeContextId]);
+            React.useEffect(() => {
+                const schemaPath = String(sourceModel?.kg_schema || '').trim();
+                if (!contextDiffEnabled || !schemaPath || !activeContextId || activeContextIndex <= 0) {
+                    setContextDiff({ from: '', to: activeContextId, node_ids: [] });
+                    return undefined;
+                }
+                let cancelled = false;
+                setContextDiffLoading(true);
+                loadTasksContextDiff({ schemaPath, contextId: activeContextId })
+                    .then((payload) => {
+                        if (cancelled) return;
+                        setContextDiff(payload);
+                        logTasksDebug('contextDiffLoaded', {
+                            widgetId,
+                            from: payload.from || '',
+                            to: payload.to || activeContextId,
+                            nodeIds: payload.node_ids || [],
+                        });
+                    })
+                    .catch((error) => {
+                        if (!cancelled) window.alert(error instanceof Error ? error.message : String(error));
+                    })
+                    .finally(() => {
+                        if (!cancelled) setContextDiffLoading(false);
+                    });
+                return () => { cancelled = true; };
+            }, [contextDiffEnabled, activeContextId, activeContextIndex, sourceModel?.kg_schema]);
             const storedProjectionPrefsRef = React.useRef(sourcePrefsRef.current?.projectionPrefs && typeof sourcePrefsRef.current.projectionPrefs === 'object'
                 ? sourcePrefsRef.current.projectionPrefs
                 : {});
@@ -3522,6 +3576,7 @@ async function renderTasksGraphs(rootElement = document) {
             const graphBaseRef = React.useRef({ nodes: [], edges: [] });
             const flowWrapperRef = React.useRef(null);
             const filterPanelRef = React.useRef(null);
+            const [graphRevision, setGraphRevision] = React.useState(0);
             const projectionPrefs = React.useMemo(
                 () => readTasksProjectionPrefsForModel(sourceModel, { projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId),
                 [sourceModel, activeProjectionId]
@@ -3562,11 +3617,19 @@ async function renderTasksGraphs(rootElement = document) {
                 setSelectedNodeIds(new Set(ids));
                 const timer = window.setTimeout(() => {
                     const reactFlow = reactFlowApiRef.current;
-                    const matched = (graphBaseRef.current.nodes || []).filter((node) => node?.id && ids.has(node.id));
+                    const matched = tasksMatchedSlideNodes(slides, slideIndex, graphBaseRef.current.nodes);
+                    logTasksDebug('slideFocusFit', {
+                        widgetId,
+                        slideIndex,
+                        graphRevision,
+                        requestedNodeCount: ids.size,
+                        matchedNodeCount: matched.length,
+                        graphReady: Boolean(reactFlow),
+                    });
                     if (reactFlow && matched.length) reactFlow.fitView({ nodes: matched, duration: 400, padding: 0.3, includeHiddenNodes: true });
                 }, 80);
                 return () => window.clearTimeout(timer);
-            }, [slideIndex, slides]);
+            }, [slideIndex, slides, graphRevision]);
             // Sticky EG/EG+ focus: rebuild the inline ego layer whenever the slide or mode changes.
             React.useEffect(() => {
                 if (egoMode) return;
@@ -3687,7 +3750,6 @@ async function renderTasksGraphs(rootElement = document) {
             const [clearedNote, setClearedNote] = React.useState(null);
             const [allClearedNotes, setAllClearedNotes] = React.useState(null);
             const [filterPanelMaxHeight, setFilterPanelMaxHeight] = React.useState('100%');
-            const [graphRevision, setGraphRevision] = React.useState(0);
             const [graphMinZoom, setGraphMinZoom] = React.useState(TASKS_GRAPH_MIN_ZOOM);
             const [queryBuilderReady, setQueryBuilderReady] = React.useState(() => Boolean(window.VyasaTasksQueryBuilder?.QueryBuilder));
             const [nodes, setNodes] = React.useState([]);
@@ -4313,6 +4375,7 @@ async function renderTasksGraphs(rootElement = document) {
                 );
                 setEdgesVisible(typeof defaults.edgesVisible === 'boolean' ? defaults.edgesVisible : true);
                 setActivePulseEnabled(true);
+                setContextDiffEnabled(false);
                 setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(defaults.edgeAnimationMode, defaults.edgeAnimationEnabled));
                 setEdgeAnimationTickSteps(clampTasksEdgeAnimationSteps(defaults.edgeAnimationTickSteps));
                 setEdgeAnimationTickDuration(clampTasksEdgeAnimationDuration(defaults.edgeAnimationTickDuration));
@@ -4732,7 +4795,12 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdges((prev) => tasksReuseGraphElements(prev, nextEdges));
             }, []);
             const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null, selectedIds = new Set()) => {
-                const baseNodes = graphBaseRef.current.nodes || [];
+                const baseNodes = (graphBaseRef.current.nodes || []).map((node) => {
+                    const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                    const changed = contextDiffNodeIds.has(String(sourceNodeId || ''));
+                    if ((node.data?.__context_diff__ === true) === changed) return node;
+                    return { ...node, data: { ...node.data, __context_diff__: changed } };
+                });
                 const baseEdges = graphBaseRef.current.edges || [];
                 // When no single node is selected, hovering a node should still reveal
                 // its checkbox. Carry it as a data flag (not the closure) so the
@@ -5094,7 +5162,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdgesReusing(edgesVisible ? nextEdges : []);
-            }, [effectiveQueryFilters, activeSwatchFilters, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeAnimationEnabled, edgeAnimationClassName, edgeOpacity, filteredSelectionIds]);
+            }, [effectiveQueryFilters, activeSwatchFilters, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeAnimationEnabled, edgeAnimationClassName, edgeOpacity, filteredSelectionIds, contextDiffNodeIds]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -5430,6 +5498,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const reviewAttrs = {
                     'data-vyasa-review-target': JSON.stringify(tasksReviewTarget(data, id, widgetId)),
                     'data-vyasa-highlight-active': !['none', 'dim'].includes(highlightMode) ? 'true' : undefined,
+                    'data-vyasa-context-diff': data?.__context_diff__ === true ? 'true' : undefined,
                 };
                 const isChecked = data?.__checked__ === true;
                 const taskStateLabel = String(data?.__card_state__ || (isChecked ? TASKS_DEFAULT_CARD_STATES[1] : TASKS_DEFAULT_CARD_STATES[0]));
@@ -6386,9 +6455,27 @@ async function renderTasksGraphs(rootElement = document) {
                         },
                     },
                         contextOptions.length > 1 ? React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
-                            React.createElement('span', { style: filterKeyStyle }, 'Context'),
+                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' } },
+                                React.createElement('span', { style: filterKeyStyle }, 'Context'),
+                                React.createElement('label', {
+                                    className: 'vyasa-tasks-toggle-label',
+                                    title: activeContextIndex <= 0 ? 'The first context has no previous context' : 'Glow changes from previous context',
+                                    style: { fontSize: '11px', fontWeight: 650 },
+                                },
+                                    React.createElement('input', {
+                                        type: 'checkbox',
+                                        className: 'vyasa-tasks-switch-input',
+                                        'aria-label': 'Glow changes from previous context',
+                                        checked: contextDiffEnabled && activeContextIndex > 0,
+                                        disabled: contextLoading || contextDiffLoading || activeContextIndex <= 0,
+                                        onChange: (event) => setContextDiffEnabled(event.target.checked),
+                                    }),
+                                    React.createElement('span', { className: 'vyasa-tasks-switch-track', 'aria-hidden': 'true' }),
+                                    React.createElement('span', null, contextDiffLoading ? 'Loading' : 'Diff')
+                                )
+                            ),
                             (() => {
-                                const ctxIndex = contextOptions.findIndex((context) => context.id === activeContextId);
+                                const ctxIndex = activeContextIndex;
                                 const ctxNavBtn = (disabled) => ({ flex: '0 0 34px', width: '34px', height: '34px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 88%, transparent)', color: 'inherit', borderRadius: '8px', padding: 0, fontSize: '18px', lineHeight: 1, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1 });
                                 const goContext = (delta) => {
                                     const target = contextOptions[ctxIndex + delta];
@@ -7280,11 +7367,16 @@ async function renderTasksGraphs(rootElement = document) {
                     // Pragmatic: wait long enough for the layout to settle, then fit.
                     // Same call the F key triggers, just timed past any settle race.
                     const timeoutId = window.setTimeout(() => {
-                        reactFlow.fitView({ duration: 200, padding: 0.16, includeHiddenNodes: true });
+                        const matched = tasksMatchedSlideNodes(slides, slideIndex, graphBaseRef.current.nodes);
+                        if (slideIndex >= 0) {
+                            if (matched.length) reactFlow.fitView({ nodes: matched, duration: 400, padding: 0.3, includeHiddenNodes: true });
+                        } else {
+                            reactFlow.fitView({ duration: 200, padding: 0.16, includeHiddenNodes: true });
+                        }
                         pendingFitActionRef.current = null;
                     }, 350);
                     return () => window.clearTimeout(timeoutId);
-                }, [reactFlow, graphRevision, viewMode]);
+                }, [reactFlow, graphRevision, viewMode, slideIndex, slides]);
                 return null;
             };
             const flowWrapperClassName = [

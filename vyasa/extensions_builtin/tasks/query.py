@@ -256,6 +256,26 @@ class KnowledgeGraphQuery:
                 )
         return rows
 
+    def previous_context_diff(self, context_id: str) -> dict[str, Any]:
+        after_id = self._context_id(context_id)
+        ordered = sorted(self.contexts, key=lambda item: (item.get("seq", 0), item.get("id", "")))
+        index = next((i for i, item in enumerate(ordered) if str(item.get("id")) == after_id), -1)
+        if index <= 0:
+            return {"from": "", "to": after_id, "node_ids": []}
+        before_id = str(ordered[index - 1]["id"])
+        present_ids = {str(node["id"]) for node in self._nodes(self._graph(after_id))}
+        changed_ids: set[str] = set()
+        for row in self._diff(before_id, after_id):
+            if row["kind"] in {"node", "attribute"}:
+                changed_ids.add(str(row["id"]))
+            elif row["kind"] == "edge":
+                changed_ids.update((str(row["source"]), str(row["target"])))
+        return {
+            "from": before_id,
+            "to": after_id,
+            "node_ids": sorted(changed_ids & present_ids),
+        }
+
     def run(self, query: str) -> QueryAnswer:
         stages = [stage.strip() for stage in query.split("|") if stage.strip()]
         if not stages:

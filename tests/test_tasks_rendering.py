@@ -1259,6 +1259,7 @@ def test_react_flow_component_fills_flow_wrapper():
 def test_tasks_slide_show_nav_stays_above_title_and_supports_jump_select():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     slide_source = source.split("const SlideShow = () => {", 1)[1].split("const DragSelectionOverlay = () => {", 1)[0]
+    ready_fit_source = source.split("const FitOnNodesReady = () => {", 1)[1].split("const flowWrapperClassName", 1)[0]
 
     assert "className: 'vyasa-task-slide-nav'" in slide_source
     assert "'aria-label': 'Jump to slide'" in slide_source
@@ -1267,18 +1268,34 @@ def test_tasks_slide_show_nav_stays_above_title_and_supports_jump_select():
     assert "onChange: (event) => setSlideIndex(Number(event.target.value))" in slide_source
     assert slide_source.index("className: 'vyasa-task-slide-nav'") < slide_source.index("slide.title || `Slide ${slideIndex + 1}`")
     assert "`${index + 1} / ${slides.length}`" in slide_source
+    assert "tasksMatchedSlideNodes(slides, slideIndex, graphBaseRef.current.nodes)" in ready_fit_source
+    assert "nodes: matched" in ready_fit_source
 
 
 def test_context_graphs_have_day_switch_contract():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+    api = Path("vyasa/extensions_builtin/tasks/api.py").read_text()
 
     assert "async function loadTasksContext" in source
     assert "fetch('/api/tasks/context'" in source
+    assert "async function loadTasksContextDiff" in source
+    assert "fetch('/api/tasks/context-diff'" in source
+    assert '@rt("/api/tasks/context-diff"' in api
     assert "const filterSectionStyle = { display: 'grid', gap: '8px', fontSize: '12px' };" in source
     assert "const filterInlineControlStyle = { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto'" in source
     assert "const filterChoiceListStyle = { display: 'grid', gap: '8px', minWidth: 0 };" in source
     assert "const contextOptions = React.useMemo" in source
     assert "React.createElement('span', { style: filterKeyStyle }, 'Context')" in source
+    assert "'aria-label': 'Glow changes from previous context'" in source
+    assert "'data-vyasa-context-diff': data?.__context_diff__ === true ? 'true' : undefined" in source
+    assert '[data-vyasa-context-diff="true"]' in css
+    assert ':not(:has([data-vyasa-highlight-active="true"]))' in css
+    assert "--vyasa-tasks-glow-color: var(--vyasa-primary)" in css
+    assert "--vyasa-tasks-glow-near-opacity: max(75%, var(--vyasa-tasks-pulse-near-opacity))" in css
+    assert "--vyasa-tasks-glow-far-opacity: max(75%, var(--vyasa-tasks-pulse-far-opacity))" in css
+    assert "var(--vyasa-tasks-pulse-near-blur)" in css
+    assert "var(--vyasa-tasks-pulse-far-opacity)" in css
     assert source.index("'Context'") < source.index("'View'")
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
     assert "const renderColorLevel = (colorBy, index) => {" in source
@@ -1288,6 +1305,7 @@ def test_context_graphs_have_day_switch_contract():
     assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Null Intensity')" in source
     assert "if (options?.resetSlideIndex) setSlideIndex((index) => index >= 0 ? 0 : -1);" in source
     assert "applyLoadedSource(payload, null, { resetSlideIndex: true });" in source
+    assert "}, [slideIndex, slides, graphRevision]);" in source
 
 
 def test_tasks_block_serializes_document_path_and_stable_storage_id():

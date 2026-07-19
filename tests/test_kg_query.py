@@ -159,6 +159,21 @@ def test_diff_compares_resolved_snapshots_not_file_order(context_pack):
     assert changed.context == {"from": "day1", "to": "day2"}
 
 
+def test_previous_context_diff_returns_present_changed_node_ids(context_pack):
+    query = KnowledgeGraphQuery(context_pack)
+
+    assert query.previous_context_diff("day2") == {
+        "from": "day1",
+        "to": "day2",
+        "node_ids": ["claim", "new"],
+    }
+    assert query.previous_context_diff("day1") == {
+        "from": "",
+        "to": "day1",
+        "node_ids": [],
+    }
+
+
 def test_filters_groups_and_aggregates_use_current_result(context_pack):
     rows = KnowledgeGraphQuery(context_pack).run(
         "nodes at day2 | where score>=2 owner=Mia,Lee | group owner | count | sum score | avg score | rate sum_score count 100 | sort group"
