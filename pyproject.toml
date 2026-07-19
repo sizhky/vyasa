@@ -36,6 +36,9 @@ dependencies = [
     "loguru>=0.7.3",
     "fastsql>=2.1.2",
     "dulwich>=0.22.0",
+    "pillow>=10.0.0",
+    "numpy>=1.26.0",
+    "shapely>=2.0.0",
 ]
 
 [project.optional-dependencies]
