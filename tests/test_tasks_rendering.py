@@ -718,16 +718,20 @@ def test_tasks_filter_query_ignores_root_mute_but_keeps_rule_mute():
 
 def test_tasks_edge_type_filter_uses_or_and_returns_endpoints():
     script = """
-        import { tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        import { tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes, tasksFilterHoverFocus } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
         const edges = [
-            { source: 'a', target: 'b', label: 'owns' },
-            { source: 'b', target: 'c', label: 'blocks' },
-            { source: 'a', target: 'c', label: 'ignores' },
+            { id: 'owns', source: 'a', target: 'b', label: 'owns' },
+            { id: 'blocks', source: 'b', target: 'c', label: 'blocks' },
+            { id: 'ignores', source: 'a', target: 'c', label: 'ignores' },
         ];
         const nodeIds = tasksEdgeFilterNodeIds(edges, ['owns', 'blocks']);
         if ([...nodeIds].sort().join(',') !== 'a,b,c') throw new Error('edge types did not use OR');
         const visibleEdges = tasksEdgesMatchingTypes(edges, ['owns', 'blocks']);
         if (visibleEdges.length !== 2 || visibleEdges.some((edge) => edge.label === 'ignores')) throw new Error('unmatched edges remained visible');
+        const focus = tasksFilterHoverFocus(new Set(['a', 'b', 'c']), edges, 'b');
+        if ([...focus.nodeIds].sort().join(',') !== 'a,b,c') throw new Error('filtered hover missed one-hop nodes');
+        if ([...focus.edgeIds].sort().join(',') !== 'blocks,owns') throw new Error('filtered hover missed one-hop edges');
+        if (tasksFilterHoverFocus(new Set(['a', 'b']), edges, 'c').nodeIds.size) throw new Error('unmatched hover escaped the filter subset');
         const aggregate = tasksEdgeFilterNodeIds([
             { source: 'a', target: 'c', label: 'owns, blocks', __edge_types__: ['owns', 'blocks'] },
         ], ['blocks']);
@@ -741,12 +745,19 @@ def test_tasks_edge_type_filter_is_searchable_persisted_and_applied():
 
     assert "placeholder: 'Search edge types'" in source
     assert "'aria-label': 'Available edge types'" in source
+    assert "}, 'Edge Types')" in source
+    assert "checked: edgeTypeFilterEnabled" in source
+    assert "const effectiveEdgeTypes = React.useMemo" in source
+    assert "edgeTypeFilterEnabled," in source
     assert "const edgeTypeColors = React.useMemo" in source
     assert "background: edgeColor" in source
     assert "border: `1px solid ${edgeTypeColors[type] || 'currentColor'}`" in source
     assert "edgeTypes: activeEdgeTypes" in source
-    assert "tasksEdgeFilterNodeIds(graphBaseRef.current.edges || [], activeEdgeTypes)" in source
-    assert "tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], activeEdgeTypes)" in source
+    assert "tasksEdgeFilterNodeIds(graphBaseRef.current.edges || [], effectiveEdgeTypes)" in source
+    assert "tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], effectiveEdgeTypes)" in source
+    assert "const filterHoverFocus = tasksFilterHoverFocus(matchingIds, baseEdges, hoveredNodeId);" in source
+    assert "'neighbor-focus'" in source
+    assert "tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderColor, checkedShadow, colorMix, true)" in source
     assert "const matchingIds = filteredSelectionIds();" in source
     assert "graphBaseRef.current = { nodes: anchoredNodes, edges: baseEdges }" in source
     assert "tasksFilterGraphByEdgeTypes" not in source

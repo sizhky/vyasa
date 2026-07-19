@@ -260,6 +260,22 @@ export function tasksEdgeFilterNodeIds(edges, edgeTypes) {
     return nodeIds;
 }
 
+export function tasksFilterHoverFocus(matchingNodeIds, edges, hoveredNodeId) {
+    const matching = matchingNodeIds instanceof Set ? matchingNodeIds : new Set(matchingNodeIds || []);
+    const nodeIds = new Set();
+    const edgeIds = new Set();
+    if (!hoveredNodeId || !matching.has(hoveredNodeId)) return { nodeIds, edgeIds };
+    nodeIds.add(hoveredNodeId);
+    for (const edge of edges || []) {
+        if (!matching.has(edge.source) || !matching.has(edge.target)) continue;
+        if (edge.source !== hoveredNodeId && edge.target !== hoveredNodeId) continue;
+        nodeIds.add(edge.source);
+        nodeIds.add(edge.target);
+        if (edge.id) edgeIds.add(edge.id);
+    }
+    return { nodeIds, edgeIds };
+}
+
 function tasksSearchNormalizeText(value) {
     return String(value ?? '').replace(/\s+/g, ' ').trim();
 }
