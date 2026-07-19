@@ -6914,7 +6914,6 @@ async function renderTasksGraphs(rootElement = document) {
                 };
                 if (!reactFlow || !wrapper) return;
                 if (wrapper.querySelector('.react-flow__pane.dragging')) {
-                    clearGraphHoverState('pointer-dragging');
                     traceHoverHit('dragging');
                     return;
                 }

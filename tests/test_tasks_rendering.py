@@ -432,6 +432,12 @@ def test_tasks_source_renders_hover_checkbox_and_done_badge():
     assert "taskStateLabel" in source
 
 
+def test_tasks_source_keeps_hover_highlight_while_panning():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "clearGraphHoverState('pointer-dragging')" not in source
+
+
 def test_tasks_active_node_pulse_uses_continuous_shared_glow_clock():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
