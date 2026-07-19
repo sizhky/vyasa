@@ -479,6 +479,7 @@ test('Knowledge Graph fit includes highlighted neighbors for selected node', () 
 
 test('Knowledge Graph right-rail hover card gets stronger shadow', () => {
     const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes("tasksModelBooleanSetting(model, 'hover-card-right-rail', false)"));
     assert.ok(source.includes('boxShadow: rightRailPlacement'));
     assert.ok(source.includes('-18px 20px 50px rgba(0,0,0,0.24)'));
 });
