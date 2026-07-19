@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vyasa"
-version = "0.6.99"
+version = "0.6.100"
 description = "A lightweight, elegant blogging platform built with FastHTML"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,6 +35,9 @@ dependencies = [
     "loguru>=0.7.3",
     "fastsql>=2.1.2",
     "dulwich>=0.22.0",
+    "pillow>=10.0.0",
+    "numpy>=1.26.0",
+    "shapely>=2.0.0",
 ]
 
 [project.optional-dependencies]

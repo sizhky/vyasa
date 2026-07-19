@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReviewTarget, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReviewTarget, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 const { buildTasksProjectionConfigText, parseTasksProjectionConfigText, tasksCollectSearchMatches, tasksNodeMatchesAllFilters, tasksNodeMatchesFilters, tasksSelectionClickKey } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
 
 function fakeStorage(initial = {}) {
@@ -305,7 +305,8 @@ test('edge toggle header button warns when edges are hidden', () => {
     assert.ok(source.includes('syncTasksEdgeToggleButtons(widgetId, edgesVisible)'), 'edge button follows visibility state');
     assert.ok(source.includes('button[onclick*="toggleEdges"]'), 'sync handles old header buttons without data attrs');
     assert.ok(source.includes('data-vyasa-edges-off'), 'hidden edge state is marked on the E button');
-    assert.ok(stylesheetSource.includes('vyasa-edges-off-pulse'), 'hidden edge state pulses visibly');
+    assert.ok(!stylesheetSource.includes('vyasa-edges-off-pulse'), 'hidden edge warning glow stays static');
+    assert.ok(stylesheetSource.includes('0 0 34px rgba(239, 68, 68, 1)'), 'hidden edge warning keeps maximum glow');
 });
 
 test('collapsed groups average both primary and secondary colors', () => {
@@ -478,6 +479,7 @@ test('Knowledge Graph fit includes highlighted neighbors for selected node', () 
 
 test('Knowledge Graph right-rail hover card gets stronger shadow', () => {
     const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes("tasksModelBooleanSetting(model, 'hover-card-right-rail', false)"));
     assert.ok(source.includes('boxShadow: rightRailPlacement'));
     assert.ok(source.includes('-18px 20px 50px rgba(0,0,0,0.24)'));
 });
@@ -660,6 +662,13 @@ test('selected edge labels stay below nodes unless edge is focused', () => {
     assert.equal(tasksEdgeLabelZForMode('dim', 6, 999, 1400), 6);
     assert.equal(tasksEdgeLabelZForMode('focused-in', 6, 999, 1400), 1400);
     assert.equal(tasksEdgeLabelZForMode('focused-out', 6, 999, 1400), 1400);
+});
+
+test('active hover only shows labels for focused edges', () => {
+    assert.equal(isTasksEdgeLabelVisible('selected', false), true);
+    assert.equal(isTasksEdgeLabelVisible('selected', true), false);
+    assert.equal(isTasksEdgeLabelVisible('focused-in', true), true);
+    assert.equal(isTasksEdgeLabelVisible('focused-out', true), true);
 });
 
 test('non-animated selected edges keep uniform stroke width before taper', () => {

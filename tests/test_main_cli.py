@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from vyasa.config import reload_config
+from vyasa.config import reload_config, theme_preset_for_working_directory
 
 
 def test_reload_source_flag_configures_uvicorn_reloader(tmp_path, monkeypatch):
@@ -67,6 +67,30 @@ def test_feedback_subcommand_dispatches_once(monkeypatch):
 
     assert stopped.value.code == 7
     assert calls == [["poll", "plan"]]
+
+
+def test_theme_debug_uses_launch_folder_theme(tmp_path, monkeypatch):
+    from vyasa import main
+
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / ".vyasa").write_text('theme_preset = "dice"\n', encoding="utf-8")
+    monkeypatch.setenv("VYASA_ROOT", str(site))
+    monkeypatch.setenv("VYASA_THEME_DEBUG", "")
+    monkeypatch.delenv("VYASA_THEME_PRESET", raising=False)
+    monkeypatch.setitem(sys.modules, "uvicorn", SimpleNamespace(run=lambda *args, **kwargs: None))
+    monkeypatch.setattr(sys, "argv", ["vyasa", str(site), "--theme-debug", "--no-browser"])
+
+    try:
+        main.cli()
+        expected = theme_preset_for_working_directory(site)
+        assert main.os.environ["VYASA_THEME_PRESET"] == expected
+        config = reload_config()
+        assert config.get_theme_preset() == expected
+        assert config.get_theme_body_font()
+    finally:
+        monkeypatch.undo()
+        reload_config()
 
 
 def test_feedback_flag_enables_extension(tmp_path, monkeypatch):

@@ -234,6 +234,48 @@ export function tasksNodeMatchesAllFilters(node, queryFilters, swatchFilters) {
     return tasksNodeMatchesFilters(node, queryFilters) && tasksNodeMatchesFilters(node, swatchFilters);
 }
 
+export function tasksEdgeTypeValues(edge) {
+    const explicit = Array.isArray(edge?.__edge_types__) ? edge.__edge_types__ : [];
+    return Array.from(new Set([
+        ...explicit,
+        edge?.relation,
+        edge?.label,
+    ].map((value) => String(value || '').trim()).filter(Boolean)));
+}
+
+export function tasksEdgesMatchingTypes(edges, edgeTypes) {
+    const selected = new Set((edgeTypes || []).map(String).filter(Boolean));
+    if (!selected.size) return edges || [];
+    return (edges || []).filter((edge) => tasksEdgeTypeValues(edge).some((type) => selected.has(type)));
+}
+
+export function tasksEdgeFilterNodeIds(edges, edgeTypes) {
+    const selected = new Set((edgeTypes || []).map(String).filter(Boolean));
+    const nodeIds = new Set();
+    if (!selected.size) return nodeIds;
+    for (const edge of tasksEdgesMatchingTypes(edges, edgeTypes)) {
+        nodeIds.add(edge.source);
+        nodeIds.add(edge.target);
+    }
+    return nodeIds;
+}
+
+export function tasksFilterHoverFocus(matchingNodeIds, edges, hoveredNodeId) {
+    const matching = matchingNodeIds instanceof Set ? matchingNodeIds : new Set(matchingNodeIds || []);
+    const nodeIds = new Set();
+    const edgeIds = new Set();
+    if (!hoveredNodeId || !matching.has(hoveredNodeId)) return { nodeIds, edgeIds };
+    nodeIds.add(hoveredNodeId);
+    for (const edge of edges || []) {
+        if (!matching.has(edge.source) || !matching.has(edge.target)) continue;
+        if (edge.source !== hoveredNodeId && edge.target !== hoveredNodeId) continue;
+        nodeIds.add(edge.source);
+        nodeIds.add(edge.target);
+        if (edge.id) edgeIds.add(edge.id);
+    }
+    return { nodeIds, edgeIds };
+}
+
 function tasksSearchNormalizeText(value) {
     return String(value ?? '').replace(/\s+/g, ' ').trim();
 }
@@ -369,6 +411,9 @@ export function buildTasksProjectionConfigText(config) {
     if (typeof cfg.queryBuilderEnabled === 'boolean') {
         lines.push(`\tquery_builder_enabled=${cfg.queryBuilderEnabled ? 'true' : 'false'}`);
     }
+    if (typeof cfg.searchEnabled === 'boolean') {
+        lines.push(`\tsearch_enabled=${cfg.searchEnabled ? 'true' : 'false'}`);
+    }
     add('search', cfg.searchQuery);
     if (typeof cfg.filtersCollapsed === 'boolean') lines.push(`\tfilters_collapsed=${cfg.filtersCollapsed ? 'true' : 'false'}`);
     if (typeof cfg.edgesVisible === 'boolean') lines.push(`\tedges_visible=${cfg.edgesVisible ? 'true' : 'false'}`);
@@ -431,6 +476,7 @@ export function parseTasksProjectionConfigText(text) {
         if (key === 'filter_query') {
             try { cfg.filterQuery = normalizeTasksFilterQuery(JSON.parse(value)); } catch { /* ignore bad paste */ }
         } else if (key === 'query_builder_enabled') cfg.queryBuilderEnabled = value === 'true';
+        else if (key === 'search_enabled') cfg.searchEnabled = value === 'true';
         else if (key === 'search') cfg.searchQuery = value;
         else if (key === 'filters_collapsed') cfg.filtersCollapsed = value === 'true';
         else if (key === 'edges_visible') cfg.edgesVisible = value !== 'false';

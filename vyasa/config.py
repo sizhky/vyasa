@@ -43,6 +43,15 @@ def port_for_working_directory(path: Path) -> int:
     return MIN_DYNAMIC_PORT + (int.from_bytes(digest[:8], "big") % span)
 
 
+def theme_preset_for_working_directory(path: Path) -> str:
+    registry = theme_registry(path)
+    presets = sorted(name for name, extension in registry.items() if extension.theme)
+    if not presets:
+        return ""
+    digest = hashlib.sha256(str(path.resolve()).encode("utf-8")).digest()
+    return presets[int.from_bytes(digest[:8], "big") % len(presets)]
+
+
 class VyasaConfig:
 
     """Configuration handler for Vyasa."""
@@ -90,15 +99,21 @@ class VyasaConfig:
                 with open(config_file, 'rb') as f:
                     import tomllib
                     self._config = tomllib.load(f)
-                preset_name = str(self._config.get("theme_preset", "")).strip()
-                if preset_name:
-                    preset_cfg = load_theme_preset(preset_name, config_file.parent)
-                    if preset_cfg:
-                        self._config = {**preset_cfg, **self._config}
                 self._loaded_config_path = config_file
-            except Exception as e:
+            except Exception:
                 self._config = {}
                 self._loaded_config_path = None
+        env_preset = str(os.getenv("VYASA_THEME_PRESET", "")).strip()
+        debug_theme = str(os.getenv("VYASA_THEME_DEBUG", "")).lower() in {"true", "1", "yes", "on"}
+        configured_preset = str(self._config.get("theme_preset", "")).strip()
+        preset_name = env_preset if debug_theme else configured_preset or env_preset
+        if preset_name:
+            base_dir = config_file.parent if config_file else Path(os.getenv("VYASA_ROOT") or Path.cwd())
+            preset_cfg = load_theme_preset(preset_name, base_dir)
+            if preset_cfg:
+                self._config = {**preset_cfg, **self._config}
+                if debug_theme:
+                    self._config["theme_preset"] = preset_name
     
     def get(self, key: str, env_var: str, default: Any = None) -> Any:
         """Get configuration value with priority: config file > env var > default.

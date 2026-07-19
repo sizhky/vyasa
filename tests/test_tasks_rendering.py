@@ -356,6 +356,14 @@ def test_tasks_query_builder_can_be_disabled_per_projection():
     assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, 'Query builder')" in source
 
 
+def test_tasks_search_can_be_disabled_per_projection():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "searchEnabled" in source
+    assert "searchEnabled ? searchQuery : ''" in source
+    assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, 'Search')" in source
+
+
 def test_tasks_query_builder_controls_use_filter_panel_css():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
@@ -424,34 +432,37 @@ def test_tasks_source_renders_hover_checkbox_and_done_badge():
     assert "taskStateLabel" in source
 
 
-def test_tasks_active_node_pulse_uses_continuous_shared_glow_clock():
+def test_tasks_source_keeps_hover_highlight_while_panning():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "clearGraphHoverState('pointer-dragging')" not in source
+
+
+def test_tasks_graph_highlights_use_static_outlines():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
-    pulse_css = css_source.split("@keyframes vyasa-tasks-active-pulse", 1)[1].split("@media", 1)[0]
     active_node_css = css_source.split(
         '.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"])',
         1,
-    )[1].split("@keyframes", 1)[0]
+    )[1].split(".react-flow__node.vyasa-tasks-node--passive", 1)[0]
 
     assert "'data-vyasa-highlight-active': !['none', 'dim'].includes(highlightMode)" in source
+    assert "'data-vyasa-hover-outline': data?.__hover_outline__ === true ? 'true' : undefined" in source
     assert "'vyasa-tasks-active-pulse'" in source
-    assert "activePulseEnabled" not in source
-    assert "Pulse active nodes" not in source
-    assert "@property --vyasa-tasks-pulse-near-opacity" in css_source
-    assert "@keyframes vyasa-tasks-active-pulse" in css_source
-    assert "animation: vyasa-tasks-active-pulse 5s" in css_source
-    assert "animation:" not in active_node_css
-    assert active_node_css.count("drop-shadow(") == 2
+    assert "@property --vyasa-tasks-pulse" not in css_source
+    assert "@keyframes vyasa-tasks-active-pulse" not in css_source
+    assert "animation: vyasa-tasks-active-pulse" not in css_source
+    assert "filter:" not in active_node_css
+    assert "box-shadow: none !important" in active_node_css
+    assert "outline: 4px solid" in css_source
+    assert "outline: 4px solid" in active_node_css
+    assert '[data-vyasa-hover-outline="true"]' in active_node_css
+    assert "outline: 12px solid var(--vyasa-tasks-active-border, var(--vyasa-primary)) !important" in active_node_css
+    assert ':has([data-vyasa-highlight-mode="selected-focus"])' not in active_node_css
+    assert "if (hoveredNodeId) hoverOutlineIds.add(nodeId);" in source
     assert "'--vyasa-tasks-active-border'" in source
     assert "var(--vyasa-tasks-active-border" in active_node_css
-    assert "--vyasa-tasks-pulse-near-opacity: 50%" in pulse_css
-    assert "--vyasa-tasks-pulse-far-opacity: 25%" in pulse_css
-    assert pulse_css.count("--vyasa-tasks-pulse-near-opacity: 100%") == 1
-    assert pulse_css.count("--vyasa-tasks-pulse-far-opacity: 100%") == 1
-    assert "border-color:" not in pulse_css
-    assert "brightness(" not in pulse_css
-    assert "saturate(" not in pulse_css
-    assert "@media (prefers-reduced-motion: reduce)" in css_source
+    assert "--vyasa-tasks-glow-" not in css_source
 
 
 def test_tasks_source_supports_configurable_card_states():
@@ -700,6 +711,54 @@ def test_tasks_filter_query_ignores_root_mute_but_keeps_rule_mute():
         if (tasksCountFilterRules(query) !== 1) throw new Error(`expected one active rule`);
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_tasks_edge_type_filter_uses_or_and_returns_endpoints():
+    script = """
+        import { tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes, tasksFilterHoverFocus } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        const edges = [
+            { id: 'owns', source: 'a', target: 'b', label: 'owns' },
+            { id: 'blocks', source: 'b', target: 'c', label: 'blocks' },
+            { id: 'ignores', source: 'a', target: 'c', label: 'ignores' },
+        ];
+        const nodeIds = tasksEdgeFilterNodeIds(edges, ['owns', 'blocks']);
+        if ([...nodeIds].sort().join(',') !== 'a,b,c') throw new Error('edge types did not use OR');
+        const visibleEdges = tasksEdgesMatchingTypes(edges, ['owns', 'blocks']);
+        if (visibleEdges.length !== 2 || visibleEdges.some((edge) => edge.label === 'ignores')) throw new Error('unmatched edges remained visible');
+        const focus = tasksFilterHoverFocus(new Set(['a', 'b', 'c']), edges, 'b');
+        if ([...focus.nodeIds].sort().join(',') !== 'a,b,c') throw new Error('filtered hover missed one-hop nodes');
+        if ([...focus.edgeIds].sort().join(',') !== 'blocks,owns') throw new Error('filtered hover missed one-hop edges');
+        if (tasksFilterHoverFocus(new Set(['a', 'b']), edges, 'c').nodeIds.size) throw new Error('unmatched hover escaped the filter subset');
+        const aggregate = tasksEdgeFilterNodeIds([
+            { source: 'a', target: 'c', label: 'owns, blocks', __edge_types__: ['owns', 'blocks'] },
+        ], ['blocks']);
+        if (![...aggregate].includes('c')) throw new Error('aggregated edge lost its original types');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_tasks_edge_type_filter_is_searchable_persisted_and_applied():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "placeholder: 'Search edge types'" in source
+    assert "'aria-label': 'Available edge types'" in source
+    assert "}, 'Edge Types')" in source
+    assert "checked: edgeTypeFilterEnabled" in source
+    assert "const effectiveEdgeTypes = React.useMemo" in source
+    assert "edgeTypeFilterEnabled," in source
+    assert "const edgeTypeColors = React.useMemo" in source
+    assert "background: edgeColor" in source
+    assert "border: `1px solid ${edgeTypeColors[type] || 'currentColor'}`" in source
+    assert "edgeTypes: activeEdgeTypes" in source
+    assert "tasksEdgeFilterNodeIds(graphBaseRef.current.edges || [], effectiveEdgeTypes)" in source
+    assert "tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], effectiveEdgeTypes)" in source
+    assert "const filterHoverFocus = tasksFilterHoverFocus(matchingIds, baseEdges, hoveredNodeId);" in source
+    assert "'neighbor-focus'" in source
+    assert "tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderColor, checkedShadow, colorMix, true)" in source
+    assert "const matchingIds = filteredSelectionIds();" in source
+    assert "graphBaseRef.current = { nodes: anchoredNodes, edges: baseEdges }" in source
+    assert "tasksFilterGraphByEdgeTypes" not in source
+    assert "setActiveEdgeTypes(egoMode || !Array.isArray(nextPrefs?.edgeTypes)" in source
 
 
 def test_tasks_source_supports_continuous_gradient_palettes():
@@ -1245,6 +1304,7 @@ def test_react_flow_component_fills_flow_wrapper():
 def test_tasks_slide_show_nav_stays_above_title_and_supports_jump_select():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     slide_source = source.split("const SlideShow = () => {", 1)[1].split("const DragSelectionOverlay = () => {", 1)[0]
+    ready_fit_source = source.split("const FitOnNodesReady = () => {", 1)[1].split("const flowWrapperClassName", 1)[0]
 
     assert "className: 'vyasa-task-slide-nav'" in slide_source
     assert "'aria-label': 'Jump to slide'" in slide_source
@@ -1253,18 +1313,31 @@ def test_tasks_slide_show_nav_stays_above_title_and_supports_jump_select():
     assert "onChange: (event) => setSlideIndex(Number(event.target.value))" in slide_source
     assert slide_source.index("className: 'vyasa-task-slide-nav'") < slide_source.index("slide.title || `Slide ${slideIndex + 1}`")
     assert "`${index + 1} / ${slides.length}`" in slide_source
+    assert "tasksMatchedSlideNodes(slides, slideIndex, graphBaseRef.current.nodes)" in ready_fit_source
+    assert "nodes: matched" in ready_fit_source
 
 
 def test_context_graphs_have_day_switch_contract():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+    api = Path("vyasa/extensions_builtin/tasks/api.py").read_text()
 
     assert "async function loadTasksContext" in source
     assert "fetch('/api/tasks/context'" in source
+    assert "async function loadTasksContextDiff" in source
+    assert "fetch('/api/tasks/context-diff'" in source
+    assert '@rt("/api/tasks/context-diff"' in api
     assert "const filterSectionStyle = { display: 'grid', gap: '8px', fontSize: '12px' };" in source
     assert "const filterInlineControlStyle = { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto'" in source
     assert "const filterChoiceListStyle = { display: 'grid', gap: '8px', minWidth: 0 };" in source
     assert "const contextOptions = React.useMemo" in source
     assert "React.createElement('span', { style: filterKeyStyle }, 'Context')" in source
+    assert "'aria-label': 'Glow changes from previous context'" in source
+    assert "'data-vyasa-context-diff': data?.__context_diff__ === true ? 'true' : undefined" in source
+    assert '[data-vyasa-context-diff="true"]' in css
+    assert ':not(:has([data-vyasa-highlight-active="true"]))' in css
+    assert "outline: 4px solid color-mix(in srgb, var(--vyasa-primary) 82%, transparent)" in css
+    assert "outline-offset: 3px" in css
     assert source.index("'Context'") < source.index("'View'")
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
     assert "const renderColorLevel = (colorBy, index) => {" in source
@@ -1274,6 +1347,7 @@ def test_context_graphs_have_day_switch_contract():
     assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Null Intensity')" in source
     assert "if (options?.resetSlideIndex) setSlideIndex((index) => index >= 0 ? 0 : -1);" in source
     assert "applyLoadedSource(payload, null, { resetSlideIndex: true });" in source
+    assert "}, [slideIndex, slides, graphRevision]);" in source
 
 
 def test_tasks_block_serializes_document_path_and_stable_storage_id():

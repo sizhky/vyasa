@@ -1,8 +1,4 @@
-.uk-list-bullet .vyasa-task-card::before, .uk-list-decimal .vyasa-task-card::before { content: none !important; }
-.vyasa-task-card { --vyasa-task-surface: color-mix(in srgb, var(--vyasa-paper-low) 96%, var(--vyasa-callout-accent) 4%); --vyasa-task-outline: color-mix(in srgb, var(--vyasa-outline-ghost) 84%, var(--vyasa-callout-accent) 16%); list-style: none; margin: 0.26rem 0; padding: 0.42rem 0.78rem 0.62rem; border: 1px solid var(--vyasa-task-outline); border-radius: 10px !important; background: var(--vyasa-task-surface); box-shadow: 0 8px 18px -24px color-mix(in srgb, var(--vyasa-ink) 28%, transparent); position: relative; }
 .react-flow__node.vyasa-tasks-node--expanded-group { background: transparent !important; background-color: transparent !important; background-image: none !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--vyasa-ink) 52%, transparent), 0 24px 64px color-mix(in srgb, var(--vyasa-primary) 10%, transparent) !important; }
-.dark .vyasa-task-card { --vyasa-task-surface: color-mix(in srgb, var(--vyasa-paper-low) 90%, var(--vyasa-callout-accent) 10%); }
-.vyasa-task-card::after { content: ""; position: absolute; inset: 0; border-left: 1.5px solid color-mix(in srgb, var(--vyasa-callout-accent) 34%, transparent); border-radius: inherit; pointer-events: none; opacity: 0.85; }
 .vyasa-task-link-badge { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.14rem; min-width: 0.8rem; height: 0.8rem; color: color-mix(in srgb, currentColor 58%, transparent); pointer-events: none; opacity: 0.72; }
 .vyasa-task-link-badge svg { width: 0.8rem; height: 0.8rem; stroke: currentColor !important; fill: none !important; }
 .vyasa-task-node-card-value > :first-child { margin-top: 0 !important; }
@@ -48,31 +44,6 @@
         inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
         0 1px 2px rgba(0, 0, 0, 0.28);
 }
-.vyasa-task-pill { display: inline-flex; width: max-content; margin-bottom: 0.14rem; padding: 0; border: 0; background: transparent; color: var(--vyasa-ink-soft); font: 600 0.63rem/1 var(--vyasa-font-ui); letter-spacing: 0.11em; text-transform: uppercase; opacity: 0.54; }
-.vyasa-task-copy { color: var(--vyasa-ink); font-size: 0.92rem; line-height: 1.34; font-style: normal; font-weight: 560; text-wrap: pretty; }
-.vyasa-task-card.is-done .vyasa-task-copy { text-decoration: line-through; text-decoration-thickness: 1.5px; text-decoration-color: color-mix(in srgb, var(--vyasa-callout-accent) 58%, currentColor); opacity: 0.72; }
-.vyasa-task-meta-row { display: flex; flex-wrap: wrap; gap: 0.3rem 0.66rem; margin-top: 0.32rem; padding-top: 0; border-top: 0; }
-.vyasa-task-card.is-done .vyasa-task-meta { opacity: 0.78; }
-.vyasa-task-meta { display: inline-flex; align-items: center; gap: 0.28rem; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--vyasa-ink-soft); font: 540 0.7rem/1.1 var(--vyasa-font-ui); letter-spacing: 0; text-transform: none; opacity: 0.88; }
-.vyasa-task-meta-priority.is-elevated { color: color-mix(in srgb, var(--vyasa-ink) 72%, #b91c1c 28%); position: relative; overflow: visible; font-weight: 700; }
-.dark .vyasa-task-meta-priority.is-elevated { color: color-mix(in srgb, var(--vyasa-ink) 84%, #fecaca 16%); }
-.vyasa-task-meta-priority.is-elevated::after { content: "•"; margin-left: 0.18rem; color: color-mix(in srgb, currentColor 72%, transparent); }
-todo { --vyasa-callout-accent: var(--vyasa-primary); --vyasa-todo-chip-bg: color-mix(in srgb, var(--vyasa-paper-raised) 72%, var(--vyasa-callout-accent) 28%); --vyasa-todo-meta: color-mix(in srgb, var(--vyasa-ink-soft) 76%, var(--vyasa-callout-accent) 24%); display: block; margin: 0.4rem 0; border: 1px solid color-mix(in srgb, var(--vyasa-callout-accent) 16%, transparent); background: linear-gradient(180deg, color-mix(in srgb, var(--vyasa-paper-raised) 78%, transparent), transparent 48%), linear-gradient(135deg, color-mix(in srgb, var(--vyasa-callout-accent) 8%, transparent), transparent 45%), color-mix(in srgb, var(--vyasa-paper-low) 84%, var(--vyasa-callout-accent) 16%); border-radius: var(--vyasa-rect-radius) !important; padding: 1.1rem 1.15rem 1rem; position: relative; z-index: 1; overflow: hidden; box-shadow: 0 22px 34px -30px color-mix(in srgb, var(--vyasa-ink) 28%, transparent); font-size: 1rem; line-height: 1.75; color: var(--vyasa-ink); font-style: italic; text-wrap: pretty; }
-p:has(> todo) { margin: 0.4rem 0 !important; }
-p:has(> todo) + p:has(> todo) { margin-top: 0 !important; }
-todo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, color-mix(in srgb, var(--vyasa-callout-accent) 8%, transparent), transparent 45%, color-mix(in srgb, var(--vyasa-paper-raised) 32%, transparent)); pointer-events: none; }
-todo br { display: block; content: ""; margin-top: 0.85rem; }
-todo::before { content: "Task"; display: block; margin-bottom: 0.6rem; color: var(--vyasa-todo-meta); font: 700 0.62rem/1 var(--vyasa-font-ui); letter-spacing: 0.2em; text-transform: uppercase; }
-todo > :not(.owner):not(.deadline) { color: var(--vyasa-ink); }
-todo > br:first-of-type { margin-top: 1rem; }
-todo > .owner, todo > .deadline { margin-top: 1rem; }
-todo::first-line { font-weight: 550; }
-todo .owner, todo .deadline { font-style: normal; }
-todo .owner, todo .deadline { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.85rem; padding: 0.32rem 0.72rem; border-radius: 999px; background: var(--vyasa-todo-chip-bg); color: var(--vyasa-todo-meta); font: 600 0.74rem/1.05 var(--vyasa-font-ui); letter-spacing: 0.04em; text-transform: uppercase; }
-todo .deadline { margin-left: 0.45rem; }
-.vyasa-todo-meta-icon { display: inline-flex; align-items: center; justify-content: center; width: 0.85rem; height: 0.85rem; flex: 0 0 0.85rem; color: currentColor; }
-.vyasa-todo-meta-icon svg { display: block; width: 100%; height: 100%; stroke-linecap: round; stroke-linejoin: round; }
-
 /* React Flow runtime overrides. */
 .tasks-container[data-tasks-maximized="true"] {
     position: fixed !important;
@@ -122,14 +93,9 @@ button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"],
 button[data-vyasa-tasks-action="toggleHoverCards"][data-vyasa-hover-cards-off="true"] {
     color: #fecaca !important;
     border-color: #ef4444 !important;
-    background: #991b1b !important;
-    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.45), 0 0 18px rgba(239, 68, 68, 0.72) !important;
-    transform: scale(1.18);
-    animation: vyasa-edges-off-pulse 0.65s ease-in-out infinite alternate !important;
-}
-@keyframes vyasa-edges-off-pulse {
-    from { transform: scale(1.08); background: #7f1d1d; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35), 0 0 10px rgba(239, 68, 68, 0.42); }
-    to { transform: scale(1.28); background: #dc2626; box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.78), 0 0 34px rgba(239, 68, 68, 1); }
+    background: #dc2626 !important;
+    box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.78), 0 0 34px rgba(239, 68, 68, 1) !important;
+    transform: scale(1.28);
 }
 .vyasa-tasks-flow .react-flow__edge,
 .vyasa-tasks-flow .react-flow__edge path,
@@ -150,57 +116,19 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 .react-flow__node[data-vyasa-group-toggle-hover="true"] {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-ink) 64%, transparent), 0 24px 72px color-mix(in srgb, var(--vyasa-primary) 16%, transparent) !important;
 }
-@property --vyasa-tasks-pulse-near-opacity {
-    syntax: "<percentage>";
-    inherits: true;
-    initial-value: 50%;
-}
-@property --vyasa-tasks-pulse-far-opacity {
-    syntax: "<percentage>";
-    inherits: true;
-    initial-value: 25%;
-}
-@property --vyasa-tasks-pulse-near-blur {
-    syntax: "<length>";
-    inherits: true;
-    initial-value: 5px;
-}
-@property --vyasa-tasks-pulse-far-blur {
-    syntax: "<length>";
-    inherits: true;
-    initial-value: 9px;
-}
-.vyasa-tasks-active-pulse {
-    animation: vyasa-tasks-active-pulse 5s ease-in-out infinite alternate;
+.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-context-diff="true"]):not(:has([data-vyasa-highlight-active="true"])) {
+    outline: 4px solid color-mix(in srgb, var(--vyasa-primary) 82%, transparent);
+    outline-offset: 3px;
+    box-shadow: none !important;
 }
 .vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"]) {
-    filter:
-        drop-shadow(0 0 var(--vyasa-tasks-pulse-near-blur) color-mix(in srgb, var(--vyasa-tasks-active-border, var(--vyasa-primary)) var(--vyasa-tasks-pulse-near-opacity), transparent))
-        drop-shadow(0 0 var(--vyasa-tasks-pulse-far-blur) color-mix(in srgb, var(--vyasa-tasks-active-border, var(--vyasa-primary)) var(--vyasa-tasks-pulse-far-opacity), transparent));
-    will-change: filter;
+    outline: 4px solid var(--vyasa-tasks-active-border, var(--vyasa-primary));
+    outline-offset: 3px;
+    box-shadow: none !important;
 }
-@keyframes vyasa-tasks-active-pulse {
-    from {
-        --vyasa-tasks-pulse-near-opacity: 50%;
-        --vyasa-tasks-pulse-far-opacity: 25%;
-        --vyasa-tasks-pulse-near-blur: 5px;
-        --vyasa-tasks-pulse-far-blur: 9px;
-    }
-    to {
-        --vyasa-tasks-pulse-near-opacity: 100%;
-        --vyasa-tasks-pulse-far-opacity: 100%;
-        --vyasa-tasks-pulse-near-blur: 10px;
-        --vyasa-tasks-pulse-far-blur: 18px;
-    }
-}
-@media (prefers-reduced-motion: reduce) {
-    .vyasa-tasks-active-pulse {
-        animation: none;
-    }
-    .vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"]) {
-        filter: none;
-        will-change: auto;
-    }
+.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-hover-outline="true"]) {
+    outline: 12px solid var(--vyasa-tasks-active-border, var(--vyasa-primary)) !important;
+    outline-offset: 3px;
 }
 .react-flow__node.vyasa-tasks-node--passive [data-vyasa-task-control="true"] {
     pointer-events: auto;

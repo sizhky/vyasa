@@ -22,7 +22,7 @@ class TasksExtension(VyasaExtensionBase):
         app.routes.add("/api/tasks", register_tasks_routes)
         app.assets.bundle(AssetBundle(
             "tasks.runtime",
-            css=("/static/extensions/tasks/tasks.css",),
+            css=("/static/markdown.css", "/static/extensions/tasks/tasks.css"),
             js=("/static/extensions/tasks/tasks_probe.js", "/static/extensions/tasks/tasks.js"),
         ))
         app.assets.page(_page_bundles)
