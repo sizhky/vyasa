@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import tempfile
+from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Callable, Protocol
@@ -59,6 +62,23 @@ def _author_from_auth(auth: dict) -> str:
     return auth.get("name") or auth.get("email") or auth.get("username") or "anonymous"
 
 
+def _export_path(runtime: RuntimeAccess, request) -> Path:
+    identity = f"{runtime.config.get_root_folder()}\n{_author_from_auth(runtime.auth_for_request(request))}"
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:12]
+    return Path(tempfile.gettempdir()) / f"vyasa-annotations-{digest}.md"
+
+
+def _replace_export(path: Path, content: bytes) -> None:
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", delete=False) as output:
+        output.write(content)
+        staged = Path(output.name)
+    try:
+        staged.chmod(0o600)
+        os.replace(staged, path)
+    finally:
+        staged.unlink(missing_ok=True)
+
+
 def register_annotations_routes(rt, runtime: RuntimeAccess, store: AnnotationStoreAdapter) -> None:
     @rt("/api/annotations", methods=["GET"])
     async def get_all_annotations(request):
@@ -76,9 +96,9 @@ def register_annotations_routes(rt, runtime: RuntimeAccess, store: AnnotationSto
         content = await request.body()
         if len(content) > 5_000_000:
             return Response("Export too large", status_code=413)
-        with tempfile.NamedTemporaryFile(prefix="vyasa-annotations-", suffix=".md", delete=False) as output:
-            output.write(content)
-        return Response(json.dumps({"path": output.name}), media_type="application/json")
+        path = _export_path(runtime, request)
+        _replace_export(path, content)
+        return Response(json.dumps({"path": str(path)}), media_type="application/json")
 
     @rt("/api/annotations/{path:path}", methods=["GET"])
     async def get_annotations(path: str, request):

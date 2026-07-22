@@ -24,8 +24,9 @@ def handlers_for(rows):
         return lambda handler: handlers.update({(method, path): handler for method in methods}) or handler
 
     runtime = cast(RuntimeAccess, SimpleNamespace(
-        config=SimpleNamespace(get_annotations_enabled=lambda: True),
+        config=SimpleNamespace(get_annotations_enabled=lambda: True, get_root_folder=lambda: Path("/site")),
         can_read_post=lambda path, request: path != "private",
+        auth_for_request=lambda request: {"name": "Yeshwanth"},
     ))
     store = CallableAnnotationStore(lambda path: [], lambda: rows, lambda row: None, lambda annotation_id: False)
     register_annotations_routes(rt, runtime, store)
@@ -52,12 +53,16 @@ def test_store_lists_all_annotations_by_path(tmp_path):
     assert [item.path for item in list_all_annotations(tmp_path, cache)] == ["one", "two"]
 
 
-def test_export_writes_markdown_and_returns_its_path(tmp_path, monkeypatch):
+def test_export_replaces_one_deterministic_markdown_file(tmp_path, monkeypatch):
     monkeypatch.setattr("tempfile.tempdir", str(tmp_path))
     handler = handlers_for([])[("POST", "/api/annotations/export")]
 
     response = asyncio.run(handler(Request(b"annotations")))
     export_path = Path(json.loads(response.body)["path"])
+    next_response = asyncio.run(handler(Request(b"updated")))
+    next_path = Path(json.loads(next_response.body)["path"])
 
-    assert export_path.read_text() == "annotations"
+    assert export_path == next_path
+    assert export_path.read_text() == "updated"
     assert export_path.parent == tmp_path
+    assert len(list(tmp_path.glob("vyasa-annotations-*.md"))) == 1

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fasthtml.common import Li
+from fasthtml.common import Button, Li
 from fasthtml.common import to_xml
 
 from vyasa.build import static_layout
@@ -37,6 +37,14 @@ def test_navbar_sidebar_toggles_have_animation_targets():
 
     assert 'data-vyasa-sidebar-toggle="posts"' in html
     assert 'data-vyasa-sidebar-toggle="toc"' in html
+
+
+def test_navbar_control_sits_left_of_search():
+    from vyasa.nav_views import navbar_view
+
+    html = to_xml(navbar_view("BLOG", "", ref_switcher=Button("Annotations", cls="annotations-control")))
+
+    assert html.index("annotations-control") < html.index("vyasa-navbar-search-input")
 
 
 def test_compact_navbar_uses_panel_toggle_not_embedded_posts_tree():

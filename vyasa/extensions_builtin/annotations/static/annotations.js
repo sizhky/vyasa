@@ -248,10 +248,19 @@ function initAnnotations(root = document) {
         input.remove();
         return copied;
     };
+    const loadAllAnnotations = () => fetch('/api/annotations')
+        .then((response) => response.ok ? response.json() : [])
+        .then((items) => Array.isArray(items) ? items : [])
+        .catch(() => []);
+    const refreshGlobalExport = async () => {
+        const items = await loadAllAnnotations();
+        document.querySelectorAll('.vyasa-annotations-export').forEach((button) => {
+            button.hidden = items.length === 0;
+        });
+        return items;
+    };
     const exportAllComments = async () => {
-        const response = await fetch('/api/annotations');
-        if (!response.ok) return;
-        const items = await response.json();
+        const items = await refreshGlobalExport();
         const exported = await fetch('/api/annotations/export', {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
@@ -259,7 +268,10 @@ function initAnnotations(root = document) {
         });
         if (!exported.ok) return;
         const result = await exported.json();
-        if (await copyAnnotationText(result.path)) showCommentCopyStatus(items.length, `${items.length} comments exported; path copied`);
+        if (await copyAnnotationText(result.path)) showCommentCopyStatus(
+            items.length,
+            `${items.length} comment${items.length === 1 ? '' : 's'} saved to ${result.path} — path copied`,
+        );
     };
     const countComments = (items) => items.reduce(
         (count, item) => count + 1 + countComments(item.replies || []), 0,
@@ -279,7 +291,7 @@ function initAnnotations(root = document) {
         clearTimeout(showCommentCopyStatus.timer);
         showCommentCopyStatus.timer = setTimeout(() => status.classList.remove('is-visible'), 1800);
     };
-    const makeCommentCopyButton = (items, label, action = null) => {
+    const makeCommentCopyButton = (items, label) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'vyasa-comment-copy';
@@ -288,12 +300,15 @@ function initAnnotations(root = document) {
         button.setAttribute('title', label);
         button.addEventListener('click', async (event) => {
             event.stopPropagation();
-            if (action) { await action(); return; }
             const selected = items();
             if (await copyAnnotationText(formatComments(selected))) showCommentCopyStatus(countComments(selected));
         });
         return button;
     };
+    document.querySelectorAll('.vyasa-annotations-export').forEach((button) => {
+        button.addEventListener('click', exportAllComments, { signal: lifecycle.signal });
+    });
+    refreshGlobalExport();
     const persistPopupState = (state) => {
         const entry = { path, id: state.item.id, pinned: true };
         persistedPopups = persistedPopups.filter((saved) => saved.path !== path || saved.id !== state.item.id);
@@ -427,7 +442,6 @@ function initAnnotations(root = document) {
         commentsSection.innerHTML = '<div class="vyasa-comments-header"><h2>Comments</h2></div><ol class="vyasa-comments-list"></ol>';
         commentsSection.querySelector('.vyasa-comments-header').appendChild(
             makeCommentCopyButton(() => annotationRoots, 'Copy all comments'),
-            makeCommentCopyButton(() => [], 'Copy all annotations', exportAllComments),
         );
         commentsList = commentsSection.querySelector('.vyasa-comments-list');
         main.appendChild(commentsSection);
@@ -562,6 +576,7 @@ function initAnnotations(root = document) {
                         sourceAnchors.delete(item.id);
                         destroyCommentPopup(item.id);
                         if (commentsList && !commentsList.children.length) commentsSection.hidden = true;
+                        refreshGlobalExport();
                     })
                     .catch(() => {});
             });
@@ -744,6 +759,7 @@ function initAnnotations(root = document) {
                     window.getSelection()?.removeAllRanges();
                     pending = null;
                     clearUi();
+                    refreshGlobalExport();
                 }).catch(() => {});
             });
         });

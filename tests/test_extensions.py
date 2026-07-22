@@ -282,6 +282,7 @@ def test_default_route_extensions_include_annotations():
     assert "annotations" in runtime.storage_namespaces
     assert "feedback" not in runtime.storage_namespaces
     assert "bookmarks" in runtime.storage_namespaces
+    assert any(provider.__module__.endswith(".annotations") for provider in runtime.navbar_control_providers)
 
 
 def test_annotations_are_enabled_by_default_and_can_be_disabled(tmp_path):
