@@ -1196,16 +1196,6 @@ function initScrollTopButton(root = document) {
     const rail = ensureFloatingActions();
     rail.appendChild(button);
     const sync = () => {
-        const main = document.getElementById('main-content');
-        const rect = main?.getBoundingClientRect();
-        if (rect) {
-            const inlineInset = parseFloat(
-                getComputedStyle(rail).getPropertyValue('--vyasa-floating-actions-inline-inset')
-            ) || 0;
-            rail.style.left = Math.max(16, rect.right - inlineInset) + 'px';
-            rail.style.right = 'auto';
-            rail.style.transform = 'translateX(-100%)';
-        }
         const footerRect = document.getElementById('site-footer')?.getBoundingClientRect();
         if (footerRect && footerRect.top < window.innerHeight) {
             const railRect = rail.getBoundingClientRect();

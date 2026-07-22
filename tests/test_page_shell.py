@@ -85,10 +85,16 @@ def test_mobile_panels_fill_dynamic_viewport_without_page_overflow():
     assert "max-height: none !important" in css
 
 
-def test_floating_actions_honor_page_inline_inset():
-    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+def test_floating_actions_park_on_screen_edge_and_reveal_together():
+    source = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 
-    assert "--vyasa-floating-actions-inline-inset" in source
+    assert ".vyasa-floating-actions::before" in source
+    assert "transform: translateX(60%)" in source
+    assert "transform: translateX(-1.25rem)" in source
+    assert ".vyasa-floating-actions:hover" in source
+    assert ".vyasa-floating-actions:focus-within" in source
+    assert "cubic-bezier(.34, 1.56, .64, 1)" in source
+    assert "prefers-reduced-motion: reduce" in source
 
 
 def test_posts_and_slides_share_shortcut_help():

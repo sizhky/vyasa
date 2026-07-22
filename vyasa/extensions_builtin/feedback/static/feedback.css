@@ -55,5 +55,5 @@
 @media (max-width: 800px) {
   :root { --vyasa-feedback-width: min(25rem, 100vw); }
   .vyasa-feedback-open #page-container { width: 100%; max-width: 100%; }
-  .vyasa-floating-actions { right: .75rem; bottom: .75rem; }
+  .vyasa-floating-actions { right: 0; bottom: .75rem; }
 }
