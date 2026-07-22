@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Callable, Protocol
@@ -13,6 +14,7 @@ from ...runtime_context import RuntimeAccess
 
 class AnnotationStoreAdapter(Protocol):
     def list(self, path: str) -> list[AnnotationRow]: ...
+    def all(self) -> list[AnnotationRow]: ...
     def upsert(self, row: AnnotationRow) -> None: ...
     def delete(self, annotation_id: str) -> bool: ...
 
@@ -20,11 +22,15 @@ class AnnotationStoreAdapter(Protocol):
 @dataclass(frozen=True)
 class CallableAnnotationStore:
     list_rows: Callable[[str], list[AnnotationRow]]
+    list_all_rows: Callable[[], list[AnnotationRow]]
     upsert_row: Callable[[AnnotationRow], None]
     delete_row: Callable[[str], bool]
 
     def list(self, path: str) -> list[AnnotationRow]:
         return self.list_rows(path)
+
+    def all(self) -> list[AnnotationRow]:
+        return self.list_all_rows()
 
     def upsert(self, row: AnnotationRow) -> None:
         self.upsert_row(row)
@@ -54,6 +60,26 @@ def _author_from_auth(auth: dict) -> str:
 
 
 def register_annotations_routes(rt, runtime: RuntimeAccess, store: AnnotationStoreAdapter) -> None:
+    @rt("/api/annotations", methods=["GET"])
+    async def get_all_annotations(request):
+        if not runtime.config.get_annotations_enabled():
+            return Response("Not Found", status_code=404)
+        rows = store.all()
+        paths = {row.path for row in rows}
+        allowed = {path for path in paths if runtime.can_read_post(path, request)}
+        return Response(json.dumps([_row_payload(row) for row in rows if row.path in allowed]), media_type="application/json")
+
+    @rt("/api/annotations/export", methods=["POST"])
+    async def export_annotations(request):
+        if not runtime.config.get_annotations_enabled():
+            return Response("Not Found", status_code=404)
+        content = await request.body()
+        if len(content) > 5_000_000:
+            return Response("Export too large", status_code=413)
+        with tempfile.NamedTemporaryFile(prefix="vyasa-annotations-", suffix=".md", delete=False) as output:
+            output.write(content)
+        return Response(json.dumps({"path": output.name}), media_type="application/json")
+
     @rt("/api/annotations/{path:path}", methods=["GET"])
     async def get_annotations(path: str, request):
         if not runtime.config.get_annotations_enabled():

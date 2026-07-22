@@ -4,7 +4,7 @@ from functools import partial
 from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 from ...runtime_services import get_runtime_services
 from .api import CallableAnnotationStore, register_annotations_routes
-from .store import delete_annotation, list_annotations, upsert_annotation
+from .store import delete_annotation, list_all_annotations, list_annotations, upsert_annotation
 
 
 class AnnotationsExtension(VyasaExtensionBase):
@@ -30,6 +30,9 @@ def _register_annotations_routes(rt, runtime, *, storage):
     def _db_list(path: str):
         return list_annotations(db_path, cache, path)
 
+    def _db_list_all():
+        return list_all_annotations(db_path, cache)
+
     def _db_upsert(row):
         upsert_annotation(db_path, cache, row)
 
@@ -39,7 +42,7 @@ def _register_annotations_routes(rt, runtime, *, storage):
     register_annotations_routes(
         rt,
         runtime,
-        CallableAnnotationStore(_db_list, _db_upsert, _db_delete),
+        CallableAnnotationStore(_db_list, _db_list_all, _db_upsert, _db_delete),
     )
 
 

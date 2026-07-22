@@ -64,6 +64,13 @@ def list_annotations(db_path: Path, cache, path: str) -> list[AnnotationRow]:
     return sorted(tbl(where="path = :path", path=normalized_path), key=lambda row: (row.created_at, row.id))
 
 
+def list_all_annotations(db_path: Path, cache) -> list[AnnotationRow]:
+    _, tbl = get_annotations_table(db_path, cache, create_if_missing=False)
+    if tbl is None:
+        return []
+    return sorted(tbl(), key=lambda row: (row.path, row.created_at, row.id))
+
+
 def upsert_annotation(db_path: Path, cache, row: AnnotationRow) -> None:
     _, tbl = get_annotations_table(db_path, cache)
     assert tbl is not None
