@@ -160,6 +160,9 @@ def cli():
             print(f"Error: Directory {root} does not exist")
             sys.exit(1)
         os.environ['VYASA_ROOT'] = str(root)
+        os.environ['VYASA_CLI_ROOT'] = str(root)
+    else:
+        os.environ.pop('VYASA_CLI_ROOT', None)
     theme_debug_enabled = args.theme_debug or str(os.environ.get('VYASA_THEME_DEBUG', '')).strip().lower() in {'true', '1', 'yes', 'on'}
     if theme_debug_enabled:
         os.environ['VYASA_THEME_DEBUG'] = 'true'
@@ -226,16 +229,19 @@ def cli():
     _ensure_logging_configured()
     # Force-close lingering connections (e.g. the live-reload SSE stream) after
     # a few seconds so shutdown doesn't hang on graceful shutdown.
-    uvicorn.run(
-        "vyasa.main:app",
-        host=host,
-        port=port,
-        log_config=None,
-        timeout_graceful_shutdown=3,
-        reload=source_reload_enabled,
-        reload_dirs=[str(source_root)] if source_reload_enabled else None,
-        reload_includes=reload_includes if source_reload_enabled else None,
-    )
+    try:
+        uvicorn.run(
+            "vyasa.main:app",
+            host=host,
+            port=port,
+            log_config=None,
+            timeout_graceful_shutdown=3,
+            reload=source_reload_enabled,
+            reload_dirs=[str(source_root)] if source_reload_enabled else None,
+            reload_includes=reload_includes if source_reload_enabled else None,
+        )
+    finally:
+        os.environ.pop('VYASA_CLI_ROOT', None)
 
 if __name__ == "__main__":
     cli()

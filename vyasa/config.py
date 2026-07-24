@@ -82,7 +82,7 @@ class VyasaConfig:
         else:
             # Search in VYASA_ROOT first (if set)
             root = os.getenv('VYASA_ROOT')
-            if root:
+            if root and not os.getenv('VYASA_CLI_ROOT'):
                 root_config = Path(root) / '.vyasa'
                 if root_config.exists():
                     config_file = root_config
@@ -140,6 +140,9 @@ class VyasaConfig:
     
     def get_root_folder(self) -> Path:
         """Get the blog root folder path."""
+        cli_root = os.getenv('VYASA_CLI_ROOT')
+        if cli_root:
+            return Path(cli_root).expanduser().resolve()
         root = self._config.get('root', None)
         env_root = os.getenv('VYASA_ROOT')
         if root in (None, ""):
@@ -158,6 +161,8 @@ class VyasaConfig:
 
     def get_vyasa_roots(self) -> list[Path]:
         """Get extra folders to expose as top-level content roots."""
+        if os.getenv('VYASA_CLI_ROOT'):
+            return []
         raw_roots = self.get('vyasa_roots', 'VYASA_ROOTS', [])
         base = self._loaded_config_path.parent if self._loaded_config_path else Path.cwd()
         roots = []
@@ -233,6 +238,8 @@ class VyasaConfig:
 
     def get_ignore_cwd_as_root(self) -> bool:
         """Get whether the primary root should be hidden from content discovery."""
+        if os.getenv('VYASA_CLI_ROOT'):
+            return False
         value = self.get('ignore_cwd_as_root', 'VYASA_IGNORE_CWD_AS_ROOT', False)
         if isinstance(value, str):
             return value.lower() in ('true', '1', 'yes', 'on')

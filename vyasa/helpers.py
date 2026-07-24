@@ -162,6 +162,9 @@ def get_ref_content_mounts() -> list[tuple[str, Path]]:
 
 
 def get_content_mounts() -> list[tuple[str, Path]]:
+    cli_root = os.getenv("VYASA_CLI_ROOT")
+    if cli_root:
+        return [("", Path(cli_root).expanduser().resolve())]
     try:
         from .extensions import get_extension_runtime
 
