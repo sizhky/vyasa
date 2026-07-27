@@ -594,6 +594,18 @@ def test_tasks_source_uses_reset_button_label():
     assert "onClick: resetProjectionControls" in source
 
 
+def test_tasks_hover_card_toggle_matches_edge_toggle_contract():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    shortcut = source.split("if (key === 'h') {", 1)[1].split("}", 1)[0]
+    actions = source.split("toggleFilters: () => setFiltersCollapsedGuarded", 1)[1].split("toggleHelp:", 1)[0]
+
+    assert "setHoverCardsEnabled((current) => !current);" in shortcut
+    assert "setHoverCardsEnabled((current) => !current)" in actions
+    assert "if (!hoverCardsEnabled || !groupHoverTooltip) return null;" in source
+    assert "refreshHoverCardRef" not in source
+    assert "&& key !== 'h'" not in source
+
+
 def test_tasks_filter_reset_button_stays_in_filter_card_header():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     panel_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
@@ -978,15 +990,6 @@ def test_tasks_wheel_measurements_are_gated_before_dom_reads():
 
     assert handler.index("if (!window.__vyasaTasksPerf.enabled) return;") < handler.index("tasksPerfSurfaceSnapshot")
     assert handler.index("if (!window.__vyasaTasksPerf.enabled) return;") < handler.index("tasksPerfScrollSnapshot")
-
-
-def test_enabling_hover_cards_refreshes_the_node_under_the_pointer():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-
-    assert "const hoverPointerRef = React.useRef(null);" in source
-    assert "if (next) window.requestAnimationFrame(() => refreshHoverCardRef.current());" in source
-    assert "hoverPointerRef.current = { clientX: event.clientX, clientY: event.clientY };" in source
-    assert "updateGroupHoverTooltip({ ...pointer, target: flowWrapperRef.current });" in source
 
 
 def test_tasks_clicking_selected_node_toggles_selection_off():

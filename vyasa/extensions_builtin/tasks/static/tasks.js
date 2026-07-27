@@ -3657,8 +3657,6 @@ async function renderTasksGraphs(rootElement = document) {
             const [dragSelection, setDragSelection] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
-            const hoverPointerRef = React.useRef(null);
-            const refreshHoverCardRef = React.useRef(() => {});
             const [helpOpen, setHelpOpen] = React.useState(false);
             const slides = React.useMemo(() => {
                 const list = Array.isArray(baseProjectionState.model?.slides) ? baseProjectionState.model.slides : [];
@@ -3811,14 +3809,6 @@ async function renderTasksGraphs(rootElement = document) {
             const [hoverCardsEnabled, setHoverCardsEnabled] = React.useState(() => (
                 typeof projectionPrefs?.hoverCardsEnabled === 'boolean' ? projectionPrefs.hoverCardsEnabled : true
             ));
-            const toggleHoverCards = React.useCallback(() => {
-                setHoverCardsEnabled((current) => {
-                    const next = !current;
-                    logTasksDebug('shortcutToggleHoverCards', { widgetId, egoMode, from: current, to: next });
-                    if (next) window.requestAnimationFrame(() => refreshHoverCardRef.current());
-                    return next;
-                });
-            }, [widgetId, egoMode]);
             const [edgeAnimationMode, setEdgeAnimationMode] = React.useState(() => (
                 normalizeTasksEdgeAnimationMode(projectionPrefs?.edgeAnimationMode, projectionPrefs?.edgeAnimationEnabled)
             ));
@@ -3836,7 +3826,6 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 syncTasksHoverCardToggleButtons(widgetId, hoverCardsEnabled);
                 logTasksDebug('hoverCardsState', { widgetId, egoMode, enabled: hoverCardsEnabled });
-                if (!hoverCardsEnabled) setGroupHoverTooltip(null);
             }, [widgetId, egoMode, hoverCardsEnabled]);
             const defaultEdgeOpacity = React.useMemo(
                 () => tasksDefaultEdgeOpacity((sourceModel?.dependency_edges || []).length),
@@ -6024,7 +6013,7 @@ async function renderTasksGraphs(rootElement = document) {
                             return;
                         }
                         if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName))) return;
-                        if (!widgetFocused && !(key === 't' && groupToggleHoverIdRef.current) && key !== 'h') return;
+                        if (!widgetFocused && !(key === 't' && groupToggleHoverIdRef.current)) return;
                         if (key === 'f' && event.shiftKey) {
                             event.preventDefault();
                             window.openTasksFullscreen?.(widgetId);
@@ -6062,7 +6051,7 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'h') {
                             event.preventDefault();
-                            toggleHoverCards();
+                            setHoverCardsEnabled((current) => !current);
                             return;
                         }
                         if (key === 't') {
@@ -6142,7 +6131,7 @@ async function renderTasksGraphs(rootElement = document) {
                     };
                     document.addEventListener('keydown', onKeyDown);
                     return () => document.removeEventListener('keydown', onKeyDown);
-                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, setFiltersCollapsedGuarded, fitCurrentHighlight, toggleHoverCards]);
+                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, setFiltersCollapsedGuarded, fitCurrentHighlight]);
                 return null;
             };
             const PanControls = () => {
@@ -7290,7 +7279,6 @@ async function renderTasksGraphs(rootElement = document) {
                 [viewerState.model, activeProjectionId]
             );
             const updateGroupHoverTooltip = React.useCallback((event) => {
-                hoverPointerRef.current = { clientX: event.clientX, clientY: event.clientY };
                 const reactFlow = reactFlowApiRef.current;
                 const wrapper = flowWrapperRef.current;
                 const graphBase = graphBaseRef.current || {};
@@ -7386,27 +7374,19 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                     }
                 }
-                if (hoverCardsEnabled) {
-                    const hoverCard = { label, nodeId, image, rows };
-                    if (hoverCardRightRail) {
-                        setGroupHoverTooltip({ ...hoverCard, placement: 'rightRail' });
-                    } else {
-                        setGroupHoverTooltip({
-                            ...hoverCard,
-                            placement: 'cursor',
-                            x: event.clientX - bounds.left + 12,
-                            y: event.clientY - bounds.top + 18,
-                        });
-                    }
-                } else if (groupHoverTooltip) {
-                    clearGroupHoverTooltip();
+                const hoverCard = { label, nodeId, image, rows };
+                if (hoverCardRightRail) {
+                    setGroupHoverTooltip({ ...hoverCard, placement: 'rightRail' });
+                } else {
+                    setGroupHoverTooltip({
+                        ...hoverCard,
+                        placement: 'cursor',
+                        x: event.clientX - bounds.left + 12,
+                        y: event.clientY - bounds.top + 18,
+                    });
                 }
                 traceHoverHit('hit', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx, groupHoverChanged });
-            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, egoMode, hoverInactiveNodes, hoverCardsEnabled, hoverCardRightRail, groupHoverTooltip, hoveredNodeId, logHoverCycle, selectedNodeId]);
-            refreshHoverCardRef.current = () => {
-                const pointer = hoverPointerRef.current;
-                if (pointer) updateGroupHoverTooltip({ ...pointer, target: flowWrapperRef.current });
-            };
+            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, egoMode, hoverInactiveNodes, hoverCardRightRail, hoveredNodeId, logHoverCycle, selectedNodeId]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -7722,14 +7702,14 @@ async function renderTasksGraphs(rootElement = document) {
                         toggleFilters: () => setFiltersCollapsedGuarded((current) => !current, 'action-toggle-filters'),
                         openFilters: () => setFiltersCollapsedGuarded(false, 'action-open-filters'),
                         closeFilters: () => setFiltersCollapsedGuarded(true, 'action-close-filters'),
-                        toggleHoverCards,
+                        toggleHoverCards: () => setHoverCardsEnabled((current) => !current),
                         toggleEdges: () => setEdgesVisible((current) => !current),
                         toggleHelp: () => setHelpOpen((current) => !current),
                     };
                     return () => {
                         delete window.__vyasaTasksActions[widgetId];
                     };
-                }, [reactFlow, currentSelectionIds, baseProjectionState.model, baseRawGraph, expanded, egoMode, egoState, activeColorBy, closeEgo, fitCurrentHighlight, toggleHoverCards]);
+                }, [reactFlow, currentSelectionIds, baseProjectionState.model, baseRawGraph, expanded, egoMode, egoState, activeColorBy, closeEgo, fitCurrentHighlight]);
                 return null;
             };
             const RestoreEgoViewport = () => {
@@ -7833,7 +7813,7 @@ async function renderTasksGraphs(rootElement = document) {
             };
             const RightRail = () => {
                 if (!selectedNodeId) return null;
-                if (hoverCardRightRail && groupHoverTooltip?.placement === 'rightRail') return null;
+                if (hoverCardsEnabled && hoverCardRightRail && groupHoverTooltip?.placement === 'rightRail') return null;
                 return window.React.createElement('div', {
                     style: {
                         position: 'absolute',
@@ -7923,7 +7903,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const height = Math.ceil(rect.height);
                     if (width !== measuredSize.width || height !== measuredSize.height) setMeasuredSize({ width, height });
                 }, [groupHoverTooltip, measuredSize.width, measuredSize.height]);
-                if (!groupHoverTooltip) return null;
+                if (!hoverCardsEnabled || !groupHoverTooltip) return null;
                 const rows = Array.isArray(groupHoverTooltip.rows) ? groupHoverTooltip.rows : [];
                 const image = normalizeTasksNodeImageUrl(groupHoverTooltip.image);
                 const panelWidth = tasksDetailPanelWidth({
