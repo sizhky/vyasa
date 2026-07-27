@@ -5460,9 +5460,11 @@ async function renderTasksGraphs(rootElement = document) {
                 const taperPath = useTaper
                     ? tasksTaperedBezierPath(path, (Number(props.style?.strokeWidth) || 4) * 2.65, Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42))
                     : '';
-                const taperArrowPath = taperPath
-                    ? tasksTaperedArrowHeadPath(path, Math.max(10, (Number(props.style?.strokeWidth) || 4) * 3.0))
-                    : '';
+                const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
+                const edgeArrowPath = tasksTaperedArrowHeadPath(
+                    path,
+                    Math.max(taperPath ? 10 : 8, strokeWidth * (taperPath ? 3.0 : 2.4))
+                );
                 const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
                 const prominentLabel = showFullLabel;
                 const displayLabel = showFullLabel
@@ -5499,25 +5501,43 @@ async function renderTasksGraphs(rootElement = document) {
                     });
                 }, [displayLabel, fullLabel, highlightMode, prominentLabel, labelStyle.fill, labelStyle.opacity, labelBgStyle.fill, labelBgStyle.fillOpacity]);
                 return React.createElement(React.Fragment, null,
+                    !taperPath && React.createElement(rf.BaseEdge, {
+                        ...props,
+                        path,
+                        markerEnd: undefined,
+                        style: {
+                            ...(props.style || {}),
+                            stroke: 'var(--vyasa-paper)',
+                            strokeWidth: strokeWidth + 4,
+                        },
+                    }),
                     taperPath && React.createElement('path', {
                         d: taperPath,
                         fill: props.style?.stroke || 'currentColor',
-                        opacity: props.style?.opacity ?? 1,
-                        pointerEvents: 'none',
-                    }),
-                    taperArrowPath && React.createElement('path', {
-                        d: taperArrowPath,
-                        fill: props.style?.stroke || 'currentColor',
+                        stroke: 'var(--vyasa-paper)',
+                        strokeWidth: 4,
+                        paintOrder: 'stroke fill',
+                        strokeLinejoin: 'round',
                         opacity: props.style?.opacity ?? 1,
                         pointerEvents: 'none',
                     }),
                     React.createElement(rf.BaseEdge, {
                         ...props,
                         path,
-                        markerEnd: taperPath ? undefined : props.markerEnd,
+                        markerEnd: undefined,
                         style: taperPath
                             ? { ...(props.style || {}), strokeWidth: 0.1 }
                             : props.style,
+                    }),
+                    edgeArrowPath && React.createElement('path', {
+                        d: edgeArrowPath,
+                        fill: props.style?.stroke || 'currentColor',
+                        stroke: 'var(--vyasa-paper)',
+                        strokeWidth: 4,
+                        paintOrder: 'stroke fill',
+                        strokeLinejoin: 'round',
+                        opacity: props.style?.opacity ?? 1,
+                        pointerEvents: 'none',
                     }),
                     displayLabel && !prominentLabel && React.createElement('g', {
                         transform: `translate(${labelX}, ${labelY})`,

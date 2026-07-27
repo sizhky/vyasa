@@ -826,6 +826,16 @@ def test_highlighted_edges_and_arrowheads_render_above_node_borders():
     assert "zIndex: highlighted ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z" in source
 
 
+def test_edges_have_two_pixel_canvas_colored_border():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "stroke: 'var(--vyasa-paper)'" in source
+    assert "strokeWidth: strokeWidth + 4" in source
+    assert "strokeWidth: 4" in source
+    assert "paintOrder: 'stroke fill'" in source
+    assert "markerEnd: undefined" in source
+
+
 def test_tasks_ego_views_keep_drag_selection_enabled():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     start_drag_selection = source.split("const startDragSelection = React.useCallback((event) => {", 1)[1].split("const updateDragSelection", 1)[0]
