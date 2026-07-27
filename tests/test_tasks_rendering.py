@@ -288,12 +288,15 @@ foundation :: Foundation:
     assert 'style="width: 100%; position: relative; left: 50%; transform: translateX(-50%);"' in html
 
 
-def test_tasks_fullscreen_copies_filter_default_flag():
+def test_tasks_fullscreen_keeps_the_existing_widget_configuration():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    modal_source = Path("vyasa/extensions_builtin/tasks/static/tasks_fullscreen.js").read_text()
 
-    assert "data-tasks-open-filters-default" in source
-    assert "data-tasks-projection-group-opacity" in source
-    assert "data-tasks-hover-font-size" in source
+    assert "wrapper.dataset.tasksOpenFiltersDefault" in source
+    assert "wrapper.dataset.tasksProjectionGroupOpacity" in source
+    assert "wrapper.dataset.tasksHoverFontSize" in source
+    assert "wrapper.setAttribute('data-tasks-maximized', 'true');" in modal_source
+    assert "document.createElement('div')" not in modal_source
 
 
 def test_tasks_source_lazy_loads_react_flow_only_when_widgets_exist():
@@ -635,7 +638,7 @@ def test_named_views_keep_grouping_overrides_in_projection_preferences():
     assert "...(groupingOverridden ? { groupByEnabled, groupByHierarchy, groupByDisabledKeys } : {})" in source
     assert "groupByEnabled," in source
     assert "groupByDisabledKeys," in source
-    assert "buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, groupByEnabled, activeGroupByHierarchy, egoMode)" in source
+    assert "buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, groupByEnabled, activeGroupByHierarchy, initialEgoMode)" in source
     assert "const customGroupingAvailable = viewMode !== 'gantt';" in source
     assert "Custom grouping applies to Default view." not in source
     assert "setActiveProjectionId('');" not in group_panel
@@ -901,7 +904,7 @@ def test_tasks_ego_views_preserve_the_supplied_grouping_hierarchy():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "if (preserveGrouping) return projectionState;" in source
-    assert "buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, groupByEnabled, activeGroupByHierarchy, egoMode)" in source
+    assert "buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, groupByEnabled, activeGroupByHierarchy, initialEgoMode)" in source
 
 
 def test_alt_shift_drag_appends_to_existing_selection():
@@ -927,19 +930,54 @@ def test_tasks_g_shortcuts_open_ego_views():
     assert "markWidgetActive();" in source
     assert "row('G', 'open EG')" in source
     assert "row('Shift + G', 'open EG+')" in source
-    assert "const egoModalOpen = Boolean(document.querySelector('#tasks-fullscreen-modal [data-tasks-ego=\"true\"]'));" in source
+    assert "const [egoState, setEgoState] = React.useState(null);" in source
+    assert "const projectionState = egoState || baseProjectionState;" in source
+    assert "setEgoState(nextEgoState);" in source
+    assert "openTasksEgoModal" not in source
     assert "if (event.key === 'Escape' && !event.shiftKey && egoMode && widgetFocused)" in source
-    assert "if (event.key === 'Escape' && !event.shiftKey && egoModalOpen)" in source
     assert "if (event.key === 'Escape' && !event.shiftKey && widgetFocused)" in source
-    assert "if (egoModalOpen && !egoMode) return;" in source
     assert "clearSelection('escape');" in source
 
 
-def test_inline_ego_silences_background_hover_handler():
+def test_slide_ego_reuses_the_existing_react_flow():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    modal_source = Path("vyasa/extensions_builtin/tasks/static/tasks_fullscreen.js").read_text()
+
+    assert "openEgo?.(" in source
+    assert "slideFocusMode === 'egplus', slide.nodes, true" in source
+    assert "window.__vyasaTasksActions?.[widgetId]?.closeEgo?.();" in source
+    assert "data-tasks-inline-ego" not in source
+    assert "openTasksEgoModal" not in modal_source
+
+
+def test_slides_hide_filters_without_changing_the_saved_filter_state():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    filter_panel = source.split("const FilterPanel = () => {", 1)[1].split("const options = tasksFilterOptions", 1)[0]
+    guarded_toggle = source.split("const setFiltersCollapsedGuarded = React.useCallback", 1)[1].split("const activeColorLevelSpecs", 1)[0]
+
+    assert "if (egoMode || slideIndex >= 0) return null;" in filter_panel
+    assert "if (slideIndex >= 0) return;" in guarded_toggle
+    assert "setFiltersCollapsed(true)" not in source.split("const SlideLauncher = () =>", 1)[1].split("const SlideShow = () =>", 1)[0]
+
+
+def test_ego_restores_the_existing_graph_state_and_viewport():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "if (!egoMode && wrapper.querySelector('[data-tasks-inline-ego=\"true\"]')) {" in source
-    assert "clearGraphHoverState('inline-ego-open');" in source
+    assert "expanded: new Set(expanded)" in source
+    assert "viewport: reactFlow.getViewport()" in source
+    assert "setExpanded(new Set(previous.expanded));" in source
+    assert "reactFlow.setViewport(pending.viewport, { duration: 0 });" in source
+    assert "setSelectedNodeIds(new Set(pending.selectedNodeIds));" in source
+    assert "if (egoState) return;" in source
+    assert "tasksFilterOptions(baseModel)" in source
+
+
+def test_tasks_wheel_measurements_are_gated_before_dom_reads():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    handler = source.split("onWheelCapture: (event) => {", 1)[1].split("onPointerMoveCapture", 1)[0]
+
+    assert handler.index("if (!window.__vyasaTasksPerf.enabled) return;") < handler.index("tasksPerfSurfaceSnapshot")
+    assert handler.index("if (!window.__vyasaTasksPerf.enabled) return;") < handler.index("tasksPerfScrollSnapshot")
 
 
 def test_enabling_hover_cards_refreshes_the_node_under_the_pointer():
@@ -964,14 +1002,12 @@ def test_tasks_clicking_selected_node_toggles_selection_off():
 
 def test_tasks_fullscreen_reuses_canvas_background_contract():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-    modal_source = Path("vyasa/extensions_builtin/tasks/static/tasks_modal.js").read_text()
+    modal_source = Path("vyasa/extensions_builtin/tasks/static/tasks_fullscreen.js").read_text()
     css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "function tasksBackgroundProps(widgetId)" in source
     assert "id: `${key}-bg`" in source
     assert "window.React.createElement(rf.Background, backgroundProps)" in source
-    assert "fullscreenWrapper.className = 'tasks-container relative';" in modal_source
-    assert "tasksHeaderControlsHtml(fullscreenId, false)" in modal_source
     assert "data-vyasa-tasks-fullscreen-toggle" in source
     assert "vyasa-tasks-fullscreen-toggle" in source
     assert "stroke-width: 1.5 !important" in css_source
@@ -980,24 +1016,9 @@ def test_tasks_fullscreen_reuses_canvas_background_contract():
     assert "'shrink' : 'expand'" in source
     assert "button.innerHTML = tasksFullscreenIconHtml(on);" in source
     assert "syncTasksFullscreenButton(wrapper);" in source
-    assert "runTasksHeaderAction('${fullscreenId}', 'toggleFilters')" in modal_source
-    assert "['toggleHelp', 'fit', 'toggleHoverCards', 'toggleEdges'].includes(action)" in source
-    assert "if (inline) {" in modal_source
-    assert "headerBar.append(headerTitle);" in modal_source
-    assert "headerBar.append(filterButton, headerTitle, topRightControls);" in modal_source
-    assert "modal.className = inline ? 'absolute inset-0 overflow-hidden' : 'fixed inset-0 z-[10000] bg-black/88 backdrop-blur-sm';" in modal_source
-    assert "flow.style.flex = '1 1 auto';" in modal_source
-    assert "flow.style.minHeight = '0';" in modal_source
-    assert "flow.style.display = 'flex';" in modal_source
-    assert "flow.style.flexDirection = 'column';" in modal_source
-    assert "flow.style.position = 'relative';" in modal_source
-    assert "closeBtn.title = 'Close (Shift+Esc)';" in modal_source
-    assert "modal.__tasksSuspendedModal = suspendedModal;" in modal_source
-    assert "const suspendedMaximizeWrapper = wrapper.getAttribute('data-tasks-maximized') === 'true' && wrapper.__tasksMaximizeEsc" in modal_source
-    assert "modal.__tasksSuspendedMaximizeWrapper = suspendedMaximizeWrapper;" in modal_source
-    assert "suspendedModal.style.display = 'none';" in modal_source
-    assert "closeTasksGraphModal(modal);" in modal_source
-    assert "if (document.getElementById('tasks-fullscreen-modal') !== modal) return;" in modal_source
+    assert "wrapper.setAttribute('data-tasks-maximized', 'true');" in modal_source
+    assert "wrapper.getAttribute('data-tasks-ego-active') === 'true'" in modal_source
+    assert "closeEgo?.();" in modal_source
     assert "event.stopImmediatePropagation?.();" in modal_source
     assert "if (event.key !== 'Escape' || !event.shiftKey) return;" in modal_source
 
@@ -1435,7 +1456,18 @@ def test_react_flow_component_fills_flow_wrapper():
     assert "applyTasksStandaloneHeight(wrapper);" in source
     assert "style: { width: '100%', height: '100%' }" in render_source
     assert "style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0" in render_source
-    assert "alignSelf: 'stretch', display: 'flex'" in render_source
+    assert "alignSelf: 'stretch',\n                display: 'flex'" in source
+
+
+def test_filter_and_slide_panels_touch_the_graph_canvas():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    render_source = source.split("return rf.ReactFlowProvider ?", 1)[1].split("const existing = document.getElementById", 1)[0]
+    filter_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
+    slide_source = source.split("const SlideShow = () => {", 1)[1].split("const DragSelectionOverlay = () => {", 1)[0]
+
+    assert "alignItems: 'stretch', gap: '12px'" not in render_source
+    assert "width: '100%',\n                            maxWidth: '100%'" in filter_source
+    assert "marginLeft: '-12px'" not in slide_source
 
 
 def test_tasks_slide_show_nav_stays_above_title_and_supports_jump_select():
@@ -1500,7 +1532,7 @@ def test_context_graphs_have_day_switch_contract():
 def test_view_menu_only_shows_views_resolved_to_the_active_context():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "const list = Array.isArray(model?.slides) ? model.slides : [];" in source
+    assert "const list = Array.isArray(baseProjectionState.model?.slides) ? baseProjectionState.model.slides : [];" in source
     assert "tasksProjectionOptions(viewerState.model, ganttEnabled, activeContextId)" in source
     assert "tasksProjectionOptions(nextModel, ganttEnabled, nextContextId)" in source
     assert "handleSwitchContext(targetContext, activeProjectionId);" not in source

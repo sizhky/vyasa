@@ -321,8 +321,9 @@ test('double click key treats expanded group title and body as same node', () =>
 
 test('edge toggle header button warns when edges are hidden', () => {
     const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const renderSource = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/render.py', import.meta.url), 'utf8');
     const stylesheetSource = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.css', import.meta.url), 'utf8');
-    assert.ok(source.includes('data-vyasa-tasks-action="${action}"'), 'header buttons carry action data');
+    assert.ok(renderSource.includes('data-vyasa-tasks-action="toggleEdges"'), 'edge header button carries action data');
     assert.ok(source.includes('syncTasksEdgeToggleButtons(widgetId, edgesVisible)'), 'edge button follows visibility state');
     assert.ok(source.includes('button[onclick*="toggleEdges"]'), 'sync handles old header buttons without data attrs');
     assert.ok(source.includes('data-vyasa-edges-off'), 'hidden edge state is marked on the E button');
