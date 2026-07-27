@@ -821,8 +821,17 @@ def test_tasks_ego_views_keep_drag_selection_enabled():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     start_drag_selection = source.split("const startDragSelection = React.useCallback((event) => {", 1)[1].split("const updateDragSelection", 1)[0]
 
-    assert "event.metaKey ? 'lasso' : (event.shiftKey ? 'rect' : '')" in start_drag_selection
+    assert "const mode = append || event.metaKey ? 'lasso' : (event.shiftKey ? 'rect' : '');" in start_drag_selection
     assert "if (egoMode) return;" not in start_drag_selection
+
+
+def test_alt_shift_drag_appends_to_existing_selection():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const append = event.altKey && event.shiftKey;" in source
+    assert "if (selectedNodeIdRef.current) initialSelectedIds.add(selectedNodeIdRef.current);" in source
+    assert "new Set([...dragSelection.initialSelectedIds, ...selected])" in source
+    assert "row('Alt + Shift + drag', 'append lasso selection')" in source
 
 
 def test_tasks_g_shortcuts_open_ego_views():
@@ -1315,6 +1324,13 @@ def test_tasks_slide_show_nav_stays_above_title_and_supports_jump_select():
     assert "`${index + 1} / ${slides.length}`" in slide_source
     assert "tasksMatchedSlideNodes(slides, slideIndex, graphBaseRef.current.nodes)" in ready_fit_source
     assert "nodes: matched" in ready_fit_source
+
+
+def test_selected_node_panel_gives_title_and_id_bounded_columns():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)'" in source
+    assert "overflowWrap: 'anywhere', wordBreak: 'break-word', textAlign: 'right'" in source
 
 
 def test_context_graphs_have_day_switch_contract():

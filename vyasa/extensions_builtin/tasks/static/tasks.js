@@ -6093,9 +6093,9 @@ async function renderTasksGraphs(rootElement = document) {
                                 padding: '0',
                             },
                         }, '⧉'),
-                        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: panelNodeId ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)', columnGap: '12px', alignItems: 'start' } },
+                        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', columnGap: '12px', alignItems: 'start' } },
                             React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' } }, selectedNode.label || selectedNode.id),
-                            panelNodeId ? React.createElement('div', { style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, textAlign: 'right' } }, panelNodeId) : null,
+                            panelNodeId ? React.createElement('div', { style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', textAlign: 'right' } }, panelNodeId) : null,
                         ),
                         panelHref ? React.createElement('a', {
                             href: panelHref,
@@ -7379,22 +7379,25 @@ async function renderTasksGraphs(rootElement = document) {
                 event.stopPropagation();
             }, [selectGroupDescendants]);
             const startDragSelection = React.useCallback((event) => {
-                const mode = event.metaKey ? 'lasso' : (event.shiftKey ? 'rect' : '');
+                const append = event.altKey && event.shiftKey;
+                const mode = append || event.metaKey ? 'lasso' : (event.shiftKey ? 'rect' : '');
                 if (!mode || (event.pointerType === 'mouse' && event.button !== 0)) return;
                 if (event.target?.closest?.('button, input, textarea, select, a, .react-flow__controls, .vyasa-tasks-filter-card')) return;
                 const reactFlow = reactFlowApiRef.current;
                 const el = flowWrapperRef.current;
                 if (!reactFlow || !el) return;
                 const startFlow = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+                const initialSelectedIds = append ? new Set(selectedNodeIdsRef.current) : new Set();
+                if (selectedNodeIdRef.current) initialSelectedIds.add(selectedNodeIdRef.current);
                 try {
                     el.setPointerCapture?.(event.pointerId);
                 } catch {
                     // Ignore if this pointer cannot be captured.
                 }
                 el.focus?.({ preventScroll: true });
-                setSelectedNodeId(null);
+                if (!append) setSelectedNodeId(null);
                 setHoveredNodeId(null);
-                setDragSelection({ pointerId: event.pointerId, mode, startClientX: event.clientX, startClientY: event.clientY, currentClientX: event.clientX, currentClientY: event.clientY, startFlow, currentFlow: startFlow, points: [startFlow], clientPoints: [{ x: event.clientX, y: event.clientY }] });
+                setDragSelection({ pointerId: event.pointerId, mode, append, initialSelectedIds: Array.from(initialSelectedIds), startClientX: event.clientX, startClientY: event.clientY, currentClientX: event.clientX, currentClientY: event.clientY, startFlow, currentFlow: startFlow, points: [startFlow], clientPoints: [{ x: event.clientX, y: event.clientY }] });
                 event.preventDefault();
                 event.stopPropagation();
             }, []);
@@ -7427,15 +7430,20 @@ async function renderTasksGraphs(rootElement = document) {
                             x2: dragSelection.currentFlow.x,
                             y2: dragSelection.currentFlow.y,
                         });
+                    const nextSelected = dragSelection.append
+                        ? new Set([...dragSelection.initialSelectedIds, ...selected])
+                        : new Set(selected);
                     logTasksDebug('selectionSetDrag', {
                         widgetId,
                         mode: dragSelection.mode,
-                        selectedIds: selected,
+                        append: dragSelection.append,
+                        selectedIds: Array.from(nextSelected),
                     });
                     markWidgetActive();
                     selectedNodeIdRef.current = null;
-                    selectedNodeIdsRef.current = new Set(selected);
-                    setSelectedNodeIds(new Set(selected));
+                    selectedNodeIdsRef.current = nextSelected;
+                    setSelectedNodeId(null);
+                    setSelectedNodeIds(nextSelected);
                     suppressNextGraphClickRef.current = true;
                     window.setTimeout(() => {
                         suppressNextGraphClickRef.current = false;
@@ -7787,6 +7795,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Click canvas', 'clear selection'),
                     row('Shift + drag', 'box select'),
                     row('Cmd + drag', 'lasso select'),
+                    row('Alt + Shift + drag', 'append lasso selection'),
                     row('Wheel / pinch', 'zoom'),
                     row('Drag canvas', 'pan'),
                     sep(),
