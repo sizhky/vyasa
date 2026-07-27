@@ -6622,7 +6622,11 @@ async function renderTasksGraphs(rootElement = document) {
                                                 color: 'inherit',
                                             },
                                         },
-                                            ...contextOptions.map((context) => React.createElement('option', { key: context.id, value: context.id }, context.label || context.caption || context.id))
+                                            ...contextOptions.map((context) => React.createElement(
+                                                'option',
+                                                { key: context.id, value: context.id },
+                                                `${context.seq}. ${context.label || context.caption || context.id}`
+                                            ))
                                         ),
                                     React.createElement('button', { type: 'button', 'aria-label': 'Next context', onClick: () => goContext(1), disabled: nextDisabled, style: ctxNavBtn(nextDisabled) }, '›')
                                 );

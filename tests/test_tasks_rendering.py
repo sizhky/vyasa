@@ -1398,6 +1398,7 @@ def test_context_graphs_have_day_switch_contract():
     assert "outline-offset: 3px" in css
     assert source.index("'Context'") < source.index("'View'")
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
+    assert "`${context.seq}. ${context.label || context.caption || context.id}`" in source
     assert "const renderColorLevel = (colorBy, index) => {" in source
     assert "sourceModel?.kg_context?.caption ? React.createElement('div', {" in source
     assert "React.createElement('span', { style: filterKeyStyle }, 'Intensity')" in source
