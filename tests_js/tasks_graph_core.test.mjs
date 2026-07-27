@@ -5,7 +5,7 @@ import fs from 'node:fs';
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
 const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReviewTarget, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
-const { buildTasksProjectionConfigText, parseTasksProjectionConfigText, tasksCollectSearchMatches, tasksNodeMatchesAllFilters, tasksNodeMatchesFilters, tasksSelectionClickKey } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+const { buildTasksProjectionConfigText, parseTasksProjectionConfigText, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksNodeMatchesAllFilters, tasksNodeMatchesFilters, tasksSelectionClickKey } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
 
 function fakeStorage(initial = {}) {
     const values = new Map(Object.entries(initial));
@@ -53,6 +53,27 @@ test('Knowledge Graph search matches notes from only the supplied graph', () => 
     assert.deepEqual(Array.from(tasksCollectSearchMatches(nodes, [], 'private phrase', { 'current-node': 'private phrase' }).nodeIds), ['current-node']);
     assert.deepEqual(Array.from(tasksCollectSearchMatches(nodes, [], 'other phrase', { 'other-node': 'other phrase' }).nodeIds), []);
     assert.deepEqual(Array.from(tasksCollectSearchMatches(nodes, [], 'Satyasri').nodeIds), ['current-node']);
+});
+
+test('context diff selects visible projected nodes or their collapsed group', () => {
+    const model = {
+        groups: [{ id: 'root' }, { id: 'phase', parent_group_id: 'root' }],
+        tasks: [
+            { id: 'changed-a', group_id: 'phase', __source_node_id: 'changed' },
+            { id: 'changed-b', group_id: 'phase', __source_node_id: 'changed' },
+            { id: 'steady', group_id: 'phase' },
+        ],
+    };
+    const changed = new Set(['changed']);
+    assert.deepEqual([...tasksContextDiffSelectionIds(model, [{ id: 'root', data: { __kind__: 'group' } }], changed)], ['root']);
+    assert.deepEqual([...tasksContextDiffSelectionIds(model, [{ id: 'phase', data: { __kind__: 'group' } }], changed)], ['phase']);
+    assert.deepEqual(
+        [...tasksContextDiffSelectionIds(model, [
+            { id: 'changed-a', data: { __kind__: 'task' } },
+            { id: 'changed-b', data: { __kind__: 'task' } },
+        ], changed)],
+        ['changed-a', 'changed-b']
+    );
 });
 
 test('Knowledge Graph boolean settings parse hover card placement flag', () => {

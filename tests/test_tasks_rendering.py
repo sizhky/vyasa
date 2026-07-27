@@ -630,6 +630,47 @@ def test_tasks_projection_copy_preserves_edge_animation_mode():
     assert "if (cfg.edgeAnimationMode) lines.push(`\\tedge_animation_mode=${normalizeTasksEdgeAnimationMode(cfg.edgeAnimationMode, cfg.edgeAnimationEnabled)}`);" in source
 
 
+def test_named_views_keep_grouping_overrides_in_projection_preferences():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    group_panel = source.split("React.createElement('span', { style: filterKeyStyle }, 'Group by')", 1)[1].split("React.createElement('span', { style: filterKeyStyle }, 'Notes')", 1)[0]
+    reset = source.split("const resetProjectionControls = React.useCallback(() => {", 1)[1].split("React.useEffect(() => {", 1)[0]
+    prefs_key = source.split("function tasksPrefsKey(model) {", 1)[1].split("function tasksCheckedStateKey", 1)[0]
+
+    assert "groupByHierarchy: schemaGroupByHierarchy," in source
+    assert "...(groupingOverridden ? { groupByEnabled, groupByHierarchy, groupByDisabledKeys } : {})" in source
+    assert "groupByEnabled," in source
+    assert "groupByDisabledKeys," in source
+    assert "buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, groupByEnabled, activeGroupByHierarchy, egoMode)" in source
+    assert "const customGroupingAvailable = viewMode !== 'gantt';" in source
+    assert "Custom grouping applies to Default view." not in source
+    assert "setActiveProjectionId('');" not in group_panel
+    assert "setGroupByEnabled(defaults.groupByEnabled === true);" in reset
+    assert "setGroupByHierarchy(Array.isArray(defaults.groupByHierarchy) ? defaults.groupByHierarchy : []);" in reset
+    assert "kg_context" not in prefs_key
+
+
+def test_view_regrouping_collapses_projected_copies_to_source_nodes():
+    script = """
+        import { tasksUngroupModelForGrouping } from './vyasa/extensions_builtin/tasks/static/tasks_graph_core.js';
+        const model = tasksUngroupModelForGrouping({
+            tasks: [
+                { id: 'a__one', __source_node_id: 'a', group_id: 'g1' },
+                { id: 'a__two', __source_node_id: 'a', group_id: 'g2' },
+                { id: 'b', __source_node_id: 'b', group_id: 'g1' },
+            ],
+            dependency_edges: [
+                { id: 'e__one', __source_edge_id: 'e', source: 'a__one', target: 'b' },
+                { id: 'e__two', __source_edge_id: 'e', source: 'a__two', target: 'b' },
+            ],
+        });
+        if (model.tasks.map((task) => task.id).join(',') !== 'a,b') throw new Error('projected node copies survived');
+        if (model.tasks.some((task) => task.group_id !== null)) throw new Error('schema groups survived');
+        if (model.dependency_edges.length !== 1) throw new Error('projected edge copies survived');
+        if (model.dependency_edges[0].source !== 'a' || model.dependency_edges[0].target !== 'b') throw new Error('edge endpoints were not restored');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
 def test_tasks_color_swatch_filter_is_independent_and_ands_with_query_filter():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     callback = source.split("const toggleFilterValue = React.useCallback", 1)[1].split("}, []);", 1)[0]
@@ -817,11 +858,10 @@ def test_tasks_group_hover_tooltip_wraps_long_values_inside_max_width():
     assert "fontSize: `calc(${hoverFontSize} * 1.12)`" in source
 
 
-def test_highlighted_edges_and_arrowheads_render_above_node_borders():
+def test_highlighted_edges_and_arrowheads_render_below_node_cards():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "const TASKS_EDGE_FOCUS_Z = 1600;" in source
-    assert "const TASKS_SELECTED_Z_BOOST = 520;" in source
+    assert "const TASKS_EDGE_FOCUS_Z = TASKS_TASK_Z - 2;" in source
     assert "zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z" in source
     assert "zIndex: highlighted ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z" in source
 
@@ -842,6 +882,13 @@ def test_tasks_ego_views_keep_drag_selection_enabled():
 
     assert "const mode = append || event.metaKey ? 'lasso' : (event.shiftKey ? 'rect' : '');" in start_drag_selection
     assert "if (egoMode) return;" not in start_drag_selection
+
+
+def test_tasks_ego_views_preserve_the_supplied_grouping_hierarchy():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "if (preserveGrouping) return projectionState;" in source
+    assert "buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, groupByEnabled, activeGroupByHierarchy, egoMode)" in source
 
 
 def test_alt_shift_drag_appends_to_existing_selection():
@@ -1303,6 +1350,32 @@ intro: Intro
     assert "<li>Second point</li>" in desc_html
 
 
+def test_view_slide_description_markdown_is_rendered_in_projection_model(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        """@graph id=deck
+@sources
+nodes=kg.nodes
+@views
+story:
+    slides:
+        intro: Intro
+            nodes=t1
+            desc=|
+                **Presenter frame**
+
+                - First point
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text("t1: Start\n", encoding="utf-8")
+
+    model, _graph = _compile_schema_payload(tmp_path / "kg.schema", str(tmp_path / "graph.md"))
+
+    desc_html = model["projection_models"]["story"]["model"]["slides"][0]["__rendered_attrs__"]["desc"]
+    assert "<strong>Presenter frame</strong>" in desc_html
+    assert "First point</li>" in desc_html
+
+
 def test_slide_description_markdown_has_list_styling_contract():
     graph_source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
@@ -1390,11 +1463,13 @@ def test_context_graphs_have_day_switch_contract():
     assert "const filterChoiceListStyle = { display: 'grid', gap: '8px', minWidth: 0 };" in source
     assert "const contextOptions = React.useMemo" in source
     assert "React.createElement('span', { style: filterKeyStyle }, 'Context')" in source
-    assert "'aria-label': 'Glow changes from previous context'" in source
-    assert "'data-vyasa-context-diff': data?.__context_diff__ === true ? 'true' : undefined" in source
-    assert '[data-vyasa-context-diff="true"]' in css
-    assert ':not(:has([data-vyasa-highlight-active="true"]))' in css
-    assert "outline: 4px solid color-mix(in srgb, var(--vyasa-primary) 82%, transparent)" in css
+    assert "'aria-label': 'Select changes from previous context'" in source
+    assert "tasksContextDiffSelectionIds(model, graphBaseRef.current.nodes, changedIds)" in source
+    assert "setSelectedNodeIds(new Set(nextIds));" in source
+    assert "const diffOwnsSelection = contextDiffEnabled" in source
+    assert "reason: 'contextDiffPaneClick'" in source
+    assert "__context_diff__" not in source
+    assert 'data-vyasa-context-diff' not in css
     assert "outline-offset: 3px" in css
     assert source.index("'Context'") < source.index("'View'")
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
@@ -1405,8 +1480,26 @@ def test_context_graphs_have_day_switch_contract():
     assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Edge Intensity')" in source
     assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Null Intensity')" in source
     assert "if (options?.resetSlideIndex) setSlideIndex((index) => index >= 0 ? 0 : -1);" in source
-    assert "applyLoadedSource(payload, null, { resetSlideIndex: true });" in source
+    assert "applyLoadedSource(payload, projectionId, { resetSlideIndex: true });" in source
     assert "}, [slideIndex, slides, graphRevision]);" in source
+
+
+def test_view_menu_only_shows_views_resolved_to_the_active_context():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const list = Array.isArray(model?.slides) ? model.slides : [];" in source
+    assert "tasksProjectionOptions(viewerState.model, ganttEnabled, activeContextId)" in source
+    assert "tasksProjectionOptions(nextModel, ganttEnabled, nextContextId)" in source
+    assert "handleSwitchContext(targetContext, activeProjectionId);" not in source
+    assert "setSlideIndex((index) => index < 0 ? -1 : (slides.length ? 0 : -1));" in source
+
+    script = """
+        import { tasksViewMatchesContext } from './vyasa/extensions_builtin/tasks/static/tasks_graph_core.js';
+        if (!tasksViewMatchesContext({ resolved_context: 'context-016' }, 'context-016')) throw new Error('matching view hidden');
+        if (tasksViewMatchesContext({ resolved_context: 'context-015' }, 'context-016')) throw new Error('foreign view shown');
+        if (!tasksViewMatchesContext({ resolved_context: 'context-015' }, '')) throw new Error('non-context graph filtered');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
 def test_tasks_block_serializes_document_path_and_stable_storage_id():

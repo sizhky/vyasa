@@ -339,6 +339,47 @@ export function tasksProjectionGroupByHierarchy(sourceModel, projectionId) {
         : [];
 }
 
+export function tasksViewMatchesContext(projection, activeContextId) {
+    const active = String(activeContextId || '').trim();
+    if (!active) return true;
+    const resolved = String(projection?.resolved_context || '').trim();
+    return !resolved || resolved === active;
+}
+
+export function tasksUngroupModelForGrouping(sourceModel) {
+    const projectedToSource = new Map();
+    const tasksBySource = new Map();
+    for (const task of sourceModel?.tasks || []) {
+        const sourceId = String(task?.__source_node_id || task?.id || '').trim();
+        if (!sourceId) continue;
+        projectedToSource.set(task.id, sourceId);
+        if (!tasksBySource.has(sourceId)) tasksBySource.set(sourceId, { ...task, id: sourceId, group_id: null });
+    }
+    const dependencyEdges = [];
+    const seenEdges = new Set();
+    for (const edge of sourceModel?.dependency_edges || []) {
+        const source = projectedToSource.get(edge.source) || edge.source;
+        const target = projectedToSource.get(edge.target) || edge.target;
+        if (!tasksBySource.has(source) || !tasksBySource.has(target)) continue;
+        const id = String(edge.__source_edge_id || edge.id || `${source}-${target}`);
+        const key = `${id}\u001f${source}\u001f${target}`;
+        if (seenEdges.has(key)) continue;
+        seenEdges.add(key);
+        dependencyEdges.push({ ...edge, id, source, target });
+    }
+    const tasks = Array.from(tasksBySource.values());
+    return {
+        ...sourceModel,
+        groups: [],
+        tasks,
+        dependency_edges: dependencyEdges,
+        group_tree: { null: [] },
+        task_children: { null: tasks.map((task) => task.id) },
+        document_order: tasks.map((task) => task.id),
+        default_open_depth: -1,
+    };
+}
+
 export function isTasksUnspecifiedProjectionGroup(node, unspecifiedLabel = 'Unspecified') {
     if (!node || node.__projection_group__ !== true) return false;
     const label = String(unspecifiedLabel || 'Unspecified').trim() || 'Unspecified';

@@ -79,27 +79,37 @@ dependency:
 - `base+dep` composes source aliases.
 - `@relations` is optional edge-type vocabulary. Use it to document relation ids, attach default presentation such as `color`, and let CLI validation catch typos. Relation label text defaults to the relation id.
 - `@grammar` is optional and names a declarative rules file (`path=` relative to the pack, or absolute) that layers *dialect* invariants on top of the generic structural checks. A grammar can enforce closed vocabularies (`closed_vocab`), directed spines over an ordered attr (`edge_direction`), relation cardinality (`edge_cardinality`), allowed endpoint kinds (`edge_endpoints`), and conditional attr presence (`requires_attr_when`). It stays out of the pack proper so one grammar is shared across many packs. No `@grammar` means structural checks only. See `scripts/validate_kg_pack.py` for the rule schema.
-- `@views` are named read-only projections for alternate cuts; do not use them to define the normal default view.
+- `@views` are named read-only views. A view may group or filter nodes, change display settings, own slides, or combine those choices. It does not need `group_by`.
+- A view accepts `context=active` (default), `context=latest`, or one exact context id. `active` follows the context selected by the request or UI; the other values select their resolved context when the view opens.
 - `group_by,color_by=status` expands to `group_by=status color_by=status`; `X,Y,Z=value` is valid for simple scalar values.
 - Projection display controls may live on views: `hover_attrs`, `edge_color_by`, `edge_label_from`, `aggregate_edges`, `default_open_depth`, and spacing/layout keys.
 
 ## Slides
 
-`@slides` entries can carry `nodes`, `caption`, and `desc` / `description`.
-Use the same multiline mini-Markdown form as node attrs for longer slide descriptions:
+Author new slide sequences inside `@views`. Each view owns zero or one ordered sequence, so one graph can keep several explanations:
 
 ```text
-@slides
-intro: Why this graph matters
-	nodes=n1,n2
-	desc=|
-		**Presenter frame**
+@views
+project_story:
+	context=latest
+	group_by=status
+	slides:
+		intro: Why this graph matters
+			nodes=n1,n2
+			caption="Start with the goal"
+			desc=|
+				**Presenter frame**
 
-		- First point to land
-		- Follow-up question
+				- First point to land
+				- Follow-up question
 ```
 
-Slide descriptions render Markdown in the KG slide card.
+- Slides preserve authored order and accept `id`, `title`, `nodes`, `caption`, and `desc` / `description`.
+- Use the same multiline mini-Markdown form as node attrs; descriptions render Markdown in the KG slide card.
+- Slide `nodes` are source node ids. Projected copies remain focusable through `__source_node_id`.
+- A view without slides closes the slide controls. Changing views changes the active slide sequence.
+- An unknown fixed context id is an error; do not fall back to `active` or `latest`.
+- Keep top-level schema or context `@slides` only when maintaining an old pack. New packs put slides under `@views`.
 
 ## Nodes
 

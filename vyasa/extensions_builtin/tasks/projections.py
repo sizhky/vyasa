@@ -51,9 +51,11 @@ def _normalize_where(value) -> dict[str, str]:
 
 def _source_attr_filters(model: dict, source: str) -> dict[str, set[str]]:
     filters: dict[str, set[str]] = {}
-    sources = model.get("kg_sources") if isinstance(model.get("kg_sources"), dict) else {}
+    raw_sources = model.get("kg_sources")
+    sources: dict = raw_sources if isinstance(raw_sources, dict) else {}
     for fragment in str(source or "base").split("+"):
-        raw = sources.get(fragment, {}).get("__attrs_filter", {})
+        source_config = sources.get(fragment)
+        raw = source_config.get("__attrs_filter", {}) if isinstance(source_config, dict) else {}
         if not isinstance(raw, dict):
             continue
         for key, values in raw.items():
@@ -125,18 +127,19 @@ def normalize_projections(value) -> list[dict]:
         if not isinstance(raw, dict):
             continue
         groups_from = _normalize_groups_from(raw.get("groups_from"))
-        if not groups_from:
-            continue
-        projection_id = _clean_projection_id(raw.get("id") or groups_from[-1])
+        projection_id = _clean_projection_id(raw.get("id") or (groups_from[-1] if groups_from else ""))
         if not projection_id or projection_id in seen:
             continue
         seen.add(projection_id)
-        default_label = " / ".join(attr.replace("_", " ").title() for attr in groups_from)
+        default_label = " / ".join(attr.replace("_", " ").title() for attr in groups_from) or projection_id.replace("-", " ").title()
         hover_attrs = _normalize_hover_attrs(raw.get("hover_attrs"))
         projection = {
             "id": projection_id,
             "label": str(raw.get("label") or default_label).strip(),
             "caption": str(raw.get("caption") or "").strip(),
+            "context": str(raw.get("context") or "active").strip(),
+            "resolved_context": str(raw.get("resolved_context") or "").strip(),
+            "slides": copy.deepcopy(raw.get("slides")) if isinstance(raw.get("slides"), list) else [],
             "source": str(raw.get("source") or "base").strip(),
             "where": _normalize_where(raw.get("where")),
             "filter_query": _normalize_filter_query(raw.get("filter_query")),
@@ -152,7 +155,7 @@ def normalize_projections(value) -> list[dict]:
             "edge_opacity": _normalize_string(raw.get("edge_opacity")),
             "projection_unspecified_content_opacity": _normalize_string(raw.get("projection_unspecified_content_opacity")),
             "groups_from": groups_from,
-            "default_color_by": str(raw.get("default_color_by") or groups_from[-1]).strip(),
+            "default_color_by": str(raw.get("default_color_by") or (groups_from[-1] if groups_from else "")).strip(),
             "default_secondary_color_by": str(raw.get("default_secondary_color_by") or raw.get("secondary_color_by") or "").strip(),
             "edge_color_by": str(raw.get("edge_color_by") or "").strip(),
             "edge_focus": str(raw.get("edge_focus") or "").strip(),
@@ -161,7 +164,10 @@ def normalize_projections(value) -> list[dict]:
             "aggregate_edges": _normalize_aggregate_edges(raw.get("aggregate_edges")),
             **{key: raw[key] for key in PROJECTION_DISPLAY_KEYS if key in raw},
         }
-        projections.append({key: item for key, item in projection.items() if item not in ("", [], (), {}, None)})
+        normalized = {key: item for key, item in projection.items() if item not in ("", [], (), {}, None)}
+        normalized["groups_from"] = groups_from
+        normalized["slides"] = projection["slides"]
+        projections.append(normalized)
     return projections
 
 
@@ -192,9 +198,9 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
         return list(product(*(values(task, attr) for attr in group_attrs)))
 
     # Bottom-up: only paths that have at least one task get materialized.
-    groups: list[dict] = []
+    groups: list[dict] = [] if group_attrs else copy.deepcopy(base_model.get("groups", []))
     groups_by_path: dict[tuple[str, ...], dict] = {}
-    group_tree: dict = defaultdict(list)
+    group_tree: dict = defaultdict(list) if group_attrs else copy.deepcopy(base_model.get("group_tree", {}))
     task_children: dict = defaultdict(list)
     tasks: list[dict] = []
     projected_ids: dict[str, list[str]] = defaultdict(list)
@@ -205,6 +211,15 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
         if where and any(value not in values(task, key) for key, value in where.items()):
             continue
         if source_attr_filters and any(not set(values(task, key)).intersection(allowed) for key, allowed in source_attr_filters.items()):
+            continue
+        if not group_attrs:
+            task_copy = copy.deepcopy(task)
+            source_id = task_copy["id"]
+            task_copy["__source_node_id"] = source_id
+            tasks.append(task_copy)
+            projected_ids[source_id].append(source_id)
+            if task_copy.get("group_id"):
+                task_children[task_copy["group_id"]].append(source_id)
             continue
         paths = value_paths(task)
         for path in paths:
@@ -265,6 +280,9 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
         "edge_label_from": str(projection.get("edge_label_from") or base_model.get("edge_label_from") or "").strip(),
         "hover_attrs": projection.get("hover_attrs") if projection.get("hover_attrs") is not None else base_model.get("hover_attrs", []),
         "aggregate_edges": projection.get("aggregate_edges") or base_model.get("aggregate_edges", {}),
+        "slides": copy.deepcopy(projection.get("slides") or []),
+        "view_context": str(projection.get("context") or "active"),
+        "resolved_view_context": str(projection.get("resolved_context") or ""),
         **{key: projection[key] for key in PROJECTION_DISPLAY_KEYS if key in projection},
         "groups": groups,
         "tasks": tasks,
