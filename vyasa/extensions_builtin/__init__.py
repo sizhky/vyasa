@@ -33,6 +33,7 @@ def load_builtin_extensions():
     from . import tasks
     from . import pdf_viewer
     from . import tree_table
+    from . import vscode
     from . import wikilinks
 
     return (
@@ -70,6 +71,7 @@ def load_builtin_extensions():
         rbac_admin.EXTENSION,
         auth_routes.EXTENSION,
         filesystem_routes.EXTENSION,
+        vscode.EXTENSION,
         filesystem.EXTENSION,
     )
 
