@@ -817,6 +817,15 @@ def test_tasks_group_hover_tooltip_wraps_long_values_inside_max_width():
     assert "fontSize: `calc(${hoverFontSize} * 1.12)`" in source
 
 
+def test_highlighted_edges_and_arrowheads_render_above_node_borders():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const TASKS_EDGE_FOCUS_Z = 1600;" in source
+    assert "const TASKS_SELECTED_Z_BOOST = 520;" in source
+    assert "zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z" in source
+    assert "zIndex: highlighted ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z" in source
+
+
 def test_tasks_ego_views_keep_drag_selection_enabled():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     start_drag_selection = source.split("const startDragSelection = React.useCallback((event) => {", 1)[1].split("const updateDragSelection", 1)[0]
@@ -846,12 +855,30 @@ def test_tasks_g_shortcuts_open_ego_views():
     assert "window.__vyasaTasksActiveWidgetId = widgetId;" in source
     assert "window.__vyasaTasksActiveWidgetId === widgetId" in source
     assert "markWidgetActive();" in source
-    assert "G: open EG\\nShift + G: open EG+" in source
+    assert "row('G', 'open EG')" in source
+    assert "row('Shift + G', 'open EG+')" in source
     assert "const egoModalOpen = Boolean(document.querySelector('#tasks-fullscreen-modal [data-tasks-ego=\"true\"]'));" in source
     assert "if (event.key === 'Escape' && !event.shiftKey && egoMode && widgetFocused)" in source
     assert "if (event.key === 'Escape' && !event.shiftKey && egoModalOpen)" in source
     assert "if (event.key === 'Escape' && !event.shiftKey && widgetFocused)" in source
+    assert "if (egoModalOpen && !egoMode) return;" in source
     assert "clearSelection('escape');" in source
+
+
+def test_inline_ego_silences_background_hover_handler():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "if (!egoMode && wrapper.querySelector('[data-tasks-inline-ego=\"true\"]')) {" in source
+    assert "clearGraphHoverState('inline-ego-open');" in source
+
+
+def test_enabling_hover_cards_refreshes_the_node_under_the_pointer():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const hoverPointerRef = React.useRef(null);" in source
+    assert "if (next) window.requestAnimationFrame(() => refreshHoverCardRef.current());" in source
+    assert "hoverPointerRef.current = { clientX: event.clientX, clientY: event.clientY };" in source
+    assert "updateGroupHoverTooltip({ ...pointer, target: flowWrapperRef.current });" in source
 
 
 def test_tasks_clicking_selected_node_toggles_selection_off():
@@ -867,37 +894,42 @@ def test_tasks_clicking_selected_node_toggles_selection_off():
 
 def test_tasks_fullscreen_reuses_canvas_background_contract():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    modal_source = Path("vyasa/extensions_builtin/tasks/static/tasks_modal.js").read_text()
+    css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "function tasksBackgroundProps(widgetId)" in source
     assert "id: `${key}-bg`" in source
     assert "window.React.createElement(rf.Background, backgroundProps)" in source
-    assert "fullscreenWrapper.className = 'tasks-container relative';" in source
-    assert "tasksHeaderControlsHtml(fullscreenId, false)" in source
+    assert "fullscreenWrapper.className = 'tasks-container relative';" in modal_source
+    assert "tasksHeaderControlsHtml(fullscreenId, false)" in modal_source
     assert "data-vyasa-tasks-fullscreen-toggle" in source
     assert "vyasa-tasks-fullscreen-toggle" in source
-    assert "stroke-width: 1.5 !important" in source
+    assert "stroke-width: 1.5 !important" in css_source
     assert "function syncTasksFullscreenButton(wrapper)" in source
     assert "function tasksFullscreenIconHtml(on = false)" in source
     assert "'shrink' : 'expand'" in source
     assert "button.innerHTML = tasksFullscreenIconHtml(on);" in source
     assert "syncTasksFullscreenButton(wrapper);" in source
-    assert "runTasksHeaderAction('${fullscreenId}', 'toggleFilters')" in source
-    assert "modal.className = 'fixed inset-0 z-[10000] bg-black/88 backdrop-blur-sm';" in source
-    assert "flow.style.flex = '1 1 auto';" in source
-    assert "flow.style.minHeight = '0';" in source
-    assert "flow.style.display = 'flex';" in source
-    assert "flow.style.flexDirection = 'column';" in source
-    assert "flow.style.position = 'relative';" in source
-    assert "closeBtn.title = 'Close (Shift+Esc)';" in source
-    assert "modal.__tasksSuspendedModal = suspendedModal;" in source
-    assert "const suspendedMaximizeWrapper = wrapper.getAttribute('data-tasks-maximized') === 'true' && wrapper.__tasksMaximizeEsc" in source
-    assert "modal.__tasksSuspendedMaximizeWrapper = suspendedMaximizeWrapper;" in source
-    assert "suspendedModal.style.display = 'none';" in source
-    assert "closeTasksGraphModal(modal);" in source
-    assert "if (document.getElementById('tasks-fullscreen-modal') !== modal) return;" in source
-    assert "e.stopImmediatePropagation?.();" in source
-    assert "event.stopImmediatePropagation?.();" in source
-    assert "if (event.key !== 'Escape' || !event.shiftKey) return;" in source
+    assert "runTasksHeaderAction('${fullscreenId}', 'toggleFilters')" in modal_source
+    assert "['toggleHelp', 'fit', 'toggleHoverCards', 'toggleEdges'].includes(action)" in source
+    assert "if (inline) {" in modal_source
+    assert "headerBar.append(headerTitle);" in modal_source
+    assert "headerBar.append(filterButton, headerTitle, topRightControls);" in modal_source
+    assert "modal.className = inline ? 'absolute inset-0 overflow-hidden' : 'fixed inset-0 z-[10000] bg-black/88 backdrop-blur-sm';" in modal_source
+    assert "flow.style.flex = '1 1 auto';" in modal_source
+    assert "flow.style.minHeight = '0';" in modal_source
+    assert "flow.style.display = 'flex';" in modal_source
+    assert "flow.style.flexDirection = 'column';" in modal_source
+    assert "flow.style.position = 'relative';" in modal_source
+    assert "closeBtn.title = 'Close (Shift+Esc)';" in modal_source
+    assert "modal.__tasksSuspendedModal = suspendedModal;" in modal_source
+    assert "const suspendedMaximizeWrapper = wrapper.getAttribute('data-tasks-maximized') === 'true' && wrapper.__tasksMaximizeEsc" in modal_source
+    assert "modal.__tasksSuspendedMaximizeWrapper = suspendedMaximizeWrapper;" in modal_source
+    assert "suspendedModal.style.display = 'none';" in modal_source
+    assert "closeTasksGraphModal(modal);" in modal_source
+    assert "if (document.getElementById('tasks-fullscreen-modal') !== modal) return;" in modal_source
+    assert "event.stopImmediatePropagation?.();" in modal_source
+    assert "if (event.key !== 'Escape' || !event.shiftKey) return;" in modal_source
 
 
 def test_tasks_filter_sidebar_search_reuses_filter_highlight_path():

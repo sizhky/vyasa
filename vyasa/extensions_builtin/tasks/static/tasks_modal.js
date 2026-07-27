@@ -142,7 +142,11 @@ export function createTasksModalController({
         headerStats.className = 'mt-1 text-xs font-medium text-slate-500 dark:text-slate-400';
         headerStats.textContent = wrapper.querySelector('[data-tasks-stats]')?.textContent || '';
         headerTitle.append(headerName, headerStats);
-        headerBar.append(filterButton, headerTitle, topRightControls);
+        if (inline) {
+            headerBar.append(headerTitle);
+        } else {
+            headerBar.append(filterButton, headerTitle, topRightControls);
+        }
 
         const flow = document.createElement('div');
         flow.className = 'vyasa-tasks-flow';
