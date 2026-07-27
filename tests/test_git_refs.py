@@ -308,8 +308,11 @@ def test_slide_runtime_supports_vim_navigation_and_delayed_first_reveal():
     assert "moveOverviewSelection(key === 'j' ? 1 : -1)" in source
     assert "scrollIntoView({ block: 'center' })" in source
     assert "vyasa-zen-overview-margin" in Path("vyasa/content_routes.py").read_text(encoding="utf-8")
-    assert "key === 'j' && (revealNextUnit() || follow('right'))" in source
-    assert "key === 'k' && (hidePreviousUnit() || follow('left'))" in source
+    assert "const scrollLastVisibleUnit = (direction, root = document) =>" in source
+    assert "Math.min(page, rect.bottom - visibleBottom)" in source
+    assert "Math.max(-page, rect.top - visibleTop)" in source
+    assert "key === 'j' && (scrollLastVisibleUnit('down') || revealNextUnit() || follow('right'))" in source
+    assert "key === 'k' && (scrollLastVisibleUnit('up') || hidePreviousUnit() || follow('left'))" in source
     assert "key === 'l' && follow('right', true)" in source
     assert "revealTimers.push(window.setTimeout(() =>" in source
     assert "const headingCount = leadingHeadingCount(units);" in source

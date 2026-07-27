@@ -17,7 +17,7 @@ if (!window.__vyasaZenBound) {
     title: 'Slide shortcuts',
     groups: [
       ['Exit', [['Shift+Esc', 'Document']]],
-      ['Slides', [['M', 'Overview'], ['?', 'Shortcuts'], ['J / K', 'Reveal / Rewind'], ['H / L', 'Previous / Next']]],
+      ['Slides', [['M', 'Overview'], ['?', 'Shortcuts'], ['J / K', 'Scroll / Reveal / Rewind'], ['H / L', 'Previous / Next']]],
       ['Overview', [['J / K', 'Move Selection'], ['H / L', 'Collapse / Expand'], ['Enter', 'Open Slide'], ['Esc', 'Close']]],
     ],
   });
@@ -175,6 +175,31 @@ if (!window.__vyasaZenBound) {
       top: Math.max(0, Math.round(targetTop)),
       behavior: 'smooth',
     });
+  };
+
+  const scrollLastVisibleUnit = (direction, root = document) => {
+    const unit = getStepUnits(root).filter(
+      (candidate) => candidate.dataset.revealState === 'visible',
+    ).at(-1);
+    if (!unit) return false;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    if (!viewportHeight) return false;
+    const inset = getRevealViewportInsets();
+    const visibleTop = inset.top;
+    const visibleBottom = viewportHeight - inset.bottom;
+    const rect = unit.getBoundingClientRect();
+    const page = Math.max(1, Math.round((visibleBottom - visibleTop) * 0.82));
+    const delta = direction === 'down'
+      ? Math.min(page, rect.bottom - visibleBottom)
+      : Math.max(-page, rect.top - visibleTop);
+    if ((direction === 'down' && delta <= 2) || (direction === 'up' && delta >= -2)) return false;
+    window.scrollBy({ top: Math.round(delta), behavior: 'smooth' });
+    slideDebug('reveal-scroll', {
+      direction,
+      delta: Math.round(delta),
+      index: unit.dataset.revealIndex,
+    });
+    return true;
   };
 
   const scrollToSlideBottom = () => {
@@ -561,8 +586,8 @@ if (!window.__vyasaZenBound) {
       event.preventDefault();
     }
     if (key === 'h' && follow('left', true)) event.preventDefault();
-    if (key === 'j' && (revealNextUnit() || follow('right'))) event.preventDefault();
-    if (key === 'k' && (hidePreviousUnit() || follow('left'))) event.preventDefault();
+    if (key === 'j' && (scrollLastVisibleUnit('down') || revealNextUnit() || follow('right'))) event.preventDefault();
+    if (key === 'k' && (scrollLastVisibleUnit('up') || hidePreviousUnit() || follow('left'))) event.preventDefault();
     if (key === 'l' && follow('right', true)) event.preventDefault();
     if (event.key === 'ArrowLeft' && (hidePreviousUnit() || follow('left'))) {
       revealLog('keydown ArrowLeft handled');
