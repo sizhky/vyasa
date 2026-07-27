@@ -3000,22 +3000,23 @@ function setTasksGroupToggleHover(wrapper, groupId) {
     });
 }
 
+function tasksGraphNodeAbsoluteRect(node, byId) {
+    let x = node.position?.x || 0;
+    let y = node.position?.y || 0;
+    let parent = node.parentId ? byId[node.parentId] : null;
+    while (parent) {
+        x += parent.position?.x || 0;
+        y += parent.position?.y || 0;
+        parent = parent.parentId ? byId[parent.parentId] : null;
+    }
+    return { x, y, width: node.style?.width || node.width || 0, height: node.style?.height || node.height || 0 };
+}
+
 function tasksGraphNodeAtFlowPoint(nodes, point) {
     const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
-    const absoluteRect = (node) => {
-        let x = node.position?.x || 0;
-        let y = node.position?.y || 0;
-        let parent = node.parentId ? byId[node.parentId] : null;
-        while (parent) {
-            x += parent.position?.x || 0;
-            y += parent.position?.y || 0;
-            parent = parent.parentId ? byId[parent.parentId] : null;
-        }
-        return { x, y, width: node.style?.width || node.width || 0, height: node.style?.height || node.height || 0 };
-    };
     return (nodes || [])
         .filter((node) => node.data?.__kind__ !== 'ganttHeader')
-        .map((node) => ({ node, rect: absoluteRect(node), z: Number(node.zIndex || node.style?.zIndex || 0) }))
+        .map((node) => ({ node, rect: tasksGraphNodeAbsoluteRect(node, byId), z: Number(node.zIndex || node.style?.zIndex || 0) }))
         .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
         .sort((a, b) => b.z - a.z)[0] || null;
 }
@@ -5592,14 +5593,14 @@ async function renderTasksGraphs(rootElement = document) {
                         style: {
                             ...(props.style || {}),
                             stroke: 'var(--vyasa-paper)',
-                            strokeWidth: strokeWidth + 4,
+                            strokeWidth: strokeWidth + 8,
                         },
                     }),
                     taperPath && React.createElement('path', {
                         d: taperPath,
                         fill: props.style?.stroke || 'currentColor',
                         stroke: 'var(--vyasa-paper)',
-                        strokeWidth: 4,
+                        strokeWidth: 8,
                         paintOrder: 'stroke fill',
                         strokeLinejoin: 'round',
                         opacity: props.style?.opacity ?? 1,
@@ -5617,7 +5618,7 @@ async function renderTasksGraphs(rootElement = document) {
                         d: edgeArrowPath,
                         fill: props.style?.stroke || 'currentColor',
                         stroke: 'var(--vyasa-paper)',
-                        strokeWidth: 4,
+                        strokeWidth: 8,
                         paintOrder: 'stroke fill',
                         strokeLinejoin: 'round',
                         opacity: props.style?.opacity ?? 1,
@@ -7723,6 +7724,31 @@ async function renderTasksGraphs(rootElement = document) {
                 }, [reactFlow, graphRevision, viewMode, slideIndex, slides]);
                 return null;
             };
+            const TasksNodeHighlightBorders = () => {
+                if (!rf.ViewportPortal) return null;
+                const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
+                const activeNodes = nodes.filter((node) => !['none', 'dim'].includes(node.data?.highlightMode || 'none'));
+                return React.createElement(rf.ViewportPortal, null, ...activeNodes.map((node) => {
+                    const rect = tasksGraphNodeAbsoluteRect(node, byId);
+                    const hoverOutline = node.data?.__hover_outline__ === true;
+                    const activeBorderColor = node.style?.['--vyasa-tasks-active-border'] || 'var(--vyasa-primary)';
+                    return React.createElement('div', {
+                        key: node.id,
+                        'data-vyasa-node-highlight-border': 'true',
+                        style: {
+                            position: 'absolute',
+                            transform: `translate(${rect.x}px, ${rect.y}px)`,
+                            width: rect.width,
+                            height: rect.height,
+                            borderRadius: node.style?.borderRadius || 6,
+                            outline: `${hoverOutline ? 12 : 4}px solid ${activeBorderColor}`,
+                            outlineOffset: '3px',
+                            pointerEvents: 'none',
+                            zIndex: TASKS_EDGE_FOCUS_Z - 1,
+                        },
+                    });
+                }));
+            };
             const flowWrapperClassName = [
                 hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '',
                 'vyasa-tasks-active-pulse',
@@ -8132,6 +8158,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
+                    window.React.createElement(TasksNodeHighlightBorders),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
                     window.React.createElement(SlideLauncher),
@@ -8150,6 +8177,7 @@ async function renderTasksGraphs(rootElement = document) {
                 window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
+                        window.React.createElement(TasksNodeHighlightBorders),
                         window.React.createElement(rf.Controls),
                         window.React.createElement(PanControls),
                     window.React.createElement(SlideLauncher),

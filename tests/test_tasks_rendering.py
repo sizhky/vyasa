@@ -438,31 +438,26 @@ def test_tasks_source_keeps_hover_highlight_while_panning():
     assert "clearGraphHoverState('pointer-dragging')" not in source
 
 
-def test_tasks_graph_highlights_use_static_outlines():
+def test_tasks_graph_highlights_use_separate_border_layer():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css_source = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
-    active_node_css = css_source.split(
-        '.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"])',
-        1,
-    )[1].split(".react-flow__node.vyasa-tasks-node--passive", 1)[0]
 
     assert "'data-vyasa-highlight-active': !['none', 'dim'].includes(highlightMode)" in source
     assert "'data-vyasa-hover-outline': data?.__hover_outline__ === true ? 'true' : undefined" in source
-    assert "'vyasa-tasks-active-pulse'" in source
-    assert "@property --vyasa-tasks-pulse" not in css_source
-    assert "@keyframes vyasa-tasks-active-pulse" not in css_source
-    assert "animation: vyasa-tasks-active-pulse" not in css_source
-    assert "filter:" not in active_node_css
-    assert "box-shadow: none !important" in active_node_css
-    assert "outline: 4px solid" in css_source
-    assert "outline: 4px solid" in active_node_css
-    assert '[data-vyasa-hover-outline="true"]' in active_node_css
-    assert "outline: 12px solid var(--vyasa-tasks-active-border, var(--vyasa-primary)) !important" in active_node_css
-    assert ':has([data-vyasa-highlight-mode="selected-focus"])' not in active_node_css
+    assert "const TasksNodeHighlightBorders = () =>" in source
+    assert "React.createElement(rf.ViewportPortal" in source
+    assert "'data-vyasa-node-highlight-border': 'true'" in source
+    assert "zIndex: TASKS_EDGE_FOCUS_Z - 1" in source
+    assert "outline: `${hoverOutline ? 12 : 4}px solid ${activeBorderColor}`" in source
+    assert (
+        '.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"]) {\n'
+        "    box-shadow: none !important;\n"
+        "}"
+    ) in css_source
+    assert "outline: 4px solid var(--vyasa-tasks-active-border" not in css_source
+    assert "outline: 12px solid var(--vyasa-tasks-active-border" not in css_source
     assert "if (hoveredNodeId) hoverOutlineIds.add(nodeId);" in source
     assert "'--vyasa-tasks-active-border'" in source
-    assert "var(--vyasa-tasks-active-border" in active_node_css
-    assert "--vyasa-tasks-glow-" not in css_source
 
 
 def test_tasks_source_supports_configurable_card_states():
@@ -866,12 +861,30 @@ def test_highlighted_edges_and_arrowheads_render_below_node_cards():
     assert "zIndex: highlighted ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z" in source
 
 
-def test_edges_have_two_pixel_canvas_colored_border():
+def test_hovered_edges_render_above_node_highlights_with_four_pixel_border():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+    hover_edge = source.split("function tasksHoverFocusEdge", 1)[1].split(
+        "// Build an inset SVG overlay", 1
+    )[0]
+
+    assert "const TASKS_EDGE_HOVER_Z" not in source
+    assert "zIndex: TASKS_EDGE_FOCUS_Z" in hover_edge
+    assert (
+        ".vyasa-tasks-hovering-edge-labels .react-flow__edgelabel-renderer {\n"
+        "    z-index: 1600 !important;\n"
+        "}"
+    ) in css
+    assert "strokeWidth: strokeWidth + 8" in source
+    assert "strokeWidth: 8" in source
+
+
+def test_edges_have_four_pixel_canvas_colored_border():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "stroke: 'var(--vyasa-paper)'" in source
-    assert "strokeWidth: strokeWidth + 4" in source
-    assert "strokeWidth: 4" in source
+    assert "strokeWidth: strokeWidth + 8" in source
+    assert "strokeWidth: 8" in source
     assert "paintOrder: 'stroke fill'" in source
     assert "markerEnd: undefined" in source
 
