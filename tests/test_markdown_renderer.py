@@ -134,6 +134,14 @@ def test_internal_file_link_escapes_main_content_htmx_boost():
     assert 'hx-boost="false"' in html
 
 
+def test_custom_uri_scheme_is_not_rewritten_as_relative_content():
+    uri = "vscode://maaashjp.symbol-opener?symbol=DoingView&cwd=%2Ftmp&kind=Class"
+
+    rendered = to_xml(from_md(f"[Open symbol]({uri})", current_path=".daksh/graph.md"))
+
+    assert f'href="{html.escape(uri, quote=True)}"' in rendered
+
+
 def test_markdown_include_renders_native_markdown_lines(tmp_path, monkeypatch):
     root = tmp_path / "site"
     root.mkdir()
