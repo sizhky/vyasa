@@ -4,6 +4,7 @@ import subprocess
 from ipaddress import ip_address
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlencode
 
 from starlette.responses import JSONResponse
 
@@ -41,6 +42,25 @@ def open_in_vscode(
     return resolved
 
 
+def vscode_symbol_uri(
+    slug: str,
+    symbol: str,
+    *,
+    kind: str = "",
+    resolve: Callable[[str], Path | None] | None = None,
+) -> str:
+    resolver = resolve or get_runtime_services().content_path_for_slug
+    path = resolver(slug)
+    if path is None or not path.is_file():
+        raise FileNotFoundError(slug)
+    if path.suffix.lower() not in CODE_SUFFIXES:
+        raise ValueError(f"Unsupported code file: {path.name}")
+    query = {"file": str(path.resolve()), "symbol": symbol}
+    if kind:
+        query["kind"] = kind
+    return f"vscode://yeshwanth.vyasa/open?{urlencode(query)}"
+
+
 def is_local_request(request: Any) -> bool:
     hostname = str(getattr(request.url, "hostname", "") or "")
     client_host = str(getattr(getattr(request, "client", None), "host", "") or "")
@@ -63,7 +83,11 @@ def register_vscode_routes(rt: Callable[..., Any], _runtime: object) -> None:
         operation_id="vscode.file.open",
         path="/api/vscode/open",
         methods=("POST",),
-        body={"path": "Content path such as src/app.py."},
+        body={
+            "path": "Content path such as src/app.py.",
+            "symbol": "Optional document symbol name.",
+            "kind": "Optional VS Code symbol kind.",
+        },
         local_only=True,
     )
     async def open_code(request):
@@ -73,7 +97,13 @@ def register_vscode_routes(rt: Callable[..., Any], _runtime: object) -> None:
             payload = await request.json()
             if not isinstance(payload, dict):
                 raise ValueError("Expected a JSON object")
-            path = open_in_vscode(str(payload.get("path") or ""))
+            slug = str(payload.get("path") or "")
+            symbol = str(payload.get("symbol") or "").strip()
+            kind = str(payload.get("kind") or "").strip()
+            if symbol:
+                uri = vscode_symbol_uri(slug, symbol, kind=kind)
+                return JSONResponse({"ok": True, "uri": uri}, status_code=202)
+            path = open_in_vscode(slug)
         except ValueError as error:
             return JSONResponse({"ok": False, "message": str(error)}, status_code=400)
         except FileNotFoundError:

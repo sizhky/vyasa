@@ -142,6 +142,15 @@ def test_custom_uri_scheme_is_not_rewritten_as_relative_content():
     assert f'href="{html.escape(uri, quote=True)}"' in rendered
 
 
+def test_relative_code_symbol_link_preserves_symbol_query():
+    rendered = to_xml(from_md(
+        "[Open symbol](../../src/views/doing.js?symbol=DoingView&kind=Class)",
+        current_path=".daksh/knowledge-graph.kg/kg.nodes",
+    ))
+
+    assert 'href="/posts/src/views/doing.js?symbol=DoingView&amp;kind=Class"' in rendered
+
+
 def test_markdown_include_renders_native_markdown_lines(tmp_path, monkeypatch):
     root = tmp_path / "site"
     root.mkdir()

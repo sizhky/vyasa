@@ -1,11 +1,12 @@
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
 from vyasa.extensions import build_extension_runtime
-from vyasa.extensions_builtin.vscode import is_local_request, open_in_vscode
+from vyasa.extensions_builtin.vscode import is_local_request, open_in_vscode, vscode_symbol_uri
 
 
 def test_open_in_vscode_launches_resolved_code_file(tmp_path):
@@ -37,6 +38,27 @@ def test_open_in_vscode_rejects_non_code_files(tmp_path, name):
 def test_open_in_vscode_rejects_missing_file():
     with pytest.raises(FileNotFoundError):
         open_in_vscode("missing.py", resolve=lambda _slug: None, launch=lambda *_args, **_options: None)
+
+
+def test_vscode_symbol_uri_contains_resolved_file(tmp_path):
+    code_file = tmp_path / "src" / "app.py"
+    code_file.parent.mkdir()
+    code_file.write_text("class App: pass\n", encoding="utf-8")
+
+    uri = vscode_symbol_uri(
+        "src/app.py",
+        "App",
+        kind="Class",
+        resolve=lambda _slug: code_file,
+    )
+
+    parsed = urlparse(uri)
+    assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "vscode://yeshwanth.vyasa/open"
+    assert parse_qs(parsed.query) == {
+        "file": [str(code_file.resolve())],
+        "symbol": ["App"],
+        "kind": ["Class"],
+    }
 
 
 @pytest.mark.parametrize(
@@ -83,6 +105,8 @@ def test_vscode_link_detection():
         const base = 'http://localhost:8000/posts/guide';
         const suffixes = new Set(['.py', '.js']);
         if (module.codePathFromHref('/posts/src/app.py', base, suffixes) !== 'src/app.py') process.exit(1);
+        const ref = module.codeReferenceFromHref('/posts/src/app.py?symbol=App&kind=Class', base, suffixes);
+        if (JSON.stringify(ref) !== JSON.stringify({{path: 'src/app.py', symbol: 'App', kind: 'Class'}})) process.exit(5);
         if (module.codePathFromHref('/src/kitchen/models.py', base, suffixes) !== 'src/kitchen/models.py') process.exit(4);
         if (module.codePathFromHref('/posts/notes.md', base, suffixes) !== null) process.exit(2);
         if (module.codePathFromHref('https://example.com/app.py', base, suffixes) !== null) process.exit(3);

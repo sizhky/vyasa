@@ -3,7 +3,7 @@ function configuredCodeSuffixes() {
     return new Set(value.split(',').filter(Boolean));
 }
 
-export function codePathFromHref(href, baseHref, codeSuffixes) {
+export function codeReferenceFromHref(href, baseHref, codeSuffixes) {
     try {
         const url = new URL(href, baseHref);
         if (url.origin !== new URL(baseHref).origin) return null;
@@ -12,22 +12,32 @@ export function codePathFromHref(href, baseHref, codeSuffixes) {
             : url.pathname.replace(/^\/+/, '');
         const path = decodeURIComponent(routePath);
         const suffix = path.includes('.') ? `.${path.split('.').pop().toLowerCase()}` : '';
-        return codeSuffixes.has(suffix) && !url.searchParams.has('ref') ? path : null;
+        if (!codeSuffixes.has(suffix) || url.searchParams.has('ref')) return null;
+        return {
+            path,
+            symbol: url.searchParams.get('symbol') || '',
+            kind: url.searchParams.get('kind') || '',
+        };
     } catch (_) {
         return null;
     }
 }
 
-async function openCodePath(path) {
+export function codePathFromHref(href, baseHref, codeSuffixes) {
+    return codeReferenceFromHref(href, baseHref, codeSuffixes)?.path || null;
+}
+
+async function openCodeReference(reference) {
     const response = await fetch('/api/vscode/open', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ path }),
+        body: JSON.stringify(reference),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.message || `VS Code failed (${response.status})`);
-    window.__vyasaToast?.(`Opened ${path.split('/').pop()} in VS Code`, 'success');
+    if (payload.uri) window.location.href = payload.uri;
+    window.__vyasaToast?.(`Opened ${reference.path.split('/').pop()} in VS Code`, 'success');
 }
 
 if (typeof document !== 'undefined' && !window.__vyasaVSCodeBound) {
@@ -35,12 +45,12 @@ if (typeof document !== 'undefined' && !window.__vyasaVSCodeBound) {
     document.addEventListener('click', (event) => {
         if (event.button !== 0) return;
         const anchor = event.target.closest?.('a[href]');
-        const path = anchor && !anchor.hasAttribute('download')
-            ? codePathFromHref(anchor.getAttribute('href'), window.location.href, configuredCodeSuffixes())
+        const reference = anchor && !anchor.hasAttribute('download')
+            ? codeReferenceFromHref(anchor.getAttribute('href'), window.location.href, configuredCodeSuffixes())
             : null;
-        if (!path) return;
+        if (!reference) return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        openCodePath(path).catch((error) => window.__vyasaToast?.(error.message, 'error'));
+        openCodeReference(reference).catch((error) => window.__vyasaToast?.(error.message, 'error'));
     }, true);
 }
