@@ -617,14 +617,52 @@ function normalizeSidebarPath(pathname) {
     return trimmed.replace(/\/+$/, '');
 }
 
+const postsTreeRefreshVersions = new WeakMap();
+
+function currentPostLink(rootElement, path) {
+    const postsTree = rootElement.querySelector('details[data-section="posts-tree"]');
+    return Array.from(postsTree?.querySelectorAll('.post-link[data-path]') || [])
+        .find((link) => link.dataset.path === path) || null;
+}
+
+async function refreshPostsTreeForPath(path, rootElement = document) {
+    const version = (postsTreeRefreshVersions.get(rootElement) || 0) + 1;
+    postsTreeRefreshVersions.set(rootElement, version);
+    try {
+        const response = await fetch(`/_sidebar/posts?current_path=${encodeURIComponent(path)}`, {
+            credentials: 'same-origin',
+            cache: 'no-store',
+        });
+        if (!response.ok) return false;
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = await response.text();
+        if (postsTreeRefreshVersions.get(rootElement) !== version) return false;
+        const nextList = wrapper.querySelector('#vyasa-posts-section-list');
+        const currentList = rootElement.querySelector('#vyasa-posts-section-list');
+        if (!nextList || !currentList) return false;
+        currentList.replaceWith(nextList);
+        initFolderChevronState(rootElement);
+        initFolderHoverExpand(rootElement);
+        syncPostsHoverToggleButtons(rootElement);
+        window.__vyasaInitBookmarksButtons?.(rootElement);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+window.__vyasaRefreshPostsTreeForPath = refreshPostsTreeForPath;
+
 // Reveal current file in sidebar
-function revealInSidebar(rootElement = document, explicitPath = null) {
+async function revealInSidebar(rootElement = document, explicitPath = null) {
     if (!explicitPath && !window.location.pathname.startsWith('/posts/')) {
         return;
     }
 
     const currentPath = explicitPath || normalizeSidebarPath(window.location.pathname);
-    const activeLink = rootElement.querySelector(`.post-link[data-path="${currentPath}"]`);
+    let activeLink = currentPostLink(rootElement, currentPath);
+    if (!activeLink && await refreshPostsTreeForPath(currentPath, rootElement)) {
+        activeLink = currentPostLink(rootElement, currentPath);
+    }
     
     if (activeLink) {
         const postsSection = activeLink.closest('details[data-section="posts-tree"]');
@@ -668,7 +706,7 @@ function focusCurrentPostInSidebar(source = document) {
     sidebar.querySelectorAll('details[data-section="posts-tree"]').forEach((section) => {
         section.open = true;
     });
-    revealInSidebar(sidebar);
+    return revealInSidebar(sidebar);
 }
 window.focusCurrentPostInSidebar = focusCurrentPostInSidebar;
 

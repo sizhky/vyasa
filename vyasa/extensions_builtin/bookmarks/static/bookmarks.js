@@ -116,23 +116,12 @@ function bindBookmarkButtons(rootElement = document) {
 }
 
 async function refreshPostsTreeForPath(path) {
-    const response = await fetch(`/_sidebar/posts?current_path=${encodeURIComponent(path)}`);
-    if (!response.ok) return;
-    const html = await response.text();
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = html;
-    const nextList = wrapper.querySelector('#vyasa-posts-section-list');
-    const postsContainer = document.querySelector('#posts-sidebar') || document;
-    const currentList = postsContainer.querySelector('#vyasa-posts-section-list');
-    if (!nextList || !currentList) return;
-    currentList.replaceWith(nextList);
-    window.__vyasaInitFolderChevronState?.(document);
+    const postsSidebar = document.querySelector('#posts-sidebar details[data-sidebar="posts"]');
+    if (!postsSidebar || !window.__vyasaRefreshPostsTreeForPath) return;
+    await window.__vyasaRefreshPostsTreeForPath(path, postsSidebar);
     updateActivePostLink(path);
     bindBookmarkButtons(document);
-    const postsSidebar = postsContainer.querySelector('details[data-sidebar="posts"]');
-    if (postsSidebar?.open) {
-        window.__vyasaRevealInSidebar?.(postsSidebar, path);
-    }
+    if (postsSidebar.open) await window.__vyasaRevealInSidebar?.(postsSidebar, path);
 }
 
 function bindBookmarkLinks(rootElement = document) {
