@@ -11,6 +11,7 @@ from ...document_pages import DocumentPage
 from ...extensions import AssetBundle, DocumentType, ExtensionMeta, VyasaExtensionBase, request_asset_bundle
 from ...helpers import content_slug_for_path
 from .api import register_tasks_routes
+from .items_pack import read_schema
 from .render import render_tasks_block
 
 
@@ -48,19 +49,12 @@ def _kg_block(schema_path: Path) -> str:
 
 def _kg_title(schema_path: Path, fallback: str) -> str:
     try:
-        for line in schema_path.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if not stripped.startswith("@graph"):
-                continue
-            if "title=" in stripped:
-                title = stripped.split("title=", 1)[1].strip().strip("\"'")
-                if title:
-                    return title
-            for part in stripped.split():
-                if part.startswith("id=") and part[3:]:
-                    return part[3:]
-            break
-    except OSError:
+        graph = read_schema(schema_path).graph
+        if graph.get("title"):
+            return graph["title"]
+        if graph.get("id"):
+            return graph["id"]
+    except (OSError, ValueError):
         pass
     return Path(fallback).name
 

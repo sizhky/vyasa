@@ -7,7 +7,7 @@ from vyasa.build import build_post_tree_static, build_static_site
 from vyasa.content_tree import ContentTree
 from vyasa.extensions import build_extension_runtime, get_extension_runtime, set_extension_runtime
 from vyasa.extensions_builtin.html_viewer import render_html_document
-from vyasa.extensions_builtin.tasks import render_kg_document
+from vyasa.extensions_builtin.tasks import _kg_title, render_kg_document
 from vyasa.tree_tables import parse_tree_table, render_tree_table_html
 
 
@@ -94,6 +94,16 @@ def test_kg_document_runtime_includes_tasks_assets(tmp_path):
     assert "height: 100%; display: flex; flex-direction: column;" in html
     assert "flex:1 1 auto;min-height:0;overflow:hidden;cursor:grab" in html
     assert "my-6 rounded-xl border-4" not in html
+
+
+def test_kg_title_stops_before_following_graph_attributes(tmp_path):
+    schema = tmp_path / "kg.schema"
+    schema.write_text(
+        '@graph id=daksh title="Daksh requirements" group_by=form color_by=status\n',
+        encoding="utf-8",
+    )
+
+    assert _kg_title(schema, "daksh.kg") == "Daksh requirements"
 
 
 def test_build_post_tree_static_includes_tree_files(tmp_path):
