@@ -83,6 +83,7 @@ class KgContext:
     node_attrs: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     edges: list[dict[str, str]] = field(default_factory=list)
     slides: list[dict[str, Any]] = field(default_factory=list)
+    views: list[KgView] = field(default_factory=list)
 
 
 def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
@@ -176,7 +177,7 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
         "groups": [],
         "tasks": [node for node_id, node in nodes_by_id.items() if node_id in present],
         "dependency_edges": edges,
-        "view_projections": _resolved_projections(schema.views, catalog, active.id),
+        "view_projections": _resolved_projections(active.views or schema.views, catalog, active.id),
         "slides": active.slides or schema.slides,
         "default_projection": "",
         "default_group_by": _list_value(schema.graph.get("group_by", "")),
@@ -255,6 +256,12 @@ def _read_context(path: PathLike) -> KgContext:
         if line.startswith("@"):
             section = line
             current_slide = None
+            if section == "@views":
+                views, consumed = _read_views(raw_lines, index)
+                for view in views:
+                    view.context = context.id
+                context.views.extend(views)
+                index += consumed
             continue
         if raw.startswith((" ", "\t")):
             if section == "@slides" and current_slide is not None:
@@ -291,6 +298,45 @@ def _read_slide_attr(raw_lines: list[str], raw_index: int, slide: dict[str, Any]
             value, consumed = _read_indented_multiline(raw_lines, raw_index + 1, slide_indent)
         slide[key] = _list_value(value) if key == "nodes" else value
     return consumed
+
+
+def _read_views(raw_lines: list[str], start: int = 0) -> tuple[list[KgView], int]:
+    views: list[KgView] = []
+    current_view: KgView | None = None
+    slides_indent: int | None = None
+    slide_indent: int | None = None
+    current_slide: dict[str, Any] | None = None
+    index = start
+    while index < len(raw_lines):
+        raw = raw_lines[index]
+        if raw.strip().startswith("@"):
+            break
+        index += 1
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        line = raw.strip()
+        if not raw.startswith((" ", "\t")):
+            current_view = _read_view(line)
+            views.append(current_view)
+            slides_indent, slide_indent, current_slide = None, None, None
+            continue
+        if current_view is None:
+            continue
+        indent = _indent_width(raw)
+        if line == "slides:":
+            slides_indent, slide_indent, current_slide = indent, None, None
+        elif slides_indent is not None and indent > slides_indent:
+            if "=" not in line and ":" in line and (slide_indent is None or indent <= slide_indent):
+                sid, _, title = line.partition(":")
+                current_slide = {"id": sid.strip(), "title": title.strip(), "nodes": []}
+                current_view.slides.append(current_slide)
+                slide_indent = indent
+            elif current_slide is not None and indent > (slide_indent or 0):
+                index += _read_slide_attr(raw_lines, index - 1, current_slide)
+        else:
+            slides_indent, slide_indent, current_slide = None, None, None
+            _update_view(current_view, _view_assignment(line))
+    return views, index - start
 
 
 def _read_context_attr_line(context: KgContext, raw: str) -> None:
@@ -378,10 +424,6 @@ def read_schema(path: PathLike) -> KgSchema:
     section = ""
     current_source = ""
     current_source_attrs = False
-    current_view: KgView | None = None
-    current_view_slides_indent: int | None = None
-    current_view_slide_indent: int | None = None
-    current_view_slide: dict[str, Any] | None = None
     current_slide: dict[str, Any] | None = None
     raw_lines = path.read_text(encoding="utf-8").splitlines()
     raw_index = 0
@@ -396,10 +438,6 @@ def read_schema(path: PathLike) -> KgSchema:
             section = parts[0]
             current_source = ""
             current_source_attrs = False
-            current_view = None
-            current_view_slides_indent = None
-            current_view_slide_indent = None
-            current_view_slide = None
             current_slide = None
             if section == "@graph":
                 payload = _assignments(parts[1:])
@@ -407,6 +445,10 @@ def read_schema(path: PathLike) -> KgSchema:
                 schema.nodes = payload.get("pool", schema.nodes)
                 schema.attrs = payload.get("attrs", schema.attrs)
                 schema.palette = payload.get("palette", schema.palette)
+            elif section == "@views":
+                views, consumed = _read_views(raw_lines, raw_index)
+                schema.views.extend(views)
+                raw_index += consumed
             continue
         if section == "@graph":
             payload = _assignments(shlex.split(line))
@@ -429,30 +471,6 @@ def read_schema(path: PathLike) -> KgSchema:
                 current_source_attrs = False
                 payload = _assignments(shlex.split(line))
                 schema.sources.setdefault(current_source, {}).update(payload)
-            elif section == "@views" and current_view:
-                indent = _indent_width(raw)
-                if line == "slides:":
-                    current_view_slides_indent = indent
-                    current_view_slide_indent = None
-                    current_view_slide = None
-                    continue
-                if current_view_slides_indent is not None and indent > current_view_slides_indent:
-                    if (
-                        "=" not in line
-                        and ":" in line
-                        and (current_view_slide_indent is None or indent <= current_view_slide_indent)
-                    ):
-                        sid, _, title = line.partition(":")
-                        current_view_slide = {"id": sid.strip(), "title": title.strip(), "nodes": []}
-                        current_view.slides.append(current_view_slide)
-                        current_view_slide_indent = indent
-                    elif current_view_slide is not None and indent > (current_view_slide_indent or 0):
-                        raw_index += _read_slide_attr(raw_lines, raw_index - 1, current_view_slide)
-                    continue
-                current_view_slides_indent = None
-                current_view_slide_indent = None
-                current_view_slide = None
-                _update_view(current_view, _view_assignment(line))
             elif section == "@slides" and current_slide is not None:
                 raw_index += _read_slide_attr(raw_lines, raw_index - 1, current_slide)
             continue
@@ -468,12 +486,6 @@ def read_schema(path: PathLike) -> KgSchema:
             schema.status_defaults.update(payload)
         elif section == "@acl":
             _read_acl_line(schema, line)
-        elif section == "@views":
-            current_view = _read_view(line)
-            schema.views.append(current_view)
-            current_view_slides_indent = None
-            current_view_slide_indent = None
-            current_view_slide = None
         elif section == "@slides":
             sid, _, title = line.partition(":")
             current_slide = {"id": sid.strip(), "title": title.strip(), "nodes": []}
@@ -490,42 +502,14 @@ def _read_tmp_view_sidecars(schema: KgSchema, schema_path: PathLike) -> None:
         return
     existing = {view.id: index for index, view in enumerate(schema.views)}
     for view_path in sorted(view_dir.glob("tmp.*.view")):
-        current_view: KgView | None = None
-        slides_indent: int | None = None
-        slide_indent: int | None = None
-        current_slide: dict[str, Any] | None = None
         raw_lines = view_path.read_text(encoding="utf-8").splitlines()
-        raw_index = 0
-        while raw_index < len(raw_lines):
-            raw = raw_lines[raw_index]
-            raw_index += 1
-            if not raw.strip() or raw.lstrip().startswith("#"):
-                continue
-            line = raw.strip()
-            if raw.startswith((" ", "\t")):
-                if current_view:
-                    indent = _indent_width(raw)
-                    if line == "slides:":
-                        slides_indent, slide_indent, current_slide = indent, None, None
-                    elif slides_indent is not None and indent > slides_indent:
-                        if "=" not in line and ":" in line and (slide_indent is None or indent <= slide_indent):
-                            sid, _, title = line.partition(":")
-                            current_slide = {"id": sid.strip(), "title": title.strip(), "nodes": []}
-                            current_view.slides.append(current_slide)
-                            slide_indent = indent
-                        elif current_slide is not None and indent > (slide_indent or 0):
-                            raw_index += _read_slide_attr(raw_lines, raw_index - 1, current_slide)
-                    else:
-                        slides_indent, slide_indent, current_slide = None, None, None
-                        _update_view(current_view, _view_assignment(line))
-                continue
-            current_view = _read_view(line)
-            slides_indent, slide_indent, current_slide = None, None, None
-            if current_view.id in existing:
-                schema.views[existing[current_view.id]] = current_view
+        views, _consumed = _read_views(raw_lines)
+        for view in views:
+            if view.id in existing:
+                schema.views[existing[view.id]] = view
             else:
-                existing[current_view.id] = len(schema.views)
-                schema.views.append(current_view)
+                existing[view.id] = len(schema.views)
+                schema.views.append(view)
 
 
 def _tmp_view_sidecar_dir(schema_path: PathLike) -> PathLike:

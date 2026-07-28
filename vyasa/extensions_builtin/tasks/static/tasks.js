@@ -6768,7 +6768,9 @@ async function renderTasksGraphs(rootElement = document) {
                                 activeProjectionOption && activeProjectionOption.id !== TASKS_GANTT_PROJECTION_ID
                                     ? React.createElement('button', {
                                         type: 'button',
-                                        title: 'Copy this view as a kg.schema @views entry',
+                                        title: sourceModel?.kg_context?.id
+                                            ? 'Copy this view as an @views entry for this context'
+                                            : 'Copy this view as a kg.schema @views entry',
                                         onClick: async (event) => {
                                             const button = event.currentTarget;
                                             const ok = await copyTasksText(buildProjectionConfigText(activeProjectionOption));
@@ -7809,7 +7811,7 @@ async function renderTasksGraphs(rootElement = document) {
                     edgeOpacity: isActiveLive ? edgeOpacity : def?.edge_opacity,
                     projectionUnspecifiedContentOpacity: isActiveLive ? projectionUnspecifiedContentOpacity : def?.projection_unspecified_content_opacity,
                     defaultOpenDepth: effectiveDefaultOpenDepth,
-                });
+                }, sourceModel?.kg_context?.id);
             };
             const RightRail = () => {
                 if (!selectedNodeId) return null;

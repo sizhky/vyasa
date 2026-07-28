@@ -403,7 +403,7 @@ function tasksQuoteSchemaValue(value) {
     return /[\s"=]/.test(text) ? `"${text.replace(/"/g, '\\"')}"` : text;
 }
 
-export function buildTasksProjectionConfigText(config) {
+export function buildTasksProjectionConfigText(config, contextId = '') {
     const cfg = config || {};
     const lines = [];
     const notes = [];
@@ -468,7 +468,10 @@ export function buildTasksProjectionConfigText(config) {
     if (cfg.defaultOpenDepth !== undefined && cfg.defaultOpenDepth !== null && cfg.defaultOpenDepth !== '' && !Number.isNaN(Number(cfg.defaultOpenDepth))) {
         lines.push(`\tdefault_open_depth=${cfg.defaultOpenDepth}`);
     }
-    let out = `# Paste under your @views section in kg.schema:\n${lines.join('\n')}`;
+    const target = String(contextId || '').trim()
+        ? 'the active .context file'
+        : 'kg.schema';
+    let out = `# Paste under your @views section in ${target}:\n${lines.join('\n')}`;
     if (notes.length) out += `\n${notes.map((note) => `# ${note}`).join('\n')}`;
     return out;
 }

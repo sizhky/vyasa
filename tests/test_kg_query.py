@@ -286,6 +286,42 @@ def test_projection_models_own_slides_and_allow_views_without_grouping(tmp_path)
     assert model["projection_models"]["plain"]["model"]["slides"] == []
 
 
+def test_context_owns_its_views_and_slides(tmp_path):
+    schema_path = _write_view_context_pack(tmp_path)
+    with (tmp_path / "day1.context").open("a", encoding="utf-8") as handle:
+        handle.write(
+            """@views
+day1_story:
+    group_by=kind
+    slides:
+        intro: Day one
+            nodes=old,claim
+            desc=|
+                **Owned by day one**
+plain:
+    color_by=status
+"""
+        )
+
+    compiled = read_kg_pack(schema_path, "day1")
+
+    assert [view["id"] for view in compiled["view_projections"]] == ["day1_story", "plain"]
+    assert compiled["view_projections"][0]["context"] == "day1"
+    assert compiled["view_projections"][0]["resolved_context"] == "day1"
+    assert compiled["view_projections"][0]["slides"][0]["desc"] == "**Owned by day one**"
+    assert [view["id"] for view in read_kg_pack(schema_path, "day2")["view_projections"]] == [
+        "active_story",
+        "latest_story",
+        "fixed_story",
+        "plain",
+    ]
+    model = parse_tasks_text(
+        f"```items\n---\nitems_schema: {schema_path}\nkg_context_id: day1\n---\n```",
+        current_path=tmp_path / "graph.md",
+    )
+    assert model["projection_models"]["day1-story"]["model"]["slides"][0]["id"] == "intro"
+
+
 def test_unknown_view_context_fails_pack_loading(tmp_path):
     schema_path = _write_view_context_pack(tmp_path, fixed_context="missing")
 

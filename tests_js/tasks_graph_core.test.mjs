@@ -939,6 +939,10 @@ test('buildTasksProjectionConfigText emits a paste-ready kg.schema @views entry'
     assert.ok(single.includes('\n\twhere=kind=sight'), 'single filter -> where');
     assert.ok(single.includes('\n\tcaption="The map view"'), 'caption quoted');
     assert.ok(single.includes('\n\tdefault_open_depth=-1'), 'open depth');
+    assert.ok(
+        build({ id: 'review' }, 'day1').startsWith('# Paste under your @views section in the active .context file:\n'),
+        'context graphs target their active context file',
+    );
 
     // Full query-builder state is serialized as schema, including muted rules and global disable.
     const noted = build({
