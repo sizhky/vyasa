@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import html
 import re
 from urllib.parse import unquote, urlsplit
 
@@ -12,7 +11,6 @@ from ...helpers import (
     content_path_for_slug,
     content_slug_for_path,
     find_folder_note_file,
-    resolve_markdown_title,
 )
 from ..markdown.renderer import from_md
 
@@ -95,11 +93,8 @@ def render_link_preview_html(*, href: str, current_path: str | None = None) -> s
         return None
     page_slug = content_slug_for_path(file_path) or slug
     preview_html = from_md(section, current_path=page_slug)
-    title, _ = resolve_markdown_title(file_path)
     return (
         '<div class="vyasa-link-preview-shell">'
-        f'<div class="vyasa-link-preview-source text-[10px] font-semibold uppercase tracking-[0.18em]">'
-        f'{html.escape(title)}</div>'
         f'<div class="vyasa-link-preview-body">{preview_html}</div>'
         '</div>'
     )

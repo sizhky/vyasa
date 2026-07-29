@@ -165,11 +165,6 @@
         drop-shadow(0 0 10px color-mix(in srgb, var(--vyasa-primary) 24%, transparent));
 }
 
-.vyasa-link-preview-source {
-    padding: 0.35rem 2rem 0.45rem 0.9rem;
-    color: var(--vyasa-ink-soft);
-}
-
 .vyasa-link-preview-shell {
     display: flex;
     flex: 1 1 auto;

@@ -357,6 +357,7 @@ def test_link_preview_renders_one_section(tmp_path, monkeypatch):
     try:
         html = render_link_preview_html(href="#keep-me", current_path="doc")
         assert html is not None
+        assert "vyasa-link-preview-source" not in html
         assert "Keep Me" in html
         assert "alpha" in html
         assert "Skip Me" not in html
