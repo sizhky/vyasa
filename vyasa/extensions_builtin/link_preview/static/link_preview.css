@@ -3,7 +3,7 @@
     display: flex;
     flex-direction: column;
     z-index: 5000;
-    width: min(560px, 46vw);
+    width: max(560px, 46vw);
     min-width: 18rem;
     min-height: 12rem;
     max-width: calc(100vw - 24px);

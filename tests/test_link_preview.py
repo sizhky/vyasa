@@ -7,7 +7,7 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     popup_rule = css.split(".vyasa-link-preview-popover.is-open", 1)[1].split("}", 1)[0]
     card_rule = css.split(".vyasa-link-preview-card {", 1)[1].split("}", 1)[0]
 
-    assert "width: min(560px, 46vw);" in css
+    assert "width: max(560px, 46vw);" in css
     assert "box-shadow:" in popup_rule
     assert "box-shadow:" not in card_rule
 
