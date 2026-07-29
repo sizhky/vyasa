@@ -413,9 +413,12 @@ function tasksTaperedArrowHeadPath(bezierPath, size) {
     ].join(' ');
 }
 
-function tasksMixedEdgePath(props) {
+function tasksEdgeIsMixed(props) {
     const horizontal = (position) => position === 'left' || position === 'right';
-    if (horizontal(props.sourcePosition) === horizontal(props.targetPosition)) return null;
+    return horizontal(props.sourcePosition) !== horizontal(props.targetPosition);
+}
+
+function tasksEdgePath(props) {
     const distance = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY);
     const stub = Math.max(56, Math.min(180, distance * 0.45));
     const shift = (x, y, position) => ({
@@ -5635,8 +5638,8 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             };
             const CustomEdge = React.memo((props) => {
-                const mixedPath = tasksMixedEdgePath(props);
-                const [path, labelX, labelY] = mixedPath || rf.getBezierPath(props);
+                const mixedEdge = tasksEdgeIsMixed(props);
+                const [path, labelX, labelY] = tasksEdgePath(props);
                 React.useEffect(() => {
                     traceTasksEdge('render', props, {
                         sourceX: props.sourceX,
@@ -5654,14 +5657,14 @@ async function renderTasksGraphs(rootElement = document) {
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
                 const strokeMode = props.data?.strokeMode || highlightMode;
-                const useTaper = !mixedPath && !props.animated && ['focused-in', 'focused-out', 'selected', 'selected-in', 'selected-out'].includes(strokeMode);
+                const useTaper = !mixedEdge && !props.animated && ['focused-in', 'focused-out', 'selected', 'selected-in', 'selected-out'].includes(strokeMode);
                 const taperPath = useTaper
                     ? tasksTaperedBezierPath(path, (Number(props.style?.strokeWidth) || 4) * 2.65, Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42))
                     : '';
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
                 const edgeArrowPath = tasksTaperedArrowHeadPath(
                     path,
-                    Math.max(taperPath ? 10 : 8, strokeWidth * (taperPath ? 3.0 : 2.4))
+                    Math.max(10, strokeWidth * 3.0)
                 );
                 const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
                 const prominentLabel = showFullLabel;

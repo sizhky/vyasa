@@ -101,6 +101,7 @@ def test_tasks_edge_anchors_use_standard_sides_until_both_are_congested():
             ['far vertical gap', { x: 262, y: -1163 }, { x: 12, y: 168 }, 'bottom', 'top'],
             ['far horizontal', { x: 926, y: 45 }, { x: 12, y: 168 }, 'left', 'right'],
             ['far diagonal', { x: 1371, y: 2311 }, { x: -941, y: 210 }, 'left', 'right'],
+            ['near vertical', { x: 145, y: -8 }, { x: 19, y: 164 }, 'bottom', 'top'],
             ['close diagonal', { x: 219, y: 11 }, { x: 12, y: 168 }, 'left', 'top'],
         ];
         for (const [name, source, target, sourceSide, targetSide] of cases) {
@@ -1002,10 +1003,12 @@ def test_tasks_projection_groups_use_their_own_dimension_tone():
     assert ": (collapsedGroupColor || projectionGroupTone || nodeColor);" in source
 
 
-def test_tasks_edge_labels_use_react_flow_bezier_coordinates():
+def test_tasks_edges_use_pronounced_bezier_coordinates_and_uniform_arrowheads():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "const [path, labelX, labelY] = rf.getBezierPath(props);" in source
+    assert "const stub = Math.max(56, Math.min(180, distance * 0.45));" in source
+    assert "const [path, labelX, labelY] = tasksEdgePath(props);" in source
+    assert "Math.max(10, strokeWidth * 3.0)" in source
     assert "translate(${labelX}px, ${labelY}px)" in source
 
 

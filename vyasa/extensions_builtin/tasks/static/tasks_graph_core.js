@@ -861,7 +861,7 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
         Math.min(sourceRect.width, targetRect.width),
         Math.min(sourceRect.height, targetRect.height),
     );
-    if (horizontalCongestion <= 1 || verticalCongestion <= 1 || !mixedModeAllowed) {
+    if (horizontalCongestion <= 1.25 || verticalCongestion <= 1.25 || !mixedModeAllowed) {
         return horizontalCongestion <= verticalCongestion ? horizontalSide : verticalSide;
     }
     return Math.abs(dx) >= Math.abs(dy)
