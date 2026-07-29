@@ -1,4 +1,9 @@
-export function linkPreviewPointerPoints(sourceRect, popupRect, baseWidth = 28) {
+export function installLinkPreviewPanTracking(target, refresh) {
+    target.addEventListener('pointermove', refresh, true);
+    target.addEventListener('wheel', refresh, true);
+}
+
+export function linkPreviewPointerGeometry(sourceRect, popupRect, baseWidth = 28, overlap = 2) {
     const tip = {
         x: sourceRect.left + sourceRect.width / 2,
         y: sourceRect.top + sourceRect.height / 2,
@@ -16,27 +21,34 @@ export function linkPreviewPointerPoints(sourceRect, popupRect, baseWidth = 28) 
     const cornerGap = halfBase + 12;
     const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
     let base;
+    let inward;
     if (horizontalSide) {
-        const x = dx < 0 ? popupRect.left + 1 : popupRect.left + popupRect.width - 1;
+        const x = dx < 0 ? popupRect.left : popupRect.left + popupRect.width;
         const y = clamp(center.y + dy * Math.abs((x - center.x) / (dx || 1)),
             popupRect.top + cornerGap, popupRect.top + popupRect.height - cornerGap);
         base = { x, y };
+        inward = { x: dx < 0 ? overlap : -overlap, y: 0 };
     } else {
-        const y = dy < 0 ? popupRect.top + 1 : popupRect.top + popupRect.height - 1;
+        const y = dy < 0 ? popupRect.top : popupRect.top + popupRect.height;
         const x = clamp(center.x + dx * Math.abs((y - center.y) / (dy || 1)),
             popupRect.left + cornerGap, popupRect.left + popupRect.width - cornerGap);
         base = { x, y };
+        inward = { x: 0, y: dy < 0 ? overlap : -overlap };
     }
-    const length = Math.hypot(tip.x - base.x, tip.y - base.y) || 1;
-    const offset = {
-        x: -(tip.y - base.y) / length * halfBase,
-        y: (tip.x - base.x) / length * halfBase,
-    };
-    return [
+    const offset = horizontalSide
+        ? { x: 0, y: halfBase }
+        : { x: halfBase, y: 0 };
+    const outline = [
         [tip.x, tip.y],
         [base.x + offset.x, base.y + offset.y],
         [base.x - offset.x, base.y - offset.y],
     ];
+    const fill = [outline[0], ...outline.slice(1).map(([x, y]) => [x + inward.x, y + inward.y])];
+    return { fill, outline };
+}
+
+export function linkPreviewPointerPoints(sourceRect, popupRect, baseWidth = 28) {
+    return linkPreviewPointerGeometry(sourceRect, popupRect, baseWidth).outline;
 }
 
 export function resizeLinkPreviewRect(rect, edge, dx, dy, viewport, margin = 8) {

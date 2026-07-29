@@ -86,15 +86,15 @@
 
 .vyasa-link-preview-pointer polygon {
     fill: var(--vyasa-link-preview-surface);
-    filter:
-        drop-shadow(0 3px 4px rgba(15, 23, 42, 0.2))
-        drop-shadow(0 12px 18px rgba(15, 23, 42, 0.3));
 }
 
 .vyasa-link-preview-pointer path {
     fill: none;
     stroke: var(--vyasa-link-preview-border);
     stroke-width: 1px;
+    filter:
+        drop-shadow(0 3px 4px rgba(15, 23, 42, 0.2))
+        drop-shadow(0 12px 18px rgba(15, 23, 42, 0.3));
 }
 
 .vyasa-link-preview-card {

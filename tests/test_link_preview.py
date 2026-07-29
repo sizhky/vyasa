@@ -9,7 +9,7 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
     popup_rule = css.split(".vyasa-link-preview-popover.is-open", 1)[1].split("}", 1)[0]
     card_rule = css.split(".vyasa-link-preview-card {", 1)[1].split("}", 1)[0]
-    pointer_rule = css.split(".vyasa-link-preview-pointer polygon {", 1)[1].split("}", 1)[0]
+    pointer_rule = css.split(".vyasa-link-preview-pointer path {", 1)[1].split("}", 1)[0]
 
     assert "width: max(560px, 46vw);" in css
     assert "box-shadow:" in popup_rule
@@ -43,9 +43,39 @@ def test_link_preview_pointer_joins_source_to_nearest_popup_edge():
         const [tip, baseA, baseB] = points;
         if (tip[0] !== 50 || tip[1] !== 110) throw new Error(`wrong source tip: ${tip}`);
         const baseCenterX = (baseA[0] + baseB[0]) / 2;
-        if (Math.abs(baseCenterX - 201) > 0.001) throw new Error(`pointer missed popup edge`);
+        if (Math.abs(baseCenterX - 200) > 0.001) throw new Error(`pointer missed popup edge`);
         const baseWidth = Math.hypot(baseA[0] - baseB[0], baseA[1] - baseB[1]);
         if (Math.abs(baseWidth - 28) > 0.001) throw new Error(`pointer base is not 28px wide`);
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_link_preview_pointer_fill_overlaps_border_but_outline_stops_at_edge():
+    script = """
+        import { linkPreviewPointerGeometry } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';
+        const geometry = linkPreviewPointerGeometry(
+            { left: 0, top: 0, width: 100, height: 20 },
+            { left: 200, top: 50, width: 100, height: 100 },
+        );
+        if (geometry.outline[1][0] !== 200 || geometry.outline[2][0] !== 200) {
+            throw new Error(`outline does not stop at popup edge: ${geometry.outline}`);
+        }
+        if (geometry.fill[1][0] !== 202 || geometry.fill[2][0] !== 202) {
+            throw new Error(`fill does not cover popup border: ${geometry.fill}`);
+        }
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_link_preview_refreshes_pointer_during_canvas_pan():
+    script = """
+        import { installLinkPreviewPanTracking } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';
+        const target = new EventTarget();
+        let refreshes = 0;
+        installLinkPreviewPanTracking(target, () => { refreshes += 1; });
+        target.dispatchEvent(new Event('pointermove'));
+        target.dispatchEvent(new Event('wheel'));
+        if (refreshes !== 2) throw new Error(`expected two pan refreshes, got ${refreshes}`);
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 

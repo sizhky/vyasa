@@ -1,5 +1,9 @@
 import { LinkPreviewStack } from './link_preview_stack.js';
-import { linkPreviewPointerPoints, resizeLinkPreviewRect } from './link_preview_geometry.js';
+import {
+    installLinkPreviewPanTracking,
+    linkPreviewPointerGeometry,
+    resizeLinkPreviewRect,
+} from './link_preview_geometry.js';
 
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 let hoveredLink = null;
@@ -136,8 +140,8 @@ function createPreviewView({ point, link, onClose }) {
     });
     applyFontSize();
     const raise = () => {
-        const z = ++previewZ;
-        pointer.style.zIndex = String(z - 1);
+        const z = previewZ += 2;
+        pointer.style.zIndex = String(z + 1);
         popover.style.zIndex = String(z);
     };
     const updatePointer = () => {
@@ -147,10 +151,10 @@ function createPreviewView({ point, link, onClose }) {
         }
         const sourceRect = link.getBoundingClientRect();
         const popupRect = popover.getBoundingClientRect();
-        const points = linkPreviewPointerPoints(sourceRect, popupRect);
+        const geometry = linkPreviewPointerGeometry(sourceRect, popupRect);
         pointer.hidden = false;
-        pointerShape.setAttribute('points', points.map(([x, y]) => `${x},${y}`).join(' '));
-        pointerOutline.setAttribute('d', `M ${points[0]} L ${points[1]} M ${points[0]} L ${points[2]}`);
+        pointerShape.setAttribute('points', geometry.fill.map(([x, y]) => `${x},${y}`).join(' '));
+        pointerOutline.setAttribute('d', `M ${geometry.outline[0]} L ${geometry.outline[1]} M ${geometry.outline[0]} L ${geometry.outline[2]}`);
     };
     let drag = null;
     bar.addEventListener('pointerdown', (event) => {
@@ -262,6 +266,7 @@ function closePreviewsForPage(path) {
     previews.closeAll();
 }
 
+installLinkPreviewPanTracking(window, schedulePointerRefresh);
 document.body.addEventListener('pointerover', openFromEvent, true);
 document.body.addEventListener('pointermove', openFromEvent, true);
 document.body.addEventListener('pointerout', (event) => {
