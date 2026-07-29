@@ -46,6 +46,9 @@
 
 .vyasa-link-preview-pointer polygon {
     fill: var(--vyasa-link-preview-surface);
+    filter:
+        drop-shadow(0 3px 4px rgba(15, 23, 42, 0.2))
+        drop-shadow(0 12px 18px rgba(15, 23, 42, 0.3));
 }
 
 .vyasa-link-preview-pointer path {
@@ -113,6 +116,13 @@
         0 30px 80px rgba(0, 0, 0, 0.68),
         0 0 32px color-mix(in srgb, var(--vyasa-primary) 22%, transparent),
         0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.dark .vyasa-link-preview-pointer polygon {
+    filter:
+        drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45))
+        drop-shadow(0 16px 24px rgba(0, 0, 0, 0.65))
+        drop-shadow(0 0 10px color-mix(in srgb, var(--vyasa-primary) 24%, transparent));
 }
 
 .vyasa-link-preview-source {
