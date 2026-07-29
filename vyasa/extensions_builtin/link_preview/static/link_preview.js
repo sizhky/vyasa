@@ -202,6 +202,8 @@ function createPreviewView({ point, link, onClose }) {
         setContent: (html) => {
             content.className = 'vyasa-link-preview-content';
             content.innerHTML = html;
+            const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
+            if (relativePath) sourceLabel.textContent = relativePath;
             schedulePointerRefresh();
         },
     };

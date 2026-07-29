@@ -73,9 +73,9 @@ def _resolve_preview_file(slug: str):
     file_path = content_path_for_slug(slug, ".md")
     if file_path and file_path.exists():
         return file_path
-    folder_path = content_path_for_slug(slug)
-    if folder_path and folder_path.exists() and folder_path.is_dir():
-        return find_folder_note_file(folder_path)
+    raw_path = content_path_for_slug(slug)
+    if raw_path and raw_path.exists():
+        return find_folder_note_file(raw_path) if raw_path.is_dir() else raw_path
     return None
 
 
@@ -86,14 +86,17 @@ def render_link_preview_html(*, href: str, current_path: str | None = None) -> s
     file_path = _resolve_preview_file(slug)
     if not file_path or not file_path.exists():
         return None
-    source = file_path.read_text(encoding="utf-8")
-    section = _extract_markdown_section_text(source, fragment) if fragment else _default_section_markdown(source)
-    if not section and fragment:
-        section = _default_section_markdown(source)
-    if not section:
-        return None
-    page_slug = content_slug_for_path(file_path) or slug
-    preview_html = from_md(section, current_path=page_slug)
+    source = file_path.read_text(encoding="utf-8", errors="replace")
+    if file_path.suffix.lower() == ".md":
+        section = _extract_markdown_section_text(source, fragment) if fragment else _default_section_markdown(source)
+        if not section and fragment:
+            section = _default_section_markdown(source)
+        if not section:
+            return None
+        page_slug = content_slug_for_path(file_path) or slug
+        preview_html = from_md(section, current_path=page_slug)
+    else:
+        preview_html = f'<pre class="vyasa-link-preview-plain-text">{html.escape(source)}</pre>'
     relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
     return (
         f'<div class="vyasa-link-preview-shell" data-relative-path="{html.escape(relative_path, quote=True)}" '

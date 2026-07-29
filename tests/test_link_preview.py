@@ -1,6 +1,8 @@
 import subprocess
 from pathlib import Path
 
+from vyasa.extensions_builtin.link_preview import routes
+
 
 def test_link_preview_shadow_is_on_unclipped_outer_popup():
     css = Path("vyasa/extensions_builtin/link_preview/static/link_preview.css").read_text()
@@ -23,8 +25,10 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert "data-vyasa-link-preview-font-decrease" in source
     assert "data-vyasa-link-preview-font-increase" in source
     assert "event.shiftKey ? shell?.dataset.absolutePath : shell?.dataset.relativePath" in source
+    assert "if (relativePath) sourceLabel.textContent = relativePath;" in source
     assert "--vyasa-link-preview-font-size" in css
     assert "font-size: 1.75em;" in css
+    assert "width: max-content;" in css
     assert ".vyasa-link-preview-body .vyasa-doc-h2 { font-size: 1.5em; }" in css
     assert ".vyasa-link-preview-body .vyasa-doc-h6 { font-size: 1em; }" in css
 
@@ -65,6 +69,18 @@ def test_link_preview_resizes_from_each_edge():
         if (bottomRight.width !== 600 || bottomRight.height !== 500) throw new Error(`bottom-right corner failed`);
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_link_preview_renders_unknown_extension_as_escaped_text(tmp_path, monkeypatch):
+    source = tmp_path / "sample.xyz"
+    source.write_text("<node>value</node>")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "sample.xyz")
+
+    result = routes.render_link_preview_html(href="sample.xyz")
+
+    assert result is not None
+    assert '<pre class="vyasa-link-preview-plain-text">&lt;node&gt;value&lt;/node&gt;</pre>' in result
 
 
 def test_link_preview_stack_keeps_nested_previews_until_each_is_closed():
