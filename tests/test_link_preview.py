@@ -4,6 +4,7 @@ from pathlib import Path
 
 def test_link_preview_shadow_is_on_unclipped_outer_popup():
     css = Path("vyasa/extensions_builtin/link_preview/static/link_preview.css").read_text()
+    source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
     popup_rule = css.split(".vyasa-link-preview-popover.is-open", 1)[1].split("}", 1)[0]
     card_rule = css.split(".vyasa-link-preview-card {", 1)[1].split("}", 1)[0]
     pointer_rule = css.split(".vyasa-link-preview-pointer polygon {", 1)[1].split("}", 1)[0]
@@ -16,6 +17,8 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert "cursor: ew-resize;" in css
     assert "cursor: nwse-resize;" in css
     assert "cursor: nesw-resize;" in css
+    assert "event.target?.id !== 'main-content'" in source
+    assert "previews.closeAll();" in source
 
 
 def test_link_preview_pointer_joins_source_to_nearest_popup_edge():
@@ -99,7 +102,10 @@ def test_link_preview_stack_keeps_nested_previews_until_each_is_closed():
         if (stack.size !== 1 || views[0].removed || !views[1].removed) {
             throw new Error(`Escape must close child and leave parent open`);
         }
-        views[0].close();
-        if (stack.size !== 0 || !views[0].removed) throw new Error(`parent did not close`);
+        stack.open(child, { clientX: 30, clientY: 30 });
+        stack.closeAll();
+        if (stack.size !== 0 || !views[0].removed || !views[2].removed) {
+            throw new Error(`page change must close every preview`);
+        }
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)

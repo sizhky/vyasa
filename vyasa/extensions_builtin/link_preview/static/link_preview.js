@@ -6,6 +6,7 @@ let hoveredLink = null;
 let modifierDown = false;
 let previewZ = 5000;
 let pointerFrame = null;
+let previewPage = `${window.location.pathname}${window.location.search}`;
 const previewViews = new Set();
 
 function schedulePointerRefresh() {
@@ -227,6 +228,14 @@ function handleKeydown(event) {
     trackModifier(event);
 }
 
+function closePreviewsForPage(path) {
+    const url = new URL(path || window.location.href, window.location.origin);
+    const nextPage = `${url.pathname}${url.search}`;
+    if (nextPage === previewPage) return;
+    previewPage = nextPage;
+    previews.closeAll();
+}
+
 document.body.addEventListener('pointerover', openFromEvent, true);
 document.body.addEventListener('pointermove', openFromEvent, true);
 document.body.addEventListener('pointerout', (event) => {
@@ -251,4 +260,13 @@ window.addEventListener('keyup', trackModifier, true);
 window.addEventListener('blur', () => { modifierDown = false; });
 window.addEventListener('resize', schedulePointerRefresh);
 window.addEventListener('scroll', schedulePointerRefresh, true);
-document.body.addEventListener('htmx:afterSwap', () => { hoveredLink = null; }, true);
+window.addEventListener('popstate', () => closePreviewsForPage(window.location.href));
+document.body.addEventListener('htmx:afterSwap', (event) => {
+    hoveredLink = null;
+    if (event.target?.id !== 'main-content') return;
+    closePreviewsForPage(
+        event.detail?.xhr?.responseURL
+        || event.detail?.requestConfig?.path
+        || window.location.href,
+    );
+}, true);

@@ -43,6 +43,10 @@ export class LinkPreviewStack {
         return true;
     }
 
+    closeAll() {
+        Array.from(this.entries).reverse().forEach((entry) => this.close(entry));
+    }
+
     async load(entry, href, currentPath) {
         try {
             const content = await this.fetchPreview({
