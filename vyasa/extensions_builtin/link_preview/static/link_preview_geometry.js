@@ -1,4 +1,4 @@
-export function linkPreviewPointerPoints(sourceRect, popupRect, baseWidth = 16) {
+export function linkPreviewPointerPoints(sourceRect, popupRect, baseWidth = 28) {
     const tip = {
         x: sourceRect.left + sourceRect.width / 2,
         y: sourceRect.top + sourceRect.height / 2,

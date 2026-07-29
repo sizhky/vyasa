@@ -24,6 +24,7 @@ def test_link_preview_pointer_joins_source_to_nearest_popup_edge():
         const baseCenterX = (baseA[0] + baseB[0]) / 2;
         if (Math.abs(baseCenterX - 201) > 0.001) throw new Error(`pointer missed popup edge`);
         if (Math.abs(baseA[0] - baseB[0]) > 0.001) throw new Error(`pointer base is not edge-aligned`);
+        if (Math.abs(baseA[1] - baseB[1]) !== 28) throw new Error(`pointer base is not 28px wide`);
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
