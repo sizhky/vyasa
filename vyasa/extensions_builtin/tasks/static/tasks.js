@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
 import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
@@ -2616,6 +2616,33 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
             bbox: { width: 250, height: 80 },
         };
     }
+    const compactGroupChildren = (positions, beforeBbox) => {
+        const order = [...groupChildren]
+            .sort((left, right) => (
+                (left.__kind__ === right.__kind__ ? 0 : (left.__kind__ === 'task' ? -1 : 1))
+                || ((positions[left.id]?.y || 0) - (positions[right.id]?.y || 0))
+                || ((positions[left.id]?.x || 0) - (positions[right.id]?.x || 0))
+            ))
+            .map((child) => child.id);
+        const compacted = packTaskChildRects(positions, {
+            gap: Math.max(12, Math.min(layoutConfig.nodeSpacing || 72, 36)),
+            padX: groupPadding,
+            padTop: groupPadTop,
+            padBottom: groupPadding,
+            minWidth: 250,
+            minHeight: 80,
+            targetAspectRatio: 1.05,
+            order,
+        });
+        logTasksDebugVerbose('groupPacking', {
+            groupId,
+            before: rectSummary(beforeBbox),
+            after: rectSummary(compacted.bbox),
+            rows: compacted.rows,
+            positions: Object.fromEntries(Object.entries(compacted.positions).map(([id, rect]) => [id, rectSummary(rect)])),
+        });
+        return compacted;
+    };
     const childIds = new Set(groupChildren.map((child) => child.id));
     const childEdges = reduceTransitiveEdges((model.dependency_edges || [])
         .filter((edge) => childIds.has(edge.source) && childIds.has(edge.target)));
@@ -2646,13 +2673,10 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
                 height: child.height || 0,
             };
         }
-        return {
-            positions,
-            bbox: {
-                width: Math.max(elkLayout.width || 0, 250),
-                height: Math.max(elkLayout.height || 0, 80),
-            },
-        };
+        return compactGroupChildren(positions, {
+            width: Math.max(elkLayout.width || 0, 250),
+            height: Math.max(elkLayout.height || 0, 80),
+        });
     }
     const packedLayout = layoutDisconnectedTaskNodes(groupChildren, groupDirection, {
         gap: Math.max(layoutConfig.nodeSpacing || 72, layoutConfig.layerSpacing || 112),
@@ -2671,13 +2695,10 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
             height: child.height || 0,
         };
     }
-    return {
-        positions,
-        bbox: {
-            width: Math.max(packedLayout.bbox.width || 0, 250),
-            height: Math.max(packedLayout.bbox.height || 0, 80),
-        },
-    };
+    return compactGroupChildren(positions, {
+        width: Math.max(packedLayout.bbox.width || 0, 250),
+        height: Math.max(packedLayout.bbox.height || 0, 80),
+    });
 }
 
 async function layoutExpandedGroups(model, expandedSet, jitterConfig = {}, layoutConfig = {}, useElkForGroups = true) {

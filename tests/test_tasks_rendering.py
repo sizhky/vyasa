@@ -732,6 +732,87 @@ def test_tasks_without_next_group_are_laid_out_before_child_groups():
 
     assert collapsed.index("for (const task of model.tasks") < collapsed.index("order.forEach((groupId")
     assert nested.index("...(model.task_children?.[groupId]") < nested.index("...(model.group_tree?.[groupId]")
+    assert "packTaskChildRects(positions" in nested
+    assert "logTasksDebugVerbose('groupPacking'" in nested
+
+
+def test_tasks_child_rect_packing_preserves_order_and_removes_empty_space():
+    script = """
+        import { packTaskChildRects } from './vyasa/extensions_builtin/tasks/static/tasks_graph_core.js';
+        const result = packTaskChildRects({
+            a: { x: 20, y: 30, width: 100, height: 50 },
+            b: { x: 520, y: 30, width: 100, height: 50 },
+            c: { x: 20, y: 330, width: 100, height: 50 },
+            d: { x: 520, y: 330, width: 100, height: 50 },
+        }, { gap: 20, padX: 10, padTop: 30, padBottom: 10 });
+        const expected = {
+            a: { x: 10, y: 30 }, b: { x: 130, y: 30 },
+            c: { x: 10, y: 100 }, d: { x: 130, y: 100 },
+        };
+        for (const [id, position] of Object.entries(expected)) {
+            if (result.positions[id].x !== position.x || result.positions[id].y !== position.y) {
+                throw new Error(`${id} moved to ${JSON.stringify(result.positions[id])}`);
+            }
+        }
+        if (result.bbox.width !== 240 || result.bbox.height !== 160) {
+            throw new Error(`wrong bbox: ${JSON.stringify(result.bbox)}`);
+        }
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_tasks_child_rect_packing_keeps_siblings_separate():
+    script = """
+        import { packTaskChildRects } from './vyasa/extensions_builtin/tasks/static/tasks_graph_core.js';
+        const result = packTaskChildRects({
+            large: { x: 800, y: 600, width: 900, height: 700 },
+            small: { x: 40, y: 30, width: 220, height: 60 },
+            tall: { x: 1800, y: 100, width: 250, height: 500 },
+        }, { gap: 24, padX: 40, padTop: 80, padBottom: 40 });
+        const rects = Object.values(result.positions);
+        for (let index = 0; index < rects.length; index += 1) {
+            for (const other of rects.slice(index + 1)) {
+                const overlapX = Math.min(rects[index].x + rects[index].width, other.x + other.width)
+                    - Math.max(rects[index].x, other.x);
+                const overlapY = Math.min(rects[index].y + rects[index].height, other.y + other.height)
+                    - Math.max(rects[index].y, other.y);
+                if (overlapX > -24 && overlapY > -24) throw new Error('siblings overlap');
+            }
+        }
+        if (result.bbox.width * result.bbox.height >= 2000000) {
+            throw new Error(`empty space remained: ${JSON.stringify(result.bbox)}`);
+        }
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_tasks_child_rect_packing_reflows_horizontal_rows_toward_square():
+    script = """
+        import { packTaskChildRects } from './vyasa/extensions_builtin/tasks/static/tasks_graph_core.js';
+        const positions = Object.fromEntries(Array.from({ length: 7 }, (_, index) => [
+            `n${index}`, { x: index * 500, y: 20, width: 220, height: 60 },
+        ]));
+        const result = packTaskChildRects(
+            positions,
+            { gap: 20, padX: 20, padTop: 40, padBottom: 20, targetAspectRatio: 1.05 }
+        );
+        const aspect = result.bbox.width / result.bbox.height;
+        if (result.rows.length < 2 || result.rows.length > 4) {
+            throw new Error(`horizontal row survived: ${JSON.stringify(result.rows)}`);
+        }
+        if (aspect < 0.7 || aspect > 1.5) {
+            throw new Error(`packing is not square enough: ${aspect}`);
+        }
+        const rowLengths = result.rows.map((row) => row.length);
+        if (Math.max(...rowLengths) - Math.min(...rowLengths) > 1) {
+            throw new Error(`last row is not balanced: ${rowLengths}`);
+        }
+        const lastRowId = result.rows[result.rows.length - 1][0];
+        if (result.positions[lastRowId].x <= 20) {
+            throw new Error('short final row was not centered');
+        }
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
 def test_view_regrouping_collapses_projected_copies_to_source_nodes():
