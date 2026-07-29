@@ -731,6 +731,12 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
     if (sourceKind === 'group' && targetKind === 'group' && Math.abs(dx) >= Math.abs(dy) * 0.8) {
         return horizontalSide;
     }
+    if (gapX > 0 && gapY > 0) {
+        return {
+            sourceSide: dy >= 0 ? 'bottom' : 'top',
+            targetSide: dx >= 0 ? 'left' : 'right',
+        };
+    }
     const significantRowOverlap = overlapY >= Math.min(sourceRect.height, targetRect.height) * 0.35;
     if (significantRowOverlap && Math.abs(dx) >= Math.abs(dy) * 1.1) {
         return horizontalSide;
@@ -812,7 +818,7 @@ export function buildTaskEdgeAnchors(nodes, edges) {
         const sourceRect = rects[edge.source];
         const targetRect = rects[edge.target];
         if (!sourceRect || !targetRect) return { ...edge, _anchorIndex: index };
-        const { sourceSide, targetSide, sortAxis } = edgeAnchorSides(sourceRect, targetRect, nodesById[edge.source], nodesById[edge.target]);
+        const { sourceSide, targetSide } = edgeAnchorSides(sourceRect, targetRect, nodesById[edge.source], nodesById[edge.target]);
         const anchored = {
             ...edge,
             _anchorIndex: index,
@@ -823,8 +829,12 @@ export function buildTaskEdgeAnchors(nodes, edges) {
         const incomingKey = `${edge.target}:target:${targetSide}`;
         if (!outgoingGroups.has(outgoingKey)) outgoingGroups.set(outgoingKey, []);
         if (!incomingGroups.has(incomingKey)) incomingGroups.set(incomingKey, []);
-        const targetSort = sortAxis === 'y' ? targetRect.y + targetRect.height / 2 : targetRect.x + targetRect.width / 2;
-        const sourceSort = sortAxis === 'y' ? sourceRect.y + sourceRect.height / 2 : sourceRect.x + sourceRect.width / 2;
+        const targetSort = ['left', 'right'].includes(sourceSide)
+            ? targetRect.y + targetRect.height / 2
+            : targetRect.x + targetRect.width / 2;
+        const sourceSort = ['left', 'right'].includes(targetSide)
+            ? sourceRect.y + sourceRect.height / 2
+            : sourceRect.x + sourceRect.width / 2;
         outgoingGroups.get(outgoingKey).push({ edge: anchored, sortValue: targetSort });
         incomingGroups.get(incomingKey).push({ edge: anchored, sortValue: sourceSort });
         return anchored;

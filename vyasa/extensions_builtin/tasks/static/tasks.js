@@ -5523,6 +5523,19 @@ async function renderTasksGraphs(rootElement = document) {
             };
             const CustomEdge = React.memo((props) => {
                 const [path, labelX, labelY] = rf.getBezierPath(props);
+                React.useEffect(() => {
+                    traceTasksEdge('render', props, {
+                        sourceX: props.sourceX,
+                        sourceY: props.sourceY,
+                        sourcePosition: props.sourcePosition,
+                        targetX: props.targetX,
+                        targetY: props.targetY,
+                        targetPosition: props.targetPosition,
+                    });
+                }, [
+                    props.source, props.target, props.sourceX, props.sourceY, props.sourcePosition,
+                    props.targetX, props.targetY, props.targetPosition,
+                ]);
                 const fullLabel = String(props.label || '').replace(/\\n/g, '\n');
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';

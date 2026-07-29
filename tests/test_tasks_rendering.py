@@ -93,6 +93,23 @@ def test_tasks_group_group_edges_prefer_side_anchors_when_side_by_side():
     assert "edgeAnchorSides(sourceRect, targetRect, nodesById[edge.source], nodesById[edge.target])" in core_source
 
 
+def test_tasks_diagonal_edge_uses_mixed_facing_anchors():
+    script = """
+        import { buildTaskEdgeAnchors } from './vyasa/extensions_builtin/tasks/static/tasks_graph_core.js';
+        const nodes = [
+            { id: 'blue', position: { x: 574, y: 103 }, width: 513, height: 213 },
+            { id: 'orange', position: { x: 22, y: 378 }, width: 514, height: 214 },
+        ];
+        const anchored = buildTaskEdgeAnchors(nodes, [{ id: 'edge', source: 'blue', target: 'orange' }]);
+        const edge = anchored.edges[0];
+        if (!edge.sourceHandle.startsWith('source-bottom-')) throw new Error(`wrong source: ${edge.sourceHandle}`);
+        if (!edge.targetHandle.startsWith('target-right-')) throw new Error(`wrong target: ${edge.targetHandle}`);
+        if (anchored.nodeHandles.blue.source[0].side !== 'bottom') throw new Error('blue handle is not on bottom');
+        if (anchored.nodeHandles.orange.target[0].side !== 'right') throw new Error('orange handle is not on right');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
 def test_tasks_filter_panel_has_group_by_hierarchy_controls():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 

@@ -430,6 +430,7 @@ async def extension_static_asset(extension_id: str, asset_path: str):
     path = extension_asset_path(extension_id, asset_path)
     if path.exists() and path.is_file():
         response = FileResponse(path)
+        response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
         logger.info(
             "extension static asset extension={} path={} bytes={} elapsed_ms={:.2f}",
             extension_id,
