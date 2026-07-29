@@ -44,15 +44,16 @@ export function resizeLinkPreviewRect(rect, edge, dx, dy, viewport, margin = 8) 
     const bottom = rect.top + rect.height;
     const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
     let { left, top, width, height } = rect;
-    if (edge === 'left') {
+    if (edge.includes('left')) {
         width = clamp(rect.width - dx, 288, right - margin);
         left = right - width;
-    } else if (edge === 'right') {
+    } else if (edge.includes('right')) {
         width = clamp(rect.width + dx, 288, viewport.width - rect.left - margin);
-    } else if (edge === 'top') {
+    }
+    if (edge.includes('top')) {
         height = clamp(rect.height - dy, 192, bottom - margin);
         top = bottom - height;
-    } else if (edge === 'bottom') {
+    } else if (edge.includes('bottom')) {
         height = clamp(rect.height + dy, 192, viewport.height - rect.top - margin);
     }
     return { left, top, width, height };

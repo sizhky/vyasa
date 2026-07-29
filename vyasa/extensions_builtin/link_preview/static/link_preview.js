@@ -35,7 +35,10 @@ function positionPopover(popover, point) {
 }
 
 function installResizeHandles(popover, raise) {
-    for (const edge of ['top', 'right', 'bottom', 'left']) {
+    for (const edge of [
+        'top', 'right', 'bottom', 'left',
+        'top-left', 'top-right', 'bottom-right', 'bottom-left',
+    ]) {
         const handle = document.createElement('div');
         handle.className = `vyasa-link-preview-resize-handle is-${edge}`;
         handle.dataset.resizeEdge = edge;

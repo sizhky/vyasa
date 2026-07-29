@@ -14,6 +14,8 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert "box-shadow:" not in card_rule
     assert "cursor: ns-resize;" in css
     assert "cursor: ew-resize;" in css
+    assert "cursor: nwse-resize;" in css
+    assert "cursor: nesw-resize;" in css
 
 
 def test_link_preview_pointer_joins_source_to_nearest_popup_edge():
@@ -42,10 +44,14 @@ def test_link_preview_resizes_from_each_edge():
         const right = resizeLinkPreviewRect(original, 'right', 100, 0, viewport);
         const top = resizeLinkPreviewRect(original, 'top', 0, 100, viewport);
         const bottom = resizeLinkPreviewRect(original, 'bottom', 0, 100, viewport);
+        const topLeft = resizeLinkPreviewRect(original, 'top-left', 100, 100, viewport);
+        const bottomRight = resizeLinkPreviewRect(original, 'bottom-right', 100, 100, viewport);
         if (left.left !== 200 || left.width !== 400) throw new Error(`left edge failed`);
         if (right.left !== 100 || right.width !== 600) throw new Error(`right edge failed`);
         if (top.top !== 200 || top.height !== 300) throw new Error(`top edge failed`);
         if (bottom.top !== 100 || bottom.height !== 500) throw new Error(`bottom edge failed`);
+        if (topLeft.left !== 200 || topLeft.top !== 200 || topLeft.width !== 400 || topLeft.height !== 300) throw new Error(`top-left corner failed`);
+        if (bottomRight.width !== 600 || bottomRight.height !== 500) throw new Error(`bottom-right corner failed`);
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
