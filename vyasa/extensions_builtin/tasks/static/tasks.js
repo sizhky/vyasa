@@ -420,7 +420,7 @@ function tasksEdgeIsMixed(props) {
 
 function tasksEdgePath(props) {
     const distance = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY);
-    const stub = Math.max(56, Math.min(180, distance * 0.45));
+    const stub = Math.max(56, distance * 0.45);
     const shift = (x, y, position) => ({
         x: x + (position === 'left' ? -stub : position === 'right' ? stub : 0),
         y: y + (position === 'top' ? -stub : position === 'bottom' ? stub : 0),

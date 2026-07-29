@@ -1006,7 +1006,7 @@ def test_tasks_projection_groups_use_their_own_dimension_tone():
 def test_tasks_edges_use_pronounced_bezier_coordinates_and_uniform_arrowheads():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "const stub = Math.max(56, Math.min(180, distance * 0.45));" in source
+    assert "const stub = Math.max(56, distance * 0.45);" in source
     assert "const [path, labelX, labelY] = tasksEdgePath(props);" in source
     assert "Math.max(10, strokeWidth * 3.0)" in source
     assert "translate(${labelX}px, ${labelY}px)" in source
