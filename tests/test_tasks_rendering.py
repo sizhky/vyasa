@@ -618,9 +618,47 @@ def test_tasks_hover_card_toggle_matches_edge_toggle_contract():
 
     assert "setHoverCardsEnabled((current) => !current);" in shortcut
     assert "setHoverCardsEnabled((current) => !current)" in actions
-    assert "if (!hoverCardsEnabled || !groupHoverTooltip) return null;" in source
+    assert "if (!hoverCardsEnabled) return null;" in source
     assert "refreshHoverCardRef" not in source
     assert "&& key !== 'h'" not in source
+
+
+def test_tasks_hover_card_ctrl_click_builds_x_dismissible_stack():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "event.key === 'Control'" in source
+    assert "const [stickyGroupHoverTooltips, setStickyGroupHoverTooltips]" in source
+    assert "const next = [...cards, sticky];" in source
+    assert "key === 'x' && stickyGroupHoverTooltipsRef.current.length" in source
+    assert "dismissLatestStickyHoverCard('shortcut-x')" in source
+    assert "dismissAllStickyHoverCards('shortcut-shift-x')" in source
+    assert "dismissLatestStickyHoverCard('escape')" not in source
+    assert "dismissStickyHoverCard(card.stickyId, 'close-button')" in source
+    assert "dismissStickyHoverCard('canvas-pointer-down')" not in source
+    assert "groupHoverTooltipRef.current?.sticky" not in source
+
+
+def test_tasks_hover_card_stacks_title_above_node_id():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    tooltip_source = source.split("const GroupHoverTooltipCard = ({ card, stickyIndex = -1, inViewportPortal = false }) => {", 1)[1].split("const GroupHoverTooltip = () => {", 1)[0]
+
+    assert "stackHeader: true" in tooltip_source
+    assert "groupHoverTooltip.label" not in tooltip_source
+    assert "card.label" in tooltip_source
+    assert "card.nodeId" in tooltip_source
+    assert "overflowWrap: 'anywhere'" in tooltip_source
+
+
+def test_tasks_sticky_hover_cards_suppress_duplicates_and_pan_without_scaling():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "target?.closest?.('[data-vyasa-hover-card-sticky=\"true\"]')" in source
+    assert "stickyGroupHoverTooltipsRef.current.some((card) => card.nodeId === nodeId)" in source
+    assert "traceHoverHit('sticky'" in source
+    assert "flowX: hoverAnchor.x" in source
+    assert "flowY: hoverAnchor.y" in source
+    assert "window.React.createElement(rf.ViewportPortal" in source
+    assert "`scale(${1 / viewportZoom})`" in source
 
 
 def test_tasks_filter_reset_button_stays_in_filter_card_header():

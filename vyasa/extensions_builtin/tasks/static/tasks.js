@@ -3222,7 +3222,10 @@ function tasksDetailPanelWidth(options = {}) {
     }).sort((left, right) => left - right);
     const weightedWidth = rowWidths.length ? rowWidths[Math.max(0, Math.floor(rowWidths.length * 0.72) - 1)] : 0;
     const imageReserve = options.hasImage ? 34 : 0;
-    return Math.round(Math.min(options.maxWidth || 720, Math.max(options.minWidth || 280, titleWidth + idWidth + imageReserve + 44, weightedWidth + 136)));
+    const headerWidth = options.stackHeader
+        ? Math.max(titleWidth + imageReserve, idWidth) + 44
+        : titleWidth + idWidth + imageReserve + 44;
+    return Math.round(Math.min(options.maxWidth || 720, Math.max(options.minWidth || 280, headerWidth, weightedWidth + 136)));
 }
 
 function tasksNoteEditorMetrics(note, font = '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif') {
@@ -3657,6 +3660,12 @@ async function renderTasksGraphs(rootElement = document) {
             const [dragSelection, setDragSelection] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
+            const groupHoverTooltipRef = React.useRef(null);
+            groupHoverTooltipRef.current = groupHoverTooltip;
+            const [stickyGroupHoverTooltips, setStickyGroupHoverTooltips] = React.useState([]);
+            const stickyGroupHoverTooltipsRef = React.useRef([]);
+            stickyGroupHoverTooltipsRef.current = stickyGroupHoverTooltips;
+            const stickyGroupHoverTooltipIdRef = React.useRef(0);
             const [helpOpen, setHelpOpen] = React.useState(false);
             const slides = React.useMemo(() => {
                 const list = Array.isArray(baseProjectionState.model?.slides) ? baseProjectionState.model.slides : [];
@@ -7273,8 +7282,81 @@ async function renderTasksGraphs(rootElement = document) {
                 setActiveSwatchFilters((current) => toggleTasksFilterQueryValue(current, key, value, enabled));
             }, []);
             const clearGroupHoverTooltip = React.useCallback(() => {
+                groupHoverTooltipRef.current = null;
                 setGroupHoverTooltip(null);
             }, []);
+            const dismissStickyHoverCard = React.useCallback((stickyId, reason) => {
+                setStickyGroupHoverTooltips((cards) => {
+                    const dismissed = cards.find((card) => card.stickyId === stickyId);
+                    if (!dismissed) return cards;
+                    logTasksDebug('hoverCardStickyClear', { widgetId, nodeId: dismissed.nodeId || '', reason });
+                    const next = cards.filter((card) => card.stickyId !== stickyId);
+                    stickyGroupHoverTooltipsRef.current = next;
+                    return next;
+                });
+            }, [widgetId]);
+            const dismissLatestStickyHoverCard = React.useCallback((reason) => {
+                const cards = stickyGroupHoverTooltipsRef.current;
+                const latest = cards[cards.length - 1];
+                if (latest) dismissStickyHoverCard(latest.stickyId, reason);
+            }, [dismissStickyHoverCard]);
+            const dismissAllStickyHoverCards = React.useCallback((reason) => {
+                const cards = stickyGroupHoverTooltipsRef.current;
+                if (!cards.length) return;
+                stickyGroupHoverTooltipsRef.current = [];
+                setStickyGroupHoverTooltips([]);
+                logTasksDebug('hoverCardStickyClearAll', { widgetId, count: cards.length, reason });
+            }, [widgetId]);
+            React.useEffect(() => {
+                let armed = '';
+                const keyFor = (card) => card ? `${card.nodeId || ''}\u0000${card.label || ''}` : '';
+                const onKeyDown = (event) => {
+                    const target = event.target instanceof Element ? event.target : null;
+                    const wrapper = flowWrapperRef.current;
+                    const key = event.key.toLowerCase();
+                    const widgetFocused = wrapper?.contains(document.activeElement) || wrapper?.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
+                    const editable = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName));
+                    if (key === 'x' && stickyGroupHoverTooltipsRef.current.length && widgetFocused && !editable && !event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey) {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        if (event.shiftKey) dismissAllStickyHoverCards('shortcut-shift-x');
+                        else dismissLatestStickyHoverCard('shortcut-x');
+                        return;
+                    }
+                    if (event.key === 'Control' && !event.repeat && !event.metaKey && !event.altKey && !event.shiftKey) {
+                        const current = groupHoverTooltipRef.current;
+                        armed = keyFor(current);
+                    } else if (event.key !== 'Control') armed = '';
+                };
+                const onKeyUp = (event) => {
+                    if (event.key !== 'Control' || !armed) return;
+                    const current = groupHoverTooltipRef.current;
+                    if (!current || keyFor(current) !== armed) return;
+                    const sticky = {
+                        ...current,
+                        sticky: true,
+                        stickyId: ++stickyGroupHoverTooltipIdRef.current,
+                        placement: 'canvas',
+                    };
+                    armed = '';
+                    setStickyGroupHoverTooltips((cards) => {
+                        const next = [...cards, sticky];
+                        stickyGroupHoverTooltipsRef.current = next;
+                        return next;
+                    });
+                    clearGroupHoverTooltip();
+                    logTasksDebug('hoverCardStickySet', { widgetId, nodeId: sticky.nodeId || '' });
+                };
+                const disarm = () => { armed = ''; };
+                document.addEventListener('keydown', onKeyDown, true);
+                document.addEventListener('keyup', onKeyUp);
+                window.addEventListener('blur', disarm);
+                return () => {
+                    document.removeEventListener('keydown', onKeyDown, true);
+                    document.removeEventListener('keyup', onKeyUp);
+                    window.removeEventListener('blur', disarm);
+                };
+            }, [clearGroupHoverTooltip, dismissAllStickyHoverCards, dismissLatestStickyHoverCard, widgetId]);
             const hoverTraceKeyRef = React.useRef('');
             const logHoverCycle = React.useCallback((label, payload = {}) => {
                 logTasksDebug(label, payload);
@@ -7319,6 +7401,11 @@ async function renderTasksGraphs(rootElement = document) {
                         ...extra,
                     });
                 };
+                if (target?.closest?.('[data-vyasa-hover-card-sticky="true"]')) {
+                    clearGroupHoverTooltip();
+                    traceHoverHit('sticky-card');
+                    return;
+                }
                 if (!reactFlow || !wrapper) return;
                 if (wrapper.querySelector('.react-flow__pane.dragging')) {
                     traceHoverHit('dragging');
@@ -7389,17 +7476,27 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                     }
                 }
-                const hoverCard = { label, nodeId, image, rows };
-                if (hoverCardRightRail) {
-                    setGroupHoverTooltip({ ...hoverCard, placement: 'rightRail' });
-                } else {
-                    setGroupHoverTooltip({
-                        ...hoverCard,
-                        placement: 'cursor',
-                        x: event.clientX - bounds.left + 12,
-                        y: event.clientY - bounds.top + 18,
-                    });
+                if (stickyGroupHoverTooltipsRef.current.some((card) => card.nodeId === nodeId)) {
+                    clearGroupHoverTooltip();
+                    traceHoverHit('sticky', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
+                    return;
                 }
+                const hoverAnchor = reactFlow.screenToFlowPosition({ x: event.clientX + 12, y: event.clientY + 18 });
+                const hoverCard = {
+                    label,
+                    nodeId,
+                    image,
+                    rows,
+                    flowX: hoverAnchor.x,
+                    flowY: hoverAnchor.y,
+                    x: event.clientX - bounds.left + 12,
+                    y: event.clientY - bounds.top + 18,
+                };
+                const nextHoverCard = hoverCardRightRail
+                    ? { ...hoverCard, placement: 'rightRail' }
+                    : { ...hoverCard, placement: 'cursor' };
+                groupHoverTooltipRef.current = nextHoverCard;
+                setGroupHoverTooltip(nextHoverCard);
                 traceHoverHit('hit', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx, groupHoverChanged });
             }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, egoMode, hoverInactiveNodes, hoverCardRightRail, hoveredNodeId, logHoverCycle, selectedNodeId]);
             const selectGroupDescendants = React.useCallback((node) => {
@@ -7908,27 +8005,29 @@ async function renderTasksGraphs(rootElement = document) {
                     },
                 }, '×');
             };
-            const GroupHoverTooltip = () => {
+            const GroupHoverTooltipCard = ({ card, stickyIndex = -1, inViewportPortal = false }) => {
                 const tooltipRef = window.React.useRef(null);
                 const [measuredSize, setMeasuredSize] = window.React.useState({ width: 0, height: 0 });
+                const viewport = typeof rf.useViewport === 'function' ? rf.useViewport() : { zoom: 1 };
+                const viewportZoom = Math.max(0.01, Number(viewport?.zoom) || 1);
                 window.React.useLayoutEffect(() => {
                     const rect = tooltipRef.current?.getBoundingClientRect?.();
                     if (!rect) return;
                     const width = Math.ceil(rect.width);
                     const height = Math.ceil(rect.height);
                     if (width !== measuredSize.width || height !== measuredSize.height) setMeasuredSize({ width, height });
-                }, [groupHoverTooltip, measuredSize.width, measuredSize.height]);
-                if (!hoverCardsEnabled || !groupHoverTooltip) return null;
-                const rows = Array.isArray(groupHoverTooltip.rows) ? groupHoverTooltip.rows : [];
-                const image = normalizeTasksNodeImageUrl(groupHoverTooltip.image);
+                }, [card, measuredSize.width, measuredSize.height]);
+                const rows = Array.isArray(card.rows) ? card.rows : [];
+                const image = normalizeTasksNodeImageUrl(card.image);
                 const panelWidth = tasksDetailPanelWidth({
-                    title: groupHoverTooltip.label || '',
-                    nodeId: groupHoverTooltip.nodeId || '',
+                    title: card.label || '',
+                    nodeId: card.nodeId || '',
                     entries: rows,
                     titleFont: `700 calc(${hoverFontSize} * 1.12) ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
                     bodyFont: `500 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
                     keyFont: `700 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
                     hasImage: Boolean(image),
+                    stackHeader: true,
                 });
                 const wrapperWidth = Math.max(240, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().width || 0));
                 const wrapperHeight = Math.max(160, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().height || 0));
@@ -7936,17 +8035,21 @@ async function renderTasksGraphs(rootElement = document) {
                 const maxHeight = Math.max(80, wrapperHeight - 24);
                 const tooltipWidth = Math.min(maxWidth, measuredSize.width || maxWidth);
                 const tooltipHeight = Math.min(maxHeight, measuredSize.height || maxHeight);
-                const rightRailPlacement = groupHoverTooltip.placement === 'rightRail';
-                const clampedLeft = rightRailPlacement
-                    ? Math.max(12, wrapperWidth - tooltipWidth - 12)
-                    : Math.max(12, Math.min(groupHoverTooltip.x, wrapperWidth - tooltipWidth - 12));
-                const clampedTop = rightRailPlacement
-                    ? 12
-                    : Math.max(12, Math.min(groupHoverTooltip.y, wrapperHeight - tooltipHeight - 12));
+                const rightRailPlacement = card.placement === 'rightRail';
+                const clampedLeft = inViewportPortal
+                    ? card.flowX
+                    : rightRailPlacement
+                    ? 'auto'
+                    : Math.max(12, Math.min(card.x, wrapperWidth - tooltipWidth - 12));
+                const clampedTop = inViewportPortal
+                    ? card.flowY
+                    : rightRailPlacement
+                    ? 'auto'
+                    : Math.max(12, Math.min(card.y, wrapperHeight - tooltipHeight - 12));
                 const children = [
                     window.React.createElement('div', {
                         key: '__label__',
-                        style: { display: 'flex', alignItems: 'center', gap: '7px', justifyContent: 'space-between', fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, marginBottom: rows.length ? '4px' : 0, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 },
+                        style: { display: 'flex', alignItems: 'flex-start', gap: '7px', fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, whiteSpace: 'normal', minWidth: 0 },
                     },
                         image ? window.React.createElement('img', {
                             src: image,
@@ -7956,21 +8059,36 @@ async function renderTasksGraphs(rootElement = document) {
                             className: tasksIsIconifyImage(image) ? 'vyasa-tasks-node-image vyasa-tasks-node-image--icon' : 'vyasa-tasks-node-image',
                             style: { width: '22px', height: '22px', objectFit: 'contain', flex: '0 0 auto' },
                         }) : null,
-                        window.React.createElement('span', { style: { flex: '1 1 auto', minWidth: 0 } }, groupHoverTooltip.label),
-                        groupHoverTooltip.nodeId ? window.React.createElement('span', {
-                            style: { flex: '0 0 auto', marginLeft: '12px', fontSize: hoverFontSize, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, textAlign: 'right' },
-                        }, groupHoverTooltip.nodeId) : null
+                        window.React.createElement('span', {
+                            style: { flex: '1 1 auto', minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' },
+                        }, card.label),
+                        card.sticky ? window.React.createElement('button', {
+                            type: 'button',
+                            title: 'Close sticky hover card',
+                            'aria-label': 'Close sticky hover card',
+                            onPointerDown: (event) => event.stopPropagation(),
+                            onClick: () => dismissStickyHoverCard(card.stickyId, 'close-button'),
+                            style: { flex: '0 0 auto', border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '0 0 0 4px' },
+                        }, '×') : null
                     ),
                 ];
+                if (card.nodeId) children.push(window.React.createElement('div', {
+                    key: '__node_id__',
+                    style: { marginTop: '5px', marginBottom: rows.length ? '5px' : 0, fontSize: hoverFontSize, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, overflowWrap: 'anywhere', wordBreak: 'break-word' },
+                }, card.nodeId));
                 if (rows.length) children.push(renderTasksDetailEntries(window.React, rows, { fontSize: hoverFontSize, lineHeight: 1.35 }));
                 return window.React.createElement('div', {
                     ref: tooltipRef,
+                    'data-vyasa-hover-card-sticky': card.sticky ? 'true' : undefined,
                     style: {
-                        position: 'absolute',
+                        position: rightRailPlacement ? 'relative' : 'absolute',
                         left: clampedLeft,
                         top: clampedTop,
-                        zIndex: 2400,
-                        pointerEvents: 'none',
+                        zIndex: rightRailPlacement ? 'auto' : 2400 + Math.max(0, stickyIndex),
+                        flex: rightRailPlacement ? '0 0 auto' : undefined,
+                        transform: inViewportPortal ? `scale(${1 / viewportZoom})` : undefined,
+                        transformOrigin: inViewportPortal ? 'top left' : undefined,
+                        pointerEvents: card.sticky ? 'auto' : 'none',
                         width: `${maxWidth}px`,
                         maxHeight: `${maxHeight}px`,
                         overflowY: 'auto',
@@ -7987,6 +8105,37 @@ async function renderTasksGraphs(rootElement = document) {
                         padding: '12px',
                     },
                 }, ...children);
+            };
+            const GroupHoverTooltip = () => {
+                if (!hoverCardsEnabled) return null;
+                const stickyCards = stickyGroupHoverTooltips.map((card, index) => window.React.createElement(GroupHoverTooltipCard, {
+                    key: card.stickyId,
+                    card,
+                    stickyIndex: index,
+                    inViewportPortal: Boolean(rf.ViewportPortal),
+                }));
+                const stickyLayer = rf.ViewportPortal
+                    ? window.React.createElement(rf.ViewportPortal, null, ...stickyCards)
+                    : window.React.createElement(window.React.Fragment, null, ...stickyCards);
+                const transientCard = groupHoverTooltip ? window.React.createElement(GroupHoverTooltipCard, {
+                    key: '__transient__',
+                    card: groupHoverTooltip,
+                }) : null;
+                const transientLayer = hoverCardRightRail ? window.React.createElement('div', {
+                    style: {
+                        position: 'absolute',
+                        inset: '12px 12px 12px auto',
+                        zIndex: 2400,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-end',
+                        gap: '10px',
+                        maxWidth: 'calc(100% - 24px)',
+                        overflowY: 'auto',
+                        pointerEvents: 'none',
+                    },
+                }, transientCard) : transientCard;
+                return window.React.createElement(window.React.Fragment, null, stickyLayer, transientLayer);
             };
             const HelpPopup = () => {
                 if (!helpOpen) return null;
