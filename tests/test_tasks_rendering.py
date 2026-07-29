@@ -714,6 +714,15 @@ def test_named_views_keep_grouping_overrides_in_projection_preferences():
     assert "kg_context" not in prefs_key
 
 
+def test_tasks_without_next_group_are_laid_out_before_child_groups():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    collapsed = source.split("function buildTasksCollapsedGraph", 1)[1].split("function buildTasksGroupedState", 1)[0]
+    nested = source.split("async function layoutGroupInternal", 1)[1].split("async function layoutExpandedGroups", 1)[0]
+
+    assert collapsed.index("for (const task of model.tasks") < collapsed.index("order.forEach((groupId")
+    assert nested.index("...(model.task_children?.[groupId]") < nested.index("...(model.group_tree?.[groupId]")
+
+
 def test_view_regrouping_collapses_projected_copies_to_source_nodes():
     script = """
         import { tasksUngroupModelForGrouping } from './vyasa/extensions_builtin/tasks/static/tasks_graph_core.js';

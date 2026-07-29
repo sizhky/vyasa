@@ -1180,6 +1180,10 @@ function buildTasksCollapsedGraph(model) {
         order.push(groupId);
         queue.push(...(groupTree[groupId] || []));
     }
+    for (const task of model.tasks || []) {
+        if (task.group_id !== null && task.group_id !== undefined) continue;
+        nodes.push({ id: task.id, label: task.label || task.id, href: task.href, kind: 'task', collapsed: true, x: 80, y: 80, width: 220, height: 60 });
+    }
     order.forEach((groupId, index) => {
         const group = groupsById[groupId] || {};
         nodes.push({
@@ -1196,10 +1200,6 @@ function buildTasksCollapsedGraph(model) {
             child_task_ids: taskChildren[groupId] || [],
         });
     });
-    for (const task of model.tasks || []) {
-        if (task.group_id !== null && task.group_id !== undefined) continue;
-        nodes.push({ id: task.id, label: task.label || task.id, href: task.href, kind: 'task', collapsed: true, x: 80, y: 80, width: 220, height: 60 });
-    }
     const collapsedOwner = (taskId) => {
         let cur = taskToGroup[taskId] || null;
         let owner = null;
@@ -2599,15 +2599,15 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
     }).height;
     const groupPadTop = groupPadding + groupTitleHeight;
     const groupChildren = [
-        ...(model.group_tree?.[groupId] || []).map((id) => {
-            const source = groupsById[id] || {};
-            const label = source.label || id;
-            return { id, __kind__: 'group', label, ...sizeTaskNode(label, 'group', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
-        }),
         ...(model.task_children?.[groupId] || []).map((id) => {
             const source = tasksById[id] || {};
             const label = source.label || id;
             return { id, __kind__: 'task', label, ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
+        }),
+        ...(model.group_tree?.[groupId] || []).map((id) => {
+            const source = groupsById[id] || {};
+            const label = source.label || id;
+            return { id, __kind__: 'group', label, ...sizeTaskNode(label, 'group', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
         }),
     ].map((child) => childSizes[child.id] ? { ...child, ...childSizes[child.id] } : child);
     if (groupChildren.length === 0) {
