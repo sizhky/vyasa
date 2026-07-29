@@ -259,6 +259,15 @@ def content_path_for_slug(slug: str | Path, suffix: str = "") -> Path | None:
         return None
     return _safe_child(root, f"{relative.as_posix()}{suffix}")
 
+
+def relative_content_directory(current_file):
+    if current_file is None:
+        return None
+    if current_file.suffix.lower() == ".kg" or current_file.is_dir():
+        return current_file
+    return current_file.parent
+
+
 def content_slug_for_path(path: Path, strip_suffix: bool = True) -> str | None:
     from .content_backend import VirtualPath
 

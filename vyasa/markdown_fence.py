@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 from .config import get_config
 from .helpers import (
@@ -10,6 +11,7 @@ from .helpers import (
     content_slug_for_path,
     content_url_for_slug,
     get_content_mounts,
+    relative_content_directory,
 )
 
 
@@ -45,7 +47,7 @@ def slug_for_resolved_path(resolved, current_path, strip_suffix=True):
     return rel.with_suffix("").as_posix() if strip_suffix else rel.as_posix()
 
 
-def resolve_items_node_href(href, current_path):
+def resolve_items_node_href(href: object, current_path: object) -> str:
     href = str(href or "").strip()
     if not href:
         return href
@@ -55,7 +57,8 @@ def resolve_items_node_href(href, current_path):
     if not current_path:
         return href
     current_file = current_content_path(current_path)
-    resolved = (current_file.parent / base).resolve() if current_file else None
+    current_dir = relative_content_directory(current_file)
+    resolved = (current_dir / base).resolve() if current_dir else None
     rel = slug_for_resolved_path(resolved, current_path, strip_suffix=not Path(base).suffix) if resolved else None
     if not rel:
         return href
@@ -63,11 +66,27 @@ def resolve_items_node_href(href, current_path):
     return f"{mapped}#{frag}" if frag else mapped
 
 
-def normalize_items_model_hrefs(model, current_path):
+def resolve_items_inline_links(value: object, current_path: object) -> str:
+    text = str(value or "")
+    return re.sub(
+        r"\[([^\]]+)\]\(([^)\s]+)\)",
+        lambda match: f"[{match.group(1)}]({resolve_items_node_href(match.group(2), current_path)})",
+        text,
+    )
+
+
+def normalize_items_model_hrefs(model: dict[str, Any], current_path: object) -> None:
     for bucket in ("groups", "tasks"):
         for node in model.get(bucket, []):
             if "href" in node:
                 node["href"] = resolve_items_node_href(node.get("href"), current_path)
+            if "label" in node:
+                node["label"] = resolve_items_inline_links(node.get("label"), current_path)
+    for collection in ("projection_models", "viewer_models"):
+        for entry in (model.get(collection) or {}).values():
+            nested = entry.get("model") if isinstance(entry, dict) else None
+            if isinstance(nested, dict):
+                normalize_items_model_hrefs(nested, current_path)
 
 
 def escape_attr(value):
@@ -103,7 +122,7 @@ def split_fence_frontmatter(code):
     frontmatter_match = re.match(r"^---\s*\n(.*?)\n---\s*\n", code, re.DOTALL)
     if not frontmatter_match:
         return {}, code
-    config = {}
+    config: dict[str, Any] = {}
     lines = frontmatter_match.group(1).splitlines()
     index = 0
     while index < len(lines):
@@ -145,7 +164,8 @@ def split_fence_frontmatter(code):
                 config[key] = clean(value)
                 index += 1
                 continue
-            config[key] = {}
+            color_by: dict[str, Any] = {}
+            config[key] = color_by
             index += 1
             while index < len(lines):
                 child_raw = lines[index]
@@ -163,10 +183,10 @@ def split_fence_frontmatter(code):
                 child_key = clean(child_key)
                 child_value = child_value.strip()
                 if child_value:
-                    config["color_by"][child_key] = clean(child_value)
+                    color_by[child_key] = clean(child_value)
                     index += 1
                     continue
-                config["color_by"][child_key] = {}
+                color_by[child_key] = {}
                 index += 1
                 while index < len(lines):
                     value_raw = lines[index]
@@ -181,7 +201,7 @@ def split_fence_frontmatter(code):
                         index += 1
                         continue
                     value_key, value_value = value_line.split(":", 1)
-                    config["color_by"][child_key][clean(value_key)] = clean(value_value)
+                    color_by[child_key][clean(value_key)] = clean(value_value)
                     index += 1
             continue
         if key == "color_palette":

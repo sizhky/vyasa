@@ -545,18 +545,20 @@ def test_tasks_node_card_attr_values_can_be_copied_from_hover_button():
     assert "const canCopy = options.copyValues && String(entry?.value ?? '').trim();" in source
     assert "await copyTasksText(entry.value);" in source
     assert "className: 'vyasa-task-node-card-copy'" in source
-    assert "renderTasksDetailEntries(React, entries, { copyValues: true })" in source
+    assert "renderTasksDetailEntries(React, entries, { copyValues: true, currentPath: sourceModel?.document_path || '' })" in source
     assert ".vyasa-task-node-card-row:hover .vyasa-task-node-card-copy" in css_source
     assert "pointer-events: none;" in css_source
 
 
-def test_tasks_selected_panel_shows_href_as_detail_instead_of_title_link():
+def test_tasks_selected_panel_renders_title_and_href_links():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));" in source
     assert "const panelHref = String(selectedNode?.href || '').trim();" in source
     assert "renderTasksNodeLinkBadge(React, { kinds: panelLinkKinds, right: '0', top: '0' })" in source
     assert "onClick: (event) => openTasksNodeHref(panelHref, event)" in source
+    assert "renderTasksInlineLinks(selectedNode.label || selectedNode.id" in source
+    assert "tasksInlineLinkPlainText(title)" in source
     assert "React.createElement('a', {" not in source.split("const labelContent = renderTasksInlineLinks(data?.label || id", 1)[1].split("const checkboxControl =", 1)[0]
     assert "cursor: hasHref ? 'pointer' : undefined" not in source
     assert "function tasksHrefDetailEntry(href)" not in source
@@ -659,6 +661,15 @@ def test_tasks_sticky_hover_cards_suppress_duplicates_and_pan_without_scaling():
     assert "flowY: hoverAnchor.y" in source
     assert "window.React.createElement(rf.ViewportPortal" in source
     assert "`scale(${1 / viewportZoom})`" in source
+
+
+def test_tasks_kg_links_use_link_preview_contract():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "'data-vyasa-link-preview': tasksHrefSupportsPreview(href) ? 'true' : undefined" in source
+    assert "'data-vyasa-link-preview-current-path': currentPath || undefined" in source
+    assert "renderTasksInlineLinks(card.label" in source
+    assert "renderTasksDetailEntries(window.React, rows, { fontSize: hoverFontSize, lineHeight: 1.35, currentPath: sourceModel?.document_path || '' })" in source
 
 
 def test_tasks_filter_reset_button_stays_in_filter_card_header():

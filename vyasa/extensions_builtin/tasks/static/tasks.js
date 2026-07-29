@@ -3066,33 +3066,61 @@ function openTasksNodeHref(href, event = null) {
     window.location.assign(href);
 }
 
+function tasksHrefSupportsPreview(href) {
+    const text = String(href || '').trim();
+    if (!text || /^(https?:|mailto:|tel:|vscode:|\/\/)/.test(text)) return false;
+    if (text.startsWith('#') || text.startsWith('/posts/')) return true;
+    if (text.startsWith('/')) return !text.split('/').pop().includes('.');
+    return true;
+}
+
 function renderTasksInlineLinks(value, options = {}) {
     const text = String(value || '');
     const interactive = options.interactive !== false;
     const onInactiveClick = typeof options.onInactiveClick === 'function' ? options.onInactiveClick : null;
+    const currentPath = String(options.currentPath || '').trim();
     const parts = [];
+    const linkPart = (label, href, key) => interactive
+        ? window.React.createElement('a', {
+            key,
+            href,
+            'data-vyasa-link-preview': tasksHrefSupportsPreview(href) ? 'true' : undefined,
+            'data-vyasa-link-preview-current-path': currentPath || undefined,
+            onClick: (event) => openTasksNodeHref(href, event),
+            style: { textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit' },
+        }, label)
+        : window.React.createElement('span', {
+            key,
+            onClick: onInactiveClick || undefined,
+            style: { textDecoration: 'none', color: 'inherit' },
+        }, label);
+    const appendText = (plain, offset) => {
+        const pattern = /(^|\s)(https?:\/\/[^\s)]+|mailto:[^\s)]+|\/posts\/[^\s)]+|\/[^\s)]+\.[^\s)]+|(?:\.\.?\/)[^\s)]+|#[A-Za-z0-9._:-]+)/g;
+        let cursor = 0;
+        let raw;
+        while ((raw = pattern.exec(plain)) !== null) {
+            if (raw.index > cursor) parts.push(plain.slice(cursor, raw.index));
+            if (raw[1]) parts.push(raw[1]);
+            parts.push(linkPart(raw[2], raw[2], `raw-${offset + raw.index}`));
+            cursor = pattern.lastIndex;
+        }
+        if (cursor < plain.length) parts.push(plain.slice(cursor));
+    };
     const pattern = /\[([^\]]+)\]\(([^)\s]+(?:\s[^)]*)?)\)/g;
     let lastIndex = 0;
     let match;
     while ((match = pattern.exec(text)) !== null) {
-        if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+        if (match.index > lastIndex) appendText(text.slice(lastIndex, match.index), lastIndex);
         const [, label, href] = match;
-        parts.push(interactive
-            ? window.React.createElement('a', {
-                key: `${href}-${match.index}`,
-                href,
-                onClick: (event) => openTasksNodeHref(href, event),
-                style: { textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit' },
-            }, label)
-            : window.React.createElement('span', {
-                key: `${href}-${match.index}`,
-                onClick: onInactiveClick || undefined,
-                style: { textDecoration: 'none', color: 'inherit' },
-            }, label));
+        parts.push(linkPart(label, href, `${href}-${match.index}`));
         lastIndex = pattern.lastIndex;
     }
-    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    if (lastIndex < text.length) appendText(text.slice(lastIndex), lastIndex);
     return parts.length ? parts : text;
+}
+
+function tasksInlineLinkPlainText(value) {
+    return String(value || '').replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1');
 }
 
 function tasksValueContainsUrl(value) {
@@ -3207,7 +3235,7 @@ function tasksDetailPanelWidth(options = {}) {
     const titleFont = options.titleFont || '700 14px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     const bodyFont = options.bodyFont || '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     const keyFont = options.keyFont || '700 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    const titleWidth = measureTextWidth(title, titleFont);
+    const titleWidth = measureTextWidth(tasksInlineLinkPlainText(title), titleFont);
     const idWidth = nodeId ? measureTextWidth(nodeId, bodyFont) + 20 : 0;
     const rowWidths = entries.map((entry) => {
         const keyWidth = measureTextWidth(entry?.label || '', keyFont);
@@ -3244,6 +3272,8 @@ function renderTasksDetailEntries(React, entries, options = {}) {
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '12px', lineHeight: options.lineHeight || 1.35 } },
         ...(entries || []).map((entry, index) => {
             const canCopy = options.copyValues && String(entry?.value ?? '').trim();
+            const urls = tasksExtractUrls(entry?.value);
+            const urlOnly = urls.length === 1 && String(entry?.value || '').trim() === urls[0];
             const copyValue = async (event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -3255,7 +3285,9 @@ function renderTasksDetailEntries(React, entries, options = {}) {
                 style: { position: 'relative', paddingTop: index === 0 ? '0' : '8px', paddingRight: canCopy ? '26px' : 0, marginTop: index === 0 ? '0' : '8px', borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)', overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'pre-line' },
             },
             React.createElement('span', { style: { fontWeight: 700, opacity: 0.72, display: 'block', marginBottom: '4px' } }, `${entry.label}:`),
-            entry.renderedValue
+            urlOnly
+                ? React.createElement('span', { className: 'vyasa-task-node-card-value' }, renderTasksInlineLinks(entry.value, { currentPath: options.currentPath }))
+                : entry.renderedValue
                 ? React.createElement('span', { className: 'vyasa-task-node-card-value', dangerouslySetInnerHTML: { __html: entry.renderedValue } })
                 : React.createElement('span', { className: 'vyasa-task-node-card-value' }, entry.value),
             canCopy ? React.createElement('button', {
@@ -5813,7 +5845,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 overflowWrap: 'anywhere',
                                 wordBreak: 'break-word',
                             }
-                        }, renderNodeImage(20, { marginTop: '1px' }), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(data?.label || data.sourceGroupId || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick }))),
+                        }, renderNodeImage(20, { marginTop: '1px' }), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(data?.label || data.sourceGroupId || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick, currentPath: sourceModel?.document_path || '' }))),
                         egoMode ? null : React.createElement('button', {
                             onClick: handleCollapse,
                             style: { flex: '0 0 auto', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
@@ -5823,7 +5855,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const isGroup = data?.__kind__ === 'group';
                 const canExpand = tasksNodeHasChildren(id, model);
                 const isExpanded = expanded.has(id);
-                const labelContent = renderTasksInlineLinks(data?.label || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick });
+                const labelContent = renderTasksInlineLinks(data?.label || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick, currentPath: sourceModel?.document_path || '' });
                 if (data?.__gantt) {
                     return React.createElement('div', {
                         ...reviewAttrs,
@@ -6217,16 +6249,20 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                         }, '⧉'),
                         React.createElement('div', { style: { display: 'grid', gridTemplateColumns: panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', columnGap: '12px', alignItems: 'start' } },
-                            React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' } }, selectedNode.label || selectedNode.id),
+                            React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' } },
+                                renderTasksInlineLinks(selectedNode.label || selectedNode.id, { currentPath: sourceModel?.document_path || '' })
+                            ),
                             panelNodeId ? React.createElement('div', { style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', textAlign: 'right' } }, panelNodeId) : null,
                         ),
                         panelHref ? React.createElement('a', {
                             href: panelHref,
+                            'data-vyasa-link-preview': tasksHrefSupportsPreview(panelHref) ? 'true' : undefined,
+                            'data-vyasa-link-preview-current-path': sourceModel?.document_path || undefined,
                             onClick: (event) => openTasksNodeHref(panelHref, event),
                             style: { display: 'inline-block', marginTop: '6px', fontSize: '12px', lineHeight: 1.3, textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit', overflowWrap: 'anywhere', wordBreak: 'break-word' },
                         }, panelHref) : null,
                     ),
-                    renderTasksDetailEntries(React, entries, { copyValues: true }),
+                    renderTasksDetailEntries(React, entries, { copyValues: true, currentPath: sourceModel?.document_path || '' }),
                     React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: '12px', lineHeight: 1.35 } },
                         React.createElement('label', {
                             style: {
@@ -8061,7 +8097,7 @@ async function renderTasksGraphs(rootElement = document) {
                         }) : null,
                         window.React.createElement('span', {
                             style: { flex: '1 1 auto', minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' },
-                        }, card.label),
+                        }, renderTasksInlineLinks(card.label, { currentPath: sourceModel?.document_path || '' })),
                         card.sticky ? window.React.createElement('button', {
                             type: 'button',
                             title: 'Close sticky hover card',
@@ -8076,7 +8112,7 @@ async function renderTasksGraphs(rootElement = document) {
                     key: '__node_id__',
                     style: { marginTop: '5px', marginBottom: rows.length ? '5px' : 0, fontSize: hoverFontSize, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, overflowWrap: 'anywhere', wordBreak: 'break-word' },
                 }, card.nodeId));
-                if (rows.length) children.push(renderTasksDetailEntries(window.React, rows, { fontSize: hoverFontSize, lineHeight: 1.35 }));
+                if (rows.length) children.push(renderTasksDetailEntries(window.React, rows, { fontSize: hoverFontSize, lineHeight: 1.35, currentPath: sourceModel?.document_path || '' }));
                 return window.React.createElement('div', {
                     ref: tooltipRef,
                     'data-vyasa-hover-card-sticky': card.sticky ? 'true' : undefined,

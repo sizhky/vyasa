@@ -26,6 +26,7 @@ from ...helpers import (
     get_content_mounts,
     content_root_and_relative,
     content_slug_for_path,
+    relative_content_directory,
     resolve_heading_anchor,
 )
 from ...markdown_fence import get_root_folder as _shared_get_root_folder
@@ -418,7 +419,7 @@ def _resolve_raw_html_url(url, current_path):
     current_file = _current_content_path(current_path)
     if not current_file:
         return url
-    current_dir = current_file.parent
+    current_dir = relative_content_directory(current_file)
     resolved = (current_dir / base).resolve()
     rel = _slug_for_resolved_path(resolved, current_path, strip_suffix=False)
     if not rel:
@@ -593,7 +594,7 @@ class ContentRenderer(FrankenRenderer):
         label = getattr(token, "label", None)
         if self.current_path:
             current_file_full = _current_content_path(self.current_path)
-            current_dir = current_file_full.parent if current_file_full else None
+            current_dir = relative_content_directory(current_file_full)
             resolved = (current_dir / raw_path).resolve() if current_dir else None
             rel_path = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=False) if resolved else None
             if rel_path:
@@ -754,7 +755,7 @@ class ContentRenderer(FrankenRenderer):
                 relative_path = relative_path[:-3]
             if self.current_path:
                 current_file = _current_content_path(self.current_path)
-                current_dir = current_file.parent if current_file else None
+                current_dir = relative_content_directory(current_file)
                 resolved = (current_dir / relative_path).resolve() if current_dir else None
                 logger.debug(f"DEBUG: original_href={original_href}, current_path={self.current_path}, current_dir={current_dir}, resolved={resolved}")
                 rel = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=not Path(relative_path).suffix) if resolved else None
