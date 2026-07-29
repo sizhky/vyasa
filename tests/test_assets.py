@@ -108,3 +108,5 @@ def test_static_build_copies_extension_assets_and_references_requested_bundles(t
     assert (output / "static" / "extensions" / "mermaid" / "mermaid.js").exists()
     assert (output / "static" / "extensions" / "tasks" / "tasks.js").exists()
     assert (output / "static" / "extensions" / "git_refs" / "git_refs.js").exists()
+    assert (output / "static" / "extensions" / "link_preview" / "link_preview_stack.js").exists()
+    assert (output / "static" / "extensions" / "link_preview" / "link_preview_geometry.js").exists()

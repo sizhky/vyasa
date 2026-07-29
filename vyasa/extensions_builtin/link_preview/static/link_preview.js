@@ -1,188 +1,203 @@
-const LINK_PREVIEW_SELECTOR = 'a[data-vyasa-link-preview="true"]';
+import { LinkPreviewStack } from './link_preview_stack.js';
+import { linkPreviewPointerPoints } from './link_preview_geometry.js';
 
-let previewPopover = null;
-let previewAbort = null;
-let previewToken = 0;
-let previewLink = null;
+const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 let hoveredLink = null;
 let modifierDown = false;
-let previewOpen = false;
-let previewAnchor = null;
-let previewResizing = false;
+let previewZ = 5000;
+let pointerFrame = null;
+const previewViews = new Set();
 
-function ensurePreviewPopover() {
-    if (previewPopover) return previewPopover;
-    previewPopover = document.createElement('div');
-    previewPopover.id = 'vyasa-link-preview-popover';
-    previewPopover.className = 'vyasa-link-preview-popover';
-    previewPopover.innerHTML = '<div class="vyasa-link-preview-card"><div class="vyasa-link-preview-loading">Loading preview...</div></div>';
-    document.body.appendChild(previewPopover);
-    return previewPopover;
-}
-
-function setPreviewMessage(message) {
-    const popover = ensurePreviewPopover();
-    popover.innerHTML = `<div class="vyasa-link-preview-card"><button type="button" class="vyasa-link-preview-close" aria-label="Close preview">x</button><div class="vyasa-link-preview-empty">${message}</div></div>`;
-    popover.classList.add('is-open');
-    previewOpen = true;
-}
-
-function setPreviewContent(content) {
-    const popover = ensurePreviewPopover();
-    popover.innerHTML = `<div class="vyasa-link-preview-card"><button type="button" class="vyasa-link-preview-close" aria-label="Close preview">x</button>${content}</div>`;
-    popover.classList.add('is-open');
-    previewOpen = true;
+function schedulePointerRefresh() {
+    if (pointerFrame !== null) return;
+    pointerFrame = window.requestAnimationFrame(() => {
+        pointerFrame = null;
+        previewViews.forEach((view) => view.updatePointer());
+    });
 }
 
 function inferCurrentPath() {
-    const raw = window.location.pathname || '';
-    if (!raw.startsWith('/posts/')) return '';
-    return decodeURIComponent(raw.slice('/posts/'.length));
+    const path = window.location.pathname || '';
+    if (!path.startsWith('/posts/')) return '';
+    return decodeURIComponent(path.slice('/posts/'.length));
 }
 
-function hideLinkPreview() {
-    previewToken += 1;
-    previewLink = null;
-    if (previewAbort) previewAbort.abort();
-    previewAbort = null;
-    if (previewPopover) {
-        previewPopover.classList.remove('is-open');
-        previewPopover.style.left = '-9999px';
-        previewPopover.style.top = '-9999px';
-    }
-    previewOpen = false;
-    previewAnchor = null;
-    previewResizing = false;
-}
-
-function positionLinkPreview(point) {
-    const popover = ensurePreviewPopover();
+function positionPopover(popover, point) {
     const width = Math.min(384, Math.max(240, window.innerWidth - 24));
     const height = Math.min(420, Math.max(220, window.innerHeight - 24));
-    const x = Math.min(point.clientX + 18, window.innerWidth - width - 12);
-    const y = Math.min(point.clientY + 18, window.innerHeight - height - 12);
-    popover.style.width = `${width}px`;
-    popover.style.height = `${height}px`;
-    popover.style.left = `${Math.max(12, x)}px`;
-    popover.style.top = `${Math.max(12, y)}px`;
+    const left = Math.min(point.clientX + 18, window.innerWidth - width - 12);
+    const top = Math.min(point.clientY + 18, window.innerHeight - height - 12);
+    Object.assign(popover.style, {
+        width: `${width}px`,
+        height: `${height}px`,
+        left: `${Math.max(12, left)}px`,
+        top: `${Math.max(12, top)}px`,
+    });
 }
 
-async function loadLinkPreview(link, event) {
-    const href = link.getAttribute('href') || '';
-    if (!href) return;
-    const currentPath = link.dataset.vyasaLinkPreviewCurrentPath || inferCurrentPath();
-    const token = ++previewToken;
-    if (previewAbort) previewAbort.abort();
-    previewAbort = new AbortController();
-    const popover = ensurePreviewPopover();
-    positionLinkPreview(event);
-    previewAnchor = { clientX: event.clientX, clientY: event.clientY };
-    popover.innerHTML = '<div class="vyasa-link-preview-card"><div class="vyasa-link-preview-loading">Loading preview...</div></div>';
-    popover.classList.add('is-open');
-    previewOpen = true;
-    try {
-        const url = new URL('/preview/link', window.location.origin);
-        url.searchParams.set('href', href);
-        if (currentPath) url.searchParams.set('current_path', currentPath);
-        const response = await fetch(url.toString(), { signal: previewAbort.signal, credentials: 'same-origin' });
-        if (token !== previewToken) return;
-        if (!response.ok) {
-            setPreviewMessage('Preview unavailable.');
+function createPreviewView({ point, link, onClose }) {
+    const popover = document.createElement('aside');
+    const pointer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const pointerShape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    const pointerOutline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    popover.className = 'vyasa-link-preview-popover is-open';
+    popover.setAttribute('role', 'dialog');
+    popover.setAttribute('aria-label', 'Link preview');
+    popover.innerHTML = [
+        '<div class="vyasa-link-preview-card">',
+        '<div class="vyasa-link-preview-bar">',
+        '<span data-vyasa-link-preview-origin></span>',
+        '<button type="button" class="vyasa-link-preview-close" aria-label="Close preview">×</button>',
+        '</div>',
+        '<div data-vyasa-link-preview-content class="vyasa-link-preview-content vyasa-link-preview-loading">Loading preview...</div>',
+        '</div>',
+    ].join('');
+    pointer.classList.add('vyasa-link-preview-pointer');
+    pointer.setAttribute('aria-hidden', 'true');
+    pointer.appendChild(pointerShape);
+    pointer.appendChild(pointerOutline);
+    const content = popover.querySelector('[data-vyasa-link-preview-content]');
+    const bar = popover.querySelector('.vyasa-link-preview-bar');
+    const sourceLabel = popover.querySelector('[data-vyasa-link-preview-origin]');
+    sourceLabel.textContent = link.textContent.trim() || link.getAttribute('href') || 'Link';
+    const raise = () => {
+        const z = ++previewZ;
+        pointer.style.zIndex = String(z - 1);
+        popover.style.zIndex = String(z);
+    };
+    const updatePointer = () => {
+        if (!link.isConnected) {
+            pointer.hidden = true;
             return;
         }
-        setPreviewContent(await response.text());
-        positionLinkPreview(previewAnchor || event);
-    } catch {
-        if (token === previewToken) hideLinkPreview();
-    }
+        const sourceRect = link.getBoundingClientRect();
+        const popupRect = popover.getBoundingClientRect();
+        const points = linkPreviewPointerPoints(sourceRect, popupRect);
+        pointer.hidden = false;
+        pointerShape.setAttribute('points', points.map(([x, y]) => `${x},${y}`).join(' '));
+        pointerOutline.setAttribute('d', `M ${points[0]} L ${points[1]} M ${points[0]} L ${points[2]}`);
+    };
+    let drag = null;
+    bar.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0 || event.target.closest('button')) return;
+        const rect = popover.getBoundingClientRect();
+        drag = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+        bar.setPointerCapture(event.pointerId);
+        raise();
+        event.preventDefault();
+    });
+    bar.addEventListener('pointermove', (event) => {
+        if (!drag || drag.id !== event.pointerId) return;
+        const rect = popover.getBoundingClientRect();
+        const left = Math.min(window.innerWidth - rect.width - 8, drag.left + event.clientX - drag.x);
+        const top = Math.min(window.innerHeight - rect.height - 8, drag.top + event.clientY - drag.y);
+        popover.style.left = `${Math.max(8, left)}px`;
+        popover.style.top = `${Math.max(8, top)}px`;
+        schedulePointerRefresh();
+    });
+    const finishDrag = (event) => {
+        if (!drag || drag.id !== event.pointerId) return;
+        drag = null;
+        if (bar.hasPointerCapture(event.pointerId)) bar.releasePointerCapture(event.pointerId);
+    };
+    bar.addEventListener('pointerup', finishDrag);
+    bar.addEventListener('pointercancel', finishDrag);
+    popover.querySelector('.vyasa-link-preview-close').addEventListener('click', onClose);
+    popover.addEventListener('pointerdown', raise);
+    document.body.appendChild(pointer);
+    document.body.appendChild(popover);
+    positionPopover(popover, point);
+    raise();
+    const resizeObserver = new ResizeObserver(schedulePointerRefresh);
+    resizeObserver.observe(popover);
+    const view = {
+        raise,
+        updatePointer,
+        remove: () => {
+            resizeObserver.disconnect();
+            previewViews.delete(view);
+            pointer.remove();
+            popover.remove();
+        },
+        setMessage: (message) => {
+            content.className = 'vyasa-link-preview-content vyasa-link-preview-empty';
+            content.textContent = message;
+        },
+        setContent: (html) => {
+            content.className = 'vyasa-link-preview-content';
+            content.innerHTML = html;
+            schedulePointerRefresh();
+        },
+    };
+    previewViews.add(view);
+    updatePointer();
+    return view;
 }
 
-function maybeShowPreview(event) {
-    const link = event.target?.closest?.(LINK_PREVIEW_SELECTOR);
-    if (link) hoveredLink = link;
-    if (!(modifierDown || event.metaKey || event.ctrlKey)) return;
-    if (!link) return;
-    if (previewOpen) return;
-    previewLink = link;
-    loadLinkPreview(link, event);
+async function fetchPreview({ href, currentPath, signal }) {
+    const url = new URL('/preview/link', window.location.origin);
+    url.searchParams.set('href', href);
+    const resolvedPath = currentPath || inferCurrentPath();
+    if (resolvedPath) url.searchParams.set('current_path', resolvedPath);
+    const response = await fetch(url.toString(), { signal, credentials: 'same-origin' });
+    return response.ok ? response.text() : null;
 }
 
-function maybeShowPreviewOnMove(event) {
-    const link = event.target?.closest?.(LINK_PREVIEW_SELECTOR);
+const previews = new LinkPreviewStack({
+    createView: createPreviewView,
+    fetchPreview,
+});
+
+function linkFromEvent(event) {
+    return event.target?.closest?.(LINK_SELECTOR) || null;
+}
+
+function openFromEvent(event) {
+    const link = linkFromEvent(event);
     if (link) hoveredLink = link;
-    if (!(modifierDown || event.metaKey || event.ctrlKey)) return;
-    if (!link || previewOpen || previewLink === link) return;
-    previewLink = link;
-    loadLinkPreview(link, event);
+    if (!link || !(modifierDown || event.metaKey || event.ctrlKey)) return;
+    previews.open(link, event);
 }
 
 function trackModifier(event) {
     const wasDown = modifierDown;
     modifierDown = event.metaKey || event.ctrlKey;
-    if (!modifierDown) return;
-    else if (!wasDown && hoveredLink) {
-        const rect = hoveredLink.getBoundingClientRect();
-        previewLink = hoveredLink;
-        loadLinkPreview(hoveredLink, { clientX: rect.left, clientY: rect.bottom });
-    }
+    if (!modifierDown || wasDown || !hoveredLink) return;
+    const rect = hoveredLink.getBoundingClientRect();
+    previews.open(hoveredLink, { clientX: rect.left, clientY: rect.bottom });
 }
 
-document.body.addEventListener('pointerover', maybeShowPreview, true);
-document.body.addEventListener('pointermove', maybeShowPreviewOnMove, true);
+function handleKeydown(event) {
+    if (event.key === 'Escape' && previews.closeLatest()) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+    }
+    trackModifier(event);
+}
+
+document.body.addEventListener('pointerover', openFromEvent, true);
+document.body.addEventListener('pointermove', openFromEvent, true);
 document.body.addEventListener('pointerout', (event) => {
-    if (previewOpen) return;
-    const link = event.target?.closest?.(LINK_PREVIEW_SELECTOR);
-    if (!link) return;
-    if (!event.relatedTarget || !link.contains(event.relatedTarget)) {
+    const link = linkFromEvent(event);
+    if (link && (!event.relatedTarget || !link.contains(event.relatedTarget))) {
         if (hoveredLink === link) hoveredLink = null;
     }
-    if (link !== previewLink) return;
-    if (event.relatedTarget && link.contains(event.relatedTarget)) return;
-    hideLinkPreview();
 }, true);
 document.body.addEventListener('wheel', (event) => {
-    if (!previewOpen) return;
-    const popover = ensurePreviewPopover();
-    if (!popover.contains(event.target)) return;
-    const body = event.target?.closest?.('.vyasa-link-preview-body') || popover.querySelector('.vyasa-link-preview-body');
+    const popover = event.target?.closest?.('.vyasa-link-preview-popover');
+    if (!popover) return;
+    const body = event.target?.closest?.('.vyasa-link-preview-body')
+        || popover.querySelector('.vyasa-link-preview-body');
     if (!body) return;
     body.scrollTop += event.deltaY;
     body.scrollLeft += event.deltaX;
     event.preventDefault();
     event.stopPropagation();
 }, { capture: true, passive: false });
-document.body.addEventListener('click', (event) => {
-    if (!previewOpen) return;
-    if (previewResizing) {
-        previewResizing = false;
-        return;
-    }
-    const popover = ensurePreviewPopover();
-    if (event.target?.closest?.('.vyasa-link-preview-close')) {
-        hideLinkPreview();
-        return;
-    }
-    if (!popover.contains(event.target)) hideLinkPreview();
-}, true);
-document.body.addEventListener('pointerdown', (event) => {
-    if (!previewOpen) return;
-    const popover = ensurePreviewPopover();
-    if (!popover.contains(event.target)) return;
-    const rect = popover.getBoundingClientRect();
-    previewResizing = rect.right - event.clientX < 24 && rect.bottom - event.clientY < 24;
-}, true);
-window.addEventListener('pointerup', () => {
-    window.setTimeout(() => {
-        previewResizing = false;
-    }, 0);
-}, true);
-document.body.addEventListener('htmx:afterSwap', () => {
-    hoveredLink = null;
-    previewLink = null;
-    previewOpen = false;
-    previewAnchor = null;
-}, true);
-document.body.addEventListener('keydown', trackModifier, true);
-document.body.addEventListener('keyup', trackModifier, true);
-window.addEventListener('blur', hideLinkPreview);
-document.body.addEventListener('htmx:beforeSwap', hideLinkPreview);
+window.addEventListener('keydown', handleKeydown, true);
+window.addEventListener('keyup', trackModifier, true);
+window.addEventListener('blur', () => { modifierDown = false; });
+window.addEventListener('resize', schedulePointerRefresh);
+window.addEventListener('scroll', schedulePointerRefresh, true);
+document.body.addEventListener('htmx:afterSwap', () => { hoveredLink = null; }, true);
