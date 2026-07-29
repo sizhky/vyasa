@@ -93,19 +93,25 @@ def test_tasks_group_group_edges_prefer_side_anchors_when_side_by_side():
     assert "edgeAnchorSides(sourceRect, targetRect, nodesById[edge.source], nodesById[edge.target])" in core_source
 
 
-def test_tasks_diagonal_edge_uses_mixed_facing_anchors():
+def test_tasks_edge_anchors_use_standard_sides_until_both_are_congested():
     script = """
         import { buildTaskEdgeAnchors } from './vyasa/extensions_builtin/tasks/static/tasks_graph_core.js';
-        const nodes = [
-            { id: 'blue', position: { x: 574, y: 103 }, width: 513, height: 213 },
-            { id: 'orange', position: { x: 22, y: 378 }, width: 514, height: 214 },
+        const cases = [
+            ['far vertical overlap', { x: 209, y: -1163 }, { x: 12, y: 168 }, 'bottom', 'top'],
+            ['far vertical gap', { x: 262, y: -1163 }, { x: 12, y: 168 }, 'bottom', 'top'],
+            ['far horizontal', { x: 926, y: 45 }, { x: 12, y: 168 }, 'left', 'right'],
+            ['far diagonal', { x: 1371, y: 2311 }, { x: -941, y: 210 }, 'left', 'right'],
+            ['close diagonal', { x: 219, y: 11 }, { x: 12, y: 168 }, 'left', 'top'],
         ];
-        const anchored = buildTaskEdgeAnchors(nodes, [{ id: 'edge', source: 'blue', target: 'orange' }]);
-        const edge = anchored.edges[0];
-        if (!edge.sourceHandle.startsWith('source-bottom-')) throw new Error(`wrong source: ${edge.sourceHandle}`);
-        if (!edge.targetHandle.startsWith('target-right-')) throw new Error(`wrong target: ${edge.targetHandle}`);
-        if (anchored.nodeHandles.blue.source[0].side !== 'bottom') throw new Error('blue handle is not on bottom');
-        if (anchored.nodeHandles.orange.target[0].side !== 'right') throw new Error('orange handle is not on right');
+        for (const [name, source, target, sourceSide, targetSide] of cases) {
+            const nodes = [
+                { id: 'source', position: source, width: 220, height: 60 },
+                { id: 'target', position: target, width: 220, height: 60 },
+            ];
+            const edge = buildTaskEdgeAnchors(nodes, [{ id: 'edge', source: 'source', target: 'target' }]).edges[0];
+            if (!edge.sourceHandle.startsWith(`source-${sourceSide}-`)) throw new Error(`${name} source: ${edge.sourceHandle}`);
+            if (!edge.targetHandle.startsWith(`target-${targetSide}-`)) throw new Error(`${name} target: ${edge.targetHandle}`);
+        }
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 

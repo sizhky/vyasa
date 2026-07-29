@@ -842,8 +842,6 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
     const targetCenterY = targetRect.y + targetRect.height / 2;
     const dx = targetCenterX - sourceCenterX;
     const dy = targetCenterY - sourceCenterY;
-    const overlapY = Math.max(0, Math.min(sourceRect.y + sourceRect.height, targetRect.y + targetRect.height) - Math.max(sourceRect.y, targetRect.y));
-    const overlapX = Math.max(0, Math.min(sourceRect.x + sourceRect.width, targetRect.x + targetRect.width) - Math.max(sourceRect.x, targetRect.x));
     const gapY = Math.max(0, Math.max(sourceRect.y, targetRect.y) - Math.min(sourceRect.y + sourceRect.height, targetRect.y + targetRect.height));
     const gapX = Math.max(0, Math.max(sourceRect.x, targetRect.x) - Math.min(sourceRect.x + sourceRect.width, targetRect.x + targetRect.width));
     const horizontalSide = dx >= 0
@@ -857,54 +855,18 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
     if (sourceKind === 'group' && targetKind === 'group' && Math.abs(dx) >= Math.abs(dy) * 0.8) {
         return horizontalSide;
     }
-    if (gapX > 0 && gapY > 0) {
-        return {
-            sourceSide: dy >= 0 ? 'bottom' : 'top',
-            targetSide: dx >= 0 ? 'left' : 'right',
-        };
+    const horizontalCongestion = gapX > 0 ? Math.abs(dy) / gapX : Infinity;
+    const verticalCongestion = gapY > 0 ? Math.abs(dx) / gapY : Infinity;
+    const mixedModeAllowed = Math.hypot(gapX, gapY) <= Math.hypot(
+        Math.min(sourceRect.width, targetRect.width),
+        Math.min(sourceRect.height, targetRect.height),
+    );
+    if (horizontalCongestion <= 1 || verticalCongestion <= 1 || !mixedModeAllowed) {
+        return horizontalCongestion <= verticalCongestion ? horizontalSide : verticalSide;
     }
-    const significantRowOverlap = overlapY >= Math.min(sourceRect.height, targetRect.height) * 0.35;
-    if (significantRowOverlap && Math.abs(dx) >= Math.abs(dy) * 1.1) {
-        return horizontalSide;
-    }
-    const significantColumnOverlap = overlapX >= Math.min(sourceRect.width, targetRect.width) * 0.35;
-    if (significantColumnOverlap && Math.abs(dy) >= Math.abs(dx) * 1.1) {
-        return verticalSide;
-    }
-    const substantialHorizontalGap = gapX >= Math.min(sourceRect.width, targetRect.width) * 0.35;
-    const strongHorizontalOffset = substantialHorizontalGap && Math.abs(dx) >= Math.abs(dy) * 0.7;
-    if (strongHorizontalOffset) {
-        return horizontalSide;
-    }
-    const substantialVerticalGap = gapY >= Math.min(sourceRect.height, targetRect.height) * 0.35;
-    const strongVerticalOffset = substantialVerticalGap && Math.abs(dy) >= Math.abs(dx) * 0.7;
-    if (strongVerticalOffset) {
-        return verticalSide;
-    }
-    const candidates = [
-        {
-            sourceSide: 'right', targetSide: 'left', sortAxis: 'y',
-            score: Math.abs(dx) + 1.4 * gapY + 0.35 * Math.abs(dy) + (dx < 0 ? 1e6 : 0) - 0.2 * overlapY,
-        },
-        {
-            sourceSide: 'left', targetSide: 'right', sortAxis: 'y',
-            score: Math.abs(dx) + 1.4 * gapY + 0.35 * Math.abs(dy) + (dx > 0 ? 1e6 : 0) - 0.2 * overlapY,
-        },
-        {
-            sourceSide: 'bottom', targetSide: 'top', sortAxis: 'x',
-            score: Math.abs(dy) + 1.4 * gapX + 0.35 * Math.abs(dx) + (dy < 0 ? 1e6 : 0) - 0.2 * overlapX,
-        },
-        {
-            sourceSide: 'top', targetSide: 'bottom', sortAxis: 'x',
-            score: Math.abs(dy) + 1.4 * gapX + 0.35 * Math.abs(dx) + (dy > 0 ? 1e6 : 0) - 0.2 * overlapX,
-        },
-    ];
-    candidates.sort((a, b) => a.score - b.score);
-    return {
-        sourceSide: candidates[0].sourceSide,
-        targetSide: candidates[0].targetSide,
-        sortAxis: candidates[0].sortAxis,
-    };
+    return Math.abs(dx) >= Math.abs(dy)
+        ? { sourceSide: horizontalSide.sourceSide, targetSide: verticalSide.targetSide, sortAxis: 'x' }
+        : { sourceSide: verticalSide.sourceSide, targetSide: horizontalSide.targetSide, sortAxis: 'y' };
 }
 
 function absoluteNodeRects(nodes) {

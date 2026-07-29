@@ -52,6 +52,10 @@ const TASKS_EDGE_OPACITY_MIN = 0.05;
 const TASKS_EDGE_OPACITY_MAX = 1;
 const TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT = 0.25;
 const TASKS_GRAPH_MIN_ZOOM = 0.05;
+const TASKS_NODE_CONNECTION_HANDLES = {
+    source: ['top', 'right', 'bottom', 'left'].flatMap((side) => [0, 1, 2].map((index) => ({ id: `source-${side}-${index}`, side, offsetPct: 50 }))),
+    target: ['top', 'right', 'bottom', 'left'].flatMap((side) => [0, 1, 2].map((index) => ({ id: `target-${side}-${index}`, side, offsetPct: 50 }))),
+};
 // Do NOT reach for React Flow's onlyRenderVisibleElements here: group children
 // carry parentId-relative positions, so its visibility test culls them at the
 // wrong absolute coords and nodes vanish when zoomed out.
@@ -407,6 +411,24 @@ function tasksTaperedArrowHeadPath(bezierPath, size) {
         `L ${baseX - nx * arrowWidth / 2} ${baseY - ny * arrowWidth / 2}`,
         'Z',
     ].join(' ');
+}
+
+function tasksMixedEdgePath(props) {
+    const horizontal = (position) => position === 'left' || position === 'right';
+    if (horizontal(props.sourcePosition) === horizontal(props.targetPosition)) return null;
+    const distance = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY);
+    const stub = Math.max(56, Math.min(180, distance * 0.45));
+    const shift = (x, y, position) => ({
+        x: x + (position === 'left' ? -stub : position === 'right' ? stub : 0),
+        y: y + (position === 'top' ? -stub : position === 'bottom' ? stub : 0),
+    });
+    const sourceStub = shift(props.sourceX, props.sourceY, props.sourcePosition);
+    const targetStub = shift(props.targetX, props.targetY, props.targetPosition);
+    return [
+        `M ${props.sourceX} ${props.sourceY} C ${sourceStub.x} ${sourceStub.y} ${targetStub.x} ${targetStub.y} ${props.targetX} ${props.targetY}`,
+        (props.sourceX + 3 * sourceStub.x + 3 * targetStub.x + props.targetX) / 8,
+        (props.sourceY + 3 * sourceStub.y + 3 * targetStub.y + props.targetY) / 8,
+    ];
 }
 
 function tasksIsIconifyImage(url) {
@@ -3523,12 +3545,15 @@ async function renderTasksGraphs(rootElement = document) {
         const TasksGraphApp = (props) => {
             const React = window.React;
             const Handle = rf.Handle;
+            const NodeToolbar = rf.NodeToolbar;
             const Position = rf.Position;
             const markWidgetActive = React.useCallback(() => {
                 window.__vyasaTasksActiveWidgetId = widgetId;
             }, []);
             const [sourceModel, setSourceModel] = React.useState(() => initialSourceModel);
             const [sourceGraph, setSourceGraph] = React.useState(() => initialSourceGraph);
+            const nodeConnectionExperiment = sourceModel.graph_id === 'kg-node-connection-logic';
+            const showDebugPositions = nodeConnectionExperiment || window.__vyasaTasksDebug.enabled;
             const [egoState, setEgoState] = React.useState(null);
             const egoMode = initialEgoMode || Boolean(egoState);
             const sourcePrefsRef = React.useRef(null);
@@ -3922,6 +3947,27 @@ async function renderTasksGraphs(rootElement = document) {
             const [queryBuilderReady, setQueryBuilderReady] = React.useState(() => Boolean(window.VyasaTasksQueryBuilder?.QueryBuilder));
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
+            const moveExperimentNodes = React.useCallback((changes) => {
+                if (!nodeConnectionExperiment) return;
+                setNodes((currentNodes) => {
+                    const movedNodes = rf.applyNodeChanges(changes, currentNodes);
+                    const anchored = buildTaskEdgeAnchors(movedNodes, graphBaseRef.current.edges);
+                    const anchoredNodes = movedNodes.map((node) => ({
+                        ...node,
+                        data: {
+                            ...node.data,
+                            handleLayout: TASKS_NODE_CONNECTION_HANDLES,
+                            __debug_position__: {
+                                x: Math.round(node.position.x),
+                                y: Math.round(node.position.y),
+                            },
+                        },
+                    }));
+                    graphBaseRef.current = { nodes: anchoredNodes, edges: anchored.edges };
+                    setEdges(anchored.edges);
+                    return anchoredNodes;
+                });
+            }, [nodeConnectionExperiment]);
             const reviewTargets = React.useMemo(() => [
                 ...nodes
                     .filter((node) => node.data?.highlightMode && !['dim', 'none'].includes(node.data.highlightMode))
@@ -4891,7 +4937,7 @@ async function renderTasksGraphs(rootElement = document) {
                             `vyasa-tasks-node--${hitArea}`,
                             isExpanded ? 'vyasa-tasks-node--expanded-group' : '',
                         ].filter(Boolean).join(' '),
-                        draggable: false,
+                        draggable: nodeConnectionExperiment,
                         selectable: isTasksGraphNodeSelectable(n.__kind__, isExpanded),
                     };
                     if (n.parentId) {
@@ -4967,7 +5013,12 @@ async function renderTasksGraphs(rootElement = document) {
                     ...node,
                     data: {
                         ...node.data,
-                        handleLayout: anchored.nodeHandles[node.id] || { source: [], target: [] },
+                        handleLayout: nodeConnectionExperiment
+                            ? TASKS_NODE_CONNECTION_HANDLES
+                            : (anchored.nodeHandles[node.id] || { source: [], target: [] }),
+                        __debug_position__: showDebugPositions
+                            ? { x: Math.round(absolutePosition(node).x), y: Math.round(absolutePosition(node).y) }
+                            : undefined,
                     },
                 }));
                 graphBaseRef.current = { nodes: anchoredNodes, edges: baseEdges };
@@ -5584,7 +5635,8 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             };
             const CustomEdge = React.memo((props) => {
-                const [path, labelX, labelY] = rf.getBezierPath(props);
+                const mixedPath = tasksMixedEdgePath(props);
+                const [path, labelX, labelY] = mixedPath || rf.getBezierPath(props);
                 React.useEffect(() => {
                     traceTasksEdge('render', props, {
                         sourceX: props.sourceX,
@@ -5602,7 +5654,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
                 const strokeMode = props.data?.strokeMode || highlightMode;
-                const useTaper = !props.animated && ['focused-in', 'focused-out', 'selected', 'selected-in', 'selected-out'].includes(strokeMode);
+                const useTaper = !mixedPath && !props.animated && ['focused-in', 'focused-out', 'selected', 'selected-in', 'selected-out'].includes(strokeMode);
                 const taperPath = useTaper
                     ? tasksTaperedBezierPath(path, (Number(props.style?.strokeWidth) || 4) * 2.65, Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42))
                     : '';
@@ -5653,6 +5705,7 @@ async function renderTasksGraphs(rootElement = document) {
                         markerEnd: undefined,
                         style: {
                             ...(props.style || {}),
+                            strokeLinejoin: 'round',
                             stroke: 'var(--vyasa-paper)',
                             strokeWidth: strokeWidth + 8,
                         },
@@ -5763,6 +5816,7 @@ async function renderTasksGraphs(rootElement = document) {
                     'data-vyasa-hover-outline': data?.__hover_outline__ === true ? 'true' : undefined,
                 };
                 const isChecked = data?.__checked__ === true;
+                const debugPosition = data?.__debug_position__;
                 const taskStateLabel = String(data?.__card_state__ || (isChecked ? TASKS_DEFAULT_CARD_STATES[1] : TASKS_DEFAULT_CARD_STATES[0]));
                 const taskStateColor = data?.__card_state_color__ || TASKS_DONE_ACCENT;
                 // Derive selection/hover state from data.highlightMode rather than
@@ -6030,6 +6084,13 @@ async function renderTasksGraphs(rootElement = document) {
                         'data-vyasa-task-control': 'true',
                         style: { position: 'absolute', right: '8px', top: '8px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
                     }, isExpanded ? '−' : '+'),
+                    NodeToolbar && debugPosition && React.createElement(NodeToolbar, {
+                        isVisible: true,
+                        position: Position.Bottom,
+                        offset: 8,
+                    }, React.createElement('code', {
+                        style: { padding: '3px 6px', borderRadius: '5px', background: 'var(--vyasa-paper)', border: '1px solid color-mix(in srgb, var(--vyasa-ink) 24%, transparent)', fontSize: '11px', whiteSpace: 'nowrap' },
+                    }, `x ${debugPosition.x}, y ${debugPosition.y}`)),
                     ...renderHandles('source')
                 );
             };
@@ -8427,7 +8488,7 @@ async function renderTasksGraphs(rootElement = document) {
                     filterPanelElement,
                     SlideShow(),
                     window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(TasksNodeHighlightBorders),
                     window.React.createElement(rf.Controls),
@@ -8448,7 +8509,7 @@ async function renderTasksGraphs(rootElement = document) {
             ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
                 filterPanelElement,
                 window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                         window.React.createElement(TasksNodeHighlightBorders),
                         window.React.createElement(rf.Controls),
