@@ -19,6 +19,14 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert "cursor: nesw-resize;" in css
     assert "event.target?.id !== 'main-content'" in source
     assert "previews.closeAll();" in source
+    assert "(normalFontPx || 18) * 0.75 - 2" in source
+    assert "data-vyasa-link-preview-font-decrease" in source
+    assert "data-vyasa-link-preview-font-increase" in source
+    assert "event.shiftKey ? shell?.dataset.absolutePath : shell?.dataset.relativePath" in source
+    assert "--vyasa-link-preview-font-size" in css
+    assert "font-size: 1.75em;" in css
+    assert ".vyasa-link-preview-body .vyasa-doc-h2 { font-size: 1.5em; }" in css
+    assert ".vyasa-link-preview-body .vyasa-doc-h6 { font-size: 1em; }" in css
 
 
 def test_link_preview_pointer_joins_source_to_nearest_popup_edge():

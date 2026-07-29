@@ -98,7 +98,12 @@ function createPreviewView({ point, link, onClose }) {
         '<div class="vyasa-link-preview-card">',
         '<div class="vyasa-link-preview-bar">',
         '<span data-vyasa-link-preview-origin></span>',
+        '<span class="vyasa-link-preview-actions">',
+        '<button type="button" data-vyasa-link-preview-copy aria-label="Copy relative path; Shift-click copies absolute path"><uk-icon icon="copy" aria-hidden="true"></uk-icon></button>',
+        '<button type="button" data-vyasa-link-preview-font-decrease aria-label="Decrease preview font size">−</button>',
+        '<button type="button" data-vyasa-link-preview-font-increase aria-label="Increase preview font size">+</button>',
         '<button type="button" class="vyasa-link-preview-close" aria-label="Close preview">×</button>',
+        '</span>',
         '</div>',
         '<div data-vyasa-link-preview-content class="vyasa-link-preview-content vyasa-link-preview-loading">Loading preview...</div>',
         '</div>',
@@ -111,6 +116,25 @@ function createPreviewView({ point, link, onClose }) {
     const bar = popover.querySelector('.vyasa-link-preview-bar');
     const sourceLabel = popover.querySelector('[data-vyasa-link-preview-origin]');
     sourceLabel.textContent = link.textContent.trim() || link.getAttribute('href') || 'Link';
+    const normalFontPx = parseFloat(getComputedStyle(document.querySelector('#main-content') || document.body).fontSize);
+    let fontSizePt = Math.max(6, (normalFontPx || 18) * 0.75 - 2);
+    const applyFontSize = () => {
+        popover.style.setProperty('--vyasa-link-preview-font-size', `${fontSizePt}pt`);
+    };
+    popover.querySelector('[data-vyasa-link-preview-font-decrease]').addEventListener('click', () => {
+        fontSizePt = Math.max(6, fontSizePt - 1);
+        applyFontSize();
+    });
+    popover.querySelector('[data-vyasa-link-preview-font-increase]').addEventListener('click', () => {
+        fontSizePt += 1;
+        applyFontSize();
+    });
+    popover.querySelector('[data-vyasa-link-preview-copy]').addEventListener('click', (event) => {
+        const shell = content.querySelector('.vyasa-link-preview-shell');
+        const path = event.shiftKey ? shell?.dataset.absolutePath : shell?.dataset.relativePath;
+        if (path) navigator.clipboard.writeText(path);
+    });
+    applyFontSize();
     const raise = () => {
         const z = ++previewZ;
         pointer.style.zIndex = String(z - 1);

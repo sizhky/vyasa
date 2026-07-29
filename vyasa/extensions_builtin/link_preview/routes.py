@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import re
 from urllib.parse import unquote, urlsplit
 
@@ -93,8 +94,10 @@ def render_link_preview_html(*, href: str, current_path: str | None = None) -> s
         return None
     page_slug = content_slug_for_path(file_path) or slug
     preview_html = from_md(section, current_path=page_slug)
+    relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
     return (
-        '<div class="vyasa-link-preview-shell">'
+        f'<div class="vyasa-link-preview-shell" data-relative-path="{html.escape(relative_path, quote=True)}" '
+        f'data-absolute-path="{html.escape(str(file_path.resolve()), quote=True)}">'
         f'<div class="vyasa-link-preview-body">{preview_html}</div>'
         '</div>'
     )
