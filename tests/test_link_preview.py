@@ -12,6 +12,8 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert "box-shadow:" in popup_rule
     assert "drop-shadow(" in pointer_rule
     assert "box-shadow:" not in card_rule
+    assert "cursor: ns-resize;" in css
+    assert "cursor: ew-resize;" in css
 
 
 def test_link_preview_pointer_joins_source_to_nearest_popup_edge():
@@ -25,8 +27,25 @@ def test_link_preview_pointer_joins_source_to_nearest_popup_edge():
         if (tip[0] !== 50 || tip[1] !== 110) throw new Error(`wrong source tip: ${tip}`);
         const baseCenterX = (baseA[0] + baseB[0]) / 2;
         if (Math.abs(baseCenterX - 201) > 0.001) throw new Error(`pointer missed popup edge`);
-        if (Math.abs(baseA[0] - baseB[0]) > 0.001) throw new Error(`pointer base is not edge-aligned`);
-        if (Math.abs(baseA[1] - baseB[1]) !== 28) throw new Error(`pointer base is not 28px wide`);
+        const baseWidth = Math.hypot(baseA[0] - baseB[0], baseA[1] - baseB[1]);
+        if (Math.abs(baseWidth - 28) > 0.001) throw new Error(`pointer base is not 28px wide`);
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_link_preview_resizes_from_each_edge():
+    script = """
+        import { resizeLinkPreviewRect } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';
+        const original = { left: 100, top: 100, width: 500, height: 400 };
+        const viewport = { width: 1000, height: 800 };
+        const left = resizeLinkPreviewRect(original, 'left', 100, 0, viewport);
+        const right = resizeLinkPreviewRect(original, 'right', 100, 0, viewport);
+        const top = resizeLinkPreviewRect(original, 'top', 0, 100, viewport);
+        const bottom = resizeLinkPreviewRect(original, 'bottom', 0, 100, viewport);
+        if (left.left !== 200 || left.width !== 400) throw new Error(`left edge failed`);
+        if (right.left !== 100 || right.width !== 600) throw new Error(`right edge failed`);
+        if (top.top !== 200 || top.height !== 300) throw new Error(`top edge failed`);
+        if (bottom.top !== 100 || bottom.height !== 500) throw new Error(`bottom edge failed`);
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 

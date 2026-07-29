@@ -1,5 +1,5 @@
 import { LinkPreviewStack } from './link_preview_stack.js';
-import { linkPreviewPointerPoints } from './link_preview_geometry.js';
+import { linkPreviewPointerPoints, resizeLinkPreviewRect } from './link_preview_geometry.js';
 
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 let hoveredLink = null;
@@ -32,6 +32,54 @@ function positionPopover(popover, point) {
         left: `${Math.max(12, left)}px`,
         top: `${Math.max(12, top)}px`,
     });
+}
+
+function installResizeHandles(popover, raise) {
+    for (const edge of ['top', 'right', 'bottom', 'left']) {
+        const handle = document.createElement('div');
+        handle.className = `vyasa-link-preview-resize-handle is-${edge}`;
+        handle.dataset.resizeEdge = edge;
+        let start = null;
+        handle.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0) return;
+            const rect = popover.getBoundingClientRect();
+            start = {
+                id: event.pointerId,
+                x: event.clientX,
+                y: event.clientY,
+                rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+            };
+            handle.setPointerCapture(event.pointerId);
+            raise();
+            event.preventDefault();
+            event.stopPropagation();
+        });
+        handle.addEventListener('pointermove', (event) => {
+            if (!start || start.id !== event.pointerId) return;
+            const rect = resizeLinkPreviewRect(
+                start.rect,
+                edge,
+                event.clientX - start.x,
+                event.clientY - start.y,
+                { width: window.innerWidth, height: window.innerHeight },
+            );
+            Object.assign(popover.style, {
+                left: `${rect.left}px`,
+                top: `${rect.top}px`,
+                width: `${rect.width}px`,
+                height: `${rect.height}px`,
+            });
+            schedulePointerRefresh();
+        });
+        const finish = (event) => {
+            if (!start || start.id !== event.pointerId) return;
+            start = null;
+            if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+        };
+        handle.addEventListener('pointerup', finish);
+        handle.addEventListener('pointercancel', finish);
+        popover.appendChild(handle);
+    }
 }
 
 function createPreviewView({ point, link, onClose }) {
@@ -103,6 +151,7 @@ function createPreviewView({ point, link, onClose }) {
     bar.addEventListener('pointercancel', finishDrag);
     popover.querySelector('.vyasa-link-preview-close').addEventListener('click', onClose);
     popover.addEventListener('pointerdown', raise);
+    installResizeHandles(popover, raise);
     document.body.appendChild(pointer);
     document.body.appendChild(popover);
     positionPopover(popover, point);
