@@ -339,6 +339,47 @@ export function tasksProjectionGroupByHierarchy(sourceModel, projectionId) {
         : [];
 }
 
+export function tasksViewMatchesContext(projection, activeContextId) {
+    const active = String(activeContextId || '').trim();
+    if (!active) return true;
+    const resolved = String(projection?.resolved_context || '').trim();
+    return !resolved || resolved === active;
+}
+
+export function tasksUngroupModelForGrouping(sourceModel) {
+    const projectedToSource = new Map();
+    const tasksBySource = new Map();
+    for (const task of sourceModel?.tasks || []) {
+        const sourceId = String(task?.__source_node_id || task?.id || '').trim();
+        if (!sourceId) continue;
+        projectedToSource.set(task.id, sourceId);
+        if (!tasksBySource.has(sourceId)) tasksBySource.set(sourceId, { ...task, id: sourceId, group_id: null });
+    }
+    const dependencyEdges = [];
+    const seenEdges = new Set();
+    for (const edge of sourceModel?.dependency_edges || []) {
+        const source = projectedToSource.get(edge.source) || edge.source;
+        const target = projectedToSource.get(edge.target) || edge.target;
+        if (!tasksBySource.has(source) || !tasksBySource.has(target)) continue;
+        const id = String(edge.__source_edge_id || edge.id || `${source}-${target}`);
+        const key = `${id}\u001f${source}\u001f${target}`;
+        if (seenEdges.has(key)) continue;
+        seenEdges.add(key);
+        dependencyEdges.push({ ...edge, id, source, target });
+    }
+    const tasks = Array.from(tasksBySource.values());
+    return {
+        ...sourceModel,
+        groups: [],
+        tasks,
+        dependency_edges: dependencyEdges,
+        group_tree: { null: [] },
+        task_children: { null: tasks.map((task) => task.id) },
+        document_order: tasks.map((task) => task.id),
+        default_open_depth: -1,
+    };
+}
+
 export function isTasksUnspecifiedProjectionGroup(node, unspecifiedLabel = 'Unspecified') {
     if (!node || node.__projection_group__ !== true) return false;
     const label = String(unspecifiedLabel || 'Unspecified').trim() || 'Unspecified';
@@ -690,6 +731,12 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
     if (sourceKind === 'group' && targetKind === 'group' && Math.abs(dx) >= Math.abs(dy) * 0.8) {
         return horizontalSide;
     }
+    if (gapX > 0 && gapY > 0) {
+        return {
+            sourceSide: dy >= 0 ? 'bottom' : 'top',
+            targetSide: dx >= 0 ? 'left' : 'right',
+        };
+    }
     const significantRowOverlap = overlapY >= Math.min(sourceRect.height, targetRect.height) * 0.35;
     if (significantRowOverlap && Math.abs(dx) >= Math.abs(dy) * 1.1) {
         return horizontalSide;
@@ -771,7 +818,7 @@ export function buildTaskEdgeAnchors(nodes, edges) {
         const sourceRect = rects[edge.source];
         const targetRect = rects[edge.target];
         if (!sourceRect || !targetRect) return { ...edge, _anchorIndex: index };
-        const { sourceSide, targetSide, sortAxis } = edgeAnchorSides(sourceRect, targetRect, nodesById[edge.source], nodesById[edge.target]);
+        const { sourceSide, targetSide } = edgeAnchorSides(sourceRect, targetRect, nodesById[edge.source], nodesById[edge.target]);
         const anchored = {
             ...edge,
             _anchorIndex: index,
@@ -782,8 +829,12 @@ export function buildTaskEdgeAnchors(nodes, edges) {
         const incomingKey = `${edge.target}:target:${targetSide}`;
         if (!outgoingGroups.has(outgoingKey)) outgoingGroups.set(outgoingKey, []);
         if (!incomingGroups.has(incomingKey)) incomingGroups.set(incomingKey, []);
-        const targetSort = sortAxis === 'y' ? targetRect.y + targetRect.height / 2 : targetRect.x + targetRect.width / 2;
-        const sourceSort = sortAxis === 'y' ? sourceRect.y + sourceRect.height / 2 : sourceRect.x + sourceRect.width / 2;
+        const targetSort = ['left', 'right'].includes(sourceSide)
+            ? targetRect.y + targetRect.height / 2
+            : targetRect.x + targetRect.width / 2;
+        const sourceSort = ['left', 'right'].includes(targetSide)
+            ? sourceRect.y + sourceRect.height / 2
+            : sourceRect.x + sourceRect.width / 2;
         outgoingGroups.get(outgoingKey).push({ edge: anchored, sortValue: targetSort });
         incomingGroups.get(incomingKey).push({ edge: anchored, sortValue: sourceSort });
         return anchored;

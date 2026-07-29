@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fasthtml.common import Li
+from fasthtml.common import Button, Li
 from fasthtml.common import to_xml
 
 from vyasa.build import static_layout
@@ -37,6 +37,14 @@ def test_navbar_sidebar_toggles_have_animation_targets():
 
     assert 'data-vyasa-sidebar-toggle="posts"' in html
     assert 'data-vyasa-sidebar-toggle="toc"' in html
+
+
+def test_navbar_control_sits_left_of_search():
+    from vyasa.nav_views import navbar_view
+
+    html = to_xml(navbar_view("BLOG", "", ref_switcher=Button("Annotations", cls="annotations-control")))
+
+    assert html.index("annotations-control") < html.index("vyasa-navbar-search-input")
 
 
 def test_compact_navbar_uses_panel_toggle_not_embedded_posts_tree():
@@ -85,10 +93,16 @@ def test_mobile_panels_fill_dynamic_viewport_without_page_overflow():
     assert "max-height: none !important" in css
 
 
-def test_floating_actions_honor_page_inline_inset():
-    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+def test_floating_actions_park_on_screen_edge_and_reveal_together():
+    source = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 
-    assert "--vyasa-floating-actions-inline-inset" in source
+    assert ".vyasa-floating-actions::before" in source
+    assert "transform: translateX(60%)" in source
+    assert "transform: translateX(-1.25rem)" in source
+    assert ".vyasa-floating-actions:hover" in source
+    assert ".vyasa-floating-actions:focus-within" in source
+    assert "cubic-bezier(.34, 1.56, .64, 1)" in source
+    assert "prefers-reduced-motion: reduce" in source
 
 
 def test_posts_and_slides_share_shortcut_help():

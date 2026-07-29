@@ -222,6 +222,18 @@ function initAnnotations(root = document) {
         return lines.join('\n');
     };
     const formatComments = (items) => `!vyasa-comments 1\n${items.length ? `\n${items.map((item, index) => formatCommentThread(item, index + 1)).join('\n\n')}\n` : ''}`;
+    const formatAllComments = (items) => {
+        const byPath = new Map();
+        items.forEach((item) => {
+            if (!byPath.has(item.path)) byPath.set(item.path, []);
+            byPath.get(item.path).push(item);
+        });
+        const documents = [...byPath.entries()].map(([documentPath, rows]) => {
+            const threads = buildAnnotationTree(rows).map((item, index) => formatCommentThread(item, index + 1));
+            return `@ document ${documentPath}\n\n${threads.join('\n\n')}`;
+        });
+        return `!vyasa-comments 1\n${documents.length ? `\n${documents.join('\n\n')}\n` : ''}`;
+    };
     const copyAnnotationText = async (text) => {
         if (navigator.clipboard?.writeText) {
             try { await navigator.clipboard.writeText(text); return true; } catch (_) {}
@@ -236,10 +248,35 @@ function initAnnotations(root = document) {
         input.remove();
         return copied;
     };
+    const loadAllAnnotations = () => fetch('/api/annotations')
+        .then((response) => response.ok ? response.json() : [])
+        .then((items) => Array.isArray(items) ? items : [])
+        .catch(() => []);
+    const refreshGlobalExport = async () => {
+        const items = await loadAllAnnotations();
+        document.querySelectorAll('.vyasa-annotations-export').forEach((button) => {
+            button.hidden = items.length === 0;
+        });
+        return items;
+    };
+    const exportAllComments = async () => {
+        const items = await refreshGlobalExport();
+        const exported = await fetch('/api/annotations/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: formatAllComments(items),
+        });
+        if (!exported.ok) return;
+        const result = await exported.json();
+        if (await copyAnnotationText(result.path)) showCommentCopyStatus(
+            items.length,
+            `${items.length} comment${items.length === 1 ? '' : 's'} saved to ${result.path} — path copied`,
+        );
+    };
     const countComments = (items) => items.reduce(
         (count, item) => count + 1 + countComments(item.replies || []), 0,
     );
-    const showCommentCopyStatus = (count) => {
+    const showCommentCopyStatus = (count, message = `${count} comment${count === 1 ? '' : 's'} copied`) => {
         let status = document.getElementById('vyasa-comment-copy-status');
         if (!status) {
             status = document.createElement('div');
@@ -249,7 +286,7 @@ function initAnnotations(root = document) {
             status.setAttribute('aria-live', 'polite');
             document.body.appendChild(status);
         }
-        status.textContent = `${count} comment${count === 1 ? '' : 's'} copied`;
+        status.textContent = message;
         status.classList.add('is-visible');
         clearTimeout(showCommentCopyStatus.timer);
         showCommentCopyStatus.timer = setTimeout(() => status.classList.remove('is-visible'), 1800);
@@ -268,6 +305,10 @@ function initAnnotations(root = document) {
         });
         return button;
     };
+    document.querySelectorAll('.vyasa-annotations-export').forEach((button) => {
+        button.addEventListener('click', exportAllComments, { signal: lifecycle.signal });
+    });
+    refreshGlobalExport();
     const persistPopupState = (state) => {
         const entry = { path, id: state.item.id, pinned: true };
         persistedPopups = persistedPopups.filter((saved) => saved.path !== path || saved.id !== state.item.id);
@@ -457,16 +498,39 @@ function initAnnotations(root = document) {
         note.appendChild(replies);
         const openEditor = () => {
             const current = body.textContent;
-            const next = window.prompt('Edit annotation', current);
-            if (next == null) return;
-            const comment = next.trim();
-            if (!comment) return;
-            persistAnnotation(item, comment).then((saved) => {
-                item.comment = comment;
-                item.author = saved.author || item.author;
-                document.querySelectorAll('[data-annotation-author]').forEach((node) => { if (node.dataset.annotationAuthor === item.id) node.textContent = item.author || 'anonymous'; });
-                document.querySelectorAll('[data-annotation-body]').forEach((node) => { if (node.dataset.annotationBody === item.id) node.textContent = comment; });
-            }).catch(() => {});
+            const editorBox = document.createElement('div');
+            editorBox.className = 'vyasa-comment-editor';
+            const editor = document.createElement('textarea');
+            editor.value = current;
+            const save = document.createElement('button');
+            save.type = 'button';
+            save.textContent = 'Save';
+            const cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.textContent = 'Cancel';
+            editorBox.append(editor, save, cancel);
+            body.replaceWith(editorBox);
+            const commit = () => {
+                const comment = editor.value.trim();
+                if (!comment) return;
+                save.disabled = true;
+                persistAnnotation(item, comment).then((saved) => {
+                    item.comment = comment;
+                    item.author = saved.author || item.author;
+                    document.querySelectorAll('[data-annotation-author]').forEach((node) => { if (node.dataset.annotationAuthor === item.id) node.textContent = item.author || 'anonymous'; });
+                    document.querySelectorAll('[data-annotation-body]').forEach((node) => { if (node.dataset.annotationBody === item.id) node.textContent = comment; });
+                    body.textContent = comment;
+                    editorBox.replaceWith(body);
+                }).catch(() => { save.disabled = false; });
+            };
+            editor.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) return;
+                event.preventDefault();
+                commit();
+            });
+            save.addEventListener('click', commit);
+            cancel.addEventListener('click', () => editorBox.replaceWith(body));
+            editor.focus();
         };
         const canManage = (item.author || 'anonymous') === currentAuthor;
         const replyBtn = document.createElement('button');
@@ -512,6 +576,7 @@ function initAnnotations(root = document) {
                         sourceAnchors.delete(item.id);
                         destroyCommentPopup(item.id);
                         if (commentsList && !commentsList.children.length) commentsSection.hidden = true;
+                        refreshGlobalExport();
                     })
                     .catch(() => {});
             });
@@ -667,8 +732,16 @@ function initAnnotations(root = document) {
             box.innerHTML = `<textarea class="h-24 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm text-[var(--vyasa-ink,#2d3434)] dark:border-slate-700" placeholder="Write a comment"></textarea><div class="mt-2 flex justify-end gap-2"><button type="button" data-ann-cancel class="rounded-md px-3 py-1.5 text-sm text-slate-500">Cancel</button><button type="button" data-ann-save class="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white dark:bg-slate-100 dark:text-slate-900">Save</button></div>`;
             document.body.appendChild(box);
             box.querySelector('[data-ann-cancel]').addEventListener('click', clearUi);
-            box.querySelector('textarea').focus();
-            box.querySelector('[data-ann-save]').addEventListener('click', () => {
+            const textarea = box.querySelector('textarea');
+            const saveButton = box.querySelector('[data-ann-save]');
+            textarea.focus();
+            textarea.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                    event.preventDefault();
+                    saveButton.click();
+                }
+            });
+            saveButton.addEventListener('click', () => {
                 const body = box.querySelector('textarea').value.trim();
                 if (!body || !pending?.range) return;
                 const item = {
@@ -686,6 +759,7 @@ function initAnnotations(root = document) {
                     window.getSelection()?.removeAllRanges();
                     pending = null;
                     clearUi();
+                    refreshGlobalExport();
                 }).catch(() => {});
             });
         });

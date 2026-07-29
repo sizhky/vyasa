@@ -1,16 +1,19 @@
 from pathlib import Path
 from functools import partial
+from fasthtml.common import Button
+from monsterui.all import UkIcon
 
 from ...extensions import AssetBundle, ExtensionMeta, VyasaExtensionBase
 from ...runtime_services import get_runtime_services
 from .api import CallableAnnotationStore, register_annotations_routes
-from .store import delete_annotation, list_annotations, upsert_annotation
+from .store import delete_annotation, list_all_annotations, list_annotations, upsert_annotation
 
 
 class AnnotationsExtension(VyasaExtensionBase):
     def register(self, app) -> None:
         storage = app.storage.namespace("annotations")
         app.routes.add("/api/annotations", partial(_register_annotations_routes, storage=storage))
+        app.navigation.navbar_control(_navbar_control)
         app.assets.page(_page_bundles)
         app.layout.main_attrs(_main_attrs)
         app.assets.bundle(
@@ -30,6 +33,9 @@ def _register_annotations_routes(rt, runtime, *, storage):
     def _db_list(path: str):
         return list_annotations(db_path, cache, path)
 
+    def _db_list_all():
+        return list_all_annotations(db_path, cache)
+
     def _db_upsert(row):
         upsert_annotation(db_path, cache, row)
 
@@ -39,7 +45,20 @@ def _register_annotations_routes(rt, runtime, *, storage):
     register_annotations_routes(
         rt,
         runtime,
-        CallableAnnotationStore(_db_list, _db_upsert, _db_delete),
+        CallableAnnotationStore(_db_list, _db_list_all, _db_upsert, _db_delete),
+    )
+
+
+def _navbar_control(context):
+    if not context.get("current_path"):
+        return None
+    return Button(
+        UkIcon("file-text", cls="w-4 h-4"),
+        type="button",
+        title="Copy all annotations",
+        aria_label="Copy all annotations",
+        cls="vyasa-annotations-export",
+        hidden=True,
     )
 
 
@@ -76,7 +95,7 @@ EXTENSION = AnnotationsExtension(
     ExtensionMeta(
         "annotations",
         "route",
-        ("cap:route:annotations", "bundle:annotations.runtime", "cap:layout:main_attrs"),
+        ("cap:route:annotations", "bundle:annotations.runtime", "cap:layout:main_attrs", "cap:navigation:annotations"),
         route_prefixes=("/api/annotations",),
         storage_namespaces=("annotations",),
         scope_disable=True,

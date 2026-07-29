@@ -1,5 +1,8 @@
+import asyncio
+
 from vyasa.assets import bundle_asset_nodes, requested_page_bundles, route_bundle_names
 from vyasa.build import build_static_site
+from vyasa.core import extension_static_asset
 from vyasa.extensions import AssetBundle, ExtensionPlan, ExtensionRuntime, build_extension_runtime, get_extension_runtime, set_extension_runtime
 
 
@@ -43,6 +46,12 @@ def test_bundle_asset_nodes_emit_css_and_js_once():
     assert rendered[1]["data-vyasa-bundle-asset"] == "true"
     assert rendered[1]["data-vyasa-bundle-kind"] == "js"
     assert rendered[2]["src"].startswith("/static/b.js")
+
+
+def test_extension_assets_require_browser_revalidation():
+    response = asyncio.run(extension_static_asset("tasks", "tasks_graph_core.js"))
+
+    assert response.headers["cache-control"] == "no-cache, max-age=0, must-revalidate"
 
 
 def test_runtime_and_static_request_annotations_when_enabled():
@@ -99,3 +108,5 @@ def test_static_build_copies_extension_assets_and_references_requested_bundles(t
     assert (output / "static" / "extensions" / "mermaid" / "mermaid.js").exists()
     assert (output / "static" / "extensions" / "tasks" / "tasks.js").exists()
     assert (output / "static" / "extensions" / "git_refs" / "git_refs.js").exists()
+    assert (output / "static" / "extensions" / "link_preview" / "link_preview_stack.js").exists()
+    assert (output / "static" / "extensions" / "link_preview" / "link_preview_geometry.js").exists()

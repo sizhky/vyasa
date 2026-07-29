@@ -41,6 +41,30 @@ export function tasksLogicalNodeId(node, fallback = '') {
     return String(node?.__source_node_id || fallback || node?.id || '').trim();
 }
 
+export function tasksContextDiffSelectionIds(model, graphNodes, diffNodeIds) {
+    const changed = diffNodeIds instanceof Set ? diffNodeIds : new Set(diffNodeIds || []);
+    const modelNodes = [...(model?.groups || []), ...(model?.tasks || [])];
+    const modelById = Object.fromEntries(modelNodes.map((node) => [String(node.id || ''), node]));
+    const visibleIds = new Set((graphNodes || []).map((node) => String(
+        node?.data?.__kind__ === 'groupTitle' ? node.data.sourceGroupId : node?.id
+    )).filter(Boolean));
+    const selected = new Set();
+    for (const node of modelNodes) {
+        if (!changed.has(tasksLogicalNodeId(node, node.id))) continue;
+        let current = node;
+        while (current) {
+            const currentId = String(current.id || '');
+            if (visibleIds.has(currentId)) {
+                selected.add(currentId);
+                break;
+            }
+            const parentId = String(current.group_id || current.parent_group_id || '');
+            current = parentId ? modelById[parentId] : null;
+        }
+    }
+    return selected;
+}
+
 export function tasksSelectionClickKey(node) {
     if (!node) return '';
     return String(node?.data?.__kind__ === 'groupTitle'
@@ -379,7 +403,7 @@ function tasksQuoteSchemaValue(value) {
     return /[\s"=]/.test(text) ? `"${text.replace(/"/g, '\\"')}"` : text;
 }
 
-export function buildTasksProjectionConfigText(config) {
+export function buildTasksProjectionConfigText(config, contextId = '') {
     const cfg = config || {};
     const lines = [];
     const notes = [];
@@ -444,7 +468,10 @@ export function buildTasksProjectionConfigText(config) {
     if (cfg.defaultOpenDepth !== undefined && cfg.defaultOpenDepth !== null && cfg.defaultOpenDepth !== '' && !Number.isNaN(Number(cfg.defaultOpenDepth))) {
         lines.push(`\tdefault_open_depth=${cfg.defaultOpenDepth}`);
     }
-    let out = `# Paste under your @views section in kg.schema:\n${lines.join('\n')}`;
+    const target = String(contextId || '').trim()
+        ? 'the active .context file'
+        : 'kg.schema';
+    let out = `# Paste under your @views section in ${target}:\n${lines.join('\n')}`;
     if (notes.length) out += `\n${notes.map((note) => `# ${note}`).join('\n')}`;
     return out;
 }

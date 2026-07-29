@@ -116,19 +116,8 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 .react-flow__node[data-vyasa-group-toggle-hover="true"] {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--vyasa-ink) 64%, transparent), 0 24px 72px color-mix(in srgb, var(--vyasa-primary) 16%, transparent) !important;
 }
-.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-context-diff="true"]):not(:has([data-vyasa-highlight-active="true"])) {
-    outline: 4px solid color-mix(in srgb, var(--vyasa-primary) 82%, transparent);
-    outline-offset: 3px;
-    box-shadow: none !important;
-}
 .vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"]) {
-    outline: 4px solid var(--vyasa-tasks-active-border, var(--vyasa-primary));
-    outline-offset: 3px;
     box-shadow: none !important;
-}
-.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-hover-outline="true"]) {
-    outline: 12px solid var(--vyasa-tasks-active-border, var(--vyasa-primary)) !important;
-    outline-offset: 3px;
 }
 .react-flow__node.vyasa-tasks-node--passive [data-vyasa-task-control="true"] {
     pointer-events: auto;

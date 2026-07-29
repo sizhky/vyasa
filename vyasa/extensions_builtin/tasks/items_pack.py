@@ -8,6 +8,8 @@ import re
 import textwrap
 from typing import TYPE_CHECKING, Any, Union
 
+from .query import resolve_context_id
+
 if TYPE_CHECKING:
     from ...content_backend import VirtualPath
 
@@ -28,6 +30,8 @@ def _as_pathlike(p: "str | PathLike") -> PathLike:
 @dataclass
 class KgView:
     id: str
+    context: str = "active"
+    slides: list[dict[str, Any]] = field(default_factory=list)
     source: str = "base"
     where: dict[str, str] = field(default_factory=dict)
     group_by: list[str] = field(default_factory=list)
@@ -79,6 +83,7 @@ class KgContext:
     node_attrs: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     edges: list[dict[str, str]] = field(default_factory=list)
     slides: list[dict[str, Any]] = field(default_factory=list)
+    views: list[KgView] = field(default_factory=list)
 
 
 def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
@@ -92,7 +97,7 @@ def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
         "groups": [],
         "tasks": [],
         "dependency_edges": [],
-        "view_projections": [_projection(view) for view in schema.views],
+        "view_projections": _resolved_projections(schema.views, [], "base"),
         "slides": schema.slides,
         "default_projection": "",
         "default_group_by": _list_value(schema.graph.get("group_by", "")),
@@ -149,7 +154,13 @@ def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
 
 def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: str = "") -> dict[str, Any]:
     contexts = _discover_contexts(schema_path, schema.graph.get("contexts", ""))
-    active = _default_context(contexts, context_id or schema.graph.get("default_context", "latest"))
+    catalog = _context_catalog(contexts)
+    active_id = resolve_context_id(
+        catalog,
+        context_id or schema.graph.get("default_context", "latest"),
+        schema.graph.get("default_context", "latest"),
+    )
+    active = next(item for item in contexts if item.id == active_id)
     edges = list(active.edges)
     nodes_by_id = {node["id"]: node for node in read_nodes(_resolve(schema_path, schema.nodes))}
     edges_by_id = {edge["id"]: edge for edge in edges}
@@ -166,7 +177,7 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
         "groups": [],
         "tasks": [node for node_id, node in nodes_by_id.items() if node_id in present],
         "dependency_edges": edges,
-        "view_projections": [_projection(view) for view in schema.views],
+        "view_projections": _resolved_projections(active.views or schema.views, catalog, active.id),
         "slides": active.slides or schema.slides,
         "default_projection": "",
         "default_group_by": _list_value(schema.graph.get("group_by", "")),
@@ -198,12 +209,29 @@ def _discover_contexts(schema_path: PathLike, pattern: str) -> list[KgContext]:
 def _default_context(contexts: list[KgContext], default_id: str) -> KgContext:
     if not contexts:
         raise ValueError("KG context schema has no contexts")
-    if default_id == "latest":
-        return max(contexts, key=lambda item: item.seq)
-    match = next((item for item in contexts if item.id == default_id), None)
-    if match is None:
-        raise ValueError(f"Unknown KG context: {default_id}")
-    return match
+    context_id = resolve_context_id(_context_catalog(contexts), default_id, default_id)
+    return next(item for item in contexts if item.id == context_id)
+
+
+def _context_catalog(contexts: list[KgContext]) -> list[dict[str, Any]]:
+    return [
+        {"id": item.id, "seq": item.seq, "label": item.label, "caption": item.caption}
+        for item in contexts
+    ]
+
+
+def _resolved_projections(
+    views: list[KgView],
+    contexts: list[dict[str, Any]],
+    active_context: str,
+) -> list[dict[str, Any]]:
+    return [
+        _projection(
+            view,
+            resolve_context_id(contexts, view.context, active_context, active_context),
+        )
+        for view in views
+    ]
 
 
 def _read_context(path: PathLike) -> KgContext:
@@ -228,6 +256,12 @@ def _read_context(path: PathLike) -> KgContext:
         if line.startswith("@"):
             section = line
             current_slide = None
+            if section == "@views":
+                views, consumed = _read_views(raw_lines, index)
+                for view in views:
+                    view.context = context.id
+                context.views.extend(views)
+                index += consumed
             continue
         if raw.startswith((" ", "\t")):
             if section == "@slides" and current_slide is not None:
@@ -264,6 +298,45 @@ def _read_slide_attr(raw_lines: list[str], raw_index: int, slide: dict[str, Any]
             value, consumed = _read_indented_multiline(raw_lines, raw_index + 1, slide_indent)
         slide[key] = _list_value(value) if key == "nodes" else value
     return consumed
+
+
+def _read_views(raw_lines: list[str], start: int = 0) -> tuple[list[KgView], int]:
+    views: list[KgView] = []
+    current_view: KgView | None = None
+    slides_indent: int | None = None
+    slide_indent: int | None = None
+    current_slide: dict[str, Any] | None = None
+    index = start
+    while index < len(raw_lines):
+        raw = raw_lines[index]
+        if raw.strip().startswith("@"):
+            break
+        index += 1
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        line = raw.strip()
+        if not raw.startswith((" ", "\t")):
+            current_view = _read_view(line)
+            views.append(current_view)
+            slides_indent, slide_indent, current_slide = None, None, None
+            continue
+        if current_view is None:
+            continue
+        indent = _indent_width(raw)
+        if line == "slides:":
+            slides_indent, slide_indent, current_slide = indent, None, None
+        elif slides_indent is not None and indent > slides_indent:
+            if "=" not in line and ":" in line and (slide_indent is None or indent <= slide_indent):
+                sid, _, title = line.partition(":")
+                current_slide = {"id": sid.strip(), "title": title.strip(), "nodes": []}
+                current_view.slides.append(current_slide)
+                slide_indent = indent
+            elif current_slide is not None and indent > (slide_indent or 0):
+                index += _read_slide_attr(raw_lines, index - 1, current_slide)
+        else:
+            slides_indent, slide_indent, current_slide = None, None, None
+            _update_view(current_view, _view_assignment(line))
+    return views, index - start
 
 
 def _read_context_attr_line(context: KgContext, raw: str) -> None:
@@ -351,7 +424,6 @@ def read_schema(path: PathLike) -> KgSchema:
     section = ""
     current_source = ""
     current_source_attrs = False
-    current_view: KgView | None = None
     current_slide: dict[str, Any] | None = None
     raw_lines = path.read_text(encoding="utf-8").splitlines()
     raw_index = 0
@@ -366,7 +438,6 @@ def read_schema(path: PathLike) -> KgSchema:
             section = parts[0]
             current_source = ""
             current_source_attrs = False
-            current_view = None
             current_slide = None
             if section == "@graph":
                 payload = _assignments(parts[1:])
@@ -374,6 +445,10 @@ def read_schema(path: PathLike) -> KgSchema:
                 schema.nodes = payload.get("pool", schema.nodes)
                 schema.attrs = payload.get("attrs", schema.attrs)
                 schema.palette = payload.get("palette", schema.palette)
+            elif section == "@views":
+                views, consumed = _read_views(raw_lines, raw_index)
+                schema.views.extend(views)
+                raw_index += consumed
             continue
         if section == "@graph":
             payload = _assignments(shlex.split(line))
@@ -396,9 +471,6 @@ def read_schema(path: PathLike) -> KgSchema:
                 current_source_attrs = False
                 payload = _assignments(shlex.split(line))
                 schema.sources.setdefault(current_source, {}).update(payload)
-            elif section == "@views" and current_view:
-                payload = _view_assignment(line)
-                _update_view(current_view, payload)
             elif section == "@slides" and current_slide is not None:
                 raw_index += _read_slide_attr(raw_lines, raw_index - 1, current_slide)
             continue
@@ -414,9 +486,6 @@ def read_schema(path: PathLike) -> KgSchema:
             schema.status_defaults.update(payload)
         elif section == "@acl":
             _read_acl_line(schema, line)
-        elif section == "@views":
-            current_view = _read_view(line)
-            schema.views.append(current_view)
         elif section == "@slides":
             sid, _, title = line.partition(":")
             current_slide = {"id": sid.strip(), "title": title.strip(), "nodes": []}
@@ -433,21 +502,14 @@ def _read_tmp_view_sidecars(schema: KgSchema, schema_path: PathLike) -> None:
         return
     existing = {view.id: index for index, view in enumerate(schema.views)}
     for view_path in sorted(view_dir.glob("tmp.*.view")):
-        current_view: KgView | None = None
-        for raw in view_path.read_text(encoding="utf-8").splitlines():
-            if not raw.strip() or raw.lstrip().startswith("#"):
-                continue
-            line = raw.strip()
-            if raw.startswith((" ", "\t")):
-                if current_view:
-                    _update_view(current_view, _view_assignment(line))
-                continue
-            current_view = _read_view(line)
-            if current_view.id in existing:
-                schema.views[existing[current_view.id]] = current_view
+        raw_lines = view_path.read_text(encoding="utf-8").splitlines()
+        views, _consumed = _read_views(raw_lines)
+        for view in views:
+            if view.id in existing:
+                schema.views[existing[view.id]] = view
             else:
-                existing[current_view.id] = len(schema.views)
-                schema.views.append(current_view)
+                existing[view.id] = len(schema.views)
+                schema.views.append(view)
 
 
 def _tmp_view_sidecar_dir(schema_path: PathLike) -> PathLike:
@@ -640,13 +702,15 @@ def _acl_payload(schema: KgSchema) -> dict[str, Any]:
 def _update_view(view: KgView, payload: dict[str, str]) -> None:
     group_by = _list_value(payload.get("group_by", ""))
     consumed = {
-        "source", "where", "filter", "group_by", "color_by", "secondary_color_by",
+        "context", "source", "where", "filter", "group_by", "color_by", "secondary_color_by",
         "edge_color_by", "edge_label_from", "hover_attrs", "aggregate_edges",
         "filter_query", "query_builder_enabled", "search_enabled", "search", "filters_collapsed",
         "edges_visible", "edge_animation_enabled", "edge_animation_mode",
         "edge_animation_tick_steps", "edge_animation_tick_duration", "edge_opacity",
         "projection_unspecified_content_opacity", "caption",
     }
+    if "context" in payload:
+        view.context = payload["context"]
     if "source" in payload:
         view.source = payload["source"]
     if "where" in payload:
@@ -703,10 +767,13 @@ def _update_view(view: KgView, payload: dict[str, str]) -> None:
             view.display[key] = _typed_scalar(value)
 
 
-def _projection(view: KgView) -> dict[str, Any]:
+def _projection(view: KgView, resolved_context: str = "base") -> dict[str, Any]:
     projection = {
         "id": view.id,
         "label": view.id.replace("_", " ").replace("-", " ").title(),
+        "context": view.context,
+        "resolved_context": resolved_context,
+        "slides": view.slides,
         "source": view.source,
         "groups_from": view.group_by,
         "default_color_by": view.color_by,

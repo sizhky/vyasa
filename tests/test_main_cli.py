@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from vyasa.config import reload_config, theme_preset_for_working_directory
+from vyasa.config import get_config, reload_config, theme_preset_for_working_directory
 
 
 def test_reload_source_flag_configures_uvicorn_reloader(tmp_path, monkeypatch):
@@ -30,6 +30,57 @@ def test_reload_source_flag_configures_uvicorn_reloader(tmp_path, monkeypatch):
         assert "*.css" in kwargs["reload_includes"]
     finally:
         reload_config()
+
+
+def test_explicit_directory_ignores_working_directory_roots(tmp_path, monkeypatch):
+    working = tmp_path / "working"
+    configured = tmp_path / "configured"
+    requested = tmp_path / "requested"
+    working.mkdir()
+    configured.mkdir()
+    requested.mkdir()
+    (working / ".vyasa").write_text(
+        f'root = "{configured}"\nvyasa_roots = ["../configured"]\n'
+        'ignore_cwd_as_root = true\nport = 1002\n',
+        encoding="utf-8",
+    )
+    (requested / ".vyasa").write_text("port = 2003\n", encoding="utf-8")
+    monkeypatch.chdir(working)
+    monkeypatch.setenv("VYASA_ROOT", "")
+    monkeypatch.setenv("VYASA_CLI_ROOT", "")
+    observed = {}
+
+    def run(*args, **kwargs):
+        from vyasa.helpers import get_content_mounts
+
+        config = get_config()
+        observed["root"] = config.get_root_folder()
+        observed["roots"] = config.get_vyasa_roots()
+        observed["mounts"] = get_content_mounts()
+        observed["port"] = config.get_port()
+        worker_config = reload_config()
+        observed["worker_root"] = worker_config.get_root_folder()
+        observed["worker_roots"] = worker_config.get_vyasa_roots()
+        observed["worker_mounts"] = get_content_mounts()
+        observed["worker_port"] = worker_config.get_port()
+
+    monkeypatch.setitem(sys.modules, "uvicorn", SimpleNamespace(run=run))
+    monkeypatch.setattr(sys, "argv", ["vyasa", str(requested), "--no-browser"])
+
+    from vyasa import main
+
+    main.cli()
+
+    assert observed == {
+        "root": requested.resolve(),
+        "roots": [],
+        "mounts": [("", requested.resolve())],
+        "port": 1002,
+        "worker_root": requested.resolve(),
+        "worker_roots": [],
+        "worker_mounts": [("", requested.resolve())],
+        "worker_port": 1002,
+    }
 
 
 def test_reload_source_env_configures_uvicorn_reloader(tmp_path, monkeypatch):

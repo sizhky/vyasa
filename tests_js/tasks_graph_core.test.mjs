@@ -5,7 +5,7 @@ import fs from 'node:fs';
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
 const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReviewTarget, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
-const { buildTasksProjectionConfigText, parseTasksProjectionConfigText, tasksCollectSearchMatches, tasksNodeMatchesAllFilters, tasksNodeMatchesFilters, tasksSelectionClickKey } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+const { buildTasksProjectionConfigText, parseTasksProjectionConfigText, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksNodeMatchesAllFilters, tasksNodeMatchesFilters, tasksSelectionClickKey } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
 
 function fakeStorage(initial = {}) {
     const values = new Map(Object.entries(initial));
@@ -53,6 +53,27 @@ test('Knowledge Graph search matches notes from only the supplied graph', () => 
     assert.deepEqual(Array.from(tasksCollectSearchMatches(nodes, [], 'private phrase', { 'current-node': 'private phrase' }).nodeIds), ['current-node']);
     assert.deepEqual(Array.from(tasksCollectSearchMatches(nodes, [], 'other phrase', { 'other-node': 'other phrase' }).nodeIds), []);
     assert.deepEqual(Array.from(tasksCollectSearchMatches(nodes, [], 'Satyasri').nodeIds), ['current-node']);
+});
+
+test('context diff selects visible projected nodes or their collapsed group', () => {
+    const model = {
+        groups: [{ id: 'root' }, { id: 'phase', parent_group_id: 'root' }],
+        tasks: [
+            { id: 'changed-a', group_id: 'phase', __source_node_id: 'changed' },
+            { id: 'changed-b', group_id: 'phase', __source_node_id: 'changed' },
+            { id: 'steady', group_id: 'phase' },
+        ],
+    };
+    const changed = new Set(['changed']);
+    assert.deepEqual([...tasksContextDiffSelectionIds(model, [{ id: 'root', data: { __kind__: 'group' } }], changed)], ['root']);
+    assert.deepEqual([...tasksContextDiffSelectionIds(model, [{ id: 'phase', data: { __kind__: 'group' } }], changed)], ['phase']);
+    assert.deepEqual(
+        [...tasksContextDiffSelectionIds(model, [
+            { id: 'changed-a', data: { __kind__: 'task' } },
+            { id: 'changed-b', data: { __kind__: 'task' } },
+        ], changed)],
+        ['changed-a', 'changed-b']
+    );
 });
 
 test('Knowledge Graph boolean settings parse hover card placement flag', () => {
@@ -300,8 +321,9 @@ test('double click key treats expanded group title and body as same node', () =>
 
 test('edge toggle header button warns when edges are hidden', () => {
     const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const renderSource = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/render.py', import.meta.url), 'utf8');
     const stylesheetSource = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.css', import.meta.url), 'utf8');
-    assert.ok(source.includes('data-vyasa-tasks-action="${action}"'), 'header buttons carry action data');
+    assert.ok(renderSource.includes('data-vyasa-tasks-action="toggleEdges"'), 'edge header button carries action data');
     assert.ok(source.includes('syncTasksEdgeToggleButtons(widgetId, edgesVisible)'), 'edge button follows visibility state');
     assert.ok(source.includes('button[onclick*="toggleEdges"]'), 'sync handles old header buttons without data attrs');
     assert.ok(source.includes('data-vyasa-edges-off'), 'hidden edge state is marked on the E button');
@@ -917,6 +939,10 @@ test('buildTasksProjectionConfigText emits a paste-ready kg.schema @views entry'
     assert.ok(single.includes('\n\twhere=kind=sight'), 'single filter -> where');
     assert.ok(single.includes('\n\tcaption="The map view"'), 'caption quoted');
     assert.ok(single.includes('\n\tdefault_open_depth=-1'), 'open depth');
+    assert.ok(
+        build({ id: 'review' }, 'day1').startsWith('# Paste under your @views section in the active .context file:\n'),
+        'context graphs target their active context file',
+    );
 
     // Full query-builder state is serialized as schema, including muted rules and global disable.
     const noted = build({

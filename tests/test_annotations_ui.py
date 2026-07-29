@@ -30,6 +30,16 @@ def test_annotations_render_bottom_comments_with_bidirectional_anchors():
     assert "!vyasa-comments 1" in source
     assert "`@ thread ${number}`" in source
     assert "makeCommentCopyButton(() => annotationRoots, 'Copy all comments')" in source
+    assert "querySelectorAll('.vyasa-annotations-export')" in source
+    assert "button.hidden = items.length === 0" in source
+    assert "button.addEventListener('click', exportAllComments" in source
+    assert "@ document ${documentPath}" in source
+    assert "fetch('/api/annotations/export'" in source
+    assert "copyAnnotationText(result.path)" in source
+    assert "saved to ${result.path} — path copied" in source
+    assert "event.metaKey || event.ctrlKey" in source
+    assert "editorBox.replaceWith(body)" in source
+    assert "save.addEventListener('click', commit)" in source
     assert "makeCommentCopyButton(() => [item], 'Copy comment thread')" in source
     assert "comment${count === 1 ? '' : 's'} copied" in source
     assert "aria-live', 'polite'" in source

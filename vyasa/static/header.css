@@ -1148,8 +1148,11 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 
 .vyasa-page-action-icon,
 .vyasa-fold-all-icon { width: 1rem; height: 1rem; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
-.vyasa-floating-actions { --vyasa-floating-actions-inline-inset: 20px; position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 0.65rem; }
-.vyasa-floating-bubble { width: 3.15rem; height: 3.15rem; padding: 0; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--vyasa-primary) 38%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--vyasa-paper) 82%, var(--vyasa-primary) 18%); color: var(--vyasa-primary); box-shadow: 0 18px 34px -20px rgba(15, 23, 42, 0.42); backdrop-filter: blur(10px); transition: opacity 160ms ease, transform 160ms ease, background 160ms ease; cursor: pointer; }
+.vyasa-floating-actions { position: fixed; right: 0; bottom: 1.25rem; z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 0.65rem; isolation: isolate; transform: translateX(60%); transition: transform 360ms cubic-bezier(.34, 1.56, .64, 1); }
+.vyasa-floating-actions::before { position: absolute; inset: -5rem 0 -1.25rem -5rem; z-index: 0; content: ""; }
+.vyasa-floating-actions:hover,
+.vyasa-floating-actions:focus-within { transform: translateX(-1.25rem); }
+.vyasa-floating-bubble { position: relative; z-index: 1; width: 3.15rem; height: 3.15rem; padding: 0; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--vyasa-primary) 38%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--vyasa-paper) 82%, var(--vyasa-primary) 18%); color: var(--vyasa-primary); box-shadow: 0 18px 34px -20px rgba(15, 23, 42, 0.42); backdrop-filter: blur(10px); transition: opacity 160ms ease, transform 160ms ease, background 160ms ease; cursor: pointer; }
 .vyasa-floating-bubble:hover { background: color-mix(in srgb, var(--vyasa-paper) 70%, var(--vyasa-primary) 30%); }
 .vyasa-shortcuts-launcher { order: -1; opacity: 1; }
 .vyasa-shortcuts { position: fixed; inset: 0; z-index: 1700; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
@@ -1163,6 +1166,7 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .vyasa-scroll-top-button { position: absolute; visibility: hidden; opacity: 0; pointer-events: none; transform: translateY(0.4rem) scale(0.96); }
 .vyasa-scroll-top-button.is-visible { position: relative; visibility: visible; opacity: 1; pointer-events: auto; transform: translateY(0); }
 .vyasa-scroll-top-icon { width: 1.4rem; height: 1.4rem; stroke: currentColor; stroke-width: 1.9; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+@media (prefers-reduced-motion: reduce) { .vyasa-floating-actions { transition-duration: 0.01ms; } }
 .vyasa-heading-fold-summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 0.1rem; }
 .vyasa-heading-fold-summary::-webkit-details-marker { display: none; }
 .vyasa-heading-fold-summary::marker { content: ""; }

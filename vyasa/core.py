@@ -430,6 +430,7 @@ async def extension_static_asset(extension_id: str, asset_path: str):
     path = extension_asset_path(extension_id, asset_path)
     if path.exists() and path.is_file():
         response = FileResponse(path)
+        response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
         logger.info(
             "extension static asset extension={} path={} bytes={} elapsed_ms={:.2f}",
             extension_id,
@@ -828,7 +829,7 @@ def navbar(
     if runtime:
         context = {"current_path": current_path, "roles": roles}
         controls = [node for provider in runtime.navbar_control_providers if (node := provider(context))]
-    ref_switcher = controls[0] if len(controls) == 1 else (Div(*controls) if controls else None)
+    ref_switcher = controls[0] if len(controls) == 1 else (Div(*controls, cls="flex items-center gap-3") if controls else None)
     return navbar_view(get_blog_title(), theme_toggle(), show_mobile_menus, htmx_nav, posts_menu_items, compact_mode, updated_label, mobile_extra_controls, ref_switcher=ref_switcher)
 
 

@@ -1,8 +1,8 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
-import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
-import { createTasksModalController } from '/static/extensions/tasks/tasks_modal.js';
+import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
+import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
 import { shortcutsSuspended } from '/static/page_shell.js';
 
@@ -24,9 +24,9 @@ const TASKS_EDGE_LABEL_FOCUS_Z = 1400;
 const TASKS_GROUP_Z = 180;
 const TASKS_TASK_Z = 1000;
 const TASKS_EDGE_LABEL_SELECTED_Z = TASKS_TASK_Z - 1;
+const TASKS_EDGE_FOCUS_Z = TASKS_TASK_Z - 2;
 const TASKS_TITLE_Z = 300;
 const TASKS_NEIGHBOR_Z_BOOST = 260;
-const TASKS_EDGE_FOCUS_Z = 1450;
 const TASKS_SELECTED_Z_BOOST = 520;
 const TASKS_NODE_BG = 'color-mix(in srgb, var(--vyasa-paper) 86%, var(--vyasa-primary) 14%)';
 const TASKS_GROUP_BG = 'color-mix(in srgb, var(--vyasa-paper) 88%, var(--vyasa-primary) 12%)';
@@ -671,11 +671,21 @@ function readTasksProjectionPrefs(prefs, projectionId) {
 
 function tasksProjectionSchemaPrefs(model, projectionId) {
     const id = String(projectionId || '').trim();
-    if (!id) return {};
-    const projection = (Array.isArray(model?.view_projections) ? model.view_projections : [])
-        .find((entry) => entry && entry.id === id);
-    if (!projection) return {};
-    const prefs = {};
+    const projection = id
+        ? (Array.isArray(model?.view_projections) ? model.view_projections : [])
+            .find((entry) => entry && entry.id === id)
+        : null;
+    if (id && !projection) return {};
+    const schemaGroupByHierarchy = (id
+        ? projection?.groups_from
+        : model?.default_group_by
+    )?.map?.((entry) => String(entry || '').trim()).filter(Boolean) || [];
+    const prefs = {
+        groupByEnabled: schemaGroupByHierarchy.length > 0,
+        groupByHierarchy: schemaGroupByHierarchy,
+        groupByDisabledKeys: [],
+    };
+    if (!projection) return prefs;
     if (projection.filter_query && typeof projection.filter_query === 'object') {
         prefs.filters = normalizeTasksFilterQuery(projection.filter_query);
     }
@@ -695,6 +705,16 @@ function tasksProjectionSchemaPrefs(model, projectionId) {
         prefs.unspecifiedContentOpacity = clampTasksProjectionContentOpacity(projection.projection_unspecified_content_opacity);
     }
     return prefs;
+}
+
+function tasksGroupByPrefsDifferFromSchema(model, projectionId, enabled, hierarchy, disabledKeys = []) {
+    const defaults = tasksProjectionSchemaPrefs(model, projectionId);
+    const currentHierarchy = (hierarchy || []).map((entry) => String(entry || '').trim()).filter(Boolean);
+    const defaultHierarchy = defaults.groupByHierarchy || [];
+    return Boolean(enabled) !== Boolean(defaults.groupByEnabled)
+        || currentHierarchy.length !== defaultHierarchy.length
+        || currentHierarchy.some((entry, index) => entry !== defaultHierarchy[index])
+        || normalizeTasksGroupByDisabledKeys(disabledKeys).length > 0;
 }
 
 function normalizeTasksColorHierarchy(value, model, nodeNotes = null) {
@@ -1205,6 +1225,7 @@ function buildTasksCollapsedGraph(model) {
 function buildTasksGroupedState(sourceModel, groupByHierarchy) {
     const attrs = (groupByHierarchy || []).map((attr) => String(attr || '').trim()).filter(Boolean);
     if (!attrs.length) return null;
+    const groupingSource = buildTasksUngroupedState(sourceModel).model;
     const groups = [];
     const groupsByPath = new Map();
     const groupTree = { null: [] };
@@ -1217,7 +1238,7 @@ function buildTasksGroupedState(sourceModel, groupByHierarchy) {
         .map((attr) => [attr, String(task?.[attr] ?? '').trim()])
         .filter(([, value]) => value);
     const pathKey = (pairs) => pairs.map(([attr, value]) => `${attr}=${value}`).join('\u001f');
-    for (const task of sourceModel.tasks || []) {
+    for (const task of groupingSource.tasks || []) {
         const path = valuePath(task);
         for (let depth = 1; depth <= path.length; depth += 1) {
             const prefix = path.slice(0, depth);
@@ -1250,11 +1271,11 @@ function buildTasksGroupedState(sourceModel, groupByHierarchy) {
     }
     const visibleTaskIds = new Set(tasks.map((task) => task.id));
     const model = {
-        ...sourceModel,
-        graph_id: `${sourceModel.graph_id || 'tasks'}-custom-group-by`,
+        ...groupingSource,
+        graph_id: `${groupingSource.graph_id || 'tasks'}-custom-group-by`,
         groups,
         tasks,
-        dependency_edges: (sourceModel.dependency_edges || []).filter((edge) => visibleTaskIds.has(edge.source) && visibleTaskIds.has(edge.target)),
+        dependency_edges: (groupingSource.dependency_edges || []).filter((edge) => visibleTaskIds.has(edge.source) && visibleTaskIds.has(edge.target)),
         group_tree: groupTree,
         task_children: taskChildren,
         document_order: [...groups.map((group) => group.id), ...tasks.map((task) => task.id)],
@@ -1280,6 +1301,13 @@ function buildTasksGroupedState(sourceModel, groupByHierarchy) {
         defaultOpenDepth: model.default_open_depth,
     });
     return { model, graph, projectionId: '__custom_group_by__' };
+}
+
+function buildTasksUngroupedState(sourceModel) {
+    const model = tasksUngroupModelForGrouping(sourceModel);
+    delete model.projection_models;
+    delete model.view_projections;
+    return { model, graph: buildTasksCollapsedGraph(model) };
 }
 
 function buildTasksEgoState(sourceModel, sourceGraph, selectedIds, includeNeighbors = false, colorBy = '') {
@@ -1983,6 +2011,7 @@ function tasksHoverFocusEdge(edge, hoveredNodeId, edgeAnimationEnabled, edgeAnim
     const strokeMode = edgeAnimationEnabled ? 'selected' : (edge.source === hoveredNodeId ? 'selected-out' : 'selected-in');
     return {
         ...edge,
+        zIndex: TASKS_EDGE_FOCUS_Z,
         data: { ...edge.data, highlightMode: 'selected', strokeMode },
         labelStyle: { ...(edge.labelStyle || {}), fill: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, fontWeight: 800 },
         labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.9 },
@@ -2966,22 +2995,23 @@ function setTasksGroupToggleHover(wrapper, groupId) {
     });
 }
 
+function tasksGraphNodeAbsoluteRect(node, byId) {
+    let x = node.position?.x || 0;
+    let y = node.position?.y || 0;
+    let parent = node.parentId ? byId[node.parentId] : null;
+    while (parent) {
+        x += parent.position?.x || 0;
+        y += parent.position?.y || 0;
+        parent = parent.parentId ? byId[parent.parentId] : null;
+    }
+    return { x, y, width: node.style?.width || node.width || 0, height: node.style?.height || node.height || 0 };
+}
+
 function tasksGraphNodeAtFlowPoint(nodes, point) {
     const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
-    const absoluteRect = (node) => {
-        let x = node.position?.x || 0;
-        let y = node.position?.y || 0;
-        let parent = node.parentId ? byId[node.parentId] : null;
-        while (parent) {
-            x += parent.position?.x || 0;
-            y += parent.position?.y || 0;
-            parent = parent.parentId ? byId[parent.parentId] : null;
-        }
-        return { x, y, width: node.style?.width || node.width || 0, height: node.style?.height || node.height || 0 };
-    };
     return (nodes || [])
         .filter((node) => node.data?.__kind__ !== 'ganttHeader')
-        .map((node) => ({ node, rect: absoluteRect(node), z: Number(node.zIndex || node.style?.zIndex || 0) }))
+        .map((node) => ({ node, rect: tasksGraphNodeAbsoluteRect(node, byId), z: Number(node.zIndex || node.style?.zIndex || 0) }))
         .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
         .sort((a, b) => b.z - a.z)[0] || null;
 }
@@ -3246,19 +3276,8 @@ function tasksBackgroundProps(widgetId) {
     };
 }
 
-function tasksHeaderButtonHtml(widgetId, action, label, title) {
-    return `<button type="button" title="${title}" data-vyasa-tasks-widget-id="${widgetId}" data-vyasa-tasks-action="${action}" onclick="runTasksHeaderAction('${widgetId}', '${action}')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">${label}</button>`;
-}
-
 function tasksFullscreenIconHtml(on = false) {
     return `<uk-icon icon="${on ? 'shrink' : 'expand'}" class="w-4 h-4"></uk-icon>`;
-}
-
-function tasksHeaderControlsHtml(widgetId, includeFullscreen = false) {
-    const fullscreen = includeFullscreen
-        ? `<button onclick="openTasksFullscreen('${widgetId}')" data-vyasa-tasks-fullscreen-toggle="${widgetId}" class="vyasa-tasks-fullscreen-toggle px-1.5 py-1 text-xs border rounded inline-flex items-center justify-center text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Fullscreen (Shift+F)" aria-label="Fullscreen (Shift+F)">${tasksFullscreenIconHtml(false)}</button>`
-        : '';
-    return `${fullscreen}<div class="flex items-center gap-1 text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400 whitespace-nowrap">${tasksHeaderButtonHtml(widgetId, 'toggleHelp', '?', 'Show graph shortcuts and gestures')}${tasksHeaderButtonHtml(widgetId, 'openEgo', 'EG', 'Open selected ego graph (G)')}${tasksHeaderButtonHtml(widgetId, 'openEgoNeighbors', 'EG+', 'Open selected ego graph with neighbors (Shift+G)')}${tasksHeaderButtonHtml(widgetId, 'fit', 'F', 'Fit view')}${tasksHeaderButtonHtml(widgetId, 'toggleFilters', 'S', 'Toggle filters')}${tasksHeaderButtonHtml(widgetId, 'expandDepth', 'I', 'Expand next group depth')}${tasksHeaderButtonHtml(widgetId, 'collapseDepth', 'O', 'Collapse deepest group depth')}${tasksHeaderButtonHtml(widgetId, 'expand', 'U', 'Unfold all groups')}${tasksHeaderButtonHtml(widgetId, 'collapse', 'P', 'Collapse all groups')}${tasksHeaderButtonHtml(widgetId, 'toggleHoverCards', 'H', 'Toggle hover cards')}${tasksHeaderButtonHtml(widgetId, 'toggleEdges', 'E', 'Toggle edges')}</div>`;
 }
 
 function syncTasksFullscreenButton(wrapper) {
@@ -3271,19 +3290,8 @@ function syncTasksFullscreenButton(wrapper) {
     });
 }
 
-const { openTasksEgoModal } = createTasksModalController({
-    renderTasksGraphs,
-    tasksHeaderButtonHtml,
-    tasksHeaderControlsHtml,
+const { setTasksMaximized } = createTasksFullscreenController({
     syncTasksFullscreenButton,
-    constants: {
-        TASKS_PROJECTION_GROUP_OPACITY_DEFAULT,
-        TASKS_PROJECTION_UNSPECIFIED_GROUP_OPACITY_DEFAULT,
-        TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT,
-        TASKS_ROOT_SPACING,
-        TASKS_ROOT_COLLISION_GAP,
-        TASKS_GROUP_PADDING,
-    },
 });
 
 function tasksHoverAttrRows(node, hoverAttrs) {
@@ -3302,13 +3310,18 @@ function tasksHoverAttrRows(node, hoverAttrs) {
     return rows;
 }
 
-function tasksProjectionOptions(model, ganttEnabled = false) {
+function tasksProjectionOptions(model, ganttEnabled = false, activeContextId = '') {
     const projections = Array.isArray(model?.view_projections) ? model.view_projections : [];
     const baseViewLabel = String(model?.base_view_label || '').trim() || 'Default';
     const options = [
         { id: '', label: baseViewLabel, caption: '' },
         ...projections
-            .filter((projection) => projection && projection.id && model?.projection_models?.[projection.id])
+            .filter((projection) => (
+                projection
+                && projection.id
+                && model?.projection_models?.[projection.id]
+                && tasksViewMatchesContext(projection, activeContextId)
+            ))
             .map((projection) => ({
                 id: String(projection.id),
                 label: String(projection.label || projection.id),
@@ -3380,10 +3393,16 @@ function selectTasksProjectionState(sourceModel, sourceGraph, projectionId) {
     return { model: entry.model, graph: entry.graph, projectionId: id };
 }
 
-function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode, groupByHierarchy = []) {
-    const customGroupedState = !String(projectionId || '').trim() ? buildTasksGroupedState(sourceModel, groupByHierarchy) : null;
-    const projectionState = customGroupedState || selectTasksProjectionState(sourceModel, sourceGraph, projectionId);
-    if (viewMode !== 'gantt') return projectionState;
+function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode, groupByEnabled = false, groupByHierarchy = [], preserveGrouping = false) {
+    const projectionState = selectTasksProjectionState(sourceModel, sourceGraph, projectionId);
+    if (preserveGrouping) return projectionState;
+    if (viewMode !== 'gantt') {
+        if (!tasksGroupByPrefsDifferFromSchema(sourceModel, projectionId, groupByEnabled, groupByHierarchy)) return projectionState;
+        const overrideState = (
+            groupByEnabled ? buildTasksGroupedState(projectionState.model, groupByHierarchy) : null
+        ) || buildTasksUngroupedState(projectionState.model);
+        return { ...overrideState, projectionId: projectionState.projectionId };
+    }
     return {
         ...projectionState,
         graph: buildGanttTasksGraph(projectionState.model),
@@ -3428,7 +3447,7 @@ async function renderTasksGraphs(rootElement = document) {
         const ganttEnabled = String(wrapper.dataset.tasksGantt || '').trim().toLowerCase() === 'true';
         const defaultViewMode = ganttEnabled && String(wrapper.dataset.tasksDefaultView || '').trim().toLowerCase() === 'gantt' ? 'gantt' : 'graph';
         const defaultFiltersOpen = String(wrapper.dataset.tasksOpenFiltersDefault || '').trim().toLowerCase() === 'true';
-        const egoMode = String(wrapper.dataset.tasksEgo || '').trim().toLowerCase() === 'true';
+        const initialEgoMode = String(wrapper.dataset.tasksEgo || '').trim().toLowerCase() === 'true';
         logTasksPerf('kg-widget', {
             widgetId,
             title: wrapper.dataset.tasksTitle || '',
@@ -3454,6 +3473,8 @@ async function renderTasksGraphs(rootElement = document) {
             }, []);
             const [sourceModel, setSourceModel] = React.useState(() => initialSourceModel);
             const [sourceGraph, setSourceGraph] = React.useState(() => initialSourceGraph);
+            const [egoState, setEgoState] = React.useState(null);
+            const egoMode = initialEgoMode || Boolean(egoState);
             const sourcePrefsRef = React.useRef(null);
             if (sourcePrefsRef.current === null) sourcePrefsRef.current = readTasksPrefs(sourceModel);
             const [activeAclViewer, setActiveAclViewer] = React.useState('');
@@ -3462,21 +3483,19 @@ async function renderTasksGraphs(rootElement = document) {
                 () => selectTasksAclViewerState(sourceModel, sourceGraph, activeAclViewer),
                 [sourceModel, sourceGraph, activeAclViewer]
             );
-            const projectionOptions = React.useMemo(() => egoMode ? [] : tasksProjectionOptions(viewerState.model, ganttEnabled), [egoMode, viewerState.model, ganttEnabled]);
             const contextOptions = React.useMemo(() => (
                 Array.isArray(sourceModel?.kg_contexts) ? sourceModel.kg_contexts.filter((item) => item && item.id) : []
             ), [sourceModel]);
             const activeContextId = String(sourceModel?.kg_context?.id || '').trim();
             const activeContextIndex = contextOptions.findIndex((context) => context.id === activeContextId);
+            const projectionOptions = React.useMemo(
+                () => egoMode ? [] : tasksProjectionOptions(viewerState.model, ganttEnabled, activeContextId),
+                [egoMode, viewerState.model, ganttEnabled, activeContextId]
+            );
             const [contextLoading, setContextLoading] = React.useState(false);
             const [contextDiffEnabled, setContextDiffEnabled] = React.useState(false);
             const [contextDiffLoading, setContextDiffLoading] = React.useState(false);
             const [contextDiff, setContextDiff] = React.useState({ from: '', to: '', node_ids: [] });
-            const contextDiffNodeIds = React.useMemo(() => (
-                contextDiffEnabled && contextDiff.to === activeContextId
-                    ? new Set((contextDiff.node_ids || []).map((id) => String(id)))
-                    : new Set()
-            ), [contextDiffEnabled, contextDiff, activeContextId]);
             React.useEffect(() => {
                 const schemaPath = String(sourceModel?.kg_schema || '').trim();
                 if (!contextDiffEnabled || !schemaPath || !activeContextId || activeContextIndex <= 0) {
@@ -3521,27 +3540,29 @@ async function renderTasksGraphs(rootElement = document) {
             const initialGraphProjectionId = initialProjectionId === TASKS_GANTT_PROJECTION_ID ? '' : initialProjectionId;
             const [activeProjectionId, setActiveProjectionId] = React.useState(initialGraphProjectionId);
             const [viewMode, setViewMode] = React.useState(defaultViewMode);
+            const initialProjectionPrefs = React.useMemo(
+                () => readTasksProjectionPrefsForModel(sourceModel, { ...sourcePrefsRef.current, projectionPrefs: storedProjectionPrefsRef.current }, initialGraphProjectionId),
+                [sourceModel, initialGraphProjectionId]
+            );
             const [groupByHierarchy, setGroupByHierarchy] = React.useState(() => (
-                Array.isArray(sourcePrefsRef.current?.groupByHierarchy) ? sourcePrefsRef.current.groupByHierarchy : defaultGroupByHierarchy
+                Array.isArray(initialProjectionPrefs?.groupByHierarchy) ? initialProjectionPrefs.groupByHierarchy : defaultGroupByHierarchy
             ));
             const [groupByEnabled, setGroupByEnabled] = React.useState(() => (
-                typeof sourcePrefsRef.current?.groupByEnabled === 'boolean'
-                    ? sourcePrefsRef.current.groupByEnabled
-                    : (
-                        (Array.isArray(sourcePrefsRef.current?.groupByHierarchy) && sourcePrefsRef.current.groupByHierarchy.some(Boolean))
-                        || defaultGroupByHierarchy.some(Boolean)
-                    )
+                typeof initialProjectionPrefs?.groupByEnabled === 'boolean'
+                    ? initialProjectionPrefs.groupByEnabled
+                    : defaultGroupByHierarchy.some(Boolean)
             ));
-            const [groupByDisabledKeys, setGroupByDisabledKeys] = React.useState(() => normalizeTasksGroupByDisabledKeys(sourcePrefsRef.current?.groupByDisabledKeys));
+            const [groupByDisabledKeys, setGroupByDisabledKeys] = React.useState(() => normalizeTasksGroupByDisabledKeys(initialProjectionPrefs?.groupByDisabledKeys));
             const groupByDisabledSet = React.useMemo(() => new Set(groupByDisabledKeys), [groupByDisabledKeys]);
             const activeGroupByHierarchy = React.useMemo(
                 () => groupByEnabled ? groupByHierarchy.filter((key) => key && !groupByDisabledSet.has(key)) : [],
                 [groupByEnabled, groupByHierarchy, groupByDisabledSet]
             );
-            const projectionState = React.useMemo(
-                () => buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, activeGroupByHierarchy),
-                [viewerState, activeProjectionId, viewMode, activeGroupByHierarchy]
+            const baseProjectionState = React.useMemo(
+                () => buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, groupByEnabled, activeGroupByHierarchy, initialEgoMode),
+                [viewerState, activeProjectionId, viewMode, groupByEnabled, activeGroupByHierarchy]
             );
+            const projectionState = egoState || baseProjectionState;
             const model = projectionState.model;
             const effectiveDefaultOpenDepth = Number.parseInt(tasksModelSetting(model, 'default_open_depth', `${defaultOpenDepth}`), 10);
             const jitterConfig = React.useMemo(() => ({
@@ -3558,9 +3579,15 @@ async function renderTasksGraphs(rootElement = document) {
             const defaultProjectionUnspecifiedContentOpacity = clampTasksProjectionContentOpacity(tasksModelSetting(model, 'projection-unspecified-content-opacity', wrapper.dataset.tasksProjectionUnspecifiedContentOpacity || `${TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT}`));
             const projectionGroupExpandedOpacity = 0;
             const projectionUnspecifiedGroupExpandedOpacity = 0;
+            const baseRawGraph = React.useMemo(
+                () => normalizeTasksGraphNodes(baseProjectionState.graph || { nodes: [], edges: [] }, baseProjectionState.model),
+                [baseProjectionState]
+            );
             const rawGraph = React.useMemo(
-                () => normalizeTasksGraphNodes(projectionState.graph || { nodes: [], edges: [] }, model),
-                [projectionState, model]
+                () => egoState
+                    ? normalizeTasksGraphNodes(egoState.graph || { nodes: [], edges: [] }, egoState.model)
+                    : baseRawGraph,
+                [egoState, baseRawGraph]
             );
             const initialExpandedSet = React.useMemo(
                 () => collectExpandedGroupsByDepth(model.group_tree, Number.isNaN(effectiveDefaultOpenDepth) ? 0 : effectiveDefaultOpenDepth),
@@ -3611,7 +3638,7 @@ async function renderTasksGraphs(rootElement = document) {
             const filterPanelRef = React.useRef(null);
             const [graphRevision, setGraphRevision] = React.useState(0);
             const projectionPrefs = React.useMemo(
-                () => readTasksProjectionPrefsForModel(sourceModel, { projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId),
+                () => readTasksProjectionPrefsForModel(sourceModel, { ...sourcePrefsRef.current, projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId),
                 [sourceModel, activeProjectionId]
             );
             const hydrateExpandedSet = React.useCallback((prefs) => {
@@ -3626,22 +3653,21 @@ async function renderTasksGraphs(rootElement = document) {
             const [selectedNodeIds, setSelectedNodeIds] = React.useState(() => new Set());
             const selectedNodeIdRef = React.useRef(null);
             const selectedNodeIdsRef = React.useRef(new Set());
+            const contextDiffSelectionRef = React.useRef({ key: '', ids: new Set() });
             const [dragSelection, setDragSelection] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
             const [helpOpen, setHelpOpen] = React.useState(false);
             const slides = React.useMemo(() => {
-                const list = (Array.isArray(sourceModel?.slides) && sourceModel.slides.length) ? sourceModel.slides : (Array.isArray(model?.slides) ? model.slides : []);
+                const list = Array.isArray(baseProjectionState.model?.slides) ? baseProjectionState.model.slides : [];
                 return list.filter((slide) => slide && Array.isArray(slide.nodes) && slide.nodes.length);
-            }, [sourceModel, model]);
+            }, [baseProjectionState.model]);
             const [slideIndex, setSlideIndex] = React.useState(-1);
             const [slideFocusMode, setSlideFocusMode] = React.useState('off'); // 'off' | 'eg' | 'egplus'
-            const teardownInlineEgo = React.useCallback(() => {
-                wrapper.querySelectorAll('[data-tasks-inline-ego="true"]').forEach((modal) => {
-                    if (modal.__tasksEscHandler) document.removeEventListener('keydown', modal.__tasksEscHandler, true);
-                    modal.remove();
-                });
-            }, []);
+            React.useEffect(() => {
+                setSlideIndex((index) => index < 0 ? -1 : (slides.length ? 0 : -1));
+                if (!slides.length) setSlideFocusMode('off');
+            }, [activeProjectionId, slides]);
             React.useEffect(() => {
                 const slide = slideIndex >= 0 ? slides[slideIndex] : null;
                 if (!slide) return;
@@ -3663,11 +3689,13 @@ async function renderTasksGraphs(rootElement = document) {
                 }, 80);
                 return () => window.clearTimeout(timer);
             }, [slideIndex, slides, graphRevision]);
-            // Sticky EG/EG+ focus: rebuild the inline ego layer whenever the slide or mode changes.
+            // Sticky EG/EG+ focus: rebuild the current graph whenever the slide or mode changes.
             React.useEffect(() => {
-                if (egoMode) return;
-                teardownInlineEgo();
-                if (slideFocusMode === 'off') return;
+                if (initialEgoMode) return;
+                if (slideFocusMode === 'off') {
+                    window.__vyasaTasksActions?.[widgetId]?.closeEgo?.();
+                    return;
+                }
                 const slide = slideIndex >= 0 ? slides[slideIndex] : null;
                 if (!slide || !Array.isArray(slide.nodes) || !slide.nodes.length) return;
                 const timer = window.setTimeout(() => {
@@ -3676,7 +3704,7 @@ async function renderTasksGraphs(rootElement = document) {
                     );
                 }, 70);
                 return () => window.clearTimeout(timer);
-            }, [slideFocusMode, slideIndex, slides, egoMode, teardownInlineEgo]);
+            }, [slideFocusMode, slideIndex, slides]);
             const [activeFilters, setActiveFilters] = React.useState(() => egoMode ? {} : (
                 projectionPrefs?.filters && typeof projectionPrefs.filters === 'object'
                     ? normalizeTasksFilterQuery(projectionPrefs.filters)
@@ -3696,8 +3724,12 @@ async function renderTasksGraphs(rootElement = document) {
                 !egoMode && projectionPrefs?.edgeTypeFilterEnabled !== false
             ));
             const effectiveEdgeTypes = React.useMemo(
-                () => edgeTypeFilterEnabled ? activeEdgeTypes : [],
-                [edgeTypeFilterEnabled, activeEdgeTypes]
+                () => egoMode || !edgeTypeFilterEnabled ? [] : activeEdgeTypes,
+                [egoMode, edgeTypeFilterEnabled, activeEdgeTypes]
+            );
+            const effectiveSwatchFilters = React.useMemo(
+                () => egoMode ? tasksEmptyFilterQuery() : activeSwatchFilters,
+                [egoMode, activeSwatchFilters]
             );
             const [edgeTypeQuery, setEdgeTypeQuery] = React.useState('');
             const [edgeTypeMenuOpen, setEdgeTypeMenuOpen] = React.useState(false);
@@ -3707,6 +3739,33 @@ async function renderTasksGraphs(rootElement = document) {
             React.useEffect(() => {
                 selectedNodeIdsRef.current = new Set(selectedNodeIds);
             }, [selectedNodeIds]);
+            React.useEffect(() => {
+                const owned = contextDiffSelectionRef.current;
+                if (!contextDiffEnabled) {
+                    const current = selectedNodeIdsRef.current;
+                    const stillOwned = !selectedNodeIdRef.current
+                        && current.size === owned.ids.size
+                        && Array.from(current).every((id) => owned.ids.has(id));
+                    if (stillOwned && owned.key) {
+                        selectedNodeIdsRef.current = new Set();
+                        setSelectedNodeIds(new Set());
+                    }
+                    contextDiffSelectionRef.current = { key: '', ids: new Set() };
+                    return;
+                }
+                if (contextDiffLoading || contextDiff.to !== activeContextId) return;
+                const changedIds = new Set((contextDiff.node_ids || []).map(String));
+                const key = `${activeContextId}:${activeProjectionId}:${Array.from(changedIds).sort().join(',')}`;
+                if (owned.key === key) return;
+                const nextIds = tasksContextDiffSelectionIds(model, graphBaseRef.current.nodes, changedIds);
+                if (changedIds.size && !nextIds.size && !graphBaseRef.current.nodes.length) return;
+                contextDiffSelectionRef.current = { key, ids: nextIds };
+                selectedNodeIdRef.current = null;
+                selectedNodeIdsRef.current = nextIds;
+                setSelectedNodeId(null);
+                setSelectedNodeIds(new Set(nextIds));
+                logTasksDebug('contextDiffSelected', { widgetId, changedIds: Array.from(changedIds), selectedIds: Array.from(nextIds) });
+            }, [contextDiffEnabled, contextDiffLoading, contextDiff, activeContextId, activeProjectionId, model, graphRevision, widgetId]);
             React.useEffect(() => {
                 logTasksPerfShellOnce(widgetId, wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
                 logTasksPerfSurfaceOnce(widgetId, flowWrapperRef.current || wrapper, tasksPerfContext(widgetId, flowWrapperRef.current || wrapper, model, graphBaseRef.current));
@@ -3766,8 +3825,8 @@ async function renderTasksGraphs(rootElement = document) {
             }, [widgetId, edgesVisible]);
             React.useEffect(() => {
                 syncTasksHoverCardToggleButtons(widgetId, hoverCardsEnabled);
-                if (!hoverCardsEnabled) setGroupHoverTooltip(null);
-            }, [widgetId, hoverCardsEnabled]);
+                logTasksDebug('hoverCardsState', { widgetId, egoMode, enabled: hoverCardsEnabled });
+            }, [widgetId, egoMode, hoverCardsEnabled]);
             const defaultEdgeOpacity = React.useMemo(
                 () => tasksDefaultEdgeOpacity((sourceModel?.dependency_edges || []).length),
                 [sourceModel]
@@ -3858,6 +3917,8 @@ async function renderTasksGraphs(rootElement = document) {
             const suppressNextGraphClickRef = React.useRef(false);
             const lastNodeClickRef = React.useRef(null);
             const pendingNodeClickToggleTimerRef = React.useRef(null);
+            const egoReturnRef = React.useRef(null);
+            const pendingEgoViewportRestoreRef = React.useRef(null);
             const activeProjection = React.useMemo(() => {
                 const projections = Array.isArray(viewerState.model?.view_projections) ? viewerState.model.view_projections : [];
                 const id = String(activeProjectionId || '').trim();
@@ -3900,7 +3961,6 @@ async function renderTasksGraphs(rootElement = document) {
             }, [model, nodeNotes, reorderTasksHierarchyLevel]);
             const reorderGroupByLevel = React.useCallback((fromIndex, toIndex) => {
                 setGroupByHierarchy((current) => reorderTasksHierarchyLevel(current, fromIndex, toIndex));
-                setActiveProjectionId('');
                 setViewMode('graph');
                 pendingFitActionRef.current = 'mode';
             }, [reorderTasksHierarchyLevel]);
@@ -3925,6 +3985,7 @@ async function renderTasksGraphs(rootElement = document) {
                 });
             }, [model, nodeNotes, widgetId]);
             const setFiltersCollapsedGuarded = React.useCallback((nextValue, action = 'filters-collapsed') => {
+                if (slideIndex >= 0) return;
                 setFiltersCollapsed((current) => {
                     const next = typeof nextValue === 'function' ? Boolean(nextValue(current)) : Boolean(nextValue);
                     logTasksPerf('state-transition', {
@@ -3936,7 +3997,7 @@ async function renderTasksGraphs(rootElement = document) {
                     });
                     return current === next ? current : next;
                 });
-            }, [widgetId]);
+            }, [widgetId, slideIndex]);
             const activeColorLevelSpecs = React.useMemo(() => activeColorHierarchy.map((colorBy) => ({
                 colorBy,
                 palette: tasksColorPaletteFor(model, colorBy),
@@ -3966,7 +4027,17 @@ async function renderTasksGraphs(rootElement = document) {
                 baseLayoutRef.current = null;
                 groupLayoutsRef.current = {};
                 graphBaseRef.current = { nodes: [], edges: [] };
-                const nextPrefs = readTasksProjectionPrefsForModel(sourceModel, { projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
+                const restoringEgo = !egoState && Boolean(pendingEgoViewportRestoreRef.current);
+                if (restoringEgo) {
+                    setDragSelection(null);
+                    setHoveredNodeId(null);
+                    groupToggleHoverIdRef.current = '';
+                    transientGraphHoverActiveRef.current = false;
+                    setTasksGroupToggleHover(flowWrapperRef.current, '');
+                    pendingFitActionRef.current = null;
+                    return;
+                }
+                const nextPrefs = readTasksProjectionPrefsForModel(sourceModel, { ...sourcePrefsRef.current, projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
                 setExpanded(egoMode ? tasksExpandableNodeIds(model) : hydrateExpandedSet(nextPrefs));
                 setSelectedNodeId(null);
                 setSelectedNodeIds(new Set());
@@ -3976,17 +4047,23 @@ async function renderTasksGraphs(rootElement = document) {
                 transientGraphHoverActiveRef.current = false;
                 setTasksGroupToggleHover(flowWrapperRef.current, '');
                 pendingFitActionRef.current = 'mode';
-            }, [sourceModel, activeProjectionId, hydrateExpandedSet]);
+            }, [sourceModel, activeProjectionId, hydrateExpandedSet, egoState]);
             React.useEffect(() => {
-                const nextPrefs = readTasksProjectionPrefsForModel(sourceModel, { projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
-                setActiveFilters(egoMode ? tasksEmptyFilterQuery() : normalizeTasksFilterQuery(nextPrefs?.filters));
-                setActiveSwatchFilters(egoMode ? tasksEmptyFilterQuery() : normalizeTasksFilterQuery(nextPrefs?.swatchFilters));
-                setActiveEdgeTypes(egoMode || !Array.isArray(nextPrefs?.edgeTypes) ? [] : nextPrefs.edgeTypes.map(String).filter(Boolean));
-                setEdgeTypeFilterEnabled(!egoMode && nextPrefs?.edgeTypeFilterEnabled !== false);
+                const nextPrefs = readTasksProjectionPrefsForModel(sourceModel, { ...sourcePrefsRef.current, projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
+                setGroupByEnabled(!initialEgoMode && nextPrefs?.groupByEnabled === true);
+                setGroupByHierarchy(initialEgoMode || !Array.isArray(nextPrefs?.groupByHierarchy) ? [] : nextPrefs.groupByHierarchy);
+                setGroupByDisabledKeys(initialEgoMode ? [] : normalizeTasksGroupByDisabledKeys(nextPrefs?.groupByDisabledKeys));
+            }, [sourceModel, activeProjectionId]);
+            React.useEffect(() => {
+                const nextPrefs = readTasksProjectionPrefsForModel(sourceModel, { ...sourcePrefsRef.current, projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId);
+                setActiveFilters(initialEgoMode ? tasksEmptyFilterQuery() : normalizeTasksFilterQuery(nextPrefs?.filters));
+                setActiveSwatchFilters(initialEgoMode ? tasksEmptyFilterQuery() : normalizeTasksFilterQuery(nextPrefs?.swatchFilters));
+                setActiveEdgeTypes(initialEgoMode || !Array.isArray(nextPrefs?.edgeTypes) ? [] : nextPrefs.edgeTypes.map(String).filter(Boolean));
+                setEdgeTypeFilterEnabled(!initialEgoMode && nextPrefs?.edgeTypeFilterEnabled !== false);
                 setEdgeTypeQuery('');
-                setSearchQuery(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
-                setSearchInputValue(egoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
-                setActiveColorHierarchy(resolveTasksPreferredColorHierarchy(model, activeProjectionId, nextPrefs, nodeNotes));
+                setSearchQuery(initialEgoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
+                setSearchInputValue(initialEgoMode ? '' : (typeof nextPrefs?.searchQuery === 'string' ? nextPrefs.searchQuery : ''));
+                setActiveColorHierarchy(resolveTasksPreferredColorHierarchy(baseProjectionState.model, activeProjectionId, nextPrefs, nodeNotes));
                 setFiltersCollapsed((current) => (
                     typeof nextPrefs?.filtersCollapsed === 'boolean'
                         ? nextPrefs.filtersCollapsed
@@ -4006,7 +4083,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setProjectionUnspecifiedContentOpacity(nextPrefs?.unspecifiedContentOpacity !== undefined ? nextPrefs.unspecifiedContentOpacity : (
                     sourcePrefsRef.current?.unspecifiedContentOpacity === undefined ? defaultProjectionUnspecifiedContentOpacity : clampTasksProjectionContentOpacity(sourcePrefsRef.current.unspecifiedContentOpacity)
                 ));
-            }, [sourceModel, activeProjectionId, model, nodeNotes, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
+            }, [sourceModel, activeProjectionId, baseProjectionState.model, nodeNotes, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
             React.useEffect(() => {
                 const timeoutId = window.setTimeout(() => {
                     setSearchQuery(searchInputValue);
@@ -4037,15 +4114,15 @@ async function renderTasksGraphs(rootElement = document) {
                 return () => { active = false; };
             }, [egoMode, filtersCollapsed, queryBuilderEnabled]);
             const effectiveQueryFilters = React.useMemo(
-                () => (queryBuilderEnabled ? activeFilters : tasksEmptyFilterQuery()),
-                [queryBuilderEnabled, activeFilters]
+                () => (egoMode || !queryBuilderEnabled ? tasksEmptyFilterQuery() : activeFilters),
+                [egoMode, queryBuilderEnabled, activeFilters]
             );
             const searchMatches = React.useMemo(
-                () => tasksCollectSearchMatches(graphBaseRef.current.nodes || [], graphBaseRef.current.edges || [], searchEnabled ? searchQuery : '', nodeNotes),
-                [graphRevision, searchEnabled, searchQuery, nodeNotes]
+                () => tasksCollectSearchMatches(graphBaseRef.current.nodes || [], graphBaseRef.current.edges || [], !egoMode && searchEnabled ? searchQuery : '', nodeNotes),
+                [graphRevision, egoMode, searchEnabled, searchQuery, nodeNotes]
             );
             const filteredSelectionIds = React.useCallback(() => {
-                const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters);
+                const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(effectiveSwatchFilters);
                 const hasEdgeFilters = effectiveEdgeTypes.length > 0;
                 const hasSearch = searchMatches.active && !searchMatches.error;
                 if (!hasFilters && !hasEdgeFilters && !hasSearch) return new Set();
@@ -4055,13 +4132,13 @@ async function renderTasksGraphs(rootElement = document) {
                 return new Set((graphBaseRef.current.nodes || [])
                     .filter((node) => node?.id && node.data?.__kind__ !== 'groupTitle')
                     .filter((node) => {
-                        const filterHit = hasFilters ? tasksNodeMatchesAllFilters(node.data, effectiveQueryFilters, activeSwatchFilters) : true;
+                        const filterHit = hasFilters ? tasksNodeMatchesAllFilters(node.data, effectiveQueryFilters, effectiveSwatchFilters) : true;
                         const edgeHit = edgeNodeIds ? edgeNodeIds.has(node.id) : true;
                         const searchHit = hasSearch ? searchMatches.nodeIds.has(node.id) : true;
                         return filterHit && edgeHit && searchHit;
                     })
                     .map((node) => node.id));
-            }, [effectiveQueryFilters, activeSwatchFilters, effectiveEdgeTypes, searchMatches]);
+            }, [effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches]);
             const currentSelectionIds = React.useCallback(() => {
                 if (selectedNodeIdRef.current) return new Set([selectedNodeIdRef.current]);
                 if (selectedNodeIdsRef.current.size) {
@@ -4105,7 +4182,7 @@ async function renderTasksGraphs(rootElement = document) {
             const tasksFitDebugPayload = React.useCallback((reason, matchedNodes = []) => {
                 const selectedIds = currentSelectionIds();
                 const hasQueryFilters = tasksFilterQueryHasRules(effectiveQueryFilters);
-                const hasSwatchFilters = tasksFilterQueryHasRules(activeSwatchFilters);
+                const hasSwatchFilters = tasksFilterQueryHasRules(effectiveSwatchFilters);
                 const hasEdgeFilters = effectiveEdgeTypes.length > 0;
                 const hasSearch = searchMatches.active && !searchMatches.error;
                 return {
@@ -4121,12 +4198,12 @@ async function renderTasksGraphs(rootElement = document) {
                     hasSearch,
                     searchError: searchMatches.error || '',
                     queryRuleCount: tasksCountFilterRules(effectiveQueryFilters),
-                    swatchRuleCount: tasksCountFilterRules(activeSwatchFilters),
+                    swatchRuleCount: tasksCountFilterRules(effectiveSwatchFilters),
                     baseNodeCount: (graphBaseRef.current.nodes || []).length,
                     matchedNodeCount: matchedNodes.length,
                     matchedNodeIds: matchedNodes.map((node) => node.id).slice(0, 80),
                 };
-            }, [widgetId, currentSelectionIds, effectiveQueryFilters, activeSwatchFilters, effectiveEdgeTypes, searchMatches]);
+            }, [widgetId, currentSelectionIds, effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches]);
             const fitCurrentHighlight = React.useCallback((reactFlow, options = {}) => {
                 const reason = String(options.reason || 'manual-fit');
                 if (!reactFlow) return 0;
@@ -4143,53 +4220,64 @@ async function renderTasksGraphs(rootElement = document) {
                 return matched.length;
             }, [currentHighlightedFitNodes, tasksFitDebugPayload]);
             React.useEffect(() => {
-                const validFilterKeys = new Set(tasksFilterOptions(model).map((option) => option.key));
+                const baseModel = baseProjectionState.model;
+                const validFilterKeys = new Set(tasksFilterOptions(baseModel).map((option) => option.key));
                 setActiveFilters((current) => tasksPruneFilterQueryFields(current, validFilterKeys));
                 setActiveSwatchFilters((current) => tasksPruneFilterQueryFields(current, validFilterKeys));
                 setActiveColorHierarchy((current) => {
-                    const normalized = normalizeTasksColorHierarchy(current, model, nodeNotes);
+                    const normalized = normalizeTasksColorHierarchy(current, baseModel, nodeNotes);
                     const unchanged = normalized.length === current.length && normalized.every((entry, i) => entry === current[i]);
                     return unchanged ? current : normalized;
                 });
-            }, [model, nodeNotes]);
+            }, [baseProjectionState.model, nodeNotes]);
             React.useEffect(() => {
                 const activeSwatchKeys = new Set([
                     ...activeColorHierarchy.filter(Boolean),
-                    ...tasksIconFilterGroups(model).map((group) => group.key),
+                    ...tasksIconFilterGroups(baseProjectionState.model).map((group) => group.key),
                 ]);
                 setActiveSwatchFilters((current) => tasksPruneFilterQueryFields(current, activeSwatchKeys));
-            }, [activeColorHierarchy, model]);
+            }, [activeColorHierarchy, baseProjectionState.model]);
             React.useEffect(() => {
+                if (egoState) return;
                 if (lastPersistedProjectionIdRef.current !== activeProjectionId) {
                     lastPersistedProjectionIdRef.current = activeProjectionId;
                     return;
                 }
                 const projectionKey = tasksProjectionPrefsKey(activeProjectionId);
+                const groupingOverridden = tasksGroupByPrefsDifferFromSchema(
+                    sourceModel,
+                    activeProjectionId,
+                    groupByEnabled,
+                    groupByHierarchy,
+                    groupByDisabledKeys
+                );
+                const scopedProjectionPrefs = {
+                    filters: activeFilters,
+                    swatchFilters: activeSwatchFilters,
+                    edgeTypes: activeEdgeTypes,
+                    edgeTypeFilterEnabled,
+                    queryBuilderEnabled,
+                    searchEnabled,
+                    searchQuery,
+                    colorBy: activeColorBy,
+                    secondaryColorBy: activeColorHierarchy[1] || '',
+                    colorHierarchy: activeColorHierarchy,
+                    filtersCollapsed,
+                    edgesVisible,
+                    hoverInactiveNodes,
+                    hoverCardsEnabled,
+                    edgeAnimationEnabled,
+                    edgeAnimationMode,
+                    edgeAnimationTickSteps,
+                    edgeAnimationTickDuration,
+                    edgeOpacity,
+                    unspecifiedContentOpacity: projectionUnspecifiedContentOpacity,
+                    expandedGroupIds: Array.from(expanded),
+                    ...(groupingOverridden ? { groupByEnabled, groupByHierarchy, groupByDisabledKeys } : {}),
+                };
                 const nextProjectionPrefs = {
                     ...storedProjectionPrefsRef.current,
-                    [projectionKey]: {
-                        filters: activeFilters,
-                        swatchFilters: activeSwatchFilters,
-                        edgeTypes: activeEdgeTypes,
-                        edgeTypeFilterEnabled,
-                        queryBuilderEnabled,
-                        searchEnabled,
-                        searchQuery,
-                        colorBy: activeColorBy,
-                        secondaryColorBy: activeColorHierarchy[1] || '',
-                        colorHierarchy: activeColorHierarchy,
-                        filtersCollapsed,
-                        edgesVisible,
-                        hoverInactiveNodes,
-                        hoverCardsEnabled,
-                        edgeAnimationEnabled,
-                        edgeAnimationMode,
-                        edgeAnimationTickSteps,
-                        edgeAnimationTickDuration,
-                        edgeOpacity,
-                        unspecifiedContentOpacity: projectionUnspecifiedContentOpacity,
-                        expandedGroupIds: Array.from(expanded),
-                    },
+                    [projectionKey]: scopedProjectionPrefs,
                 };
                 sourcePrefsRef.current = {
                     ...(sourcePrefsRef.current || {}),
@@ -4220,7 +4308,7 @@ async function renderTasksGraphs(rootElement = document) {
                     slideNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [sourceModel, activeFilters, activeSwatchFilters, activeEdgeTypes, edgeTypeFilterEnabled, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
+            }, [egoState, sourceModel, activeFilters, activeSwatchFilters, activeEdgeTypes, edgeTypeFilterEnabled, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
@@ -4276,7 +4364,8 @@ async function renderTasksGraphs(rootElement = document) {
                 setSourceModel(nextModel);
                 setSourceGraph(nextGraph);
                 const wanted = projectionId === null ? activeProjectionId : String(projectionId || '');
-                const available = tasksProjectionOptions(nextModel, ganttEnabled).some((option) => option.id === wanted);
+                const nextContextId = String(nextModel?.kg_context?.id || '').trim();
+                const available = tasksProjectionOptions(nextModel, ganttEnabled, nextContextId).some((option) => option.id === wanted);
                 setActiveProjectionId(available ? wanted : '');
                 setViewMode('graph');
                 setSelectedNodeId(null);
@@ -4286,9 +4375,13 @@ async function renderTasksGraphs(rootElement = document) {
                 if (options?.resetSlideIndex) setSlideIndex((index) => index >= 0 ? 0 : -1);
                 pendingFitActionRef.current = 'mode';
             }, [sourceModel, activeProjectionId, ganttEnabled]);
-            const handleSwitchContext = React.useCallback(async (contextId) => {
+            const handleSwitchContext = React.useCallback(async (contextId, projectionId = null) => {
                 const schemaPath = String(sourceModel?.kg_schema || '').trim();
-                if (!schemaPath || !contextId || contextId === activeContextId) return;
+                if (!schemaPath || !contextId) return;
+                if (contextId === activeContextId) {
+                    if (projectionId !== null) setActiveProjectionId(String(projectionId || ''));
+                    return;
+                }
                 setContextLoading(true);
                 try {
                     const payload = await loadTasksContext({
@@ -4296,7 +4389,7 @@ async function renderTasksGraphs(rootElement = document) {
                         currentPath: sourceModel?.document_path || '',
                         contextId,
                     });
-                    applyLoadedSource(payload, null, { resetSlideIndex: true });
+                    applyLoadedSource(payload, projectionId, { resetSlideIndex: true });
                 } catch (error) {
                     window.alert(error instanceof Error ? error.message : String(error));
                 } finally {
@@ -4446,9 +4539,9 @@ async function renderTasksGraphs(rootElement = document) {
                 setSearchInputValue(defaultSearch);
                 setSearchQuery(defaultSearch);
                 setActiveColorHierarchy(resolveTasksPreferredColorHierarchy(model, activeProjectionId, defaults, nodeNotes));
-                setGroupByEnabled(defaultGroupByHierarchy.some(Boolean));
-                setGroupByHierarchy(defaultGroupByHierarchy);
-                setGroupByDisabledKeys([]);
+                setGroupByEnabled(defaults.groupByEnabled === true);
+                setGroupByHierarchy(Array.isArray(defaults.groupByHierarchy) ? defaults.groupByHierarchy : []);
+                setGroupByDisabledKeys(normalizeTasksGroupByDisabledKeys(defaults.groupByDisabledKeys));
                 setExpanded(hydrateExpandedSet(defaults));
                 setFiltersCollapsed(
                     typeof defaults.filtersCollapsed === 'boolean'
@@ -4467,7 +4560,7 @@ async function renderTasksGraphs(rootElement = document) {
                         ? defaults.unspecifiedContentOpacity
                         : defaultProjectionUnspecifiedContentOpacity
                 );
-            }, [viewerState.model, activeProjectionId, model, nodeNotes, hydrateExpandedSet, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity, defaultGroupByHierarchy]);
+            }, [viewerState.model, activeProjectionId, model, nodeNotes, hydrateExpandedSet, defaultFiltersOpen, defaultEdgeOpacity, defaultProjectionUnspecifiedContentOpacity]);
             React.useEffect(() => {
                 setNoteInputValue(nodeNotes[selectedLogicalNodeId] || '');
                 setClearedNote(null);
@@ -4877,12 +4970,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdges((prev) => tasksReuseGraphElements(prev, nextEdges));
             }, []);
             const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null, selectedIds = new Set()) => {
-                const baseNodes = (graphBaseRef.current.nodes || []).map((node) => {
-                    const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
-                    const changed = contextDiffNodeIds.has(String(sourceNodeId || ''));
-                    if ((node.data?.__context_diff__ === true) === changed) return node;
-                    return { ...node, data: { ...node.data, __context_diff__: changed } };
-                });
+                const baseNodes = graphBaseRef.current.nodes || [];
                 const baseEdges = tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], effectiveEdgeTypes);
                 // When no single node is selected, hovering a node should still reveal
                 // its checkbox. Carry it as a data flag (not the closure) so the
@@ -4925,6 +5013,7 @@ async function renderTasksGraphs(rootElement = document) {
                         const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
                         return {
                             ...edge,
+                            zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
                             data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim' },
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
@@ -4936,7 +5025,7 @@ async function renderTasksGraphs(rootElement = document) {
                     return;
                 }
                 if (!hasNodeSelection) {
-                    const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters) || effectiveEdgeTypes.length > 0;
+                    const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(effectiveSwatchFilters) || effectiveEdgeTypes.length > 0;
                     const hasSearch = searchMatches.active && !searchMatches.error;
                     if (!hasFilters && !hasSearch) {
                         const hoverEndpointIds = new Set(hoveredNodeId ? [hoveredNodeId] : []);
@@ -5026,6 +5115,7 @@ async function renderTasksGraphs(rootElement = document) {
                         const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
                         return {
                             ...edge,
+                            zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
                             data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim' },
                             labelStyle: {
                                 ...(edge.labelStyle || {}),
@@ -5155,7 +5245,7 @@ async function renderTasksGraphs(rootElement = document) {
                     return {
                         ...edge,
                         data: { ...edge.data, highlightMode: mode, strokeMode, hoverDimsLabels },
-                        zIndex: focused ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
+                        zIndex: highlighted ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
                         labelZIndex: tasksEdgeLabelZForMode(mode, TASKS_EDGE_LABEL_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_FOCUS_Z),
                         labelStyle: {
                             ...(edge.labelStyle || {}),
@@ -5239,7 +5329,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdgesReusing(edgesVisible ? nextEdges : []);
-            }, [effectiveQueryFilters, activeSwatchFilters, effectiveEdgeTypes, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeAnimationEnabled, edgeAnimationClassName, edgeOpacity, filteredSelectionIds, contextDiffNodeIds]);
+            }, [effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeAnimationEnabled, edgeAnimationClassName, edgeOpacity, filteredSelectionIds]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -5313,7 +5403,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, [graphRevision, expanded]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnFilter()) return;
-                const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(activeSwatchFilters) || effectiveEdgeTypes.length > 0;
+                const hasFilters = tasksFilterQueryHasRules(effectiveQueryFilters) || tasksFilterQueryHasRules(effectiveSwatchFilters) || effectiveEdgeTypes.length > 0;
                 const hasSearch = searchMatches.active && !searchMatches.error;
                 if (!hasFilters && !hasSearch) return;
                 const reactFlow = reactFlowApiRef.current;
@@ -5331,7 +5421,7 @@ async function renderTasksGraphs(rootElement = document) {
                 return () => {
                     if (rafId !== null) window.cancelAnimationFrame(rafId);
                 };
-            }, [graphRevision, effectiveQueryFilters, activeSwatchFilters, effectiveEdgeTypes, searchMatches, currentHighlightedFitNodes]);
+            }, [graphRevision, effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches, currentHighlightedFitNodes]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnFilter()) return;
                 if (selectedNodeId || !selectedNodeIds.size) return;
@@ -5433,6 +5523,19 @@ async function renderTasksGraphs(rootElement = document) {
             };
             const CustomEdge = React.memo((props) => {
                 const [path, labelX, labelY] = rf.getBezierPath(props);
+                React.useEffect(() => {
+                    traceTasksEdge('render', props, {
+                        sourceX: props.sourceX,
+                        sourceY: props.sourceY,
+                        sourcePosition: props.sourcePosition,
+                        targetX: props.targetX,
+                        targetY: props.targetY,
+                        targetPosition: props.targetPosition,
+                    });
+                }, [
+                    props.source, props.target, props.sourceX, props.sourceY, props.sourcePosition,
+                    props.targetX, props.targetY, props.targetPosition,
+                ]);
                 const fullLabel = String(props.label || '').replace(/\\n/g, '\n');
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
@@ -5441,9 +5544,11 @@ async function renderTasksGraphs(rootElement = document) {
                 const taperPath = useTaper
                     ? tasksTaperedBezierPath(path, (Number(props.style?.strokeWidth) || 4) * 2.65, Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42))
                     : '';
-                const taperArrowPath = taperPath
-                    ? tasksTaperedArrowHeadPath(path, Math.max(10, (Number(props.style?.strokeWidth) || 4) * 3.0))
-                    : '';
+                const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
+                const edgeArrowPath = tasksTaperedArrowHeadPath(
+                    path,
+                    Math.max(taperPath ? 10 : 8, strokeWidth * (taperPath ? 3.0 : 2.4))
+                );
                 const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
                 const prominentLabel = showFullLabel;
                 const displayLabel = showFullLabel
@@ -5480,25 +5585,43 @@ async function renderTasksGraphs(rootElement = document) {
                     });
                 }, [displayLabel, fullLabel, highlightMode, prominentLabel, labelStyle.fill, labelStyle.opacity, labelBgStyle.fill, labelBgStyle.fillOpacity]);
                 return React.createElement(React.Fragment, null,
+                    !taperPath && React.createElement(rf.BaseEdge, {
+                        ...props,
+                        path,
+                        markerEnd: undefined,
+                        style: {
+                            ...(props.style || {}),
+                            stroke: 'var(--vyasa-paper)',
+                            strokeWidth: strokeWidth + 8,
+                        },
+                    }),
                     taperPath && React.createElement('path', {
                         d: taperPath,
                         fill: props.style?.stroke || 'currentColor',
-                        opacity: props.style?.opacity ?? 1,
-                        pointerEvents: 'none',
-                    }),
-                    taperArrowPath && React.createElement('path', {
-                        d: taperArrowPath,
-                        fill: props.style?.stroke || 'currentColor',
+                        stroke: 'var(--vyasa-paper)',
+                        strokeWidth: 8,
+                        paintOrder: 'stroke fill',
+                        strokeLinejoin: 'round',
                         opacity: props.style?.opacity ?? 1,
                         pointerEvents: 'none',
                     }),
                     React.createElement(rf.BaseEdge, {
                         ...props,
                         path,
-                        markerEnd: taperPath ? undefined : props.markerEnd,
+                        markerEnd: undefined,
                         style: taperPath
                             ? { ...(props.style || {}), strokeWidth: 0.1 }
                             : props.style,
+                    }),
+                    edgeArrowPath && React.createElement('path', {
+                        d: edgeArrowPath,
+                        fill: props.style?.stroke || 'currentColor',
+                        stroke: 'var(--vyasa-paper)',
+                        strokeWidth: 8,
+                        paintOrder: 'stroke fill',
+                        strokeLinejoin: 'round',
+                        opacity: props.style?.opacity ?? 1,
+                        pointerEvents: 'none',
                     }),
                     displayLabel && !prominentLabel && React.createElement('g', {
                         transform: `translate(${labelX}, ${labelY})`,
@@ -5576,7 +5699,6 @@ async function renderTasksGraphs(rootElement = document) {
                     'data-vyasa-review-target': JSON.stringify(tasksReviewTarget(data, id, widgetId)),
                     'data-vyasa-highlight-active': !['none', 'dim'].includes(highlightMode) ? 'true' : undefined,
                     'data-vyasa-hover-outline': data?.__hover_outline__ === true ? 'true' : undefined,
-                    'data-vyasa-context-diff': data?.__context_diff__ === true ? 'true' : undefined,
                 };
                 const isChecked = data?.__checked__ === true;
                 const taskStateLabel = String(data?.__card_state__ || (isChecked ? TASKS_DEFAULT_CARD_STATES[1] : TASKS_DEFAULT_CARD_STATES[0]));
@@ -5871,14 +5993,12 @@ async function renderTasksGraphs(rootElement = document) {
                         const target = event.target instanceof Element ? event.target : null;
                         const key = event.key.toLowerCase();
                         const widgetFocused = wrapper.contains(document.activeElement) || wrapper.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
-                        const egoModalOpen = Boolean(document.querySelector('#tasks-fullscreen-modal [data-tasks-ego="true"]'));
                         if ((event.key === 'Escape' || key === 'g') && window.__vyasaTasksDebug.enabled) {
                             logTasksDebug('shortcutKeydown', {
                                 widgetId,
                                 key: event.key,
                                 shiftKey: event.shiftKey,
                                 widgetFocused,
-                                egoModalOpen,
                                 activeWidgetId: String(window.__vyasaTasksActiveWidgetId || ''),
                                 activeElementTag: document.activeElement?.tagName || '',
                                 targetTag: target?.tagName || '',
@@ -5889,11 +6009,6 @@ async function renderTasksGraphs(rootElement = document) {
                         if (event.key === 'Escape' && !event.shiftKey && egoMode && widgetFocused) {
                             event.preventDefault();
                             clearSelection('escape');
-                            return;
-                        }
-                        if (event.key === 'Escape' && !event.shiftKey && egoModalOpen) {
-                            event.preventDefault();
-                            event.stopPropagation();
                             return;
                         }
                         if (event.key === 'Escape' && !event.shiftKey && widgetFocused) {
@@ -5911,7 +6026,7 @@ async function renderTasksGraphs(rootElement = document) {
                             return;
                         }
                         if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName))) return;
-                        if (!widgetFocused && !(key === 't' && groupToggleHoverIdRef.current) && key !== 'h') return;
+                        if (!widgetFocused && !(key === 't' && groupToggleHoverIdRef.current)) return;
                         if (key === 'f' && event.shiftKey) {
                             event.preventDefault();
                             window.openTasksFullscreen?.(widgetId);
@@ -5923,7 +6038,6 @@ async function renderTasksGraphs(rootElement = document) {
                             return;
                         }
                         if (event.key === '?' || (event.key === '/' && event.shiftKey)) {
-                            if (egoModalOpen && !egoMode) return; // ego layer owns help while open
                             event.preventDefault();
                             setHelpOpen((current) => !current);
                             return;
@@ -6093,9 +6207,9 @@ async function renderTasksGraphs(rootElement = document) {
                                 padding: '0',
                             },
                         }, '⧉'),
-                        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: panelNodeId ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)', columnGap: '12px', alignItems: 'start' } },
+                        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', columnGap: '12px', alignItems: 'start' } },
                             React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' } }, selectedNode.label || selectedNode.id),
-                            panelNodeId ? React.createElement('div', { style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, textAlign: 'right' } }, panelNodeId) : null,
+                            panelNodeId ? React.createElement('div', { style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', textAlign: 'right' } }, panelNodeId) : null,
                         ),
                         panelHref ? React.createElement('a', {
                             href: panelHref,
@@ -6160,7 +6274,7 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             };
             const FilterPanel = () => {
-                if (egoMode) return null;
+                if (egoMode || slideIndex >= 0) return null;
                 const options = tasksFilterOptions(model);
                 const colorOptions = tasksColorOptions(model, nodeNotes);
                 const iconFilterGroups = tasksIconFilterGroups(model);
@@ -6170,10 +6284,9 @@ async function renderTasksGraphs(rootElement = document) {
                         ? projection.id === TASKS_GANTT_PROJECTION_ID
                         : projection.id === activeProjectionId
                 )) || null;
-                const customGroupingAvailable = !String(activeProjectionId || '').trim() && viewMode !== 'gantt';
+                const customGroupingAvailable = viewMode !== 'gantt';
                 const groupByControlsEnabled = customGroupingAvailable && groupByEnabled;
-                const projectionGroupByHierarchy = viewMode === 'gantt' ? [] : tasksProjectionGroupByHierarchy(viewerState.model, activeProjectionId);
-                const displayedGroupByHierarchy = customGroupingAvailable ? groupByHierarchy : projectionGroupByHierarchy;
+                const displayedGroupByHierarchy = customGroupingAvailable ? groupByHierarchy : [];
                 const activeGroupByCount = groupByControlsEnabled ? activeGroupByHierarchy.length : 0;
                 const groupByLevels = displayedGroupByHierarchy.filter(Boolean);
                 if (customGroupingAvailable && groupByEnabled) groupByLevels.push('');
@@ -6493,8 +6606,8 @@ async function renderTasksGraphs(rootElement = document) {
                         ref: filterPanelRef,
                         className: 'vyasa-tasks-filter-card',
                         style: {
-                            width: filterPanelWidth,
-                            maxWidth: 'calc(100% - 24px)',
+                            width: '100%',
+                            maxWidth: '100%',
                             maxHeight: filterPanelMaxHeight,
                             overflowX: 'hidden',
                             overflowY: 'auto',
@@ -6547,7 +6660,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     React.createElement('input', {
                                         type: 'checkbox',
                                         className: 'vyasa-tasks-switch-input',
-                                        'aria-label': 'Glow changes from previous context',
+                                        'aria-label': 'Select changes from previous context',
                                         checked: contextDiffEnabled && activeContextIndex > 0,
                                         disabled: contextLoading || contextDiffLoading || activeContextIndex <= 0,
                                         onChange: (event) => setContextDiffEnabled(event.target.checked),
@@ -6582,7 +6695,11 @@ async function renderTasksGraphs(rootElement = document) {
                                                 color: 'inherit',
                                             },
                                         },
-                                            ...contextOptions.map((context) => React.createElement('option', { key: context.id, value: context.id }, context.label || context.caption || context.id))
+                                            ...contextOptions.map((context) => React.createElement(
+                                                'option',
+                                                { key: context.id, value: context.id },
+                                                `${context.seq}. ${context.label || context.caption || context.id}`
+                                            ))
                                         ),
                                     React.createElement('button', { type: 'button', 'aria-label': 'Next context', onClick: () => goContext(1), disabled: nextDisabled, style: ctxNavBtn(nextDisabled) }, '›')
                                 );
@@ -6664,7 +6781,9 @@ async function renderTasksGraphs(rootElement = document) {
                                 activeProjectionOption && activeProjectionOption.id !== TASKS_GANTT_PROJECTION_ID
                                     ? React.createElement('button', {
                                         type: 'button',
-                                        title: 'Copy this view as a kg.schema @views entry',
+                                        title: sourceModel?.kg_context?.id
+                                            ? 'Copy this view as an @views entry for this context'
+                                            : 'Copy this view as a kg.schema @views entry',
                                         onClick: async (event) => {
                                             const button = event.currentTarget;
                                             const ok = await copyTasksText(buildProjectionConfigText(activeProjectionOption));
@@ -6711,7 +6830,6 @@ async function renderTasksGraphs(rootElement = document) {
                                         disabled: !customGroupingAvailable,
                                         onChange: (event) => {
                                             setGroupByEnabled(event.target.checked);
-                                            setActiveProjectionId('');
                                             setViewMode('graph');
                                             pendingFitActionRef.current = 'mode';
                                         },
@@ -6765,7 +6883,6 @@ async function renderTasksGraphs(rootElement = document) {
                                                         if (event.target.checked) disabled.delete(key); else disabled.add(key);
                                                         return Array.from(disabled);
                                                     });
-                                                    setActiveProjectionId('');
                                                     setViewMode('graph');
                                                     pendingFitActionRef.current = 'mode';
                                                 },
@@ -6780,7 +6897,6 @@ async function renderTasksGraphs(rootElement = document) {
                                                     next[level] = nextKey;
                                                     setGroupByHierarchy(next.slice(0, level + 1).filter(Boolean));
                                                     setGroupByDisabledKeys((current) => normalizeTasksGroupByDisabledKeys(current).filter((key) => key !== selectedKey && key !== nextKey));
-                                                    setActiveProjectionId('');
                                                     setViewMode('graph');
                                                     pendingFitActionRef.current = 'mode';
                                                 },
@@ -6810,15 +6926,14 @@ async function renderTasksGraphs(rootElement = document) {
                                                     next[level] = '';
                                                     setGroupByHierarchy(next.slice(0, level + 1).filter(Boolean));
                                                     setGroupByDisabledKeys((current) => normalizeTasksGroupByDisabledKeys(current).filter((key) => key !== selectedKey));
-                                                    setActiveProjectionId('');
                                                     setViewMode('graph');
                                                     pendingFitActionRef.current = 'mode';
                                                 },
                                             }, '×')
                                         );
                                     }),
-                                    activeProjectionId || viewMode === 'gantt'
-                                        ? React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.3 } }, 'Custom grouping applies to Default view.')
+                                    viewMode === 'gantt'
+                                        ? React.createElement('div', { style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.3 } }, 'Grouping is unavailable in Gantt.')
                                         : null
                             )
                         ),
@@ -7274,23 +7389,19 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                     }
                 }
-                if (hoverCardsEnabled) {
-                    const hoverCard = { label, nodeId, image, rows };
-                    if (hoverCardRightRail) {
-                        setGroupHoverTooltip({ ...hoverCard, placement: 'rightRail' });
-                    } else {
-                        setGroupHoverTooltip({
-                            ...hoverCard,
-                            placement: 'cursor',
-                            x: event.clientX - bounds.left + 12,
-                            y: event.clientY - bounds.top + 18,
-                        });
-                    }
-                } else if (groupHoverTooltip) {
-                    clearGroupHoverTooltip();
+                const hoverCard = { label, nodeId, image, rows };
+                if (hoverCardRightRail) {
+                    setGroupHoverTooltip({ ...hoverCard, placement: 'rightRail' });
+                } else {
+                    setGroupHoverTooltip({
+                        ...hoverCard,
+                        placement: 'cursor',
+                        x: event.clientX - bounds.left + 12,
+                        y: event.clientY - bounds.top + 18,
+                    });
                 }
                 traceHoverHit('hit', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx, groupHoverChanged });
-            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, hoverInactiveNodes, hoverCardsEnabled, hoverCardRightRail, groupHoverTooltip, hoveredNodeId, logHoverCycle, selectedNodeId]);
+            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, egoMode, hoverInactiveNodes, hoverCardRightRail, hoveredNodeId, logHoverCycle, selectedNodeId]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -7379,22 +7490,25 @@ async function renderTasksGraphs(rootElement = document) {
                 event.stopPropagation();
             }, [selectGroupDescendants]);
             const startDragSelection = React.useCallback((event) => {
-                const mode = event.metaKey ? 'lasso' : (event.shiftKey ? 'rect' : '');
+                const append = event.altKey && event.shiftKey;
+                const mode = append || event.metaKey ? 'lasso' : (event.shiftKey ? 'rect' : '');
                 if (!mode || (event.pointerType === 'mouse' && event.button !== 0)) return;
                 if (event.target?.closest?.('button, input, textarea, select, a, .react-flow__controls, .vyasa-tasks-filter-card')) return;
                 const reactFlow = reactFlowApiRef.current;
                 const el = flowWrapperRef.current;
                 if (!reactFlow || !el) return;
                 const startFlow = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+                const initialSelectedIds = append ? new Set(selectedNodeIdsRef.current) : new Set();
+                if (selectedNodeIdRef.current) initialSelectedIds.add(selectedNodeIdRef.current);
                 try {
                     el.setPointerCapture?.(event.pointerId);
                 } catch {
                     // Ignore if this pointer cannot be captured.
                 }
                 el.focus?.({ preventScroll: true });
-                setSelectedNodeId(null);
+                if (!append) setSelectedNodeId(null);
                 setHoveredNodeId(null);
-                setDragSelection({ pointerId: event.pointerId, mode, startClientX: event.clientX, startClientY: event.clientY, currentClientX: event.clientX, currentClientY: event.clientY, startFlow, currentFlow: startFlow, points: [startFlow], clientPoints: [{ x: event.clientX, y: event.clientY }] });
+                setDragSelection({ pointerId: event.pointerId, mode, append, initialSelectedIds: Array.from(initialSelectedIds), startClientX: event.clientX, startClientY: event.clientY, currentClientX: event.clientX, currentClientY: event.clientY, startFlow, currentFlow: startFlow, points: [startFlow], clientPoints: [{ x: event.clientX, y: event.clientY }] });
                 event.preventDefault();
                 event.stopPropagation();
             }, []);
@@ -7427,15 +7541,20 @@ async function renderTasksGraphs(rootElement = document) {
                             x2: dragSelection.currentFlow.x,
                             y2: dragSelection.currentFlow.y,
                         });
+                    const nextSelected = dragSelection.append
+                        ? new Set([...dragSelection.initialSelectedIds, ...selected])
+                        : new Set(selected);
                     logTasksDebug('selectionSetDrag', {
                         widgetId,
                         mode: dragSelection.mode,
-                        selectedIds: selected,
+                        append: dragSelection.append,
+                        selectedIds: Array.from(nextSelected),
                     });
                     markWidgetActive();
                     selectedNodeIdRef.current = null;
-                    selectedNodeIdsRef.current = new Set(selected);
-                    setSelectedNodeIds(new Set(selected));
+                    selectedNodeIdsRef.current = nextSelected;
+                    setSelectedNodeId(null);
+                    setSelectedNodeIds(nextSelected);
                     suppressNextGraphClickRef.current = true;
                     window.setTimeout(() => {
                         suppressNextGraphClickRef.current = false;
@@ -7461,6 +7580,28 @@ async function renderTasksGraphs(rootElement = document) {
                 if (flowWrapperRef.current) observer.observe(flowWrapperRef.current);
                 return () => observer.disconnect();
             }, [activeFilters, activeColorBy, filtersCollapsed, model]);
+            const closeEgo = React.useCallback(() => {
+                const previous = egoReturnRef.current;
+                if (!previous || !egoState) return;
+                egoReturnRef.current = null;
+                wrapper.removeAttribute('data-tasks-ego-active');
+                setEgoState(null);
+                setExpanded(new Set(previous.expanded));
+                selectedNodeIdRef.current = null;
+                selectedNodeIdsRef.current = new Set();
+                setSelectedNodeId(null);
+                setSelectedNodeIds(new Set());
+                setHoveredNodeId(null);
+                pendingFitActionRef.current = null;
+                pendingEgoViewportRestoreRef.current = {
+                    viewport: previous.viewport,
+                    graphRevision,
+                    selectedNodeId: previous.selectedNodeId,
+                    selectedNodeIds: new Set(previous.selectedNodeIds),
+                };
+                if (!previous.inline && !previous.maximized) setTasksMaximized(wrapper, false, { fit: false });
+                try { previous.onClose?.(); } catch { /* noop */ }
+            }, [egoState, graphRevision]);
             const ActionBridge = () => {
                 const reactFlow = rf.useReactFlow();
                 reactFlowApiRef.current = reactFlow;
@@ -7502,27 +7643,48 @@ async function renderTasksGraphs(rootElement = document) {
                             logTasksDebug('manualSelect', { nodeId });
                         },
                         openEgo: (includeNeighbors = false, explicitIds = null, inline = false, onClose = null) => {
+                            const previous = egoReturnRef.current;
                             const egoSelection = Array.isArray(explicitIds) && explicitIds.length
                                 ? new Set(explicitIds.map((id) => String(id || '').trim()).filter(Boolean))
-                                : currentSelectionIds();
+                                : (previous ? new Set(previous.egoSelection) : currentSelectionIds());
                             logTasksDebug('openEgoAction', {
                                 widgetId,
                                 includeNeighbors,
                                 selection: Array.from(egoSelection),
                                 ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeId),
                             });
-                            const egoState = buildTasksEgoState(model, rawGraph, egoSelection, includeNeighbors, activeColorBy);
-                            if (!egoState) return;
-                            openTasksEgoModal(wrapper, {
-                                title: `${sourceModel.title || sourceModel.graph_id || 'Knowledge Graph'} ego`,
-                                model: egoState.model,
-                                graph: egoState.graph,
-                                selectedIds: Array.from(egoSelection),
+                            const nextEgoState = buildTasksEgoState(
+                                baseProjectionState.model,
+                                baseRawGraph,
+                                egoSelection,
                                 includeNeighbors,
-                                inline,
-                                onClose,
-                            });
+                                activeColorBy
+                            );
+                            if (!nextEgoState) return;
+                            if (!previous) {
+                                egoReturnRef.current = {
+                                    viewport: reactFlow.getViewport(),
+                                    expanded: new Set(expanded),
+                                    selectedNodeId: selectedNodeIdRef.current,
+                                    selectedNodeIds: new Set(selectedNodeIdsRef.current),
+                                    egoSelection: new Set(egoSelection),
+                                    inline,
+                                    maximized: wrapper.getAttribute('data-tasks-maximized') === 'true',
+                                    onClose,
+                                };
+                                wrapper.setAttribute('data-tasks-ego-active', 'true');
+                                if (!inline) setTasksMaximized(wrapper, true);
+                            }
+                            setEgoState(nextEgoState);
+                            setExpanded(tasksExpandableNodeIds(nextEgoState.model));
+                            selectedNodeIdRef.current = null;
+                            selectedNodeIdsRef.current = new Set();
+                            setSelectedNodeId(null);
+                            setSelectedNodeIds(new Set());
+                            setHoveredNodeId(null);
+                            pendingFitActionRef.current = 'mode';
                         },
+                        closeEgo,
                         openEgoNeighbors: () => window.__vyasaTasksActions[widgetId]?.openEgo?.(true),
                         expand: () => {
                             if (egoMode) return;
@@ -7562,7 +7724,24 @@ async function renderTasksGraphs(rootElement = document) {
                     return () => {
                         delete window.__vyasaTasksActions[widgetId];
                     };
-                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, activeColorBy, fitCurrentHighlight]);
+                }, [reactFlow, currentSelectionIds, baseProjectionState.model, baseRawGraph, expanded, egoMode, egoState, activeColorBy, closeEgo, fitCurrentHighlight]);
+                return null;
+            };
+            const RestoreEgoViewport = () => {
+                const reactFlow = rf.useReactFlow();
+                React.useEffect(() => {
+                    const pending = pendingEgoViewportRestoreRef.current;
+                    if (egoMode || !pending || graphRevision <= pending.graphRevision) return;
+                    pendingEgoViewportRestoreRef.current = null;
+                    const frame = window.requestAnimationFrame(() => {
+                        reactFlow.setViewport(pending.viewport, { duration: 0 });
+                        selectedNodeIdRef.current = pending.selectedNodeId;
+                        selectedNodeIdsRef.current = new Set(pending.selectedNodeIds);
+                        setSelectedNodeId(pending.selectedNodeId);
+                        setSelectedNodeIds(new Set(pending.selectedNodeIds));
+                    });
+                    return () => window.cancelAnimationFrame(frame);
+                }, [reactFlow, graphRevision, egoMode]);
                 return null;
             };
             const FitOnNodesReady = () => {
@@ -7583,6 +7762,31 @@ async function renderTasksGraphs(rootElement = document) {
                     return () => window.clearTimeout(timeoutId);
                 }, [reactFlow, graphRevision, viewMode, slideIndex, slides]);
                 return null;
+            };
+            const TasksNodeHighlightBorders = () => {
+                if (!rf.ViewportPortal) return null;
+                const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
+                const activeNodes = nodes.filter((node) => !['none', 'dim'].includes(node.data?.highlightMode || 'none'));
+                return React.createElement(rf.ViewportPortal, null, ...activeNodes.map((node) => {
+                    const rect = tasksGraphNodeAbsoluteRect(node, byId);
+                    const hoverOutline = node.data?.__hover_outline__ === true;
+                    const activeBorderColor = node.style?.['--vyasa-tasks-active-border'] || 'var(--vyasa-primary)';
+                    return React.createElement('div', {
+                        key: node.id,
+                        'data-vyasa-node-highlight-border': 'true',
+                        style: {
+                            position: 'absolute',
+                            transform: `translate(${rect.x}px, ${rect.y}px)`,
+                            width: rect.width,
+                            height: rect.height,
+                            borderRadius: node.style?.borderRadius || 6,
+                            outline: `${hoverOutline ? 12 : 4}px solid ${activeBorderColor}`,
+                            outlineOffset: '3px',
+                            pointerEvents: 'none',
+                            zIndex: TASKS_EDGE_FOCUS_Z - 1,
+                        },
+                    });
+                }));
             };
             const flowWrapperClassName = [
                 hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '',
@@ -7620,11 +7824,11 @@ async function renderTasksGraphs(rootElement = document) {
                     edgeOpacity: isActiveLive ? edgeOpacity : def?.edge_opacity,
                     projectionUnspecifiedContentOpacity: isActiveLive ? projectionUnspecifiedContentOpacity : def?.projection_unspecified_content_opacity,
                     defaultOpenDepth: effectiveDefaultOpenDepth,
-                });
+                }, sourceModel?.kg_context?.id);
             };
             const RightRail = () => {
                 if (!selectedNodeId) return null;
-                if (hoverCardRightRail && groupHoverTooltip?.placement === 'rightRail') return null;
+                if (hoverCardsEnabled && hoverCardRightRail && groupHoverTooltip?.placement === 'rightRail') return null;
                 return window.React.createElement('div', {
                     style: {
                         position: 'absolute',
@@ -7679,6 +7883,31 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement('span', { style: { opacity: 0.8, minWidth: '3em', textAlign: 'right', fontVariantNumeric: 'tabular-nums' } }, tasksOpacityPctLabel(egoNeighborOpacity))
                 );
             };
+            const EgoCloseControl = () => {
+                const previous = egoReturnRef.current;
+                if (!egoMode || !previous || previous.inline) return null;
+                return window.React.createElement('button', {
+                    type: 'button',
+                    title: 'Close EG (Shift+Esc)',
+                    'aria-label': 'Close EG',
+                    onClick: closeEgo,
+                    style: {
+                        position: 'absolute',
+                        left: '12px',
+                        top: '12px',
+                        zIndex: 35,
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '8px',
+                        border: '1px solid color-mix(in srgb, currentColor 35%, transparent)',
+                        background: 'var(--vyasa-paper, #fff)',
+                        color: 'currentColor',
+                        fontSize: '16px',
+                        lineHeight: 1,
+                        cursor: 'pointer',
+                    },
+                }, '×');
+            };
             const GroupHoverTooltip = () => {
                 const tooltipRef = window.React.useRef(null);
                 const [measuredSize, setMeasuredSize] = window.React.useState({ width: 0, height: 0 });
@@ -7689,7 +7918,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const height = Math.ceil(rect.height);
                     if (width !== measuredSize.width || height !== measuredSize.height) setMeasuredSize({ width, height });
                 }, [groupHoverTooltip, measuredSize.width, measuredSize.height]);
-                if (!groupHoverTooltip) return null;
+                if (!hoverCardsEnabled || !groupHoverTooltip) return null;
                 const rows = Array.isArray(groupHoverTooltip.rows) ? groupHoverTooltip.rows : [];
                 const image = normalizeTasksNodeImageUrl(groupHoverTooltip.image);
                 const panelWidth = tasksDetailPanelWidth({
@@ -7761,8 +7990,6 @@ async function renderTasksGraphs(rootElement = document) {
             };
             const HelpPopup = () => {
                 if (!helpOpen) return null;
-                // Under an inline ego layer the underlying widget must stay silent so only one help shows.
-                if (!egoMode && document.querySelector('#tasks-fullscreen-modal [data-tasks-ego="true"]')) return null;
                 const R = window.React;
                 const sep = () => R.createElement('div', { style: { height: '1px', background: 'color-mix(in srgb, var(--vyasa-primary) 22%, transparent)', margin: '16px 0' } });
                 const heading = (text) => R.createElement('div', { style: { fontSize: '12px', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.55, marginBottom: '10px' } }, text);
@@ -7787,6 +8014,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Click canvas', 'clear selection'),
                     row('Shift + drag', 'box select'),
                     row('Cmd + drag', 'lasso select'),
+                    row('Alt + Shift + drag', 'append lasso selection'),
                     row('Wheel / pinch', 'zoom'),
                     row('Drag canvas', 'pan'),
                     sep(),
@@ -7826,7 +8054,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const focusBtn = (active) => ({ flex: '1 1 0', height: '30px', border: `1px solid ${active ? 'var(--vyasa-primary)' : 'color-mix(in srgb, var(--vyasa-primary) 26%, transparent)'}`, background: active ? 'color-mix(in srgb, var(--vyasa-primary) 86%, transparent)' : 'color-mix(in srgb, var(--vyasa-paper) 90%, transparent)', color: active ? 'var(--vyasa-paper)' : 'inherit', borderRadius: '8px', padding: '0 10px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', boxShadow: active ? '0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 22%, transparent)' : 'none' });
                 const panelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`;
                 return window.React.createElement('aside', {
-                    style: { flex: `0 0 ${panelWidth}`, width: panelWidth, minWidth: 0, height: '100%', marginLeft: '-12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: '16px', borderRadius: '14px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 26%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 95%, transparent)', boxShadow: '0 14px 36px rgba(0,0,0,0.16)', pointerEvents: 'auto' },
+                    style: { flex: `0 0 ${panelWidth}`, width: panelWidth, minWidth: 0, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: '16px', borderRadius: '14px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 26%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 95%, transparent)', boxShadow: '0 14px 36px rgba(0,0,0,0.16)', pointerEvents: 'auto' },
                 },
                     window.React.createElement('div', { className: 'vyasa-task-slide-nav', style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid color-mix(in srgb, var(--vyasa-primary) 14%, transparent)' } },
                         window.React.createElement('button', { type: 'button', 'aria-label': 'Previous slide', onClick: () => go(-1), disabled: slideIndex <= 0, style: navBtn(slideIndex <= 0) }, '‹'),
@@ -7912,6 +8140,17 @@ async function renderTasksGraphs(rootElement = document) {
                     suppressNextGraphClickRef.current = false;
                     return;
                 }
+                const diffSelection = contextDiffSelectionRef.current;
+                const diffOwnsSelection = contextDiffEnabled
+                    && Boolean(diffSelection.key)
+                    && diffSelection.ids.size > 0
+                    && !selectedNodeIdRef.current
+                    && selectedNodeIdsRef.current.size === diffSelection.ids.size
+                    && Array.from(selectedNodeIdsRef.current).every((id) => diffSelection.ids.has(id));
+                if (diffOwnsSelection) {
+                    logTasksDebug('selectionClearBlocked', { widgetId, reason: 'contextDiffPaneClick' });
+                    return;
+                }
                 if (slideIndex >= 0 && slides[slideIndex]) {
                     setSelectedNodeId(null);
                     setHoveredNodeId(null);
@@ -7929,7 +8168,9 @@ async function renderTasksGraphs(rootElement = document) {
                 onPointerDown: (event) => {
                     markWidgetActive();
                     flowWrapperRef.current?.focus({ preventScroll: true });
-                    markTasksFrameProbe(widgetId, flowWrapperRef.current, model, graphBaseRef.current, 'pointerdown', currentPerfViewState());
+                    if (window.__vyasaTasksPerf.enabled) {
+                        markTasksFrameProbe(widgetId, flowWrapperRef.current, model, graphBaseRef.current, 'pointerdown', currentPerfViewState());
+                    }
                     // Skip hover-clear when pressing a node: clearing hover here runs
                     // applyHighlight synchronously mid-click, which rebuilds the node
                     // DOM under the cursor between mousedown and mouseup and drops the
@@ -7942,6 +8183,7 @@ async function renderTasksGraphs(rootElement = document) {
                 onPointerDownCapture: startDragSelection,
                 onPointerMove: updateGroupHoverTooltip,
                 onWheelCapture: (event) => {
+                    if (!window.__vyasaTasksPerf.enabled) return;
                     markTasksFrameProbe(widgetId, flowWrapperRef.current, model, graphBaseRef.current, 'wheel', currentPerfViewState());
                     traceTasksInteractionFrame('wheel', {
                         ...tasksPerfContext(widgetId, flowWrapperRef.current, model, graphBaseRef.current),
@@ -7975,17 +8217,20 @@ async function renderTasksGraphs(rootElement = document) {
                 ...edgeAnimationStyle,
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
-                window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', gap: '12px', position: 'relative' } },
+                window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
                     filterPanelElement,
                     SlideShow(),
                     window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
+                    window.React.createElement(TasksNodeHighlightBorders),
                     window.React.createElement(rf.Controls),
                     window.React.createElement(PanControls),
+                    window.React.createElement(EgoCloseControl),
                     window.React.createElement(SlideLauncher),
                     window.React.createElement(FitViewHotkey),
                     window.React.createElement(ActionBridge),
+                    window.React.createElement(RestoreEgoViewport),
                     window.React.createElement(FitOnNodesReady)
                     ),
                     RightRail(),
@@ -7994,16 +8239,19 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(GroupHoverTooltip),
                     window.React.createElement(DragSelectionOverlay)
                 ))
-            ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', gap: '12px', position: 'relative' } },
+            ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
                 filterPanelElement,
                 window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
+                        window.React.createElement(TasksNodeHighlightBorders),
                         window.React.createElement(rf.Controls),
                         window.React.createElement(PanControls),
+                    window.React.createElement(EgoCloseControl),
                     window.React.createElement(SlideLauncher),
                         window.React.createElement(FitViewHotkey),
                         window.React.createElement(ActionBridge),
+                        window.React.createElement(RestoreEgoViewport),
                         window.React.createElement(FitOnNodesReady)
                     ),
                     RightRail(),

@@ -17,7 +17,12 @@
 .vyasa-comments { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent); }
 .vyasa-comments[hidden] { display: none; }
 .vyasa-comments-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.vyasa-annotations-export { display: inline-flex; align-items: center; justify-content: center; padding: .5rem; border-radius: .375rem; color: inherit; }
+.vyasa-annotations-export[hidden] { display: none; }
+.vyasa-annotations-export:hover { background: rgb(30 41 59 / .8); }
 .vyasa-comments-list { display: grid; gap: 1rem; margin: 1rem 0 0; padding: 0; list-style: none; }
+.vyasa-comment-editor { display: grid; grid-template-columns: 1fr auto auto; gap: .5rem; align-items: end; }
+.vyasa-comment-editor textarea { min-height: 5rem; resize: vertical; }
 .vyasa-comment { border-inline-start: 2px solid var(--vyasa-accent, #45655b); padding-inline-start: 1rem; }
 .vyasa-comment-row { cursor: pointer; color: color-mix(in srgb, currentColor 72%, transparent); }
 .vyasa-comment-author { display: flex; align-items: center; gap: .5rem; font: 600 .8rem/1.4 var(--vyasa-font-ui, sans-serif); }

@@ -70,7 +70,7 @@ def test_extensions_default_preset_when_section_omitted(tmp_path, monkeypatch):
     assert plan.preset == "default"
     assert plan.selected_by_category["layout"] == ("default_layout",)
     assert plan.selected_by_category["render"] == ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "mdx", "html_viewer", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
-    assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "git_refs", "annotations", "bookmarks", "api_catalog", "filesystem_routes")
+    assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "git_refs", "annotations", "bookmarks", "api_catalog", "filesystem_routes", "vscode")
     assert "feedback" not in plan.enabled_ids
     assert "annotations" in plan.enabled_ids
     assert plan.enabled_ids[-1] == "filesystem"
@@ -278,10 +278,12 @@ def test_default_route_extensions_include_annotations():
     assert "/api/bookmarks" in prefixes
     assert "/api/catalog" in prefixes
     assert "/api/annotations" in prefixes
+    assert "/api/vscode" in prefixes
     assert "/api/feedback" not in prefixes
     assert "annotations" in runtime.storage_namespaces
     assert "feedback" not in runtime.storage_namespaces
     assert "bookmarks" in runtime.storage_namespaces
+    assert any(provider.__module__.endswith(".annotations") for provider in runtime.navbar_control_providers)
 
 
 def test_annotations_are_enabled_by_default_and_can_be_disabled(tmp_path):

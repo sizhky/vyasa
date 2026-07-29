@@ -726,7 +726,7 @@ class ContentRenderer(FrankenRenderer):
     def render_link(self, token):
         href, inner, title = token.target, self.render_inner(token), f' title="{token.title}"' if token.title else ""
         is_hash = href.startswith("#")
-        is_external = href.startswith(("http://", "https://", "mailto:", "tel:", "//"))
+        is_external = href.startswith(("http://", "https://", "mailto:", "tel:", "vscode:", "//"))
         is_absolute_internal = href.startswith("/") and not href.startswith("//")
         is_relative = not is_external and not is_absolute_internal
         download_flag = bool(token.title and "download=true" in token.title.lower())

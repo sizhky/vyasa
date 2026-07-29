@@ -8,14 +8,33 @@ import re
 import shlex
 from typing import Any, Iterable
 
-from .items_pack import read_kg_pack, read_schema
-
-
 CONDITION_RE = re.compile(r'([\w-]+)\s*(!=|<=|>=|<|>|~|=)\s*("(?:[^"\\]|\\.)*"|\S+)')
 
 
 class QueryError(ValueError):
     pass
+
+
+def resolve_context_id(
+    contexts: Iterable[dict[str, Any]],
+    requested: str | None,
+    default_context: str = "base",
+    active_context: str = "",
+) -> str:
+    catalog = list(contexts)
+    context_id = str(requested or default_context)
+    if context_id == "active":
+        context_id = active_context or default_context
+    if context_id == "latest":
+        if not catalog:
+            raise QueryError("Unknown KG context: latest")
+        return str(max(catalog, key=lambda item: (item.get("seq", 0), item.get("id", "")))["id"])
+    known = {str(item.get("id")) for item in catalog}
+    if catalog and context_id not in known:
+        raise QueryError(f"Unknown KG context: {context_id}")
+    if not catalog and context_id != "base":
+        raise QueryError(f"Unknown KG context: {context_id}")
+    return context_id
 
 
 class QueryAnswer(list[dict[str, Any]]):
@@ -75,6 +94,8 @@ def _matches(row: dict[str, Any], field: str, operator: str, expected: str) -> b
 
 class KnowledgeGraphQuery:
     def __init__(self, schema_path: str | Path):
+        from .items_pack import read_kg_pack, read_schema
+
         self.schema_path = Path(schema_path)
         self.schema = read_schema(self.schema_path)
         self.relations = set(self.schema.relations)
@@ -86,19 +107,13 @@ class KnowledgeGraphQuery:
         self._graphs[self.default_context] = default_graph
 
     def _context_id(self, requested: str | None) -> str:
-        context_id = requested or self.default_context
-        if context_id == "latest" and self.contexts:
-            return str(max(self.contexts, key=lambda item: (item.get("seq", 0), item.get("id", "")))["id"])
-        known = {str(item.get("id")) for item in self.contexts}
-        if self.contexts and context_id not in known:
-            raise QueryError(f"Unknown KG context: {context_id}")
-        if not self.contexts and context_id != "base":
-            raise QueryError(f"Unknown KG context: {context_id}")
-        return context_id
+        return resolve_context_id(self.contexts, requested, self.default_context)
 
     def _graph(self, context_id: str) -> dict[str, Any]:
         if context_id not in self._graphs:
             try:
+                from .items_pack import read_kg_pack
+
                 self._graphs[context_id] = read_kg_pack(self.schema_path, context_id)
             except ValueError as exc:
                 raise QueryError(str(exc)) from exc
