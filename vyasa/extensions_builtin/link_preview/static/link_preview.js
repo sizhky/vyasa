@@ -23,13 +23,12 @@ function inferCurrentPath() {
 }
 
 function positionPopover(popover, point) {
-    const width = Math.min(384, Math.max(240, window.innerWidth - 24));
     const height = Math.min(420, Math.max(220, window.innerHeight - 24));
+    popover.style.height = `${height}px`;
+    const width = popover.getBoundingClientRect().width;
     const left = Math.min(point.clientX + 18, window.innerWidth - width - 12);
     const top = Math.min(point.clientY + 18, window.innerHeight - height - 12);
     Object.assign(popover.style, {
-        width: `${width}px`,
-        height: `${height}px`,
         left: `${Math.max(12, left)}px`,
         top: `${Math.max(12, top)}px`,
     });
