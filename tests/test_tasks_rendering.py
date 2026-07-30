@@ -1033,6 +1033,23 @@ def test_tasks_group_hover_tooltip_wraps_long_values_inside_max_width():
     assert "fontSize: `calc(${hoverFontSize} * 1.12)`" in source
 
 
+def test_tasks_group_hover_uses_side_card_stats_for_hover_attrs():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    script = """
+        import { tasksGroupHoverAttrRows } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        const rows = tasksGroupHoverAttrRows(
+            [],
+            [{ key: 'range:tokens', label: 'Tokens', value: '5 ≤ Tokens (μ 42) ≤ 88' }],
+            ['tokens'],
+        );
+        if (rows.length !== 1 || rows[0].value !== '5 ≤ Tokens (μ 42) ≤ 88') {
+            throw new Error(`group hover lost side-card stats: ${JSON.stringify(rows)}`);
+        }
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+    assert "tasksGroupHoverAttrRows(directRows, tasksGroupDetailEntries(hoverGroupId, model), activeHoverAttrs)" in source
+
+
 def test_highlighted_edges_and_arrowheads_render_below_node_cards():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
