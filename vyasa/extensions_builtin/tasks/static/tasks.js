@@ -6150,10 +6150,11 @@ async function renderTasksGraphs(rootElement = document) {
                     const onKeyDown = (event) => {
                         if (shortcutsSuspended()) return;
                         if (event.defaultPrevented || event.repeat) return;
-                        if (event.metaKey || event.ctrlKey || event.altKey) return;
-                        const flowWrapper = flowWrapperRef.current;
                         const target = event.target instanceof Element ? event.target : null;
                         const key = event.key.toLowerCase();
+                        const optionZoom = event.altKey && !event.shiftKey && (key === 'arrowup' || key === 'arrowdown');
+                        if (event.metaKey || event.ctrlKey || (event.altKey && !optionZoom)) return;
+                        const flowWrapper = flowWrapperRef.current;
                         const widgetFocused = wrapper.contains(document.activeElement) || wrapper.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
                         if ((event.key === 'Escape' || key === 'g') && window.__vyasaTasksDebug.enabled) {
                             logTasksDebug('shortcutKeydown', {
@@ -6276,6 +6277,12 @@ async function renderTasksGraphs(rootElement = document) {
                             pendingFitActionRef.current = 'shortcut';
                             setExpanded(new Set());
                             logTasksDebug('shortcutCollapseAll');
+                            return;
+                        }
+                        if (optionZoom) {
+                            event.preventDefault();
+                            if (key === 'arrowup') reactFlow.zoomIn({ duration: 120 });
+                            else reactFlow.zoomOut({ duration: 120 });
                             return;
                         }
                         if (key === 'arrowup') {
@@ -8349,6 +8356,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('T', 'toggle hovered group'),
                     row('I / O', 'expand / collapse one depth'),
                     row('U / P', 'unfold / collapse all'),
+                    row('Option + ↑ / ↓', 'zoom in / out'),
                     row('Arrows', 'pan'),
                     row('Shift + arrows', 'pan faster')
                 ));

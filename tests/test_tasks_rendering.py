@@ -1125,6 +1125,15 @@ def test_alt_shift_drag_appends_to_existing_selection():
     assert "row('Alt + Shift + drag', 'append lasso selection')" in source
 
 
+def test_option_vertical_arrows_zoom_the_canvas():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const optionZoom = event.altKey && !event.shiftKey && (key === 'arrowup' || key === 'arrowdown');" in source
+    assert "if (key === 'arrowup') reactFlow.zoomIn({ duration: 120 });" in source
+    assert "else reactFlow.zoomOut({ duration: 120 });" in source
+    assert "row('Option + ↑ / ↓', 'zoom in / out')" in source
+
+
 def test_tasks_g_shortcuts_open_ego_views():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
