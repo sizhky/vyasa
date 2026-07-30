@@ -523,6 +523,7 @@ def test_tasks_source_supports_local_card_notes():
     assert "nodeNotes" in source
     assert "const noteTextareaRef = React.useRef(null);" in source
     assert "setNoteInputValue(event.target.value)" in source
+    assert "event.currentTarget.blur();" in source
     assert "textarea.style.height = 'auto';" in source
     assert "textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'" in source
     assert "updateNodeNote(selectedLogicalNodeId, noteInputValue)" in source
@@ -539,9 +540,23 @@ def test_tasks_node_card_width_ignores_note_text_length():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     panel_source = source.split("const SelectedNodePanel = () => {", 1)[1].split("const FilterPanel = () => {", 1)[0]
 
-    assert "const noteMetrics = tasksNoteEditorMetrics(noteInputValue);" in panel_source
+    assert "renderTasksNoteTextarea(React" in panel_source
     assert "const panelWidth = tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries });" in panel_source
-    assert "noteMetrics.width" not in panel_source
+    assert "tasksNoteEditorMetrics(noteInputValue).width" not in panel_source
+
+
+def test_tasks_hover_card_shows_node_notes_textarea():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    tooltip_source = source.split("const GroupHoverTooltipCard = React.useMemo(() => function GroupHoverTooltipCard({", 1)[1].split("const GroupHoverTooltip = () => {", 1)[0]
+
+    assert "noteValue = ''" in tooltip_source
+    assert "renderTasksNoteTextarea(window.React" in tooltip_source
+    assert "readOnly: !card.sticky" in tooltip_source
+    assert "onNoteChange?.(event.target.value)" in tooltip_source
+    assert "noteValue: nodeNotes[card.nodeId] || ''" in source
+    assert "onNoteChange: (value) => updateNodeNote(card.nodeId, value)" in source
+    assert source.count("GroupHoverTooltip(),") == 2
+    assert "window.React.createElement(GroupHoverTooltip)" not in source
 
 
 def test_tasks_node_card_attr_values_can_be_copied_from_hover_button():

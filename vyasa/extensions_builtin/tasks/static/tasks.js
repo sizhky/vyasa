@@ -3314,6 +3314,42 @@ function tasksNoteEditorMetrics(note, font = '500 12px ui-sans-serif, system-ui,
     };
 }
 
+function renderTasksNoteTextarea(React, options = {}) {
+    const value = String(options.value || '');
+    return React.createElement('textarea', {
+        ref: options.ref,
+        'data-vyasa-task-control': 'true',
+        'aria-label': options.ariaLabel || 'Notes',
+        value,
+        placeholder: 'Notes',
+        readOnly: options.readOnly === true,
+        rows: Math.min(15, tasksNoteEditorMetrics(value).lines),
+        onChange: options.onChange,
+        onKeyDown: (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.blur();
+        },
+        onPointerDown: (event) => event.stopPropagation(),
+        style: {
+            width: '100%',
+            minHeight: '76px',
+            maxHeight: 'calc(1.35em * 15 + 16px)',
+            resize: options.readOnly ? 'none' : 'vertical',
+            overflowY: 'auto',
+            border: '1px solid color-mix(in srgb, var(--vyasa-ink) 18%, transparent)',
+            borderRadius: '8px',
+            background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)',
+            color: 'var(--vyasa-ink)',
+            fontSize: '12px',
+            lineHeight: 1.35,
+            padding: '8px',
+            boxSizing: 'border-box',
+        },
+    });
+}
+
 function renderTasksDetailEntries(React, entries, options = {}) {
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '12px', lineHeight: options.lineHeight || 1.35 } },
         ...(entries || []).map((entry, index) => {
@@ -6300,7 +6336,6 @@ async function renderTasksGraphs(rootElement = document) {
                 const panelNodeId = sourceNodeId || selectedNode.id || '';
                 const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
                 const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;
-                const noteMetrics = tasksNoteEditorMetrics(noteInputValue);
                 const panelWidth = tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries });
                 const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));
                 const panelHref = String(selectedNode?.href || '').trim();
@@ -6376,28 +6411,10 @@ async function renderTasksGraphs(rootElement = document) {
                                     style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: 'inherit', padding: '0', lineHeight: 1, opacity: 0.45, display: 'flex', alignItems: 'center' },
                                 }, '×') : null,
                             ),
-                            React.createElement('textarea', {
+                            renderTasksNoteTextarea(React, {
                                 ref: noteTextareaRef,
-                                'data-vyasa-task-control': 'true',
                                 value: noteInputValue,
-                                placeholder: 'Notes',
-                                rows: Math.min(15, noteMetrics.lines),
                                 onChange: (event) => setNoteInputValue(event.target.value),
-                                style: {
-                                    width: '100%',
-                                    minHeight: '76px',
-                                    maxHeight: 'calc(1.35em * 15 + 16px)',
-                                    resize: 'none',
-                                    overflowY: 'hidden',
-                                    border: '1px solid color-mix(in srgb, var(--vyasa-ink) 18%, transparent)',
-                                    borderRadius: '8px',
-                                    background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)',
-                                    color: 'var(--vyasa-ink)',
-                                    fontSize: '12px',
-                                    lineHeight: 1.35,
-                                    padding: '8px',
-                                    boxSizing: 'border-box',
-                                },
                             })
                         )
                     )
@@ -8129,7 +8146,13 @@ async function renderTasksGraphs(rootElement = document) {
                     },
                 }, '×');
             };
-            const GroupHoverTooltipCard = ({ card, stickyIndex = -1, inViewportPortal = false }) => {
+            const GroupHoverTooltipCard = React.useMemo(() => function GroupHoverTooltipCard({
+                card,
+                noteValue = '',
+                onNoteChange,
+                stickyIndex = -1,
+                inViewportPortal = false,
+            }) {
                 const tooltipRef = window.React.useRef(null);
                 const [measuredSize, setMeasuredSize] = window.React.useState({ width: 0, height: 0 });
                 const viewport = typeof rf.useViewport === 'function' ? rf.useViewport() : { zoom: 1 };
@@ -8201,6 +8224,25 @@ async function renderTasksGraphs(rootElement = document) {
                     style: { marginTop: '5px', marginBottom: rows.length ? '5px' : 0, fontSize: hoverFontSize, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, overflowWrap: 'anywhere', wordBreak: 'break-word' },
                 }, card.nodeId));
                 if (rows.length) children.push(renderTasksDetailEntries(window.React, rows, { fontSize: hoverFontSize, lineHeight: 1.35, currentPath: sourceModel?.document_path || '' }));
+                children.push(window.React.createElement('label', {
+                    key: '__notes__',
+                    style: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                        marginTop: '10px',
+                        paddingTop: '10px',
+                        borderTop: '1px dashed color-mix(in srgb, currentColor 18%, transparent)',
+                    },
+                },
+                    window.React.createElement('span', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.7 } }, 'Notes'),
+                    renderTasksNoteTextarea(window.React, {
+                        value: noteValue,
+                        readOnly: !card.sticky,
+                        ariaLabel: `Notes for ${card.label || card.nodeId}`,
+                        onChange: card.sticky ? (event) => onNoteChange?.(event.target.value) : undefined,
+                    })
+                ));
                 return window.React.createElement('div', {
                     ref: tooltipRef,
                     'data-vyasa-hover-card-sticky': card.sticky ? 'true' : undefined,
@@ -8229,12 +8271,14 @@ async function renderTasksGraphs(rootElement = document) {
                         padding: '12px',
                     },
                 }, ...children);
-            };
+            }, [dismissStickyHoverCard, hoverFontSize, rf, sourceModel]);
             const GroupHoverTooltip = () => {
                 if (!hoverCardsEnabled) return null;
                 const stickyCards = stickyGroupHoverTooltips.map((card, index) => window.React.createElement(GroupHoverTooltipCard, {
                     key: card.stickyId,
                     card,
+                    noteValue: nodeNotes[card.nodeId] || '',
+                    onNoteChange: (value) => updateNodeNote(card.nodeId, value),
                     stickyIndex: index,
                     inViewportPortal: Boolean(rf.ViewportPortal),
                 }));
@@ -8244,6 +8288,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const transientCard = groupHoverTooltip ? window.React.createElement(GroupHoverTooltipCard, {
                     key: '__transient__',
                     card: groupHoverTooltip,
+                    noteValue: nodeNotes[groupHoverTooltip.nodeId] || '',
                 }) : null;
                 const transientLayer = hoverCardRightRail ? window.React.createElement('div', {
                     style: {
@@ -8509,7 +8554,7 @@ async function renderTasksGraphs(rootElement = document) {
                     RightRail(),
                     window.React.createElement(EgoNeighborControl),
                     window.React.createElement(HelpPopup),
-                    window.React.createElement(GroupHoverTooltip),
+                    GroupHoverTooltip(),
                     window.React.createElement(DragSelectionOverlay)
                 ))
             ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
@@ -8530,7 +8575,7 @@ async function renderTasksGraphs(rootElement = document) {
                     RightRail(),
                     window.React.createElement(EgoNeighborControl),
                     window.React.createElement(HelpPopup),
-                    window.React.createElement(GroupHoverTooltip),
+                    GroupHoverTooltip(),
                     window.React.createElement(DragSelectionOverlay)
                 )
             );
