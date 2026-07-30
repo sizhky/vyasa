@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import html
 import re
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from starlette.responses import Response
 
@@ -81,6 +81,7 @@ def _resolve_preview_file(slug: str):
 
 def render_link_preview_html(*, href: str, current_path: str | None = None) -> str | None:
     slug, fragment = _normalize_preview_slug(href, current_path)
+    symbol = str(parse_qs(urlsplit(href or "").query).get("symbol", [""])[0]).strip()
     if not slug:
         return None
     file_path = _resolve_preview_file(slug)
@@ -88,7 +89,13 @@ def render_link_preview_html(*, href: str, current_path: str | None = None) -> s
         return None
     source = file_path.read_text(encoding="utf-8", errors="replace")
     if file_path.suffix.lower() == ".md":
-        section = _extract_markdown_section_text(source, fragment) if fragment else _default_section_markdown(source)
+        section = (
+            _extract_markdown_section_text(source, fragment)
+            if fragment
+            else _strip_leading_frontmatter_block(source).strip()
+            if symbol
+            else _default_section_markdown(source)
+        )
         if not section and fragment:
             section = _default_section_markdown(source)
         if not section:

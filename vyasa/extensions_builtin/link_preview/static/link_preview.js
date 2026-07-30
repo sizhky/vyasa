@@ -4,6 +4,7 @@ import {
     linkPreviewPointerGeometry,
     resizeLinkPreviewRect,
 } from './link_preview_geometry.js';
+import { linkPreviewSymbolMatch } from './link_preview_target.js';
 
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 let hoveredLink = null;
@@ -208,12 +209,36 @@ function createPreviewView({ point, link, onClose }) {
             content.innerHTML = html;
             const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
             if (relativePath) sourceLabel.textContent = relativePath;
+            requestAnimationFrame(() => scrollLinkPreviewToSymbol(content, link.getAttribute('href') || ''));
             schedulePointerRefresh();
         },
     };
     previewViews.add(view);
     updatePointer();
     return view;
+}
+
+function scrollLinkPreviewToSymbol(content, href) {
+    const body = content.querySelector('.vyasa-link-preview-body');
+    if (!body) return;
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) {
+        if (walker.currentNode.textContent) textNodes.push(walker.currentNode);
+    }
+    const match = linkPreviewSymbolMatch(href, textNodes.map((node) => node.textContent));
+    if (!match) return;
+    if (match.chunkIndex < 0) {
+        if (match.kind.toLocaleLowerCase() === 'file') body.scrollTop = 0;
+        return;
+    }
+    const node = textNodes[match.chunkIndex];
+    const range = document.createRange();
+    range.setStart(node, match.start);
+    range.setEnd(node, match.end);
+    const matchRect = range.getBoundingClientRect();
+    const bodyRect = body.getBoundingClientRect();
+    body.scrollTop += matchRect.top - bodyRect.top - Math.max(0, (body.clientHeight - matchRect.height) / 2);
 }
 
 async function fetchPreview({ href, currentPath, signal }) {

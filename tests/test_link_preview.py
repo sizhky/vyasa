@@ -80,6 +80,30 @@ def test_link_preview_refreshes_pointer_during_canvas_pan():
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
+def test_link_preview_finds_symbol_position_from_link_query():
+    source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
+    script = """
+        import { linkPreviewSymbolMatch } from './vyasa/extensions_builtin/link_preview/static/link_preview_target.js';
+        const match = linkPreviewSymbolMatch(
+            '/posts/src/kitchen/story.md?symbol=story&kind=File',
+            ['Introduction', 'The Supply Chain Planner\\'s Story'],
+        );
+        if (match?.chunkIndex !== 1 || match?.start !== 27 || match?.kind !== 'File') {
+            throw new Error(`wrong symbol match: ${JSON.stringify(match)}`);
+        }
+        const exact = linkPreviewSymbolMatch(
+            '/posts/code.py?symbol=run&kind=Function',
+            ['runner', 'function run()'],
+        );
+        if (exact?.chunkIndex !== 1 || exact?.start !== 9) {
+            throw new Error(`exact symbol match lost: ${JSON.stringify(exact)}`);
+        }
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+    assert "scrollLinkPreviewToSymbol(content, link.getAttribute('href') || '')" in source
+    assert "body.scrollTop += matchRect.top - bodyRect.top" in source
+
+
 def test_link_preview_resizes_from_each_edge():
     script = """
         import { resizeLinkPreviewRect } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';
@@ -111,6 +135,19 @@ def test_link_preview_renders_unknown_extension_as_escaped_text(tmp_path, monkey
 
     assert result is not None
     assert '<pre class="vyasa-link-preview-plain-text">&lt;node&gt;value&lt;/node&gt;</pre>' in result
+
+
+def test_link_preview_renders_full_markdown_for_symbol_position(tmp_path, monkeypatch):
+    source = tmp_path / "sample.md"
+    source.write_text("# Start\n\nOpening.\n\n# Later\n\nRun the target.")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "sample.md")
+
+    result = routes.render_link_preview_html(href="sample.md?symbol=target&kind=Function")
+
+    assert result is not None
+    assert "Opening." in result
+    assert "Run the target." in result
 
 
 def test_link_preview_stack_keeps_nested_previews_until_each_is_closed():
