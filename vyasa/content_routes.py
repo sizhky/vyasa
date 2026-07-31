@@ -351,7 +351,7 @@ def render_post_detail(path, htmx, request, *, get_root_folder, effective_abbrev
         error_toast if error_toast else Div(),
         error_script if error_script else Div(),
         *action_aux_nodes,
-        content,
+        Div(content, data_vyasa_document_body="true", cls="w-full"),
         pager if pager else Div(),
     )
     layout_start = time.time()
@@ -643,7 +643,7 @@ def render_index(htmx, request, *, get_blog_title, find_index_file_fn, parse_fro
         page_content = Div(
             document_header(page_title, render_content, actions=document_actions, file_path=index_file),
             *action_aux_nodes,
-            from_md(render_content, current_path=index_path),
+            Div(from_md(render_content, current_path=index_path), data_vyasa_document_body="true", cls="w-full"),
         )
         result = DocumentPage(page_title, index_path, page_content, toc_source=raw_content).render(layout, htmx=htmx, blog_title=blog_title, auth=request.scope.get("auth"))
         if logger:

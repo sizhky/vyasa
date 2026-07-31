@@ -148,10 +148,13 @@ def cli():
     parser.add_argument('--theme-debug', action='store_true', help='Show runtime theme preset switcher for debugging')
     parser.add_argument('--log-file', action='store_true', help='Write DEBUG logs to vyasa.log')
     parser.add_argument('--feedback', action='store_true', help='Enable the feedback extension')
+    parser.add_argument('--edit', action='store_true', help='Let documents be edited from the reading view (off by default)')
     
     args = parser.parse_args()
     if args.feedback:
         os.environ['VYASA_FEEDBACK_CLI'] = 'true'
+    if args.edit:
+        os.environ['VYASA_DOCUMENT_EDIT'] = 'true'
     
     # Set root folder from arguments or environment
     if args.directory:

@@ -455,6 +455,18 @@ class VyasaConfig:
             return value.lower() in ('true', '1', 'yes', 'on')
         return bool(value)
 
+    def get_document_edit(self) -> bool:
+        """Get whether documents may be edited from the reading view.
+
+        Off unless asked for: the `document_edit` flag in `.vyasa`, the
+        `VYASA_DOCUMENT_EDIT` environment variable, or `--edit` on the command
+        line. Any one of the three turns it on.
+        """
+        value = self.get('document_edit', 'VYASA_DOCUMENT_EDIT', False)
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes', 'on')
+        return bool(value)
+
     def get_table_col_max_width(self) -> str | None:
         """Get the default maximum width for rendered table cells."""
         value = self.get('table_col_max_width', 'VYASA_TABLE_COL_MAX_WIDTH', '45vw')

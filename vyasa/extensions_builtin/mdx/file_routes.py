@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
-import tempfile
 from urllib.parse import unquote
 
 from starlette.responses import FileResponse, Response
 
 from ...runtime_services import get_runtime_services
 from ...api_catalog import publish_api
+from ...helpers import atomic_write_bytes as _atomic_write_bytes, is_local_request as _is_local_request
 
 
 _REF_QUERY = ({"name": "ref", "required": True, "description": "Content-root-safe sidecar path"},)
@@ -109,9 +109,6 @@ def _inside_content_roots(path: Path, mounts) -> bool:
     return False
 
 
-def _is_local_request(request) -> bool:
-    host = getattr(getattr(request, "client", None), "host", "")
-    return host in {"127.0.0.1", "::1", "localhost", ""}
 
 
 def _readonly() -> bool:
@@ -121,16 +118,3 @@ def _readonly() -> bool:
 def _edits_enabled() -> bool:
     return not _readonly()
 
-
-def _atomic_write_bytes(path: Path, payload: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
-    try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(payload)
-        os.replace(tmp_name, path)
-    finally:
-        try:
-            os.unlink(tmp_name)
-        except FileNotFoundError:
-            pass
