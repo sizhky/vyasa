@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import html
 import re
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from starlette.responses import Response
 
@@ -12,7 +12,6 @@ from ...helpers import (
     content_path_for_slug,
     content_slug_for_path,
     find_folder_note_file,
-    resolve_markdown_title,
 )
 from ..markdown.renderer import from_md
 
@@ -74,32 +73,41 @@ def _resolve_preview_file(slug: str):
     file_path = content_path_for_slug(slug, ".md")
     if file_path and file_path.exists():
         return file_path
-    folder_path = content_path_for_slug(slug)
-    if folder_path and folder_path.exists() and folder_path.is_dir():
-        return find_folder_note_file(folder_path)
+    raw_path = content_path_for_slug(slug)
+    if raw_path and raw_path.exists():
+        return find_folder_note_file(raw_path) if raw_path.is_dir() else raw_path
     return None
 
 
 def render_link_preview_html(*, href: str, current_path: str | None = None) -> str | None:
     slug, fragment = _normalize_preview_slug(href, current_path)
+    symbol = str(parse_qs(urlsplit(href or "").query).get("symbol", [""])[0]).strip()
     if not slug:
         return None
     file_path = _resolve_preview_file(slug)
     if not file_path or not file_path.exists():
         return None
-    source = file_path.read_text(encoding="utf-8")
-    section = _extract_markdown_section_text(source, fragment) if fragment else _default_section_markdown(source)
-    if not section and fragment:
-        section = _default_section_markdown(source)
-    if not section:
-        return None
-    page_slug = content_slug_for_path(file_path) or slug
-    preview_html = from_md(section, current_path=page_slug)
-    title, _ = resolve_markdown_title(file_path)
+    source = file_path.read_text(encoding="utf-8", errors="replace")
+    if file_path.suffix.lower() == ".md":
+        section = (
+            _extract_markdown_section_text(source, fragment)
+            if fragment
+            else _strip_leading_frontmatter_block(source).strip()
+            if symbol
+            else _default_section_markdown(source)
+        )
+        if not section and fragment:
+            section = _default_section_markdown(source)
+        if not section:
+            return None
+        page_slug = content_slug_for_path(file_path) or slug
+        preview_html = from_md(section, current_path=page_slug)
+    else:
+        preview_html = f'<pre class="vyasa-link-preview-plain-text">{html.escape(source)}</pre>'
+    relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
     return (
-        '<div class="vyasa-link-preview-shell">'
-        f'<div class="vyasa-link-preview-source text-[10px] font-semibold uppercase tracking-[0.18em]">'
-        f'{html.escape(title)}</div>'
+        f'<div class="vyasa-link-preview-shell" data-relative-path="{html.escape(relative_path, quote=True)}" '
+        f'data-absolute-path="{html.escape(str(file_path.resolve()), quote=True)}">'
         f'<div class="vyasa-link-preview-body">{preview_html}</div>'
         '</div>'
     )

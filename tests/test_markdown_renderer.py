@@ -127,6 +127,26 @@ def test_relative_markdown_link_preserves_fragment():
     assert 'href="/posts/docs/glossary%23goal"' not in html
 
 
+def test_kg_label_link_keeps_multi_root_alias(monkeypatch, tmp_path):
+    from vyasa import helpers, markdown_fence
+
+    primary = tmp_path / "primary"
+    mounted = tmp_path / "divami-agents"
+    primary.mkdir()
+    mounted.mkdir()
+    kg_dir = mounted / "tmp" / "daksh-instruction-files.kg"
+    kg_dir.mkdir(parents=True)
+    mounts = [("", primary), ("divami-agents", mounted)]
+    monkeypatch.setattr(helpers, "get_content_mounts", lambda: mounts)
+    monkeypatch.setattr(markdown_fence, "get_content_mounts", lambda: mounts)
+    monkeypatch.setattr(markdown_fence, "get_root_folder", lambda: primary)
+    model = {"tasks": [{"label": "[Route](../../skills/daksh/instructions/knowledge-graph/relations/route)"}]}
+
+    markdown_fence.normalize_items_model_hrefs(model, "divami-agents/tmp/daksh-instruction-files.kg")
+
+    assert model["tasks"][0]["label"] == "[Route](/posts/divami-agents/skills/daksh/instructions/knowledge-graph/relations/route)"
+
+
 def test_internal_file_link_escapes_main_content_htmx_boost():
     html = to_xml(from_md("[PDF](/posts/library/guide.pdf)"))
 

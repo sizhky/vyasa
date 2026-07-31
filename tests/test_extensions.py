@@ -347,6 +347,20 @@ def test_internal_links_request_preview_bundle_and_keep_current_path():
     assert "link_preview.runtime" in collector.requested
 
 
+def test_tasks_request_link_preview_runtime():
+    runtime = build_extension_runtime({})
+    previous = get_extension_runtime()
+    set_extension_runtime(runtime)
+    collector = runtime.new_asset_collector()
+    try:
+        from_md("```tasks\n- [Open](/posts/doc)\n```", current_path="graph", asset_collector=collector, emit_bundle_nodes=False)
+    finally:
+        set_extension_runtime(previous)
+
+    assert "tasks.runtime" in collector.requested
+    assert "link_preview.runtime" in collector.requested
+
+
 def test_link_preview_renders_one_section(tmp_path, monkeypatch):
     root = tmp_path / "site"
     root.mkdir()
@@ -357,6 +371,7 @@ def test_link_preview_renders_one_section(tmp_path, monkeypatch):
     try:
         html = render_link_preview_html(href="#keep-me", current_path="doc")
         assert html is not None
+        assert "vyasa-link-preview-source" not in html
         assert "Keep Me" in html
         assert "alpha" in html
         assert "Skip Me" not in html

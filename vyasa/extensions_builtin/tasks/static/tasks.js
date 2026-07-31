@@ -1,7 +1,7 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
-import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
+import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksGroupHoverAttrRows, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
 import { shortcutsSuspended } from '/static/page_shell.js';
@@ -52,6 +52,10 @@ const TASKS_EDGE_OPACITY_MIN = 0.05;
 const TASKS_EDGE_OPACITY_MAX = 1;
 const TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT = 0.25;
 const TASKS_GRAPH_MIN_ZOOM = 0.05;
+const TASKS_NODE_CONNECTION_HANDLES = {
+    source: ['top', 'right', 'bottom', 'left'].flatMap((side) => [0, 1, 2].map((index) => ({ id: `source-${side}-${index}`, side, offsetPct: 50 }))),
+    target: ['top', 'right', 'bottom', 'left'].flatMap((side) => [0, 1, 2].map((index) => ({ id: `target-${side}-${index}`, side, offsetPct: 50 }))),
+};
 // Do NOT reach for React Flow's onlyRenderVisibleElements here: group children
 // carry parentId-relative positions, so its visibility test culls them at the
 // wrong absolute coords and nodes vanish when zoomed out.
@@ -407,6 +411,27 @@ function tasksTaperedArrowHeadPath(bezierPath, size) {
         `L ${baseX - nx * arrowWidth / 2} ${baseY - ny * arrowWidth / 2}`,
         'Z',
     ].join(' ');
+}
+
+function tasksEdgeIsMixed(props) {
+    const horizontal = (position) => position === 'left' || position === 'right';
+    return horizontal(props.sourcePosition) !== horizontal(props.targetPosition);
+}
+
+function tasksEdgePath(props) {
+    const distance = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY);
+    const stub = Math.max(56, distance * 0.45);
+    const shift = (x, y, position) => ({
+        x: x + (position === 'left' ? -stub : position === 'right' ? stub : 0),
+        y: y + (position === 'top' ? -stub : position === 'bottom' ? stub : 0),
+    });
+    const sourceStub = shift(props.sourceX, props.sourceY, props.sourcePosition);
+    const targetStub = shift(props.targetX, props.targetY, props.targetPosition);
+    return [
+        `M ${props.sourceX} ${props.sourceY} C ${sourceStub.x} ${sourceStub.y} ${targetStub.x} ${targetStub.y} ${props.targetX} ${props.targetY}`,
+        (props.sourceX + 3 * sourceStub.x + 3 * targetStub.x + props.targetX) / 8,
+        (props.sourceY + 3 * sourceStub.y + 3 * targetStub.y + props.targetY) / 8,
+    ];
 }
 
 function tasksIsIconifyImage(url) {
@@ -1180,6 +1205,10 @@ function buildTasksCollapsedGraph(model) {
         order.push(groupId);
         queue.push(...(groupTree[groupId] || []));
     }
+    for (const task of model.tasks || []) {
+        if (task.group_id !== null && task.group_id !== undefined) continue;
+        nodes.push({ id: task.id, label: task.label || task.id, href: task.href, kind: 'task', collapsed: true, x: 80, y: 80, width: 220, height: 60 });
+    }
     order.forEach((groupId, index) => {
         const group = groupsById[groupId] || {};
         nodes.push({
@@ -1196,10 +1225,6 @@ function buildTasksCollapsedGraph(model) {
             child_task_ids: taskChildren[groupId] || [],
         });
     });
-    for (const task of model.tasks || []) {
-        if (task.group_id !== null && task.group_id !== undefined) continue;
-        nodes.push({ id: task.id, label: task.label || task.id, href: task.href, kind: 'task', collapsed: true, x: 80, y: 80, width: 220, height: 60 });
-    }
     const collapsedOwner = (taskId) => {
         let cur = taskToGroup[taskId] || null;
         let owner = null;
@@ -2599,15 +2624,15 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
     }).height;
     const groupPadTop = groupPadding + groupTitleHeight;
     const groupChildren = [
-        ...(model.group_tree?.[groupId] || []).map((id) => {
-            const source = groupsById[id] || {};
-            const label = source.label || id;
-            return { id, __kind__: 'group', label, ...sizeTaskNode(label, 'group', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
-        }),
         ...(model.task_children?.[groupId] || []).map((id) => {
             const source = tasksById[id] || {};
             const label = source.label || id;
             return { id, __kind__: 'task', label, ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
+        }),
+        ...(model.group_tree?.[groupId] || []).map((id) => {
+            const source = groupsById[id] || {};
+            const label = source.label || id;
+            return { id, __kind__: 'group', label, ...sizeTaskNode(label, 'group', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
         }),
     ].map((child) => childSizes[child.id] ? { ...child, ...childSizes[child.id] } : child);
     if (groupChildren.length === 0) {
@@ -2616,6 +2641,33 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
             bbox: { width: 250, height: 80 },
         };
     }
+    const compactGroupChildren = (positions, beforeBbox) => {
+        const order = [...groupChildren]
+            .sort((left, right) => (
+                (left.__kind__ === right.__kind__ ? 0 : (left.__kind__ === 'task' ? -1 : 1))
+                || ((positions[left.id]?.y || 0) - (positions[right.id]?.y || 0))
+                || ((positions[left.id]?.x || 0) - (positions[right.id]?.x || 0))
+            ))
+            .map((child) => child.id);
+        const compacted = packTaskChildRects(positions, {
+            gap: Math.max(12, Math.min(layoutConfig.nodeSpacing || 72, 36)),
+            padX: groupPadding,
+            padTop: groupPadTop,
+            padBottom: groupPadding,
+            minWidth: 250,
+            minHeight: 80,
+            targetAspectRatio: 1.05,
+            order,
+        });
+        logTasksDebugVerbose('groupPacking', {
+            groupId,
+            before: rectSummary(beforeBbox),
+            after: rectSummary(compacted.bbox),
+            rows: compacted.rows,
+            positions: Object.fromEntries(Object.entries(compacted.positions).map(([id, rect]) => [id, rectSummary(rect)])),
+        });
+        return compacted;
+    };
     const childIds = new Set(groupChildren.map((child) => child.id));
     const childEdges = reduceTransitiveEdges((model.dependency_edges || [])
         .filter((edge) => childIds.has(edge.source) && childIds.has(edge.target)));
@@ -2646,13 +2698,10 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
                 height: child.height || 0,
             };
         }
-        return {
-            positions,
-            bbox: {
-                width: Math.max(elkLayout.width || 0, 250),
-                height: Math.max(elkLayout.height || 0, 80),
-            },
-        };
+        return compactGroupChildren(positions, {
+            width: Math.max(elkLayout.width || 0, 250),
+            height: Math.max(elkLayout.height || 0, 80),
+        });
     }
     const packedLayout = layoutDisconnectedTaskNodes(groupChildren, groupDirection, {
         gap: Math.max(layoutConfig.nodeSpacing || 72, layoutConfig.layerSpacing || 112),
@@ -2671,13 +2720,10 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
             height: child.height || 0,
         };
     }
-    return {
-        positions,
-        bbox: {
-            width: Math.max(packedLayout.bbox.width || 0, 250),
-            height: Math.max(packedLayout.bbox.height || 0, 80),
-        },
-    };
+    return compactGroupChildren(positions, {
+        width: Math.max(packedLayout.bbox.width || 0, 250),
+        height: Math.max(packedLayout.bbox.height || 0, 80),
+    });
 }
 
 async function layoutExpandedGroups(model, expandedSet, jitterConfig = {}, layoutConfig = {}, useElkForGroups = true) {
@@ -3066,33 +3112,61 @@ function openTasksNodeHref(href, event = null) {
     window.location.assign(href);
 }
 
+function tasksHrefSupportsPreview(href) {
+    const text = String(href || '').trim();
+    if (!text || /^(https?:|mailto:|tel:|vscode:|\/\/)/.test(text)) return false;
+    if (text.startsWith('#') || text.startsWith('/posts/')) return true;
+    if (text.startsWith('/')) return !text.split('/').pop().includes('.');
+    return true;
+}
+
 function renderTasksInlineLinks(value, options = {}) {
     const text = String(value || '');
     const interactive = options.interactive !== false;
     const onInactiveClick = typeof options.onInactiveClick === 'function' ? options.onInactiveClick : null;
+    const currentPath = String(options.currentPath || '').trim();
     const parts = [];
+    const linkPart = (label, href, key) => interactive
+        ? window.React.createElement('a', {
+            key,
+            href,
+            'data-vyasa-link-preview': tasksHrefSupportsPreview(href) ? 'true' : undefined,
+            'data-vyasa-link-preview-current-path': currentPath || undefined,
+            onClick: (event) => openTasksNodeHref(href, event),
+            style: { textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit' },
+        }, label)
+        : window.React.createElement('span', {
+            key,
+            onClick: onInactiveClick || undefined,
+            style: { textDecoration: 'none', color: 'inherit' },
+        }, label);
+    const appendText = (plain, offset) => {
+        const pattern = /(^|\s)(https?:\/\/[^\s)]+|mailto:[^\s)]+|\/posts\/[^\s)]+|\/[^\s)]+\.[^\s)]+|(?:\.\.?\/)[^\s)]+|#[A-Za-z0-9._:-]+)/g;
+        let cursor = 0;
+        let raw;
+        while ((raw = pattern.exec(plain)) !== null) {
+            if (raw.index > cursor) parts.push(plain.slice(cursor, raw.index));
+            if (raw[1]) parts.push(raw[1]);
+            parts.push(linkPart(raw[2], raw[2], `raw-${offset + raw.index}`));
+            cursor = pattern.lastIndex;
+        }
+        if (cursor < plain.length) parts.push(plain.slice(cursor));
+    };
     const pattern = /\[([^\]]+)\]\(([^)\s]+(?:\s[^)]*)?)\)/g;
     let lastIndex = 0;
     let match;
     while ((match = pattern.exec(text)) !== null) {
-        if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+        if (match.index > lastIndex) appendText(text.slice(lastIndex, match.index), lastIndex);
         const [, label, href] = match;
-        parts.push(interactive
-            ? window.React.createElement('a', {
-                key: `${href}-${match.index}`,
-                href,
-                onClick: (event) => openTasksNodeHref(href, event),
-                style: { textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit' },
-            }, label)
-            : window.React.createElement('span', {
-                key: `${href}-${match.index}`,
-                onClick: onInactiveClick || undefined,
-                style: { textDecoration: 'none', color: 'inherit' },
-            }, label));
+        parts.push(linkPart(label, href, `${href}-${match.index}`));
         lastIndex = pattern.lastIndex;
     }
-    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    if (lastIndex < text.length) appendText(text.slice(lastIndex), lastIndex);
     return parts.length ? parts : text;
+}
+
+function tasksInlineLinkPlainText(value) {
+    return String(value || '').replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1');
 }
 
 function tasksValueContainsUrl(value) {
@@ -3207,7 +3281,7 @@ function tasksDetailPanelWidth(options = {}) {
     const titleFont = options.titleFont || '700 14px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     const bodyFont = options.bodyFont || '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     const keyFont = options.keyFont || '700 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    const titleWidth = measureTextWidth(title, titleFont);
+    const titleWidth = measureTextWidth(tasksInlineLinkPlainText(title), titleFont);
     const idWidth = nodeId ? measureTextWidth(nodeId, bodyFont) + 20 : 0;
     const rowWidths = entries.map((entry) => {
         const keyWidth = measureTextWidth(entry?.label || '', keyFont);
@@ -3222,7 +3296,10 @@ function tasksDetailPanelWidth(options = {}) {
     }).sort((left, right) => left - right);
     const weightedWidth = rowWidths.length ? rowWidths[Math.max(0, Math.floor(rowWidths.length * 0.72) - 1)] : 0;
     const imageReserve = options.hasImage ? 34 : 0;
-    return Math.round(Math.min(options.maxWidth || 720, Math.max(options.minWidth || 280, titleWidth + idWidth + imageReserve + 44, weightedWidth + 136)));
+    const headerWidth = options.stackHeader
+        ? Math.max(titleWidth + imageReserve, idWidth) + 44
+        : titleWidth + idWidth + imageReserve + 44;
+    return Math.round(Math.min(options.maxWidth || 720, Math.max(options.minWidth || 280, headerWidth, weightedWidth + 136)));
 }
 
 function tasksNoteEditorMetrics(note, font = '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif') {
@@ -3237,10 +3314,48 @@ function tasksNoteEditorMetrics(note, font = '500 12px ui-sans-serif, system-ui,
     };
 }
 
+function renderTasksNoteTextarea(React, options = {}) {
+    const value = String(options.value || '');
+    return React.createElement('textarea', {
+        ref: options.ref,
+        'data-vyasa-task-control': 'true',
+        'aria-label': options.ariaLabel || 'Notes',
+        value,
+        placeholder: 'Notes',
+        readOnly: options.readOnly === true,
+        rows: Math.min(15, tasksNoteEditorMetrics(value).lines),
+        onChange: options.onChange,
+        onKeyDown: (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.blur();
+        },
+        onPointerDown: (event) => event.stopPropagation(),
+        style: {
+            width: '100%',
+            minHeight: '76px',
+            maxHeight: 'calc(1.35em * 15 + 16px)',
+            resize: options.readOnly ? 'none' : 'vertical',
+            overflowY: 'auto',
+            border: '1px solid color-mix(in srgb, var(--vyasa-ink) 18%, transparent)',
+            borderRadius: '8px',
+            background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)',
+            color: 'var(--vyasa-ink)',
+            fontSize: '12px',
+            lineHeight: 1.35,
+            padding: '8px',
+            boxSizing: 'border-box',
+        },
+    });
+}
+
 function renderTasksDetailEntries(React, entries, options = {}) {
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '12px', lineHeight: options.lineHeight || 1.35 } },
         ...(entries || []).map((entry, index) => {
             const canCopy = options.copyValues && String(entry?.value ?? '').trim();
+            const urls = tasksExtractUrls(entry?.value);
+            const urlOnly = urls.length === 1 && String(entry?.value || '').trim() === urls[0];
             const copyValue = async (event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -3252,7 +3367,9 @@ function renderTasksDetailEntries(React, entries, options = {}) {
                 style: { position: 'relative', paddingTop: index === 0 ? '0' : '8px', paddingRight: canCopy ? '26px' : 0, marginTop: index === 0 ? '0' : '8px', borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)', overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'pre-line' },
             },
             React.createElement('span', { style: { fontWeight: 700, opacity: 0.72, display: 'block', marginBottom: '4px' } }, `${entry.label}:`),
-            entry.renderedValue
+            urlOnly
+                ? React.createElement('span', { className: 'vyasa-task-node-card-value' }, renderTasksInlineLinks(entry.value, { currentPath: options.currentPath }))
+                : entry.renderedValue
                 ? React.createElement('span', { className: 'vyasa-task-node-card-value', dangerouslySetInnerHTML: { __html: entry.renderedValue } })
                 : React.createElement('span', { className: 'vyasa-task-node-card-value' }, entry.value),
             canCopy ? React.createElement('button', {
@@ -3467,12 +3584,15 @@ async function renderTasksGraphs(rootElement = document) {
         const TasksGraphApp = (props) => {
             const React = window.React;
             const Handle = rf.Handle;
+            const NodeToolbar = rf.NodeToolbar;
             const Position = rf.Position;
             const markWidgetActive = React.useCallback(() => {
                 window.__vyasaTasksActiveWidgetId = widgetId;
             }, []);
             const [sourceModel, setSourceModel] = React.useState(() => initialSourceModel);
             const [sourceGraph, setSourceGraph] = React.useState(() => initialSourceGraph);
+            const nodeConnectionExperiment = sourceModel.graph_id === 'kg-node-connection-logic';
+            const showDebugPositions = nodeConnectionExperiment || window.__vyasaTasksDebug.enabled;
             const [egoState, setEgoState] = React.useState(null);
             const egoMode = initialEgoMode || Boolean(egoState);
             const sourcePrefsRef = React.useRef(null);
@@ -3657,6 +3777,12 @@ async function renderTasksGraphs(rootElement = document) {
             const [dragSelection, setDragSelection] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
+            const groupHoverTooltipRef = React.useRef(null);
+            groupHoverTooltipRef.current = groupHoverTooltip;
+            const [stickyGroupHoverTooltips, setStickyGroupHoverTooltips] = React.useState([]);
+            const stickyGroupHoverTooltipsRef = React.useRef([]);
+            stickyGroupHoverTooltipsRef.current = stickyGroupHoverTooltips;
+            const stickyGroupHoverTooltipIdRef = React.useRef(0);
             const [helpOpen, setHelpOpen] = React.useState(false);
             const slides = React.useMemo(() => {
                 const list = Array.isArray(baseProjectionState.model?.slides) ? baseProjectionState.model.slides : [];
@@ -3860,6 +3986,27 @@ async function renderTasksGraphs(rootElement = document) {
             const [queryBuilderReady, setQueryBuilderReady] = React.useState(() => Boolean(window.VyasaTasksQueryBuilder?.QueryBuilder));
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
+            const moveExperimentNodes = React.useCallback((changes) => {
+                if (!nodeConnectionExperiment) return;
+                setNodes((currentNodes) => {
+                    const movedNodes = rf.applyNodeChanges(changes, currentNodes);
+                    const anchored = buildTaskEdgeAnchors(movedNodes, graphBaseRef.current.edges);
+                    const anchoredNodes = movedNodes.map((node) => ({
+                        ...node,
+                        data: {
+                            ...node.data,
+                            handleLayout: TASKS_NODE_CONNECTION_HANDLES,
+                            __debug_position__: {
+                                x: Math.round(node.position.x),
+                                y: Math.round(node.position.y),
+                            },
+                        },
+                    }));
+                    graphBaseRef.current = { nodes: anchoredNodes, edges: anchored.edges };
+                    setEdges(anchored.edges);
+                    return anchoredNodes;
+                });
+            }, [nodeConnectionExperiment]);
             const reviewTargets = React.useMemo(() => [
                 ...nodes
                     .filter((node) => node.data?.highlightMode && !['dim', 'none'].includes(node.data.highlightMode))
@@ -4829,7 +4976,7 @@ async function renderTasksGraphs(rootElement = document) {
                             `vyasa-tasks-node--${hitArea}`,
                             isExpanded ? 'vyasa-tasks-node--expanded-group' : '',
                         ].filter(Boolean).join(' '),
-                        draggable: false,
+                        draggable: nodeConnectionExperiment,
                         selectable: isTasksGraphNodeSelectable(n.__kind__, isExpanded),
                     };
                     if (n.parentId) {
@@ -4905,7 +5052,12 @@ async function renderTasksGraphs(rootElement = document) {
                     ...node,
                     data: {
                         ...node.data,
-                        handleLayout: anchored.nodeHandles[node.id] || { source: [], target: [] },
+                        handleLayout: nodeConnectionExperiment
+                            ? TASKS_NODE_CONNECTION_HANDLES
+                            : (anchored.nodeHandles[node.id] || { source: [], target: [] }),
+                        __debug_position__: showDebugPositions
+                            ? { x: Math.round(absolutePosition(node).x), y: Math.round(absolutePosition(node).y) }
+                            : undefined,
                     },
                 }));
                 graphBaseRef.current = { nodes: anchoredNodes, edges: baseEdges };
@@ -5522,7 +5674,8 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             };
             const CustomEdge = React.memo((props) => {
-                const [path, labelX, labelY] = rf.getBezierPath(props);
+                const mixedEdge = tasksEdgeIsMixed(props);
+                const [path, labelX, labelY] = tasksEdgePath(props);
                 React.useEffect(() => {
                     traceTasksEdge('render', props, {
                         sourceX: props.sourceX,
@@ -5540,14 +5693,14 @@ async function renderTasksGraphs(rootElement = document) {
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
                 const strokeMode = props.data?.strokeMode || highlightMode;
-                const useTaper = !props.animated && ['focused-in', 'focused-out', 'selected', 'selected-in', 'selected-out'].includes(strokeMode);
+                const useTaper = !mixedEdge && !props.animated && ['focused-in', 'focused-out', 'selected', 'selected-in', 'selected-out'].includes(strokeMode);
                 const taperPath = useTaper
                     ? tasksTaperedBezierPath(path, (Number(props.style?.strokeWidth) || 4) * 2.65, Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42))
                     : '';
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
                 const edgeArrowPath = tasksTaperedArrowHeadPath(
                     path,
-                    Math.max(taperPath ? 10 : 8, strokeWidth * (taperPath ? 3.0 : 2.4))
+                    Math.max(10, strokeWidth * 3.0)
                 );
                 const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
                 const prominentLabel = showFullLabel;
@@ -5591,6 +5744,7 @@ async function renderTasksGraphs(rootElement = document) {
                         markerEnd: undefined,
                         style: {
                             ...(props.style || {}),
+                            strokeLinejoin: 'round',
                             stroke: 'var(--vyasa-paper)',
                             strokeWidth: strokeWidth + 8,
                         },
@@ -5701,6 +5855,7 @@ async function renderTasksGraphs(rootElement = document) {
                     'data-vyasa-hover-outline': data?.__hover_outline__ === true ? 'true' : undefined,
                 };
                 const isChecked = data?.__checked__ === true;
+                const debugPosition = data?.__debug_position__;
                 const taskStateLabel = String(data?.__card_state__ || (isChecked ? TASKS_DEFAULT_CARD_STATES[1] : TASKS_DEFAULT_CARD_STATES[0]));
                 const taskStateColor = data?.__card_state_color__ || TASKS_DONE_ACCENT;
                 // Derive selection/hover state from data.highlightMode rather than
@@ -5804,7 +5959,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 overflowWrap: 'anywhere',
                                 wordBreak: 'break-word',
                             }
-                        }, renderNodeImage(20, { marginTop: '1px' }), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(data?.label || data.sourceGroupId || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick }))),
+                        }, renderNodeImage(20, { marginTop: '1px' }), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(data?.label || data.sourceGroupId || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick, currentPath: sourceModel?.document_path || '' }))),
                         egoMode ? null : React.createElement('button', {
                             onClick: handleCollapse,
                             style: { flex: '0 0 auto', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
@@ -5814,7 +5969,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const isGroup = data?.__kind__ === 'group';
                 const canExpand = tasksNodeHasChildren(id, model);
                 const isExpanded = expanded.has(id);
-                const labelContent = renderTasksInlineLinks(data?.label || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick });
+                const labelContent = renderTasksInlineLinks(data?.label || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick, currentPath: sourceModel?.document_path || '' });
                 if (data?.__gantt) {
                     return React.createElement('div', {
                         ...reviewAttrs,
@@ -5968,6 +6123,13 @@ async function renderTasksGraphs(rootElement = document) {
                         'data-vyasa-task-control': 'true',
                         style: { position: 'absolute', right: '8px', top: '8px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
                     }, isExpanded ? '−' : '+'),
+                    NodeToolbar && debugPosition && React.createElement(NodeToolbar, {
+                        isVisible: true,
+                        position: Position.Bottom,
+                        offset: 8,
+                    }, React.createElement('code', {
+                        style: { padding: '3px 6px', borderRadius: '5px', background: 'var(--vyasa-paper)', border: '1px solid color-mix(in srgb, var(--vyasa-ink) 24%, transparent)', fontSize: '11px', whiteSpace: 'nowrap' },
+                    }, `x ${debugPosition.x}, y ${debugPosition.y}`)),
                     ...renderHandles('source')
                 );
             };
@@ -5988,10 +6150,11 @@ async function renderTasksGraphs(rootElement = document) {
                     const onKeyDown = (event) => {
                         if (shortcutsSuspended()) return;
                         if (event.defaultPrevented || event.repeat) return;
-                        if (event.metaKey || event.ctrlKey || event.altKey) return;
-                        const flowWrapper = flowWrapperRef.current;
                         const target = event.target instanceof Element ? event.target : null;
                         const key = event.key.toLowerCase();
+                        const optionZoom = event.altKey && !event.shiftKey && (key === 'arrowup' || key === 'arrowdown');
+                        if (event.metaKey || event.ctrlKey || (event.altKey && !optionZoom)) return;
+                        const flowWrapper = flowWrapperRef.current;
                         const widgetFocused = wrapper.contains(document.activeElement) || wrapper.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
                         if ((event.key === 'Escape' || key === 'g') && window.__vyasaTasksDebug.enabled) {
                             logTasksDebug('shortcutKeydown', {
@@ -6116,6 +6279,12 @@ async function renderTasksGraphs(rootElement = document) {
                             logTasksDebug('shortcutCollapseAll');
                             return;
                         }
+                        if (optionZoom) {
+                            event.preventDefault();
+                            if (key === 'arrowup') reactFlow.zoomIn({ duration: 120 });
+                            else reactFlow.zoomOut({ duration: 120 });
+                            return;
+                        }
                         if (key === 'arrowup') {
                             event.preventDefault();
                             panViewport(reactFlow, 0, 120 * (event.shiftKey ? 2 : 1));
@@ -6174,7 +6343,6 @@ async function renderTasksGraphs(rootElement = document) {
                 const panelNodeId = sourceNodeId || selectedNode.id || '';
                 const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
                 const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;
-                const noteMetrics = tasksNoteEditorMetrics(noteInputValue);
                 const panelWidth = tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries });
                 const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));
                 const panelHref = String(selectedNode?.href || '').trim();
@@ -6208,16 +6376,20 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                         }, '⧉'),
                         React.createElement('div', { style: { display: 'grid', gridTemplateColumns: panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', columnGap: '12px', alignItems: 'start' } },
-                            React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' } }, selectedNode.label || selectedNode.id),
+                            React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' } },
+                                renderTasksInlineLinks(selectedNode.label || selectedNode.id, { currentPath: sourceModel?.document_path || '' })
+                            ),
                             panelNodeId ? React.createElement('div', { style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', textAlign: 'right' } }, panelNodeId) : null,
                         ),
                         panelHref ? React.createElement('a', {
                             href: panelHref,
+                            'data-vyasa-link-preview': tasksHrefSupportsPreview(panelHref) ? 'true' : undefined,
+                            'data-vyasa-link-preview-current-path': sourceModel?.document_path || undefined,
                             onClick: (event) => openTasksNodeHref(panelHref, event),
                             style: { display: 'inline-block', marginTop: '6px', fontSize: '12px', lineHeight: 1.3, textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit', overflowWrap: 'anywhere', wordBreak: 'break-word' },
                         }, panelHref) : null,
                     ),
-                    renderTasksDetailEntries(React, entries, { copyValues: true }),
+                    renderTasksDetailEntries(React, entries, { copyValues: true, currentPath: sourceModel?.document_path || '' }),
                     React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: '12px', lineHeight: 1.35 } },
                         React.createElement('label', {
                             style: {
@@ -6246,28 +6418,10 @@ async function renderTasksGraphs(rootElement = document) {
                                     style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: 'inherit', padding: '0', lineHeight: 1, opacity: 0.45, display: 'flex', alignItems: 'center' },
                                 }, '×') : null,
                             ),
-                            React.createElement('textarea', {
+                            renderTasksNoteTextarea(React, {
                                 ref: noteTextareaRef,
-                                'data-vyasa-task-control': 'true',
                                 value: noteInputValue,
-                                placeholder: 'Notes',
-                                rows: Math.min(15, noteMetrics.lines),
                                 onChange: (event) => setNoteInputValue(event.target.value),
-                                style: {
-                                    width: '100%',
-                                    minHeight: '76px',
-                                    maxHeight: 'calc(1.35em * 15 + 16px)',
-                                    resize: 'none',
-                                    overflowY: 'hidden',
-                                    border: '1px solid color-mix(in srgb, var(--vyasa-ink) 18%, transparent)',
-                                    borderRadius: '8px',
-                                    background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)',
-                                    color: 'var(--vyasa-ink)',
-                                    fontSize: '12px',
-                                    lineHeight: 1.35,
-                                    padding: '8px',
-                                    boxSizing: 'border-box',
-                                },
                             })
                         )
                     )
@@ -7273,8 +7427,81 @@ async function renderTasksGraphs(rootElement = document) {
                 setActiveSwatchFilters((current) => toggleTasksFilterQueryValue(current, key, value, enabled));
             }, []);
             const clearGroupHoverTooltip = React.useCallback(() => {
+                groupHoverTooltipRef.current = null;
                 setGroupHoverTooltip(null);
             }, []);
+            const dismissStickyHoverCard = React.useCallback((stickyId, reason) => {
+                setStickyGroupHoverTooltips((cards) => {
+                    const dismissed = cards.find((card) => card.stickyId === stickyId);
+                    if (!dismissed) return cards;
+                    logTasksDebug('hoverCardStickyClear', { widgetId, nodeId: dismissed.nodeId || '', reason });
+                    const next = cards.filter((card) => card.stickyId !== stickyId);
+                    stickyGroupHoverTooltipsRef.current = next;
+                    return next;
+                });
+            }, [widgetId]);
+            const dismissLatestStickyHoverCard = React.useCallback((reason) => {
+                const cards = stickyGroupHoverTooltipsRef.current;
+                const latest = cards[cards.length - 1];
+                if (latest) dismissStickyHoverCard(latest.stickyId, reason);
+            }, [dismissStickyHoverCard]);
+            const dismissAllStickyHoverCards = React.useCallback((reason) => {
+                const cards = stickyGroupHoverTooltipsRef.current;
+                if (!cards.length) return;
+                stickyGroupHoverTooltipsRef.current = [];
+                setStickyGroupHoverTooltips([]);
+                logTasksDebug('hoverCardStickyClearAll', { widgetId, count: cards.length, reason });
+            }, [widgetId]);
+            React.useEffect(() => {
+                let armed = '';
+                const keyFor = (card) => card ? `${card.nodeId || ''}\u0000${card.label || ''}` : '';
+                const onKeyDown = (event) => {
+                    const target = event.target instanceof Element ? event.target : null;
+                    const wrapper = flowWrapperRef.current;
+                    const key = event.key.toLowerCase();
+                    const widgetFocused = wrapper?.contains(document.activeElement) || wrapper?.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
+                    const editable = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName));
+                    if (key === 'x' && stickyGroupHoverTooltipsRef.current.length && widgetFocused && !editable && !event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey) {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        if (event.shiftKey) dismissAllStickyHoverCards('shortcut-shift-x');
+                        else dismissLatestStickyHoverCard('shortcut-x');
+                        return;
+                    }
+                    if (event.key === 'Control' && !event.repeat && !event.metaKey && !event.altKey && !event.shiftKey) {
+                        const current = groupHoverTooltipRef.current;
+                        armed = keyFor(current);
+                    } else if (event.key !== 'Control') armed = '';
+                };
+                const onKeyUp = (event) => {
+                    if (event.key !== 'Control' || !armed) return;
+                    const current = groupHoverTooltipRef.current;
+                    if (!current || keyFor(current) !== armed) return;
+                    const sticky = {
+                        ...current,
+                        sticky: true,
+                        stickyId: ++stickyGroupHoverTooltipIdRef.current,
+                        placement: 'canvas',
+                    };
+                    armed = '';
+                    setStickyGroupHoverTooltips((cards) => {
+                        const next = [...cards, sticky];
+                        stickyGroupHoverTooltipsRef.current = next;
+                        return next;
+                    });
+                    clearGroupHoverTooltip();
+                    logTasksDebug('hoverCardStickySet', { widgetId, nodeId: sticky.nodeId || '' });
+                };
+                const disarm = () => { armed = ''; };
+                document.addEventListener('keydown', onKeyDown, true);
+                document.addEventListener('keyup', onKeyUp);
+                window.addEventListener('blur', disarm);
+                return () => {
+                    document.removeEventListener('keydown', onKeyDown, true);
+                    document.removeEventListener('keyup', onKeyUp);
+                    window.removeEventListener('blur', disarm);
+                };
+            }, [clearGroupHoverTooltip, dismissAllStickyHoverCards, dismissLatestStickyHoverCard, widgetId]);
             const hoverTraceKeyRef = React.useRef('');
             const logHoverCycle = React.useCallback((label, payload = {}) => {
                 logTasksDebug(label, payload);
@@ -7319,6 +7546,11 @@ async function renderTasksGraphs(rootElement = document) {
                         ...extra,
                     });
                 };
+                if (target?.closest?.('[data-vyasa-hover-card-sticky="true"]')) {
+                    clearGroupHoverTooltip();
+                    traceHoverHit('sticky-card');
+                    return;
+                }
                 if (!reactFlow || !wrapper) return;
                 if (wrapper.querySelector('.react-flow__pane.dragging')) {
                     traceHoverHit('dragging');
@@ -7363,7 +7595,10 @@ async function renderTasksGraphs(rootElement = document) {
                     traceHoverHit('blocked', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
-                const rows = tasksHoverAttrRows(nodeData, activeHoverAttrs);
+                const directRows = tasksHoverAttrRows(nodeData, activeHoverAttrs);
+                const rows = hoverGroupId
+                    ? tasksGroupHoverAttrRows(directRows, tasksGroupDetailEntries(hoverGroupId, model), activeHoverAttrs)
+                    : directRows;
                 const label = nodeData.label || hit.node.id;
                 const nodeId = nodeData.__kind__ === 'groupTitle' ? (nodeData.sourceGroupId || hit.node.id) : hit.node.id;
                 const image = normalizeTasksNodeImageUrl(nodeData.__node_image__);
@@ -7389,17 +7624,27 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                     }
                 }
-                const hoverCard = { label, nodeId, image, rows };
-                if (hoverCardRightRail) {
-                    setGroupHoverTooltip({ ...hoverCard, placement: 'rightRail' });
-                } else {
-                    setGroupHoverTooltip({
-                        ...hoverCard,
-                        placement: 'cursor',
-                        x: event.clientX - bounds.left + 12,
-                        y: event.clientY - bounds.top + 18,
-                    });
+                if (stickyGroupHoverTooltipsRef.current.some((card) => card.nodeId === nodeId)) {
+                    clearGroupHoverTooltip();
+                    traceHoverHit('sticky', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
+                    return;
                 }
+                const hoverAnchor = reactFlow.screenToFlowPosition({ x: event.clientX + 12, y: event.clientY + 18 });
+                const hoverCard = {
+                    label,
+                    nodeId,
+                    image,
+                    rows,
+                    flowX: hoverAnchor.x,
+                    flowY: hoverAnchor.y,
+                    x: event.clientX - bounds.left + 12,
+                    y: event.clientY - bounds.top + 18,
+                };
+                const nextHoverCard = hoverCardRightRail
+                    ? { ...hoverCard, placement: 'rightRail' }
+                    : { ...hoverCard, placement: 'cursor' };
+                groupHoverTooltipRef.current = nextHoverCard;
+                setGroupHoverTooltip(nextHoverCard);
                 traceHoverHit('hit', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx, groupHoverChanged });
             }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, egoMode, hoverInactiveNodes, hoverCardRightRail, hoveredNodeId, logHoverCycle, selectedNodeId]);
             const selectGroupDescendants = React.useCallback((node) => {
@@ -7908,27 +8153,35 @@ async function renderTasksGraphs(rootElement = document) {
                     },
                 }, '×');
             };
-            const GroupHoverTooltip = () => {
+            const GroupHoverTooltipCard = React.useMemo(() => function GroupHoverTooltipCard({
+                card,
+                noteValue = '',
+                onNoteChange,
+                stickyIndex = -1,
+                inViewportPortal = false,
+            }) {
                 const tooltipRef = window.React.useRef(null);
                 const [measuredSize, setMeasuredSize] = window.React.useState({ width: 0, height: 0 });
+                const viewport = typeof rf.useViewport === 'function' ? rf.useViewport() : { zoom: 1 };
+                const viewportZoom = Math.max(0.01, Number(viewport?.zoom) || 1);
                 window.React.useLayoutEffect(() => {
                     const rect = tooltipRef.current?.getBoundingClientRect?.();
                     if (!rect) return;
                     const width = Math.ceil(rect.width);
                     const height = Math.ceil(rect.height);
                     if (width !== measuredSize.width || height !== measuredSize.height) setMeasuredSize({ width, height });
-                }, [groupHoverTooltip, measuredSize.width, measuredSize.height]);
-                if (!hoverCardsEnabled || !groupHoverTooltip) return null;
-                const rows = Array.isArray(groupHoverTooltip.rows) ? groupHoverTooltip.rows : [];
-                const image = normalizeTasksNodeImageUrl(groupHoverTooltip.image);
+                }, [card, measuredSize.width, measuredSize.height]);
+                const rows = Array.isArray(card.rows) ? card.rows : [];
+                const image = normalizeTasksNodeImageUrl(card.image);
                 const panelWidth = tasksDetailPanelWidth({
-                    title: groupHoverTooltip.label || '',
-                    nodeId: groupHoverTooltip.nodeId || '',
+                    title: card.label || '',
+                    nodeId: card.nodeId || '',
                     entries: rows,
                     titleFont: `700 calc(${hoverFontSize} * 1.12) ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
                     bodyFont: `500 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
                     keyFont: `700 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
                     hasImage: Boolean(image),
+                    stackHeader: true,
                 });
                 const wrapperWidth = Math.max(240, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().width || 0));
                 const wrapperHeight = Math.max(160, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().height || 0));
@@ -7936,17 +8189,21 @@ async function renderTasksGraphs(rootElement = document) {
                 const maxHeight = Math.max(80, wrapperHeight - 24);
                 const tooltipWidth = Math.min(maxWidth, measuredSize.width || maxWidth);
                 const tooltipHeight = Math.min(maxHeight, measuredSize.height || maxHeight);
-                const rightRailPlacement = groupHoverTooltip.placement === 'rightRail';
-                const clampedLeft = rightRailPlacement
-                    ? Math.max(12, wrapperWidth - tooltipWidth - 12)
-                    : Math.max(12, Math.min(groupHoverTooltip.x, wrapperWidth - tooltipWidth - 12));
-                const clampedTop = rightRailPlacement
-                    ? 12
-                    : Math.max(12, Math.min(groupHoverTooltip.y, wrapperHeight - tooltipHeight - 12));
+                const rightRailPlacement = card.placement === 'rightRail';
+                const clampedLeft = inViewportPortal
+                    ? card.flowX
+                    : rightRailPlacement
+                    ? 'auto'
+                    : Math.max(12, Math.min(card.x, wrapperWidth - tooltipWidth - 12));
+                const clampedTop = inViewportPortal
+                    ? card.flowY
+                    : rightRailPlacement
+                    ? 'auto'
+                    : Math.max(12, Math.min(card.y, wrapperHeight - tooltipHeight - 12));
                 const children = [
                     window.React.createElement('div', {
                         key: '__label__',
-                        style: { display: 'flex', alignItems: 'center', gap: '7px', justifyContent: 'space-between', fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, marginBottom: rows.length ? '4px' : 0, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 },
+                        style: { display: 'flex', alignItems: 'flex-start', gap: '7px', fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, whiteSpace: 'normal', minWidth: 0 },
                     },
                         image ? window.React.createElement('img', {
                             src: image,
@@ -7956,21 +8213,55 @@ async function renderTasksGraphs(rootElement = document) {
                             className: tasksIsIconifyImage(image) ? 'vyasa-tasks-node-image vyasa-tasks-node-image--icon' : 'vyasa-tasks-node-image',
                             style: { width: '22px', height: '22px', objectFit: 'contain', flex: '0 0 auto' },
                         }) : null,
-                        window.React.createElement('span', { style: { flex: '1 1 auto', minWidth: 0 } }, groupHoverTooltip.label),
-                        groupHoverTooltip.nodeId ? window.React.createElement('span', {
-                            style: { flex: '0 0 auto', marginLeft: '12px', fontSize: hoverFontSize, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, textAlign: 'right' },
-                        }, groupHoverTooltip.nodeId) : null
+                        window.React.createElement('span', {
+                            style: { flex: '1 1 auto', minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' },
+                        }, renderTasksInlineLinks(card.label, { currentPath: sourceModel?.document_path || '' })),
+                        card.sticky ? window.React.createElement('button', {
+                            type: 'button',
+                            title: 'Close sticky hover card',
+                            'aria-label': 'Close sticky hover card',
+                            onPointerDown: (event) => event.stopPropagation(),
+                            onClick: () => dismissStickyHoverCard(card.stickyId, 'close-button'),
+                            style: { flex: '0 0 auto', border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '0 0 0 4px' },
+                        }, '×') : null
                     ),
                 ];
-                if (rows.length) children.push(renderTasksDetailEntries(window.React, rows, { fontSize: hoverFontSize, lineHeight: 1.35 }));
+                if (card.nodeId) children.push(window.React.createElement('div', {
+                    key: '__node_id__',
+                    style: { marginTop: '5px', marginBottom: rows.length ? '5px' : 0, fontSize: hoverFontSize, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, overflowWrap: 'anywhere', wordBreak: 'break-word' },
+                }, card.nodeId));
+                if (rows.length) children.push(renderTasksDetailEntries(window.React, rows, { fontSize: hoverFontSize, lineHeight: 1.35, currentPath: sourceModel?.document_path || '' }));
+                children.push(window.React.createElement('label', {
+                    key: '__notes__',
+                    style: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                        marginTop: '10px',
+                        paddingTop: '10px',
+                        borderTop: '1px dashed color-mix(in srgb, currentColor 18%, transparent)',
+                    },
+                },
+                    window.React.createElement('span', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.7 } }, 'Notes'),
+                    renderTasksNoteTextarea(window.React, {
+                        value: noteValue,
+                        readOnly: !card.sticky,
+                        ariaLabel: `Notes for ${card.label || card.nodeId}`,
+                        onChange: card.sticky ? (event) => onNoteChange?.(event.target.value) : undefined,
+                    })
+                ));
                 return window.React.createElement('div', {
                     ref: tooltipRef,
+                    'data-vyasa-hover-card-sticky': card.sticky ? 'true' : undefined,
                     style: {
-                        position: 'absolute',
+                        position: rightRailPlacement ? 'relative' : 'absolute',
                         left: clampedLeft,
                         top: clampedTop,
-                        zIndex: 2400,
-                        pointerEvents: 'none',
+                        zIndex: rightRailPlacement ? 'auto' : 2400 + Math.max(0, stickyIndex),
+                        flex: rightRailPlacement ? '0 0 auto' : undefined,
+                        transform: inViewportPortal ? `scale(${1 / viewportZoom})` : undefined,
+                        transformOrigin: inViewportPortal ? 'top left' : undefined,
+                        pointerEvents: card.sticky ? 'auto' : 'none',
                         width: `${maxWidth}px`,
                         maxHeight: `${maxHeight}px`,
                         overflowY: 'auto',
@@ -7987,6 +8278,40 @@ async function renderTasksGraphs(rootElement = document) {
                         padding: '12px',
                     },
                 }, ...children);
+            }, [dismissStickyHoverCard, hoverFontSize, rf, sourceModel]);
+            const GroupHoverTooltip = () => {
+                if (!hoverCardsEnabled) return null;
+                const stickyCards = stickyGroupHoverTooltips.map((card, index) => window.React.createElement(GroupHoverTooltipCard, {
+                    key: card.stickyId,
+                    card,
+                    noteValue: nodeNotes[card.nodeId] || '',
+                    onNoteChange: (value) => updateNodeNote(card.nodeId, value),
+                    stickyIndex: index,
+                    inViewportPortal: Boolean(rf.ViewportPortal),
+                }));
+                const stickyLayer = rf.ViewportPortal
+                    ? window.React.createElement(rf.ViewportPortal, null, ...stickyCards)
+                    : window.React.createElement(window.React.Fragment, null, ...stickyCards);
+                const transientCard = groupHoverTooltip ? window.React.createElement(GroupHoverTooltipCard, {
+                    key: '__transient__',
+                    card: groupHoverTooltip,
+                    noteValue: nodeNotes[groupHoverTooltip.nodeId] || '',
+                }) : null;
+                const transientLayer = hoverCardRightRail ? window.React.createElement('div', {
+                    style: {
+                        position: 'absolute',
+                        inset: '12px 12px 12px auto',
+                        zIndex: 2400,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-end',
+                        gap: '10px',
+                        maxWidth: 'calc(100% - 24px)',
+                        overflowY: 'auto',
+                        pointerEvents: 'none',
+                    },
+                }, transientCard) : transientCard;
+                return window.React.createElement(window.React.Fragment, null, stickyLayer, transientLayer);
             };
             const HelpPopup = () => {
                 if (!helpOpen) return null;
@@ -8031,6 +8356,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('T', 'toggle hovered group'),
                     row('I / O', 'expand / collapse one depth'),
                     row('U / P', 'unfold / collapse all'),
+                    row('Option + ↑ / ↓', 'zoom in / out'),
                     row('Arrows', 'pan'),
                     row('Shift + arrows', 'pan faster')
                 ));
@@ -8221,7 +8547,7 @@ async function renderTasksGraphs(rootElement = document) {
                     filterPanelElement,
                     SlideShow(),
                     window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(TasksNodeHighlightBorders),
                     window.React.createElement(rf.Controls),
@@ -8236,13 +8562,13 @@ async function renderTasksGraphs(rootElement = document) {
                     RightRail(),
                     window.React.createElement(EgoNeighborControl),
                     window.React.createElement(HelpPopup),
-                    window.React.createElement(GroupHoverTooltip),
+                    GroupHoverTooltip(),
                     window.React.createElement(DragSelectionOverlay)
                 ))
             ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
                 filterPanelElement,
                 window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: false, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                         window.React.createElement(TasksNodeHighlightBorders),
                         window.React.createElement(rf.Controls),
@@ -8257,7 +8583,7 @@ async function renderTasksGraphs(rootElement = document) {
                     RightRail(),
                     window.React.createElement(EgoNeighborControl),
                     window.React.createElement(HelpPopup),
-                    window.React.createElement(GroupHoverTooltip),
+                    GroupHoverTooltip(),
                     window.React.createElement(DragSelectionOverlay)
                 )
             );

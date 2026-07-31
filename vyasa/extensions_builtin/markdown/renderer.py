@@ -23,9 +23,11 @@ from ...helpers import (
     _strip_leading_frontmatter_block,
     content_path_for_slug,
     content_url_for_slug,
+    enabled_document_suffixes,
     get_content_mounts,
     content_root_and_relative,
     content_slug_for_path,
+    relative_content_directory,
     resolve_heading_anchor,
 )
 from ...markdown_fence import get_root_folder as _shared_get_root_folder
@@ -418,7 +420,7 @@ def _resolve_raw_html_url(url, current_path):
     current_file = _current_content_path(current_path)
     if not current_file:
         return url
-    current_dir = current_file.parent
+    current_dir = relative_content_directory(current_file)
     resolved = (current_dir / base).resolve()
     rel = _slug_for_resolved_path(resolved, current_path, strip_suffix=False)
     if not rel:
@@ -593,7 +595,7 @@ class ContentRenderer(FrankenRenderer):
         label = getattr(token, "label", None)
         if self.current_path:
             current_file_full = _current_content_path(self.current_path)
-            current_dir = current_file_full.parent if current_file_full else None
+            current_dir = relative_content_directory(current_file_full)
             resolved = (current_dir / raw_path).resolve() if current_dir else None
             rel_path = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=False) if resolved else None
             if rel_path:
@@ -754,7 +756,7 @@ class ContentRenderer(FrankenRenderer):
                 relative_path = relative_path[:-3]
             if self.current_path:
                 current_file = _current_content_path(self.current_path)
-                current_dir = current_file.parent if current_file else None
+                current_dir = relative_content_directory(current_file)
                 resolved = (current_dir / relative_path).resolve() if current_dir else None
                 logger.debug(f"DEBUG: original_href={original_href}, current_path={self.current_path}, current_dir={current_dir}, resolved={resolved}")
                 rel = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=not Path(relative_path).suffix) if resolved else None
@@ -766,6 +768,8 @@ class ContentRenderer(FrankenRenderer):
             else:
                 is_external = True
         is_internal = is_absolute_internal and "." not in href.split("/")[-1]
+        href_suffix = Path(urlsplit(href).path).suffix.lower()
+        is_plain_text = is_absolute_internal and bool(href_suffix) and href_suffix not in enabled_document_suffixes()
         doc_escape = self.slide_mode and is_absolute_internal and not href.startswith("/slides/")
         hx = f' hx-get="{href}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML show:window:top"' if (is_internal and not doc_escape) else ""
         ext = "" if (is_internal or is_absolute_internal or is_hash) else ' target="_blank" rel="noopener noreferrer"'
@@ -777,7 +781,7 @@ class ContentRenderer(FrankenRenderer):
             download_target = href[len("/posts/"):] if href.startswith("/posts/") else href.lstrip("/") if href.startswith("/") else href
             href = content_url_for_slug(download_target, prefix="/download")
             hx = ""
-        if is_internal and not download_flag:
+        if (is_internal or is_plain_text) and not download_flag:
             request_asset_bundle("link_preview.runtime")
             preview_attrs = f' data-vyasa-link-preview="true"{current_path_attr}'
         link_class = "underline underline-offset-2 font-medium transition-colors"

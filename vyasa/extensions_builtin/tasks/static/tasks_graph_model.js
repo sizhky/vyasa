@@ -91,6 +91,19 @@ export function tasksNodeMetaEntries(node) {
         }));
 }
 
+export function tasksGroupHoverAttrRows(directRows, detailEntries, hoverAttrs) {
+    const directByAttr = new Map((directRows || []).map((row) => [String(row?.attr || ''), row]));
+    const statsByAttr = new Map((detailEntries || [])
+        .filter((entry) => String(entry?.key || '').startsWith('range:'))
+        .map((entry) => [String(entry.key).slice('range:'.length), entry]));
+    return (hoverAttrs || []).map((attr) => {
+        const key = String(attr || '').trim();
+        const stat = statsByAttr.get(key);
+        if (stat) return { attr: key, label: stat.label, value: stat.value, renderedValue: stat.renderedValue || '' };
+        return directByAttr.get(key);
+    }).filter(Boolean);
+}
+
 export function tasksEmptyFilterQuery() {
     return { combinator: 'and', rules: [] };
 }

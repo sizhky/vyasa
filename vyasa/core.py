@@ -393,7 +393,7 @@ if _auth_required is None:
 _rbac_cfg = _load_rbac_cfg_from_store()
 _set_rbac_cfg(_rbac_cfg)
 def _build_beforeware():
-    auth_before = make_user_auth_before(_auth_required, _rbac_rules, _rbac_cfg, _google_oauth_cfg, _config._coerce_list)
+    auth_before = make_user_auth_before(_auth_required, lambda: _rbac_rules, lambda: _rbac_cfg, lambda: _google_oauth_cfg, _config._coerce_list)
     return build_beforeware(auth_before, bool(_auth_enabled or (_rbac_cfg.get("enabled") and _rbac_rules)))
 
 

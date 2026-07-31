@@ -1,11 +1,17 @@
 import { LinkPreviewStack } from './link_preview_stack.js';
-import { linkPreviewPointerPoints } from './link_preview_geometry.js';
+import {
+    installLinkPreviewPanTracking,
+    linkPreviewPointerGeometry,
+    resizeLinkPreviewRect,
+} from './link_preview_geometry.js';
+import { linkPreviewSymbolMatch } from './link_preview_target.js';
 
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 let hoveredLink = null;
 let modifierDown = false;
 let previewZ = 5000;
 let pointerFrame = null;
+let previewPage = `${window.location.pathname}${window.location.search}`;
 const previewViews = new Set();
 
 function schedulePointerRefresh() {
@@ -23,16 +29,66 @@ function inferCurrentPath() {
 }
 
 function positionPopover(popover, point) {
-    const width = Math.min(384, Math.max(240, window.innerWidth - 24));
     const height = Math.min(420, Math.max(220, window.innerHeight - 24));
+    popover.style.height = `${height}px`;
+    const width = popover.getBoundingClientRect().width;
     const left = Math.min(point.clientX + 18, window.innerWidth - width - 12);
     const top = Math.min(point.clientY + 18, window.innerHeight - height - 12);
     Object.assign(popover.style, {
-        width: `${width}px`,
-        height: `${height}px`,
         left: `${Math.max(12, left)}px`,
         top: `${Math.max(12, top)}px`,
     });
+}
+
+function installResizeHandles(popover, raise) {
+    for (const edge of [
+        'top', 'right', 'bottom', 'left',
+        'top-left', 'top-right', 'bottom-right', 'bottom-left',
+    ]) {
+        const handle = document.createElement('div');
+        handle.className = `vyasa-link-preview-resize-handle is-${edge}`;
+        handle.dataset.resizeEdge = edge;
+        let start = null;
+        handle.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0) return;
+            const rect = popover.getBoundingClientRect();
+            start = {
+                id: event.pointerId,
+                x: event.clientX,
+                y: event.clientY,
+                rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+            };
+            handle.setPointerCapture(event.pointerId);
+            raise();
+            event.preventDefault();
+            event.stopPropagation();
+        });
+        handle.addEventListener('pointermove', (event) => {
+            if (!start || start.id !== event.pointerId) return;
+            const rect = resizeLinkPreviewRect(
+                start.rect,
+                edge,
+                event.clientX - start.x,
+                event.clientY - start.y,
+                { width: window.innerWidth, height: window.innerHeight },
+            );
+            Object.assign(popover.style, {
+                left: `${rect.left}px`,
+                top: `${rect.top}px`,
+                width: `${rect.width}px`,
+                height: `${rect.height}px`,
+            });
+            schedulePointerRefresh();
+        });
+        const finish = (event) => {
+            if (!start || start.id !== event.pointerId) return;
+            start = null;
+            if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+        };
+        handle.addEventListener('pointerup', finish);
+        handle.addEventListener('pointercancel', finish);
+        popover.appendChild(handle);
+    }
 }
 
 function createPreviewView({ point, link, onClose }) {
@@ -47,7 +103,12 @@ function createPreviewView({ point, link, onClose }) {
         '<div class="vyasa-link-preview-card">',
         '<div class="vyasa-link-preview-bar">',
         '<span data-vyasa-link-preview-origin></span>',
+        '<span class="vyasa-link-preview-actions">',
+        '<button type="button" data-vyasa-link-preview-copy aria-label="Copy relative path; Shift-click copies absolute path"><uk-icon icon="copy" aria-hidden="true"></uk-icon></button>',
+        '<button type="button" data-vyasa-link-preview-font-decrease aria-label="Decrease preview font size">−</button>',
+        '<button type="button" data-vyasa-link-preview-font-increase aria-label="Increase preview font size">+</button>',
         '<button type="button" class="vyasa-link-preview-close" aria-label="Close preview">×</button>',
+        '</span>',
         '</div>',
         '<div data-vyasa-link-preview-content class="vyasa-link-preview-content vyasa-link-preview-loading">Loading preview...</div>',
         '</div>',
@@ -60,9 +121,28 @@ function createPreviewView({ point, link, onClose }) {
     const bar = popover.querySelector('.vyasa-link-preview-bar');
     const sourceLabel = popover.querySelector('[data-vyasa-link-preview-origin]');
     sourceLabel.textContent = link.textContent.trim() || link.getAttribute('href') || 'Link';
+    const normalFontPx = parseFloat(getComputedStyle(document.querySelector('#main-content') || document.body).fontSize);
+    let fontSizePt = Math.max(6, (normalFontPx || 18) * 0.75 - 2);
+    const applyFontSize = () => {
+        popover.style.setProperty('--vyasa-link-preview-font-size', `${fontSizePt}pt`);
+    };
+    popover.querySelector('[data-vyasa-link-preview-font-decrease]').addEventListener('click', () => {
+        fontSizePt = Math.max(6, fontSizePt - 1);
+        applyFontSize();
+    });
+    popover.querySelector('[data-vyasa-link-preview-font-increase]').addEventListener('click', () => {
+        fontSizePt += 1;
+        applyFontSize();
+    });
+    popover.querySelector('[data-vyasa-link-preview-copy]').addEventListener('click', (event) => {
+        const shell = content.querySelector('.vyasa-link-preview-shell');
+        const path = event.shiftKey ? shell?.dataset.absolutePath : shell?.dataset.relativePath;
+        if (path) navigator.clipboard.writeText(path);
+    });
+    applyFontSize();
     const raise = () => {
-        const z = ++previewZ;
-        pointer.style.zIndex = String(z - 1);
+        const z = previewZ += 2;
+        pointer.style.zIndex = String(z + 1);
         popover.style.zIndex = String(z);
     };
     const updatePointer = () => {
@@ -72,10 +152,10 @@ function createPreviewView({ point, link, onClose }) {
         }
         const sourceRect = link.getBoundingClientRect();
         const popupRect = popover.getBoundingClientRect();
-        const points = linkPreviewPointerPoints(sourceRect, popupRect);
+        const geometry = linkPreviewPointerGeometry(sourceRect, popupRect);
         pointer.hidden = false;
-        pointerShape.setAttribute('points', points.map(([x, y]) => `${x},${y}`).join(' '));
-        pointerOutline.setAttribute('d', `M ${points[0]} L ${points[1]} M ${points[0]} L ${points[2]}`);
+        pointerShape.setAttribute('points', geometry.fill.map(([x, y]) => `${x},${y}`).join(' '));
+        pointerOutline.setAttribute('d', `M ${geometry.outline[0]} L ${geometry.outline[1]} M ${geometry.outline[0]} L ${geometry.outline[2]}`);
     };
     let drag = null;
     bar.addEventListener('pointerdown', (event) => {
@@ -104,6 +184,7 @@ function createPreviewView({ point, link, onClose }) {
     bar.addEventListener('pointercancel', finishDrag);
     popover.querySelector('.vyasa-link-preview-close').addEventListener('click', onClose);
     popover.addEventListener('pointerdown', raise);
+    installResizeHandles(popover, raise);
     document.body.appendChild(pointer);
     document.body.appendChild(popover);
     positionPopover(popover, point);
@@ -126,12 +207,38 @@ function createPreviewView({ point, link, onClose }) {
         setContent: (html) => {
             content.className = 'vyasa-link-preview-content';
             content.innerHTML = html;
+            const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
+            if (relativePath) sourceLabel.textContent = relativePath;
+            requestAnimationFrame(() => scrollLinkPreviewToSymbol(content, link.getAttribute('href') || ''));
             schedulePointerRefresh();
         },
     };
     previewViews.add(view);
     updatePointer();
     return view;
+}
+
+function scrollLinkPreviewToSymbol(content, href) {
+    const body = content.querySelector('.vyasa-link-preview-body');
+    if (!body) return;
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) {
+        if (walker.currentNode.textContent) textNodes.push(walker.currentNode);
+    }
+    const match = linkPreviewSymbolMatch(href, textNodes.map((node) => node.textContent));
+    if (!match) return;
+    if (match.chunkIndex < 0) {
+        if (match.kind.toLocaleLowerCase() === 'file') body.scrollTop = 0;
+        return;
+    }
+    const node = textNodes[match.chunkIndex];
+    const range = document.createRange();
+    range.setStart(node, match.start);
+    range.setEnd(node, match.end);
+    const matchRect = range.getBoundingClientRect();
+    const bodyRect = body.getBoundingClientRect();
+    body.scrollTop += matchRect.top - bodyRect.top - Math.max(0, (body.clientHeight - matchRect.height) / 2);
 }
 
 async function fetchPreview({ href, currentPath, signal }) {
@@ -176,6 +283,15 @@ function handleKeydown(event) {
     trackModifier(event);
 }
 
+function closePreviewsForPage(path) {
+    const url = new URL(path || window.location.href, window.location.origin);
+    const nextPage = `${url.pathname}${url.search}`;
+    if (nextPage === previewPage) return;
+    previewPage = nextPage;
+    previews.closeAll();
+}
+
+installLinkPreviewPanTracking(window, schedulePointerRefresh);
 document.body.addEventListener('pointerover', openFromEvent, true);
 document.body.addEventListener('pointermove', openFromEvent, true);
 document.body.addEventListener('pointerout', (event) => {
@@ -200,4 +316,13 @@ window.addEventListener('keyup', trackModifier, true);
 window.addEventListener('blur', () => { modifierDown = false; });
 window.addEventListener('resize', schedulePointerRefresh);
 window.addEventListener('scroll', schedulePointerRefresh, true);
-document.body.addEventListener('htmx:afterSwap', () => { hoveredLink = null; }, true);
+window.addEventListener('popstate', () => closePreviewsForPage(window.location.href));
+document.body.addEventListener('htmx:afterSwap', (event) => {
+    hoveredLink = null;
+    if (event.target?.id !== 'main-content') return;
+    closePreviewsForPage(
+        event.detail?.xhr?.responseURL
+        || event.detail?.requestConfig?.path
+        || window.location.href,
+    );
+}, true);

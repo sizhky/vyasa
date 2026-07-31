@@ -3,7 +3,7 @@
     display: flex;
     flex-direction: column;
     z-index: 5000;
-    width: 24rem;
+    width: max(560px, 46vw);
     min-width: 18rem;
     min-height: 12rem;
     max-width: calc(100vw - 24px);
@@ -20,7 +20,6 @@
     opacity: 1;
     transform: translateY(0) scale(1);
     pointer-events: auto;
-    resize: both;
     overflow: hidden;
     border-radius: 14px;
     box-shadow:
@@ -28,6 +27,47 @@
         0 28px 72px rgba(15, 23, 42, 0.32),
         0 0 0 1px color-mix(in srgb, var(--vyasa-primary) 12%, transparent);
 }
+
+.vyasa-link-preview-resize-handle {
+    position: absolute;
+    z-index: 4;
+    touch-action: none;
+}
+
+.vyasa-link-preview-resize-handle.is-top,
+.vyasa-link-preview-resize-handle.is-bottom {
+    right: 0;
+    left: 0;
+    height: 8px;
+    cursor: ns-resize;
+}
+
+.vyasa-link-preview-resize-handle.is-top { top: 0; }
+.vyasa-link-preview-resize-handle.is-bottom { bottom: 0; }
+
+.vyasa-link-preview-resize-handle.is-left,
+.vyasa-link-preview-resize-handle.is-right {
+    top: 8px;
+    bottom: 8px;
+    width: 8px;
+    cursor: ew-resize;
+}
+
+.vyasa-link-preview-resize-handle.is-left { left: 0; }
+.vyasa-link-preview-resize-handle.is-right { right: 0; }
+
+.vyasa-link-preview-resize-handle.is-top-left,
+.vyasa-link-preview-resize-handle.is-top-right,
+.vyasa-link-preview-resize-handle.is-bottom-left,
+.vyasa-link-preview-resize-handle.is-bottom-right {
+    width: 12px;
+    height: 12px;
+}
+
+.vyasa-link-preview-resize-handle.is-top-left { top: 0; left: 0; cursor: nwse-resize; }
+.vyasa-link-preview-resize-handle.is-top-right { top: 0; right: 0; cursor: nesw-resize; }
+.vyasa-link-preview-resize-handle.is-bottom-left { bottom: 0; left: 0; cursor: nesw-resize; }
+.vyasa-link-preview-resize-handle.is-bottom-right { right: 0; bottom: 0; cursor: nwse-resize; }
 
 .vyasa-link-preview-pointer {
     position: fixed;
@@ -52,6 +92,9 @@
     fill: none;
     stroke: var(--vyasa-link-preview-border);
     stroke-width: 1px;
+    filter:
+        drop-shadow(0 3px 4px rgba(15, 23, 42, 0.2))
+        drop-shadow(0 12px 18px rgba(15, 23, 42, 0.3));
 }
 
 .vyasa-link-preview-card {
@@ -69,7 +112,7 @@
 .vyasa-link-preview-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 0.75rem;
     min-height: 2rem;
     padding: 0.35rem 0.55rem 0.25rem 0.9rem;
     color: var(--vyasa-ink-soft);
@@ -86,20 +129,42 @@
 }
 
 .vyasa-link-preview-bar [data-vyasa-link-preview-origin] {
+    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
+.vyasa-link-preview-actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1.5rem);
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.vyasa-link-preview-actions button {
+    display: inline-grid;
+    height: 1.5rem;
+    width: 1.5rem;
+    place-items: center;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: 700 0.85rem/1 var(--vyasa-font-ui, sans-serif);
+    cursor: pointer;
+}
+
 .vyasa-link-preview-content {
     display: flex;
     flex: 1 1 auto;
+    min-width: 0;
     min-height: 0;
 }
 
 .vyasa-link-preview-content > .vyasa-link-preview-shell {
     flex: 1 1 auto;
+    min-width: 0;
 }
 
 .dark .vyasa-link-preview-pointer,
@@ -115,25 +180,52 @@
         0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
-.vyasa-link-preview-source {
-    padding: 0.35rem 2rem 0.45rem 0.9rem;
-    color: var(--vyasa-ink-soft);
+.dark .vyasa-link-preview-pointer polygon {
+    filter:
+        drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45))
+        drop-shadow(0 16px 24px rgba(0, 0, 0, 0.65))
+        drop-shadow(0 0 10px color-mix(in srgb, var(--vyasa-primary) 24%, transparent));
 }
 
 .vyasa-link-preview-shell {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
+    min-width: 0;
     min-height: 0;
 }
 
 .vyasa-link-preview-body {
     flex: 1 1 auto;
+    min-width: 0;
     min-height: 0;
     max-height: none;
     overflow: auto;
     overscroll-behavior: contain;
     padding: 0 2rem 0.9rem 0.9rem;
+    font-size: var(--vyasa-link-preview-font-size);
+}
+
+.vyasa-link-preview-body .text-base {
+    font-size: inherit;
+}
+
+.vyasa-link-preview-body .vyasa-doc-h1 {
+    font-size: 1.75em;
+}
+
+.vyasa-link-preview-body .vyasa-doc-h2 { font-size: 1.5em; }
+.vyasa-link-preview-body .vyasa-doc-h3 { font-size: 1.25em; }
+.vyasa-link-preview-body .vyasa-doc-h4 { font-size: 1.125em; }
+.vyasa-link-preview-body .vyasa-doc-h5,
+.vyasa-link-preview-body .vyasa-doc-h6 { font-size: 1em; }
+
+.vyasa-link-preview-plain-text {
+    width: max-content;
+    min-width: 100%;
+    margin: 0;
+    font-family: var(--vyasa-font-mono, monospace);
+    white-space: pre;
 }
 
 .vyasa-link-preview-body .w-full {

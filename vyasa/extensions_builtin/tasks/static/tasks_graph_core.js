@@ -700,6 +700,132 @@ export function layoutDisconnectedTaskNodes(nodes, direction = 'DOWN', options =
     };
 }
 
+export function packTaskChildRects(inputPositions, options = {}) {
+    const gap = Math.max(0, Number(options.gap) || 0);
+    const padX = Math.max(0, Number(options.padX) || 0);
+    const padTop = Math.max(0, Number(options.padTop) || 0);
+    const padBottom = Math.max(0, Number(options.padBottom) || 0);
+    const targetAspectRatio = Math.max(0.5, Number(options.targetAspectRatio) || 1.05);
+    const sourceRects = Object.fromEntries(
+        Object.entries(inputPositions || {}).map(([id, rect]) => [id, {
+            width: Math.max(0, Number(rect?.width) || 0),
+            height: Math.max(0, Number(rect?.height) || 0),
+        }])
+    );
+    const requestedOrder = Array.isArray(options.order) ? options.order.map(String) : [];
+    const seenIds = new Set();
+    const orderedIds = [];
+    for (const id of [...requestedOrder, ...Object.keys(sourceRects)]) {
+        if (!sourceRects[id] || seenIds.has(id)) continue;
+        seenIds.add(id);
+        orderedIds.push(id);
+    }
+    if (!orderedIds.length) {
+        return {
+            positions: {},
+            bbox: {
+                width: Math.max(Number(options.minWidth) || 0, padX * 2),
+                height: Math.max(Number(options.minHeight) || 0, padTop + padBottom),
+            },
+            rows: [],
+        };
+    }
+    const rowWidth = (row) => row.reduce(
+        (sum, id, index) => sum + sourceRects[id].width + (index ? gap : 0),
+        0
+    );
+    const packAtWidth = (targetWidth) => {
+        const rows = [[]];
+        let currentWidth = 0;
+        for (const id of orderedIds) {
+            const row = rows[rows.length - 1];
+            const nextWidth = currentWidth + (row.length ? gap : 0) + sourceRects[id].width;
+            if (row.length && nextWidth > targetWidth) {
+                rows.push([id]);
+                currentWidth = sourceRects[id].width;
+            } else {
+                row.push(id);
+                currentWidth = nextWidth;
+            }
+        }
+        for (let pass = 0; pass < rows.length; pass += 1) {
+            for (let index = rows.length - 1; index > 0; index -= 1) {
+                const previous = rows[index - 1];
+                const current = rows[index];
+                while (previous.length > current.length + 1) {
+                    const moving = previous[previous.length - 1];
+                    const nextCurrent = [moving, ...current];
+                    const beforeWidth = Math.max(rowWidth(previous), rowWidth(current));
+                    const afterWidth = Math.max(rowWidth(previous.slice(0, -1)), rowWidth(nextCurrent));
+                    if (rowWidth(nextCurrent) > targetWidth || afterWidth > beforeWidth) break;
+                    previous.pop();
+                    current.unshift(moving);
+                }
+            }
+        }
+        const rowMetrics = rows.map((row) => ({
+            width: rowWidth(row),
+            height: Math.max(...row.map((id) => sourceRects[id].height)),
+        }));
+        const contentWidth = Math.max(...rowMetrics.map((row) => row.width));
+        const positions = {};
+        let y = padTop;
+        for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+            const row = rows[rowIndex];
+            const metrics = rowMetrics[rowIndex];
+            let x = padX + (contentWidth - metrics.width) / 2;
+            for (const id of row) {
+                const rect = sourceRects[id];
+                positions[id] = { x, y, width: rect.width, height: rect.height };
+                x += rect.width + gap;
+            }
+            y += metrics.height + gap;
+        }
+        const contentHeight = y - gap - padTop;
+        const width = Math.max(Number(options.minWidth) || 0, contentWidth + padX * 2);
+        const height = Math.max(Number(options.minHeight) || 0, contentHeight + padTop + padBottom);
+        const itemArea = orderedIds.reduce(
+            (sum, id) => sum + sourceRects[id].width * sourceRects[id].height,
+            0
+        );
+        const fill = itemArea / Math.max(width * height, 1);
+        const aspectPenalty = Math.abs(Math.log((width / Math.max(height, 1)) / targetAspectRatio));
+        return {
+            positions,
+            bbox: { width, height },
+            rows: rows.map((row) => [...row]),
+            score: aspectPenalty * 2 + (1 - fill) * 0.65,
+        };
+    };
+    const maxWidth = Math.max(...orderedIds.map((id) => sourceRects[id].width));
+    const averageOuterWidth = orderedIds.reduce(
+        (sum, id) => sum + sourceRects[id].width + gap,
+        0
+    ) / orderedIds.length;
+    const paddedArea = orderedIds.reduce(
+        (sum, id) => sum + (sourceRects[id].width + gap) * (sourceRects[id].height + gap),
+        0
+    );
+    const squareWidth = Math.sqrt(paddedArea * targetAspectRatio);
+    const targetWidths = new Set([maxWidth]);
+    const maxColumns = Math.min(
+        orderedIds.length,
+        Math.max(12, Math.ceil(Math.sqrt(orderedIds.length) * 3))
+    );
+    for (let columns = 1; columns <= maxColumns; columns += 1) {
+        targetWidths.add(Math.max(maxWidth, averageOuterWidth * columns - gap));
+    }
+    for (let step = 0; step <= 12; step += 1) {
+        targetWidths.add(Math.max(maxWidth, squareWidth * (0.55 + step * 0.125)));
+    }
+    return Array.from(targetWidths)
+        .map(packAtWidth)
+        .sort((left, right) => (
+            (left.score - right.score)
+            || (left.bbox.width * left.bbox.height - right.bbox.width * right.bbox.height)
+        ))[0];
+}
+
 function edgeHandlePct(index, count) {
     if (count <= 1) return 50;
     return 18 + (index * 64) / (count - 1);
@@ -716,8 +842,6 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
     const targetCenterY = targetRect.y + targetRect.height / 2;
     const dx = targetCenterX - sourceCenterX;
     const dy = targetCenterY - sourceCenterY;
-    const overlapY = Math.max(0, Math.min(sourceRect.y + sourceRect.height, targetRect.y + targetRect.height) - Math.max(sourceRect.y, targetRect.y));
-    const overlapX = Math.max(0, Math.min(sourceRect.x + sourceRect.width, targetRect.x + targetRect.width) - Math.max(sourceRect.x, targetRect.x));
     const gapY = Math.max(0, Math.max(sourceRect.y, targetRect.y) - Math.min(sourceRect.y + sourceRect.height, targetRect.y + targetRect.height));
     const gapX = Math.max(0, Math.max(sourceRect.x, targetRect.x) - Math.min(sourceRect.x + sourceRect.width, targetRect.x + targetRect.width));
     const horizontalSide = dx >= 0
@@ -731,54 +855,18 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
     if (sourceKind === 'group' && targetKind === 'group' && Math.abs(dx) >= Math.abs(dy) * 0.8) {
         return horizontalSide;
     }
-    if (gapX > 0 && gapY > 0) {
-        return {
-            sourceSide: dy >= 0 ? 'bottom' : 'top',
-            targetSide: dx >= 0 ? 'left' : 'right',
-        };
+    const horizontalCongestion = gapX > 0 ? Math.abs(dy) / gapX : Infinity;
+    const verticalCongestion = gapY > 0 ? Math.abs(dx) / gapY : Infinity;
+    const mixedModeAllowed = Math.hypot(gapX, gapY) <= Math.hypot(
+        Math.min(sourceRect.width, targetRect.width),
+        Math.min(sourceRect.height, targetRect.height),
+    );
+    if (horizontalCongestion <= 1.25 || verticalCongestion <= 1.25 || !mixedModeAllowed) {
+        return horizontalCongestion <= verticalCongestion ? horizontalSide : verticalSide;
     }
-    const significantRowOverlap = overlapY >= Math.min(sourceRect.height, targetRect.height) * 0.35;
-    if (significantRowOverlap && Math.abs(dx) >= Math.abs(dy) * 1.1) {
-        return horizontalSide;
-    }
-    const significantColumnOverlap = overlapX >= Math.min(sourceRect.width, targetRect.width) * 0.35;
-    if (significantColumnOverlap && Math.abs(dy) >= Math.abs(dx) * 1.1) {
-        return verticalSide;
-    }
-    const substantialHorizontalGap = gapX >= Math.min(sourceRect.width, targetRect.width) * 0.35;
-    const strongHorizontalOffset = substantialHorizontalGap && Math.abs(dx) >= Math.abs(dy) * 0.7;
-    if (strongHorizontalOffset) {
-        return horizontalSide;
-    }
-    const substantialVerticalGap = gapY >= Math.min(sourceRect.height, targetRect.height) * 0.35;
-    const strongVerticalOffset = substantialVerticalGap && Math.abs(dy) >= Math.abs(dx) * 0.7;
-    if (strongVerticalOffset) {
-        return verticalSide;
-    }
-    const candidates = [
-        {
-            sourceSide: 'right', targetSide: 'left', sortAxis: 'y',
-            score: Math.abs(dx) + 1.4 * gapY + 0.35 * Math.abs(dy) + (dx < 0 ? 1e6 : 0) - 0.2 * overlapY,
-        },
-        {
-            sourceSide: 'left', targetSide: 'right', sortAxis: 'y',
-            score: Math.abs(dx) + 1.4 * gapY + 0.35 * Math.abs(dy) + (dx > 0 ? 1e6 : 0) - 0.2 * overlapY,
-        },
-        {
-            sourceSide: 'bottom', targetSide: 'top', sortAxis: 'x',
-            score: Math.abs(dy) + 1.4 * gapX + 0.35 * Math.abs(dx) + (dy < 0 ? 1e6 : 0) - 0.2 * overlapX,
-        },
-        {
-            sourceSide: 'top', targetSide: 'bottom', sortAxis: 'x',
-            score: Math.abs(dy) + 1.4 * gapX + 0.35 * Math.abs(dx) + (dy > 0 ? 1e6 : 0) - 0.2 * overlapX,
-        },
-    ];
-    candidates.sort((a, b) => a.score - b.score);
-    return {
-        sourceSide: candidates[0].sourceSide,
-        targetSide: candidates[0].targetSide,
-        sortAxis: candidates[0].sortAxis,
-    };
+    return Math.abs(dx) >= Math.abs(dy)
+        ? { sourceSide: horizontalSide.sourceSide, targetSide: verticalSide.targetSide, sortAxis: 'x' }
+        : { sourceSide: verticalSide.sourceSide, targetSide: horizontalSide.targetSide, sortAxis: 'y' };
 }
 
 function absoluteNodeRects(nodes) {

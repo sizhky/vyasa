@@ -15,6 +15,11 @@ from .items_pack import read_schema
 from .render import render_tasks_block
 
 
+def _request_tasks_assets() -> None:
+    request_asset_bundle("tasks.runtime")
+    request_asset_bundle("link_preview.runtime")
+
+
 class TasksExtension(VyasaExtensionBase):
     def register(self, app) -> None:
         app.documents.document_type(DocumentType(".kg", "kg", "network"))
@@ -28,11 +33,11 @@ class TasksExtension(VyasaExtensionBase):
         ))
         app.assets.page(_page_bundles)
         items_handler = lambda code, context, attrs: (
-            request_asset_bundle("tasks.runtime"),
+            _request_tasks_assets(),
             render_tasks_block(code, context.current_path if context else None, "items"),
         )[1]
         tasks_handler = lambda code, context, attrs: (
-            request_asset_bundle("tasks.runtime"),
+            _request_tasks_assets(),
             render_tasks_block(code, context.current_path if context else None, "tasks"),
         )[1]
         app.markdown.fence("items", items_handler)
@@ -93,7 +98,7 @@ def render_kg_document(context):
     log_phase("schema_path", schema_path=str(schema_path))
     title = _kg_title(schema_path, context.path)
     log_phase("title", title=title)
-    request_asset_bundle("tasks.runtime")
+    _request_tasks_assets()
     log_phase("request_asset_bundle")
     block = render_tasks_block(_kg_block(schema_path), context.path, "items")
     log_phase("render_tasks_block", block_bytes=len(block.encode("utf-8", "replace")))
@@ -110,7 +115,7 @@ def render_kg_document(context):
         show_toc=False,
         full_width=True,
         no_scroll=True,
-        extra_head_nodes=bundle_asset_nodes(("tasks.runtime",)),
+        extra_head_nodes=bundle_asset_nodes(("tasks.runtime", "link_preview.runtime")),
     )
     log_phase("document_page")
     rendered = page.render(context.layout, htmx=context.htmx, blog_title=context.blog_title, auth=context.auth)
@@ -122,13 +127,13 @@ def render_static_kg_document(context):
     schema_path = _kg_schema_path(context.doc_file)
     slug = content_slug_for_path(context.doc_file) or str(context.relative_path)
     title = _kg_title(schema_path, slug)
-    request_asset_bundle("tasks.runtime")
+    _request_tasks_assets()
     content = render_tasks_block(_kg_block(schema_path), slug, "items")
     return SimpleNamespace(title=title, raw_content=schema_path.read_text(encoding="utf-8"), toc_items=None, content_html=content)
 
 
 def _page_bundles(context):
-    return ("tasks.runtime",) if context.get("mode") == "static" else ()
+    return ("tasks.runtime", "link_preview.runtime") if context.get("mode") == "static" else ()
 
 
 EXTENSION = TasksExtension(
