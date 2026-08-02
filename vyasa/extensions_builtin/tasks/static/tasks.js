@@ -2613,6 +2613,31 @@ function hasExplicitGroupDirection(model) {
     return (model.groups || []).some((group) => group && (group.direction || group.layout_direction));
 }
 
+function tasksWaterfallBands(ids, edges, direction, positions = {}) {
+    if (direction !== 'DOWN' || !edges.length) return null;
+    const incoming = new Map(ids.map((id) => [id, []]));
+    for (const edge of edges) {
+        if (incoming.has(edge.target) && incoming.has(edge.source)) incoming.get(edge.target).push(edge.source);
+    }
+    const ranks = new Map();
+    const resolving = new Set();
+    const rankOf = (id) => {
+        if (ranks.has(id)) return ranks.get(id);
+        if (resolving.has(id)) return 0;
+        resolving.add(id);
+        const rank = incoming.get(id).reduce((deepest, source) => Math.max(deepest, rankOf(source) + 1), 0);
+        resolving.delete(id);
+        ranks.set(id, rank);
+        return rank;
+    };
+    for (const id of ids) rankOf(id);
+    const bands = Array.from({ length: Math.max(...ranks.values()) + 1 }, () => []);
+    for (const id of [...ids].sort((left, right) => (positions[left]?.x || 0) - (positions[right]?.x || 0))) {
+        bands[ranks.get(id)].push(id);
+    }
+    return bands;
+}
+
 async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig = {}, layoutConfig = {}, useElkForGroups = true) {
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
     const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
@@ -2644,11 +2669,12 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
     const compactGroupChildren = (positions, beforeBbox) => {
         const order = [...groupChildren]
             .sort((left, right) => (
-                (left.__kind__ === right.__kind__ ? 0 : (left.__kind__ === 'task' ? -1 : 1))
-                || ((positions[left.id]?.y || 0) - (positions[right.id]?.y || 0))
+                ((positions[left.id]?.y || 0) - (positions[right.id]?.y || 0))
                 || ((positions[left.id]?.x || 0) - (positions[right.id]?.x || 0))
+                || (left.__kind__ === right.__kind__ ? 0 : (left.__kind__ === 'task' ? -1 : 1))
             ))
             .map((child) => child.id);
+        const bands = tasksWaterfallBands(order, childEdges, groupDirection, positions);
         const compacted = packTaskChildRects(positions, {
             gap: Math.max(12, Math.min(layoutConfig.nodeSpacing || 72, 36)),
             padX: groupPadding,
@@ -2658,6 +2684,7 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
             minHeight: 80,
             targetAspectRatio: 1.05,
             order,
+            bands: bands || undefined,
         });
         logTasksDebugVerbose('groupPacking', {
             groupId,
@@ -2669,8 +2696,24 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
         return compacted;
     };
     const childIds = new Set(groupChildren.map((child) => child.id));
-    const childEdges = reduceTransitiveEdges((model.dependency_edges || [])
-        .filter((edge) => childIds.has(edge.source) && childIds.has(edge.target)));
+    const parentOf = Object.fromEntries([
+        ...(model.tasks || []).map((task) => [task.id, task.group_id || null]),
+        ...(model.groups || []).map((group) => [group.id, group.parent_group_id || null]),
+    ]);
+    const liftToChild = (id) => {
+        let current = id;
+        while (current && !childIds.has(current)) current = parentOf[current] ?? null;
+        return current;
+    };
+    const liftedEdges = new Map();
+    for (const edge of (model.dependency_edges || [])) {
+        const source = liftToChild(edge.source);
+        const target = liftToChild(edge.target);
+        if (!source || !target || source === target) continue;
+        const key = `${source} ${target}`;
+        if (!liftedEdges.has(key)) liftedEdges.set(key, { ...edge, source, target });
+    }
+    const childEdges = reduceTransitiveEdges([...liftedEdges.values()]);
     if (useElkForGroups && childEdges.length > 0) {
         const elkLayout = await tasksElk.layout({
             id: `group-${groupId}`,
