@@ -371,6 +371,31 @@ function tasksTaperedBezierPath(bezierPath, sourceWidth, targetWidth) {
     ].join(' ');
 }
 
+// A highlighted edge sweeps a bright band outward, from the hovered/selected
+// node toward its neighbour. strokeMode says which end that central node is:
+// '*-out' means it is the edge source, '*-in' means it is the target.
+function tasksEdgeFlareSweep(strokeMode) {
+    if (strokeMode === 'selected-out' || strokeMode === 'focused-out' || strokeMode === 'selected') return 'out';
+    if (strokeMode === 'selected-in' || strokeMode === 'focused-in') return 'in';
+    return '';
+}
+
+// Mask region in flow coordinates. objectBoundingBox units collapse on
+// axis-aligned edges, whose fill bbox is a flat line, so state the box.
+function tasksEdgeFlareBox(bezierPath, pad) {
+    const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
+    if (nums.length < 8) return null;
+    const xs = nums.filter((_, index) => index % 2 === 0);
+    const ys = nums.filter((_, index) => index % 2 === 1);
+    const margin = Math.max(1, Number(pad) || 1);
+    return {
+        x: Math.min(...xs) - margin,
+        y: Math.min(...ys) - margin,
+        width: (Math.max(...xs) - Math.min(...xs)) + (margin * 2),
+        height: (Math.max(...ys) - Math.min(...ys)) + (margin * 2),
+    };
+}
+
 function tasksTaperedArrowHeadPath(bezierPath, size) {
     const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
     if (nums.length < 8) return '';
@@ -2009,7 +2034,7 @@ function tasksHoverFocusEdge(edge, hoveredNodeId) {
     return {
         ...edge,
         zIndex: TASKS_EDGE_FOCUS_Z,
-        data: { ...edge.data, highlightMode: 'selected', strokeMode },
+        data: { ...edge.data, highlightMode: 'selected', strokeMode, flareKey: `hover:${hoveredNodeId || ''}` },
         labelStyle: { ...(edge.labelStyle || {}), fill: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, fontWeight: 800 },
         labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.9 },
         style: { ...edge.style, stroke: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, strokeWidth: Math.max(4.75, tasksEdgeStrokeWidthForMode(strokeMode)), strokeLinecap: 'round' },
@@ -5172,7 +5197,12 @@ async function renderTasksGraphs(rootElement = document) {
                         return {
                             ...edge,
                             zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
-                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim' },
+                            data: {
+                                ...edge.data,
+                                highlightMode: hit ? 'selected' : 'dim',
+                                strokeMode: hit && touchesHover ? (edge.source === hoveredNodeId ? 'selected-out' : 'selected-in') : (hit ? 'selected' : 'dim'),
+                                flareKey: `hover:${hoveredNodeId || ''}`,
+                            },
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
                             style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity, strokeWidth: hit ? 4.5 : 2.5, strokeLinecap: hit ? 'round' : undefined, '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s' },
@@ -5394,7 +5424,7 @@ async function renderTasksGraphs(rootElement = document) {
                         : mode;
                     return {
                         ...edge,
-                        data: { ...edge.data, highlightMode: mode, strokeMode, hoverDimsLabels },
+                        data: { ...edge.data, highlightMode: mode, strokeMode, hoverDimsLabels, flareKey: `${nodeId}:${hoveredNodeId || ''}` },
                         zIndex: highlighted ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
                         labelZIndex: tasksEdgeLabelZForMode(mode, TASKS_EDGE_LABEL_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_FOCUS_Z),
                         labelStyle: {
@@ -5691,6 +5721,10 @@ async function renderTasksGraphs(rootElement = document) {
                     Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42)
                 );
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
+                const flareSweep = taperPath ? tasksEdgeFlareSweep(strokeMode) : '';
+                const flareBox = flareSweep ? tasksEdgeFlareBox(path, strokeWidth * 4) : null;
+                const flareMaskId = `vyasa-tasks-edge-flare-${String(props.id || '').replace(/[^\w-]/g, '_')}`;
+                const flareKey = `${props.data?.flareKey || ''}|${flareSweep}`;
                 const edgeArrowPath = tasksTaperedArrowHeadPath(
                     path,
                     Math.max(10, strokeWidth * 3.0)
@@ -5749,9 +5783,39 @@ async function renderTasksGraphs(rootElement = document) {
                         strokeWidth: 8,
                         paintOrder: 'stroke fill',
                         strokeLinejoin: 'round',
-                        opacity: props.style?.opacity ?? 1,
+                        // While a flare sweeps, the ribbon underneath stays faint so
+                        // the swept part reads as an opacity rise, then settles full.
+                        opacity: (props.style?.opacity ?? 1) * (flareBox ? 0.3 : 1),
                         pointerEvents: 'none',
                     }),
+                    flareBox && React.createElement('g', { key: flareKey, pointerEvents: 'none' },
+                        React.createElement('mask', {
+                            id: flareMaskId,
+                            maskUnits: 'userSpaceOnUse',
+                            x: flareBox.x,
+                            y: flareBox.y,
+                            width: flareBox.width,
+                            height: flareBox.height,
+                        },
+                        React.createElement('path', {
+                            className: 'vyasa-tasks-edge-flare',
+                            d: path,
+                            pathLength: 1,
+                            fill: 'none',
+                            stroke: '#fff',
+                            strokeWidth: Math.max(20, strokeWidth * 8),
+                            strokeDasharray: '1 1',
+                            style: {
+                                '--vyasa-edge-flare-from': flareSweep === 'in' ? -1 : 1,
+                                filter: 'blur(3px)',
+                            },
+                        })),
+                        React.createElement('path', {
+                            d: taperPath,
+                            mask: `url(#${flareMaskId})`,
+                            fill: props.style?.stroke || 'currentColor',
+                            opacity: props.style?.opacity ?? 1,
+                        })),
                     React.createElement(rf.BaseEdge, {
                         ...props,
                         path,
