@@ -463,7 +463,7 @@ class ContentRenderer(FrankenRenderer):
         self.iframe_counter = 0
 
     def render_line_break(self, token):
-        return "\n"
+        return "\n" if token.soft else "<br />\n"
 
     def render_list_item(self, token):
         inner = self.render_inner(token)
