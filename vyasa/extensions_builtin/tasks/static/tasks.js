@@ -2710,7 +2710,7 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
         const source = liftToChild(edge.source);
         const target = liftToChild(edge.target);
         if (!source || !target || source === target) continue;
-        const key = `${source} ${target}`;
+        const key = `${source}->${target}`;
         if (!liftedEdges.has(key)) liftedEdges.set(key, { ...edge, source, target });
     }
     const childEdges = reduceTransitiveEdges([...liftedEdges.values()]);
@@ -5180,9 +5180,22 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const hasNodeSelection = nodeId && baseNodes.some((node) => node.id === nodeId);
                 if (!hasNodeSelection && multiSelectedIds.size > 0) {
+                    const multiHoverEndpointIds = new Set(hoveredNodeId ? [hoveredNodeId] : []);
+                    if (hoveredNodeId) {
+                        for (const edge of baseEdges) {
+                            if (edge.source === hoveredNodeId || edge.target === hoveredNodeId) {
+                                multiHoverEndpointIds.add(edge.source);
+                                multiHoverEndpointIds.add(edge.target);
+                            }
+                        }
+                    }
                     setNodesReusing(baseNodes.map((node) => {
                         const sourceGroupId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : null;
-                        const selected = multiSelectedHighlightIds.has(node.id) || (sourceGroupId && multiSelectedHighlightIds.has(sourceGroupId));
+                        const logicalId = sourceGroupId || node.id;
+                        const hovered = Boolean(hoveredNodeId) && logicalId === hoveredNodeId;
+                        const hoverNeighbor = !hovered && multiHoverEndpointIds.has(logicalId);
+                        const inSelection = multiSelectedHighlightIds.has(node.id) || (sourceGroupId && multiSelectedHighlightIds.has(sourceGroupId));
+                        const selected = inSelection || hovered || hoverNeighbor;
                         const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette);
                         const collapsedGroupColor = node.data?.__kind__ === 'group' && !expanded.has(node.id)
                             ? resolveTasksCollapsedGroupColor(node.data, model, activeColorBy, activeColorPalette)
@@ -5191,7 +5204,12 @@ async function renderTasksGraphs(rootElement = document) {
                         const activeBorderColor = node.data?.__checked__ ? (node.data?.__card_state_color__ || TASKS_DONE_ACCENT) : displayColor;
                         return {
                             ...node,
-                            data: { ...node.data, highlightMode: selected ? 'selected' : 'dim', __hover_checkbox__: node.id === hoverCheckboxId },
+                            data: {
+                                ...node.data,
+                                highlightMode: hovered ? 'selected-focus' : (hoverNeighbor ? 'neighbor' : (selected ? 'selected' : 'dim')),
+                                __hover_checkbox__: node.id === hoverCheckboxId,
+                                __hover_outline__: hovered || hoverNeighbor,
+                            },
                             style: {
                             ...node.style,
                                 opacity: (node.data?.__projection_branch_opacity__ ?? 1) * (selected ? 1 : 0.18),
@@ -5203,7 +5221,9 @@ async function renderTasksGraphs(rootElement = document) {
                         };
                     }));
                     setEdgesReusing(edgesVisible ? baseEdges.map((edge) => {
-                        const hit = multiSelectedHighlightIds.has(edge.source) && multiSelectedHighlightIds.has(edge.target);
+                        const touchesHover = Boolean(hoveredNodeId) && (edge.source === hoveredNodeId || edge.target === hoveredNodeId);
+                        const hit = touchesHover
+                            || (multiSelectedHighlightIds.has(edge.source) && multiSelectedHighlightIds.has(edge.target));
                         const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
                         const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
                         return {
@@ -5430,10 +5450,6 @@ async function renderTasksGraphs(rootElement = document) {
                     const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
                     const activeOpacity = highlighted ? 1 : branchOpacity;
                     const hoverDimsLabels = isTasksEdgeLabelHoverDimmingActive(nodeId, hoveredNodeId);
-                    const dashArray = highlighted ? ((mode === 'focused-in' || mode === 'focused-out') ? '10 6' : '8 6') : undefined;
-                    const dashCycle = dashArray
-                        ? dashArray.split(/\s+/).map(Number).filter(Number.isFinite).slice(0, 2).reduce((sum, value) => sum + value, 0)
-                        : undefined;
                     const strokeMode = !edgeAnimationEnabled && mode === 'selected'
                         ? (edge.source === nodeId ? 'selected-out' : (edge.target === nodeId ? 'selected-in' : mode))
                         : mode;
@@ -5472,8 +5488,6 @@ async function renderTasksGraphs(rootElement = document) {
                                 ? tasksProminentEdgeOpacity()
                                 : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.08, edgeOpacity))),
                             strokeWidth: tasksEdgeStrokeWidthForMode(strokeMode, edgeAnimationEnabled),
-                            strokeDasharray: dashArray,
-                            '--vyasa-edge-dash-cycle': dashCycle,
                             '--vyasa-edge-flow-duration': (mode === 'focused-in' || mode === 'focused-out') ? '0.72s' : '0.64s',
                             strokeLinecap: highlighted ? 'round' : undefined,
                         },
@@ -5736,7 +5750,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
                 const strokeMode = props.data?.strokeMode || highlightMode;
-                const useTaper = !mixedEdge && !props.animated && ['focused-in', 'focused-out', 'selected', 'selected-in', 'selected-out'].includes(strokeMode);
+                const useTaper = !mixedEdge;
                 const taperPath = useTaper
                     ? tasksTaperedBezierPath(path, (Number(props.style?.strokeWidth) || 4) * 2.65, Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42))
                     : '';
