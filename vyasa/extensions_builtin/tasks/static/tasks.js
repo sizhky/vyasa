@@ -332,24 +332,6 @@ function tasksApplyEdgeOpacity(alpha, opacity) {
     return Number((normalized * clampTasksEdgeOpacity(opacity)).toFixed(4));
 }
 
-function normalizeTasksEdgeAnimationMode(mode, enabledFallback = undefined) {
-    const text = String(mode || '').trim().toLowerCase();
-    if (text === 'none' || text === 'tick' || text === 'smooth') return text;
-    return enabledFallback === true ? 'smooth' : 'none';
-}
-
-function nextTasksEdgeAnimationMode(mode) {
-    return ({ smooth: 'tick', tick: 'none', none: 'smooth' })[normalizeTasksEdgeAnimationMode(mode)] || 'smooth';
-}
-
-function clampTasksEdgeAnimationSteps(value) {
-    return Math.max(2, Math.min(60, Math.round(Number(value) || 6)));
-}
-
-function clampTasksEdgeAnimationDuration(value) {
-    return Math.max(0.2, Math.min(8, Number(value) || 1.2));
-}
-
 function tasksProminentEdgeOpacity() {
     return 1;
 }
@@ -361,8 +343,7 @@ function tasksEdgeOpacityLabel(opacity) {
     return 'Clear';
 }
 
-function tasksEdgeStrokeWidthForMode(mode, animated) {
-    if (animated) return (mode === 'focused-in' || mode === 'focused-out') ? 5 : (mode === 'selected' ? 3.5 : 2.5);
+function tasksEdgeStrokeWidthForMode(mode) {
     if (mode === 'focused-in' || mode === 'focused-out' || mode === 'selected-in' || mode === 'selected-out' || mode === 'selected') return 3.5;
     return 1.25;
 }
@@ -411,11 +392,6 @@ function tasksTaperedArrowHeadPath(bezierPath, size) {
         `L ${baseX - nx * arrowWidth / 2} ${baseY - ny * arrowWidth / 2}`,
         'Z',
     ].join(' ');
-}
-
-function tasksEdgeIsMixed(props) {
-    const horizontal = (position) => position === 'left' || position === 'right';
-    return horizontal(props.sourcePosition) !== horizontal(props.targetPosition);
 }
 
 function tasksEdgePath(props) {
@@ -721,10 +697,6 @@ function tasksProjectionSchemaPrefs(model, projectionId) {
     if (typeof projection.default_secondary_color_by === 'string') prefs.secondaryColorBy = projection.default_secondary_color_by;
     if (typeof projection.filters_collapsed === 'boolean') prefs.filtersCollapsed = projection.filters_collapsed;
     if (typeof projection.edges_visible === 'boolean') prefs.edgesVisible = projection.edges_visible;
-    if (typeof projection.edge_animation_enabled === 'boolean') prefs.edgeAnimationEnabled = projection.edge_animation_enabled;
-    if (projection.edge_animation_mode) prefs.edgeAnimationMode = normalizeTasksEdgeAnimationMode(projection.edge_animation_mode, projection.edge_animation_enabled);
-    if (projection.edge_animation_tick_steps !== undefined && projection.edge_animation_tick_steps !== '') prefs.edgeAnimationTickSteps = clampTasksEdgeAnimationSteps(projection.edge_animation_tick_steps);
-    if (projection.edge_animation_tick_duration !== undefined && projection.edge_animation_tick_duration !== '') prefs.edgeAnimationTickDuration = clampTasksEdgeAnimationDuration(projection.edge_animation_tick_duration);
     if (projection.edge_opacity !== undefined && projection.edge_opacity !== '') prefs.edgeOpacity = clampTasksEdgeOpacity(projection.edge_opacity);
     if (projection.projection_unspecified_content_opacity !== undefined && projection.projection_unspecified_content_opacity !== '') {
         prefs.unspecifiedContentOpacity = clampTasksProjectionContentOpacity(projection.projection_unspecified_content_opacity);
@@ -2030,19 +2002,17 @@ function tasksHoverFocusNodeStyle(node, nodeColor, displayColor, activeBorderCol
     };
 }
 
-function tasksHoverFocusEdge(edge, hoveredNodeId, edgeAnimationEnabled, edgeAnimationClassName) {
+function tasksHoverFocusEdge(edge, hoveredNodeId) {
     const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
     const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
-    const strokeMode = edgeAnimationEnabled ? 'selected' : (edge.source === hoveredNodeId ? 'selected-out' : 'selected-in');
+    const strokeMode = edge.source === hoveredNodeId ? 'selected-out' : 'selected-in';
     return {
         ...edge,
         zIndex: TASKS_EDGE_FOCUS_Z,
         data: { ...edge.data, highlightMode: 'selected', strokeMode },
         labelStyle: { ...(edge.labelStyle || {}), fill: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, fontWeight: 800 },
         labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.9 },
-        style: { ...edge.style, stroke: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, strokeWidth: Math.max(4.75, tasksEdgeStrokeWidthForMode(strokeMode, edgeAnimationEnabled)), strokeLinecap: 'round' },
-        animated: edgeAnimationEnabled,
-        className: edgeAnimationClassName,
+        style: { ...edge.style, stroke: edgeColor, opacity: tasksProminentEdgeOpacity() * branchOpacity, strokeWidth: Math.max(4.75, tasksEdgeStrokeWidthForMode(strokeMode)), strokeLinecap: 'round' },
     };
 }
 
@@ -3978,17 +3948,6 @@ async function renderTasksGraphs(rootElement = document) {
             const [hoverCardsEnabled, setHoverCardsEnabled] = React.useState(() => (
                 typeof projectionPrefs?.hoverCardsEnabled === 'boolean' ? projectionPrefs.hoverCardsEnabled : true
             ));
-            const [edgeAnimationMode, setEdgeAnimationMode] = React.useState(() => (
-                normalizeTasksEdgeAnimationMode(projectionPrefs?.edgeAnimationMode, projectionPrefs?.edgeAnimationEnabled)
-            ));
-            const [edgeAnimationTickSteps, setEdgeAnimationTickSteps] = React.useState(() => clampTasksEdgeAnimationSteps(projectionPrefs?.edgeAnimationTickSteps));
-            const [edgeAnimationTickDuration, setEdgeAnimationTickDuration] = React.useState(() => clampTasksEdgeAnimationDuration(projectionPrefs?.edgeAnimationTickDuration));
-            const edgeAnimationEnabled = edgeAnimationMode !== 'none';
-            const edgeAnimationClassName = edgeAnimationMode === 'tick' ? 'vyasa-edge-animation-tick' : '';
-            const edgeAnimationStyle = React.useMemo(() => ({
-                '--vyasa-edge-animation-steps': String(edgeAnimationTickSteps),
-                '--vyasa-edge-animation-duration': `${edgeAnimationTickDuration}s`,
-            }), [edgeAnimationTickSteps, edgeAnimationTickDuration]);
             React.useEffect(() => {
                 syncTasksEdgeToggleButtons(widgetId, edgesVisible);
             }, [widgetId, edgesVisible]);
@@ -4208,11 +4167,10 @@ async function renderTasksGraphs(rootElement = document) {
                     defaultColoredNodes: currentNodes.filter((node) => !resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette) && node.data?.__default_color__).length,
                     colorOverlayNodes: currentNodes.filter((node) => Array.isArray(node.data?.__color_levels__) && node.data.__color_levels__.length).length,
                     edgesVisible,
-                    edgeAnimationMode,
                     edgeOpacity,
                     projectionUnspecifiedContentOpacity,
                 };
-            }, [viewMode, activeProjectionId, activeColorBy, activeColorHierarchy, model, activeColorPalette, edgesVisible, edgeAnimationMode, edgeOpacity, projectionUnspecifiedContentOpacity]);
+            }, [viewMode, activeProjectionId, activeColorBy, activeColorHierarchy, model, activeColorPalette, edgesVisible, edgeOpacity, projectionUnspecifiedContentOpacity]);
             React.useEffect(() => {
                 baseLayoutRef.current = null;
                 groupLayoutsRef.current = {};
@@ -4264,9 +4222,6 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
                 setHoverInactiveNodes(typeof nextPrefs?.hoverInactiveNodes === 'boolean' ? nextPrefs.hoverInactiveNodes : true);
                 setHoverCardsEnabled(typeof nextPrefs?.hoverCardsEnabled === 'boolean' ? nextPrefs.hoverCardsEnabled : true);
-                setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(nextPrefs?.edgeAnimationMode, nextPrefs?.edgeAnimationEnabled));
-                setEdgeAnimationTickSteps(clampTasksEdgeAnimationSteps(nextPrefs?.edgeAnimationTickSteps));
-                setEdgeAnimationTickDuration(clampTasksEdgeAnimationDuration(nextPrefs?.edgeAnimationTickDuration));
                 setEdgeOpacity(nextPrefs?.edgeOpacity !== undefined ? nextPrefs.edgeOpacity : (
                     sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity)
                 ));
@@ -4456,10 +4411,6 @@ async function renderTasksGraphs(rootElement = document) {
                     edgesVisible,
                     hoverInactiveNodes,
                     hoverCardsEnabled,
-                    edgeAnimationEnabled,
-                    edgeAnimationMode,
-                    edgeAnimationTickSteps,
-                    edgeAnimationTickDuration,
                     edgeOpacity,
                     unspecifiedContentOpacity: projectionUnspecifiedContentOpacity,
                     expandedGroupIds: Array.from(expanded),
@@ -4498,7 +4449,7 @@ async function renderTasksGraphs(rootElement = document) {
                     slideNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [egoState, sourceModel, activeFilters, activeSwatchFilters, activeEdgeTypes, edgeTypeFilterEnabled, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, edgeAnimationEnabled, edgeAnimationMode, edgeAnimationTickSteps, edgeAnimationTickDuration, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
+            }, [egoState, sourceModel, activeFilters, activeSwatchFilters, activeEdgeTypes, edgeTypeFilterEnabled, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
@@ -4510,9 +4461,6 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 if (typeof cfg.filtersCollapsed === 'boolean') setFiltersCollapsed(cfg.filtersCollapsed);
                 if (typeof cfg.edgesVisible === 'boolean') setEdgesVisible(cfg.edgesVisible);
-                if (cfg.edgeAnimationMode || typeof cfg.edgeAnimationEnabled === 'boolean') setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(cfg.edgeAnimationMode, cfg.edgeAnimationEnabled));
-                if (cfg.edgeAnimationTickSteps !== undefined) setEdgeAnimationTickSteps(clampTasksEdgeAnimationSteps(cfg.edgeAnimationTickSteps));
-                if (cfg.edgeAnimationTickDuration !== undefined) setEdgeAnimationTickDuration(clampTasksEdgeAnimationDuration(cfg.edgeAnimationTickDuration));
                 if (cfg.edgeOpacity !== undefined) setEdgeOpacity(clampTasksEdgeOpacity(cfg.edgeOpacity));
                 if (cfg.projectionUnspecifiedContentOpacity !== undefined) {
                     setProjectionUnspecifiedContentOpacity(clampTasksProjectionContentOpacity(cfg.projectionUnspecifiedContentOpacity));
@@ -4741,9 +4689,6 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdgesVisible(typeof defaults.edgesVisible === 'boolean' ? defaults.edgesVisible : true);
                 setActivePulseEnabled(true);
                 setContextDiffEnabled(false);
-                setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(defaults.edgeAnimationMode, defaults.edgeAnimationEnabled));
-                setEdgeAnimationTickSteps(clampTasksEdgeAnimationSteps(defaults.edgeAnimationTickSteps));
-                setEdgeAnimationTickDuration(clampTasksEdgeAnimationDuration(defaults.edgeAnimationTickDuration));
                 setEdgeOpacity(defaults.edgeOpacity !== undefined ? defaults.edgeOpacity : defaultEdgeOpacity);
                 setProjectionUnspecifiedContentOpacity(
                     defaults.unspecifiedContentOpacity !== undefined
@@ -5073,7 +5018,6 @@ async function renderTasksGraphs(rootElement = document) {
                         ...edge,
                         label: resolvedLabel,
                         type: 'vyasaEdge',
-                        animated: false,
                         data: { ...(edge.data || {}), edgeColor, __projection_branch_opacity__: branchOpacity * egoEdgeOpacity },
                         markerEnd: {
                             type: rf.MarkerType.ArrowClosed,
@@ -5233,8 +5177,6 @@ async function renderTasksGraphs(rootElement = document) {
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
                             style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity, strokeWidth: hit ? 4.5 : 2.5, strokeLinecap: hit ? 'round' : undefined, '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s' },
-                            animated: edgeAnimationEnabled && hit,
-                            className: edgeAnimationClassName,
                         };
                     }) : []);
                     return;
@@ -5280,7 +5222,7 @@ async function renderTasksGraphs(rootElement = document) {
                         setEdgesReusing(edgesVisible ? (hoveredNodeId
                             ? baseEdges.map((edge) => {
                                 if (edge.source !== hoveredNodeId && edge.target !== hoveredNodeId) return edge;
-                                return tasksHoverFocusEdge(edge, hoveredNodeId, edgeAnimationEnabled, edgeAnimationClassName);
+                                return tasksHoverFocusEdge(edge, hoveredNodeId);
                             })
                             : baseEdges) : []);
                         return;
@@ -5324,7 +5266,7 @@ async function renderTasksGraphs(rootElement = document) {
                     setEdgesReusing(edgesVisible ? baseEdges.map((edge) => {
                         const hit = (visibleSelectionIds.has(edge.source) && visibleSelectionIds.has(edge.target)) || searchMatches.edgeIds.has(edge.id);
                         if (filterHoverFocus.edgeIds.has(edge.id)) {
-                            return tasksHoverFocusEdge(edge, hoveredNodeId, edgeAnimationEnabled, edgeAnimationClassName);
+                            return tasksHoverFocusEdge(edge, hoveredNodeId);
                         }
                         const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
                         const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
@@ -5346,8 +5288,6 @@ async function renderTasksGraphs(rootElement = document) {
                                 strokeLinecap: hit ? 'round' : undefined,
                                 '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s',
                             },
-                            animated: edgeAnimationEnabled && hit,
-                            className: edgeAnimationClassName,
                         };
                     }) : []);
                     return;
@@ -5450,7 +5390,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const branchOpacity = edge.data?.__projection_branch_opacity__ ?? 1;
                     const activeOpacity = highlighted ? 1 : branchOpacity;
                     const hoverDimsLabels = isTasksEdgeLabelHoverDimmingActive(nodeId, hoveredNodeId);
-                    const strokeMode = !edgeAnimationEnabled && mode === 'selected'
+                    const strokeMode = mode === 'selected'
                         ? (edge.source === nodeId ? 'selected-out' : (edge.target === nodeId ? 'selected-in' : mode))
                         : mode;
                     return {
@@ -5487,12 +5427,10 @@ async function renderTasksGraphs(rootElement = document) {
                             opacity: activeOpacity * ((mode === 'focused-in' || mode === 'focused-out')
                                 ? tasksProminentEdgeOpacity()
                                 : (highlighted ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.08, edgeOpacity))),
-                            strokeWidth: tasksEdgeStrokeWidthForMode(strokeMode, edgeAnimationEnabled),
+                            strokeWidth: tasksEdgeStrokeWidthForMode(strokeMode),
                             '--vyasa-edge-flow-duration': (mode === 'focused-in' || mode === 'focused-out') ? '0.72s' : '0.64s',
                             strokeLinecap: highlighted ? 'round' : undefined,
                         },
-                        animated: edgeAnimationEnabled && highlighted,
-                        className: edgeAnimationClassName,
                     };
                 });
                 if (window.__vyasaTasksDebug.enabled) {
@@ -5520,7 +5458,6 @@ async function renderTasksGraphs(rootElement = document) {
                             source: edge.source,
                             target: edge.target,
                             mode: edge.data?.highlightMode || '',
-                            animated: Boolean(edge.animated),
                             zIndex: edge.zIndex ?? null,
                             labelZIndex: edge.labelZIndex ?? null,
                             strokeWidth: edge.style?.strokeWidth ?? null,
@@ -5538,7 +5475,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdgesReusing(edgesVisible ? nextEdges : []);
-            }, [effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeAnimationEnabled, edgeAnimationClassName, edgeOpacity, filteredSelectionIds]);
+            }, [effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeOpacity, filteredSelectionIds]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -5731,7 +5668,6 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             };
             const CustomEdge = React.memo((props) => {
-                const mixedEdge = tasksEdgeIsMixed(props);
                 const [path, labelX, labelY] = tasksEdgePath(props);
                 React.useEffect(() => {
                     traceTasksEdge('render', props, {
@@ -5750,10 +5686,11 @@ async function renderTasksGraphs(rootElement = document) {
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
                 const strokeMode = props.data?.strokeMode || highlightMode;
-                const useTaper = !mixedEdge;
-                const taperPath = useTaper
-                    ? tasksTaperedBezierPath(path, (Number(props.style?.strokeWidth) || 4) * 2.65, Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42))
-                    : '';
+                const taperPath = tasksTaperedBezierPath(
+                    path,
+                    (Number(props.style?.strokeWidth) || 4) * 2.65,
+                    Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42)
+                );
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
                 const edgeArrowPath = tasksTaperedArrowHeadPath(
                     path,
@@ -6345,11 +6282,6 @@ async function renderTasksGraphs(rootElement = document) {
                         if (key === 'arrowup') {
                             event.preventDefault();
                             panViewport(reactFlow, 0, 120 * (event.shiftKey ? 2 : 1));
-                            return;
-                        }
-                        if (key === '0') {
-                            event.preventDefault();
-                            setEdgeAnimationMode((current) => nextTasksEdgeAnimationMode(current));
                             return;
                         }
                         if (key === 'arrowdown') {
@@ -8121,8 +8053,6 @@ async function renderTasksGraphs(rootElement = document) {
                     searchQuery: isActiveLive ? searchQuery : (def?.search || ''),
                     filtersCollapsed: isActiveLive ? filtersCollapsed : def?.filters_collapsed,
                     edgesVisible: isActiveLive ? edgesVisible : def?.edges_visible,
-                    edgeAnimationEnabled: isActiveLive ? edgeAnimationEnabled : def?.edge_animation_enabled,
-                    edgeAnimationMode: isActiveLive ? edgeAnimationMode : def?.edge_animation_mode,
                     edgeOpacity: isActiveLive ? edgeOpacity : def?.edge_opacity,
                     projectionUnspecifiedContentOpacity: isActiveLive ? projectionUnspecifiedContentOpacity : def?.projection_unspecified_content_opacity,
                     defaultOpenDepth: effectiveDefaultOpenDepth,
@@ -8409,7 +8339,6 @@ async function renderTasksGraphs(rootElement = document) {
                     row('S', 'toggle filters'),
                     row('E', 'toggle edges'),
                     row('H', 'toggle hover cards'),
-                    row('0', 'edge animation none / smooth / tick'),
                     row('T', 'toggle hovered group'),
                     row('I / O', 'expand / collapse one depth'),
                     row('U / P', 'unfold / collapse all'),
@@ -8597,7 +8526,6 @@ async function renderTasksGraphs(rootElement = document) {
                 isolation: 'isolate',
                 overscrollBehavior: 'contain',
                 touchAction: 'none',
-                ...edgeAnimationStyle,
             };
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },

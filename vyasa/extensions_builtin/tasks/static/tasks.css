@@ -521,20 +521,3 @@ html:not(.vyasa-tasks-edge-labels-on) .vyasa-tasks-flow .vyasa-tasks-edge-label:
 .vyasa-tasks-filter-card .ruleGroup button {
     cursor: pointer;
 }
-.react-flow__edge.animated path {
-    animation: vyasa-edge-dashdraw var(--vyasa-edge-flow-duration, 0.6s) linear infinite;
-}
-.react-flow__edge.animated.vyasa-edge-animation-tick path {
-    animation: vyasa-edge-dashdraw var(--vyasa-edge-animation-duration, 1.2s) steps(var(--vyasa-edge-animation-steps, 6), jump-none) infinite;
-}
-.react-flow__edge.animated path.react-flow__edge-interaction {
-    animation: none;
-}
-@keyframes vyasa-edge-dashdraw {
-    from {
-        stroke-dashoffset: var(--vyasa-edge-dash-cycle, 10);
-    }
-    to {
-        stroke-dashoffset: 0;
-    }
-}

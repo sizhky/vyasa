@@ -390,23 +390,6 @@ function clampTasksProjectionContentOpacity(value) {
     return Math.max(0, Math.min(1, parsed));
 }
 
-function normalizeTasksEdgeAnimationMode(mode, enabledFallback = undefined) {
-    if (enabledFallback === false) return "none";
-    const raw = String(mode || "").trim().toLowerCase();
-    if (["none", "smooth", "tick"].includes(raw)) return raw;
-    return "smooth";
-}
-
-function clampTasksEdgeAnimationSteps(value) {
-    const parsed = Number.parseInt(value, 10);
-    return Math.max(1, Math.min(48, Number.isFinite(parsed) ? parsed : 6));
-}
-
-function clampTasksEdgeAnimationDuration(value) {
-    const parsed = Number.parseFloat(value);
-    return Math.max(0.2, Math.min(12, Number.isFinite(parsed) ? parsed : 1.2));
-}
-
 function tasksConfigListValue(values) {
     return (values || []).map((value) => String(value ?? '').trim()).filter(Boolean).join(',');
 }
@@ -454,10 +437,6 @@ export function buildTasksProjectionConfigText(config, contextId = '') {
     add('search', cfg.searchQuery);
     if (typeof cfg.filtersCollapsed === 'boolean') lines.push(`\tfilters_collapsed=${cfg.filtersCollapsed ? 'true' : 'false'}`);
     if (typeof cfg.edgesVisible === 'boolean') lines.push(`\tedges_visible=${cfg.edgesVisible ? 'true' : 'false'}`);
-    if (typeof cfg.edgeAnimationEnabled === 'boolean') lines.push(`\tedge_animation_enabled=${cfg.edgeAnimationEnabled ? 'true' : 'false'}`);
-    if (cfg.edgeAnimationMode) lines.push(`\tedge_animation_mode=${normalizeTasksEdgeAnimationMode(cfg.edgeAnimationMode, cfg.edgeAnimationEnabled)}`);
-    if (cfg.edgeAnimationTickSteps !== undefined) lines.push(`\tedge_animation_tick_steps=${clampTasksEdgeAnimationSteps(cfg.edgeAnimationTickSteps)}`);
-    if (cfg.edgeAnimationTickDuration !== undefined) lines.push(`\tedge_animation_tick_duration=${clampTasksEdgeAnimationDuration(cfg.edgeAnimationTickDuration)}`);
     if (cfg.edgeOpacity !== undefined && cfg.edgeOpacity !== null && cfg.edgeOpacity !== '' && !Number.isNaN(Number(cfg.edgeOpacity))) {
         lines.push(`\tedge_opacity=${clampTasksEdgeOpacity(cfg.edgeOpacity)}`);
     }
@@ -520,10 +499,6 @@ export function parseTasksProjectionConfigText(text) {
         else if (key === 'search') cfg.searchQuery = value;
         else if (key === 'filters_collapsed') cfg.filtersCollapsed = value === 'true';
         else if (key === 'edges_visible') cfg.edgesVisible = value !== 'false';
-        else if (key === 'edge_animation_enabled') cfg.edgeAnimationEnabled = value !== 'false';
-        else if (key === 'edge_animation_mode') cfg.edgeAnimationMode = normalizeTasksEdgeAnimationMode(value, cfg.edgeAnimationEnabled);
-        else if (key === 'edge_animation_tick_steps') cfg.edgeAnimationTickSteps = clampTasksEdgeAnimationSteps(value);
-        else if (key === 'edge_animation_tick_duration') cfg.edgeAnimationTickDuration = clampTasksEdgeAnimationDuration(value);
         else if (key === 'edge_opacity') cfg.edgeOpacity = value;
         else if (key === 'projection_unspecified_content_opacity') cfg.projectionUnspecifiedContentOpacity = value;
         else if (key === 'color_by') cfg.colorBy = value;
