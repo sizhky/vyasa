@@ -123,6 +123,7 @@ def iter_blog_home_files(roots=None, roles=None):
         rbac_rules=_rbac_rules,
         iter_files=iter_visible_files,
         slug_for_path=content_slug_for_path,
+        show_hidden=get_config().get_show_hidden(),
     )
 
 
@@ -1587,6 +1588,11 @@ def index(htmx, request: Request):
         layout=layout,
         logger=logger,
     )
+
+
+@rt("/_home")
+def home(htmx, request: Request):
+    return render_blog_home(htmx, request)
 
 
 @rt("/_home/feed")

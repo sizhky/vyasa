@@ -20,7 +20,7 @@ def _home_provider(htmx, request):
     roots = services.get_content_mounts()
     root = roots[0][1] if roots else services.get_root_folder()
     roles = services.get_roles_from_auth(request.scope.get("auth"), services.rbac_rules(), services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list)
-    entries = sort_entries(iter_home_files(roots, roles, is_allowed_fn=services.is_allowed, rbac_rules=services.rbac_rules(), iter_files=services.iter_visible_files, slug_for_path=services.content_slug_for_path), root, get_sort=services.get_config().get_home_sort, created_ts=services.get_file_created_ts)
+    entries = sort_entries(iter_home_files(roots, roles, is_allowed_fn=services.is_allowed, rbac_rules=services.rbac_rules(), iter_files=services.iter_visible_files, slug_for_path=services.content_slug_for_path, show_hidden=services.get_config().get_show_hidden()), root, get_sort=services.get_config().get_home_sort, created_ts=services.get_file_created_ts)
     feed = services.render_blog_home_feed(entries, root, 0)
     shell = Div(H1(f"Welcome to {services.get_blog_title()}!", cls="vyasa-page-title text-4xl font-bold"), P("Latest posts", cls="mt-2 text-slate-500"), feed, cls="space-y-6")
     return services.layout(shell, htmx=htmx, title=f"Home - {services.get_blog_title()}", show_sidebar=True, current_path="__home__", auth=request.scope.get("auth"))
@@ -31,14 +31,14 @@ def _feed_provider(offset=0, htmx=None, request=None):
     roots = services.get_content_mounts()
     root = roots[0][1] if roots else services.get_root_folder()
     roles = services.get_roles_from_auth(request.scope.get("auth"), services.rbac_rules(), services.rbac_cfg(), services.google_oauth_cfg(), services.coerce_list) if request else None
-    entries = sort_entries(iter_home_files(roots, roles, is_allowed_fn=services.is_allowed, rbac_rules=services.rbac_rules(), iter_files=services.iter_visible_files, slug_for_path=services.content_slug_for_path), root, get_sort=services.get_config().get_home_sort, created_ts=services.get_file_created_ts)
+    entries = sort_entries(iter_home_files(roots, roles, is_allowed_fn=services.is_allowed, rbac_rules=services.rbac_rules(), iter_files=services.iter_visible_files, slug_for_path=services.content_slug_for_path, show_hidden=services.get_config().get_show_hidden()), root, get_sort=services.get_config().get_home_sort, created_ts=services.get_file_created_ts)
     return services.render_blog_home_feed(entries, root, max(0, offset), wrap=False)
 
 
-def iter_home_files(roots=None, roles=None, *, is_allowed_fn, rbac_rules, iter_files=iter_visible_files, slug_for_path=content_slug_for_path):
+def iter_home_files(roots=None, roles=None, *, is_allowed_fn, rbac_rules, iter_files=iter_visible_files, slug_for_path=content_slug_for_path, show_hidden=False):
     for _, root in roots or get_content_mounts():
-        for path in iter_files(root, (".md",), include_hidden=False):
-            if path.name.startswith(".") or is_ignored(path, root):
+        for path in iter_files(root, (".md",), show_hidden):
+            if (not show_hidden and path.name.startswith(".")) or is_ignored(path, root):
                 continue
             if path.parent == root and path.stem.lower() in {"index", "readme"}:
                 continue
