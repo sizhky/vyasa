@@ -1,13 +1,13 @@
 /* The editor stands in the same column as the reading view, at the same
    width, font, and line height, so the eye does not move when you toggle. */
 /* The reading column is 46rem, and half of that is too narrow to write in, so
-   the editor grows outward while it is open. The negative margin only kicks in
-   when the column is narrower than the target, so a wide page is left alone. */
+   the editor grows outward while it is open. It takes the whole column when the
+   column is already wider than that, and pulls outward when it is narrower. */
 .vyasa-document-editor {
     display: flex;
     flex-direction: column;
     gap: 0.85rem;
-    width: min(72rem, calc(100vw - 3rem));
+    width: max(100%, min(72rem, calc(100vw - 3rem)));
     margin-inline: min(0px, calc(50% - 36rem));
 }
 
