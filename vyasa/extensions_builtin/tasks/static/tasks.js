@@ -2583,28 +2583,27 @@ function hasExplicitGroupDirection(model) {
     return (model.groups || []).some((group) => group && (group.direction || group.layout_direction));
 }
 
+// Read the layering ELK already worked out, rather than re-deriving ranks from
+// the edges. ELK breaks cycles as part of laying out; a longest-path rank of our
+// own cuts a cycle wherever its walk happens to enter it, which can drop a group
+// far from the one edge that placed it. A band is a set of children that overlap
+// vertically, which is exactly what one ELK layer looks like.
 function tasksWaterfallBands(ids, edges, direction, positions = {}) {
     if (direction !== 'DOWN' || !edges.length) return null;
-    const incoming = new Map(ids.map((id) => [id, []]));
-    for (const edge of edges) {
-        if (incoming.has(edge.target) && incoming.has(edge.source)) incoming.get(edge.target).push(edge.source);
+    const placed = ids.filter((id) => positions[id]);
+    if (!placed.length) return null;
+    const bands = [];
+    let bandBottom = -Infinity;
+    for (const id of placed.sort((left, right) => positions[left].y - positions[right].y)) {
+        const rect = positions[id];
+        if (!bands.length || rect.y >= bandBottom) {
+            bands.push([]);
+            bandBottom = -Infinity;
+        }
+        bands[bands.length - 1].push(id);
+        bandBottom = Math.max(bandBottom, rect.y + (rect.height || 0));
     }
-    const ranks = new Map();
-    const resolving = new Set();
-    const rankOf = (id) => {
-        if (ranks.has(id)) return ranks.get(id);
-        if (resolving.has(id)) return 0;
-        resolving.add(id);
-        const rank = incoming.get(id).reduce((deepest, source) => Math.max(deepest, rankOf(source) + 1), 0);
-        resolving.delete(id);
-        ranks.set(id, rank);
-        return rank;
-    };
-    for (const id of ids) rankOf(id);
-    const bands = Array.from({ length: Math.max(...ranks.values()) + 1 }, () => []);
-    for (const id of [...ids].sort((left, right) => (positions[left]?.x || 0) - (positions[right]?.x || 0))) {
-        bands[ranks.get(id)].push(id);
-    }
+    for (const band of bands) band.sort((left, right) => positions[left].x - positions[right].x);
     return bands;
 }
 

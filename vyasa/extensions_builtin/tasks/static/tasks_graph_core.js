@@ -745,10 +745,18 @@ export function packTaskChildRects(inputPositions, options = {}) {
     const filledBands = bands.filter((band) => band.length);
     const packAtWidth = (targetWidth) => {
         const rows = [];
+        let currentWidth = 0;
         for (const band of filledBands) {
-            const bandStart = rows.length;
-            rows.push([]);
-            let currentWidth = 0;
+            // Bands hold the top-to-bottom order, but a band small enough to sit
+            // beside the one before it shares that row instead of adding a new one.
+            // Without this a long chain of one-child bands draws as a tall column.
+            const previousRow = rows[rows.length - 1];
+            let bandStart = rows.length - 1;
+            if (!previousRow?.length || currentWidth + gap + rowWidth(band) > targetWidth) {
+                bandStart = rows.length;
+                rows.push([]);
+                currentWidth = 0;
+            }
             for (const id of band) {
                 const row = rows[rows.length - 1];
                 const nextWidth = currentWidth + (row.length ? gap : 0) + sourceRects[id].width;
