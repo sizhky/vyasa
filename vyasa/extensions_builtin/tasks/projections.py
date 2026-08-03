@@ -127,6 +127,11 @@ def normalize_projections(value) -> list[dict]:
         if not isinstance(raw, dict):
             continue
         groups_from = _normalize_groups_from(raw.get("groups_from"))
+        # `group_by=none` keeps a view flat; an empty groups_from inherits the
+        # graph's default_group_by (resolved in attach_projection_models).
+        ungrouped = bool(raw.get("ungrouped")) or [attr.lower() for attr in groups_from] == ["none"]
+        if ungrouped:
+            groups_from = []
         projection_id = _clean_projection_id(raw.get("id") or (groups_from[-1] if groups_from else ""))
         if not projection_id or projection_id in seen:
             continue
@@ -166,6 +171,7 @@ def normalize_projections(value) -> list[dict]:
         }
         normalized = {key: item for key, item in projection.items() if item not in ("", [], (), {}, None)}
         normalized["groups_from"] = groups_from
+        normalized["ungrouped"] = ungrouped
         normalized["slides"] = projection["slides"]
         projections.append(normalized)
     return projections
@@ -218,8 +224,9 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
             task_copy["__source_node_id"] = source_id
             tasks.append(task_copy)
             projected_ids[source_id].append(source_id)
-            if task_copy.get("group_id"):
-                task_children[task_copy["group_id"]].append(source_id)
+            # Ungrouped tasks belong under the null parent, the same key the base
+            # model uses. Without it the view has no root nodes and renders empty.
+            task_children[task_copy.get("group_id")].append(source_id)
             continue
         paths = value_paths(task)
         for path in paths:
@@ -299,9 +306,12 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
 
 def attach_projection_models(model: dict) -> dict:
     projections = normalize_projections(model.get("view_projections"))
+    default_group_by = _normalize_groups_from(model.get("default_group_by"))
     model["view_projections"] = projections
     model["projection_models"] = {}
     for projection in projections:
+        if not projection["groups_from"] and not projection.get("ungrouped"):
+            projection["groups_from"] = list(default_group_by)
         projection_model = build_projection_model(model, projection)
         model["projection_models"][projection["id"]] = {
             "model": projection_model,
