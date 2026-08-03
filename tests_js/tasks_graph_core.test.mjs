@@ -30,7 +30,7 @@ test('Knowledge Graph notes backup round-trips one graph preference record', () 
         'vyasa:tasks:prefs:doc::graph-b': JSON.stringify({ nodeNotes: { b: 'second note' } }),
     });
     const backup = collectTasksStoredNotes(storage, graphKey, { a: 'Alpha title' }, { intro: 'Intro slide' });
-    assert.equal(backup, '!vyasa-notes 4\n\n@ node a [Done] Alpha title\n  first note\n\n@ slide intro Intro slide\n  slide note\n');
+    assert.equal(backup, '# vyasa-notes 4\n\n@ node a [Done] Alpha title\n  first note\n\n@ slide intro Intro slide\n  slide note\n');
 
     const target = fakeStorage({
         [graphKey]: JSON.stringify({ nodeNotes: { existing: 'keep me' }, nodeStates: { existing: 'Review' }, projectionId: 'main' }),
@@ -43,7 +43,7 @@ test('Knowledge Graph notes backup round-trips one graph preference record', () 
     assert.deepEqual(restored.nodeStates, { existing: 'Review', a: 'Done' });
     assert.equal(restored.projectionId, 'main');
     assert.throws(
-        () => importTasksStoredNotes(target, graphKey, '!vyasa-notes 3'),
+        () => importTasksStoredNotes(target, graphKey, '# vyasa-notes 3'),
         /Invalid Vyasa Knowledge Graph notes backup/
     );
 });

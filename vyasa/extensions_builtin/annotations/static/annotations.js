@@ -221,7 +221,7 @@ function initAnnotations(root = document) {
         append(item, 1);
         return lines.join('\n');
     };
-    const formatComments = (items) => `!vyasa-comments 1\n${items.length ? `\n${items.map((item, index) => formatCommentThread(item, index + 1)).join('\n\n')}\n` : ''}`;
+    const formatComments = (items) => `# vyasa-comments 1\n${items.length ? `\n${items.map((item, index) => formatCommentThread(item, index + 1)).join('\n\n')}\n` : ''}`;
     const formatAllComments = (items) => {
         const byPath = new Map();
         items.forEach((item) => {
@@ -232,7 +232,7 @@ function initAnnotations(root = document) {
             const threads = buildAnnotationTree(rows).map((item, index) => formatCommentThread(item, index + 1));
             return `@ document ${documentPath}\n\n${threads.join('\n\n')}`;
         });
-        return `!vyasa-comments 1\n${documents.length ? `\n${documents.join('\n\n')}\n` : ''}`;
+        return `# vyasa-comments 1\n${documents.length ? `\n${documents.join('\n\n')}\n` : ''}`;
     };
     const copyAnnotationText = async (text) => {
         if (navigator.clipboard?.writeText) {
