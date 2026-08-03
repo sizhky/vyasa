@@ -8064,12 +8064,22 @@ async function renderTasksGraphs(rootElement = document) {
                 if (!rf.ViewportPortal) return null;
                 const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
                 const activeNodes = nodes.filter((node) => !['none', 'dim'].includes(node.data?.highlightMode || 'none'));
-                return React.createElement(rf.ViewportPortal, null, ...activeNodes.map((node) => {
+                return React.createElement(rf.ViewportPortal, null, ...activeNodes.flatMap((node) => {
                     const rect = tasksGraphNodeAbsoluteRect(node, byId);
                     const hoverOutline = node.data?.__hover_outline__ === true;
                     const activeBorderColor = node.style?.['--vyasa-tasks-active-border'] || 'var(--vyasa-primary)';
-                    return React.createElement('div', {
-                        key: node.id,
+                    const mode = node.data?.highlightMode || 'none';
+                    // A neighbour splits its band into thirds — an inner band, a
+                    // transparent gap, then an outer band — so it stops looking like
+                    // the central node, which keeps the solid band. One div draws one
+                    // outline, so the outer band rides a second div over the same rect.
+                    const central = mode === 'selected' || mode === 'selected-focus';
+                    const width = hoverOutline ? 12 : 4;
+                    const bands = central
+                        ? [[width, 3]]
+                        : [[width / 3, 3], [width / 3, 3 + ((width / 3) * 2)]];
+                    return bands.map(([bandWidth, bandOffset], index) => React.createElement('div', {
+                        key: index ? `${node.id}-outer` : node.id,
                         'data-vyasa-node-highlight-border': 'true',
                         style: {
                             position: 'absolute',
@@ -8077,12 +8087,12 @@ async function renderTasksGraphs(rootElement = document) {
                             width: rect.width,
                             height: rect.height,
                             borderRadius: node.style?.borderRadius || 6,
-                            outline: `${hoverOutline ? 12 : 4}px solid ${activeBorderColor}`,
-                            outlineOffset: '3px',
+                            outline: `${bandWidth}px solid ${activeBorderColor}`,
+                            outlineOffset: `${bandOffset}px`,
                             pointerEvents: 'none',
                             zIndex: TASKS_EDGE_FOCUS_Z - 1,
                         },
-                    });
+                    }));
                 }));
             };
             const flowWrapperClassName = [
