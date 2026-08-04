@@ -51,6 +51,9 @@ const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;
 const TASKS_EDGE_OPACITY_MIN = 0.05;
 const TASKS_EDGE_OPACITY_MAX = 1;
 const TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT = 0.25;
+// No document path in the key: neighbor opacity is one setting for every graph
+// on this server, and localStorage is already scoped to the origin.
+const TASKS_EGO_NEIGHBOR_OPACITY_KEY = 'vyasa:tasks:ego-neighbor-opacity';
 const TASKS_GRAPH_MIN_ZOOM = 0.05;
 const TASKS_NODE_CONNECTION_HANDLES = {
     source: ['top', 'right', 'bottom', 'left'].flatMap((side) => [0, 1, 2].map((index) => ({ id: `source-${side}-${index}`, side, offsetPct: 50 }))),
@@ -529,6 +532,28 @@ function scheduleTasksStorageWrite(key, writeNow, payload = '') {
     };
     const timer = window.setTimeout(run, TASKS_STORAGE_WRITE_DELAY_MS);
     tasksStorageWriteTimers.set(key, timer);
+}
+
+function readTasksEgoNeighborOpacity() {
+    const storage = tasksGetStorage();
+    if (!storage) return TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT;
+    try {
+        const raw = storage.getItem(TASKS_EGO_NEIGHBOR_OPACITY_KEY);
+        return raw === null ? TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT : clampTasksEgoNeighborOpacity(raw);
+    } catch {
+        return TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT;
+    }
+}
+
+function writeTasksEgoNeighborOpacity(value) {
+    const storage = tasksGetStorage();
+    if (!storage) return;
+    const payload = String(clampTasksEgoNeighborOpacity(value));
+    scheduleTasksStorageWrite(
+        TASKS_EGO_NEIGHBOR_OPACITY_KEY,
+        () => storage.setItem(TASKS_EGO_NEIGHBOR_OPACITY_KEY, payload),
+        payload
+    );
 }
 
 function showTasksToast(message) {
@@ -3992,7 +4017,7 @@ async function renderTasksGraphs(rootElement = document) {
                     ? defaultProjectionUnspecifiedContentOpacity
                     : clampTasksProjectionContentOpacity(sourcePrefsRef.current.unspecifiedContentOpacity)
             ));
-            const [egoNeighborOpacity, setEgoNeighborOpacity] = React.useState(TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT);
+            const [egoNeighborOpacity, setEgoNeighborOpacity] = React.useState(readTasksEgoNeighborOpacity);
             const cardStates = React.useMemo(() => normalizeTasksCardStates(sourceModel), [sourceModel]);
             const [nodeStates, setNodeStates] = React.useState(() => {
                 const stableCheckedNodeIds = readTasksCheckedNodeIds(sourceModel);
@@ -8177,7 +8202,11 @@ async function renderTasksGraphs(rootElement = document) {
                         max: 1,
                         step: 0.01,
                         value: egoNeighborOpacity,
-                        onChange: (event) => setEgoNeighborOpacity(clampTasksEgoNeighborOpacity(event.target.value)),
+                        onChange: (event) => {
+                            const next = clampTasksEgoNeighborOpacity(event.target.value);
+                            setEgoNeighborOpacity(next);
+                            writeTasksEgoNeighborOpacity(next);
+                        },
                         style: { width: '100%', minWidth: 0, margin: 0 },
                     }),
                     window.React.createElement('span', { style: { opacity: 0.8, minWidth: '3em', textAlign: 'right', fontVariantNumeric: 'tabular-nums' } }, tasksOpacityPctLabel(egoNeighborOpacity))
