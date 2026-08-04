@@ -304,6 +304,21 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
     return projection_model
 
 
+def _apply_default_group_by(model: dict, group_attrs: list[str]) -> None:
+    """Give the base view the groups its own `default_group_by` declares.
+
+    A model that only records the attributes stays flat, while the viewer reads
+    `default_group_by` as grouping the schema already applied. Picking that exact
+    hierarchy then renders an ungrouped graph. Authored groups win, so only a
+    base model without groups is built here.
+    """
+    if not group_attrs or model.get("groups"):
+        return
+    grouped = build_projection_model(model, {"id": "base", "source": "base", "groups_from": list(group_attrs)})
+    for key in ("groups", "tasks", "dependency_edges", "group_tree", "task_children", "document_order"):
+        model[key] = grouped[key]
+
+
 def attach_projection_models(model: dict) -> dict:
     projections = normalize_projections(model.get("view_projections"))
     default_group_by = _normalize_groups_from(model.get("default_group_by"))
@@ -319,4 +334,5 @@ def attach_projection_models(model: dict) -> dict:
         }
     if model.get("default_projection") and model["default_projection"] not in model["projection_models"]:
         model["default_projection"] = ""
+    _apply_default_group_by(model, default_group_by)
     return model
