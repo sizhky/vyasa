@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
 import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksGroupHoverAttrRows, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
@@ -50,10 +50,6 @@ const TASKS_PROJECTION_UNSPECIFIED_GROUP_OPACITY_DEFAULT = 7;
 const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;
 const TASKS_EDGE_OPACITY_MIN = 0.05;
 const TASKS_EDGE_OPACITY_MAX = 1;
-const TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT = 0.25;
-// No document path in the key: neighbor opacity is one setting for every graph
-// on this server, and localStorage is already scoped to the origin.
-const TASKS_EGO_NEIGHBOR_OPACITY_KEY = 'vyasa:tasks:ego-neighbor-opacity';
 const TASKS_GRAPH_MIN_ZOOM = 0.05;
 const TASKS_NODE_CONNECTION_HANDLES = {
     source: ['top', 'right', 'bottom', 'left'].flatMap((side) => [0, 1, 2].map((index) => ({ id: `source-${side}-${index}`, side, offsetPct: 50 }))),
@@ -318,12 +314,6 @@ function tasksOpacityPctLabel(value) {
     return `${Math.round(clampTasksProjectionContentOpacity(value) * 100)}%`;
 }
 
-function clampTasksEgoNeighborOpacity(value) {
-    const parsed = Number.parseFloat(String(value ?? ''));
-    if (!Number.isFinite(parsed)) return TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT;
-    return Math.max(0.05, Math.min(1, parsed));
-}
-
 function tasksDefaultEdgeOpacity(edgeCount) {
     const count = Math.max(1, Number.parseFloat(String(edgeCount ?? '')) || 1);
     return clampTasksEdgeOpacity(5 / Math.sqrt(count));
@@ -532,28 +522,6 @@ function scheduleTasksStorageWrite(key, writeNow, payload = '') {
     };
     const timer = window.setTimeout(run, TASKS_STORAGE_WRITE_DELAY_MS);
     tasksStorageWriteTimers.set(key, timer);
-}
-
-function readTasksEgoNeighborOpacity() {
-    const storage = tasksGetStorage();
-    if (!storage) return TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT;
-    try {
-        const raw = storage.getItem(TASKS_EGO_NEIGHBOR_OPACITY_KEY);
-        return raw === null ? TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT : clampTasksEgoNeighborOpacity(raw);
-    } catch {
-        return TASKS_EGO_NEIGHBOR_OPACITY_DEFAULT;
-    }
-}
-
-function writeTasksEgoNeighborOpacity(value) {
-    const storage = tasksGetStorage();
-    if (!storage) return;
-    const payload = String(clampTasksEgoNeighborOpacity(value));
-    scheduleTasksStorageWrite(
-        TASKS_EGO_NEIGHBOR_OPACITY_KEY,
-        () => storage.setItem(TASKS_EGO_NEIGHBOR_OPACITY_KEY, payload),
-        payload
-    );
 }
 
 function showTasksToast(message) {
@@ -3836,6 +3804,10 @@ async function renderTasksGraphs(rootElement = document) {
             const contextDiffSelectionRef = React.useRef({ key: '', ids: new Set() });
             const [dragSelection, setDragSelection] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
+            // The keydown handler does not re-register on hover, so shortcuts read
+            // the hovered node from this ref rather than the stale closure value.
+            const hoveredNodeIdRef = React.useRef(null);
+            hoveredNodeIdRef.current = hoveredNodeId;
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
             const groupHoverTooltipRef = React.useRef(null);
             groupHoverTooltipRef.current = groupHoverTooltip;
@@ -4017,7 +3989,6 @@ async function renderTasksGraphs(rootElement = document) {
                     ? defaultProjectionUnspecifiedContentOpacity
                     : clampTasksProjectionContentOpacity(sourcePrefsRef.current.unspecifiedContentOpacity)
             ));
-            const [egoNeighborOpacity, setEgoNeighborOpacity] = React.useState(readTasksEgoNeighborOpacity);
             const cardStates = React.useMemo(() => normalizeTasksCardStates(sourceModel), [sourceModel]);
             const [nodeStates, setNodeStates] = React.useState(() => {
                 const stableCheckedNodeIds = readTasksCheckedNodeIds(sourceModel);
@@ -4897,9 +4868,6 @@ async function renderTasksGraphs(rootElement = document) {
                 const derived = await deriveSquishedExpandedLayout(rootGraph, model, effectiveExpandedSet, baseLayout, groupLayoutsRef.current, layoutConfig);
                 const derivedDone = tasksPerfNow();
                 const derivedById = Object.fromEntries((derived.nodes || []).map((node) => [node.id, node]));
-                const egoSelectedIds = egoMode && Array.isArray(model.ego_selected_ids)
-                    ? new Set(model.ego_selected_ids.map((id) => String(id || '').trim()).filter(Boolean))
-                    : new Set();
                 const unspecifiedProjectionGroupIds = new Set(
                     (derived.nodes || [])
                         .filter((node) => isTasksUnspecifiedProjectionGroup(node, TASKS_PROJECTION_UNSPECIFIED_LABEL))
@@ -4937,9 +4905,6 @@ async function renderTasksGraphs(rootElement = document) {
                 const unspecifiedProjectionBranchIds = new Set(
                     (derived.nodes || []).filter(isInUnspecifiedProjectionBranch).map((node) => node.id)
                 );
-                const egoGroupsById = egoMode && model.ego_include_neighbors
-                    ? Object.fromEntries((model.groups || []).map((g) => [String(g.id || ''), g]))
-                    : null;
                 const baseNodes = derived.nodes.map((n) => {
                     const isExpanded = n.__kind__ === 'group' && effectiveExpandedSet.has(n.id);
                     const hitArea = tasksGraphNodeHitArea(n.__kind__, isExpanded);
@@ -4982,10 +4947,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ? `1px solid color-mix(in srgb, var(--vyasa-paper) ${100 - groupBorderMix}%, ${groupColor} ${groupBorderMix}%)`
                             : `1px solid color-mix(in srgb, var(--vyasa-paper) 30%, ${nodeColor} 70%)`)
                         : TASKS_NODE_BORDER;
-                    const egoNodeOpacity = egoMode
-                        ? tasksEgoNodeOpacity(n, egoSelectedIds, model, egoNeighborOpacity, egoGroupsById)
-                        : 1;
-                    const branchOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1) * egoNodeOpacity;
+                    const branchOpacity = isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1;
                     const rfNode = {
                         id: n.id,
                         type: 'vyasaTask',
@@ -5027,8 +4989,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const titleWidth = Math.max(80, n.width - 16);
                     const titleImage = resolveTasksNodeImage(n, model);
                     const titleHeight = sizeTaskNode(n.label || n.id, 'groupTitle', titleWidth, { hasImage: Boolean(titleImage) }).height;
-                    const titleOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1)
-                        * (egoMode ? tasksEgoNodeOpacity(n, egoSelectedIds, model, egoNeighborOpacity, egoGroupsById) : 1);
+                    const titleOpacity = isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1;
                     baseNodes.push({
                         id: `${n.id}__title`,
                         type: 'vyasaTask',
@@ -5060,12 +5021,11 @@ async function renderTasksGraphs(rootElement = document) {
                     const branchOpacity = (unspecifiedProjectionBranchIds.has(edge.source) || unspecifiedProjectionBranchIds.has(edge.target))
                         ? projectionUnspecifiedContentOpacity
                         : 1;
-                    const egoEdgeOpacity = egoMode && model.ego_include_neighbors && (!egoSelectedIds.has(edge.source) || !egoSelectedIds.has(edge.target)) ? egoNeighborOpacity : 1;
                     return {
                         ...edge,
                         label: resolvedLabel,
                         type: 'vyasaEdge',
-                        data: { ...(edge.data || {}), edgeColor, __projection_branch_opacity__: branchOpacity * egoEdgeOpacity },
+                        data: { ...(edge.data || {}), edgeColor, __projection_branch_opacity__: branchOpacity },
                         markerEnd: {
                             type: rf.MarkerType.ArrowClosed,
                             width: 8,
@@ -5077,9 +5037,9 @@ async function renderTasksGraphs(rootElement = document) {
                         labelBgBorderRadius: 3,
                         labelZIndex: TASKS_EDGE_LABEL_Z,
                         labelMaxWidth: layoutConfig.edgeLabelWidth,
-                        labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || TASKS_EDGE_LABEL_TEXT, opacity: edgeOpacity * branchOpacity * egoEdgeOpacity },
+                        labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || TASKS_EDGE_LABEL_TEXT, opacity: edgeOpacity * branchOpacity },
                         labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
-                        style: { strokeWidth: 2.5, opacity: edgeOpacity * branchOpacity * egoEdgeOpacity, stroke: edgeColor || 'currentColor' },
+                        style: { strokeWidth: 2.5, opacity: edgeOpacity * branchOpacity, stroke: edgeColor || 'currentColor' },
                     };
                 });
                 const anchoredNodes = baseNodes.map((node) => ({
@@ -5141,7 +5101,7 @@ async function renderTasksGraphs(rootElement = document) {
                     deriveMs: Math.round((derivedDone - groupsDone) * 10) / 10,
                     totalMs: Math.round((tasksPerfNow() - layoutStart) * 10) / 10,
                 });
-            }, [ensureBaseLayout, model, sourceModel, activeColorBy, activeColorPalette, activeColorLevelSpecs, activeProjection, viewMode, edgesVisible, edgeOpacity, projectionUnspecifiedContentOpacity, egoNeighborOpacity, checkedNodeIdSet, nodeStates, nodeNotes, cardStates, defaultNodeColor]);
+            }, [ensureBaseLayout, model, sourceModel, activeColorBy, activeColorPalette, activeColorLevelSpecs, activeProjection, viewMode, edgesVisible, edgeOpacity, projectionUnspecifiedContentOpacity, checkedNodeIdSet, nodeStates, nodeNotes, cardStates, defaultNodeColor]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: 'currentColor' },
@@ -6266,7 +6226,11 @@ async function renderTasksGraphs(rootElement = document) {
                             return;
                         }
                         if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName))) return;
-                        if (!widgetFocused && !(key === 't' && groupToggleHoverIdRef.current)) return;
+                        // Hovering never marks the widget active, so the shortcuts that
+                        // act on what the cursor is over need their own way past this gate.
+                        if (!widgetFocused
+                            && !(key === 't' && groupToggleHoverIdRef.current)
+                            && !(key === 'g' && hoveredNodeIdRef.current)) return;
                         if (key === 'f' && event.shiftKey) {
                             event.preventDefault();
                             window.openTasksFullscreen?.(widgetId);
@@ -6284,12 +6248,22 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'g' && !egoMode) {
                             event.preventDefault();
+                            // The node under the cursor is the EG target, so G works on
+                            // hover alone. Selection carries it only when nothing is hovered.
+                            const hoveredEgoId = hoveredNodeIdRef.current;
+                            // Plain G opens EG+, the everyday view; Shift+G drops the
+                            // neighbours for plain EG.
+                            const includeNeighbors = !event.shiftKey;
                             logTasksDebug('shortcutOpenEgo', {
                                 widgetId,
-                                includeNeighbors: event.shiftKey,
-                                ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeId),
+                                includeNeighbors,
+                                hoveredEgoId: hoveredEgoId || '',
+                                ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredEgoId),
                             });
-                            window.__vyasaTasksActions?.[widgetId]?.openEgo?.(event.shiftKey);
+                            window.__vyasaTasksActions?.[widgetId]?.openEgo?.(
+                                includeNeighbors,
+                                hoveredEgoId ? [hoveredEgoId] : null
+                            );
                             return;
                         }
                         if (key === 's') {
@@ -8083,7 +8057,15 @@ async function renderTasksGraphs(rootElement = document) {
             const TasksNodeHighlightBorders = () => {
                 if (!rf.ViewportPortal) return null;
                 const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
-                const activeNodes = nodes.filter((node) => !['none', 'dim'].includes(node.data?.highlightMode || 'none'));
+                // In EG+ the nodes the view was opened on wear a dashed band. It is the
+                // only thing marking them apart now that neighbours are not dimmed.
+                const egoSeedIds = egoMode && model.ego_include_neighbors && Array.isArray(model.ego_selected_ids)
+                    ? new Set(model.ego_selected_ids.map((id) => String(id || '').trim()).filter(Boolean))
+                    : null;
+                const isEgoSeed = (node) => egoSeedIds !== null && egoSeedIds.has(node.id);
+                const activeNodes = nodes.filter((node) => (
+                    !['none', 'dim'].includes(node.data?.highlightMode || 'none') || isEgoSeed(node)
+                ));
                 return React.createElement(rf.ViewportPortal, null, ...activeNodes.flatMap((node) => {
                     const rect = tasksGraphNodeAbsoluteRect(node, byId);
                     const hoverOutline = node.data?.__hover_outline__ === true;
@@ -8094,8 +8076,11 @@ async function renderTasksGraphs(rootElement = document) {
                     // the central node, which keeps the solid band. One div draws one
                     // outline, so the outer band rides a second div over the same rect.
                     const central = mode === 'selected' || mode === 'selected-focus';
+                    // A hover reads through the usual bands, so the seed marker only
+                    // shows while the node carries no highlight of its own.
+                    const seedBand = ['none', 'dim'].includes(mode) && isEgoSeed(node);
                     const width = hoverOutline ? 12 : 4;
-                    const bands = central
+                    const bands = central || seedBand
                         ? [[width, 3]]
                         : [[width / 3, 3], [width / 3, 3 + ((width / 3) * 2)]];
                     return bands.map(([bandWidth, bandOffset], index) => React.createElement('div', {
@@ -8107,7 +8092,7 @@ async function renderTasksGraphs(rootElement = document) {
                             width: rect.width,
                             height: rect.height,
                             borderRadius: node.style?.borderRadius || 6,
-                            outline: `${bandWidth}px solid ${activeBorderColor}`,
+                            outline: `${bandWidth}px ${seedBand ? 'dashed' : 'solid'} ${activeBorderColor}`,
                             outlineOffset: `${bandOffset}px`,
                             pointerEvents: 'none',
                             zIndex: TASKS_EDGE_FOCUS_Z - 1,
@@ -8171,45 +8156,6 @@ async function renderTasksGraphs(rootElement = document) {
                     },
                 },
                     SelectedNodePanel()
-                );
-            };
-            const EgoNeighborControl = () => {
-                if (!egoMode || !model.ego_include_neighbors) return null;
-                return window.React.createElement('div', {
-                    style: {
-                        position: 'absolute',
-                        left: '12px',
-                        top: '12px',
-                        zIndex: 34,
-                        pointerEvents: 'auto',
-                        display: 'grid',
-                        gridTemplateColumns: 'max-content minmax(92px, 150px) max-content',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '7px 9px',
-                        borderRadius: '8px',
-                        border: '1px solid color-mix(in srgb, var(--vyasa-primary) 22%, transparent)',
-                        background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
-                        boxShadow: '0 10px 24px rgba(0,0,0,0.10)',
-                        backdropFilter: 'blur(8px)',
-                        fontSize: '12px',
-                    },
-                },
-                    window.React.createElement('span', { style: { fontWeight: 700, opacity: 0.72 } }, 'Neighbor Opacity'),
-                    window.React.createElement('input', {
-                        type: 'range',
-                        min: 0.05,
-                        max: 1,
-                        step: 0.01,
-                        value: egoNeighborOpacity,
-                        onChange: (event) => {
-                            const next = clampTasksEgoNeighborOpacity(event.target.value);
-                            setEgoNeighborOpacity(next);
-                            writeTasksEgoNeighborOpacity(next);
-                        },
-                        style: { width: '100%', minWidth: 0, margin: 0 },
-                    }),
-                    window.React.createElement('span', { style: { opacity: 0.8, minWidth: '3em', textAlign: 'right', fontVariantNumeric: 'tabular-nums' } }, tasksOpacityPctLabel(egoNeighborOpacity))
                 );
             };
             const EgoCloseControl = () => {
@@ -8431,8 +8377,8 @@ async function renderTasksGraphs(rootElement = document) {
                     row('?', 'toggle this help'),
                     row('F', 'fit view'),
                     row('Shift + F', 'toggle fullscreen'),
-                    row('G', 'open EG'),
-                    row('Shift + G', 'open EG+'),
+                    row('G', 'open EG+ for hovered or selected node'),
+                    row('Shift + G', 'open EG for hovered or selected node'),
                     row('S', 'toggle filters'),
                     row('E', 'toggle edges'),
                     row('H', 'toggle hover cards'),
@@ -8642,7 +8588,6 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(FitOnNodesReady)
                     ),
                     RightRail(),
-                    window.React.createElement(EgoNeighborControl),
                     window.React.createElement(HelpPopup),
                     GroupHoverTooltip(),
                     window.React.createElement(DragSelectionOverlay)
@@ -8663,7 +8608,6 @@ async function renderTasksGraphs(rootElement = document) {
                         window.React.createElement(FitOnNodesReady)
                     ),
                     RightRail(),
-                    window.React.createElement(EgoNeighborControl),
                     window.React.createElement(HelpPopup),
                     GroupHoverTooltip(),
                     window.React.createElement(DragSelectionOverlay)

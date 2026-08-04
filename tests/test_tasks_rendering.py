@@ -69,9 +69,7 @@ def test_tasks_groups_remain_selectable_when_expanded():
     assert "const descendantIds = collectTasksGroupDescendantIds(nodeId, model);" in graph_source
     assert "const directEndpointIds = new Set([nodeId, ...descendantIds]);" in graph_source
     assert "for (const endpointId of Array.from(directEndpointIds))" in graph_source
-    assert "const egoNodeOpacity = egoMode" in graph_source
-    assert "tasksEgoNodeOpacity(n, egoSelectedIds, model, egoNeighborOpacity)" in graph_source
-    assert "const titleOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1)" in graph_source
+    assert "const titleOpacity = isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1;" in graph_source
     assert "addGroupWithDescendants(edge.target)" not in graph_source
 
 
