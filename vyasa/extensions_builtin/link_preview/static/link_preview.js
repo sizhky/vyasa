@@ -9,7 +9,9 @@ import { linkPreviewSymbolMatch } from './link_preview_target.js';
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 let hoveredLink = null;
 let modifierDown = false;
-let previewZ = 5000;
+// Above the tasks graph's maximized layer (z-index 10000, used by EG/EG+) and the
+// 10000-band toasts and modals, below the 99999 confirm overlay.
+let previewZ = 10500;
 let pointerFrame = null;
 let previewPage = `${window.location.pathname}${window.location.search}`;
 const previewViews = new Set();
