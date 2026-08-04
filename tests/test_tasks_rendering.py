@@ -637,8 +637,8 @@ def test_tasks_hover_card_toggle_matches_edge_toggle_contract():
     shortcut = source.split("if (key === 'h') {", 1)[1].split("}", 1)[0]
     actions = source.split("toggleFilters: () => setFiltersCollapsedGuarded", 1)[1].split("toggleHelp:", 1)[0]
 
-    assert "setHoverCardsEnabled((current) => !current);" in shortcut
-    assert "setHoverCardsEnabled((current) => !current)" in actions
+    assert "setHoverCardMode(nextTasksHoverCardMode);" in shortcut
+    assert "setHoverCardMode((current) => (" in actions
     assert "if (!hoverCardsEnabled) return null;" in source
     assert "refreshHoverCardRef" not in source
     assert "&& key !== 'h'" not in source

@@ -145,6 +145,20 @@ function tasksModelSetting(model, key, fallback = '') {
     return value;
 }
 
+// H cycles the hover card through these, in this order. 'cursor' and 'rightRail'
+// are the placements the card already knew; 'off' is the old hidden state.
+const TASKS_HOVER_CARD_MODES = ['off', 'cursor', 'rightRail'];
+
+function nextTasksHoverCardMode(mode) {
+    const index = TASKS_HOVER_CARD_MODES.indexOf(mode);
+    if (index < 0) return 'cursor';
+    return TASKS_HOVER_CARD_MODES[(index + 1) % TASKS_HOVER_CARD_MODES.length];
+}
+
+function clampTasksHoverCardMode(mode, fallback = 'cursor') {
+    return TASKS_HOVER_CARD_MODES.includes(mode) ? mode : fallback;
+}
+
 function tasksModelBooleanSetting(model, key, fallback = false) {
     const value = tasksModelSetting(model, key, fallback ? 'true' : 'false');
     if (typeof value === 'boolean') return value;
@@ -3719,7 +3733,7 @@ async function renderTasksGraphs(rootElement = document) {
             }), [model]);
             const layoutConfig = React.useMemo(() => readTasksLayoutConfigForModel(wrapper, model), [model]);
             const nodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '480px')).trim() || '480px';
-            const hoverCardRightRail = tasksModelBooleanSetting(model, 'hover-card-right-rail', false);
+            const hoverCardRightRailSetting = tasksModelBooleanSetting(model, 'hover-card-right-rail', false);
             const hoverFontSize = String(tasksModelSetting(model, 'hover-font-size', wrapper.dataset.tasksHoverFontSize || '12px')).trim() || '12px';
             const colorMix = readTasksColorMixConfigForModel(wrapper, model);
             const projectionGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(tasksModelSetting(model, 'projection-group-opacity', wrapper.dataset.tasksProjectionGroupOpacity || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`)) || TASKS_PROJECTION_GROUP_OPACITY_DEFAULT));
@@ -3964,16 +3978,26 @@ async function renderTasksGraphs(rootElement = document) {
             const [hoverInactiveNodes, setHoverInactiveNodes] = React.useState(() => (
                 typeof projectionPrefs?.hoverInactiveNodes === 'boolean' ? projectionPrefs.hoverInactiveNodes : true
             ));
-            const [hoverCardsEnabled, setHoverCardsEnabled] = React.useState(() => (
-                typeof projectionPrefs?.hoverCardsEnabled === 'boolean' ? projectionPrefs.hoverCardsEnabled : true
-            ));
+            // One mode replaces the old enabled flag and the authored right-rail
+            // setting; both are derived below, so every read site stays as it was.
+            const [hoverCardMode, setHoverCardMode] = React.useState(() => {
+                if (TASKS_HOVER_CARD_MODES.includes(projectionPrefs?.hoverCardMode)) return projectionPrefs.hoverCardMode;
+                if (projectionPrefs?.hoverCardsEnabled === false) return 'off';
+                return hoverCardRightRailSetting ? 'rightRail' : 'cursor';
+            });
+            const hoverCardsEnabled = hoverCardMode !== 'off';
+            const hoverCardRightRail = hoverCardMode === 'rightRail';
+            // The toolbar button is still show/hide, so it needs to know which
+            // placement to come back to.
+            const lastHoverCardPlacementRef = React.useRef('cursor');
+            if (hoverCardsEnabled) lastHoverCardPlacementRef.current = hoverCardMode;
             React.useEffect(() => {
                 syncTasksEdgeToggleButtons(widgetId, edgesVisible);
             }, [widgetId, edgesVisible]);
             React.useEffect(() => {
                 syncTasksHoverCardToggleButtons(widgetId, hoverCardsEnabled);
-                logTasksDebug('hoverCardsState', { widgetId, egoMode, enabled: hoverCardsEnabled });
-            }, [widgetId, egoMode, hoverCardsEnabled]);
+                logTasksDebug('hoverCardsState', { widgetId, egoMode, enabled: hoverCardsEnabled, mode: hoverCardMode });
+            }, [widgetId, egoMode, hoverCardsEnabled, hoverCardMode]);
             const defaultEdgeOpacity = React.useMemo(
                 () => tasksDefaultEdgeOpacity((sourceModel?.dependency_edges || []).length),
                 [sourceModel]
@@ -4239,7 +4263,9 @@ async function renderTasksGraphs(rootElement = document) {
                 setSearchEnabled(typeof nextPrefs?.searchEnabled === 'boolean' ? nextPrefs.searchEnabled : true);
                 setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
                 setHoverInactiveNodes(typeof nextPrefs?.hoverInactiveNodes === 'boolean' ? nextPrefs.hoverInactiveNodes : true);
-                setHoverCardsEnabled(typeof nextPrefs?.hoverCardsEnabled === 'boolean' ? nextPrefs.hoverCardsEnabled : true);
+                setHoverCardMode(TASKS_HOVER_CARD_MODES.includes(nextPrefs?.hoverCardMode)
+                    ? nextPrefs.hoverCardMode
+                    : (nextPrefs?.hoverCardsEnabled === false ? 'off' : (hoverCardRightRailSetting ? 'rightRail' : 'cursor')));
                 setEdgeOpacity(nextPrefs?.edgeOpacity !== undefined ? nextPrefs.edgeOpacity : (
                     sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity)
                 ));
@@ -4429,6 +4455,7 @@ async function renderTasksGraphs(rootElement = document) {
                     edgesVisible,
                     hoverInactiveNodes,
                     hoverCardsEnabled,
+                    hoverCardMode,
                     edgeOpacity,
                     unspecifiedContentOpacity: projectionUnspecifiedContentOpacity,
                     expandedGroupIds: Array.from(expanded),
@@ -4467,7 +4494,7 @@ async function renderTasksGraphs(rootElement = document) {
                     slideNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [egoState, sourceModel, activeFilters, activeSwatchFilters, activeEdgeTypes, edgeTypeFilterEnabled, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
+            }, [egoState, sourceModel, activeFilters, activeSwatchFilters, activeEdgeTypes, edgeTypeFilterEnabled, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, hoverCardMode, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
@@ -6278,7 +6305,7 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'h') {
                             event.preventDefault();
-                            setHoverCardsEnabled((current) => !current);
+                            setHoverCardMode(nextTasksHoverCardMode);
                             return;
                         }
                         if (key === 't') {
@@ -8008,7 +8035,9 @@ async function renderTasksGraphs(rootElement = document) {
                         toggleFilters: () => setFiltersCollapsedGuarded((current) => !current, 'action-toggle-filters'),
                         openFilters: () => setFiltersCollapsedGuarded(false, 'action-open-filters'),
                         closeFilters: () => setFiltersCollapsedGuarded(true, 'action-close-filters'),
-                        toggleHoverCards: () => setHoverCardsEnabled((current) => !current),
+                        toggleHoverCards: () => setHoverCardMode((current) => (
+                            current === 'off' ? clampTasksHoverCardMode(lastHoverCardPlacementRef.current) : 'off'
+                        )),
                         toggleEdges: () => setEdgesVisible((current) => !current),
                         toggleHelp: () => setHelpOpen((current) => !current),
                     };
@@ -8381,7 +8410,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Shift + G', 'open EG for hovered or selected node'),
                     row('S', 'toggle filters'),
                     row('E', 'toggle edges'),
-                    row('H', 'toggle hover cards'),
+                    row('H', 'hover cards: off, at cursor, right rail'),
                     row('T', 'toggle hovered group'),
                     row('I / O', 'expand / collapse one depth'),
                     row('U / P', 'unfold / collapse all'),
