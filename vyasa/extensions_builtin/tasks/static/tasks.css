@@ -103,7 +103,7 @@ button[data-vyasa-tasks-action="toggleHoverCards"][data-vyasa-hover-cards-off="t
     pointer-events: none;
 }
 @keyframes vyasa-tasks-edge-flare-sweep {
-    from { stroke-dashoffset: var(--vyasa-edge-flare-from, 1); }
+    from { stroke-dashoffset: 1; }
     to { stroke-dashoffset: 0; }
 }
 .vyasa-tasks-edge-flare {

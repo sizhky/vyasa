@@ -371,13 +371,11 @@ function tasksTaperedBezierPath(bezierPath, sourceWidth, targetWidth) {
     ].join(' ');
 }
 
-// A highlighted edge sweeps a bright band outward, from the hovered/selected
-// node toward its neighbour. strokeMode says which end that central node is:
-// '*-out' means it is the edge source, '*-in' means it is the target.
-function tasksEdgeFlareSweep(strokeMode) {
-    if (strokeMode === 'selected-out' || strokeMode === 'focused-out' || strokeMode === 'selected') return 'out';
-    if (strokeMode === 'selected-in' || strokeMode === 'focused-in') return 'in';
-    return '';
+// A highlighted edge sweeps a bright band along the curve, always from source
+// to target so the flare reads as the edge's own direction. strokeMode only
+// says whether this edge is highlighted at all.
+function isTasksEdgeFlareActive(strokeMode) {
+    return ['selected', 'selected-in', 'selected-out', 'focused-in', 'focused-out'].includes(strokeMode);
 }
 
 // Mask region in flow coordinates. objectBoundingBox units collapse on
@@ -5721,10 +5719,10 @@ async function renderTasksGraphs(rootElement = document) {
                     Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42)
                 );
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
-                const flareSweep = taperPath ? tasksEdgeFlareSweep(strokeMode) : '';
-                const flareBox = flareSweep ? tasksEdgeFlareBox(path, strokeWidth * 4) : null;
+                const flareActive = taperPath ? isTasksEdgeFlareActive(strokeMode) : false;
+                const flareBox = flareActive ? tasksEdgeFlareBox(path, strokeWidth * 4) : null;
                 const flareMaskId = `vyasa-tasks-edge-flare-${String(props.id || '').replace(/[^\w-]/g, '_')}`;
-                const flareKey = `${props.data?.flareKey || ''}|${flareSweep}`;
+                const flareKey = `${props.data?.flareKey || ''}|${flareActive}`;
                 const edgeArrowPath = tasksTaperedArrowHeadPath(
                     path,
                     Math.max(10, strokeWidth * 3.0)
@@ -5805,10 +5803,7 @@ async function renderTasksGraphs(rootElement = document) {
                             stroke: '#fff',
                             strokeWidth: Math.max(20, strokeWidth * 8),
                             strokeDasharray: '1 1',
-                            style: {
-                                '--vyasa-edge-flare-from': flareSweep === 'in' ? -1 : 1,
-                                filter: 'blur(3px)',
-                            },
+                            style: { filter: 'blur(3px)' },
                         })),
                         React.createElement('path', {
                             d: taperPath,
