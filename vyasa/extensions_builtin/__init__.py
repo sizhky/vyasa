@@ -15,6 +15,7 @@ def load_builtin_extensions():
     from . import default_search
     from . import default_theme
     from . import document_actions
+    from . import document_edit
     from . import filesystem
     from . import filesystem_routes
     from . import git_refs
@@ -55,6 +56,7 @@ def load_builtin_extensions():
         pdf_viewer.EXTENSION,
         tree_table.EXTENSION,
         document_actions.EXTENSION,
+        document_edit.EXTENSION,
         table_of_contents.EXTENSION,
         scoped_custom_css.EXTENSION,
         code_tools.EXTENSION,

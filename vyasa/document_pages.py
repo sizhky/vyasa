@@ -168,6 +168,20 @@ def copy_text_button(label: str, text: str, target_id: str, toast_id: str, *, al
     )
 
 
+def edit_document_button(slug: str):
+    """Toggle the reading view into an editor that sits in the same column."""
+    return Button(
+        action_icon("file-edit"),
+        Span("Edit", cls="text-sm font-medium"),
+        type="button",
+        data_vyasa_edit_document=str(slug or "").strip("/"),
+        aria_pressed="false",
+        data_tooltip="Edit this document (E)",
+        aria_label="Edit this document",
+        cls="vyasa-page-action-button vyasa-page-action-tooltip inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+    )
+
+
 def fold_all_button():
     return Button(
         action_icon("fold"),

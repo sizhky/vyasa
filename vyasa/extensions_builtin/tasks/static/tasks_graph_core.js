@@ -204,19 +204,6 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
     };
 }
 
-export function tasksEgoNodeOpacity(node, selectedIds, model, neighborOpacity = 1, groupsById = null) {
-    if (!model?.ego_include_neighbors) return 1;
-    const id = String(node?.id || '').trim();
-    if (!id || selectedIds.has(id)) return 1;
-    const groups = groupsById ?? Object.fromEntries((model.groups || []).map((group) => [String(group.id || ''), group]));
-    let parentId = String(node?.group_id || node?.parent_group_id || '').trim();
-    while (parentId) {
-        if (selectedIds.has(parentId)) return 1;
-        parentId = String(groups[parentId]?.parent_group_id || '').trim();
-    }
-    return neighborOpacity;
-}
-
 export function isTasksGraphNodeSelectable(kind, isExpanded = false) {
     if (kind === 'task') return true;
     if (kind === 'group') return true;
@@ -510,12 +497,12 @@ export function collectTasksStoredNotes(storage, storageKey, nodeTitles = {}, sl
         return `${header}\n${slideNotes[slideId].split('\n').map((line) => `  ${line}`).join('\n')}`;
     });
     const stanzas = [...nodeStanzas, ...slideStanzas];
-    return `!vyasa-notes 4\n${stanzas.length ? `\n${stanzas.join('\n\n')}\n` : ''}`;
+    return `# vyasa-notes 4\n${stanzas.length ? `\n${stanzas.join('\n\n')}\n` : ''}`;
 }
 
 export function importTasksStoredNotes(storage, storageKey, backup) {
     const lines = String(backup || '').replace(/\r\n?/g, '\n').split('\n');
-    if (lines.shift()?.trim() !== '!vyasa-notes 4') {
+    if (lines.shift()?.trim() !== '# vyasa-notes 4') {
         throw new Error('Invalid Vyasa Knowledge Graph notes backup.');
     }
     const imported = {};
@@ -734,32 +721,53 @@ export function packTaskChildRects(inputPositions, options = {}) {
         (sum, id, index) => sum + sourceRects[id].width + (index ? gap : 0),
         0
     );
+    const bandIndex = new Map();
+    const requestedBands = Array.isArray(options.bands) ? options.bands : [];
+    requestedBands.forEach((band, index) => {
+        for (const id of (Array.isArray(band) ? band : [])) bandIndex.set(String(id), index);
+    });
+    const bandCount = Math.max(1, requestedBands.length);
+    const bands = Array.from({ length: bandCount }, () => []);
+    for (const id of orderedIds) bands[bandIndex.get(id) ?? 0].push(id);
+    const filledBands = bands.filter((band) => band.length);
     const packAtWidth = (targetWidth) => {
-        const rows = [[]];
+        const rows = [];
         let currentWidth = 0;
-        for (const id of orderedIds) {
-            const row = rows[rows.length - 1];
-            const nextWidth = currentWidth + (row.length ? gap : 0) + sourceRects[id].width;
-            if (row.length && nextWidth > targetWidth) {
-                rows.push([id]);
-                currentWidth = sourceRects[id].width;
-            } else {
-                row.push(id);
-                currentWidth = nextWidth;
+        for (const band of filledBands) {
+            // Bands hold the top-to-bottom order, but a band small enough to sit
+            // beside the one before it shares that row instead of adding a new one.
+            // Without this a long chain of one-child bands draws as a tall column.
+            const previousRow = rows[rows.length - 1];
+            let bandStart = rows.length - 1;
+            if (!previousRow?.length || currentWidth + gap + rowWidth(band) > targetWidth) {
+                bandStart = rows.length;
+                rows.push([]);
+                currentWidth = 0;
             }
-        }
-        for (let pass = 0; pass < rows.length; pass += 1) {
-            for (let index = rows.length - 1; index > 0; index -= 1) {
-                const previous = rows[index - 1];
-                const current = rows[index];
-                while (previous.length > current.length + 1) {
-                    const moving = previous[previous.length - 1];
-                    const nextCurrent = [moving, ...current];
-                    const beforeWidth = Math.max(rowWidth(previous), rowWidth(current));
-                    const afterWidth = Math.max(rowWidth(previous.slice(0, -1)), rowWidth(nextCurrent));
-                    if (rowWidth(nextCurrent) > targetWidth || afterWidth > beforeWidth) break;
-                    previous.pop();
-                    current.unshift(moving);
+            for (const id of band) {
+                const row = rows[rows.length - 1];
+                const nextWidth = currentWidth + (row.length ? gap : 0) + sourceRects[id].width;
+                if (row.length && nextWidth > targetWidth) {
+                    rows.push([id]);
+                    currentWidth = sourceRects[id].width;
+                } else {
+                    row.push(id);
+                    currentWidth = nextWidth;
+                }
+            }
+            for (let pass = bandStart; pass < rows.length; pass += 1) {
+                for (let index = rows.length - 1; index > bandStart; index -= 1) {
+                    const previous = rows[index - 1];
+                    const current = rows[index];
+                    while (previous.length > current.length + 1) {
+                        const moving = previous[previous.length - 1];
+                        const nextCurrent = [moving, ...current];
+                        const beforeWidth = Math.max(rowWidth(previous), rowWidth(current));
+                        const afterWidth = Math.max(rowWidth(previous.slice(0, -1)), rowWidth(nextCurrent));
+                        if (rowWidth(nextCurrent) > targetWidth || afterWidth > beforeWidth) break;
+                        previous.pop();
+                        current.unshift(moving);
+                    }
                 }
             }
         }

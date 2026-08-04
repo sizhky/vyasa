@@ -2,7 +2,7 @@
     position: fixed;
     display: flex;
     flex-direction: column;
-    z-index: 5000;
+    z-index: 10500;
     width: max(560px, 46vw);
     min-width: 18rem;
     min-height: 12rem;

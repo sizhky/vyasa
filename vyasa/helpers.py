@@ -1076,3 +1076,29 @@ def find_folder_note_file(folder: Path) -> Path | None:
         return index_file or readme_file or named_file
     except OSError:
         return None
+
+
+def is_local_request(request) -> bool:
+    """True when the request came from this machine.
+
+    Shared by every write route, so "local means editable" has one definition.
+    """
+    host = getattr(getattr(request, "client", None), "host", "")
+    return host in {"127.0.0.1", "::1", "localhost", ""}
+
+
+def atomic_write_bytes(path: Path, payload: bytes) -> None:
+    """Replace a file in one step, so a reader never sees a half-written file."""
+    import tempfile
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+        os.replace(tmp_name, path)
+    finally:
+        try:
+            os.unlink(tmp_name)
+        except FileNotFoundError:
+            pass

@@ -69,9 +69,7 @@ def test_tasks_groups_remain_selectable_when_expanded():
     assert "const descendantIds = collectTasksGroupDescendantIds(nodeId, model);" in graph_source
     assert "const directEndpointIds = new Set([nodeId, ...descendantIds]);" in graph_source
     assert "for (const endpointId of Array.from(directEndpointIds))" in graph_source
-    assert "const egoNodeOpacity = egoMode" in graph_source
-    assert "tasksEgoNodeOpacity(n, egoSelectedIds, model, egoNeighborOpacity)" in graph_source
-    assert "const titleOpacity = (isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1)" in graph_source
+    assert "const titleOpacity = isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1;" in graph_source
     assert "addGroupWithDescendants(edge.target)" not in graph_source
 
 
@@ -631,7 +629,6 @@ def test_tasks_source_uses_reset_button_label():
     assert "setSearchInputValue(defaultSearch)" in source
     assert "setActiveColorHierarchy(resolveTasksPreferredColorHierarchy(model, activeProjectionId, defaults, nodeNotes))" in source
     assert "setEdgesVisible(typeof defaults.edgesVisible === 'boolean'" in source
-    assert "setEdgeAnimationMode(normalizeTasksEdgeAnimationMode(defaults.edgeAnimationMode, defaults.edgeAnimationEnabled))" in source
     assert "onClick: resetProjectionControls" in source
 
 
@@ -640,8 +637,8 @@ def test_tasks_hover_card_toggle_matches_edge_toggle_contract():
     shortcut = source.split("if (key === 'h') {", 1)[1].split("}", 1)[0]
     actions = source.split("toggleFilters: () => setFiltersCollapsedGuarded", 1)[1].split("toggleHelp:", 1)[0]
 
-    assert "setHoverCardsEnabled((current) => !current);" in shortcut
-    assert "setHoverCardsEnabled((current) => !current)" in actions
+    assert "setHoverCardMode(nextTasksHoverCardMode);" in shortcut
+    assert "setHoverCardMode((current) => (" in actions
     assert "if (!hoverCardsEnabled) return null;" in source
     assert "refreshHoverCardRef" not in source
     assert "&& key !== 'h'" not in source
@@ -710,22 +707,6 @@ def test_tasks_projection_switch_preserves_filter_drawer_when_view_has_no_saved_
 
     assert "setFiltersCollapsed((current) => (" in source
     assert "typeof nextPrefs?.filtersCollapsed === 'boolean'\n                        ? nextPrefs.filtersCollapsed\n                        : current" in source
-
-
-def test_tasks_edge_animation_defaults_off_and_zero_cycles_smooth_then_tick():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-
-    assert "function normalizeTasksEdgeAnimationMode(mode, enabledFallback = undefined)" in source
-    assert "return enabledFallback === true ? 'smooth' : 'none';" in source
-    assert "return ({ smooth: 'tick', tick: 'none', none: 'smooth' })" in source
-    assert "0: edge animation none / smooth / tick" in source
-
-
-def test_tasks_projection_copy_preserves_edge_animation_mode():
-    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-
-    assert "edgeAnimationMode: isActiveLive ? edgeAnimationMode : def?.edge_animation_mode" in source
-    assert "if (cfg.edgeAnimationMode) lines.push(`\\tedge_animation_mode=${normalizeTasksEdgeAnimationMode(cfg.edgeAnimationMode, cfg.edgeAnimationEnabled)}`);" in source
 
 
 def test_named_views_keep_grouping_overrides_in_projection_preferences():

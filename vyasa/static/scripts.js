@@ -1039,6 +1039,10 @@ async function softRefreshActiveContent(detail = {}) {
     const activePath = currentPostsSearchPath();
     const changed = Array.isArray(detail.activePaths) ? detail.activePaths : [];
     if (!changed.length || !changed.includes(activePath)) return;
+    // Saving from the editor writes the file, which brings us here. The swap
+    // replaces #main-content, and the editor lives inside it, so it would take
+    // the open editor away. The save response already carried fresh HTML.
+    if (document.querySelector('[data-vyasa-document-editor]')) return;
     console.info('[vyasa] soft reload active content', { activePath, detail });
     if (window.htmx?.ajax) {
         await window.htmx.ajax('GET', window.location.href, { target: '#main-content', swap: 'outerHTML show:window:top settle:0.1s' });

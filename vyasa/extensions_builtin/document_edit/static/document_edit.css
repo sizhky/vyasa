@@ -1,0 +1,130 @@
+/* The editor stands in the same column as the reading view, at the same
+   width, font, and line height, so the eye does not move when you toggle. */
+/* The reading column is 46rem, and half of that is too narrow to write in, so
+   the editor grows outward while it is open. It takes the whole column when the
+   column is already wider than that, and pulls outward when it is narrower. */
+.vyasa-document-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    width: max(100%, min(72rem, calc(100vw - 3rem)));
+    margin-inline: min(0px, calc(50% - 36rem));
+}
+
+.vyasa-document-editor-panes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    align-items: stretch;
+    height: max(24rem, calc(100vh - 16rem));
+}
+
+.vyasa-document-editor-panes > * {
+    min-width: 0;
+    overflow-y: auto;
+}
+
+@media (max-width: 60rem) {
+    .vyasa-document-editor {
+        width: 100%;
+        margin-inline: 0;
+    }
+
+    .vyasa-document-editor-panes {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+
+    .vyasa-document-editor-panes > * {
+        overflow-y: visible;
+    }
+}
+
+.vyasa-document-editor-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    color: var(--vyasa-ink-soft);
+    font: 500 0.75rem/1.2 var(--vyasa-font-ui);
+    letter-spacing: 0.04em;
+}
+
+.vyasa-document-editor-bar [data-kind="dirty"] { color: color-mix(in srgb, var(--vyasa-ink) 60%, #b45309 40%); }
+.vyasa-document-editor-bar [data-kind="ok"] { color: color-mix(in srgb, var(--vyasa-ink) 55%, #15803d 45%); }
+.vyasa-document-editor-bar [data-kind="error"] { color: color-mix(in srgb, var(--vyasa-ink) 45%, #b91c1c 55%); }
+
+.vyasa-document-editor-hint {
+    opacity: 0.62;
+    text-transform: uppercase;
+}
+
+.vyasa-document-editor-input {
+    width: 100%;
+    height: 100%;
+    min-height: 18rem;
+    box-sizing: border-box;
+    padding: 1.1rem 1.15rem;
+    border: 1px solid color-mix(in srgb, var(--vyasa-ink) 18%, transparent);
+    border-radius: var(--vyasa-rect-radius);
+    background: color-mix(in srgb, var(--vyasa-paper-low) 86%, var(--vyasa-ink) 4%);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--vyasa-ink) 6%, transparent);
+    color: var(--vyasa-ink);
+    font-family: var(--vyasa-font-mono);
+    font-size: 0.9rem;
+    line-height: 1.7;
+    resize: none;
+    overflow-y: auto;
+    outline: none;
+    tab-size: 2;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+.vyasa-document-editor-input:focus {
+    border-color: color-mix(in srgb, var(--vyasa-primary) 60%, transparent);
+    background: color-mix(in srgb, var(--vyasa-paper-low) 92%, var(--vyasa-primary) 4%);
+}
+
+.vyasa-document-editor-input::placeholder { color: var(--vyasa-ink-soft); }
+
+/* The preview is the reading view, so it keeps the reading font and needs no
+   box of its own -- only a rule to divide it from the editor beside it. */
+.vyasa-document-editor-preview {
+    box-sizing: border-box;
+    padding: 0 1.35rem 0 0.25rem;
+    border-right: 1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent);
+}
+
+@media (max-width: 60rem) {
+    /* Stacked, the editor belongs on top: reading can scroll, typing cannot. */
+    .vyasa-document-editor-input {
+        order: -1;
+    }
+
+    .vyasa-document-editor-preview {
+        padding: 1.25rem 0 0;
+        border-right: 0;
+        border-top: 1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent);
+    }
+}
+
+.vyasa-page-action-button-active {
+    background: var(--vyasa-primary-dim);
+    border-color: color-mix(in srgb, var(--vyasa-primary) 88%, black 12%);
+}
+
+/* Off-screen twin of the editor, used only to measure where a heading line sits.
+   It carries no border: the width it is given already excludes one, and adding
+   it back would narrow the content box and move where lines wrap. */
+.vyasa-document-editor-mirror {
+    position: absolute;
+    top: 0;
+    left: -99999px;
+    box-sizing: border-box;
+    border: 0;
+    visibility: hidden;
+    pointer-events: none;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}

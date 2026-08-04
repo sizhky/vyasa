@@ -113,7 +113,6 @@ export function tasksPerfContext(widgetId, wrapper, model, graphBase, viewState 
         defaultColoredNodes: Number.isFinite(viewState.defaultColoredNodes) ? viewState.defaultColoredNodes : null,
         colorOverlayNodes: Number.isFinite(viewState.colorOverlayNodes) ? viewState.colorOverlayNodes : null,
         edgesVisible: viewState.edgesVisible ?? null,
-        edgeAnimationMode: viewState.edgeAnimationMode || '',
         edgeOpacity: viewState.edgeOpacity ?? null,
         unspecifiedContentOpacity: viewState.projectionUnspecifiedContentOpacity ?? null,
     };
@@ -259,8 +258,6 @@ function tasksPerfGraphDomSnapshot(wrapper) {
         '[style*="backdrop-filter"]',
         '[class*="animate"]',
         '[class*="animation"]',
-        '.vyasa-edge-dashdraw',
-        '.vyasa-edge-animation-tick',
     ];
     const counts = {};
     selectors.forEach((selector) => {

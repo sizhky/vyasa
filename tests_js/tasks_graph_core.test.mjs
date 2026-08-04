@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksEgoNodeOpacity, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReviewTarget, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReviewTarget, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 const { buildTasksProjectionConfigText, parseTasksProjectionConfigText, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksNodeMatchesAllFilters, tasksNodeMatchesFilters, tasksSelectionClickKey } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
 
 function fakeStorage(initial = {}) {
@@ -30,7 +30,7 @@ test('Knowledge Graph notes backup round-trips one graph preference record', () 
         'vyasa:tasks:prefs:doc::graph-b': JSON.stringify({ nodeNotes: { b: 'second note' } }),
     });
     const backup = collectTasksStoredNotes(storage, graphKey, { a: 'Alpha title' }, { intro: 'Intro slide' });
-    assert.equal(backup, '!vyasa-notes 4\n\n@ node a [Done] Alpha title\n  first note\n\n@ slide intro Intro slide\n  slide note\n');
+    assert.equal(backup, '# vyasa-notes 4\n\n@ node a [Done] Alpha title\n  first note\n\n@ slide intro Intro slide\n  slide note\n');
 
     const target = fakeStorage({
         [graphKey]: JSON.stringify({ nodeNotes: { existing: 'keep me' }, nodeStates: { existing: 'Review' }, projectionId: 'main' }),
@@ -43,7 +43,7 @@ test('Knowledge Graph notes backup round-trips one graph preference record', () 
     assert.deepEqual(restored.nodeStates, { existing: 'Review', a: 'Done' });
     assert.equal(restored.projectionId, 'main');
     assert.throws(
-        () => importTasksStoredNotes(target, graphKey, '!vyasa-notes 3'),
+        () => importTasksStoredNotes(target, graphKey, '# vyasa-notes 3'),
         /Invalid Vyasa Knowledge Graph notes backup/
     );
 });
@@ -418,32 +418,6 @@ test('unspecified projection groups are detectable for reduced opacity', () => {
         city: 'Unspecified',
     }), true);
     assert.equal(isTasksUnspecifiedProjectionGroup({ id: 'city-tokyo', __projection_group__: true, city: 'Tokyo' }), false);
-});
-
-test('EG+ neighbor opacity applies to unselected group backgrounds', () => {
-    const model = {
-        ego_include_neighbors: true,
-        groups: [
-            { id: 'selected-group' },
-            { id: 'neighbor-group' },
-            { id: 'selected-parent' },
-        ],
-        tasks: [
-            { id: 'selected-task', group_id: 'selected-group' },
-            { id: 'neighbor-task', group_id: 'neighbor-group' },
-            { id: 'child-of-selected-group', group_id: 'selected-parent' },
-        ],
-        group_tree: { null: ['selected-group', 'neighbor-group', 'selected-parent'] },
-        task_children: {
-            'selected-group': ['selected-task'],
-            'neighbor-group': ['neighbor-task'],
-            'selected-parent': ['child-of-selected-group'],
-        },
-    };
-    assert.equal(tasksEgoNodeOpacity({ id: 'selected-group', __kind__: 'group' }, new Set(['selected-task']), model, 0.25), 0.25);
-    assert.equal(tasksEgoNodeOpacity({ id: 'selected-group', __kind__: 'group' }, new Set(['selected-group']), model, 0.25), 1);
-    assert.equal(tasksEgoNodeOpacity({ id: 'neighbor-group', __kind__: 'group' }, new Set(['selected-task']), model, 0.25), 0.25);
-    assert.equal(tasksEgoNodeOpacity({ id: 'child-of-selected-group', __kind__: 'task', group_id: 'selected-parent' }, new Set(['selected-parent']), model, 0.25), 1);
 });
 
 test('group panels use selectable hit areas in items graph', () => {
