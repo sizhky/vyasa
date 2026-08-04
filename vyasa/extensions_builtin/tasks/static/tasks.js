@@ -148,6 +148,10 @@ function tasksModelSetting(model, key, fallback = '') {
 // H cycles the hover card through these, in this order. 'cursor' and 'rightRail'
 // are the placements the card already knew; 'off' is the old hidden state.
 const TASKS_HOVER_CARD_MODES = ['off', 'cursor', 'rightRail'];
+// No document path in the keys: E and H are one setting for every graph on this
+// server, and localStorage is already scoped to the origin.
+const TASKS_EDGES_VISIBLE_KEY = 'vyasa:tasks:edges-visible';
+const TASKS_HOVER_CARD_MODE_KEY = 'vyasa:tasks:hover-card-mode';
 
 function nextTasksHoverCardMode(mode) {
     const index = TASKS_HOVER_CARD_MODES.indexOf(mode);
@@ -536,6 +540,52 @@ function scheduleTasksStorageWrite(key, writeNow, payload = '') {
     };
     const timer = window.setTimeout(run, TASKS_STORAGE_WRITE_DELAY_MS);
     tasksStorageWriteTimers.set(key, timer);
+}
+
+function readTasksGlobalToggle(key) {
+    const storage = tasksGetStorage();
+    if (!storage) return null;
+    try {
+        return storage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+function writeTasksGlobalToggle(key, value) {
+    const storage = tasksGetStorage();
+    if (!storage) return;
+    const payload = String(value);
+    scheduleTasksStorageWrite(key, () => storage.setItem(key, payload), payload);
+}
+
+// Reset to schema defaults has to drop the server-wide value as well, or the
+// next projection switch reads it back and the reset looks ignored.
+function clearTasksGlobalToggle(key) {
+    const pending = tasksStorageWriteTimers.get(key);
+    if (pending) window.clearTimeout(pending);
+    tasksStorageWriteTimers.delete(key);
+    tasksStorageWriteCache.delete(key);
+    const storage = tasksGetStorage();
+    if (!storage) return;
+    try {
+        storage.removeItem(key);
+    } catch {
+        // A blocked or full storage keeps the old value; the next toggle rewrites it.
+    }
+}
+
+// Null means the toggle was never pressed on this server, so the graph keeps
+// whatever its own schema and projection prefs asked for.
+function readTasksEdgesVisible() {
+    const raw = readTasksGlobalToggle(TASKS_EDGES_VISIBLE_KEY);
+    if (raw === 'true') return true;
+    return raw === 'false' ? false : null;
+}
+
+function readTasksHoverCardMode() {
+    const raw = readTasksGlobalToggle(TASKS_HOVER_CARD_MODE_KEY);
+    return TASKS_HOVER_CARD_MODES.includes(raw) ? raw : null;
 }
 
 function showTasksToast(message) {
@@ -3972,19 +4022,39 @@ async function renderTasksGraphs(rootElement = document) {
             const [searchEnabled, setSearchEnabled] = React.useState(() => (
                 typeof projectionPrefs?.searchEnabled === 'boolean' ? projectionPrefs.searchEnabled : true
             ));
-            const [edgesVisible, setEdgesVisible] = React.useState(() => (
-                typeof projectionPrefs?.edgesVisible === 'boolean' ? projectionPrefs.edgesVisible : true
-            ));
+            const [edgesVisible, setEdgesVisible] = React.useState(() => {
+                const stored = readTasksEdgesVisible();
+                if (stored !== null) return stored;
+                return typeof projectionPrefs?.edgesVisible === 'boolean' ? projectionPrefs.edgesVisible : true;
+            });
             const [hoverInactiveNodes, setHoverInactiveNodes] = React.useState(() => (
                 typeof projectionPrefs?.hoverInactiveNodes === 'boolean' ? projectionPrefs.hoverInactiveNodes : true
             ));
             // One mode replaces the old enabled flag and the authored right-rail
             // setting; both are derived below, so every read site stays as it was.
             const [hoverCardMode, setHoverCardMode] = React.useState(() => {
+                const stored = readTasksHoverCardMode();
+                if (stored) return stored;
                 if (TASKS_HOVER_CARD_MODES.includes(projectionPrefs?.hoverCardMode)) return projectionPrefs.hoverCardMode;
                 if (projectionPrefs?.hoverCardsEnabled === false) return 'off';
                 return hoverCardRightRailSetting ? 'rightRail' : 'cursor';
             });
+            // The E and H toggles write what they set, so the next graph on this
+            // server opens the same way. Every other write path stays local.
+            const setEdgesVisibleGlobal = React.useCallback((update) => {
+                setEdgesVisible((current) => {
+                    const next = Boolean(typeof update === 'function' ? update(current) : update);
+                    writeTasksGlobalToggle(TASKS_EDGES_VISIBLE_KEY, next);
+                    return next;
+                });
+            }, []);
+            const setHoverCardModeGlobal = React.useCallback((update) => {
+                setHoverCardMode((current) => {
+                    const next = clampTasksHoverCardMode(typeof update === 'function' ? update(current) : update);
+                    writeTasksGlobalToggle(TASKS_HOVER_CARD_MODE_KEY, next);
+                    return next;
+                });
+            }, []);
             const hoverCardsEnabled = hoverCardMode !== 'off';
             const hoverCardRightRail = hoverCardMode === 'rightRail';
             // The toolbar button is still show/hide, so it needs to know which
@@ -4261,11 +4331,17 @@ async function renderTasksGraphs(rootElement = document) {
                 ));
                 setQueryBuilderEnabled(typeof nextPrefs?.queryBuilderEnabled === 'boolean' ? nextPrefs.queryBuilderEnabled : true);
                 setSearchEnabled(typeof nextPrefs?.searchEnabled === 'boolean' ? nextPrefs.searchEnabled : true);
-                setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
+                // A pressed E or H outranks the projection here too, so switching
+                // views does not undo what the reader set for the whole server.
+                const storedEdgesVisible = readTasksEdgesVisible();
+                setEdgesVisible(storedEdgesVisible !== null
+                    ? storedEdgesVisible
+                    : (typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true));
                 setHoverInactiveNodes(typeof nextPrefs?.hoverInactiveNodes === 'boolean' ? nextPrefs.hoverInactiveNodes : true);
-                setHoverCardMode(TASKS_HOVER_CARD_MODES.includes(nextPrefs?.hoverCardMode)
-                    ? nextPrefs.hoverCardMode
-                    : (nextPrefs?.hoverCardsEnabled === false ? 'off' : (hoverCardRightRailSetting ? 'rightRail' : 'cursor')));
+                setHoverCardMode(readTasksHoverCardMode()
+                    || (TASKS_HOVER_CARD_MODES.includes(nextPrefs?.hoverCardMode)
+                        ? nextPrefs.hoverCardMode
+                        : (nextPrefs?.hoverCardsEnabled === false ? 'off' : (hoverCardRightRailSetting ? 'rightRail' : 'cursor'))));
                 setEdgeOpacity(nextPrefs?.edgeOpacity !== undefined ? nextPrefs.edgeOpacity : (
                     sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity)
                 ));
@@ -4731,6 +4807,8 @@ async function renderTasksGraphs(rootElement = document) {
                         ? defaults.filtersCollapsed
                         : !tasksDefaultFiltersOpen(defaultFiltersOpen)
                 );
+                clearTasksGlobalToggle(TASKS_EDGES_VISIBLE_KEY);
+                clearTasksGlobalToggle(TASKS_HOVER_CARD_MODE_KEY);
                 setEdgesVisible(typeof defaults.edgesVisible === 'boolean' ? defaults.edgesVisible : true);
                 setActivePulseEnabled(true);
                 setContextDiffEnabled(false);
@@ -6300,12 +6378,12 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'e') {
                             event.preventDefault();
-                            setEdgesVisible((current) => !current);
+                            setEdgesVisibleGlobal((current) => !current);
                             return;
                         }
                         if (key === 'h') {
                             event.preventDefault();
-                            setHoverCardMode(nextTasksHoverCardMode);
+                            setHoverCardModeGlobal(nextTasksHoverCardMode);
                             return;
                         }
                         if (key === 't') {
@@ -8035,10 +8113,10 @@ async function renderTasksGraphs(rootElement = document) {
                         toggleFilters: () => setFiltersCollapsedGuarded((current) => !current, 'action-toggle-filters'),
                         openFilters: () => setFiltersCollapsedGuarded(false, 'action-open-filters'),
                         closeFilters: () => setFiltersCollapsedGuarded(true, 'action-close-filters'),
-                        toggleHoverCards: () => setHoverCardMode((current) => (
+                        toggleHoverCards: () => setHoverCardModeGlobal((current) => (
                             current === 'off' ? clampTasksHoverCardMode(lastHoverCardPlacementRef.current) : 'off'
                         )),
-                        toggleEdges: () => setEdgesVisible((current) => !current),
+                        toggleEdges: () => setEdgesVisibleGlobal((current) => !current),
                         toggleHelp: () => setHelpOpen((current) => !current),
                     };
                     return () => {
