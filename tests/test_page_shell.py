@@ -239,14 +239,19 @@ def test_fold_all_script_keeps_tooltip_in_sync_with_button_state():
 
 def test_document_keyboard_shortcuts_scroll_with_j_and_k():
     source = Path("vyasa/static/scripts.js").read_text()
+    shell = Path("vyasa/static/page_shell.js").read_text()
 
     assert "(e.key === 'j' || e.key === 'k')" in source
-    assert "DOCUMENT_SCROLL_ACCELERATION" in source
-    assert "DOCUMENT_SCROLL_FRICTION" in source
-    assert "documentScrollLastTime === null ? 16 : Math.min(32" in source
+    assert "const documentScroll = createMomentumRunner({" in source
+    assert "documentScroll.release(direction)" in source
     assert "['wheel', 'touchstart', 'pointerdown', 'htmx:beforeSwap']" in source
-    assert "prefers-reduced-motion: reduce" in source
     assert "!mainContent?.classList.contains('vyasa-zen-present')" in source
+
+    # The motion model itself now lives in the shell so the graph shares it.
+    assert "acceleration: 0.0025" in shell
+    assert "friction: 0.012" in shell
+    assert "lastTime === null ? 16 : Math.min(32" in shell
+    assert "prefers-reduced-motion: reduce" in shell
 
 
 def test_sidebars_bound_main_content_width():

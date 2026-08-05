@@ -1,4 +1,4 @@
-import { ensureFloatingActions, ensureShortcutHelp, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
+import { createMomentumRunner, ensureFloatingActions, ensureShortcutHelp, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
 
 function switchTab(tabsId, index) {
     const container = document.querySelector(`.tabs-container[data-tabs-id="${tabsId}"]`);
@@ -1652,44 +1652,21 @@ function initMobileMenus() {
     }
 }
 
-let documentScrollFrame = null;
-let documentScrollDirection = 0;
-let documentScrollVelocity = 0;
-let documentScrollLastTime = null;
-const DOCUMENT_SCROLL_INITIAL_SPEED = 0.24;
-const DOCUMENT_SCROLL_MAX_SPEED = 1.4;
-const DOCUMENT_SCROLL_ACCELERATION = 0.0025;
-const DOCUMENT_SCROLL_FRICTION = 0.012;
+const documentScroll = createMomentumRunner({
+    step: (distance) => {
+        const before = window.scrollY;
+        window.scrollBy({ top: distance });
+        return window.scrollY !== before;
+    },
+    stepStatic: (direction) => window.scrollBy({ top: direction * 40 }),
+});
 
 function stopDocumentScroll() {
-    if (documentScrollFrame !== null) window.cancelAnimationFrame(documentScrollFrame);
-    documentScrollFrame = null;
-    documentScrollDirection = 0;
-    documentScrollVelocity = 0;
-    documentScrollLastTime = null;
-}
-
-function animateDocumentScroll(now) {
-    const elapsed = documentScrollLastTime === null ? 16 : Math.min(32, now - documentScrollLastTime);
-    documentScrollLastTime = now;
-    if (documentScrollDirection) {
-        const speed = Math.min(DOCUMENT_SCROLL_MAX_SPEED, Math.max(DOCUMENT_SCROLL_INITIAL_SPEED, Math.abs(documentScrollVelocity) + DOCUMENT_SCROLL_ACCELERATION * elapsed));
-        documentScrollVelocity = documentScrollDirection * speed;
-    } else {
-        documentScrollVelocity *= Math.exp(-DOCUMENT_SCROLL_FRICTION * elapsed);
-        if (Math.abs(documentScrollVelocity) < 0.02) return stopDocumentScroll();
-    }
-    const before = window.scrollY;
-    window.scrollBy({ top: documentScrollVelocity * elapsed });
-    if (window.scrollY === before) return stopDocumentScroll();
-    documentScrollFrame = window.requestAnimationFrame(animateDocumentScroll);
+    documentScroll.stop();
 }
 
 function startDocumentScroll(direction) {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return window.scrollBy({ top: direction * 40 });
-    if (documentScrollDirection !== direction) documentScrollVelocity = direction * Math.max(DOCUMENT_SCROLL_INITIAL_SPEED, Math.abs(documentScrollVelocity) * 0.35);
-    documentScrollDirection = direction;
-    if (documentScrollFrame === null) documentScrollFrame = window.requestAnimationFrame(animateDocumentScroll);
+    documentScroll.start(direction);
 }
 
 function initDocumentShortcutHelp() {
@@ -1764,7 +1741,7 @@ function initKeyboardShortcuts() {
     });
     document.addEventListener('keyup', (e) => {
         const direction = e.key === 'j' ? 1 : e.key === 'k' ? -1 : 0;
-        if (direction === documentScrollDirection) documentScrollDirection = 0;
+        if (direction) documentScroll.release(direction);
     });
     ['wheel', 'touchstart', 'pointerdown', 'htmx:beforeSwap'].forEach((type) => document.addEventListener(type, stopDocumentScroll, { passive: true }));
     window.addEventListener('blur', stopDocumentScroll);

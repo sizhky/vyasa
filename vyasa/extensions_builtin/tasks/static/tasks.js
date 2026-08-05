@@ -4,7 +4,7 @@ import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDom
 import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksGroupHoverAttrRows, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
-import { shortcutsSuspended } from '/static/page_shell.js';
+import { createMomentumRunner, shortcutsSuspended } from '/static/page_shell.js';
 
 window.__vyasaTasksPhaseLog?.('tasks-js:module-start');
 
@@ -51,6 +51,9 @@ const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;
 const TASKS_EDGE_OPACITY_MIN = 0.05;
 const TASKS_EDGE_OPACITY_MAX = 1;
 const TASKS_GRAPH_MIN_ZOOM = 0.05;
+// The graph sets no maxZoom, so this is React Flow's own default ceiling. Held-key
+// zoom writes the viewport itself, so it has to stop at the same place the wheel does.
+const TASKS_GRAPH_MAX_ZOOM = 2;
 const TASKS_NODE_CONNECTION_HANDLES = {
     source: ['top', 'right', 'bottom', 'left'].flatMap((side) => [0, 1, 2].map((index) => ({ id: `source-${side}-${index}`, side, offsetPct: 50 }))),
     target: ['top', 'right', 'bottom', 'left'].flatMap((side) => [0, 1, 2].map((index) => ({ id: `target-${side}-${index}`, side, offsetPct: 50 }))),
@@ -145,10 +148,21 @@ function tasksModelSetting(model, key, fallback = '') {
     return value;
 }
 
-// H cycles the hover card through these, in this order. 'cursor' and 'rightRail'
+// C cycles the hover card through these, in this order. 'cursor' and 'rightRail'
 // are the placements the card already knew; 'off' is the old hidden state.
 const TASKS_HOVER_CARD_MODES = ['off', 'cursor', 'rightRail'];
-// No document path in the keys: E and H are one setting for every graph on this
+// Every key the graph shortcut handler consumes. It stops these from reaching the
+// document shortcuts while a graph is focused; anything absent here stays the
+// document's key.
+const TASKS_SHORTCUT_KEYS = new Set([
+    'f', 'g', 's', 'e', 'c', 't', 'i', 'o', 'u', 'p',
+    'h', 'j', 'k', 'l',
+    'arrowup', 'arrowdown', 'arrowleft', 'arrowright',
+]);
+// Momentum speed is in pixels per millisecond, so zoom turns that distance into a
+// factor: at the ceiling speed the graph doubles in about three quarters of a second.
+const TASKS_ZOOM_MOMENTUM_RATE = 0.0007;
+// No document path in the keys: E and C are one setting for every graph on this
 // server, and localStorage is already scoped to the origin.
 const TASKS_EDGES_VISIBLE_KEY = 'vyasa:tasks:edges-visible';
 const TASKS_HOVER_CARD_MODE_KEY = 'vyasa:tasks:hover-card-mode';
@@ -6289,13 +6303,76 @@ async function renderTasksGraphs(rootElement = document) {
             const FitViewHotkey = () => {
                 const reactFlow = rf.useReactFlow();
                 React.useEffect(() => {
+                    // H/J/K/L and Shift+J/K hold to accelerate and coast on release,
+                    // on the same momentum model as J/K document scroll. Each run keeps
+                    // its own offset instead of reading back the viewport it just wrote,
+                    // and drops it once the motion stops so a mouse pan is never undone.
+                    const panMomentum = (axis) => {
+                        let offset = null;
+                        return createMomentumRunner({
+                            step: (distance) => {
+                                const viewport = reactFlow.getViewport();
+                                if (offset === null) offset = axis === 'x' ? viewport.x : viewport.y;
+                                offset -= distance;
+                                reactFlow.setViewport(axis === 'x'
+                                    ? { ...viewport, x: offset }
+                                    : { ...viewport, y: offset });
+                            },
+                            stepStatic: (direction) => (axis === 'x'
+                                ? panViewport(reactFlow, -direction * 40, 0)
+                                : panViewport(reactFlow, 0, -direction * 40)),
+                            onStop: () => { offset = null; },
+                        });
+                    };
+                    const panXMomentum = panMomentum('x');
+                    const panYMomentum = panMomentum('y');
+                    let zoomLevel = null;
+                    const zoomMomentum = createMomentumRunner({
+                        onStop: () => { zoomLevel = null; },
+                        step: (distance) => {
+                            const viewport = reactFlow.getViewport();
+                            const base = zoomLevel === null ? viewport.zoom : zoomLevel;
+                            const nextZoom = Math.min(TASKS_GRAPH_MAX_ZOOM, Math.max(graphMinZoom, base * Math.exp(TASKS_ZOOM_MOMENTUM_RATE * distance)));
+                            if (nextZoom === base) return false;
+                            zoomLevel = nextZoom;
+                            // Hold the graph point under the middle of the pane still,
+                            // the way the wheel and the zoom buttons do.
+                            const width = flowWrapperRef.current?.clientWidth || 0;
+                            const height = flowWrapperRef.current?.clientHeight || 0;
+                            reactFlow.setViewport({
+                                x: width / 2 - ((width / 2 - viewport.x) / viewport.zoom) * nextZoom,
+                                y: height / 2 - ((height / 2 - viewport.y) / viewport.zoom) * nextZoom,
+                                zoom: nextZoom,
+                            });
+                            return true;
+                        },
+                        stepStatic: (direction) => (direction > 0 ? reactFlow.zoomIn() : reactFlow.zoomOut()),
+                    });
+                    const stopMomentum = () => {
+                        panXMomentum.stop();
+                        panYMomentum.stop();
+                        zoomMomentum.stop();
+                    };
+                    const onKeyUp = (event) => {
+                        const key = event.key.toLowerCase();
+                        if (key === 'j' || key === 'k') {
+                            const direction = key === 'j' ? 1 : -1;
+                            panYMomentum.release(direction);
+                            zoomMomentum.release(direction);
+                            return;
+                        }
+                        if (key === 'h' || key === 'l') panXMomentum.release(key === 'l' ? 1 : -1);
+                    };
                     const onKeyDown = (event) => {
                         if (shortcutsSuspended()) return;
-                        if (event.defaultPrevented || event.repeat) return;
+                        if (event.defaultPrevented) return;
                         const target = event.target instanceof Element ? event.target : null;
                         const key = event.key.toLowerCase();
                         const optionZoom = event.altKey && !event.shiftKey && (key === 'arrowup' || key === 'arrowdown');
                         if (event.metaKey || event.ctrlKey || (event.altKey && !optionZoom)) return;
+                        // A held key still has to reach the claim below, or the document
+                        // shortcuts scroll the page under the graph on every repeat.
+                        if (event.repeat && !TASKS_SHORTCUT_KEYS.has(key)) return;
                         const flowWrapper = flowWrapperRef.current;
                         const widgetFocused = wrapper.contains(document.activeElement) || wrapper.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
                         if ((event.key === 'Escape' || key === 'g') && window.__vyasaTasksDebug.enabled) {
@@ -6336,6 +6413,13 @@ async function renderTasksGraphs(rootElement = document) {
                         if (!widgetFocused
                             && !(key === 't' && groupToggleHoverIdRef.current)
                             && !(key === 'g' && hoveredNodeIdRef.current)) return;
+                        // The document shortcuts in scripts.js bind J/K to scroll, C to
+                        // fold and P to slides, and they preventDefault before this
+                        // handler ever sees the key. So this handler listens in the
+                        // capture phase and claims its own keys while the graph is
+                        // focused, leaving every other key to the document.
+                        if (TASKS_SHORTCUT_KEYS.has(key)) event.stopPropagation();
+                        if (event.repeat) return;
                         if (key === 'f' && event.shiftKey) {
                             event.preventDefault();
                             window.openTasksFullscreen?.(widgetId);
@@ -6381,7 +6465,7 @@ async function renderTasksGraphs(rootElement = document) {
                             setEdgesVisibleGlobal((current) => !current);
                             return;
                         }
-                        if (key === 'h') {
+                        if (key === 'c') {
                             event.preventDefault();
                             setHoverCardModeGlobal(nextTasksHoverCardMode);
                             return;
@@ -6461,10 +6545,32 @@ async function renderTasksGraphs(rootElement = document) {
                             panViewport(reactFlow, -120 * (event.shiftKey ? 2 : 1), 0);
                             return;
                         }
+                        // Vim keys: H/J/K/L pan, and because J/K are the vertical pair,
+                        // Shift turns them into zoom in / zoom out. Direction 1 is down
+                        // like the document scroll, which makes Shift+J the zoom in.
+                        if (key === 'j' || key === 'k') {
+                            event.preventDefault();
+                            const direction = key === 'j' ? 1 : -1;
+                            if (event.shiftKey) zoomMomentum.start(direction);
+                            else panYMomentum.start(direction);
+                            return;
+                        }
+                        if (key === 'h' || key === 'l') {
+                            event.preventDefault();
+                            panXMomentum.start(key === 'l' ? 1 : -1);
+                            return;
+                        }
                     };
-                    document.addEventListener('keydown', onKeyDown);
-                    return () => document.removeEventListener('keydown', onKeyDown);
-                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, setFiltersCollapsedGuarded, fitCurrentHighlight]);
+                    document.addEventListener('keydown', onKeyDown, true);
+                    document.addEventListener('keyup', onKeyUp, true);
+                    window.addEventListener('blur', stopMomentum);
+                    return () => {
+                        document.removeEventListener('keydown', onKeyDown, true);
+                        document.removeEventListener('keyup', onKeyUp, true);
+                        window.removeEventListener('blur', stopMomentum);
+                        stopMomentum();
+                    };
+                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, setFiltersCollapsedGuarded, fitCurrentHighlight, panViewport, graphMinZoom]);
                 return null;
             };
             const PanControls = () => {
@@ -8488,13 +8594,16 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Shift + G', 'open EG for hovered or selected node'),
                     row('S', 'toggle filters'),
                     row('E', 'toggle edges'),
-                    row('H', 'hover cards: off, at cursor, right rail'),
+                    row('C', 'hover cards: off, at cursor, right rail'),
                     row('T', 'toggle hovered group'),
                     row('I / O', 'expand / collapse one depth'),
                     row('U / P', 'unfold / collapse all'),
                     row('Option + ↑ / ↓', 'zoom in / out'),
                     row('Arrows', 'pan'),
-                    row('Shift + arrows', 'pan faster')
+                    row('Shift + arrows', 'pan faster'),
+                    row('H / J / K / L', 'pan left / down / up / right'),
+                    row('Shift + J / K', 'zoom in / out'),
+                    row('Hold H J K L', 'keep moving, coast on release')
                 ));
             };
             const SlideLauncher = () => {

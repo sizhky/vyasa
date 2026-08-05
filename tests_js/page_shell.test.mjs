@@ -46,3 +46,34 @@ test('review targets use only the published data interface', () => {
     assert.deepEqual(targets.reviewTargets(element), [{ kind: 'node', id: 'n1' }]);
     assert.equal(targets.reviewTargetElement(element), carrier);
 });
+
+test('Momentum runner accelerates while held and coasts to a stop on release', () => {
+    let now = 0;
+    const queue = [];
+    Object.assign(window, {
+        requestAnimationFrame: (fn) => queue.push(fn),
+        cancelAnimationFrame: () => { queue.length = 0; },
+        matchMedia: () => ({ matches: false }),
+    });
+    const steps = [];
+    const runner = shell.createMomentumRunner({ step: (distance) => steps.push(distance) });
+    const tick = (count) => {
+        for (let i = 0; i < count && queue.length; i += 1) {
+            now += 16;
+            queue.shift()(now);
+        }
+    };
+
+    runner.start(1);
+    tick(30);
+    const held = steps.length;
+    assert.ok(steps[held - 1] > steps[0], 'held key accelerates');
+    runner.release(-1);
+    tick(5);
+    assert.equal(steps.length, held + 5, 'a release of the other direction is ignored');
+    runner.release(1);
+    tick(400);
+    assert.ok(steps.length > held + 5, 'release coasts on');
+    assert.ok(steps.every((distance) => distance > 0), 'coasting never reverses');
+    assert.equal(queue.length, 0, 'friction ends the coast');
+});

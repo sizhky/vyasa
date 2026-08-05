@@ -634,14 +634,14 @@ def test_tasks_source_uses_reset_button_label():
 
 def test_tasks_hover_card_toggle_matches_edge_toggle_contract():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-    shortcut = source.split("if (key === 'h') {", 1)[1].split("}", 1)[0]
+    shortcut = source.split("if (key === 'c') {", 1)[1].split("}", 1)[0]
     actions = source.split("toggleFilters: () => setFiltersCollapsedGuarded", 1)[1].split("toggleHelp:", 1)[0]
 
-    assert "setHoverCardMode(nextTasksHoverCardMode);" in shortcut
-    assert "setHoverCardMode((current) => (" in actions
+    assert "setHoverCardModeGlobal(nextTasksHoverCardMode);" in shortcut
+    assert "setHoverCardModeGlobal((current) => (" in actions
     assert "if (!hoverCardsEnabled) return null;" in source
     assert "refreshHoverCardRef" not in source
-    assert "&& key !== 'h'" not in source
+    assert "&& key !== 'c'" not in source
 
 
 def test_tasks_hover_card_ctrl_click_builds_x_dismissible_stack():
