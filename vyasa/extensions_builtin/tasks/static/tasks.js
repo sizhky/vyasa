@@ -4645,6 +4645,16 @@ async function renderTasksGraphs(rootElement = document) {
                     matchedNodeIds: matchedNodes.map((node) => node.id).slice(0, 80),
                 };
             }, [widgetId, currentSelectionIds, effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches]);
+            const fitPaddingAroundCards = React.useCallback((fallback) => {
+                const canvas = flowWrapperRef.current;
+                if (!canvas) return fallback;
+                const canvasRect = canvas.getBoundingClientRect();
+                const cards = Array.from(canvas.querySelectorAll('[data-vyasa-node-card], [data-vyasa-edge-card]'));
+                const cardLeft = Math.min(...cards.map((card) => card.getBoundingClientRect().left));
+                if (!Number.isFinite(cardLeft)) return fallback;
+                const coveredRight = Math.max(0, canvasRect.right - Math.max(canvasRect.left, cardLeft));
+                return { top: '24px', right: `${Math.ceil(coveredRight + 12)}px`, bottom: '24px', left: '24px' };
+            }, []);
             const fitCurrentHighlight = React.useCallback((reactFlow, options = {}) => {
                 const reason = String(options.reason || 'manual-fit');
                 if (!reactFlow) return 0;
@@ -4656,10 +4666,10 @@ async function renderTasksGraphs(rootElement = document) {
                     duration,
                 });
                 reactFlow.fitView(matched.length
-                    ? { nodes: matched, duration, padding: options.highlightPadding ?? 0.25, includeHiddenNodes: true }
-                    : { duration, padding: options.padding ?? 0.2, includeHiddenNodes: true });
+                    ? { nodes: matched, duration, padding: fitPaddingAroundCards(options.highlightPadding ?? 0.25), includeHiddenNodes: true }
+                    : { duration, padding: fitPaddingAroundCards(options.padding ?? 0.2), includeHiddenNodes: true });
                 return matched.length;
-            }, [currentHighlightedFitNodes, tasksFitDebugPayload]);
+            }, [currentHighlightedFitNodes, fitPaddingAroundCards, tasksFitDebugPayload]);
             const fitSelectedEdgeConnection = React.useCallback((reactFlow, duration = 300) => {
                 if (!reactFlow || !selectedEdgeIdRef.current) return 0;
                 const visibleEdge = (graphBaseRef.current.edges || []).find(
@@ -4670,9 +4680,9 @@ async function renderTasksGraphs(rootElement = document) {
                 const endpointIds = new Set([edge.source, edge.target]);
                 const matched = (graphBaseRef.current.nodes || []).filter((node) => endpointIds.has(node.id));
                 if (!matched.length) return 0;
-                reactFlow.fitView({ nodes: matched, duration, padding: 0.32, includeHiddenNodes: true });
+                reactFlow.fitView({ nodes: matched, duration, padding: fitPaddingAroundCards(0.32), includeHiddenNodes: true });
                 return matched.length;
-            }, [selectedEdgeRecord]);
+            }, [fitPaddingAroundCards, selectedEdgeRecord]);
             React.useEffect(() => {
                 const baseModel = baseProjectionState.model;
                 const validFilterKeys = new Set(tasksFilterOptions(baseModel).map((option) => option.key));
@@ -7052,11 +7062,11 @@ async function renderTasksGraphs(rootElement = document) {
                             style: { border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: 0, opacity: 0.62 },
                         }, '×')
                     ),
-                    renderTasksDetailEntries(React, entries, { copyValues: true, edgeFields: true, currentPath: sourceModel?.document_path || '' }),
                     React.createElement('button', {
                         type: 'button', onClick: fitConnection,
-                        style: { marginTop: entries.length ? '12px' : 0, border: '1px solid color-mix(in srgb, currentColor 24%, transparent)', borderRadius: '8px', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', color: 'inherit', cursor: 'pointer', padding: '6px 9px', fontSize: '12px', lineHeight: 1.35, fontWeight: 700 },
-                    }, 'Fit connection')
+                        style: { marginBottom: entries.length ? '12px' : 0, border: '1px solid color-mix(in srgb, currentColor 24%, transparent)', borderRadius: '8px', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', color: 'inherit', cursor: 'pointer', padding: '6px 9px', fontSize: '12px', lineHeight: 1.35, fontWeight: 700 },
+                    }, 'Fit connection'),
+                    renderTasksDetailEntries(React, entries, { copyValues: true, edgeFields: true, currentPath: sourceModel?.document_path || '' })
                 );
             };
             const FilterPanel = () => {
