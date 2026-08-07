@@ -6111,7 +6111,7 @@ async function renderTasksGraphs(rootElement = document) {
                     Math.max(10, strokeWidth * 3.0)
                 );
                 const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
-                const prominentLabel = showFullLabel && !props.data?.edgeCardActive;
+                const prominentLabel = showFullLabel;
                 const displayLabel = showFullLabel
                     ? fullLabel
                     : (labelLines.length > 1 ? `${labelLines[0]}...` : fullLabel);
@@ -8719,7 +8719,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }));
             };
             const flowWrapperClassName = [
-                hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '',
+                hoveredNodeId || selectedEdgeId ? 'vyasa-tasks-hovering-edge-labels' : '',
                 'vyasa-tasks-active-pulse',
             ].filter(Boolean).join(' ');
             const buildProjectionConfigText = (projection) => {
