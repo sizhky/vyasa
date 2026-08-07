@@ -497,12 +497,12 @@ export function collectTasksStoredNotes(storage, storageKey, nodeTitles = {}, sl
         return `${header}\n${slideNotes[slideId].split('\n').map((line) => `  ${line}`).join('\n')}`;
     });
     const stanzas = [...nodeStanzas, ...slideStanzas];
-    return `# vyasa-notes 4\n${stanzas.length ? `\n${stanzas.join('\n\n')}\n` : ''}`;
+    return `vyasa-notes 4\n${stanzas.length ? `\n${stanzas.join('\n\n')}\n` : ''}`;
 }
 
 export function importTasksStoredNotes(storage, storageKey, backup) {
     const lines = String(backup || '').replace(/\r\n?/g, '\n').split('\n');
-    if (lines.shift()?.trim() !== '# vyasa-notes 4') {
+    if (lines.shift()?.trim() !== 'vyasa-notes 4') {
         throw new Error('Invalid Vyasa Knowledge Graph notes backup.');
     }
     const imported = {};
