@@ -7029,7 +7029,11 @@ async function renderTasksGraphs(rootElement = document) {
                 },
                     React.createElement('div', { style: { display: 'flex', alignItems: 'start', gap: '10px', marginBottom: '10px' } },
                         React.createElement('div', { style: { flex: '1 1 auto', minWidth: 0 } },
-                            React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' } }, `${sourceLabel} —${relation}→ ${targetLabel}`),
+                            React.createElement('div', { style: { display: 'grid', gap: '2px', fontSize: '14px', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' } },
+                                React.createElement('div', null, sourceLabel),
+                                React.createElement('div', { style: { fontSize: '12px', fontWeight: 600, fontStyle: 'italic', opacity: 0.7 } }, `${relation}${relation ? ' ' : ''}↓`),
+                                React.createElement('div', null, targetLabel)
+                            ),
                             React.createElement('div', { style: { marginTop: '4px', fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', opacity: 0.7, overflowWrap: 'anywhere' } }, selectedEdgeRecord.id),
                             sourceModel?.kg_context?.label ? React.createElement('div', { style: { marginTop: '3px', fontSize: '12px', lineHeight: 1.3, opacity: 0.62 } }, sourceModel.kg_context.label) : null
                         ),
