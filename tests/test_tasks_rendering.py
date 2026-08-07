@@ -534,27 +534,64 @@ def test_tasks_source_supports_local_card_notes():
     assert "tasksHasAnyNodeNote(nodeNotes)" in source
 
 
-def test_tasks_node_card_width_ignores_note_text_length():
+def test_tasks_node_and_edge_cards_share_note_access_and_rendering():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-    panel_source = source.split("const SelectedNodePanel = () => {", 1)[1].split("const FilterPanel = () => {", 1)[0]
+
+    assert "function updateTasksNote(setNotes, id, note)" in source
+    assert "function renderTasksCardNoteEditor(React, options = {})" in source
+    assert "const [edgeNotes, setEdgeNotes] = React.useState" in source
+    assert "updateTasksNote(setNodeNotes, nodeId, note)" in source
+    assert "updateTasksNote(setEdgeNotes, edgeId, note)" in source
+    assert "renderTasksCardNoteEditor(React" in source
+    assert "value: edgeNotes[selectedEdgeRecord.id] || ''" in source
+    assert "edgeNotes," in source
+
+
+def test_tasks_node_cards_share_the_configured_default_width():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    panel_source = source.split("const SelectedNodePanel = (", 1)[1].split("const SelectedEdgePanel = () =>", 1)[0]
 
     assert "renderTasksNoteTextarea(React" in panel_source
-    assert "const panelWidth = tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries });" in panel_source
-    assert "tasksNoteEditorMetrics(noteInputValue).width" not in panel_source
+    assert "width: `min(${nodeCardWidth}, 100%)`" in panel_source
+    assert "tasksDetailPanelWidth" not in panel_source
 
 
-def test_tasks_hover_card_shows_node_notes_textarea():
+def test_tasks_hover_card_reuses_selected_node_panel_on_right_side():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-    tooltip_source = source.split("const GroupHoverTooltipCard = React.useMemo(() => function GroupHoverTooltipCard({", 1)[1].split("const GroupHoverTooltip = () => {", 1)[0]
 
-    assert "noteValue = ''" in tooltip_source
-    assert "renderTasksNoteTextarea(window.React" in tooltip_source
-    assert "readOnly: !card.sticky" in tooltip_source
-    assert "onNoteChange?.(event.target.value)" in tooltip_source
-    assert "noteValue: nodeNotes[card.nodeId] || ''" in source
-    assert "onNoteChange: (value) => updateNodeNote(card.nodeId, value)" in source
+    assert "const TASKS_HOVER_CARD_MODES = ['off', 'rightRail']" in source
+    assert "const SelectedNodePanel = (panelGraphNodeId = selectedNodeId, readOnly = false, hoverCard = null)" in source
+    assert "SelectedNodePanel(groupHoverTooltip.nodeId, true, groupHoverTooltip)" in source
+    assert "ref: hoverCard ? hoverCardScrollRef : detailCardScrollRef" in source
+    assert "tasksActiveHoverAttrs" not in source
+    assert "tasksHoverAttrRows" not in source
+    assert "tasksGroupHoverAttrRows" not in source
+    assert "hoverAttrs:" in source
     assert source.count("GroupHoverTooltip(),") == 2
-    assert "window.React.createElement(GroupHoverTooltip)" not in source
+    assert "row('C', 'hover cards: off / right side')" in source
+
+
+def test_tasks_node_card_keeps_notes_below_the_scrolling_details():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    panel = source.split("const SelectedNodePanel = (", 1)[1].split("const SelectedEdgePanel = () =>", 1)[0]
+
+    assert panel.index("ref: hoverCard ? hoverCardScrollRef : detailCardScrollRef") < panel.index("data-vyasa-node-card-notes")
+    assert "style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto'" in panel
+    assert "'data-vyasa-node-card-notes': 'true'" in panel
+    assert "style: { flex: '0 0 auto', padding: '12px', borderTop:" in panel
+    assert "background: 'color-mix(in srgb, var(--vyasa-primary) 8%, var(--vyasa-paper) 92%)'" in panel
+
+
+def test_enter_selects_hovered_node_in_right_rail_and_focuses_notes():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "key !== 'enter' || !current" in source
+    assert "selectNodeCard(current.nodeId, current.nodeId, current.group ? 'group' : 'task', true)" in source
+    assert "if (focusNotes) pendingNodeNoteFocusRef.current = sourceNodeId" in source
+    assert "pendingNodeNoteFocusRef.current === selectedLogicalNodeId" in source
+    assert "textarea.focus()" in source
+    assert "row('Enter', 'pin hovered node and focus Notes / open selected edge')" in source
+    assert "event.key === 'Control'" not in source.split("const dismissAllStickyHoverCards", 1)[1].split("const hoverTraceKeyRef", 1)[0]
 
 
 def test_tasks_node_card_attr_values_can_be_copied_from_hover_button():
@@ -666,22 +703,26 @@ def test_w_edge_q_temporarily_shows_other_node_card():
     assert "event.code === 'KeyW'" in source
     assert "event.code === 'KeyQ'" in source
     assert "setOptionEdgeNodeCardId(optionEdgeOtherNodeIdRef.current);" in source
-    assert "event.key === 'Shift' && optionEdgePreviewHeldRef.current" in source
+    assert "event.key === 'Enter' && optionEdgePreviewHeldRef.current" in source
     assert "SelectedNodePanel(optionEdgeNodeCardId, true)" in source
 
 
-def test_shift_w_pin_blooms_from_the_edge():
+def test_w_enter_pin_blooms_from_the_edge():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "setEdgePinBloom({ edgeId: selectedEdgeIdRef.current, key: bloomKey });" in source
+    assert "window.requestAnimationFrame(() => edgeNoteTextareaRef.current?.focus())" in source
+    assert "ref: edgeNoteTextareaRef" in source
+    assert "row('W + Enter', 'pin edge details')" in source
+    assert "if (event.shiftKey) pinPreview();" not in source
     assert "edgePinBloom?.edgeId === tasksEdgeRecordId(edge)" in source
     assert "vyasa-tasks-edge-pin-bloom--late" not in source
     assert "@keyframes vyasa-tasks-edge-pin-bloom" in css
     assert "1720ms" in css
 
 
-def test_v_toggles_off_cursor_hover_card_scroll_mode():
+def test_v_toggles_right_side_hover_card_scroll_mode():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
     render_source = Path("vyasa/extensions_builtin/tasks/render.py").read_text()
@@ -691,8 +732,13 @@ def test_v_toggles_off_cursor_hover_card_scroll_mode():
     assert "readTasksGlobalToggle(TASKS_HOVER_CARD_SCROLL_KEY) === 'true'" in source
     assert "writeTasksGlobalToggle(TASKS_HOVER_CARD_SCROLL_KEY, next)" in source
     assert "const scrollCard = hoverCardScrollRef.current || detailCardScrollRef.current;" in source
-    assert "scrollCard.scrollBy" in source
-    assert source.count("ref: detailCardScrollRef") == 2
+    assert "if (hoverCardScrollMode && scrollCard && maxScrollTop > 0)" in source
+    assert "scrollCard.scrollTop = nextScrollTop" in source
+    assert "function applyTasksCardOverscroll(card, unusedDelta)" in source
+    assert "current.frame = window.requestAnimationFrame(step)" in source
+    assert "body.style.transform = `scaleY(${stretch})`" in source
+    assert source.count("className: 'vyasa-tasks-card-scroll-body'") == 3
+    assert "ref: hoverCard ? hoverCardScrollRef : detailCardScrollRef" in source
     assert "row('V', 'toggle hover card scroll mode')" in source
     assert "syncTasksCardScrollToggleButtons(widgetId, hoverCardScrollMode)" in source
     assert "toggleCardScroll: () => setHoverCardScrollModeGlobal" in source
@@ -704,8 +750,7 @@ def test_v_toggles_off_cursor_hover_card_scroll_mode():
     assert "50%" in css
     assert "vyasa-tasks-hover-card-scroll-pulse 2s cubic-bezier(0.37, 0, 0.63, 1)" in css
     assert "drop-shadow(" not in css.split("@keyframes vyasa-tasks-hover-card-scroll-pulse", 1)[1].split("}", 4)[0]
-    right_rail = source.split("const transientLayer = hoverCardRightRail", 1)[1].split("}, transientCard)", 1)[0]
-    assert "overflowY: 'auto'" not in right_rail
+    assert "hoverCardRightRail" not in source
 
 
 def test_tasks_hover_card_stacks_title_above_node_id():
@@ -1115,21 +1160,12 @@ def test_tasks_group_hover_tooltip_wraps_long_values_inside_max_width():
     assert "fontSize: `calc(${hoverFontSize} * 1.12)`" in source
 
 
-def test_tasks_group_hover_uses_side_card_stats_for_hover_attrs():
+def test_tasks_group_hover_uses_the_selected_panel_entries():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
-    script = """
-        import { tasksGroupHoverAttrRows } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
-        const rows = tasksGroupHoverAttrRows(
-            [],
-            [{ key: 'range:tokens', label: 'Tokens', value: '5 ≤ Tokens (μ 42) ≤ 88' }],
-            ['tokens'],
-        );
-        if (rows.length !== 1 || rows[0].value !== '5 ≤ Tokens (μ 42) ≤ 88') {
-            throw new Error(`group hover lost side-card stats: ${JSON.stringify(rows)}`);
-        }
-    """
-    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
-    assert "tasksGroupHoverAttrRows(directRows, tasksGroupDetailEntries(hoverGroupId, model), activeHoverAttrs)" in source
+
+    assert "selectedNode?.__kind__ === 'group'" in source
+    assert "tasksGroupDetailEntries(sourceNodeId, model)" in source
+    assert "SelectedNodePanel(groupHoverTooltip.nodeId, true, groupHoverTooltip)" in source
 
 
 def test_highlighted_edges_and_arrowheads_render_below_node_cards():
