@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksInlineLinkPlainText, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksCenteredViewport, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksInlineLinkPlainText, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
 import { buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksPruneFilterQueryFields, tasksReferenceEdges, tasksSelectionClickKey, tasksVisibleReferenceEdges, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
@@ -3500,6 +3500,12 @@ function renderTasksNoteTextarea(React, options = {}) {
         rows: Math.min(15, tasksNoteEditorMetrics(value).lines),
         onChange: options.onChange,
         onKeyDown: (event) => {
+            if (event.key === 'Enter' && event.shiftKey && options.onShiftEnter) {
+                event.preventDefault();
+                event.stopPropagation();
+                options.onShiftEnter();
+                return;
+            }
             if (event.key !== 'Escape') return;
             event.preventDefault();
             event.stopPropagation();
@@ -3550,7 +3556,7 @@ function renderTasksCardNoteEditor(React, options = {}) {
 
 function renderTasksCardDetailsAndNotes(React, options = {}) {
     const props = options.props || {};
-    const className = [props.className, options.scrollMode ? 'vyasa-tasks-hover-card--scroll' : ''].filter(Boolean).join(' ') || undefined;
+    const className = [props.className, options.scrollMode ? 'vyasa-tasks-pulse' : ''].filter(Boolean).join(' ') || undefined;
     return React.createElement('div', {
         ...props,
         className,
@@ -3971,6 +3977,34 @@ async function renderTasksGraphs(rootElement = document) {
             const referenceEdgesRef = React.useRef([]);
             const flowWrapperRef = React.useRef(null);
             const filterPanelRef = React.useRef(null);
+            const focusedNodePulseRef = React.useRef({ element: null, timer: 0 });
+            React.useEffect(() => () => {
+                window.clearTimeout(focusedNodePulseRef.current.timer);
+                focusedNodePulseRef.current.element?.classList.remove('vyasa-tasks-pulse');
+            }, []);
+            const nodeReferenceKeyHeldRef = React.useRef(false);
+            React.useEffect(() => {
+                const syncNodeReferenceModifier = (event) => {
+                    if (event.type !== 'blur' && String(event.key || '').toLowerCase() !== 'd') return;
+                    const target = event.target instanceof Element ? event.target : null;
+                    const editing = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+                    const held = event.type === 'keydown' && !editing;
+                    nodeReferenceKeyHeldRef.current = held;
+                    flowWrapperRef.current?.classList.toggle(
+                        'vyasa-tasks-node-reference-modifier',
+                        held
+                    );
+                };
+                window.addEventListener('keydown', syncNodeReferenceModifier, true);
+                window.addEventListener('keyup', syncNodeReferenceModifier, true);
+                window.addEventListener('blur', syncNodeReferenceModifier, true);
+                return () => {
+                    window.removeEventListener('keydown', syncNodeReferenceModifier, true);
+                    window.removeEventListener('keyup', syncNodeReferenceModifier, true);
+                    window.removeEventListener('blur', syncNodeReferenceModifier, true);
+                    flowWrapperRef.current?.classList.remove('vyasa-tasks-node-reference-modifier');
+                };
+            }, []);
             const [graphRevision, setGraphRevision] = React.useState(0);
             const projectionPrefs = React.useMemo(
                 () => readTasksProjectionPrefsForModel(sourceModel, { ...sourcePrefsRef.current, projectionPrefs: storedProjectionPrefsRef.current }, activeProjectionId),
@@ -5357,6 +5391,49 @@ async function renderTasksGraphs(rootElement = document) {
                     { duration, interpolate: 'linear' }
                 );
             }, []);
+            const focusGraphNode = React.useCallback((targetId) => {
+                const id = String(targetId || '').trim();
+                const graphNodes = graphBaseRef.current.nodes || [];
+                const targetNode = graphNodes.find((node) => node.id === id)
+                    || graphNodes.find((node) => tasksLogicalNodeId(node.data, node.id) === id);
+                const reactFlow = reactFlowApiRef.current;
+                const wrapperEl = flowWrapperRef.current;
+                const escape = window.CSS?.escape || ((value) => String(value).replace(/["\\]/g, '\\$&'));
+                const nodeEl = targetNode && wrapperEl
+                    ? wrapperEl.querySelector(`.react-flow__node[data-id="${escape(targetNode.id)}"]`)
+                    : null;
+                logTasksDebug('graphNodeFocus', { widgetId, targetId: id, nodeId: targetNode?.id || '', found: Boolean(targetNode && nodeEl && reactFlow) });
+                if (!targetNode || !nodeEl || !reactFlow || !wrapperEl) return false;
+                const sourceNodeId = targetNode.data?.__kind__ === 'groupTitle' ? targetNode.data?.sourceGroupId : targetNode.id;
+                selectNodeCard(sourceNodeId, targetNode.id, targetNode.data?.__kind__ || '');
+                reactFlow.setViewport(tasksCenteredViewport(
+                    reactFlow.getViewport(), wrapperEl.getBoundingClientRect(), nodeEl.getBoundingClientRect()
+                ), { duration: 240 });
+                const previousPulse = focusedNodePulseRef.current;
+                window.clearTimeout(previousPulse.timer);
+                previousPulse.element?.classList.remove('vyasa-tasks-pulse');
+                nodeEl.classList.remove('vyasa-tasks-pulse');
+                void nodeEl.offsetWidth;
+                nodeEl.classList.add('vyasa-tasks-pulse');
+                focusedNodePulseRef.current = {
+                    element: nodeEl,
+                    timer: window.setTimeout(() => {
+                        nodeEl.classList.remove('vyasa-tasks-pulse');
+                        focusedNodePulseRef.current = { element: null, timer: 0 };
+                    }, 8000),
+                };
+                return true;
+            }, [selectNodeCard, widgetId]);
+            const focusNodeReferenceFromEvent = React.useCallback((event) => {
+                const reference = event.target instanceof Element
+                    ? event.target.closest('[data-vyasa-node-reference]')
+                    : null;
+                if (!reference || !nodeReferenceKeyHeldRef.current) return false;
+                event.preventDefault();
+                event.stopPropagation();
+                focusGraphNode(String(reference.dataset.vyasaNodeReference || '').trim());
+                return true;
+            }, [focusGraphNode]);
             const ensureBaseLayout = React.useCallback(async () => {
                 if (!baseLayoutRef.current) baseLayoutRef.current = await layoutBaseTasksGraph(layoutRawGraph, layoutModel, jitterConfig, layoutConfig);
                 return baseLayoutRef.current;
@@ -6582,6 +6659,7 @@ async function renderTasksGraphs(rootElement = document) {
                     setHoveredNodeId(null);
                 };
                 const handleSelectedNodeToggleCapture = (event) => {
+                    if (focusNodeReferenceFromEvent(event)) return;
                     if (event.defaultPrevented) return;
                     if (event.target?.closest?.('a, button, input, textarea, select, [data-vyasa-task-control="true"]')) return;
                     if (selectedNodeIdRef.current !== sourceNodeId || selectedNodeIdsRef.current.size !== 0) return;
@@ -7180,11 +7258,18 @@ async function renderTasksGraphs(rootElement = document) {
                     event.stopPropagation();
                     await copyTasksText(selectedNode.label || selectedNode.id);
                 };
+                const focusPanelNode = (event) => {
+                    if (event.type === 'keydown' && !['Enter', ' '].includes(event.key)) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    focusGraphNode(panelGraphNodeId);
+                };
                 const nodeNotesEditor = renderTasksCardNoteEditor(React, {
                     ref: readOnly ? undefined : noteTextareaRef,
                     value: readOnly ? nodeNotes[panelNodeId] : noteInputValue,
                     readOnly,
                     onChange: readOnly ? undefined : (event) => setNoteInputValue(event.target.value),
+                    onShiftEnter: readOnly ? undefined : () => focusGraphNode(panelGraphNodeId),
                     clearedValue: readOnly ? '' : clearedNote,
                     onUndo: readOnly ? undefined : (event) => { event.preventDefault(); setNoteInputValue(clearedNote); updateNodeNote(panelNodeId, clearedNote); setClearedNote(null); window.clearTimeout(clearedNoteTimerRef.current); },
                     onClear: readOnly ? undefined : (event) => { event.preventDefault(); const prev = noteInputValue; setNoteInputValue(''); updateNodeNote(panelNodeId, ''); setClearedNote(prev); },
@@ -7221,7 +7306,7 @@ async function renderTasksGraphs(rootElement = document) {
                         React.createElement('div', { style: { display: 'grid', gridTemplateColumns: panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', columnGap: '12px', alignItems: 'start' } },
                             React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px', fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' } },
                                 renderTasksCardNodeIcon(React, selectedNode, model),
-                                React.createElement('span', { style: { minWidth: 0 } },
+                                React.createElement('span', { role: 'button', tabIndex: 0, title: 'Center node', onClick: focusPanelNode, onKeyDown: focusPanelNode, style: { minWidth: 0, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '2px' } },
                                     renderTasksInlineLinks(selectedNode.label || selectedNode.id, { currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels }))
                             ),
                             panelNodeId ? React.createElement('div', { style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', textAlign: 'right' } }, panelNodeId) : null,
@@ -7261,6 +7346,7 @@ async function renderTasksGraphs(rootElement = document) {
                     value: edgeNotes[selectedEdgeRecord.id] || '',
                     ariaLabel: `Notes for edge ${selectedEdgeRecord.id}`,
                     onChange: (event) => updateEdgeNote(selectedEdgeRecord.id, event.target.value),
+                    onShiftEnter: () => fitSelectedEdgeConnection(reactFlowApiRef.current),
                 });
                 return renderTasksCardDetailsAndNotes(React, {
                     props: {
@@ -8544,7 +8630,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const append = event.altKey && event.shiftKey;
                 const mode = append || event.metaKey ? 'lasso' : (event.shiftKey ? 'rect' : '');
                 if (!mode || (event.pointerType === 'mouse' && event.button !== 0)) return;
-                if (event.target?.closest?.('button, input, textarea, select, a, .react-flow__controls, .vyasa-tasks-filter-card')) return;
+                if (event.target?.closest?.('button, input, textarea, select, a, [data-vyasa-node-reference], .react-flow__controls, .vyasa-tasks-filter-card')) return;
                 const reactFlow = reactFlowApiRef.current;
                 const el = flowWrapperRef.current;
                 if (!reactFlow || !el) return;
@@ -8989,6 +9075,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Click node', 'select card or group'),
                     row('Click edge', 'open edge details'),
                     row('Click canvas', 'clear selection'),
+                    row('D + click [[node]]', 'go to referenced node'),
                     row('Shift + drag', 'box select'),
                     row('Cmd + drag', 'lasso select'),
                     row('Alt + Shift + drag', 'append lasso selection'),
@@ -8999,6 +9086,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('?', 'toggle this help'),
                     row('[ / ]', 'select previous / next visible edge'),
                     row('Enter', 'pin hovered node and focus Notes / open selected edge'),
+                    row('Shift + Enter', 'center pinned node or fit pinned edge'),
                     row('F', 'fit view or active edge'),
                     row('Option + F', 'fit highlighted edge'),
                     row('W / Q', 'hold edge preview / opposite node card'),
@@ -9152,6 +9240,7 @@ async function renderTasksGraphs(rootElement = document) {
                 clearSelection('paneClick');
             };
             const flowPointerHandlers = {
+                onClickCapture: focusNodeReferenceFromEvent,
                 onPointerDown: (event) => {
                     markWidgetActive();
                     flowWrapperRef.current?.focus({ preventScroll: true });

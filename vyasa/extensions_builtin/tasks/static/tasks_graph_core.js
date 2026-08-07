@@ -13,6 +13,14 @@ export function tasksReviewTarget(data, id, widgetId) {
     };
 }
 
+export function tasksCenteredViewport(viewport, canvasRect, nodeRect) {
+    return {
+        x: viewport.x + canvasRect.left + canvasRect.width / 2 - nodeRect.left - nodeRect.width / 2,
+        y: viewport.y + canvasRect.top + canvasRect.height / 2 - nodeRect.top - nodeRect.height / 2,
+        zoom: viewport.zoom,
+    };
+}
+
 export function nextWheelState(state, rect, point, deltaY, maxScale = 55) {
     const mouseX = point.x - rect.left - rect.width / 2;
     const mouseY = point.y - rect.top - rect.height / 2;
