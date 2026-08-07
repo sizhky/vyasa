@@ -1,7 +1,7 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
 import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
-import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksGroupHoverAttrRows, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
+import { buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
 import { createMomentumRunner, shortcutsSuspended } from '/static/page_shell.js';
@@ -148,9 +148,7 @@ function tasksModelSetting(model, key, fallback = '') {
     return value;
 }
 
-// C cycles the hover card through these, in this order. 'cursor' and 'rightRail'
-// are the placements the card already knew; 'off' is the old hidden state.
-const TASKS_HOVER_CARD_MODES = ['off', 'cursor', 'rightRail'];
+const TASKS_HOVER_CARD_MODES = ['off', 'rightRail'];
 // Every key the graph shortcut handler consumes. It stops these from reaching the
 // document shortcuts while a graph is focused; anything absent here stays the
 // document's key.
@@ -170,13 +168,46 @@ const TASKS_HOVER_CARD_MODE_KEY = 'vyasa:tasks:hover-card-mode';
 const TASKS_GROUP_HOVER_CARDS_KEY = 'vyasa:tasks:group-hover-cards';
 const TASKS_HOVER_CARD_SCROLL_KEY = 'vyasa:tasks:hover-card-scroll';
 
+const tasksCardOverscrollStates = new WeakMap();
+
+function applyTasksCardOverscroll(card, unusedDelta) {
+    const body = card.querySelector(':scope > .vyasa-tasks-card-scroll-body');
+    if (!body || !unusedDelta) return;
+    const current = tasksCardOverscrollStates.get(card) || { offset: 0, velocity: 0, frame: 0, edge: 1 };
+    if (current.offset && Math.sign(current.offset) !== Math.sign(unusedDelta)) current.offset = 0;
+    current.edge = Math.sign(unusedDelta);
+    const resistance = 1 - Math.min(1, Math.abs(current.offset) / 56);
+    current.offset = Math.max(-56, Math.min(56, current.offset + (unusedDelta * 0.28 * resistance)));
+    current.velocity += unusedDelta * 0.015;
+    const render = () => {
+        const stretch = Math.max(0.96, 1 + ((current.offset * current.edge) / 420));
+        body.style.transformOrigin = current.edge > 0 ? 'bottom center' : 'top center';
+        body.style.transform = `scaleY(${stretch})`;
+    };
+    render();
+    const step = () => {
+        current.velocity += (-0.16 * current.offset) - (0.58 * current.velocity);
+        current.offset += current.velocity;
+        render();
+        if (Math.abs(current.offset) < 0.08 && Math.abs(current.velocity) < 0.08) {
+            body.style.removeProperty('transform');
+            body.style.removeProperty('transform-origin');
+            tasksCardOverscrollStates.delete(card);
+            return;
+        }
+        current.frame = window.requestAnimationFrame(step);
+    };
+    if (!current.frame) current.frame = window.requestAnimationFrame(step);
+    tasksCardOverscrollStates.set(card, current);
+}
+
 function nextTasksHoverCardMode(mode) {
     const index = TASKS_HOVER_CARD_MODES.indexOf(mode);
-    if (index < 0) return 'cursor';
+    if (index < 0) return 'rightRail';
     return TASKS_HOVER_CARD_MODES[(index + 1) % TASKS_HOVER_CARD_MODES.length];
 }
 
-function clampTasksHoverCardMode(mode, fallback = 'cursor') {
+function clampTasksHoverCardMode(mode, fallback = 'rightRail') {
     return TASKS_HOVER_CARD_MODES.includes(mode) ? mode : fallback;
 }
 
@@ -841,6 +872,18 @@ function normalizeTasksNodeNotes(value) {
         .filter(([nodeId, note]) => nodeId && note.trim()));
 }
 
+function updateTasksNote(setNotes, id, note) {
+    const normalizedId = String(id || '').trim();
+    if (!normalizedId) return;
+    setNotes((current) => {
+        const next = { ...(current || {}) };
+        const text = String(note || '');
+        if (text.trim()) next[normalizedId] = text;
+        else delete next[normalizedId];
+        return next;
+    });
+}
+
 function normalizeTasksSlideNotes(value) {
     return normalizeTasksNodeNotes(value);
 }
@@ -908,6 +951,9 @@ function writeTasksPrefs(model, prefs) {
     const nodeNotes = Object.prototype.hasOwnProperty.call(prefs || {}, 'nodeNotes')
         ? normalizeTasksNodeNotes(prefs?.nodeNotes)
         : normalizeTasksNodeNotes(existing.nodeNotes);
+    const edgeNotes = Object.prototype.hasOwnProperty.call(prefs || {}, 'edgeNotes')
+        ? normalizeTasksNodeNotes(prefs?.edgeNotes)
+        : normalizeTasksNodeNotes(existing.edgeNotes);
     const slideNotes = Object.prototype.hasOwnProperty.call(prefs || {}, 'slideNotes')
         ? normalizeTasksSlideNotes(prefs?.slideNotes)
         : normalizeTasksSlideNotes(existing.slideNotes);
@@ -922,6 +968,7 @@ function writeTasksPrefs(model, prefs) {
         projectionPrefs,
         nodeStates,
         nodeNotes,
+        edgeNotes,
         slideNotes,
     });
     const attempt = () => {
@@ -1135,13 +1182,8 @@ function tasksGroupDetailEntries(nodeId, model) {
             value: String(sampleNodes.length),
         });
     }
-    const declaredOrder = new Map(tasksActiveHoverAttrs(model, '').map((key, index) => [key, index]));
-    const byDeclaredOrder = ([left], [right]) => {
-        const leftOrder = declaredOrder.has(left) ? declaredOrder.get(left) : Number.MAX_SAFE_INTEGER;
-        const rightOrder = declaredOrder.has(right) ? declaredOrder.get(right) : Number.MAX_SAFE_INTEGER;
-        return (leftOrder - rightOrder) || left.localeCompare(right);
-    };
-    for (const [key, stat] of Array.from(metrics.entries()).sort(byDeclaredOrder)) {
+    const byKey = ([left], [right]) => left.localeCompare(right);
+    for (const [key, stat] of Array.from(metrics.entries()).sort(byKey)) {
         if (excludedDerivedKeys.has(String(key || '').toLowerCase())) continue;
         const label = tasksNodeMetaLabel(key);
         detailEntries.push({
@@ -1150,7 +1192,7 @@ function tasksGroupDetailEntries(nodeId, model) {
             value: `${formatTasksMetricValue(stat.min)} ≤ ${label} (μ ${formatTasksMetricValue(stat.sum / Math.max(stat.count, 1))}) ≤ ${formatTasksMetricValue(stat.max)}`,
         });
     }
-    for (const [key, counts] of Array.from(discreteColorCounts.entries()).sort(byDeclaredOrder)) {
+    for (const [key, counts] of Array.from(discreteColorCounts.entries()).sort(byKey)) {
         const summary = Array.from(counts.entries())
             .sort(([left], [right]) => left.localeCompare(right))
             .map(([value, count]) => `${value}: ${count}`)
@@ -3319,40 +3361,6 @@ function renderTasksNodeLinkBadge(React, options = {}) {
     })));
 }
 
-function tasksActiveHoverAttrs(sourceModel, activeProjectionId) {
-    const projections = Array.isArray(sourceModel?.view_projections) ? sourceModel.view_projections : [];
-    const normalize = (value) => (Array.isArray(value) ? value : String(value || '').split(','))
-        .map((attr) => String(attr || '').trim())
-        .filter(Boolean);
-    const id = String(activeProjectionId || '').trim();
-    if (id) {
-        const projection = projections.find((p) => p && p.id === id);
-        if (projection?.hover_attrs) {
-            return normalize(projection.hover_attrs);
-        }
-    }
-    if (sourceModel?.hover_attrs) return normalize(sourceModel.hover_attrs);
-    return [];
-}
-
-function tasksFormatHoverValue(attr, value) {
-    if (value === null || value === undefined) return '';
-    if (typeof value === 'number') {
-        if (Number.isInteger(value) && Math.abs(value) >= 1000) {
-            return value.toLocaleString('en-US');
-        }
-        return String(value);
-    }
-    const str = normalizeTasksAttrText(value);
-    if (!str) return '';
-    // Try numeric formatting for stringy numbers (the fence parser stores everything as strings).
-    if (/^-?\d+(\.\d+)?$/.test(str)) {
-        const num = Number(str);
-        if (Number.isFinite(num) && Math.abs(num) >= 1000) return num.toLocaleString('en-US');
-    }
-    return str;
-}
-
 function tasksDetailPanelWidth(options = {}) {
     const title = options.title || '';
     const nodeId = options.nodeId || '';
@@ -3399,6 +3407,7 @@ function renderTasksNoteTextarea(React, options = {}) {
         ref: options.ref,
         'data-vyasa-task-control': 'true',
         'aria-label': options.ariaLabel || 'Notes',
+        autoFocus: options.autoFocus === true,
         value,
         placeholder: 'Notes',
         readOnly: options.readOnly === true,
@@ -3427,6 +3436,49 @@ function renderTasksNoteTextarea(React, options = {}) {
             boxSizing: 'border-box',
         },
     });
+}
+
+function renderTasksCardNoteEditor(React, options = {}) {
+    const value = String(options.value || '');
+    return React.createElement('label', { style: {
+        display: 'flex', flexDirection: 'column', gap: '6px',
+        paddingTop: options.separated ? '10px' : 0,
+        marginTop: options.separated ? '10px' : 0,
+        borderTop: options.separated ? '1px dashed color-mix(in srgb, currentColor 18%, transparent)' : 'none',
+    } },
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+            React.createElement('span', { style: { fontWeight: 700, opacity: 0.7, flex: '1 1 auto' } }, 'Notes'),
+            options.onUndo && options.clearedValue ? React.createElement('button', {
+                type: 'button', 'data-vyasa-task-control': 'true', onClick: options.onUndo,
+                style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--vyasa-primary)', fontWeight: 600, padding: 0, lineHeight: 1, opacity: 0.85 },
+            }, 'Undo') : null,
+            options.onClear && value.trim() ? React.createElement('button', {
+                type: 'button', title: 'Clear note', 'aria-label': 'Clear note',
+                'data-vyasa-task-control': 'true', onClick: options.onClear,
+                style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: 'inherit', padding: 0, lineHeight: 1, opacity: 0.45, display: 'flex', alignItems: 'center' },
+            }, '×') : null,
+        ),
+        renderTasksNoteTextarea(React, options)
+    );
+}
+
+function renderTasksCardDetailsAndNotes(React, options = {}) {
+    const props = options.props || {};
+    const className = [props.className, options.scrollMode ? 'vyasa-tasks-hover-card--scroll' : ''].filter(Boolean).join(' ') || undefined;
+    return React.createElement('div', {
+        ...props,
+        className,
+        style: { pointerEvents: 'auto', minHeight: 0, maxHeight: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', ...props.style },
+    },
+        React.createElement('div', {
+            ref: options.scrollRef,
+            style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '12px' },
+        }, React.createElement('div', { className: 'vyasa-tasks-card-scroll-body' }, options.details)),
+        React.createElement('div', {
+            'data-vyasa-card-notes': 'true',
+            style: { flex: '0 0 auto', padding: '12px', borderTop: '1px dashed color-mix(in srgb, currentColor 18%, transparent)', background: 'color-mix(in srgb, var(--vyasa-primary) 8%, var(--vyasa-paper) 92%)', fontSize: '12px', lineHeight: 1.35 },
+        }, options.notes)
+    );
 }
 
 function renderTasksDetailEntries(React, entries, options = {}) {
@@ -3497,22 +3549,6 @@ function syncTasksFullscreenButton(wrapper) {
 const { setTasksMaximized } = createTasksFullscreenController({
     syncTasksFullscreenButton,
 });
-
-function tasksHoverAttrRows(node, hoverAttrs) {
-    if (!node || !Array.isArray(hoverAttrs) || !hoverAttrs.length) return [];
-    const rows = [];
-    for (const attr of hoverAttrs) {
-        const value = node[attr];
-        if (value === null || value === undefined || String(value).trim() === '') continue;
-        rows.push({
-            attr,
-            label: tasksNodeMetaLabel(attr),
-            value: tasksFormatHoverValue(attr, value),
-            renderedValue: typeof node?.__rendered_attrs__?.[attr] === 'string' ? node.__rendered_attrs__[attr] : '',
-        });
-    }
-    return rows;
-}
 
 function tasksProjectionOptions(model, ganttEnabled = false, activeContextId = '') {
     const projections = Array.isArray(model?.view_projections) ? model.view_projections : [];
@@ -3778,7 +3814,6 @@ async function renderTasksGraphs(rootElement = document) {
             }), [model]);
             const layoutConfig = React.useMemo(() => readTasksLayoutConfigForModel(wrapper, model), [model]);
             const nodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '480px')).trim() || '480px';
-            const hoverCardRightRailSetting = tasksModelBooleanSetting(model, 'hover-card-right-rail', false);
             const hoverFontSize = String(tasksModelSetting(model, 'hover-font-size', wrapper.dataset.tasksHoverFontSize || '12px')).trim() || '12px';
             const colorMix = readTasksColorMixConfigForModel(wrapper, model);
             const projectionGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(tasksModelSetting(model, 'projection-group-opacity', wrapper.dataset.tasksProjectionGroupOpacity || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`)) || TASKS_PROJECTION_GROUP_OPACITY_DEFAULT));
@@ -3885,6 +3920,28 @@ async function renderTasksGraphs(rootElement = document) {
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
             const groupHoverTooltipRef = React.useRef(null);
             groupHoverTooltipRef.current = groupHoverTooltip;
+            const pendingNodeNoteFocusRef = React.useRef('');
+            const selectNodeCard = React.useCallback((sourceNodeId, nodeId, kind, focusNotes = false) => {
+                logTasksDebug('selectionSetNode', {
+                    widgetId,
+                    sourceNodeId,
+                    nodeId,
+                    kind,
+                    ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeIdRef.current),
+                });
+                markWidgetActive();
+                selectedEdgeIdRef.current = null;
+                optionEdgeNodeIdRef.current = '';
+                setSelectedEdgeId(null);
+                setSelectedEdgeRecord(null);
+                setEdgeCardOpen(false);
+                selectedNodeIdRef.current = sourceNodeId;
+                selectedNodeIdsRef.current = new Set();
+                if (focusNotes) pendingNodeNoteFocusRef.current = sourceNodeId;
+                setSelectedNodeId(sourceNodeId);
+                setSelectedNodeIds(new Set());
+                setHoveredNodeId(null);
+            }, [markWidgetActive, widgetId]);
             const [hoverCardScrollMode, setHoverCardScrollMode] = React.useState(
                 () => readTasksGlobalToggle(TASKS_HOVER_CARD_SCROLL_KEY) === 'true'
             );
@@ -3898,10 +3955,6 @@ async function renderTasksGraphs(rootElement = document) {
                     return next;
                 });
             }, [widgetId]);
-            const [stickyGroupHoverTooltips, setStickyGroupHoverTooltips] = React.useState([]);
-            const stickyGroupHoverTooltipsRef = React.useRef([]);
-            stickyGroupHoverTooltipsRef.current = stickyGroupHoverTooltips;
-            const stickyGroupHoverTooltipIdRef = React.useRef(0);
             const [helpOpen, setHelpOpen] = React.useState(false);
             const slides = React.useMemo(() => {
                 const list = Array.isArray(baseProjectionState.model?.slides) ? baseProjectionState.model.slides : [];
@@ -4034,6 +4087,7 @@ async function renderTasksGraphs(rootElement = document) {
                 typeof projectionPrefs?.searchQuery === 'string' ? projectionPrefs.searchQuery : ''
             ));
             const [nodeNotes, setNodeNotes] = React.useState(() => normalizeTasksNodeNotes(sourcePrefsRef.current?.nodeNotes));
+            const [edgeNotes, setEdgeNotes] = React.useState(() => normalizeTasksNodeNotes(sourcePrefsRef.current?.edgeNotes));
             const [slideNotes, setSlideNotes] = React.useState(() => normalizeTasksSlideNotes(sourcePrefsRef.current?.slideNotes));
             const [activeColorHierarchy, setActiveColorHierarchy] = React.useState(() => (
                 resolveTasksPreferredColorHierarchy(model, activeProjectionId, projectionPrefs, nodeNotes)
@@ -4056,14 +4110,12 @@ async function renderTasksGraphs(rootElement = document) {
             const [hoverInactiveNodes, setHoverInactiveNodes] = React.useState(() => (
                 typeof projectionPrefs?.hoverInactiveNodes === 'boolean' ? projectionPrefs.hoverInactiveNodes : true
             ));
-            // One mode replaces the old enabled flag and the authored right-rail
-            // setting; both are derived below, so every read site stays as it was.
             const [hoverCardMode, setHoverCardMode] = React.useState(() => {
                 const stored = readTasksHoverCardMode();
                 if (stored) return stored;
                 if (TASKS_HOVER_CARD_MODES.includes(projectionPrefs?.hoverCardMode)) return projectionPrefs.hoverCardMode;
                 if (projectionPrefs?.hoverCardsEnabled === false) return 'off';
-                return hoverCardRightRailSetting ? 'rightRail' : 'cursor';
+                return 'rightRail';
             });
             // The E and H toggles write what they set, so the next graph on this
             // server opens the same way. Every other write path stays local.
@@ -4082,7 +4134,6 @@ async function renderTasksGraphs(rootElement = document) {
                 });
             }, []);
             const hoverCardsEnabled = hoverCardMode !== 'off';
-            const hoverCardRightRail = hoverCardMode === 'rightRail';
             const [groupHoverCardsEnabled, setGroupHoverCardsEnabled] = React.useState(
                 () => readTasksGlobalToggle(TASKS_GROUP_HOVER_CARDS_KEY) !== 'false'
             );
@@ -4096,7 +4147,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, []);
             // The toolbar button is still show/hide, so it needs to know which
             // placement to come back to.
-            const lastHoverCardPlacementRef = React.useRef('cursor');
+            const lastHoverCardPlacementRef = React.useRef('rightRail');
             if (hoverCardsEnabled) lastHoverCardPlacementRef.current = hoverCardMode;
             React.useEffect(() => {
                 syncTasksEdgeToggleButtons(widgetId, edgesVisible);
@@ -4242,6 +4293,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.setTimeout(() => setEdgePinBloom((current) => current?.key === bloomKey ? null : current), 1800);
                     logTasksDebug('optionEdgePinned', { widgetId, edgeId: selectedEdgeIdRef.current, bloomKey });
                     setEdgeStatus(`${selectedEdgeIdRef.current}. Edge details pinned.`);
+                    window.requestAnimationFrame(() => edgeNoteTextareaRef.current?.focus());
                     return true;
                 };
                 const edgeKeyApplies = (event) => {
@@ -4255,9 +4307,21 @@ async function renderTasksGraphs(rootElement = document) {
                         optionEdgePreviewHeldRef.current = true;
                         event.preventDefault();
                         event.stopPropagation();
-                        if (event.shiftKey) pinPreview();
-                    } else if (event.key === 'Shift' && optionEdgePreviewHeldRef.current) {
-                        if (pinPreview()) event.preventDefault();
+                    } else if (event.key === 'Enter' && optionEdgePreviewHeldRef.current) {
+                        const oppositeNodeId = optionEdgeNodeCardHeldRef.current ? optionEdgeOtherNodeIdRef.current : '';
+                        if (oppositeNodeId) {
+                            optionEdgePreviewHeldRef.current = false;
+                            optionEdgeNodeCardHeldRef.current = false;
+                            optionEdgeOtherNodeIdRef.current = '';
+                            setOptionEdgeNodeCardId(null);
+                            selectNodeCard(oppositeNodeId, oppositeNodeId, 'task', true);
+                            logTasksDebug('optionEdgeNodeCardSelected', { widgetId, nodeId: oppositeNodeId, reason: 'w-q-enter' });
+                            event.preventDefault();
+                            event.stopImmediatePropagation();
+                        } else if (pinPreview()) {
+                            event.preventDefault();
+                            event.stopImmediatePropagation();
+                        }
                     } else if (event.code === 'KeyQ') {
                         optionEdgeNodeCardHeldRef.current = true;
                         event.preventDefault();
@@ -4291,7 +4355,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.removeEventListener('keyup', onKeyUp, true);
                     window.removeEventListener('blur', clearKeys);
                 };
-            }, [clearOptionEdgePreview, widgetId]);
+            }, [clearOptionEdgePreview, selectNodeCard, widgetId]);
             const selectGraphEdge = React.useCallback((event, edge) => {
                 event?.preventDefault?.();
                 event?.stopPropagation?.();
@@ -4350,6 +4414,7 @@ async function renderTasksGraphs(rootElement = document) {
                 else delete carrier.dataset.vyasaReviewTargets;
             }, [reviewTargets]);
             const noteTextareaRef = React.useRef(null);
+            const edgeNoteTextareaRef = React.useRef(null);
             const extendLassoPoints = React.useCallback((points, nextPoint) => {
                 const current = Array.isArray(points) ? points : [];
                 const last = current[current.length - 1];
@@ -4548,7 +4613,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoverCardMode(readTasksHoverCardMode()
                     || (TASKS_HOVER_CARD_MODES.includes(nextPrefs?.hoverCardMode)
                         ? nextPrefs.hoverCardMode
-                        : (nextPrefs?.hoverCardsEnabled === false ? 'off' : (hoverCardRightRailSetting ? 'rightRail' : 'cursor'))));
+                        : (nextPrefs?.hoverCardsEnabled === false ? 'off' : 'rightRail')));
                 setEdgeOpacity(nextPrefs?.edgeOpacity !== undefined ? nextPrefs.edgeOpacity : (
                     sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity)
                 ));
@@ -4784,6 +4849,7 @@ async function renderTasksGraphs(rootElement = document) {
                     projectionPrefs: nextProjectionPrefs,
                     nodeStates,
                     nodeNotes,
+                    edgeNotes,
                     slideNotes,
                 };
                 storedProjectionPrefsRef.current = nextProjectionPrefs;
@@ -4799,10 +4865,11 @@ async function renderTasksGraphs(rootElement = document) {
                     projectionPrefs: nextProjectionPrefs,
                     nodeStates,
                     nodeNotes,
+                    edgeNotes,
                     slideNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [egoState, sourceModel, activeFilters, activeSwatchFilters, activeEdgeTypes, edgeTypeFilterEnabled, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, hoverCardMode, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
+            }, [egoState, sourceModel, activeFilters, activeSwatchFilters, activeEdgeTypes, edgeTypeFilterEnabled, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, hoverCardMode, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, edgeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
@@ -4990,26 +5057,13 @@ async function renderTasksGraphs(rootElement = document) {
                 });
             }, [cardStates]);
             const updateNodeNote = React.useCallback((nodeId, note) => {
-                const normalizedId = String(nodeId || '').trim();
-                if (!normalizedId) return;
-                setNodeNotes((current) => {
-                    const next = { ...(current || {}) };
-                    const text = String(note || '');
-                    if (text.trim()) next[normalizedId] = text;
-                    else delete next[normalizedId];
-                    return next;
-                });
+                updateTasksNote(setNodeNotes, nodeId, note);
+            }, []);
+            const updateEdgeNote = React.useCallback((edgeId, note) => {
+                updateTasksNote(setEdgeNotes, edgeId, note);
             }, []);
             const updateSlideNote = React.useCallback((slideId, note) => {
-                const normalizedId = String(slideId || '').trim();
-                if (!normalizedId) return;
-                setSlideNotes((current) => {
-                    const next = { ...(current || {}) };
-                    const text = String(note || '');
-                    if (text.trim()) next[normalizedId] = text;
-                    else delete next[normalizedId];
-                    return next;
-                });
+                updateTasksNote(setSlideNotes, slideId, note);
             }, []);
             const latestNodeNotes = React.useCallback(() => {
                 const latest = { ...nodeNotes };
@@ -5136,6 +5190,10 @@ async function renderTasksGraphs(rootElement = document) {
             React.useLayoutEffect(() => {
                 const textarea = noteTextareaRef.current;
                 if (!textarea) return;
+                if (pendingNodeNoteFocusRef.current === selectedLogicalNodeId) {
+                    pendingNodeNoteFocusRef.current = '';
+                    textarea.focus();
+                }
                 textarea.style.height = 'auto';
                 const computed = window.getComputedStyle(textarea);
                 const lineHeight = Number.parseFloat(computed.lineHeight) || 16;
@@ -6932,7 +6990,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, panViewport, graphMinZoom]);
                 return null;
             };
-            const SelectedNodePanel = (panelGraphNodeId = selectedNodeId, readOnly = false) => {
+            const SelectedNodePanel = (panelGraphNodeId = selectedNodeId, readOnly = false, hoverCard = null) => {
                 const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === panelGraphNodeId)?.data || null;
                 const sourceNodeId = selectedNode?.__kind__ === 'groupTitle'
                     ? selectedNode.sourceGroupId
@@ -6944,7 +7002,6 @@ async function renderTasksGraphs(rootElement = document) {
                 const panelNodeId = sourceNodeId || selectedNode.id || '';
                 const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
                 const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;
-                const panelWidth = tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries });
                 const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));
                 const panelHref = String(selectedNode?.href || '').trim();
                 const copyPanelTitle = async (event) => {
@@ -6952,12 +7009,23 @@ async function renderTasksGraphs(rootElement = document) {
                     event.stopPropagation();
                     await copyTasksText(selectedNode.label || selectedNode.id);
                 };
-                return React.createElement('div', {
-                    ref: detailCardScrollRef,
-                    className: hoverCardScrollMode ? 'vyasa-tasks-hover-card--scroll' : undefined,
-                    'data-vyasa-node-card': 'true',
-                    style: { width: `min(${panelWidth}px, 100%)`, maxWidth: '100%', minWidth: 'min(220px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto', minHeight: 0, flex: '0 1 auto', overflowY: 'auto', overscrollBehavior: 'contain' },
-                },
+                const nodeNotesEditor = renderTasksCardNoteEditor(React, {
+                    ref: readOnly ? undefined : noteTextareaRef,
+                    value: readOnly ? nodeNotes[panelNodeId] : noteInputValue,
+                    readOnly,
+                    onChange: readOnly ? undefined : (event) => setNoteInputValue(event.target.value),
+                    clearedValue: readOnly ? '' : clearedNote,
+                    onUndo: readOnly ? undefined : (event) => { event.preventDefault(); setNoteInputValue(clearedNote); updateNodeNote(panelNodeId, clearedNote); setClearedNote(null); window.clearTimeout(clearedNoteTimerRef.current); },
+                    onClear: readOnly ? undefined : (event) => { event.preventDefault(); const prev = noteInputValue; setNoteInputValue(''); updateNodeNote(panelNodeId, ''); setClearedNote(prev); },
+                });
+                return renderTasksCardDetailsAndNotes(React, {
+                    props: {
+                        'data-vyasa-node-card': 'true',
+                        style: { width: `min(${nodeCardWidth}, 100%)`, maxWidth: '100%', minWidth: 'min(220px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', flex: '0 1 auto' },
+                    },
+                    scrollRef: hoverCard ? hoverCardScrollRef : detailCardScrollRef,
+                    scrollMode: hoverCardScrollMode,
+                    details: React.createElement(React.Fragment, null,
                     React.createElement('div', { style: { position: 'relative', paddingRight: panelLinkKinds.length ? '56px' : '28px', marginBottom: '10px' } },
                         panelLinkKinds.length ? renderTasksNodeLinkBadge(React, { kinds: panelLinkKinds, right: '0', top: '0' }) : null,
                         React.createElement('button', {
@@ -6993,44 +7061,10 @@ async function renderTasksGraphs(rootElement = document) {
                             style: { display: 'inline-block', marginTop: '6px', fontSize: '12px', lineHeight: 1.3, textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit', overflowWrap: 'anywhere', wordBreak: 'break-word' },
                         }, panelHref) : null,
                     ),
-                    renderTasksDetailEntries(React, entries, { copyValues: true, currentPath: sourceModel?.document_path || '' }),
-                    React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: '12px', lineHeight: 1.35 } },
-                        React.createElement('label', {
-                            style: {
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '6px',
-                                paddingTop: entries.length ? '10px' : '0',
-                                marginTop: entries.length ? '10px' : '0',
-                                borderTop: entries.length ? '1px dashed color-mix(in srgb, currentColor 18%, transparent)' : 'none',
-                            },
-                        },
-                            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
-                                React.createElement('span', { style: { fontWeight: 700, opacity: 0.7, flex: '1 1 auto' } }, 'Notes'),
-                                !readOnly && clearedNote ? React.createElement('button', {
-                                    type: 'button',
-                                    'data-vyasa-task-control': 'true',
-                                    onClick: (e) => { e.preventDefault(); setNoteInputValue(clearedNote); updateNodeNote(panelNodeId, clearedNote); setClearedNote(null); window.clearTimeout(clearedNoteTimerRef.current); },
-                                    style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--vyasa-primary)', fontWeight: 600, padding: '0', lineHeight: 1, opacity: 0.85 },
-                                }, 'Undo') : null,
-                                !readOnly && noteInputValue.trim() ? React.createElement('button', {
-                                    type: 'button',
-                                    title: 'Clear note',
-                                    'aria-label': 'Clear note',
-                                    'data-vyasa-task-control': 'true',
-                                    onClick: (e) => { e.preventDefault(); const prev = noteInputValue; setNoteInputValue(''); updateNodeNote(panelNodeId, ''); setClearedNote(prev); },
-                                    style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: 'inherit', padding: '0', lineHeight: 1, opacity: 0.45, display: 'flex', alignItems: 'center' },
-                                }, '×') : null,
-                            ),
-                            renderTasksNoteTextarea(React, {
-                                ref: noteTextareaRef,
-                                value: readOnly ? nodeNotes[panelNodeId] : noteInputValue,
-                                readOnly,
-                                onChange: readOnly ? undefined : (event) => setNoteInputValue(event.target.value),
-                            })
-                        )
-                    )
-                );
+                    renderTasksDetailEntries(React, entries, { copyValues: true, currentPath: sourceModel?.document_path || '' })
+                    ),
+                    notes: nodeNotesEditor,
+                });
             };
             const SelectedEdgePanel = () => {
                 if (!edgeCardOpen) return null;
@@ -7047,12 +7081,20 @@ async function renderTasksGraphs(rootElement = document) {
                 const fitConnection = () => {
                     fitSelectedEdgeConnection(reactFlowApiRef.current);
                 };
-                return React.createElement('div', {
-                    ref: detailCardScrollRef,
-                    className: hoverCardScrollMode ? 'vyasa-tasks-hover-card--scroll' : undefined,
-                    'data-vyasa-edge-card': selectedEdgeRecord.id,
-                    style: { width: `min(${nodeCardWidth}, 100%)`, maxWidth: '100%', minWidth: 'min(260px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '2px solid color-mix(in srgb, var(--vyasa-primary) 76%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12), 0 0 18px color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto', minHeight: 0, maxHeight: '100%', overflowY: 'auto', overscrollBehavior: 'contain' },
-                },
+                const edgeNotesEditor = renderTasksCardNoteEditor(React, {
+                    ref: edgeNoteTextareaRef,
+                    value: edgeNotes[selectedEdgeRecord.id] || '',
+                    ariaLabel: `Notes for edge ${selectedEdgeRecord.id}`,
+                    onChange: (event) => updateEdgeNote(selectedEdgeRecord.id, event.target.value),
+                });
+                return renderTasksCardDetailsAndNotes(React, {
+                    props: {
+                        'data-vyasa-edge-card': selectedEdgeRecord.id,
+                        style: { width: `min(${nodeCardWidth}, 100%)`, maxWidth: '100%', minWidth: 'min(260px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '2px solid color-mix(in srgb, var(--vyasa-primary) 76%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12), 0 0 18px color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', backdropFilter: 'blur(8px)' },
+                    },
+                    scrollRef: detailCardScrollRef,
+                    scrollMode: hoverCardScrollMode,
+                    details: React.createElement(React.Fragment, null,
                     React.createElement('div', { style: { display: 'flex', alignItems: 'start', gap: '10px', marginBottom: '10px' } },
                         React.createElement('div', { style: { flex: '1 1 auto', minWidth: 0 } },
                             React.createElement('div', { style: { display: 'grid', gap: '2px', fontSize: '14px', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' } },
@@ -7082,7 +7124,9 @@ async function renderTasksGraphs(rootElement = document) {
                         style: { marginBottom: entries.length ? '12px' : 0, border: '1px solid color-mix(in srgb, currentColor 24%, transparent)', borderRadius: '8px', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', color: 'inherit', cursor: 'pointer', padding: '6px 9px', fontSize: '12px', lineHeight: 1.35, fontWeight: 700 },
                     }, 'Fit connection'),
                     renderTasksDetailEntries(React, entries, { copyValues: true, edgeFields: true, currentPath: sourceModel?.document_path || '' })
-                );
+                    ),
+                    notes: edgeNotesEditor,
+                });
             };
             const FilterPanel = () => {
                 if (egoMode || slideIndex >= 0) return null;
@@ -8095,78 +8139,25 @@ async function renderTasksGraphs(rootElement = document) {
                 groupHoverTooltipRef.current = null;
                 setGroupHoverTooltip(null);
             }, []);
-            const dismissStickyHoverCard = React.useCallback((stickyId, reason) => {
-                setStickyGroupHoverTooltips((cards) => {
-                    const dismissed = cards.find((card) => card.stickyId === stickyId);
-                    if (!dismissed) return cards;
-                    logTasksDebug('hoverCardStickyClear', { widgetId, nodeId: dismissed.nodeId || '', reason });
-                    const next = cards.filter((card) => card.stickyId !== stickyId);
-                    stickyGroupHoverTooltipsRef.current = next;
-                    return next;
-                });
-            }, [widgetId]);
-            const dismissLatestStickyHoverCard = React.useCallback((reason) => {
-                const cards = stickyGroupHoverTooltipsRef.current;
-                const latest = cards[cards.length - 1];
-                if (latest) dismissStickyHoverCard(latest.stickyId, reason);
-            }, [dismissStickyHoverCard]);
-            const dismissAllStickyHoverCards = React.useCallback((reason) => {
-                const cards = stickyGroupHoverTooltipsRef.current;
-                if (!cards.length) return;
-                stickyGroupHoverTooltipsRef.current = [];
-                setStickyGroupHoverTooltips([]);
-                logTasksDebug('hoverCardStickyClearAll', { widgetId, count: cards.length, reason });
-            }, [widgetId]);
             React.useEffect(() => {
-                let armed = '';
-                const keyFor = (card) => card ? `${card.nodeId || ''}\u0000${card.label || ''}` : '';
                 const onKeyDown = (event) => {
                     const target = event.target instanceof Element ? event.target : null;
                     const wrapper = flowWrapperRef.current;
                     const key = event.key.toLowerCase();
-                    const widgetFocused = wrapper?.contains(document.activeElement) || wrapper?.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
                     const editable = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName));
-                    if (key === 'x' && stickyGroupHoverTooltipsRef.current.length && widgetFocused && !editable && !event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey) {
-                        event.preventDefault();
-                        event.stopImmediatePropagation();
-                        if (event.shiftKey) dismissAllStickyHoverCards('shortcut-shift-x');
-                        else dismissLatestStickyHoverCard('shortcut-x');
-                        return;
-                    }
-                    if (event.key === 'Control' && !event.repeat && !event.metaKey && !event.altKey && !event.shiftKey) {
-                        const current = groupHoverTooltipRef.current;
-                        armed = keyFor(current);
-                    } else if (event.key !== 'Control') armed = '';
-                };
-                const onKeyUp = (event) => {
-                    if (event.key !== 'Control' || !armed) return;
                     const current = groupHoverTooltipRef.current;
-                    if (!current || keyFor(current) !== armed) return;
-                    const sticky = {
-                        ...current,
-                        sticky: true,
-                        stickyId: ++stickyGroupHoverTooltipIdRef.current,
-                        placement: 'canvas',
-                    };
-                    armed = '';
-                    setStickyGroupHoverTooltips((cards) => {
-                        const next = [...cards, sticky];
-                        stickyGroupHoverTooltipsRef.current = next;
-                        return next;
-                    });
+                    if (key !== 'enter' || !current || editable || event.repeat || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    selectNodeCard(current.nodeId, current.nodeId, current.group ? 'group' : 'task', true);
                     clearGroupHoverTooltip();
-                    logTasksDebug('hoverCardStickySet', { widgetId, nodeId: sticky.nodeId || '' });
+                    logTasksDebug('hoverCardStickySet', { widgetId, nodeId: current.nodeId || '', reason: 'enter' });
                 };
-                const disarm = () => { armed = ''; };
                 document.addEventListener('keydown', onKeyDown, true);
-                document.addEventListener('keyup', onKeyUp);
-                window.addEventListener('blur', disarm);
                 return () => {
                     document.removeEventListener('keydown', onKeyDown, true);
-                    document.removeEventListener('keyup', onKeyUp);
-                    window.removeEventListener('blur', disarm);
                 };
-            }, [clearGroupHoverTooltip, dismissAllStickyHoverCards, dismissLatestStickyHoverCard, widgetId]);
+            }, [clearGroupHoverTooltip, selectNodeCard, widgetId]);
             const hoverTraceKeyRef = React.useRef('');
             const logHoverCycle = React.useCallback((label, payload = {}) => {
                 logTasksDebug(label, payload);
@@ -8181,10 +8172,6 @@ async function renderTasksGraphs(rootElement = document) {
                 clearGroupHoverTooltip();
                 setHoveredNodeId(null);
             }, [clearGroupHoverTooltip, logHoverCycle]);
-            const activeHoverAttrs = React.useMemo(
-                () => tasksActiveHoverAttrs(viewerState.model, activeProjectionId),
-                [viewerState.model, activeProjectionId]
-            );
             const updateGroupHoverTooltip = React.useCallback((event) => {
                 const reactFlow = reactFlowApiRef.current;
                 const wrapper = flowWrapperRef.current;
@@ -8222,11 +8209,6 @@ async function renderTasksGraphs(rootElement = document) {
                         ...extra,
                     });
                 };
-                if (target?.closest?.('[data-vyasa-hover-card-sticky="true"]')) {
-                    clearGroupHoverTooltip();
-                    traceHoverHit('sticky-card');
-                    return;
-                }
                 if (!reactFlow || !wrapper) return;
                 if (wrapper.querySelector('.react-flow__pane.dragging')) {
                     traceHoverHit('dragging');
@@ -8271,14 +8253,9 @@ async function renderTasksGraphs(rootElement = document) {
                     traceHoverHit('blocked', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
-                const directRows = tasksHoverAttrRows(nodeData, activeHoverAttrs);
-                const rows = hoverGroupId
-                    ? tasksGroupHoverAttrRows(directRows, tasksGroupDetailEntries(hoverGroupId, model), activeHoverAttrs)
-                    : directRows;
                 const label = nodeData.label || hit.node.id;
                 const nodeId = nodeData.__kind__ === 'groupTitle' ? (nodeData.sourceGroupId || hit.node.id) : hit.node.id;
-                const image = normalizeTasksNodeImageUrl(nodeData.__node_image__);
-                if (!label && !rows.length) {
+                if (!label) {
                     clearGroupHoverTooltip();
                     traceHoverHit('empty', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
@@ -8300,35 +8277,23 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                     }
                 }
-                if (stickyGroupHoverTooltipsRef.current.some((card) => card.nodeId === nodeId)) {
-                    clearGroupHoverTooltip();
-                    traceHoverHit('sticky', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
-                    return;
-                }
                 if (hoverGroupId && !groupHoverCardsEnabled) {
                     clearGroupHoverTooltip();
                     traceHoverHit('group-card-disabled', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
-                const hoverAnchor = reactFlow.screenToFlowPosition({ x: event.clientX + 12, y: event.clientY + 18 });
                 const hoverCard = {
                     label,
                     nodeId,
                     group: Boolean(hoverGroupId),
-                    image,
-                    rows,
-                    flowX: hoverAnchor.x,
-                    flowY: hoverAnchor.y,
                     x: event.clientX - bounds.left + 12,
                     y: event.clientY - bounds.top + 18,
+                    placement: 'rightRail',
                 };
-                const nextHoverCard = hoverCardRightRail
-                    ? { ...hoverCard, placement: 'rightRail' }
-                    : { ...hoverCard, placement: 'cursor' };
-                groupHoverTooltipRef.current = nextHoverCard;
-                setGroupHoverTooltip(nextHoverCard);
+                groupHoverTooltipRef.current = hoverCard;
+                setGroupHoverTooltip(hoverCard);
                 traceHoverHit('hit', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx, groupHoverChanged });
-            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, clearOptionEdgePreview, edgeForOptionPointer, previewOptionEdge, activeHoverAttrs, nodes, widgetId, model, egoMode, hoverInactiveNodes, hoverCardRightRail, groupHoverCardsEnabled, hoveredNodeId, logHoverCycle, selectedNodeId]);
+            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, clearOptionEdgePreview, edgeForOptionPointer, previewOptionEdge, nodes, widgetId, model, egoMode, hoverInactiveNodes, groupHoverCardsEnabled, hoveredNodeId, logHoverCycle, selectedNodeId]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -8392,25 +8357,8 @@ async function renderTasksGraphs(rootElement = document) {
                     }, 220);
                     return;
                 }
-                logTasksDebug('selectionSetNode', {
-                    widgetId,
-                    sourceNodeId,
-                    nodeId: node.id,
-                    kind: node.data?.__kind__ || '',
-                    ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeId),
-                });
-                markWidgetActive();
-                selectedEdgeIdRef.current = null;
-                optionEdgeNodeIdRef.current = '';
-                setSelectedEdgeId(null);
-                setSelectedEdgeRecord(null);
-                setEdgeCardOpen(false);
-                selectedNodeIdRef.current = sourceNodeId;
-                selectedNodeIdsRef.current = new Set();
-                setSelectedNodeId(sourceNodeId);
-                setSelectedNodeIds(new Set());
-                setHoveredNodeId(null);
-            }, [expanded, selectGroupDescendants]);
+                selectNodeCard(sourceNodeId, node.id, node.data?.__kind__ || '');
+            }, [expanded, selectGroupDescendants, selectNodeCard]);
             const doubleClickGraphNode = React.useCallback((event, node) => {
                 if (!selectGroupDescendants(node)) return;
                 if (pendingNodeClickToggleTimerRef.current) {
@@ -8782,8 +8730,7 @@ async function renderTasksGraphs(rootElement = document) {
             };
             const RightRail = () => {
                 if (!selectedNodeId && !optionEdgeNodeCardId && !(edgeCardOpen && (selectedEdgeRecord || edgeCardError))) return null;
-                if (hoverCardsEnabled && hoverCardRightRail && groupHoverTooltip?.placement === 'rightRail'
-                    && (groupHoverCardsEnabled || !groupHoverTooltip.group)) return null;
+                if (hoverCardsEnabled && groupHoverTooltip && (groupHoverCardsEnabled || !groupHoverTooltip.group)) return null;
                 return window.React.createElement('div', {
                     style: {
                         position: 'absolute',
@@ -8836,171 +8783,15 @@ async function renderTasksGraphs(rootElement = document) {
                     },
                 }, '×');
             };
-            const GroupHoverTooltipCard = React.useMemo(() => function GroupHoverTooltipCard({
-                card,
-                noteValue = '',
-                onNoteChange,
-                scrollRef,
-                scrollMode = false,
-                stickyIndex = -1,
-                inViewportPortal = false,
-            }) {
-                const tooltipRef = window.React.useRef(null);
-                const [measuredSize, setMeasuredSize] = window.React.useState({ width: 0, height: 0 });
-                const viewport = typeof rf.useViewport === 'function' ? rf.useViewport() : { zoom: 1 };
-                const viewportZoom = Math.max(0.01, Number(viewport?.zoom) || 1);
-                window.React.useLayoutEffect(() => {
-                    const rect = tooltipRef.current?.getBoundingClientRect?.();
-                    if (!rect) return;
-                    const width = Math.ceil(rect.width);
-                    const height = Math.ceil(rect.height);
-                    if (width !== measuredSize.width || height !== measuredSize.height) setMeasuredSize({ width, height });
-                }, [card, measuredSize.width, measuredSize.height]);
-                const rows = Array.isArray(card.rows) ? card.rows : [];
-                const image = normalizeTasksNodeImageUrl(card.image);
-                const panelWidth = tasksDetailPanelWidth({
-                    title: card.label || '',
-                    nodeId: card.nodeId || '',
-                    entries: rows,
-                    titleFont: `700 calc(${hoverFontSize} * 1.12) ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
-                    bodyFont: `500 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
-                    keyFont: `700 ${hoverFontSize} ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`,
-                    hasImage: Boolean(image),
-                    stackHeader: true,
-                });
-                const wrapperWidth = Math.max(240, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().width || 0));
-                const wrapperHeight = Math.max(160, Math.floor(flowWrapperRef.current?.getBoundingClientRect?.().height || 0));
-                const maxWidth = Math.max(220, Math.min(panelWidth, wrapperWidth - 24));
-                const maxHeight = Math.max(80, wrapperHeight - 24);
-                const tooltipWidth = Math.min(maxWidth, measuredSize.width || maxWidth);
-                const tooltipHeight = Math.min(maxHeight, measuredSize.height || maxHeight);
-                const rightRailPlacement = card.placement === 'rightRail';
-                const clampedLeft = inViewportPortal
-                    ? card.flowX
-                    : rightRailPlacement
-                    ? 'auto'
-                    : Math.max(12, Math.min(card.x, wrapperWidth - tooltipWidth - 12));
-                const clampedTop = inViewportPortal
-                    ? card.flowY
-                    : rightRailPlacement
-                    ? 'auto'
-                    : Math.max(12, Math.min(card.y, wrapperHeight - tooltipHeight - 12));
-                const children = [
-                    window.React.createElement('div', {
-                        key: '__label__',
-                        style: { display: 'flex', alignItems: 'flex-start', gap: '7px', fontWeight: 700, fontSize: `calc(${hoverFontSize} * 1.12)`, lineHeight: 1.25, whiteSpace: 'normal', minWidth: 0 },
-                    },
-                        image ? window.React.createElement('img', {
-                            src: image,
-                            alt: '',
-                            loading: 'lazy',
-                            draggable: false,
-                            className: tasksIsIconifyImage(image) ? 'vyasa-tasks-node-image vyasa-tasks-node-image--icon' : 'vyasa-tasks-node-image',
-                            style: { width: '22px', height: '22px', objectFit: 'contain', flex: '0 0 auto' },
-                        }) : null,
-                        window.React.createElement('span', {
-                            style: { flex: '1 1 auto', minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' },
-                        }, renderTasksInlineLinks(card.label, { currentPath: sourceModel?.document_path || '' })),
-                        card.sticky ? window.React.createElement('button', {
-                            type: 'button',
-                            title: 'Close sticky hover card',
-                            'aria-label': 'Close sticky hover card',
-                            onPointerDown: (event) => event.stopPropagation(),
-                            onClick: () => dismissStickyHoverCard(card.stickyId, 'close-button'),
-                            style: { flex: '0 0 auto', border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '0 0 0 4px' },
-                        }, '×') : null
-                    ),
-                ];
-                if (card.nodeId) children.push(window.React.createElement('div', {
-                    key: '__node_id__',
-                    style: { marginTop: '5px', marginBottom: rows.length ? '5px' : 0, fontSize: hoverFontSize, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, overflowWrap: 'anywhere', wordBreak: 'break-word' },
-                }, card.nodeId));
-                if (rows.length) children.push(renderTasksDetailEntries(window.React, rows, { fontSize: hoverFontSize, lineHeight: 1.35, currentPath: sourceModel?.document_path || '' }));
-                children.push(window.React.createElement('label', {
-                    key: '__notes__',
-                    style: {
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '6px',
-                        marginTop: '10px',
-                        paddingTop: '10px',
-                        borderTop: '1px dashed color-mix(in srgb, currentColor 18%, transparent)',
-                    },
-                },
-                    window.React.createElement('span', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.7 } }, 'Notes'),
-                    renderTasksNoteTextarea(window.React, {
-                        value: noteValue,
-                        readOnly: !card.sticky,
-                        ariaLabel: `Notes for ${card.label || card.nodeId}`,
-                        onChange: card.sticky ? (event) => onNoteChange?.(event.target.value) : undefined,
-                    })
-                ));
-                return window.React.createElement('div', {
-                    ref: (node) => { tooltipRef.current = node; if (scrollRef) scrollRef.current = node; },
-                    className: scrollMode ? 'vyasa-tasks-hover-card--scroll' : undefined,
-                    'data-vyasa-hover-card-sticky': card.sticky ? 'true' : undefined,
-                    style: {
-                        position: rightRailPlacement ? 'relative' : 'absolute',
-                        left: clampedLeft,
-                        top: clampedTop,
-                        zIndex: rightRailPlacement ? 'auto' : 2400 + Math.max(0, stickyIndex),
-                        flex: rightRailPlacement ? '0 0 auto' : undefined,
-                        transform: inViewportPortal ? `scale(${1 / viewportZoom})` : undefined,
-                        transformOrigin: inViewportPortal ? 'top left' : undefined,
-                        pointerEvents: card.sticky ? 'auto' : 'none',
-                        width: `${maxWidth}px`,
-                        maxHeight: `${maxHeight}px`,
-                        overflowY: 'auto',
-                        maxWidth: '100%',
-                        minWidth: 'min(220px, 100%)',
-                        boxSizing: 'border-box',
-                        borderRadius: '12px',
-                        border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)',
-                        background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)',
-                        boxShadow: rightRailPlacement
-                            ? '-18px 20px 50px rgba(0,0,0,0.24), 0 4px 16px rgba(0,0,0,0.16)'
-                            : '0 10px 30px rgba(0,0,0,0.12)',
-                        backdropFilter: 'blur(8px)',
-                        padding: '12px',
-                    },
-                }, ...children);
-            }, [dismissStickyHoverCard, hoverFontSize, rf, sourceModel]);
             const GroupHoverTooltip = () => {
                 if (!hoverCardsEnabled) return null;
-                const stickyCards = stickyGroupHoverTooltips
-                    .filter((card) => groupHoverCardsEnabled || !card.group)
-                    .map((card, index) => window.React.createElement(GroupHoverTooltipCard, {
-                    key: card.stickyId,
-                    card,
-                    noteValue: nodeNotes[card.nodeId] || '',
-                    onNoteChange: (value) => updateNodeNote(card.nodeId, value),
-                    stickyIndex: index,
-                    inViewportPortal: Boolean(rf.ViewportPortal),
-                }));
-                const stickyLayer = rf.ViewportPortal
-                    ? window.React.createElement(rf.ViewportPortal, null, ...stickyCards)
-                    : window.React.createElement(window.React.Fragment, null, ...stickyCards);
-                const transientCard = groupHoverTooltip && (groupHoverCardsEnabled || !groupHoverTooltip.group) ? window.React.createElement(GroupHoverTooltipCard, {
-                    key: '__transient__',
-                    card: groupHoverTooltip,
-                    noteValue: nodeNotes[groupHoverTooltip.nodeId] || '',
-                    scrollRef: hoverCardScrollRef,
-                    scrollMode: hoverCardScrollMode,
-                }) : null;
-                const transientLayer = hoverCardRightRail ? window.React.createElement('div', {
-                    style: {
-                        position: 'absolute',
-                        inset: '12px 12px 12px auto',
-                        zIndex: 2400,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-end',
-                        gap: '10px',
-                        maxWidth: 'calc(100% - 24px)',
-                        pointerEvents: 'none',
-                    },
-                }, transientCard) : transientCard;
-                return window.React.createElement(window.React.Fragment, null, stickyLayer, transientLayer);
+                const transientCard = groupHoverTooltip && (groupHoverCardsEnabled || !groupHoverTooltip.group)
+                    ? SelectedNodePanel(groupHoverTooltip.nodeId, true, groupHoverTooltip)
+                    : null;
+                const transientLayer = transientCard ? window.React.createElement('div', {
+                    style: { position: 'absolute', inset: '12px 12px 12px auto', zIndex: 2400, width: nodeCardWidth, maxWidth: 'calc(100% - 24px)', display: 'flex', flexDirection: 'column', pointerEvents: 'none', minHeight: 0 },
+                }, transientCard) : null;
+                return transientLayer;
             };
             const HelpPopup = () => {
                 if (!helpOpen) return null;
@@ -9036,17 +8827,17 @@ async function renderTasksGraphs(rootElement = document) {
                     heading('Keys'),
                     row('?', 'toggle this help'),
                     row('[ / ]', 'select previous / next visible edge'),
-                    row('Enter', 'open selected edge details'),
+                    row('Enter', 'pin hovered node and focus Notes / open selected edge'),
                     row('F', 'fit view or active edge'),
                     row('Option + F', 'fit highlighted edge'),
                     row('W / Q', 'hold edge preview / opposite node card'),
-                    row('Shift + W', 'pin edge details'),
+                    row('W + Enter', 'pin edge details'),
                     row('Shift + F', 'toggle fullscreen'),
                     row('G', 'open EG+ for hovered or selected node'),
                     row('Shift + G', 'open EG for hovered or selected node'),
                     row('S', 'toggle filters'),
                     row('E', 'toggle edges'),
-                    row('C', 'hover cards: off, at cursor, right rail'),
+                    row('C', 'hover cards: off / right side'),
                     row('V', 'toggle hover card scroll mode'),
                     row('Shift + C', 'toggle group hover cards'),
                     row('T', 'toggle hovered group'),
@@ -9209,10 +9000,14 @@ async function renderTasksGraphs(rootElement = document) {
                 onPointerMove: updateGroupHoverTooltip,
                 onWheelCapture: (event) => {
                     const scrollCard = hoverCardScrollRef.current || detailCardScrollRef.current;
-                    if (hoverCardScrollMode && scrollCard) {
+                    const maxScrollTop = scrollCard ? Math.max(0, scrollCard.scrollHeight - scrollCard.clientHeight) : 0;
+                    if (hoverCardScrollMode && scrollCard && maxScrollTop > 0) {
                         event.preventDefault();
                         event.stopPropagation();
-                        scrollCard.scrollBy({ top: event.deltaY, left: event.deltaX });
+                        const nextScrollTop = Math.max(0, Math.min(maxScrollTop, scrollCard.scrollTop + event.deltaY));
+                        const unusedDelta = event.deltaY - (nextScrollTop - scrollCard.scrollTop);
+                        scrollCard.scrollTop = nextScrollTop;
+                        applyTasksCardOverscroll(scrollCard, unusedDelta);
                         return;
                     }
                     if (!window.__vyasaTasksPerf.enabled) return;
