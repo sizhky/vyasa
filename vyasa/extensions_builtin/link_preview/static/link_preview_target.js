@@ -56,13 +56,23 @@ function leadsDefinition(text, start, keywords) {
     return keywords.some((keyword) => before === keyword || before.endsWith(` ${keyword}`));
 }
 
+function withLineBounds(hit, text) {
+    if (!hit) return hit;
+    const lineStart = text.lastIndexOf('\n', Math.max(0, hit.start - 1)) + 1;
+    const nextBreak = text.indexOf('\n', hit.end);
+    return { ...hit, lineStart, lineEnd: nextBreak < 0 ? text.length : nextBreak };
+}
+
 function searchSymbol(list, symbol, keywords, kind) {
     let fallback = null;
     for (const caseSensitive of [true, false]) {
         for (let chunkIndex = 0; chunkIndex < list.length; chunkIndex += 1) {
             const text = String(list[chunkIndex] || '');
             for (const start of symbolIndexes(text, symbol, caseSensitive)) {
-                const hit = { chunkIndex, start, end: start + symbol.length, symbol, kind };
+                const hit = withLineBounds(
+                    { chunkIndex, start, end: start + symbol.length, symbol, kind },
+                    text,
+                );
                 if (keywords.length && leadsDefinition(text, start, keywords)) {
                     return { definition: hit, fallback };
                 }
@@ -71,6 +81,15 @@ function searchSymbol(list, symbol, keywords, kind) {
         }
     }
     return { definition: null, fallback };
+}
+
+export function linkPreviewHashMatch(href, ids) {
+    const hash = new URL(href || '', 'http://vyasa.local').hash.slice(1);
+    if (!hash) return null;
+    let fragment = hash;
+    try { fragment = decodeURIComponent(hash); } catch (_) {}
+    const folded = fragment.toLocaleLowerCase();
+    return (ids || []).find((id) => String(id).toLocaleLowerCase() === folded) || null;
 }
 
 export function linkPreviewSymbolMatch(href, chunks) {

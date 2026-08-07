@@ -4,7 +4,7 @@ import {
     linkPreviewPointerGeometry,
     resizeLinkPreviewRect,
 } from './link_preview_geometry.js';
-import { linkPreviewSymbolMatch } from './link_preview_target.js';
+import { linkPreviewHashMatch, linkPreviewSymbolMatch } from './link_preview_target.js';
 
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 let hoveredLink = null;
@@ -211,7 +211,7 @@ function createPreviewView({ point, link, onClose }) {
             content.innerHTML = html;
             const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
             if (relativePath) sourceLabel.textContent = relativePath;
-            requestAnimationFrame(() => scrollLinkPreviewToSymbol(content, link.getAttribute('href') || ''));
+            requestAnimationFrame(() => scrollLinkPreviewToTarget(content, link.getAttribute('href') || ''));
             schedulePointerRefresh();
         },
     };
@@ -220,9 +220,17 @@ function createPreviewView({ point, link, onClose }) {
     return view;
 }
 
-function scrollLinkPreviewToSymbol(content, href) {
+function scrollLinkPreviewToTarget(content, href) {
     const body = content.querySelector('.vyasa-link-preview-body');
     if (!body) return;
+    const elementsWithIds = [...body.querySelectorAll('[id]')];
+    const matchedId = linkPreviewHashMatch(href, elementsWithIds.map((element) => element.id));
+    if (matchedId) {
+        const target = elementsWithIds.find((element) => element.id === matchedId);
+        target.classList.add('vyasa-link-preview-target-line');
+        target.scrollIntoView({ block: 'center' });
+        return;
+    }
     const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
     const textNodes = [];
     while (walker.nextNode()) {
@@ -236,11 +244,12 @@ function scrollLinkPreviewToSymbol(content, href) {
     }
     const node = textNodes[match.chunkIndex];
     const range = document.createRange();
-    range.setStart(node, match.start);
-    range.setEnd(node, match.end);
-    const matchRect = range.getBoundingClientRect();
-    const bodyRect = body.getBoundingClientRect();
-    body.scrollTop += matchRect.top - bodyRect.top - Math.max(0, (body.clientHeight - matchRect.height) / 2);
+    range.setStart(node, match.lineStart);
+    range.setEnd(node, match.lineEnd);
+    const target = document.createElement('span');
+    target.className = 'vyasa-link-preview-target-line';
+    range.surroundContents(target);
+    target.scrollIntoView({ block: 'center' });
 }
 
 async function fetchPreview({ href, currentPath, signal }) {

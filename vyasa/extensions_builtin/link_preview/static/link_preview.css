@@ -220,6 +220,12 @@
 .vyasa-link-preview-body .vyasa-doc-h5,
 .vyasa-link-preview-body .vyasa-doc-h6 { font-size: 1em; }
 
+.vyasa-link-preview-target-line {
+    border-radius: 0.2em;
+    background: color-mix(in srgb, var(--vyasa-primary) 22%, transparent);
+    box-shadow: 0 0 0 0.18em color-mix(in srgb, var(--vyasa-primary) 22%, transparent);
+}
+
 .vyasa-link-preview-plain-text {
     width: max-content;
     min-width: 100%;

@@ -31,6 +31,7 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert "width: max-content;" in css
     assert ".vyasa-link-preview-body .vyasa-doc-h2 { font-size: 1.5em; }" in css
     assert ".vyasa-link-preview-body .vyasa-doc-h6 { font-size: 1em; }" in css
+    assert ".vyasa-link-preview-target-line" in css
 
 
 def test_link_preview_pointer_joins_source_to_nearest_popup_edge():
@@ -83,7 +84,7 @@ def test_link_preview_refreshes_pointer_during_canvas_pan():
 def test_link_preview_finds_symbol_position_from_link_query():
     source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
     script = """
-        import { linkPreviewSymbolMatch } from './vyasa/extensions_builtin/link_preview/static/link_preview_target.js';
+        import { linkPreviewHashMatch, linkPreviewSymbolMatch } from './vyasa/extensions_builtin/link_preview/static/link_preview_target.js';
         const match = linkPreviewSymbolMatch(
             '/posts/src/kitchen/story.md?symbol=story&kind=File',
             ['Introduction', 'The Supply Chain Planner\\'s Story'],
@@ -98,10 +99,23 @@ def test_link_preview_finds_symbol_position_from_link_query():
         if (exact?.chunkIndex !== 1 || exact?.start !== 9) {
             throw new Error(`exact symbol match lost: ${JSON.stringify(exact)}`);
         }
+        const code = linkPreviewSymbolMatch(
+            '/posts/code.py?symbol=run&kind=Function',
+            ['value = 1\\nfunction run(arg) {\\n  return arg;\\n}'],
+        );
+        if (code?.lineStart !== 10 || code?.lineEnd !== 29) {
+            throw new Error(`target line lost: ${JSON.stringify(code)}`);
+        }
+        const heading = linkPreviewHashMatch(
+            '/posts/doc#Likely-changes',
+            ['first', 'likely-changes'],
+        );
+        if (heading !== 'likely-changes') throw new Error(`fragment match lost: ${heading}`);
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
-    assert "scrollLinkPreviewToSymbol(content, link.getAttribute('href') || '')" in source
-    assert "body.scrollTop += matchRect.top - bodyRect.top" in source
+    assert "scrollLinkPreviewToTarget(content, link.getAttribute('href') || '')" in source
+    assert "target.scrollIntoView({ block: 'center' })" in source
+    assert "target.className = 'vyasa-link-preview-target-line'" in source
 
 
 def test_link_preview_resizes_from_each_edge():
@@ -148,6 +162,21 @@ def test_link_preview_renders_full_markdown_for_symbol_position(tmp_path, monkey
     assert result is not None
     assert "Opening." in result
     assert "Run the target." in result
+
+
+def test_link_preview_fragment_match_ignores_heading_case(tmp_path, monkeypatch):
+    source = tmp_path / "sample.md"
+    source.write_text("# First\n\nopening\n\n## Likely changes\n\ntarget\n\n## Later\n\nignore\n")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "sample.md")
+
+    result = routes.render_link_preview_html(href="/posts/sample#Likely-changes")
+
+    assert result is not None
+    assert "Likely changes" in result
+    assert "target" in result
+    assert "opening" not in result
+    assert "Later" not in result
 
 
 def test_link_preview_stack_keeps_nested_previews_until_each_is_closed():
