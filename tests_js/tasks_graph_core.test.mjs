@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
-const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReviewTarget, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
+const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nearestTasksIncidentEdge, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReviewTarget, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
 const { buildTasksProjectionConfigText, parseTasksProjectionConfigText, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksNodeMatchesAllFilters, tasksNodeMatchesFilters, tasksSelectionClickKey } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
 
 function fakeStorage(initial = {}) {
@@ -21,6 +21,34 @@ test('Knowledge Graph publishes review targets without React Flow details', () =
     assert.deepEqual(tasksReviewTarget({ __kind__: 'groupTitle', sourceGroupId: 'g1', label: 'Group' }, 'g1__title', 'w1'), {
         kind: 'node', id: 'g1', label: 'Group', node_kind: 'groupTitle', widget_id: 'w1',
     });
+});
+
+test('Option edge preview chooses the connection point closest to the cursor', () => {
+    const nodes = [{
+        id: 'active', position: { x: 0, y: 0 }, style: { width: 100, height: 100 },
+        data: { handleLayout: {
+            source: [
+                { id: 'source-left-0', side: 'left', offsetPct: 20 },
+                { id: 'source-right-0', side: 'right', offsetPct: 20 },
+            ],
+            target: [{ id: 'target-bottom-0', side: 'bottom', offsetPct: 50 }],
+        } },
+    }];
+    const edge = nearestTasksIncidentEdge({ x: 92, y: 18 }, 'active', nodes, [
+        { id: 'left', source: 'active', target: 'a', sourceHandle: 'source-left-0' },
+        { id: 'right', source: 'active', target: 'b', sourceHandle: 'source-right-0' },
+        { id: 'incoming', source: 'c', target: 'active', targetHandle: 'target-bottom-0' },
+    ]);
+    assert.equal(edge.id, 'right');
+});
+
+test('Knowledge Graph wires Option preview and the selected edge halo', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes('const match = edgeForOptionPointer(event);'));
+    assert.ok(source.includes('previewOptionEdge(match.edge, match.nodeId);'));
+    assert.ok(source.includes('props.data?.edgeCardActive'));
+    assert.ok(source.includes("strokeWidth: strokeWidth + 6"));
+    assert.ok(source.includes("return String(edge?.__source_edge_id || edge?.id || '').trim();"));
 });
 
 test('Knowledge Graph notes backup round-trips one graph preference record', () => {

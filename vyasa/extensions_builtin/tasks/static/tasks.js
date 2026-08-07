@@ -1,10 +1,10 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
-import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksGroupHoverAttrRows, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
+import { buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
-import { shortcutsSuspended } from '/static/page_shell.js';
+import { createMomentumRunner, shortcutsSuspended } from '/static/page_shell.js';
 
 window.__vyasaTasksPhaseLog?.('tasks-js:module-start');
 
@@ -51,6 +51,9 @@ const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;
 const TASKS_EDGE_OPACITY_MIN = 0.05;
 const TASKS_EDGE_OPACITY_MAX = 1;
 const TASKS_GRAPH_MIN_ZOOM = 0.05;
+// The graph sets no maxZoom, so this is React Flow's own default ceiling. Held-key
+// zoom writes the viewport itself, so it has to stop at the same place the wheel does.
+const TASKS_GRAPH_MAX_ZOOM = 2;
 const TASKS_NODE_CONNECTION_HANDLES = {
     source: ['top', 'right', 'bottom', 'left'].flatMap((side) => [0, 1, 2].map((index) => ({ id: `source-${side}-${index}`, side, offsetPct: 50 }))),
     target: ['top', 'right', 'bottom', 'left'].flatMap((side) => [0, 1, 2].map((index) => ({ id: `target-${side}-${index}`, side, offsetPct: 50 }))),
@@ -145,17 +148,66 @@ function tasksModelSetting(model, key, fallback = '') {
     return value;
 }
 
-// H cycles the hover card through these, in this order. 'cursor' and 'rightRail'
-// are the placements the card already knew; 'off' is the old hidden state.
-const TASKS_HOVER_CARD_MODES = ['off', 'cursor', 'rightRail'];
+const TASKS_HOVER_CARD_MODES = ['off', 'rightRail'];
+// Every key the graph shortcut handler consumes. It stops these from reaching the
+// document shortcuts while a graph is focused; anything absent here stays the
+// document's key.
+const TASKS_SHORTCUT_KEYS = new Set([
+    'f', 'g', 's', 'e', 'c', 't', 'i', 'o', 'u', 'p',
+    'h', 'j', 'k', 'l', 'v',
+    '[', ']', 'enter',
+    'arrowup', 'arrowdown', 'arrowleft', 'arrowright',
+]);
+// Momentum speed is in pixels per millisecond, so zoom turns that distance into a
+// factor: at the ceiling speed the graph doubles in about three quarters of a second.
+const TASKS_ZOOM_MOMENTUM_RATE = 0.0007;
+// No document path in the keys: E and C are one setting for every graph on this
+// server, and localStorage is already scoped to the origin.
+const TASKS_EDGES_VISIBLE_KEY = 'vyasa:tasks:edges-visible';
+const TASKS_HOVER_CARD_MODE_KEY = 'vyasa:tasks:hover-card-mode';
+const TASKS_GROUP_HOVER_CARDS_KEY = 'vyasa:tasks:group-hover-cards';
+const TASKS_HOVER_CARD_SCROLL_KEY = 'vyasa:tasks:hover-card-scroll';
+
+const tasksCardOverscrollStates = new WeakMap();
+
+function applyTasksCardOverscroll(card, unusedDelta) {
+    const body = card.querySelector(':scope > .vyasa-tasks-card-scroll-body');
+    if (!body || !unusedDelta) return;
+    const current = tasksCardOverscrollStates.get(card) || { offset: 0, velocity: 0, frame: 0, edge: 1 };
+    if (current.offset && Math.sign(current.offset) !== Math.sign(unusedDelta)) current.offset = 0;
+    current.edge = Math.sign(unusedDelta);
+    const resistance = 1 - Math.min(1, Math.abs(current.offset) / 56);
+    current.offset = Math.max(-56, Math.min(56, current.offset + (unusedDelta * 0.28 * resistance)));
+    current.velocity += unusedDelta * 0.015;
+    const render = () => {
+        const stretch = Math.max(0.96, 1 + ((current.offset * current.edge) / 420));
+        body.style.transformOrigin = current.edge > 0 ? 'bottom center' : 'top center';
+        body.style.transform = `scaleY(${stretch})`;
+    };
+    render();
+    const step = () => {
+        current.velocity += (-0.16 * current.offset) - (0.58 * current.velocity);
+        current.offset += current.velocity;
+        render();
+        if (Math.abs(current.offset) < 0.08 && Math.abs(current.velocity) < 0.08) {
+            body.style.removeProperty('transform');
+            body.style.removeProperty('transform-origin');
+            tasksCardOverscrollStates.delete(card);
+            return;
+        }
+        current.frame = window.requestAnimationFrame(step);
+    };
+    if (!current.frame) current.frame = window.requestAnimationFrame(step);
+    tasksCardOverscrollStates.set(card, current);
+}
 
 function nextTasksHoverCardMode(mode) {
     const index = TASKS_HOVER_CARD_MODES.indexOf(mode);
-    if (index < 0) return 'cursor';
+    if (index < 0) return 'rightRail';
     return TASKS_HOVER_CARD_MODES[(index + 1) % TASKS_HOVER_CARD_MODES.length];
 }
 
-function clampTasksHoverCardMode(mode, fallback = 'cursor') {
+function clampTasksHoverCardMode(mode, fallback = 'rightRail') {
     return TASKS_HOVER_CARD_MODES.includes(mode) ? mode : fallback;
 }
 
@@ -378,29 +430,6 @@ function tasksTaperedBezierPath(bezierPath, sourceWidth, targetWidth) {
     ].join(' ');
 }
 
-// A highlighted edge sweeps a bright band along the curve, always from source
-// to target so the flare reads as the edge's own direction. strokeMode only
-// says whether this edge is highlighted at all.
-function isTasksEdgeFlareActive(strokeMode) {
-    return ['selected', 'selected-in', 'selected-out', 'focused-in', 'focused-out'].includes(strokeMode);
-}
-
-// Mask region in flow coordinates. objectBoundingBox units collapse on
-// axis-aligned edges, whose fill bbox is a flat line, so state the box.
-function tasksEdgeFlareBox(bezierPath, pad) {
-    const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
-    if (nums.length < 8) return null;
-    const xs = nums.filter((_, index) => index % 2 === 0);
-    const ys = nums.filter((_, index) => index % 2 === 1);
-    const margin = Math.max(1, Number(pad) || 1);
-    return {
-        x: Math.min(...xs) - margin,
-        y: Math.min(...ys) - margin,
-        width: (Math.max(...xs) - Math.min(...xs)) + (margin * 2),
-        height: (Math.max(...ys) - Math.min(...ys)) + (margin * 2),
-    };
-}
-
 function tasksTaperedArrowHeadPath(bezierPath, size) {
     const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
     if (nums.length < 8) return '';
@@ -536,6 +565,52 @@ function scheduleTasksStorageWrite(key, writeNow, payload = '') {
     };
     const timer = window.setTimeout(run, TASKS_STORAGE_WRITE_DELAY_MS);
     tasksStorageWriteTimers.set(key, timer);
+}
+
+function readTasksGlobalToggle(key) {
+    const storage = tasksGetStorage();
+    if (!storage) return null;
+    try {
+        return storage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+function writeTasksGlobalToggle(key, value) {
+    const storage = tasksGetStorage();
+    if (!storage) return;
+    const payload = String(value);
+    scheduleTasksStorageWrite(key, () => storage.setItem(key, payload), payload);
+}
+
+// Reset to schema defaults has to drop the server-wide value as well, or the
+// next projection switch reads it back and the reset looks ignored.
+function clearTasksGlobalToggle(key) {
+    const pending = tasksStorageWriteTimers.get(key);
+    if (pending) window.clearTimeout(pending);
+    tasksStorageWriteTimers.delete(key);
+    tasksStorageWriteCache.delete(key);
+    const storage = tasksGetStorage();
+    if (!storage) return;
+    try {
+        storage.removeItem(key);
+    } catch {
+        // A blocked or full storage keeps the old value; the next toggle rewrites it.
+    }
+}
+
+// Null means the toggle was never pressed on this server, so the graph keeps
+// whatever its own schema and projection prefs asked for.
+function readTasksEdgesVisible() {
+    const raw = readTasksGlobalToggle(TASKS_EDGES_VISIBLE_KEY);
+    if (raw === 'true') return true;
+    return raw === 'false' ? false : null;
+}
+
+function readTasksHoverCardMode() {
+    const raw = readTasksGlobalToggle(TASKS_HOVER_CARD_MODE_KEY);
+    return TASKS_HOVER_CARD_MODES.includes(raw) ? raw : null;
 }
 
 function showTasksToast(message) {
@@ -797,6 +872,18 @@ function normalizeTasksNodeNotes(value) {
         .filter(([nodeId, note]) => nodeId && note.trim()));
 }
 
+function updateTasksNote(setNotes, id, note) {
+    const normalizedId = String(id || '').trim();
+    if (!normalizedId) return;
+    setNotes((current) => {
+        const next = { ...(current || {}) };
+        const text = String(note || '');
+        if (text.trim()) next[normalizedId] = text;
+        else delete next[normalizedId];
+        return next;
+    });
+}
+
 function normalizeTasksSlideNotes(value) {
     return normalizeTasksNodeNotes(value);
 }
@@ -864,6 +951,9 @@ function writeTasksPrefs(model, prefs) {
     const nodeNotes = Object.prototype.hasOwnProperty.call(prefs || {}, 'nodeNotes')
         ? normalizeTasksNodeNotes(prefs?.nodeNotes)
         : normalizeTasksNodeNotes(existing.nodeNotes);
+    const edgeNotes = Object.prototype.hasOwnProperty.call(prefs || {}, 'edgeNotes')
+        ? normalizeTasksNodeNotes(prefs?.edgeNotes)
+        : normalizeTasksNodeNotes(existing.edgeNotes);
     const slideNotes = Object.prototype.hasOwnProperty.call(prefs || {}, 'slideNotes')
         ? normalizeTasksSlideNotes(prefs?.slideNotes)
         : normalizeTasksSlideNotes(existing.slideNotes);
@@ -878,6 +968,7 @@ function writeTasksPrefs(model, prefs) {
         projectionPrefs,
         nodeStates,
         nodeNotes,
+        edgeNotes,
         slideNotes,
     });
     const attempt = () => {
@@ -1091,13 +1182,8 @@ function tasksGroupDetailEntries(nodeId, model) {
             value: String(sampleNodes.length),
         });
     }
-    const declaredOrder = new Map(tasksActiveHoverAttrs(model, '').map((key, index) => [key, index]));
-    const byDeclaredOrder = ([left], [right]) => {
-        const leftOrder = declaredOrder.has(left) ? declaredOrder.get(left) : Number.MAX_SAFE_INTEGER;
-        const rightOrder = declaredOrder.has(right) ? declaredOrder.get(right) : Number.MAX_SAFE_INTEGER;
-        return (leftOrder - rightOrder) || left.localeCompare(right);
-    };
-    for (const [key, stat] of Array.from(metrics.entries()).sort(byDeclaredOrder)) {
+    const byKey = ([left], [right]) => left.localeCompare(right);
+    for (const [key, stat] of Array.from(metrics.entries()).sort(byKey)) {
         if (excludedDerivedKeys.has(String(key || '').toLowerCase())) continue;
         const label = tasksNodeMetaLabel(key);
         detailEntries.push({
@@ -1106,7 +1192,7 @@ function tasksGroupDetailEntries(nodeId, model) {
             value: `${formatTasksMetricValue(stat.min)} ≤ ${label} (μ ${formatTasksMetricValue(stat.sum / Math.max(stat.count, 1))}) ≤ ${formatTasksMetricValue(stat.max)}`,
         });
     }
-    for (const [key, counts] of Array.from(discreteColorCounts.entries()).sort(byDeclaredOrder)) {
+    for (const [key, counts] of Array.from(discreteColorCounts.entries()).sort(byKey)) {
         const summary = Array.from(counts.entries())
             .sort(([left], [right]) => left.localeCompare(right))
             .map(([value, count]) => `${value}: ${count}`)
@@ -2046,6 +2132,10 @@ function tasksHoverFocusEdge(edge, hoveredNodeId) {
     };
 }
 
+function tasksEdgeRecordId(edge) {
+    return String(edge?.__source_edge_id || edge?.id || '').trim();
+}
+
 // Build an inset SVG overlay element drawing the diagonal-band / horizontal-strip fill.
 function tasksColorOverlay(React, levels, width, height) {
     const w = Math.max(1, Number(width) || 100);
@@ -2069,42 +2159,31 @@ window.runTasksHeaderAction = function(widgetId, action) {
     actions[action]();
 };
 
-function syncTasksEdgeToggleButtons(widgetId, edgesVisible) {
+function syncTasksToggleButtons(widgetId, action, emphasized, attribute, normalTitle, emphasizedTitle) {
     const id = String(widgetId || '');
-    document.querySelectorAll('button[data-vyasa-tasks-action="toggleEdges"], button[onclick*="toggleEdges"]').forEach((button) => {
+    document.querySelectorAll(`button[data-vyasa-tasks-action="${action}"], button[onclick*="${action}"]`).forEach((button) => {
         const buttonWidgetId = button.getAttribute('data-vyasa-tasks-widget-id') || '';
         const onclick = button.getAttribute('onclick') || '';
         if (buttonWidgetId && buttonWidgetId !== id) return;
         if (!buttonWidgetId && !onclick.includes(`'${id}'`)) return;
         button.setAttribute('data-vyasa-tasks-widget-id', id);
-        button.setAttribute('data-vyasa-tasks-action', 'toggleEdges');
-        if (edgesVisible) {
-            button.removeAttribute('data-vyasa-edges-off');
-            button.title = 'Toggle edges';
-        } else {
-            button.setAttribute('data-vyasa-edges-off', 'true');
-            button.title = 'Edges are hidden (E)';
-        }
+        button.setAttribute('data-vyasa-tasks-action', action);
+        if (emphasized) button.setAttribute(attribute, 'true');
+        else button.removeAttribute(attribute);
+        button.title = emphasized ? emphasizedTitle : normalTitle;
     });
 }
 
+function syncTasksEdgeToggleButtons(widgetId, edgesVisible) {
+    syncTasksToggleButtons(widgetId, 'toggleEdges', !edgesVisible, 'data-vyasa-edges-off', 'Toggle edges', 'Edges are hidden (E)');
+}
+
 function syncTasksHoverCardToggleButtons(widgetId, hoverCardsEnabled) {
-    const id = String(widgetId || '');
-    document.querySelectorAll('button[data-vyasa-tasks-action="toggleHoverCards"], button[onclick*="toggleHoverCards"]').forEach((button) => {
-        const buttonWidgetId = button.getAttribute('data-vyasa-tasks-widget-id') || '';
-        const onclick = button.getAttribute('onclick') || '';
-        if (buttonWidgetId && buttonWidgetId !== id) return;
-        if (!buttonWidgetId && !onclick.includes(`'${id}'`)) return;
-        button.setAttribute('data-vyasa-tasks-widget-id', id);
-        button.setAttribute('data-vyasa-tasks-action', 'toggleHoverCards');
-        if (hoverCardsEnabled) {
-            button.removeAttribute('data-vyasa-hover-cards-off');
-            button.title = 'Toggle hover cards';
-        } else {
-            button.setAttribute('data-vyasa-hover-cards-off', 'true');
-            button.title = 'Hover cards are hidden (H)';
-        }
-    });
+    syncTasksToggleButtons(widgetId, 'toggleHoverCards', !hoverCardsEnabled, 'data-vyasa-hover-cards-off', 'Toggle hover cards', 'Hover cards are hidden (H)');
+}
+
+function syncTasksCardScrollToggleButtons(widgetId, enabled) {
+    syncTasksToggleButtons(widgetId, 'toggleCardScroll', enabled, 'data-vyasa-card-scroll-on', 'Toggle card scroll mode (V)', 'Card scroll mode is on (V)');
 }
 
 function buildVisibleTasksGraph(model, expanded) {
@@ -3282,40 +3361,6 @@ function renderTasksNodeLinkBadge(React, options = {}) {
     })));
 }
 
-function tasksActiveHoverAttrs(sourceModel, activeProjectionId) {
-    const projections = Array.isArray(sourceModel?.view_projections) ? sourceModel.view_projections : [];
-    const normalize = (value) => (Array.isArray(value) ? value : String(value || '').split(','))
-        .map((attr) => String(attr || '').trim())
-        .filter(Boolean);
-    const id = String(activeProjectionId || '').trim();
-    if (id) {
-        const projection = projections.find((p) => p && p.id === id);
-        if (projection?.hover_attrs) {
-            return normalize(projection.hover_attrs);
-        }
-    }
-    if (sourceModel?.hover_attrs) return normalize(sourceModel.hover_attrs);
-    return [];
-}
-
-function tasksFormatHoverValue(attr, value) {
-    if (value === null || value === undefined) return '';
-    if (typeof value === 'number') {
-        if (Number.isInteger(value) && Math.abs(value) >= 1000) {
-            return value.toLocaleString('en-US');
-        }
-        return String(value);
-    }
-    const str = normalizeTasksAttrText(value);
-    if (!str) return '';
-    // Try numeric formatting for stringy numbers (the fence parser stores everything as strings).
-    if (/^-?\d+(\.\d+)?$/.test(str)) {
-        const num = Number(str);
-        if (Number.isFinite(num) && Math.abs(num) >= 1000) return num.toLocaleString('en-US');
-    }
-    return str;
-}
-
 function tasksDetailPanelWidth(options = {}) {
     const title = options.title || '';
     const nodeId = options.nodeId || '';
@@ -3362,6 +3407,7 @@ function renderTasksNoteTextarea(React, options = {}) {
         ref: options.ref,
         'data-vyasa-task-control': 'true',
         'aria-label': options.ariaLabel || 'Notes',
+        autoFocus: options.autoFocus === true,
         value,
         placeholder: 'Notes',
         readOnly: options.readOnly === true,
@@ -3392,12 +3438,39 @@ function renderTasksNoteTextarea(React, options = {}) {
     });
 }
 
+function renderTasksCardNoteEditor(React, options = {}) {
+    const value = String(options.value || '');
+    return React.createElement('label', { style: {
+        display: 'flex', flexDirection: 'column', gap: '6px',
+        paddingTop: options.separated ? '10px' : 0,
+        marginTop: options.separated ? '10px' : 0,
+        borderTop: options.separated ? '1px dashed color-mix(in srgb, currentColor 18%, transparent)' : 'none',
+    } },
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+            React.createElement('span', { style: { fontWeight: 700, opacity: 0.7, flex: '1 1 auto' } }, 'Notes'),
+            options.onUndo && options.clearedValue ? React.createElement('button', {
+                type: 'button', 'data-vyasa-task-control': 'true', onClick: options.onUndo,
+                style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--vyasa-primary)', fontWeight: 600, padding: 0, lineHeight: 1, opacity: 0.85 },
+            }, 'Undo') : null,
+            options.onClear && value.trim() ? React.createElement('button', {
+                type: 'button', title: 'Clear note', 'aria-label': 'Clear note',
+                'data-vyasa-task-control': 'true', onClick: options.onClear,
+                style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px', color: 'inherit', padding: 0, lineHeight: 1, opacity: 0.45, display: 'flex', alignItems: 'center' },
+            }, '×') : null,
+        ),
+        renderTasksNoteTextarea(React, options)
+    );
+}
+
 function renderTasksDetailEntries(React, entries, options = {}) {
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '12px', lineHeight: options.lineHeight || 1.35 } },
         ...(entries || []).map((entry, index) => {
             const canCopy = options.copyValues && String(entry?.value ?? '').trim();
             const urls = tasksExtractUrls(entry?.value);
             const urlOnly = urls.length === 1 && String(entry?.value || '').trim() === urls[0];
+            const renderedValues = Array.isArray(entry?.renderedValue)
+                ? entry.renderedValue.filter((value) => typeof value === 'string' && value)
+                : (typeof entry?.renderedValue === 'string' && entry.renderedValue ? [entry.renderedValue] : []);
             const copyValue = async (event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -3405,14 +3478,19 @@ function renderTasksDetailEntries(React, entries, options = {}) {
             };
             return React.createElement('div', {
                 key: entry.key || entry.attr || `${index}`,
+                'data-vyasa-edge-field': options.edgeFields ? (entry.key || entry.attr || '') : undefined,
                 className: 'vyasa-task-node-card-row',
                 style: { position: 'relative', paddingTop: index === 0 ? '0' : '8px', paddingRight: canCopy ? '26px' : 0, marginTop: index === 0 ? '0' : '8px', borderTop: index === 0 ? 'none' : '1px dashed color-mix(in srgb, currentColor 18%, transparent)', overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'pre-line' },
             },
             React.createElement('span', { style: { fontWeight: 700, opacity: 0.72, display: 'block', marginBottom: '4px' } }, `${entry.label}:`),
             urlOnly
                 ? React.createElement('span', { className: 'vyasa-task-node-card-value' }, renderTasksInlineLinks(entry.value, { currentPath: options.currentPath }))
-                : entry.renderedValue
-                ? React.createElement('span', { className: 'vyasa-task-node-card-value', dangerouslySetInnerHTML: { __html: entry.renderedValue } })
+                : renderedValues.length
+                ? React.createElement('span', { className: 'vyasa-task-node-card-value', style: { display: 'grid', gap: '4px' } },
+                    ...renderedValues.map((renderedValue, renderedIndex) => React.createElement('span', {
+                        key: `${renderedIndex}`,
+                        dangerouslySetInnerHTML: { __html: renderedValue },
+                    })))
                 : React.createElement('span', { className: 'vyasa-task-node-card-value' }, entry.value),
             canCopy ? React.createElement('button', {
                 type: 'button',
@@ -3452,22 +3530,6 @@ function syncTasksFullscreenButton(wrapper) {
 const { setTasksMaximized } = createTasksFullscreenController({
     syncTasksFullscreenButton,
 });
-
-function tasksHoverAttrRows(node, hoverAttrs) {
-    if (!node || !Array.isArray(hoverAttrs) || !hoverAttrs.length) return [];
-    const rows = [];
-    for (const attr of hoverAttrs) {
-        const value = node[attr];
-        if (value === null || value === undefined || String(value).trim() === '') continue;
-        rows.push({
-            attr,
-            label: tasksNodeMetaLabel(attr),
-            value: tasksFormatHoverValue(attr, value),
-            renderedValue: typeof node?.__rendered_attrs__?.[attr] === 'string' ? node.__rendered_attrs__[attr] : '',
-        });
-    }
-    return rows;
-}
 
 function tasksProjectionOptions(model, ganttEnabled = false, activeContextId = '') {
     const projections = Array.isArray(model?.view_projections) ? model.view_projections : [];
@@ -3733,7 +3795,6 @@ async function renderTasksGraphs(rootElement = document) {
             }), [model]);
             const layoutConfig = React.useMemo(() => readTasksLayoutConfigForModel(wrapper, model), [model]);
             const nodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '480px')).trim() || '480px';
-            const hoverCardRightRailSetting = tasksModelBooleanSetting(model, 'hover-card-right-rail', false);
             const hoverFontSize = String(tasksModelSetting(model, 'hover-font-size', wrapper.dataset.tasksHoverFontSize || '12px')).trim() || '12px';
             const colorMix = readTasksColorMixConfigForModel(wrapper, model);
             const projectionGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(tasksModelSetting(model, 'projection-group-opacity', wrapper.dataset.tasksProjectionGroupOpacity || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`)) || TASKS_PROJECTION_GROUP_OPACITY_DEFAULT));
@@ -3815,6 +3876,21 @@ async function renderTasksGraphs(rootElement = document) {
             const [selectedNodeIds, setSelectedNodeIds] = React.useState(() => new Set());
             const selectedNodeIdRef = React.useRef(null);
             const selectedNodeIdsRef = React.useRef(new Set());
+            const [selectedEdgeId, setSelectedEdgeId] = React.useState(null);
+            const selectedEdgeIdRef = React.useRef(null);
+            const [edgeCardOpen, setEdgeCardOpen] = React.useState(false);
+            const [edgeCardField, setEdgeCardField] = React.useState('');
+            const [edgeCardError, setEdgeCardError] = React.useState('');
+            const [edgeStatus, setEdgeStatus] = React.useState('');
+            const edgeCycleNodeIdRef = React.useRef('');
+            const optionEdgeNodeIdRef = React.useRef('');
+            const optionEdgePreviewHeldRef = React.useRef(false);
+            const optionEdgeOtherNodeIdRef = React.useRef('');
+            const optionEdgeNodeCardHeldRef = React.useRef(false);
+            const [optionEdgeNodeCardId, setOptionEdgeNodeCardId] = React.useState(null);
+            const optionEdgePinnedRef = React.useRef(false);
+            const edgePinBloomIdRef = React.useRef(0);
+            const [edgePinBloom, setEdgePinBloom] = React.useState(null);
             const contextDiffSelectionRef = React.useRef({ key: '', ids: new Set() });
             const [dragSelection, setDragSelection] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
@@ -3825,6 +3901,19 @@ async function renderTasksGraphs(rootElement = document) {
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
             const groupHoverTooltipRef = React.useRef(null);
             groupHoverTooltipRef.current = groupHoverTooltip;
+            const [hoverCardScrollMode, setHoverCardScrollMode] = React.useState(
+                () => readTasksGlobalToggle(TASKS_HOVER_CARD_SCROLL_KEY) === 'true'
+            );
+            const hoverCardScrollRef = React.useRef(null);
+            const detailCardScrollRef = React.useRef(null);
+            const setHoverCardScrollModeGlobal = React.useCallback((update) => {
+                setHoverCardScrollMode((current) => {
+                    const next = Boolean(typeof update === 'function' ? update(current) : update);
+                    writeTasksGlobalToggle(TASKS_HOVER_CARD_SCROLL_KEY, next);
+                    logTasksDebug('hoverCardScrollMode', { widgetId, enabled: next });
+                    return next;
+                });
+            }, [widgetId]);
             const [stickyGroupHoverTooltips, setStickyGroupHoverTooltips] = React.useState([]);
             const stickyGroupHoverTooltipsRef = React.useRef([]);
             stickyGroupHoverTooltipsRef.current = stickyGroupHoverTooltips;
@@ -3912,6 +4001,9 @@ async function renderTasksGraphs(rootElement = document) {
                 selectedNodeIdsRef.current = new Set(selectedNodeIds);
             }, [selectedNodeIds]);
             React.useEffect(() => {
+                selectedEdgeIdRef.current = selectedEdgeId;
+            }, [selectedEdgeId]);
+            React.useEffect(() => {
                 const owned = contextDiffSelectionRef.current;
                 if (!contextDiffEnabled) {
                     const current = selectedNodeIdsRef.current;
@@ -3958,6 +4050,7 @@ async function renderTasksGraphs(rootElement = document) {
                 typeof projectionPrefs?.searchQuery === 'string' ? projectionPrefs.searchQuery : ''
             ));
             const [nodeNotes, setNodeNotes] = React.useState(() => normalizeTasksNodeNotes(sourcePrefsRef.current?.nodeNotes));
+            const [edgeNotes, setEdgeNotes] = React.useState(() => normalizeTasksNodeNotes(sourcePrefsRef.current?.edgeNotes));
             const [slideNotes, setSlideNotes] = React.useState(() => normalizeTasksSlideNotes(sourcePrefsRef.current?.slideNotes));
             const [activeColorHierarchy, setActiveColorHierarchy] = React.useState(() => (
                 resolveTasksPreferredColorHierarchy(model, activeProjectionId, projectionPrefs, nodeNotes)
@@ -3972,24 +4065,52 @@ async function renderTasksGraphs(rootElement = document) {
             const [searchEnabled, setSearchEnabled] = React.useState(() => (
                 typeof projectionPrefs?.searchEnabled === 'boolean' ? projectionPrefs.searchEnabled : true
             ));
-            const [edgesVisible, setEdgesVisible] = React.useState(() => (
-                typeof projectionPrefs?.edgesVisible === 'boolean' ? projectionPrefs.edgesVisible : true
-            ));
+            const [edgesVisible, setEdgesVisible] = React.useState(() => {
+                const stored = readTasksEdgesVisible();
+                if (stored !== null) return stored;
+                return typeof projectionPrefs?.edgesVisible === 'boolean' ? projectionPrefs.edgesVisible : true;
+            });
             const [hoverInactiveNodes, setHoverInactiveNodes] = React.useState(() => (
                 typeof projectionPrefs?.hoverInactiveNodes === 'boolean' ? projectionPrefs.hoverInactiveNodes : true
             ));
-            // One mode replaces the old enabled flag and the authored right-rail
-            // setting; both are derived below, so every read site stays as it was.
             const [hoverCardMode, setHoverCardMode] = React.useState(() => {
+                const stored = readTasksHoverCardMode();
+                if (stored) return stored;
                 if (TASKS_HOVER_CARD_MODES.includes(projectionPrefs?.hoverCardMode)) return projectionPrefs.hoverCardMode;
                 if (projectionPrefs?.hoverCardsEnabled === false) return 'off';
-                return hoverCardRightRailSetting ? 'rightRail' : 'cursor';
+                return 'rightRail';
             });
+            // The E and H toggles write what they set, so the next graph on this
+            // server opens the same way. Every other write path stays local.
+            const setEdgesVisibleGlobal = React.useCallback((update) => {
+                setEdgesVisible((current) => {
+                    const next = Boolean(typeof update === 'function' ? update(current) : update);
+                    writeTasksGlobalToggle(TASKS_EDGES_VISIBLE_KEY, next);
+                    return next;
+                });
+            }, []);
+            const setHoverCardModeGlobal = React.useCallback((update) => {
+                setHoverCardMode((current) => {
+                    const next = clampTasksHoverCardMode(typeof update === 'function' ? update(current) : update);
+                    writeTasksGlobalToggle(TASKS_HOVER_CARD_MODE_KEY, next);
+                    return next;
+                });
+            }, []);
             const hoverCardsEnabled = hoverCardMode !== 'off';
-            const hoverCardRightRail = hoverCardMode === 'rightRail';
+            const [groupHoverCardsEnabled, setGroupHoverCardsEnabled] = React.useState(
+                () => readTasksGlobalToggle(TASKS_GROUP_HOVER_CARDS_KEY) !== 'false'
+            );
+            const setGroupHoverCardsEnabledGlobal = React.useCallback((update) => {
+                setGroupHoverCardsEnabled((current) => {
+                    const next = Boolean(typeof update === 'function' ? update(current) : update);
+                    writeTasksGlobalToggle(TASKS_GROUP_HOVER_CARDS_KEY, next);
+                    showTasksToast(`Group hover cards ${next ? 'on' : 'off'}`);
+                    return next;
+                });
+            }, []);
             // The toolbar button is still show/hide, so it needs to know which
             // placement to come back to.
-            const lastHoverCardPlacementRef = React.useRef('cursor');
+            const lastHoverCardPlacementRef = React.useRef('rightRail');
             if (hoverCardsEnabled) lastHoverCardPlacementRef.current = hoverCardMode;
             React.useEffect(() => {
                 syncTasksEdgeToggleButtons(widgetId, edgesVisible);
@@ -3998,6 +4119,9 @@ async function renderTasksGraphs(rootElement = document) {
                 syncTasksHoverCardToggleButtons(widgetId, hoverCardsEnabled);
                 logTasksDebug('hoverCardsState', { widgetId, egoMode, enabled: hoverCardsEnabled, mode: hoverCardMode });
             }, [widgetId, egoMode, hoverCardsEnabled, hoverCardMode]);
+            React.useEffect(() => {
+                syncTasksCardScrollToggleButtons(widgetId, hoverCardScrollMode);
+            }, [widgetId, hoverCardScrollMode]);
             const defaultEdgeOpacity = React.useMemo(
                 () => tasksDefaultEdgeOpacity((sourceModel?.dependency_edges || []).length),
                 [sourceModel]
@@ -4030,6 +4154,168 @@ async function renderTasksGraphs(rootElement = document) {
             const [queryBuilderReady, setQueryBuilderReady] = React.useState(() => Boolean(window.VyasaTasksQueryBuilder?.QueryBuilder));
             const [nodes, setNodes] = React.useState([]);
             const [edges, setEdges] = React.useState([]);
+            const visibleEdgesRef = React.useRef([]);
+            visibleEdgesRef.current = edges;
+            const edgeNodeLabels = React.useMemo(() => Object.fromEntries(
+                [...(model?.groups || []), ...(model?.tasks || [])].map((node) => [String(node.id || ''), String(node.label || node.id || '')])
+            ), [model]);
+            const [selectedEdgeRecord, setSelectedEdgeRecord] = React.useState(null);
+            const resolveEdgeRecord = React.useCallback((edge) => {
+                const edgeId = tasksEdgeRecordId(edge);
+                if (!edgeId) return null;
+                return (model?.dependency_edges || []).find((item) => tasksEdgeRecordId(item) === edgeId)
+                    || (sourceModel?.dependency_edges || []).find((item) => tasksEdgeRecordId(item) === edgeId)
+                    || edge;
+            }, [model, sourceModel]);
+            const selectEdgeRecord = React.useCallback((edge, openCard = true, field = '') => {
+                const edgeId = tasksEdgeRecordId(edge);
+                if (!edgeId) return;
+                const record = resolveEdgeRecord(edge);
+                const ordered = tasksOrderedEdges(visibleEdgesRef.current.length ? visibleEdgesRef.current : model?.dependency_edges || []);
+                const index = ordered.findIndex((item) => tasksEdgeRecordId(item) === edgeId);
+                const sourceLabel = edgeNodeLabels[record.source] || record.source || '';
+                const targetLabel = edgeNodeLabels[record.target] || record.target || '';
+                const relation = record.relation || record.label || '';
+                selectedNodeIdRef.current = null;
+                selectedNodeIdsRef.current = new Set();
+                selectedEdgeIdRef.current = edgeId;
+                setSelectedNodeId(null);
+                setSelectedNodeIds(new Set());
+                setSelectedEdgeId(edgeId);
+                setSelectedEdgeRecord(record);
+                setEdgeCardOpen(openCard);
+                setEdgeCardField(field);
+                setEdgeCardError('');
+                setHoveredNodeId(null);
+                setEdgeStatus(`${edgeId}: ${sourceLabel} ${relation} ${targetLabel}, edge ${Math.max(1, index + 1)} of ${ordered.length} visible edges${openCard ? '. Edge details opened.' : ''}`);
+                if (openCard && activeContextId && window.history?.replaceState) {
+                    const fragment = ['kg', activeContextId, edgeId, field].filter(Boolean).map(encodeURIComponent).join('/');
+                    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${fragment}`);
+                }
+                logTasksDebug('edgeSelectionSet', { widgetId, edgeId, source: record.source || '', target: record.target || '', openCard });
+            }, [activeContextId, edgeNodeLabels, model, resolveEdgeRecord, widgetId]);
+            const edgeForOptionPointer = React.useCallback((event) => {
+                const reactFlow = reactFlowApiRef.current;
+                if (!reactFlow) return null;
+                const point = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+                const graph = graphBaseRef.current || { nodes: [], edges: [] };
+                let nodeId = selectedNodeIdRef.current || optionEdgeNodeIdRef.current;
+                if (!nodeId) {
+                    const hit = tasksGraphNodeAtFlowPoint(graph.nodes || [], point);
+                    if (hit) nodeId = hit.node.data?.__kind__ === 'groupTitle'
+                        ? (hit.node.data?.sourceGroupId || hit.node.id)
+                        : hit.node.id;
+                }
+                if (!nodeId) return null;
+                const edge = nearestTasksIncidentEdge(point, nodeId, graph.nodes || [], graph.edges || []);
+                return edge ? { edge, nodeId } : null;
+            }, []);
+            const previewOptionEdge = React.useCallback((edge, nodeId) => {
+                if (optionEdgePinnedRef.current) return;
+                const edgeId = tasksEdgeRecordId(edge);
+                if (!edgeId) return;
+                optionEdgeNodeIdRef.current = nodeId;
+                optionEdgeOtherNodeIdRef.current = edge.source === nodeId ? edge.target : edge.source;
+                if (optionEdgeNodeCardHeldRef.current) setOptionEdgeNodeCardId(optionEdgeOtherNodeIdRef.current);
+                edgeCycleNodeIdRef.current = nodeId;
+                selectedEdgeIdRef.current = edgeId;
+                setSelectedEdgeId(edgeId);
+                setSelectedEdgeRecord(resolveEdgeRecord(edge));
+                setEdgeCardOpen(true);
+                setEdgeCardField('');
+                setEdgeCardError('');
+                groupHoverTooltipRef.current = null;
+                setGroupHoverTooltip(null);
+                setEdgeStatus(`${edgeId}. Release W to return to the node.`);
+            }, [resolveEdgeRecord]);
+            const clearOptionEdgePreview = React.useCallback(() => {
+                optionEdgeOtherNodeIdRef.current = '';
+                setOptionEdgeNodeCardId(null);
+                if (optionEdgePinnedRef.current) {
+                    optionEdgePinnedRef.current = false;
+                    optionEdgeNodeIdRef.current = '';
+                    setEdgeStatus('Edge details pinned.');
+                    return;
+                }
+                if (!optionEdgeNodeIdRef.current) return;
+                optionEdgeNodeIdRef.current = '';
+                selectedEdgeIdRef.current = null;
+                setSelectedEdgeId(null);
+                setSelectedEdgeRecord(null);
+                setEdgeCardOpen(false);
+                setEdgeCardField('');
+                setEdgeCardError('');
+                setEdgeStatus('Edge preview closed.');
+            }, []);
+            React.useEffect(() => {
+                const pinPreview = () => {
+                    if (!optionEdgeNodeIdRef.current || !selectedEdgeIdRef.current) return false;
+                    optionEdgePinnedRef.current = true;
+                    const bloomKey = `${selectedEdgeIdRef.current}:${++edgePinBloomIdRef.current}`;
+                    setEdgePinBloom({ edgeId: selectedEdgeIdRef.current, key: bloomKey });
+                    window.setTimeout(() => setEdgePinBloom((current) => current?.key === bloomKey ? null : current), 1800);
+                    logTasksDebug('optionEdgePinned', { widgetId, edgeId: selectedEdgeIdRef.current, bloomKey });
+                    setEdgeStatus(`${selectedEdgeIdRef.current}. Edge details pinned.`);
+                    window.requestAnimationFrame(() => edgeNoteTextareaRef.current?.focus());
+                    return true;
+                };
+                const edgeKeyApplies = (event) => {
+                    const target = event.target instanceof Element ? event.target : null;
+                    const editable = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName));
+                    return !editable && Boolean(flowWrapperRef.current?.matches(':hover') || optionEdgeNodeIdRef.current);
+                };
+                const onKeyDown = (event) => {
+                    if (event.repeat || !edgeKeyApplies(event)) return;
+                    if (event.code === 'KeyW') {
+                        optionEdgePreviewHeldRef.current = true;
+                        event.preventDefault();
+                        event.stopPropagation();
+                    } else if (event.key === 'Enter' && optionEdgePreviewHeldRef.current) {
+                        if (pinPreview()) {
+                            event.preventDefault();
+                            event.stopImmediatePropagation();
+                        }
+                    } else if (event.code === 'KeyQ') {
+                        optionEdgeNodeCardHeldRef.current = true;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (optionEdgeOtherNodeIdRef.current) {
+                            setOptionEdgeNodeCardId(optionEdgeOtherNodeIdRef.current);
+                            logTasksDebug('optionEdgeNodeCardSet', { widgetId, nodeId: optionEdgeOtherNodeIdRef.current });
+                        }
+                    }
+                };
+                const onKeyUp = (event) => {
+                    if (event.code === 'KeyW') {
+                        optionEdgePreviewHeldRef.current = false;
+                        clearOptionEdgePreview();
+                    } else if (event.code === 'KeyQ') {
+                        optionEdgeNodeCardHeldRef.current = false;
+                        setOptionEdgeNodeCardId(null);
+                        logTasksDebug('optionEdgeNodeCardClear', { widgetId, reason: 'q-up' });
+                    }
+                };
+                const clearKeys = () => {
+                    optionEdgePreviewHeldRef.current = false;
+                    optionEdgeNodeCardHeldRef.current = false;
+                    clearOptionEdgePreview();
+                };
+                window.addEventListener('keydown', onKeyDown, true);
+                window.addEventListener('keyup', onKeyUp, true);
+                window.addEventListener('blur', clearKeys);
+                return () => {
+                    window.removeEventListener('keydown', onKeyDown, true);
+                    window.removeEventListener('keyup', onKeyUp, true);
+                    window.removeEventListener('blur', clearKeys);
+                };
+            }, [clearOptionEdgePreview, widgetId]);
+            const selectGraphEdge = React.useCallback((event, edge) => {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
+                markWidgetActive();
+                edgeCycleNodeIdRef.current = '';
+                selectEdgeRecord(edge, true);
+            }, [markWidgetActive, selectEdgeRecord]);
             const moveExperimentNodes = React.useCallback((changes) => {
                 if (!nodeConnectionExperiment) return;
                 setNodes((currentNodes) => {
@@ -4081,6 +4367,8 @@ async function renderTasksGraphs(rootElement = document) {
                 else delete carrier.dataset.vyasaReviewTargets;
             }, [reviewTargets]);
             const noteTextareaRef = React.useRef(null);
+            const edgeNoteTextareaRef = React.useRef(null);
+            const pendingNodeNoteFocusRef = React.useRef('');
             const extendLassoPoints = React.useCallback((points, nextPoint) => {
                 const current = Array.isArray(points) ? points : [];
                 const last = current[current.length - 1];
@@ -4231,6 +4519,14 @@ async function renderTasksGraphs(rootElement = document) {
                 setExpanded(egoMode ? tasksExpandableNodeIds(model) : hydrateExpandedSet(nextPrefs));
                 setSelectedNodeId(null);
                 setSelectedNodeIds(new Set());
+                selectedEdgeIdRef.current = null;
+                edgeCycleNodeIdRef.current = '';
+                optionEdgeNodeIdRef.current = '';
+                setSelectedEdgeId(null);
+                setSelectedEdgeRecord(null);
+                setEdgeCardOpen(false);
+                setEdgeCardField('');
+                setEdgeCardError('');
                 setDragSelection(null);
                 setHoveredNodeId(null);
                 groupToggleHoverIdRef.current = '';
@@ -4261,11 +4557,17 @@ async function renderTasksGraphs(rootElement = document) {
                 ));
                 setQueryBuilderEnabled(typeof nextPrefs?.queryBuilderEnabled === 'boolean' ? nextPrefs.queryBuilderEnabled : true);
                 setSearchEnabled(typeof nextPrefs?.searchEnabled === 'boolean' ? nextPrefs.searchEnabled : true);
-                setEdgesVisible(typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true);
+                // A pressed E or H outranks the projection here too, so switching
+                // views does not undo what the reader set for the whole server.
+                const storedEdgesVisible = readTasksEdgesVisible();
+                setEdgesVisible(storedEdgesVisible !== null
+                    ? storedEdgesVisible
+                    : (typeof nextPrefs?.edgesVisible === 'boolean' ? nextPrefs.edgesVisible : true));
                 setHoverInactiveNodes(typeof nextPrefs?.hoverInactiveNodes === 'boolean' ? nextPrefs.hoverInactiveNodes : true);
-                setHoverCardMode(TASKS_HOVER_CARD_MODES.includes(nextPrefs?.hoverCardMode)
-                    ? nextPrefs.hoverCardMode
-                    : (nextPrefs?.hoverCardsEnabled === false ? 'off' : (hoverCardRightRailSetting ? 'rightRail' : 'cursor')));
+                setHoverCardMode(readTasksHoverCardMode()
+                    || (TASKS_HOVER_CARD_MODES.includes(nextPrefs?.hoverCardMode)
+                        ? nextPrefs.hoverCardMode
+                        : (nextPrefs?.hoverCardsEnabled === false ? 'off' : 'rightRail')));
                 setEdgeOpacity(nextPrefs?.edgeOpacity !== undefined ? nextPrefs.edgeOpacity : (
                     sourcePrefsRef.current?.edgeOpacity === undefined ? defaultEdgeOpacity : clampTasksEdgeOpacity(sourcePrefsRef.current.edgeOpacity)
                 ));
@@ -4343,7 +4645,9 @@ async function renderTasksGraphs(rootElement = document) {
             const currentHighlightedFitNodes = React.useCallback(() => {
                 const selectedIds = currentSelectionIds();
                 if (!selectedIds.size) return [];
-                const baseEdges = tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], effectiveEdgeTypes);
+                // Equal-z hit paths use paint order. Stable edge order makes the
+                // overlap winner deterministic; keyboard cycling still reaches all edges.
+                const baseEdges = tasksOrderedEdges(tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], effectiveEdgeTypes));
                 const fitIds = new Set(selectedIds);
                 for (const selectedId of selectedIds) {
                     for (const descendantId of collectTasksGroupDescendantIds(selectedId, model)) fitIds.add(descendantId);
@@ -4393,6 +4697,16 @@ async function renderTasksGraphs(rootElement = document) {
                     matchedNodeIds: matchedNodes.map((node) => node.id).slice(0, 80),
                 };
             }, [widgetId, currentSelectionIds, effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches]);
+            const fitPaddingAroundCards = React.useCallback((fallback) => {
+                const canvas = flowWrapperRef.current;
+                if (!canvas) return fallback;
+                const canvasRect = canvas.getBoundingClientRect();
+                const cards = Array.from(canvas.querySelectorAll('[data-vyasa-node-card], [data-vyasa-edge-card]'));
+                const cardLeft = Math.min(...cards.map((card) => card.getBoundingClientRect().left));
+                if (!Number.isFinite(cardLeft)) return fallback;
+                const coveredRight = Math.max(0, canvasRect.right - Math.max(canvasRect.left, cardLeft));
+                return { top: '24px', right: `${Math.ceil(coveredRight + 12)}px`, bottom: '24px', left: '24px' };
+            }, []);
             const fitCurrentHighlight = React.useCallback((reactFlow, options = {}) => {
                 const reason = String(options.reason || 'manual-fit');
                 if (!reactFlow) return 0;
@@ -4404,10 +4718,23 @@ async function renderTasksGraphs(rootElement = document) {
                     duration,
                 });
                 reactFlow.fitView(matched.length
-                    ? { nodes: matched, duration, padding: options.highlightPadding ?? 0.25, includeHiddenNodes: true }
-                    : { duration, padding: options.padding ?? 0.2, includeHiddenNodes: true });
+                    ? { nodes: matched, duration, padding: fitPaddingAroundCards(options.highlightPadding ?? 0.25), includeHiddenNodes: true }
+                    : { duration, padding: fitPaddingAroundCards(options.padding ?? 0.2), includeHiddenNodes: true });
                 return matched.length;
-            }, [currentHighlightedFitNodes, tasksFitDebugPayload]);
+            }, [currentHighlightedFitNodes, fitPaddingAroundCards, tasksFitDebugPayload]);
+            const fitSelectedEdgeConnection = React.useCallback((reactFlow, duration = 300) => {
+                if (!reactFlow || !selectedEdgeIdRef.current) return 0;
+                const visibleEdge = (graphBaseRef.current.edges || []).find(
+                    (edge) => tasksEdgeRecordId(edge) === selectedEdgeIdRef.current
+                );
+                const edge = visibleEdge || selectedEdgeRecord;
+                if (!edge) return 0;
+                const endpointIds = new Set([edge.source, edge.target]);
+                const matched = (graphBaseRef.current.nodes || []).filter((node) => endpointIds.has(node.id));
+                if (!matched.length) return 0;
+                reactFlow.fitView({ nodes: matched, duration, padding: fitPaddingAroundCards(0.32), includeHiddenNodes: true });
+                return matched.length;
+            }, [fitPaddingAroundCards, selectedEdgeRecord]);
             React.useEffect(() => {
                 const baseModel = baseProjectionState.model;
                 const validFilterKeys = new Set(tasksFilterOptions(baseModel).map((option) => option.key));
@@ -4476,6 +4803,7 @@ async function renderTasksGraphs(rootElement = document) {
                     projectionPrefs: nextProjectionPrefs,
                     nodeStates,
                     nodeNotes,
+                    edgeNotes,
                     slideNotes,
                 };
                 storedProjectionPrefsRef.current = nextProjectionPrefs;
@@ -4491,10 +4819,11 @@ async function renderTasksGraphs(rootElement = document) {
                     projectionPrefs: nextProjectionPrefs,
                     nodeStates,
                     nodeNotes,
+                    edgeNotes,
                     slideNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [egoState, sourceModel, activeFilters, activeSwatchFilters, activeEdgeTypes, edgeTypeFilterEnabled, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, hoverCardMode, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, slideNotes]);
+            }, [egoState, sourceModel, activeFilters, activeSwatchFilters, activeEdgeTypes, edgeTypeFilterEnabled, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, hoverCardMode, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, edgeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
@@ -4579,6 +4908,65 @@ async function renderTasksGraphs(rootElement = document) {
                     setContextLoading(false);
                 }
             }, [sourceModel, activeContextId, applyLoadedSource]);
+            const handledEdgeHashRef = React.useRef('');
+            React.useEffect(() => {
+                const hash = String(window.location.hash || '');
+                if (!hash.startsWith('#kg/') || handledEdgeHashRef.current === hash) return;
+                let parts;
+                try {
+                    parts = hash.slice(1).split('/').map(decodeURIComponent);
+                } catch {
+                    handledEdgeHashRef.current = hash;
+                    setEdgeCardError('This graph link has invalid encoded text.');
+                    setEdgeCardOpen(true);
+                    setEdgeStatus('This graph link has invalid encoded text.');
+                    return;
+                }
+                const [, contextId, edgeId, field = ''] = parts;
+                if (!contextId || !edgeId || parts.length > 4) {
+                    handledEdgeHashRef.current = hash;
+                    setEdgeCardError('Use #kg/<context>/<edge-id>[/<field>] for an edge link.');
+                    setEdgeCardOpen(true);
+                    setEdgeStatus('The graph edge link is incomplete.');
+                    return;
+                }
+                if (!contextOptions.some((context) => String(context.id || '') === contextId)) {
+                    handledEdgeHashRef.current = hash;
+                    setEdgeCardError(`The graph has no context named ${contextId}.`);
+                    setEdgeCardOpen(true);
+                    setEdgeStatus(`The graph has no context named ${contextId}.`);
+                    return;
+                }
+                if (activeContextId !== contextId) {
+                    handleSwitchContext(contextId);
+                    return;
+                }
+                const record = (model?.dependency_edges || []).find((edge) => String(edge.id || '') === edgeId);
+                if (!record) {
+                    handledEdgeHashRef.current = hash;
+                    setEdgeCardError(`Context ${contextId} has no edge named ${edgeId}.`);
+                    setEdgeCardOpen(true);
+                    setEdgeStatus(`Context ${contextId} has no edge named ${edgeId}.`);
+                    return;
+                }
+                if (field && !(field in record)) {
+                    handledEdgeHashRef.current = hash;
+                    setEdgeCardError(`Edge ${edgeId} has no field named ${field}.`);
+                    setEdgeCardOpen(true);
+                    setEdgeStatus(`Edge ${edgeId} has no field named ${field}.`);
+                    return;
+                }
+                handledEdgeHashRef.current = hash;
+                selectEdgeRecord(record, true, field);
+            }, [activeContextId, contextOptions, handleSwitchContext, model, selectEdgeRecord]);
+            React.useEffect(() => {
+                if (!edgeCardOpen || !edgeCardField || edgeCardError) return undefined;
+                const timer = window.setTimeout(() => {
+                    const selector = `[data-vyasa-edge-field="${CSS.escape(edgeCardField)}"]`;
+                    flowWrapperRef.current?.querySelector(selector)?.scrollIntoView({ block: 'nearest' });
+                }, 0);
+                return () => window.clearTimeout(timer);
+            }, [edgeCardOpen, edgeCardError, edgeCardField]);
             const handleAddView = React.useCallback(async () => {
                 const schemaPath = String(sourceModel?.kg_schema || '').trim();
                 if (!schemaPath) {
@@ -4623,26 +5011,13 @@ async function renderTasksGraphs(rootElement = document) {
                 });
             }, [cardStates]);
             const updateNodeNote = React.useCallback((nodeId, note) => {
-                const normalizedId = String(nodeId || '').trim();
-                if (!normalizedId) return;
-                setNodeNotes((current) => {
-                    const next = { ...(current || {}) };
-                    const text = String(note || '');
-                    if (text.trim()) next[normalizedId] = text;
-                    else delete next[normalizedId];
-                    return next;
-                });
+                updateTasksNote(setNodeNotes, nodeId, note);
+            }, []);
+            const updateEdgeNote = React.useCallback((edgeId, note) => {
+                updateTasksNote(setEdgeNotes, edgeId, note);
             }, []);
             const updateSlideNote = React.useCallback((slideId, note) => {
-                const normalizedId = String(slideId || '').trim();
-                if (!normalizedId) return;
-                setSlideNotes((current) => {
-                    const next = { ...(current || {}) };
-                    const text = String(note || '');
-                    if (text.trim()) next[normalizedId] = text;
-                    else delete next[normalizedId];
-                    return next;
-                });
+                updateTasksNote(setSlideNotes, slideId, note);
             }, []);
             const latestNodeNotes = React.useCallback(() => {
                 const latest = { ...nodeNotes };
@@ -4731,7 +5106,11 @@ async function renderTasksGraphs(rootElement = document) {
                         ? defaults.filtersCollapsed
                         : !tasksDefaultFiltersOpen(defaultFiltersOpen)
                 );
+                clearTasksGlobalToggle(TASKS_EDGES_VISIBLE_KEY);
+                clearTasksGlobalToggle(TASKS_HOVER_CARD_MODE_KEY);
+                clearTasksGlobalToggle(TASKS_GROUP_HOVER_CARDS_KEY);
                 setEdgesVisible(typeof defaults.edgesVisible === 'boolean' ? defaults.edgesVisible : true);
+                setGroupHoverCardsEnabled(true);
                 setActivePulseEnabled(true);
                 setContextDiffEnabled(false);
                 setEdgeOpacity(defaults.edgeOpacity !== undefined ? defaults.edgeOpacity : defaultEdgeOpacity);
@@ -4765,6 +5144,10 @@ async function renderTasksGraphs(rootElement = document) {
             React.useLayoutEffect(() => {
                 const textarea = noteTextareaRef.current;
                 if (!textarea) return;
+                if (pendingNodeNoteFocusRef.current === selectedLogicalNodeId) {
+                    pendingNodeNoteFocusRef.current = '';
+                    textarea.focus();
+                }
                 textarea.style.height = 'auto';
                 const computed = window.getComputedStyle(textarea);
                 const lineHeight = Number.parseFloat(computed.lineHeight) || 16;
@@ -5142,9 +5525,42 @@ async function renderTasksGraphs(rootElement = document) {
             const setEdgesReusing = React.useCallback((nextEdges) => {
                 setEdges((prev) => tasksReuseGraphElements(prev, nextEdges));
             }, []);
-            const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null, selectedIds = new Set()) => {
+            const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null, selectedIds = new Set(), edgeId = '') => {
                 const baseNodes = graphBaseRef.current.nodes || [];
                 const baseEdges = tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], effectiveEdgeTypes);
+                const selectedEdge = edgeId ? baseEdges.find((edge) => tasksEdgeRecordId(edge) === edgeId) : null;
+                if (selectedEdge) {
+                    const endpointIds = new Set([selectedEdge.source, selectedEdge.target]);
+                    setNodesReusing(baseNodes.map((node) => {
+                        const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
+                        const hit = endpointIds.has(sourceNodeId);
+                        const nodeColor = resolveTasksNodeColor(node.data, model, activeColorBy, activeColorPalette) || 'var(--vyasa-primary)';
+                        return {
+                            ...node,
+                            data: { ...node.data, highlightMode: hit ? 'selected' : 'dim', __hover_outline__: hit },
+                            style: {
+                                ...node.style,
+                                opacity: hit ? 1 : (node.data?.__projection_branch_opacity__ ?? 1) * 0.18,
+                                '--vyasa-tasks-active-border': hit ? nodeColor : undefined,
+                                boxShadow: hit ? `0 0 0 2px color-mix(in srgb, ${nodeColor} 70%, transparent)` : node.style.boxShadow,
+                            },
+                        };
+                    }));
+                    setEdgesReusing(edgesVisible ? baseEdges.map((edge) => {
+                        const hit = edge === selectedEdge;
+                        const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
+                        return {
+                            ...edge,
+                            zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
+                            labelZIndex: hit ? TASKS_EDGE_LABEL_FOCUS_Z : TASKS_EDGE_LABEL_Z,
+                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim', strokeMode: hit ? 'selected' : 'dim', edgeCardActive: hit, pinBloomKey: hit && edgePinBloom?.edgeId === tasksEdgeRecordId(edge) ? edgePinBloom.key : '' },
+                            labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: hit ? 1 : 0.12 },
+                            labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.86 : 0.04 },
+                            style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: hit ? 1 : 0.08, strokeWidth: hit ? 4.5 : 2.5 },
+                        };
+                    }) : []);
+                    return;
+                }
                 // When no single node is selected, hovering a node should still reveal
                 // its checkbox. Carry it as a data flag (not the closure) so the
                 // memoized node updates without forcing the per-hover remount.
@@ -5514,7 +5930,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdgesReusing(edgesVisible ? nextEdges : []);
-            }, [effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeOpacity, filteredSelectionIds]);
+            }, [effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeOpacity, edgePinBloom, filteredSelectionIds]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -5547,8 +5963,8 @@ async function renderTasksGraphs(rootElement = document) {
                 // Pass hoveredNodeId through even with no selection so applyHighlight
                 // can flag the hovered node's checkbox (__hover_checkbox__). When a
                 // node is selected, hover drives neighbor focus as before.
-                applyHighlight(selectedNodeId, hoveredNodeId, selectedNodeIds);
-            }, [graphRevision, selectedNodeId, selectedNodeIds, hoveredNodeId, applyHighlight]);
+                applyHighlight(selectedNodeId, hoveredNodeId, selectedNodeIds, selectedEdgeId || '');
+            }, [graphRevision, selectedNodeId, selectedNodeIds, selectedEdgeId, hoveredNodeId, applyHighlight]);
             React.useEffect(() => {
                 if (!shouldAutoFitTasksOnExpand()) {
                     // Only clear expand-driven requests. Leave 'mode' (projection-swap)
@@ -5731,10 +6147,6 @@ async function renderTasksGraphs(rootElement = document) {
                     Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42)
                 );
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
-                const flareActive = taperPath ? isTasksEdgeFlareActive(strokeMode) : false;
-                const flareBox = flareActive ? tasksEdgeFlareBox(path, strokeWidth * 4) : null;
-                const flareMaskId = `vyasa-tasks-edge-flare-${String(props.id || '').replace(/[^\w-]/g, '_')}`;
-                const flareKey = `${props.data?.flareKey || ''}|${flareActive}`;
                 const edgeArrowPath = tasksTaperedArrowHeadPath(
                     path,
                     Math.max(10, strokeWidth * 3.0)
@@ -5775,6 +6187,15 @@ async function renderTasksGraphs(rootElement = document) {
                     });
                 }, [displayLabel, fullLabel, highlightMode, prominentLabel, labelStyle.fill, labelStyle.opacity, labelBgStyle.fill, labelBgStyle.fillOpacity]);
                 return React.createElement(React.Fragment, null,
+                    React.createElement('path', {
+                        d: path,
+                        fill: 'none',
+                        stroke: 'transparent',
+                        strokeWidth: 24,
+                        vectorEffect: 'non-scaling-stroke',
+                        pointerEvents: 'stroke',
+                        className: 'react-flow__edge-interaction vyasa-tasks-edge-hit-path',
+                    }),
                     !taperPath && React.createElement(rf.BaseEdge, {
                         ...props,
                         path,
@@ -5795,34 +6216,27 @@ async function renderTasksGraphs(rootElement = document) {
                         strokeLinejoin: 'round',
                         // While a flare sweeps, the ribbon underneath stays faint so
                         // the swept part reads as an opacity rise, then settles full.
-                        opacity: (props.style?.opacity ?? 1) * (flareBox ? 0.3 : 1),
+                        opacity: props.style?.opacity ?? 1,
                         pointerEvents: 'none',
                     }),
-                    flareBox && React.createElement('g', { key: flareKey, pointerEvents: 'none' },
-                        React.createElement('mask', {
-                            id: flareMaskId,
-                            maskUnits: 'userSpaceOnUse',
-                            x: flareBox.x,
-                            y: flareBox.y,
-                            width: flareBox.width,
-                            height: flareBox.height,
-                        },
+                    props.data?.edgeCardActive && React.createElement('path', {
+                        d: path,
+                        fill: 'none',
+                        stroke: props.style?.stroke || 'currentColor',
+                        strokeWidth: strokeWidth + 28,
+                        strokeOpacity: 0.36,
+                        strokeLinecap: 'round',
+                        strokeLinejoin: 'round',
+                        vectorEffect: 'non-scaling-stroke',
+                        pointerEvents: 'none',
+                        style: { filter: 'blur(14px)' },
+                    }),
+                    props.data?.pinBloomKey && React.createElement('g', { key: props.data.pinBloomKey, pointerEvents: 'none' },
                         React.createElement('path', {
-                            className: 'vyasa-tasks-edge-flare',
-                            d: path,
-                            pathLength: 1,
-                            fill: 'none',
-                            stroke: '#fff',
-                            strokeWidth: Math.max(20, strokeWidth * 8),
-                            strokeDasharray: '1 1',
-                            style: { filter: 'blur(3px)' },
-                        })),
-                        React.createElement('path', {
-                            d: taperPath,
-                            mask: `url(#${flareMaskId})`,
-                            fill: props.style?.stroke || 'currentColor',
-                            opacity: props.style?.opacity ?? 1,
-                        })),
+                            className: 'vyasa-tasks-edge-pin-bloom', d: path, pathLength: 1, fill: 'none',
+                            stroke: props.style?.stroke || 'currentColor', strokeLinecap: 'round', vectorEffect: 'non-scaling-stroke',
+                        })
+                    ),
                     React.createElement(rf.BaseEdge, {
                         ...props,
                         path,
@@ -6211,13 +6625,77 @@ async function renderTasksGraphs(rootElement = document) {
             const FitViewHotkey = () => {
                 const reactFlow = rf.useReactFlow();
                 React.useEffect(() => {
+                    // H/J/K/L and Shift+J/K hold to accelerate and coast on release,
+                    // on the same momentum model as J/K document scroll. Each run keeps
+                    // its own offset instead of reading back the viewport it just wrote,
+                    // and drops it once the motion stops so a mouse pan is never undone.
+                    const panMomentum = (axis) => {
+                        let offset = null;
+                        return createMomentumRunner({
+                            step: (distance) => {
+                                const viewport = reactFlow.getViewport();
+                                if (offset === null) offset = axis === 'x' ? viewport.x : viewport.y;
+                                offset -= distance;
+                                reactFlow.setViewport(axis === 'x'
+                                    ? { ...viewport, x: offset }
+                                    : { ...viewport, y: offset });
+                            },
+                            stepStatic: (direction) => (axis === 'x'
+                                ? panViewport(reactFlow, -direction * 40, 0)
+                                : panViewport(reactFlow, 0, -direction * 40)),
+                            onStop: () => { offset = null; },
+                        });
+                    };
+                    const panXMomentum = panMomentum('x');
+                    const panYMomentum = panMomentum('y');
+                    let zoomLevel = null;
+                    const zoomMomentum = createMomentumRunner({
+                        onStop: () => { zoomLevel = null; },
+                        step: (distance) => {
+                            const viewport = reactFlow.getViewport();
+                            const base = zoomLevel === null ? viewport.zoom : zoomLevel;
+                            const nextZoom = Math.min(TASKS_GRAPH_MAX_ZOOM, Math.max(graphMinZoom, base * Math.exp(TASKS_ZOOM_MOMENTUM_RATE * distance)));
+                            if (nextZoom === base) return false;
+                            zoomLevel = nextZoom;
+                            // Hold the graph point under the middle of the pane still,
+                            // the way the wheel and the zoom buttons do.
+                            const width = flowWrapperRef.current?.clientWidth || 0;
+                            const height = flowWrapperRef.current?.clientHeight || 0;
+                            reactFlow.setViewport({
+                                x: width / 2 - ((width / 2 - viewport.x) / viewport.zoom) * nextZoom,
+                                y: height / 2 - ((height / 2 - viewport.y) / viewport.zoom) * nextZoom,
+                                zoom: nextZoom,
+                            });
+                            return true;
+                        },
+                        stepStatic: (direction) => (direction > 0 ? reactFlow.zoomIn() : reactFlow.zoomOut()),
+                    });
+                    const stopMomentum = () => {
+                        panXMomentum.stop();
+                        panYMomentum.stop();
+                        zoomMomentum.stop();
+                    };
+                    const onKeyUp = (event) => {
+                        const key = event.key.toLowerCase();
+                        if (key === 'j' || key === 'k') {
+                            const direction = key === 'j' ? 1 : -1;
+                            panYMomentum.release(direction);
+                            zoomMomentum.release(direction);
+                            return;
+                        }
+                        if (key === 'h' || key === 'l') panXMomentum.release(key === 'l' ? 1 : -1);
+                    };
                     const onKeyDown = (event) => {
                         if (shortcutsSuspended()) return;
-                        if (event.defaultPrevented || event.repeat) return;
+                        if (event.defaultPrevented) return;
                         const target = event.target instanceof Element ? event.target : null;
                         const key = event.key.toLowerCase();
                         const optionZoom = event.altKey && !event.shiftKey && (key === 'arrowup' || key === 'arrowdown');
-                        if (event.metaKey || event.ctrlKey || (event.altKey && !optionZoom)) return;
+                        const optionEdgeFit = event.altKey && !event.shiftKey && event.code === 'KeyF' && Boolean(selectedEdgeIdRef.current);
+                        if (event.metaKey || event.ctrlKey || (event.altKey && !optionZoom && !optionEdgeFit)) return;
+                        // A held key still has to reach the claim below, or the document
+                        // shortcuts scroll the page under the graph on every repeat.
+                        if (event.repeat && !TASKS_SHORTCUT_KEYS.has(key)) return;
                         const flowWrapper = flowWrapperRef.current;
                         const widgetFocused = wrapper.contains(document.activeElement) || wrapper.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
                         if ((event.key === 'Escape' || key === 'g') && window.__vyasaTasksDebug.enabled) {
@@ -6248,6 +6726,17 @@ async function renderTasksGraphs(rootElement = document) {
                                 setHelpOpen(false);
                                 return;
                             }
+                            if (edgeCardOpen) {
+                                event.preventDefault();
+                                selectedEdgeIdRef.current = null;
+                                optionEdgeNodeIdRef.current = '';
+                                setSelectedEdgeId(null);
+                                setSelectedEdgeRecord(null);
+                                setEdgeCardOpen(false);
+                                setEdgeCardField('');
+                                setEdgeStatus('Edge details closed.');
+                                return;
+                            }
                             event.preventDefault();
                             clearSelection('escape');
                             return;
@@ -6256,16 +6745,50 @@ async function renderTasksGraphs(rootElement = document) {
                         // Hovering never marks the widget active, so the shortcuts that
                         // act on what the cursor is over need their own way past this gate.
                         if (!widgetFocused
+                            && !optionEdgeFit
                             && !(key === 't' && groupToggleHoverIdRef.current)
+                            && !(key === 'v' && (groupHoverTooltipRef.current || edgeCardOpen || selectedNodeIdRef.current))
                             && !(key === 'g' && hoveredNodeIdRef.current)) return;
-                        if (key === 'f' && event.shiftKey) {
+                        // The document shortcuts in scripts.js bind J/K to scroll, C to
+                        // fold and P to slides, and they preventDefault before this
+                        // handler ever sees the key. So this handler listens in the
+                        // capture phase and claims its own keys while the graph is
+                        // focused, leaving every other key to the document.
+                        if (optionEdgeFit || TASKS_SHORTCUT_KEYS.has(key)) event.stopPropagation();
+                        if (event.repeat) return;
+                        if (key === '[' || key === ']') {
+                            event.preventDefault();
+                            const incidentNodeId = selectedNodeIdRef.current || edgeCycleNodeIdRef.current;
+                            if (selectedNodeIdRef.current) edgeCycleNodeIdRef.current = selectedNodeIdRef.current;
+                            const ordered = tasksOrderedEdges(visibleEdgesRef.current, incidentNodeId);
+                            if (!ordered.length) {
+                                setEdgeStatus(incidentNodeId ? `No visible edges connect to ${incidentNodeId}.` : 'No visible edges.');
+                                return;
+                            }
+                            const currentIndex = ordered.findIndex((edge) => tasksEdgeRecordId(edge) === String(selectedEdgeIdRef.current || ''));
+                            const delta = key === ']' ? 1 : -1;
+                            const nextIndex = currentIndex < 0 ? (delta > 0 ? 0 : ordered.length - 1) : (currentIndex + delta + ordered.length) % ordered.length;
+                            selectEdgeRecord(ordered[nextIndex], edgeCardOpen, edgeCardField);
+                            return;
+                        }
+                        if (key === 'enter' && selectedEdgeIdRef.current) {
+                            event.preventDefault();
+                            const record = (model?.dependency_edges || []).find((edge) => tasksEdgeRecordId(edge) === selectedEdgeIdRef.current);
+                            if (record) selectEdgeRecord(record, true, edgeCardField);
+                            return;
+                        }
+                        if (key === 'f' && event.shiftKey && !event.metaKey) {
                             event.preventDefault();
                             window.openTasksFullscreen?.(widgetId);
                             return;
                         }
-                        if (key === 'f') {
+                        if (key === 'f' || optionEdgeFit) {
                             event.preventDefault();
-                            fitCurrentHighlight(reactFlow, { reason: 'shortcut-f' });
+                            if (optionEdgeFit) {
+                                fitSelectedEdgeConnection(reactFlow);
+                            } else if (!edgeCardOpen || !fitSelectedEdgeConnection(reactFlow)) {
+                                fitCurrentHighlight(reactFlow, { reason: 'shortcut-f' });
+                            }
                             return;
                         }
                         if (event.key === '?' || (event.key === '/' && event.shiftKey)) {
@@ -6300,12 +6823,22 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'e') {
                             event.preventDefault();
-                            setEdgesVisible((current) => !current);
+                            setEdgesVisibleGlobal((current) => !current);
                             return;
                         }
-                        if (key === 'h') {
+                        if (key === 'c' && event.shiftKey) {
                             event.preventDefault();
-                            setHoverCardMode(nextTasksHoverCardMode);
+                            setGroupHoverCardsEnabledGlobal((current) => !current);
+                            return;
+                        }
+                        if (key === 'c') {
+                            event.preventDefault();
+                            setHoverCardModeGlobal(nextTasksHoverCardMode);
+                            return;
+                        }
+                        if (key === 'v') {
+                            event.preventDefault();
+                            setHoverCardScrollModeGlobal((current) => !current);
                             return;
                         }
                         if (key === 't') {
@@ -6383,29 +6916,36 @@ async function renderTasksGraphs(rootElement = document) {
                             panViewport(reactFlow, -120 * (event.shiftKey ? 2 : 1), 0);
                             return;
                         }
+                        // Vim keys: H/J/K/L pan, and because J/K are the vertical pair,
+                        // Shift turns them into zoom in / zoom out. Direction 1 is down
+                        // like the document scroll, which makes Shift+J the zoom in.
+                        if (key === 'j' || key === 'k') {
+                            event.preventDefault();
+                            const direction = key === 'j' ? 1 : -1;
+                            if (event.shiftKey) zoomMomentum.start(direction);
+                            else panYMomentum.start(direction);
+                            return;
+                        }
+                        if (key === 'h' || key === 'l') {
+                            event.preventDefault();
+                            panXMomentum.start(key === 'l' ? 1 : -1);
+                            return;
+                        }
                     };
-                    document.addEventListener('keydown', onKeyDown);
-                    return () => document.removeEventListener('keydown', onKeyDown);
-                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, setFiltersCollapsedGuarded, fitCurrentHighlight]);
+                    document.addEventListener('keydown', onKeyDown, true);
+                    document.addEventListener('keyup', onKeyUp, true);
+                    window.addEventListener('blur', stopMomentum);
+                    return () => {
+                        document.removeEventListener('keydown', onKeyDown, true);
+                        document.removeEventListener('keyup', onKeyUp, true);
+                        window.removeEventListener('blur', stopMomentum);
+                        stopMomentum();
+                    };
+                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, panViewport, graphMinZoom]);
                 return null;
             };
-            const PanControls = () => {
-                const reactFlow = rf.useReactFlow();
-                const btn = { width: '32px', height: '32px', borderRadius: '8px', border: '1px solid color-mix(in srgb, currentColor 35%, transparent)', background: 'var(--vyasa-paper, #fff)', color: 'currentColor', fontSize: '16px', lineHeight: 1, cursor: 'pointer' };
-                return React.createElement('div', { style: { position: 'absolute', right: '12px', bottom: '12px', display: 'grid', gridTemplateColumns: '32px 32px 32px', gap: '4px', zIndex: 20 } },
-                    React.createElement('span'),
-                    React.createElement('button', { type: 'button', onClick: () => panViewport(reactFlow, 0, 180), style: btn }, '↑'),
-                    React.createElement('span'),
-                    React.createElement('button', { type: 'button', onClick: () => panViewport(reactFlow, 180, 0), style: btn }, '←'),
-                    React.createElement('button', { type: 'button', onClick: () => fitCurrentHighlight(reactFlow, { reason: 'pan-home' }), style: btn }, '⌂'),
-                    React.createElement('button', { type: 'button', onClick: () => panViewport(reactFlow, -180, 0), style: btn }, '→'),
-                    React.createElement('span'),
-                    React.createElement('button', { type: 'button', onClick: () => panViewport(reactFlow, 0, -180), style: btn }, '↓'),
-                    React.createElement('span')
-                );
-            };
-            const SelectedNodePanel = () => {
-                const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === selectedNodeId)?.data || null;
+            const SelectedNodePanel = (panelGraphNodeId = selectedNodeId, readOnly = false, hoverCard = null) => {
+                const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === panelGraphNodeId)?.data || null;
                 const sourceNodeId = selectedNode?.__kind__ === 'groupTitle'
                     ? selectedNode.sourceGroupId
                     : tasksLogicalNodeId(selectedNode, selectedNode?.id);
@@ -6416,7 +6956,6 @@ async function renderTasksGraphs(rootElement = document) {
                 const panelNodeId = sourceNodeId || selectedNode.id || '';
                 const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
                 const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;
-                const panelWidth = tasksDetailPanelWidth({ title: selectedNode.label || selectedNode.id, nodeId: panelNodeId, entries });
                 const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));
                 const panelHref = String(selectedNode?.href || '').trim();
                 const copyPanelTitle = async (event) => {
@@ -6425,8 +6964,13 @@ async function renderTasksGraphs(rootElement = document) {
                     await copyTasksText(selectedNode.label || selectedNode.id);
                 };
                 return React.createElement('div', {
-                    style: { width: `min(${panelWidth}px, 100%)`, maxWidth: '100%', minWidth: 'min(220px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto', minHeight: 0, flex: '0 1 auto', overflowY: 'auto', overscrollBehavior: 'contain' },
-                },
+                    'data-vyasa-node-card': 'true',
+                    style: { width: `min(${nodeCardWidth}, 100%)`, maxWidth: '100%', minWidth: 'min(220px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', pointerEvents: 'auto', minHeight: 0, maxHeight: '100%', flex: '0 1 auto', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+                }, React.createElement('div', {
+                    ref: hoverCard ? hoverCardScrollRef : detailCardScrollRef,
+                    className: hoverCardScrollMode ? 'vyasa-tasks-hover-card--scroll' : undefined,
+                    style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '12px' },
+                }, React.createElement('div', { className: 'vyasa-tasks-card-scroll-body' },
                     React.createElement('div', { style: { position: 'relative', paddingRight: panelLinkKinds.length ? '56px' : '28px', marginBottom: '10px' } },
                         panelLinkKinds.length ? renderTasksNodeLinkBadge(React, { kinds: panelLinkKinds, right: '0', top: '0' }) : null,
                         React.createElement('button', {
@@ -6462,27 +7006,27 @@ async function renderTasksGraphs(rootElement = document) {
                             style: { display: 'inline-block', marginTop: '6px', fontSize: '12px', lineHeight: 1.3, textDecoration: 'underline', textUnderlineOffset: '2px', color: 'inherit', overflowWrap: 'anywhere', wordBreak: 'break-word' },
                         }, panelHref) : null,
                     ),
-                    renderTasksDetailEntries(React, entries, { copyValues: true, currentPath: sourceModel?.document_path || '' }),
-                    React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: '12px', lineHeight: 1.35 } },
+                    renderTasksDetailEntries(React, entries, { copyValues: true, currentPath: sourceModel?.document_path || '' })
+                )), React.createElement('div', {
+                    'data-vyasa-node-card-notes': 'true',
+                    style: { flex: '0 0 auto', padding: '12px', borderTop: '1px dashed color-mix(in srgb, currentColor 18%, transparent)', background: 'color-mix(in srgb, var(--vyasa-primary) 8%, var(--vyasa-paper) 92%)', fontSize: '12px', lineHeight: 1.35 },
+                },
                         React.createElement('label', {
                             style: {
                                 display: 'flex',
                                 flexDirection: 'column',
                                 gap: '6px',
-                                paddingTop: entries.length ? '10px' : '0',
-                                marginTop: entries.length ? '10px' : '0',
-                                borderTop: entries.length ? '1px dashed color-mix(in srgb, currentColor 18%, transparent)' : 'none',
                             },
                         },
                             React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
                                 React.createElement('span', { style: { fontWeight: 700, opacity: 0.7, flex: '1 1 auto' } }, 'Notes'),
-                                clearedNote ? React.createElement('button', {
+                                !readOnly && clearedNote ? React.createElement('button', {
                                     type: 'button',
                                     'data-vyasa-task-control': 'true',
                                     onClick: (e) => { e.preventDefault(); setNoteInputValue(clearedNote); updateNodeNote(panelNodeId, clearedNote); setClearedNote(null); window.clearTimeout(clearedNoteTimerRef.current); },
                                     style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--vyasa-primary)', fontWeight: 600, padding: '0', lineHeight: 1, opacity: 0.85 },
                                 }, 'Undo') : null,
-                                noteInputValue.trim() ? React.createElement('button', {
+                                !readOnly && noteInputValue.trim() ? React.createElement('button', {
                                     type: 'button',
                                     title: 'Clear note',
                                     'aria-label': 'Clear note',
@@ -6492,13 +7036,71 @@ async function renderTasksGraphs(rootElement = document) {
                                 }, '×') : null,
                             ),
                             renderTasksNoteTextarea(React, {
-                                ref: noteTextareaRef,
-                                value: noteInputValue,
-                                onChange: (event) => setNoteInputValue(event.target.value),
+                                ref: readOnly ? undefined : noteTextareaRef,
+                                value: readOnly ? nodeNotes[panelNodeId] : noteInputValue,
+                                readOnly,
+                                onChange: readOnly ? undefined : (event) => setNoteInputValue(event.target.value),
                             })
                         )
-                    )
-                );
+                ));
+            };
+            const SelectedEdgePanel = () => {
+                if (!edgeCardOpen) return null;
+                if (edgeCardError) return React.createElement('div', {
+                    role: 'alert',
+                    'data-vyasa-edge-card': 'error',
+                    style: { width: `min(${nodeCardWidth}, 100%)`, marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, #dc2626 45%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, #dc2626 8%)', padding: '12px', pointerEvents: 'auto', fontSize: '12px', lineHeight: 1.45 },
+                }, edgeCardError);
+                if (!selectedEdgeRecord) return null;
+                const sourceLabel = edgeNodeLabels[selectedEdgeRecord.source] || selectedEdgeRecord.source || '';
+                const targetLabel = edgeNodeLabels[selectedEdgeRecord.target] || selectedEdgeRecord.target || '';
+                const relation = selectedEdgeRecord.relation || selectedEdgeRecord.label || '';
+                const entries = tasksEdgeMetaEntries(selectedEdgeRecord);
+                const fitConnection = () => {
+                    fitSelectedEdgeConnection(reactFlowApiRef.current);
+                };
+                return React.createElement('div', {
+                    ref: detailCardScrollRef,
+                    className: hoverCardScrollMode ? 'vyasa-tasks-hover-card--scroll' : undefined,
+                    'data-vyasa-edge-card': selectedEdgeRecord.id,
+                    style: { width: `min(${nodeCardWidth}, 100%)`, maxWidth: '100%', minWidth: 'min(260px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '2px solid color-mix(in srgb, var(--vyasa-primary) 76%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12), 0 0 18px color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto', minHeight: 0, maxHeight: '100%', overflowY: 'auto', overscrollBehavior: 'contain' },
+                }, React.createElement('div', { className: 'vyasa-tasks-card-scroll-body' },
+                    React.createElement('div', { style: { display: 'flex', alignItems: 'start', gap: '10px', marginBottom: '10px' } },
+                        React.createElement('div', { style: { flex: '1 1 auto', minWidth: 0 } },
+                            React.createElement('div', { style: { display: 'grid', gap: '2px', fontSize: '14px', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' } },
+                                React.createElement('div', null, sourceLabel),
+                                React.createElement('div', { style: { fontSize: '12px', fontWeight: 600, fontStyle: 'italic', opacity: 0.7 } }, `${relation}${relation ? ' ' : ''}↓`),
+                                React.createElement('div', null, targetLabel)
+                            ),
+                            React.createElement('div', { style: { marginTop: '4px', fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', opacity: 0.7, overflowWrap: 'anywhere' } }, selectedEdgeRecord.id),
+                            sourceModel?.kg_context?.label ? React.createElement('div', { style: { marginTop: '3px', fontSize: '12px', lineHeight: 1.3, opacity: 0.62 } }, sourceModel.kg_context.label) : null
+                        ),
+                        React.createElement('button', {
+                            type: 'button', title: 'Close edge details', 'aria-label': 'Close edge details',
+                            onClick: () => {
+                                selectedEdgeIdRef.current = null;
+                                optionEdgeNodeIdRef.current = '';
+                                setSelectedEdgeId(null);
+                                setSelectedEdgeRecord(null);
+                                setEdgeCardOpen(false);
+                                setEdgeCardField('');
+                                setEdgeStatus('Edge details closed.');
+                            },
+                            style: { border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: 0, opacity: 0.62 },
+                        }, '×')
+                    ),
+                    React.createElement('button', {
+                        type: 'button', onClick: fitConnection,
+                        style: { marginBottom: entries.length ? '12px' : 0, border: '1px solid color-mix(in srgb, currentColor 24%, transparent)', borderRadius: '8px', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', color: 'inherit', cursor: 'pointer', padding: '6px 9px', fontSize: '12px', lineHeight: 1.35, fontWeight: 700 },
+                    }, 'Fit connection'),
+                    renderTasksDetailEntries(React, entries, { copyValues: true, edgeFields: true, currentPath: sourceModel?.document_path || '' }),
+                    renderTasksCardNoteEditor(React, {
+                        ref: edgeNoteTextareaRef,
+                        value: edgeNotes[selectedEdgeRecord.id] || '', separated: entries.length > 0,
+                        ariaLabel: `Notes for edge ${selectedEdgeRecord.id}`,
+                        onChange: (event) => updateEdgeNote(selectedEdgeRecord.id, event.target.value),
+                    })
+                ));
             };
             const FilterPanel = () => {
                 if (egoMode || slideIndex >= 0) return null;
@@ -7491,8 +8093,16 @@ async function renderTasksGraphs(rootElement = document) {
                 });
                 selectedNodeIdRef.current = null;
                 selectedNodeIdsRef.current = new Set();
+                selectedEdgeIdRef.current = null;
+                edgeCycleNodeIdRef.current = '';
+                optionEdgeNodeIdRef.current = '';
                 setSelectedNodeId(null);
                 setSelectedNodeIds(new Set());
+                setSelectedEdgeId(null);
+                setSelectedEdgeRecord(null);
+                setEdgeCardOpen(false);
+                setEdgeCardField('');
+                setEdgeCardError('');
                 setDragSelection(null);
                 setHoveredNodeId(null);
             };
@@ -7503,6 +8113,27 @@ async function renderTasksGraphs(rootElement = document) {
                 groupHoverTooltipRef.current = null;
                 setGroupHoverTooltip(null);
             }, []);
+            const selectNodeCard = React.useCallback((sourceNodeId, nodeId, kind, focusNotes = false) => {
+                logTasksDebug('selectionSetNode', {
+                    widgetId,
+                    sourceNodeId,
+                    nodeId,
+                    kind,
+                    ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeIdRef.current),
+                });
+                markWidgetActive();
+                selectedEdgeIdRef.current = null;
+                optionEdgeNodeIdRef.current = '';
+                setSelectedEdgeId(null);
+                setSelectedEdgeRecord(null);
+                setEdgeCardOpen(false);
+                selectedNodeIdRef.current = sourceNodeId;
+                selectedNodeIdsRef.current = new Set();
+                if (focusNotes) pendingNodeNoteFocusRef.current = sourceNodeId;
+                setSelectedNodeId(sourceNodeId);
+                setSelectedNodeIds(new Set());
+                setHoveredNodeId(null);
+            }, [markWidgetActive, widgetId]);
             const dismissStickyHoverCard = React.useCallback((stickyId, reason) => {
                 setStickyGroupHoverTooltips((cards) => {
                     const dismissed = cards.find((card) => card.stickyId === stickyId);
@@ -7526,8 +8157,6 @@ async function renderTasksGraphs(rootElement = document) {
                 logTasksDebug('hoverCardStickyClearAll', { widgetId, count: cards.length, reason });
             }, [widgetId]);
             React.useEffect(() => {
-                let armed = '';
-                const keyFor = (card) => card ? `${card.nodeId || ''}\u0000${card.label || ''}` : '';
                 const onKeyDown = (event) => {
                     const target = event.target instanceof Element ? event.target : null;
                     const wrapper = flowWrapperRef.current;
@@ -7541,40 +8170,19 @@ async function renderTasksGraphs(rootElement = document) {
                         else dismissLatestStickyHoverCard('shortcut-x');
                         return;
                     }
-                    if (event.key === 'Control' && !event.repeat && !event.metaKey && !event.altKey && !event.shiftKey) {
-                        const current = groupHoverTooltipRef.current;
-                        armed = keyFor(current);
-                    } else if (event.key !== 'Control') armed = '';
-                };
-                const onKeyUp = (event) => {
-                    if (event.key !== 'Control' || !armed) return;
                     const current = groupHoverTooltipRef.current;
-                    if (!current || keyFor(current) !== armed) return;
-                    const sticky = {
-                        ...current,
-                        sticky: true,
-                        stickyId: ++stickyGroupHoverTooltipIdRef.current,
-                        placement: 'canvas',
-                    };
-                    armed = '';
-                    setStickyGroupHoverTooltips((cards) => {
-                        const next = [...cards, sticky];
-                        stickyGroupHoverTooltipsRef.current = next;
-                        return next;
-                    });
+                    if (key !== 'enter' || !current || editable || event.repeat || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    selectNodeCard(current.nodeId, current.nodeId, current.group ? 'group' : 'task', true);
                     clearGroupHoverTooltip();
-                    logTasksDebug('hoverCardStickySet', { widgetId, nodeId: sticky.nodeId || '' });
+                    logTasksDebug('hoverCardStickySet', { widgetId, nodeId: current.nodeId || '', reason: 'enter' });
                 };
-                const disarm = () => { armed = ''; };
                 document.addEventListener('keydown', onKeyDown, true);
-                document.addEventListener('keyup', onKeyUp);
-                window.addEventListener('blur', disarm);
                 return () => {
                     document.removeEventListener('keydown', onKeyDown, true);
-                    document.removeEventListener('keyup', onKeyUp);
-                    window.removeEventListener('blur', disarm);
                 };
-            }, [clearGroupHoverTooltip, dismissAllStickyHoverCards, dismissLatestStickyHoverCard, widgetId]);
+            }, [clearGroupHoverTooltip, dismissAllStickyHoverCards, dismissLatestStickyHoverCard, selectNodeCard, widgetId]);
             const hoverTraceKeyRef = React.useRef('');
             const logHoverCycle = React.useCallback((label, payload = {}) => {
                 logTasksDebug(label, payload);
@@ -7589,16 +8197,23 @@ async function renderTasksGraphs(rootElement = document) {
                 clearGroupHoverTooltip();
                 setHoveredNodeId(null);
             }, [clearGroupHoverTooltip, logHoverCycle]);
-            const activeHoverAttrs = React.useMemo(
-                () => tasksActiveHoverAttrs(viewerState.model, activeProjectionId),
-                [viewerState.model, activeProjectionId]
-            );
             const updateGroupHoverTooltip = React.useCallback((event) => {
                 const reactFlow = reactFlowApiRef.current;
                 const wrapper = flowWrapperRef.current;
                 const graphBase = graphBaseRef.current || {};
                 const target = event.target instanceof Element ? event.target : null;
                 const domNode = target?.closest?.('.react-flow__node') || null;
+                if (target?.closest?.('[data-vyasa-node-card], [data-vyasa-edge-card]')) {
+                    delete wrapper?.dataset.vyasaReviewPointerTarget;
+                    clearGraphHoverState('detail-card');
+                    return;
+                }
+                if (optionEdgePreviewHeldRef.current) {
+                    const match = edgeForOptionPointer(event);
+                    if (match) previewOptionEdge(match.edge, match.nodeId);
+                    return;
+                }
+                if (optionEdgeNodeIdRef.current) clearOptionEdgePreview();
                 const traceHoverHit = (stage, extra = {}) => {
                     const key = [
                         stage,
@@ -7668,14 +8283,9 @@ async function renderTasksGraphs(rootElement = document) {
                     traceHoverHit('blocked', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
-                const directRows = tasksHoverAttrRows(nodeData, activeHoverAttrs);
-                const rows = hoverGroupId
-                    ? tasksGroupHoverAttrRows(directRows, tasksGroupDetailEntries(hoverGroupId, model), activeHoverAttrs)
-                    : directRows;
                 const label = nodeData.label || hit.node.id;
                 const nodeId = nodeData.__kind__ === 'groupTitle' ? (nodeData.sourceGroupId || hit.node.id) : hit.node.id;
-                const image = normalizeTasksNodeImageUrl(nodeData.__node_image__);
-                if (!label && !rows.length) {
+                if (!label) {
                     clearGroupHoverTooltip();
                     traceHoverHit('empty', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
@@ -7702,24 +8312,23 @@ async function renderTasksGraphs(rootElement = document) {
                     traceHoverHit('sticky', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
-                const hoverAnchor = reactFlow.screenToFlowPosition({ x: event.clientX + 12, y: event.clientY + 18 });
+                if (hoverGroupId && !groupHoverCardsEnabled) {
+                    clearGroupHoverTooltip();
+                    traceHoverHit('group-card-disabled', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
+                    return;
+                }
                 const hoverCard = {
                     label,
                     nodeId,
-                    image,
-                    rows,
-                    flowX: hoverAnchor.x,
-                    flowY: hoverAnchor.y,
+                    group: Boolean(hoverGroupId),
                     x: event.clientX - bounds.left + 12,
                     y: event.clientY - bounds.top + 18,
+                    placement: 'rightRail',
                 };
-                const nextHoverCard = hoverCardRightRail
-                    ? { ...hoverCard, placement: 'rightRail' }
-                    : { ...hoverCard, placement: 'cursor' };
-                groupHoverTooltipRef.current = nextHoverCard;
-                setGroupHoverTooltip(nextHoverCard);
+                groupHoverTooltipRef.current = hoverCard;
+                setGroupHoverTooltip(hoverCard);
                 traceHoverHit('hit', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx, groupHoverChanged });
-            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, egoMode, hoverInactiveNodes, hoverCardRightRail, hoveredNodeId, logHoverCycle, selectedNodeId]);
+            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, clearOptionEdgePreview, edgeForOptionPointer, previewOptionEdge, nodes, widgetId, model, egoMode, hoverInactiveNodes, groupHoverCardsEnabled, hoveredNodeId, logHoverCycle, selectedNodeId]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -7783,20 +8392,8 @@ async function renderTasksGraphs(rootElement = document) {
                     }, 220);
                     return;
                 }
-                logTasksDebug('selectionSetNode', {
-                    widgetId,
-                    sourceNodeId,
-                    nodeId: node.id,
-                    kind: node.data?.__kind__ || '',
-                    ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeId),
-                });
-                markWidgetActive();
-                selectedNodeIdRef.current = sourceNodeId;
-                selectedNodeIdsRef.current = new Set();
-                setSelectedNodeId(sourceNodeId);
-                setSelectedNodeIds(new Set());
-                setHoveredNodeId(null);
-            }, [expanded, selectGroupDescendants]);
+                selectNodeCard(sourceNodeId, node.id, node.data?.__kind__ || '');
+            }, [expanded, selectGroupDescendants, selectNodeCard]);
             const doubleClickGraphNode = React.useCallback((event, node) => {
                 if (!selectGroupDescendants(node)) return;
                 if (pendingNodeClickToggleTimerRef.current) {
@@ -8035,16 +8632,17 @@ async function renderTasksGraphs(rootElement = document) {
                         toggleFilters: () => setFiltersCollapsedGuarded((current) => !current, 'action-toggle-filters'),
                         openFilters: () => setFiltersCollapsedGuarded(false, 'action-open-filters'),
                         closeFilters: () => setFiltersCollapsedGuarded(true, 'action-close-filters'),
-                        toggleHoverCards: () => setHoverCardMode((current) => (
+                        toggleHoverCards: () => setHoverCardModeGlobal((current) => (
                             current === 'off' ? clampTasksHoverCardMode(lastHoverCardPlacementRef.current) : 'off'
                         )),
-                        toggleEdges: () => setEdgesVisible((current) => !current),
+                        toggleEdges: () => setEdgesVisibleGlobal((current) => !current),
+                        toggleCardScroll: () => setHoverCardScrollModeGlobal((current) => !current),
                         toggleHelp: () => setHelpOpen((current) => !current),
                     };
                     return () => {
                         delete window.__vyasaTasksActions[widgetId];
                     };
-                }, [reactFlow, currentSelectionIds, baseProjectionState.model, baseRawGraph, expanded, egoMode, egoState, activeColorBy, closeEgo, fitCurrentHighlight]);
+                }, [reactFlow, currentSelectionIds, baseProjectionState.model, baseRawGraph, expanded, egoMode, egoState, activeColorBy, closeEgo, fitCurrentHighlight, setHoverCardScrollModeGlobal]);
                 return null;
             };
             const RestoreEgoViewport = () => {
@@ -8130,7 +8728,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }));
             };
             const flowWrapperClassName = [
-                hoveredNodeId ? 'vyasa-tasks-hovering-edge-labels' : '',
+                hoveredNodeId || selectedEdgeId ? 'vyasa-tasks-hovering-edge-labels' : '',
                 'vyasa-tasks-active-pulse',
             ].filter(Boolean).join(' ');
             const buildProjectionConfigText = (projection) => {
@@ -8166,8 +8764,8 @@ async function renderTasksGraphs(rootElement = document) {
                 }, sourceModel?.kg_context?.id);
             };
             const RightRail = () => {
-                if (!selectedNodeId) return null;
-                if (hoverCardsEnabled && hoverCardRightRail && groupHoverTooltip?.placement === 'rightRail') return null;
+                if (!selectedNodeId && !optionEdgeNodeCardId && !(edgeCardOpen && (selectedEdgeRecord || edgeCardError))) return null;
+                if (hoverCardsEnabled && groupHoverTooltip && (groupHoverCardsEnabled || !groupHoverTooltip.group)) return null;
                 return window.React.createElement('div', {
                     style: {
                         position: 'absolute',
@@ -8184,9 +8782,17 @@ async function renderTasksGraphs(rootElement = document) {
                         minHeight: 0,
                     },
                 },
-                    SelectedNodePanel()
+                    optionEdgeNodeCardId
+                        ? SelectedNodePanel(optionEdgeNodeCardId, true)
+                        : (edgeCardOpen && (selectedEdgeRecord || edgeCardError) ? SelectedEdgePanel() : SelectedNodePanel())
                 );
             };
+            const EdgeLiveStatus = () => window.React.createElement('div', {
+                role: 'status',
+                'aria-live': 'polite',
+                'aria-atomic': 'true',
+                style: { position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 },
+            }, edgeStatus);
             const EgoCloseControl = () => {
                 const previous = egoReturnRef.current;
                 if (!egoMode || !previous || previous.inline) return null;
@@ -8216,6 +8822,8 @@ async function renderTasksGraphs(rootElement = document) {
                 card,
                 noteValue = '',
                 onNoteChange,
+                scrollRef,
+                scrollMode = false,
                 stickyIndex = -1,
                 inViewportPortal = false,
             }) {
@@ -8304,13 +8912,15 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement('span', { style: { fontSize: '12px', fontWeight: 700, opacity: 0.7 } }, 'Notes'),
                     renderTasksNoteTextarea(window.React, {
                         value: noteValue,
+                        autoFocus: card.focusNotes === true,
                         readOnly: !card.sticky,
                         ariaLabel: `Notes for ${card.label || card.nodeId}`,
                         onChange: card.sticky ? (event) => onNoteChange?.(event.target.value) : undefined,
                     })
                 ));
                 return window.React.createElement('div', {
-                    ref: tooltipRef,
+                    ref: (node) => { tooltipRef.current = node; if (scrollRef) scrollRef.current = node; },
+                    className: scrollMode ? 'vyasa-tasks-hover-card--scroll' : undefined,
                     'data-vyasa-hover-card-sticky': card.sticky ? 'true' : undefined,
                     style: {
                         position: rightRailPlacement ? 'relative' : 'absolute',
@@ -8336,11 +8946,13 @@ async function renderTasksGraphs(rootElement = document) {
                         backdropFilter: 'blur(8px)',
                         padding: '12px',
                     },
-                }, ...children);
+                }, window.React.createElement('div', { className: 'vyasa-tasks-card-scroll-body' }, ...children));
             }, [dismissStickyHoverCard, hoverFontSize, rf, sourceModel]);
             const GroupHoverTooltip = () => {
                 if (!hoverCardsEnabled) return null;
-                const stickyCards = stickyGroupHoverTooltips.map((card, index) => window.React.createElement(GroupHoverTooltipCard, {
+                const stickyCards = stickyGroupHoverTooltips
+                    .filter((card) => groupHoverCardsEnabled || !card.group)
+                    .map((card, index) => window.React.createElement(GroupHoverTooltipCard, {
                     key: card.stickyId,
                     card,
                     noteValue: nodeNotes[card.nodeId] || '',
@@ -8351,25 +8963,12 @@ async function renderTasksGraphs(rootElement = document) {
                 const stickyLayer = rf.ViewportPortal
                     ? window.React.createElement(rf.ViewportPortal, null, ...stickyCards)
                     : window.React.createElement(window.React.Fragment, null, ...stickyCards);
-                const transientCard = groupHoverTooltip ? window.React.createElement(GroupHoverTooltipCard, {
-                    key: '__transient__',
-                    card: groupHoverTooltip,
-                    noteValue: nodeNotes[groupHoverTooltip.nodeId] || '',
-                }) : null;
-                const transientLayer = hoverCardRightRail ? window.React.createElement('div', {
-                    style: {
-                        position: 'absolute',
-                        inset: '12px 12px 12px auto',
-                        zIndex: 2400,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-end',
-                        gap: '10px',
-                        maxWidth: 'calc(100% - 24px)',
-                        overflowY: 'auto',
-                        pointerEvents: 'none',
-                    },
-                }, transientCard) : transientCard;
+                const transientCard = groupHoverTooltip && (groupHoverCardsEnabled || !groupHoverTooltip.group)
+                    ? SelectedNodePanel(groupHoverTooltip.nodeId, true, groupHoverTooltip)
+                    : null;
+                const transientLayer = transientCard ? window.React.createElement('div', {
+                    style: { position: 'absolute', inset: '12px 12px 12px auto', zIndex: 2400, width: nodeCardWidth, maxWidth: 'calc(100% - 24px)', display: 'flex', flexDirection: 'column', pointerEvents: 'none', minHeight: 0 },
+                }, transientCard) : null;
                 return window.React.createElement(window.React.Fragment, null, stickyLayer, transientLayer);
             };
             const HelpPopup = () => {
@@ -8395,6 +8994,7 @@ async function renderTasksGraphs(rootElement = document) {
                     sep(),
                     heading('Mouse'),
                     row('Click node', 'select card or group'),
+                    row('Click edge', 'open edge details'),
                     row('Click canvas', 'clear selection'),
                     row('Shift + drag', 'box select'),
                     row('Cmd + drag', 'lasso select'),
@@ -8404,19 +9004,29 @@ async function renderTasksGraphs(rootElement = document) {
                     sep(),
                     heading('Keys'),
                     row('?', 'toggle this help'),
-                    row('F', 'fit view'),
+                    row('[ / ]', 'select previous / next visible edge'),
+                    row('Enter', 'pin hovered node and focus Notes / open selected edge'),
+                    row('F', 'fit view or active edge'),
+                    row('Option + F', 'fit highlighted edge'),
+                    row('W / Q', 'hold edge preview / opposite node card'),
+                    row('W + Enter', 'pin edge details'),
                     row('Shift + F', 'toggle fullscreen'),
                     row('G', 'open EG+ for hovered or selected node'),
                     row('Shift + G', 'open EG for hovered or selected node'),
                     row('S', 'toggle filters'),
                     row('E', 'toggle edges'),
-                    row('H', 'hover cards: off, at cursor, right rail'),
+                    row('C', 'hover cards: off / right side'),
+                    row('V', 'toggle hover card scroll mode'),
+                    row('Shift + C', 'toggle group hover cards'),
                     row('T', 'toggle hovered group'),
                     row('I / O', 'expand / collapse one depth'),
                     row('U / P', 'unfold / collapse all'),
                     row('Option + ↑ / ↓', 'zoom in / out'),
                     row('Arrows', 'pan'),
-                    row('Shift + arrows', 'pan faster')
+                    row('Shift + arrows', 'pan faster'),
+                    row('H / J / K / L', 'pan left / down / up / right'),
+                    row('Shift + J / K', 'zoom in / out'),
+                    row('Hold H J K L', 'keep moving, coast on release')
                 ));
             };
             const SlideLauncher = () => {
@@ -8567,6 +9177,17 @@ async function renderTasksGraphs(rootElement = document) {
                 onPointerDownCapture: startDragSelection,
                 onPointerMove: updateGroupHoverTooltip,
                 onWheelCapture: (event) => {
+                    const scrollCard = hoverCardScrollRef.current || detailCardScrollRef.current;
+                    const maxScrollTop = scrollCard ? Math.max(0, scrollCard.scrollHeight - scrollCard.clientHeight) : 0;
+                    if (hoverCardScrollMode && scrollCard && maxScrollTop > 0) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const nextScrollTop = Math.max(0, Math.min(maxScrollTop, scrollCard.scrollTop + event.deltaY));
+                        const unusedDelta = event.deltaY - (nextScrollTop - scrollCard.scrollTop);
+                        scrollCard.scrollTop = nextScrollTop;
+                        applyTasksCardOverscroll(scrollCard, unusedDelta);
+                        return;
+                    }
                     if (!window.__vyasaTasksPerf.enabled) return;
                     markTasksFrameProbe(widgetId, flowWrapperRef.current, model, graphBaseRef.current, 'wheel', currentPerfViewState());
                     traceTasksInteractionFrame('wheel', {
@@ -8581,6 +9202,7 @@ async function renderTasksGraphs(rootElement = document) {
                 onPointerCancelCapture: finishDragSelection,
                 onPointerLeave: (event) => {
                     finishDragSelection(event);
+                    clearOptionEdgePreview();
                     if (flowWrapperRef.current) delete flowWrapperRef.current.dataset.vyasaReviewPointerTarget;
                     clearGraphHoverState('wrapper-pointer-leave');
                 },
@@ -8602,13 +9224,12 @@ async function renderTasksGraphs(rootElement = document) {
             return rf.ReactFlowProvider ? window.React.createElement(rf.ReactFlowProvider, null,
                 window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
                     filterPanelElement,
+                    window.React.createElement(EdgeLiveStatus),
                     SlideShow(),
                     window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onEdgeClick: selectGraphEdge, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(TasksNodeHighlightBorders),
-                    window.React.createElement(rf.Controls),
-                    window.React.createElement(PanControls),
                     window.React.createElement(EgoCloseControl),
                     window.React.createElement(SlideLauncher),
                     window.React.createElement(FitViewHotkey),
@@ -8623,12 +9244,11 @@ async function renderTasksGraphs(rootElement = document) {
                 ))
             ) : window.React.createElement('div', { onPointerDownCapture: markWidgetActive, onFocusCapture: markWidgetActive, style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'stretch', position: 'relative' } },
                 filterPanelElement,
+                window.React.createElement(EdgeLiveStatus),
                 window.React.createElement('div', { ref: flowWrapperRef, 'data-tasks-canvas': 'true', 'data-vyasa-review-surface': 'knowledge-graph', className: flowWrapperClassName, tabIndex: 0, style: flowWrapperStyle, ...flowPointerHandlers },
-                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
+                    window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onEdgeClick: selectGraphEdge, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                         window.React.createElement(TasksNodeHighlightBorders),
-                        window.React.createElement(rf.Controls),
-                        window.React.createElement(PanControls),
                     window.React.createElement(EgoCloseControl),
                     window.React.createElement(SlideLauncher),
                         window.React.createElement(FitViewHotkey),

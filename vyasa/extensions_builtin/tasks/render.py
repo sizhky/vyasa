@@ -20,6 +20,7 @@ _RENDERABLE_NODE_KEYS = {
     "card_state", "__checked__", "__card_state__", "__card_state_color__", "__has_note__",
     "__rendered_attrs__",
 }
+_RENDERABLE_EDGE_KEYS = _RENDERABLE_NODE_KEYS | {"source", "target", "relation"}
 
 
 _MARKDOWN_BLOCK_LINE_RE = re.compile(
@@ -58,21 +59,24 @@ def _prepare_node_attr_markdown(value) -> str:
 
 
 def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
-    for bucket in ("groups", "tasks"):
+    for bucket in ("groups", "tasks", "dependency_edges"):
+        reserved = _RENDERABLE_EDGE_KEYS if bucket == "dependency_edges" else _RENDERABLE_NODE_KEYS
         for node in model.get(bucket, []):
             rendered_attrs = {}
             for key, value in node.items():
                 lowered = str(key).lower()
-                if lowered in _RENDERABLE_NODE_KEYS:
+                if lowered in reserved:
                     continue
                 if value is None or value == "":
                     continue
-                if not isinstance(value, (str, int, float, bool)):
+                values = value if isinstance(value, list) else [value]
+                if not all(isinstance(item, (str, int, float, bool)) for item in values):
                     continue
-                rendered_attrs[key] = _render_markdown_fragment(
-                    _prepare_node_attr_markdown(value),
-                    current_path=current_path,
-                )
+                rendered = [
+                    _render_markdown_fragment(_prepare_node_attr_markdown(item), current_path=current_path)
+                    for item in values
+                ]
+                rendered_attrs[key] = rendered if isinstance(value, list) else rendered[0]
             if rendered_attrs:
                 node["__rendered_attrs__"] = rendered_attrs
     for entry in (model.get("projection_models") or {}).values():
@@ -270,6 +274,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         f'<button type="button" title="Unfold all groups" onclick="runTasksHeaderAction(\'{widget_id}\', \'expand\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">U</button>'
         f'<button type="button" title="Collapse all groups" onclick="runTasksHeaderAction(\'{widget_id}\', \'collapse\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">P</button>'
         f'<button type="button" title="Toggle hover cards" data-vyasa-tasks-widget-id="{widget_id}" data-vyasa-tasks-action="toggleHoverCards" onclick="runTasksHeaderAction(\'{widget_id}\', \'toggleHoverCards\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">H</button>'
+        f'<button type="button" title="Toggle card scroll mode (V)" data-vyasa-tasks-widget-id="{widget_id}" data-vyasa-tasks-action="toggleCardScroll" onclick="runTasksHeaderAction(\'{widget_id}\', \'toggleCardScroll\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">V</button>'
         f'<button type="button" title="Toggle edges" data-vyasa-tasks-widget-id="{widget_id}" data-vyasa-tasks-action="toggleEdges" onclick="runTasksHeaderAction(\'{widget_id}\', \'toggleEdges\')" class="rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-1.5 py-0.5 font-mono text-[10px] leading-none text-slate-700 dark:text-slate-300">E</button>'
         f'</div>'
         f'</div>'

@@ -11,6 +11,69 @@ export function shortcutsSuspended() {
     return shortcutOwners.size > 0;
 }
 
+// The held-key motion model behind J/K document scroll: hold to accelerate to a
+// ceiling, release to coast out under friction. Shared so graph pan and zoom feel
+// like the page scroll instead of growing a second set of numbers.
+export const MOMENTUM_DEFAULTS = {
+    initialSpeed: 0.24,
+    maxSpeed: 1.4,
+    acceleration: 0.0025,
+    friction: 0.012,
+    minSpeed: 0.02,
+    restartFactor: 0.35,
+};
+
+// step(distance) moves the thing and returns false when it cannot move further,
+// which ends the coast. stepStatic(direction) is the reduced-motion single hop.
+export function createMomentumRunner({ step, stepStatic, onStop, ...overrides } = {}) {
+    const config = { ...MOMENTUM_DEFAULTS, ...overrides };
+    let frame = null;
+    let direction = 0;
+    let velocity = 0;
+    let lastTime = null;
+
+    function stop() {
+        if (frame !== null) window.cancelAnimationFrame(frame);
+        frame = null;
+        direction = 0;
+        velocity = 0;
+        lastTime = null;
+        onStop?.();
+    }
+
+    function animate(now) {
+        const elapsed = lastTime === null ? 16 : Math.min(32, now - lastTime);
+        lastTime = now;
+        if (direction) {
+            const speed = Math.min(config.maxSpeed, Math.max(config.initialSpeed, Math.abs(velocity) + config.acceleration * elapsed));
+            velocity = direction * speed;
+        } else {
+            velocity *= Math.exp(-config.friction * elapsed);
+            if (Math.abs(velocity) < config.minSpeed) return stop();
+        }
+        if (step(velocity * elapsed) === false) return stop();
+        frame = window.requestAnimationFrame(animate);
+    }
+
+    return {
+        start(nextDirection) {
+            if (!nextDirection) return;
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                stepStatic?.(nextDirection);
+                return;
+            }
+            if (direction !== nextDirection) velocity = nextDirection * Math.max(config.initialSpeed, Math.abs(velocity) * config.restartFactor);
+            direction = nextDirection;
+            if (frame === null) frame = window.requestAnimationFrame(animate);
+        },
+        // Drop the drive but keep the coast. Ignores a stale key release.
+        release(forDirection) {
+            if (forDirection === undefined || forDirection === direction) direction = 0;
+        },
+        stop,
+    };
+}
+
 export function isEditableShortcutEvent(event) {
     return event.composedPath().some((node) => (
         node instanceof Element

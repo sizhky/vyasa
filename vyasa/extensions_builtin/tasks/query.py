@@ -148,17 +148,17 @@ class KnowledgeGraphQuery:
                     facts.append({"e": entity, "a": field, "v": value, "ref": False, "context": context_id})
         for edge in self._edges(graph):
             relation = str(edge.get("relation") or edge.get("label") or "")
-            facts.append(
-                {
-                    "e": edge.get("source"),
-                    "a": relation,
-                    "v": edge.get("target"),
-                    "ref": True,
-                    "relation": relation,
-                    "edge_id": edge.get("id"),
-                    "context": context_id,
-                }
-            )
+            fact = {key: value for key, value in edge.items() if not key.startswith("__")}
+            fact.update({
+                "e": edge.get("source"),
+                "a": relation,
+                "v": edge.get("target"),
+                "ref": True,
+                "relation": relation,
+                "edge_id": edge.get("id"),
+                "context": context_id,
+            })
+            facts.append(fact)
         return facts
 
     def _require_relation(self, relation: str) -> None:
@@ -213,14 +213,15 @@ class KnowledgeGraphQuery:
         reached = sorted(paths)
         return [{**nodes[node_id], "__path__": paths[node_id]} for node_id in reached if node_id in nodes]
 
-    def _snapshot(self, context_id: str) -> tuple[dict[str, dict[str, Any]], dict[tuple[str, str, str], dict[str, Any]]]:
+    def _snapshot(self, context_id: str) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
         graph = self._graph(context_id)
         nodes = {str(node["id"]): node for node in self._nodes(graph)}
         edges = {}
         for edge in self._edges(graph):
-            relation = str(edge.get("relation") or edge.get("label") or "")
-            key = (str(edge.get("source")), relation, str(edge.get("target")))
-            edges[key] = {key: value for key, value in edge.items() if not key.startswith("__")}
+            edge_id = str(edge.get("id") or "")
+            if edge_id in edges:
+                raise QueryError(f"Duplicate KG edge id: {edge_id}")
+            edges[edge_id] = {key: value for key, value in edge.items() if not key.startswith("__")}
         return nodes, edges
 
     def _diff(self, before_id: str, after_id: str) -> list[dict[str, Any]]:
@@ -247,28 +248,20 @@ class KnowledgeGraphQuery:
                         "after": after.get(field),
                     }
                 )
-        for key in sorted(after_edges.keys() - before_edges.keys()):
-            source, relation, target = key
-            rows.append({"change": "added", "kind": "edge", "source": source, "relation": relation, "target": target})
-        for key in sorted(before_edges.keys() - after_edges.keys()):
-            source, relation, target = key
-            rows.append({"change": "removed", "kind": "edge", "source": source, "relation": relation, "target": target})
-        for key in sorted(before_edges.keys() & after_edges.keys()):
-            before = {k: v for k, v in before_edges[key].items() if k != "id"}
-            after = {k: v for k, v in after_edges[key].items() if k != "id"}
-            if before != after:
-                source, relation, target = key
-                rows.append(
-                    {
-                        "change": "changed",
-                        "kind": "edge",
-                        "source": source,
-                        "relation": relation,
-                        "target": target,
-                        "before": before,
-                        "after": after,
-                    }
-                )
+        for edge_id in sorted(after_edges.keys() - before_edges.keys()):
+            edge = after_edges[edge_id]
+            rows.append({
+                "change": "added", "kind": "edge", "id": edge_id,
+                "source": edge.get("source"), "relation": edge.get("relation") or edge.get("label", ""),
+                "target": edge.get("target"),
+            })
+        for edge_id in sorted(before_edges.keys() - after_edges.keys()):
+            edge = before_edges[edge_id]
+            rows.append({
+                "change": "removed", "kind": "edge", "id": edge_id,
+                "source": edge.get("source"), "relation": edge.get("relation") or edge.get("label", ""),
+                "target": edge.get("target"),
+            })
         return rows
 
     def previous_context_diff(self, context_id: str) -> dict[str, Any]:

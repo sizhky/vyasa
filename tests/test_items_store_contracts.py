@@ -20,6 +20,7 @@ from vyasa.config import reload_config
 
 import sys
 import json
+import pytest
 from pathlib import Path
 from typing import cast
 
@@ -37,6 +38,93 @@ def test_kg_pack_named_edge_without_relation_still_loads(tmp_path):
     edges = read_edges(edges_path)
 
     assert edges == [{"id": "e-api-ui", "source": "n-api", "target": "n-ui"}]
+
+
+def test_kg_pack_edge_records_support_fields_multiline_and_lists(tmp_path):
+    edges_path = tmp_path / "kg.edges"
+    edges_path.write_text(
+        """m4-uses-li3: m4 -> li3 uses
+    summary=Calls the configured data agent.
+    guarantee=|
+        Keeps rows and SQL details
+        for the current request.
+    evidence=[query](agent.py?symbol=query)
+    evidence=[ask](agent.py?symbol=ask)
+""",
+        encoding="utf-8",
+    )
+
+    edge = read_edges(edges_path)[0]
+
+    assert edge["id"] == "m4-uses-li3"
+    assert edge["guarantee"] == "Keeps rows and SQL details\nfor the current request."
+    assert edge["evidence"] == ["[query](agent.py?symbol=query)", "[ask](agent.py?symbol=ask)"]
+
+
+def test_kg_pack_edge_records_reject_reserved_fields_and_malformed_lines(tmp_path):
+    edges_path = tmp_path / "kg.edges"
+    edges_path.write_text("e1: a -> b uses\n    source=wrong\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="reserved"):
+        read_edges(edges_path)
+
+    edges_path.write_text("e1 a b\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="invalid edge"):
+        read_edges(edges_path)
+
+
+def test_context_pack_resolves_shared_edge_records_and_introduction(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        "@graph id=shared\ncontexts=*.context\n@sources\nnodes=kg.nodes\nedges=kg.edges\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text("m4: Orchestrator\nli3: Data agent\n", encoding="utf-8")
+    (tmp_path / "kg.edges").write_text(
+        "m4-uses-li3: m4 -> li3 uses\n    summary=Calls the configured data agent.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "01.context").write_text(
+        "@context id=ctx1 seq=1 stage=interfaces\n@edges\nm4-uses-li3: m4 -> li3 uses\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "02.context").write_text(
+        "@context id=ctx2 seq=2 stage=hierarchy\n@edges\nm4-uses-li3: m4 -> li3 uses\n",
+        encoding="utf-8",
+    )
+
+    graph = read_kg_pack(tmp_path / "kg.schema", "ctx2")
+
+    assert graph["kg_context"]["stage"] == "hierarchy"
+    assert graph["dependency_edges"][0]["summary"] == "Calls the configured data agent."
+    assert graph["dependency_edges"][0]["introduced_context"] == "ctx1"
+    assert graph["dependency_edges"][0]["introduced_stage"] == "interfaces"
+    assert "summary" in graph["edge_index_attributes"]
+
+
+def test_context_pack_validates_every_shared_edge_assertion(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        "@graph id=shared\ncontexts=*.context\n@sources\nnodes=kg.nodes\nedges=kg.edges\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text("a: A\nb: B\n", encoding="utf-8")
+    (tmp_path / "kg.edges").write_text("a-uses-b: a -> b uses\n", encoding="utf-8")
+    (tmp_path / "01.context").write_text(
+        "@context id=one seq=1 stage=first\n@edges\na-uses-b: b -> a uses\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "02.context").write_text(
+        "@context id=two seq=2 stage=second\n@edges\na-uses-b: a -> b uses\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="conflicting source"):
+        read_kg_pack(tmp_path / "kg.schema", "two")
+
+    (tmp_path / "01.context").write_text(
+        "@context id=one seq=1\n@edges\na-uses-b: a -> b uses\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="must declare stage"):
+        read_kg_pack(tmp_path / "kg.schema", "two")
 
 
 def test_kg_pack_names_are_stable():

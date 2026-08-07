@@ -90,7 +90,8 @@
     pointer-events: none;
 }
 button[data-vyasa-tasks-action="toggleEdges"][data-vyasa-edges-off="true"],
-button[data-vyasa-tasks-action="toggleHoverCards"][data-vyasa-hover-cards-off="true"] {
+button[data-vyasa-tasks-action="toggleHoverCards"][data-vyasa-hover-cards-off="true"],
+button[data-vyasa-tasks-action="toggleCardScroll"][data-vyasa-card-scroll-on="true"] {
     color: #fecaca !important;
     border-color: #ef4444 !important;
     background: #dc2626 !important;
@@ -102,16 +103,27 @@ button[data-vyasa-tasks-action="toggleHoverCards"][data-vyasa-hover-cards-off="t
 .vyasa-tasks-flow .react-flow__edge-interaction {
     pointer-events: none;
 }
-@keyframes vyasa-tasks-edge-flare-sweep {
-    from { stroke-dashoffset: 1; }
-    to { stroke-dashoffset: 0; }
+@keyframes vyasa-tasks-edge-pin-bloom {
+    0% { stroke-width: 8; stroke-opacity: 0.82; filter: blur(1px); }
+    100% { stroke-width: 180; stroke-opacity: 0; filter: blur(28px); }
 }
-.vyasa-tasks-edge-flare {
-    stroke-dashoffset: 0;
-    animation: vyasa-tasks-edge-flare-sweep 1.24s cubic-bezier(0.32, 0, 0.24, 1) 1 both;
+.vyasa-tasks-edge-pin-bloom {
+    animation: vyasa-tasks-edge-pin-bloom 1720ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes vyasa-tasks-hover-card-scroll-pulse {
+    0%, 100% {
+        box-shadow: 0 10px 30px rgba(0,0,0,0.12), 0 0 6px 2px color-mix(in srgb, var(--vyasa-primary) 22%, transparent);
+    }
+    50% {
+        box-shadow: 0 10px 30px rgba(0,0,0,0.12), 0 0 36px 20px color-mix(in srgb, var(--vyasa-primary) 68%, transparent);
+    }
+}
+.vyasa-tasks-hover-card--scroll {
+    animation: vyasa-tasks-hover-card-scroll-pulse 2s cubic-bezier(0.37, 0, 0.63, 1) infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-    .vyasa-tasks-edge-flare { animation: none; }
+    .vyasa-tasks-edge-pin-bloom { animation: none; }
+    .vyasa-tasks-hover-card--scroll { animation: none; box-shadow: 0 0 0 2px var(--vyasa-primary); }
 }
 .vyasa-tasks-hovering-edge-labels .react-flow__edgelabel-renderer {
     z-index: 1600 !important;

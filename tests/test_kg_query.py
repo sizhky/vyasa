@@ -14,6 +14,9 @@ attrs=kg.attrs
 contexts=*.context
 default_context=day2
 
+@sources
+edges=kg.edges
+
 @relations
 allocates_to
 
@@ -45,38 +48,48 @@ score:
 """,
         encoding="utf-8",
     )
+    (tmp_path / "kg.edges").write_text(
+        """old-allocates_to-claim: old -> claim allocates_to
+    confidence=low
+claim-allocates_to-jira: claim -> jira allocates_to
+new-allocates_to-claim: new -> claim allocates_to
+    confidence=high
+    definition=[Allocation contract](../edge-proxies/new-allocates_to-claim.md)
+""",
+        encoding="utf-8",
+    )
     (tmp_path / "z-day1.context").write_text(
-        """@context id=day1 seq=1 label="Day one"
+        """@context id=day1 seq=1 label="Day one" stage=first
 @attrs
 status:
   open: claim old
 @edges
-  old -> claim allocates_to confidence=low
-  claim -> jira allocates_to
+  old-allocates_to-claim: old -> claim allocates_to
+  claim-allocates_to-jira: claim -> jira allocates_to
 """,
         encoding="utf-8",
     )
     (tmp_path / "a-day2.context").write_text(
-        """@context id=day2 seq=2 label="Day two"
+        """@context id=day2 seq=2 label="Day two" stage=second
 @attrs
 status:
   done: claim
   open: new
 @edges
-  claim -> jira allocates_to
-  new -> claim allocates_to confidence=high
+  claim-allocates_to-jira: claim -> jira allocates_to
+  new-allocates_to-claim: new -> claim allocates_to
 """,
         encoding="utf-8",
     )
     (tmp_path / "m-day3.context").write_text(
-        """@context id=day3 seq=3 label="Day three"
+        """@context id=day3 seq=3 label="Day three" stage=third
 @attrs
 status:
   open: new
   done: claim
 @edges
-  new -> claim allocates_to confidence=high
-  claim -> jira allocates_to
+  new-allocates_to-claim: new -> claim allocates_to
+  claim-allocates_to-jira: claim -> jira allocates_to
 """,
         encoding="utf-8",
     )
@@ -201,6 +214,22 @@ def test_facts_join_preserves_machine_fields(context_pack):
             "owner": "Lee",
         }
     ]
+
+
+def test_edge_facts_keep_shared_record_fields(context_pack):
+    rows = KnowledgeGraphQuery(context_pack).run(
+        "facts at day2 | where definition!=_none | select edge_id e relation v confidence definition introduced_stage"
+    )
+
+    assert rows == [{
+        "edge_id": "new-allocates_to-claim",
+        "e": "new",
+        "relation": "allocates_to",
+        "v": "claim",
+        "confidence": "high",
+        "definition": "[Allocation contract](../edge-proxies/new-allocates_to-claim.md)",
+        "introduced_stage": "second",
+    }]
 
 
 def _write_view_context_pack(tmp_path, fixed_context="day1"):

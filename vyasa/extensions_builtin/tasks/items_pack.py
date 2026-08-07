@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 PathLike = Union[Path, "VirtualPath"]
 
 NODE_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
+EDGE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+EDGE_RESERVED_FIELDS = {"id", "source", "target", "relation", "label"}
 
 
 def _as_pathlike(p: "str | PathLike") -> PathLike:
@@ -69,6 +71,7 @@ class KgSchema:
     palette: str = ""
     cache: str = ""
     nodes: str = ""
+    edges: str = ""
     attrs: str = ""
 
 
@@ -77,11 +80,12 @@ class KgContext:
     id: str
     seq: int
     label: str = ""
+    stage: str = ""
     caption: str = ""
     attrs_path: str = ""
     palette: str = ""
     node_attrs: dict[str, dict[str, list[str]]] = field(default_factory=dict)
-    edges: list[dict[str, str]] = field(default_factory=list)
+    edges: list[dict[str, Any]] = field(default_factory=list)
     slides: list[dict[str, Any]] = field(default_factory=list)
     views: list[KgView] = field(default_factory=list)
 
@@ -113,13 +117,14 @@ def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
     nodes_by_id: dict[str, dict] = {}
     edges_by_id: dict[str, dict] = {}
     index_attributes: list[str] = []
+    edge_index_attributes: list[str] = []
     for source_name in _source_names_for_views(schema):
         source = _resolve_source(schema, source_name)
         for node_path in _path_list(source.get("nodes")):
             for node in read_nodes(_resolve(schema_path, node_path)):
                 nodes_by_id[node["id"]] = {**nodes_by_id.get(node["id"], {}), **node}
         for edge_path in _path_list(source.get("edges")):
-            for raw_edge in read_edges(_resolve(schema_path, edge_path), schema.relations):
+            for raw_edge in read_edges(_resolve(schema_path, edge_path)):
                 edge: dict[str, Any] = dict(raw_edge)
                 edge["__kg_sources"] = _source_tags(edges_by_id.get(edge["id"], {}).get("__kg_sources"), source_name)
                 edges_by_id[edge["id"]] = {**edges_by_id.get(edge["id"], {}), **edge}
@@ -128,6 +133,9 @@ def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
             for key in indexed.get("node", []):
                 if key not in index_attributes:
                     index_attributes.append(key)
+            for key in indexed.get("edge", []):
+                if key not in edge_index_attributes:
+                    edge_index_attributes.append(key)
     _propagate_inherited_attrs(nodes_by_id)
     groups = []
     tasks = []
@@ -147,6 +155,7 @@ def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
     graph["kg_cache"] = schema.cache
     graph["kg_sources"] = schema.sources
     graph["index_attributes"] = index_attributes
+    graph["edge_index_attributes"] = list(dict.fromkeys(edge_index_attributes + _edge_attribute_keys(edges_by_id.values())))
     graph["filter_attributes"] = index_attributes
     _write_kg_cache(schema_path, schema.cache, graph)
     return graph
@@ -154,6 +163,7 @@ def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
 
 def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: str = "") -> dict[str, Any]:
     contexts = _discover_contexts(schema_path, schema.graph.get("contexts", ""))
+    _validate_context_catalog(contexts, require_stage=bool(schema.edges))
     catalog = _context_catalog(contexts)
     active_id = resolve_context_id(
         catalog,
@@ -161,13 +171,22 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
         schema.graph.get("default_context", "latest"),
     )
     active = next(item for item in contexts if item.id == active_id)
-    edges = list(active.edges)
+    edge_definitions = _read_edge_definitions(schema_path, schema)
+    introduced = _edge_introductions(contexts)
+    resolved_edges = {
+        context.id: _resolve_context_edges(context, edge_definitions, introduced)
+        for context in contexts
+    }
+    edges = resolved_edges[active.id]
     nodes_by_id = {node["id"]: node for node in read_nodes(_resolve(schema_path, schema.nodes))}
     edges_by_id = {edge["id"]: edge for edge in edges}
     index_attributes: list[str] = []
     if schema.attrs:
         indexed = apply_attrs(_resolve(schema_path, schema.attrs), nodes_by_id, edges_by_id)
         index_attributes.extend(indexed.get("node", []))
+        edge_index_attributes = list(indexed.get("edge", []))
+    else:
+        edge_index_attributes = []
     _apply_context_attrs(active, nodes_by_id)
     _apply_status_defaults(schema, nodes_by_id, edges)
     present = {node_id for edge in edges for node_id in (edge.get("source"), edge.get("target")) if node_id}
@@ -189,14 +208,15 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
         "hover_attrs": _list_value(schema.graph.get("hover_attrs", "")),
         "card_states": _list_value(schema.graph.get("card_states", "")),
         "acl": _acl_payload(schema),
-        "kg_context": {"id": active.id, "seq": active.seq, "label": active.label, "caption": active.caption},
-        "kg_contexts": [{"id": item.id, "seq": item.seq, "label": item.label, "caption": item.caption} for item in contexts],
+        "kg_context": {"id": active.id, "seq": active.seq, "label": active.label, "stage": active.stage, "caption": active.caption},
+        "kg_contexts": [{"id": item.id, "seq": item.seq, "label": item.label, "stage": item.stage, "caption": item.caption} for item in contexts],
     }
     if active.palette or schema.palette:
         graph["color_palette_source"] = str(_resolve(schema_path, active.palette or schema.palette))
     graph["kg_schema"] = str(schema_path)
     graph["kg_sources"] = schema.sources or {"base": {"context": active.id}}
     graph["index_attributes"] = list(dict.fromkeys(index_attributes + list(active.node_attrs) + ["status"]))
+    graph["edge_index_attributes"] = list(dict.fromkeys(edge_index_attributes + _edge_attribute_keys(edges)))
     graph["filter_attributes"] = graph["index_attributes"]
     return graph
 
@@ -215,7 +235,7 @@ def _default_context(contexts: list[KgContext], default_id: str) -> KgContext:
 
 def _context_catalog(contexts: list[KgContext]) -> list[dict[str, Any]]:
     return [
-        {"id": item.id, "seq": item.seq, "label": item.label, "caption": item.caption}
+        {"id": item.id, "seq": item.seq, "label": item.label, "stage": item.stage, "caption": item.caption}
         for item in contexts
     ]
 
@@ -251,6 +271,7 @@ def _read_context(path: PathLike) -> KgContext:
             context.id = payload.get("id", "")
             context.seq = int(payload.get("seq", "0") or 0)
             context.label = payload.get("label", "")
+            context.stage = payload.get("stage", "")
             section = "@context"
             continue
         if line.startswith("@"):
@@ -275,12 +296,11 @@ def _read_context(path: PathLike) -> KgContext:
             elif "caption" in payload:
                 context.caption = payload["caption"]
             context.palette = payload.get("palette", context.palette)
+            context.stage = payload.get("stage", context.stage)
         elif section == "@attrs":
             _read_context_attr_line(context, raw)
         elif section == "@edges":
-            edge = _read_context_edge(line, context.id, len(context.edges) + 1)
-            if edge:
-                context.edges.append(edge)
+            context.edges.append(_read_context_edge(line, context.id, len(context.edges) + 1, path))
         elif section == "@slides":
             sid, _, title = line.partition(":")
             current_slide = {"id": sid.strip(), "title": title.strip(), "nodes": []}
@@ -352,22 +372,10 @@ def _read_context_attr_line(context: KgContext, raw: str) -> None:
     bucket.setdefault(value.strip(), []).extend(shlex.split(ids_text))
 
 
-def _read_context_edge(line: str, context_id: str, index: int) -> dict[str, str] | None:
-    parts = shlex.split(line)
-    if len(parts) < 3 or parts[1] != "->":
-        return None
-    relation = parts[3] if len(parts) > 3 and "=" not in parts[3] else ""
-    attr_parts = parts[4:] if relation else parts[3:]
-    edge = {
-        "id": f"{context_id}-e{index}",
-        "source": parts[0],
-        "target": parts[2],
-        **_assignments(attr_parts),
-        "__kg_sources": [context_id],
-    }
-    if relation:
-        edge["relation"] = relation
-        edge.setdefault("label", relation)
+def _read_context_edge(line: str, context_id: str, index: int, path: PathLike | None = None) -> dict[str, Any]:
+    edge = _parse_edge_head(line, path or f"context {context_id}", generated_id=f"{context_id}-e{index}")
+    edge["__kg_sources"] = [context_id]
+    edge["__authored_id__"] = ":" in line.split("->", 1)[0]
     return edge
 
 
@@ -577,30 +585,150 @@ def _read_indented_multiline(raw_lines: list[str], start_index: int, parent_inde
     return textwrap.dedent("\n".join(block_lines)).strip("\n"), line_index - start_index
 
 
-def read_edges(path: PathLike, relations: dict[str, dict[str, str]] | None = None) -> list[dict[str, str]]:
-    edges = []
-    known_relations = set((relations or {}).keys())
-    for line in _record_lines(path):
-        head, rest = line.split(":", 1)
-        parts = shlex.split(rest)
-        if len(parts) < 3 or parts[1] != "->":
+def read_edges(path: PathLike, relations: dict[str, dict[str, str]] | None = None) -> list[dict[str, Any]]:
+    del relations  # Relation palettes style edges at render time; records stay authored data only.
+    edges: list[dict[str, Any]] = []
+    by_id: dict[str, dict[str, Any]] = {}
+    current: dict[str, Any] | None = None
+    raw_lines = _as_pathlike(path).read_text(encoding="utf-8").splitlines()
+    line_index = 0
+    while line_index < len(raw_lines):
+        raw = raw_lines[line_index]
+        line_index += 1
+        if not raw.strip() or raw.lstrip().startswith(("#", "@")):
             continue
-        relation = ""
-        attr_parts = parts[3:]
-        if len(parts) >= 4 and "=" not in parts[3]:
-            relation = parts[3]
-            attr_parts = parts[4:]
-        attrs = _assignments(attr_parts)
-        edge = {"id": head.strip(), "source": parts[0], "target": parts[2], **attrs}
-        if relation:
-            edge["relation"] = relation
-        if relation in known_relations:
-            for key, value in (relations or {}).get(relation, {}).items():
-                edge.setdefault(key, value)
-        if relation:
-            edge.setdefault("label", relation)
-        edges.append(edge)
+        line = raw.strip()
+        if not raw.startswith((" ", "\t")):
+            edge = _parse_edge_head(line, path)
+            if edge["id"] in by_id:
+                raise ValueError(f"{path}: duplicate edge id {edge['id']!r}")
+            by_id[edge["id"]] = edge
+            edges.append(edge)
+            current = edge
+            continue
+        if current is None or "=" not in line:
+            raise ValueError(f"{path}: invalid edge field {line!r}")
+        key, value = _split_inline_assignment(line)
+        if key in EDGE_RESERVED_FIELDS:
+            raise ValueError(f"{path}: edge field {key!r} is reserved")
+        if value == "|":
+            value, consumed = _read_indented_multiline(raw_lines, line_index, _indent_width(raw))
+            line_index += consumed
+        _merge_edge_value(current, key, value)
     return edges
+
+
+def _parse_edge_head(line: str, path: PathLike | str, generated_id: str = "") -> dict[str, Any]:
+    edge_id = generated_id
+    rest = line
+    if ":" in line:
+        edge_id, rest = (part.strip() for part in line.split(":", 1))
+    if not edge_id or not EDGE_ID_RE.fullmatch(edge_id):
+        raise ValueError(f"{path}: invalid edge id {edge_id!r}")
+    parts = shlex.split(rest)
+    if len(parts) < 3 or parts[1] != "->":
+        raise ValueError(f"{path}: invalid edge line {line!r}; expected '<id>: <source> -> <target> [relation]'")
+    relation = parts[3] if len(parts) > 3 and "=" not in parts[3] else ""
+    attr_parts = parts[4:] if relation else parts[3:]
+    malformed = next((part for part in attr_parts if "=" not in part), "")
+    if malformed:
+        raise ValueError(f"{path}: invalid edge field {malformed!r}")
+    attrs = _assignments(attr_parts)
+    conflict = EDGE_RESERVED_FIELDS & attrs.keys()
+    if conflict:
+        raise ValueError(f"{path}: edge field {sorted(conflict)[0]!r} is reserved")
+    edge: dict[str, Any] = {"id": edge_id, "source": parts[0], "target": parts[2], **attrs}
+    if relation:
+        edge["relation"] = relation
+        edge["label"] = relation
+    return edge
+
+
+def _merge_edge_value(edge: dict[str, Any], key: str, value: Any) -> None:
+    existing = edge.get(key)
+    if existing is None:
+        edge[key] = value
+    elif isinstance(existing, list):
+        if value not in existing:
+            existing.append(value)
+    elif existing != value:
+        edge[key] = [existing, value]
+
+
+def _edge_attribute_keys(edges) -> list[str]:
+    return list(dict.fromkeys(
+        key
+        for edge in edges
+        for key in edge
+        if key not in EDGE_RESERVED_FIELDS and not key.startswith("__")
+    ))
+
+
+def _read_edge_definitions(schema_path: PathLike, schema: KgSchema) -> dict[str, dict[str, Any]]:
+    if not schema.edges:
+        return {}
+    definitions: dict[str, dict[str, Any]] = {}
+    for edge_path in _path_list(schema.edges):
+        for edge in read_edges(_resolve(schema_path, edge_path)):
+            edge_id = str(edge["id"])
+            if edge_id in definitions:
+                raise ValueError(f"{schema_path}: duplicate edge id {edge_id!r}")
+            definitions[edge_id] = edge
+    return definitions
+
+
+def _validate_context_catalog(contexts: list[KgContext], require_stage: bool) -> None:
+    seen_seq: set[int] = set()
+    for context in contexts:
+        if context.seq in seen_seq:
+            raise ValueError(f"Duplicate KG context seq: {context.seq}")
+        seen_seq.add(context.seq)
+        if require_stage and not context.stage:
+            raise ValueError(f"KG context {context.id!r} must declare stage")
+
+
+def _edge_introductions(contexts: list[KgContext]) -> dict[str, tuple[str, str]]:
+    introduced: dict[str, tuple[str, str]] = {}
+    for context in sorted(contexts, key=lambda item: (item.seq, item.id)):
+        for edge in context.edges:
+            introduced.setdefault(str(edge["id"]), (context.id, context.stage))
+    return introduced
+
+
+def _resolve_context_edges(
+    context: KgContext,
+    definitions: dict[str, dict[str, Any]],
+    introduced: dict[str, tuple[str, str]],
+) -> list[dict[str, Any]]:
+    if not definitions:
+        return list(context.edges)
+    resolved: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    allowed = EDGE_RESERVED_FIELDS | {"__kg_sources", "__authored_id__"}
+    for assertion in context.edges:
+        edge_id = str(assertion["id"])
+        if edge_id in seen_ids:
+            raise ValueError(f"KG context {context.id!r} asserts edge {edge_id!r} more than once")
+        seen_ids.add(edge_id)
+        if not assertion.get("__authored_id__"):
+            raise ValueError(f"KG context {context.id!r} edge must use an authored id")
+        definition = definitions.get(edge_id)
+        if definition is None:
+            raise ValueError(f"KG context {context.id!r} names undefined edge {edge_id!r}")
+        extra = [key for key in assertion if key not in allowed]
+        if extra:
+            raise ValueError(f"KG context {context.id!r} edge {edge_id!r} cannot set field {extra[0]!r}")
+        for key in ("source", "target", "relation"):
+            if str(assertion.get(key) or "") != str(definition.get(key) or ""):
+                raise ValueError(f"KG context {context.id!r} edge {edge_id!r} has conflicting {key}")
+        introduced_context, introduced_stage = introduced[edge_id]
+        resolved.append({
+            **definition,
+            "introduced_context": introduced_context,
+            "introduced_stage": introduced_stage,
+            "__kg_sources": [context.id],
+        })
+    return resolved
 
 
 def apply_attrs(path: PathLike, nodes: dict[str, dict], edges: dict[str, dict]) -> dict[str, list[str]]:
@@ -663,6 +791,7 @@ def _read_source_line(schema: KgSchema, line: str) -> str:
     schema.palette = payload.get("palette", schema.palette)
     schema.cache = payload.get("cache", schema.cache)
     schema.nodes = payload.get("nodes", schema.nodes)
+    schema.edges = payload.get("edges", schema.edges)
     schema.attrs = payload.get("attrs", schema.attrs)
     return ""
 
@@ -892,6 +1021,8 @@ def _resolve_source(schema: KgSchema, name: str) -> dict[str, Any]:
         merged["nodes"] = schema.nodes
     if schema.attrs:
         merged["attrs"] = schema.attrs
+    if schema.edges:
+        merged["edges"] = schema.edges
     for fragment in str(name or "base").split("+"):
         for key, value in schema.sources.get(fragment, {}).items():
             if key == "__attrs_filter":
