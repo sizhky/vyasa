@@ -4660,6 +4660,19 @@ async function renderTasksGraphs(rootElement = document) {
                     : { duration, padding: options.padding ?? 0.2, includeHiddenNodes: true });
                 return matched.length;
             }, [currentHighlightedFitNodes, tasksFitDebugPayload]);
+            const fitSelectedEdgeConnection = React.useCallback((reactFlow, duration = 300) => {
+                if (!reactFlow || !selectedEdgeIdRef.current) return 0;
+                const visibleEdge = (graphBaseRef.current.edges || []).find(
+                    (edge) => tasksEdgeRecordId(edge) === selectedEdgeIdRef.current
+                );
+                const edge = visibleEdge || selectedEdgeRecord;
+                if (!edge) return 0;
+                const endpointIds = new Set([edge.source, edge.target]);
+                const matched = (graphBaseRef.current.nodes || []).filter((node) => endpointIds.has(node.id));
+                if (!matched.length) return 0;
+                reactFlow.fitView({ nodes: matched, duration, padding: 0.32, includeHiddenNodes: true });
+                return matched.length;
+            }, [selectedEdgeRecord]);
             React.useEffect(() => {
                 const baseModel = baseProjectionState.model;
                 const validFilterKeys = new Set(tasksFilterOptions(baseModel).map((option) => option.key));
@@ -6735,7 +6748,9 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'f') {
                             event.preventDefault();
-                            fitCurrentHighlight(reactFlow, { reason: 'shortcut-f' });
+                            if (!edgeCardOpen || !fitSelectedEdgeConnection(reactFlow)) {
+                                fitCurrentHighlight(reactFlow, { reason: 'shortcut-f' });
+                            }
                             return;
                         }
                         if (event.key === '?' || (event.key === '/' && event.shiftKey)) {
@@ -6883,7 +6898,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.removeEventListener('blur', stopMomentum);
                         stopMomentum();
                     };
-                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, fitCurrentHighlight, panViewport, graphMinZoom]);
+                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, panViewport, graphMinZoom]);
                 return null;
             };
             const PanControls = () => {
@@ -7009,11 +7024,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const relation = selectedEdgeRecord.relation || selectedEdgeRecord.label || '';
                 const entries = tasksEdgeMetaEntries(selectedEdgeRecord);
                 const fitConnection = () => {
-                    const reactFlow = reactFlowApiRef.current;
-                    if (!reactFlow) return;
-                    const endpointIds = new Set([selectedEdgeRecord.source, selectedEdgeRecord.target]);
-                    const matched = (graphBaseRef.current.nodes || []).filter((node) => endpointIds.has(node.id));
-                    if (matched.length) reactFlow.fitView({ nodes: matched, duration: 300, padding: 0.32, includeHiddenNodes: true });
+                    fitSelectedEdgeConnection(reactFlowApiRef.current);
                 };
                 return React.createElement('div', {
                     'data-vyasa-edge-card': selectedEdgeRecord.id,
@@ -8987,7 +8998,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('?', 'toggle this help'),
                     row('[ / ]', 'select previous / next visible edge'),
                     row('Enter', 'open selected edge details'),
-                    row('F', 'fit view'),
+                    row('F', 'fit view or active edge'),
                     row('Shift + F', 'toggle fullscreen'),
                     row('G', 'open EG+ for hovered or selected node'),
                     row('Shift + G', 'open EG for hovered or selected node'),
