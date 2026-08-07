@@ -148,6 +148,7 @@ def test_tasks_node_detail_rows_always_stack_values_below_labels():
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "`${entry.label}:`" in source
+    assert "fontSize: options.fontSize || '14px'" in source
     assert "display: 'block', marginBottom: '4px'" in source
     assert "return Math.max(keyWidth, valueWidth * weight);" in source
     assert "overflowWrap: 'anywhere'" in source
@@ -155,7 +156,9 @@ def test_tasks_node_detail_rows_always_stack_values_below_labels():
     assert "tasksIsLongFormEntry" not in source
     assert ".vyasa-task-node-card-value > p:first-child { display: inline; }" not in css
     assert ".vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }" in css
-    assert ".vyasa-task-node-card-value li > p { margin: 0; }" in css
+    assert ".vyasa-task-node-card-value :where(p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote) { font-size: inherit !important; line-height: inherit !important; color: inherit !important; }" in css
+    assert ".vyasa-task-node-card-value > * + * { margin-top: 0.45em !important; }" in css
+    assert ".vyasa-task-node-card-value li > p { margin: 0 !important; }" in css
     assert ".vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }" in css
 
 
