@@ -398,29 +398,6 @@ function tasksTaperedBezierPath(bezierPath, sourceWidth, targetWidth) {
     ].join(' ');
 }
 
-// A highlighted edge sweeps a bright band along the curve, always from source
-// to target so the flare reads as the edge's own direction. strokeMode only
-// says whether this edge is highlighted at all.
-function isTasksEdgeFlareActive(strokeMode) {
-    return ['selected', 'selected-in', 'selected-out', 'focused-in', 'focused-out'].includes(strokeMode);
-}
-
-// Mask region in flow coordinates. objectBoundingBox units collapse on
-// axis-aligned edges, whose fill bbox is a flat line, so state the box.
-function tasksEdgeFlareBox(bezierPath, pad) {
-    const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
-    if (nums.length < 8) return null;
-    const xs = nums.filter((_, index) => index % 2 === 0);
-    const ys = nums.filter((_, index) => index % 2 === 1);
-    const margin = Math.max(1, Number(pad) || 1);
-    return {
-        x: Math.min(...xs) - margin,
-        y: Math.min(...ys) - margin,
-        width: (Math.max(...xs) - Math.min(...xs)) + (margin * 2),
-        height: (Math.max(...ys) - Math.min(...ys)) + (margin * 2),
-    };
-}
-
 function tasksTaperedArrowHeadPath(bezierPath, size) {
     const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
     if (nums.length < 8) return '';
@@ -3901,7 +3878,12 @@ async function renderTasksGraphs(rootElement = document) {
             const [edgeStatus, setEdgeStatus] = React.useState('');
             const edgeCycleNodeIdRef = React.useRef('');
             const optionEdgeNodeIdRef = React.useRef('');
+            const optionEdgeOtherNodeIdRef = React.useRef('');
+            const optionEdgeNodeCardHeldRef = React.useRef(false);
+            const [optionEdgeNodeCardId, setOptionEdgeNodeCardId] = React.useState(null);
             const optionEdgePinnedRef = React.useRef(false);
+            const edgePinBloomIdRef = React.useRef(0);
+            const [edgePinBloom, setEdgePinBloom] = React.useState(null);
             const contextDiffSelectionRef = React.useRef({ key: '', ids: new Set() });
             const [dragSelection, setDragSelection] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
@@ -4212,6 +4194,8 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgeId = tasksEdgeRecordId(edge);
                 if (!edgeId) return;
                 optionEdgeNodeIdRef.current = nodeId;
+                optionEdgeOtherNodeIdRef.current = edge.source === nodeId ? edge.target : edge.source;
+                if (optionEdgeNodeCardHeldRef.current) setOptionEdgeNodeCardId(optionEdgeOtherNodeIdRef.current);
                 edgeCycleNodeIdRef.current = nodeId;
                 selectedEdgeIdRef.current = edgeId;
                 setSelectedEdgeId(edgeId);
@@ -4224,6 +4208,9 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdgeStatus(`${edgeId}. Release Option to return to the node.`);
             }, [resolveEdgeRecord]);
             const clearOptionEdgePreview = React.useCallback(() => {
+                optionEdgeNodeCardHeldRef.current = false;
+                optionEdgeOtherNodeIdRef.current = '';
+                setOptionEdgeNodeCardId(null);
                 if (optionEdgePinnedRef.current) {
                     optionEdgePinnedRef.current = false;
                     optionEdgeNodeIdRef.current = '';
@@ -4245,20 +4232,38 @@ async function renderTasksGraphs(rootElement = document) {
                     if (event.key !== 'Shift' || !event.altKey || event.repeat) return;
                     if (!optionEdgeNodeIdRef.current || !selectedEdgeIdRef.current) return;
                     optionEdgePinnedRef.current = true;
+                    const bloomKey = `${selectedEdgeIdRef.current}:${++edgePinBloomIdRef.current}`;
+                    setEdgePinBloom({ edgeId: selectedEdgeIdRef.current, key: bloomKey });
+                    window.setTimeout(() => setEdgePinBloom((current) => current?.key === bloomKey ? null : current), 1800);
+                    logTasksDebug('optionEdgePinned', { widgetId, edgeId: selectedEdgeIdRef.current, bloomKey });
                     setEdgeStatus(`${selectedEdgeIdRef.current}. Edge details pinned.`);
                 };
                 const releasePreview = (event) => {
                     if (event.key === 'Alt') clearOptionEdgePreview();
+                    if (event.key === 'Control') {
+                        optionEdgeNodeCardHeldRef.current = false;
+                        setOptionEdgeNodeCardId(null);
+                        logTasksDebug('optionEdgeNodeCardClear', { widgetId, reason: 'control-up' });
+                    }
                 };
+                const previewOtherNode = (event) => {
+                    if (event.key !== 'Control' || !event.altKey || event.repeat) return;
+                    if (!optionEdgeNodeIdRef.current || !optionEdgeOtherNodeIdRef.current) return;
+                    optionEdgeNodeCardHeldRef.current = true;
+                    setOptionEdgeNodeCardId(optionEdgeOtherNodeIdRef.current);
+                    logTasksDebug('optionEdgeNodeCardSet', { widgetId, nodeId: optionEdgeOtherNodeIdRef.current });
+                };
+                window.addEventListener('keydown', previewOtherNode, true);
                 window.addEventListener('keydown', pinPreview, true);
                 window.addEventListener('keyup', releasePreview, true);
                 window.addEventListener('blur', clearOptionEdgePreview);
                 return () => {
+                    window.removeEventListener('keydown', previewOtherNode, true);
                     window.removeEventListener('keydown', pinPreview, true);
                     window.removeEventListener('keyup', releasePreview, true);
                     window.removeEventListener('blur', clearOptionEdgePreview);
                 };
-            }, [clearOptionEdgePreview]);
+            }, [clearOptionEdgePreview, widgetId]);
             const selectGraphEdge = React.useCallback((event, edge) => {
                 event?.preventDefault?.();
                 event?.stopPropagation?.();
@@ -5508,7 +5513,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ...edge,
                             zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
                             labelZIndex: hit ? TASKS_EDGE_LABEL_FOCUS_Z : TASKS_EDGE_LABEL_Z,
-                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim', strokeMode: hit ? 'selected' : 'dim', edgeCardActive: hit },
+                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim', strokeMode: hit ? 'selected' : 'dim', edgeCardActive: hit, pinBloomKey: hit && edgePinBloom?.edgeId === tasksEdgeRecordId(edge) ? edgePinBloom.key : '' },
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: hit ? 1 : 0.12 },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.86 : 0.04 },
                             style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: hit ? 1 : 0.08, strokeWidth: hit ? 4.5 : 2.5 },
@@ -5885,7 +5890,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
                 setEdgesReusing(edgesVisible ? nextEdges : []);
-            }, [effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeOpacity, filteredSelectionIds]);
+            }, [effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeOpacity, edgePinBloom, filteredSelectionIds]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
                 if (selectedNodeId && !baseNodeIds.has(selectedNodeId)) {
@@ -6102,10 +6107,6 @@ async function renderTasksGraphs(rootElement = document) {
                     Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42)
                 );
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
-                const flareActive = taperPath ? isTasksEdgeFlareActive(strokeMode) : false;
-                const flareBox = flareActive ? tasksEdgeFlareBox(path, strokeWidth * 4) : null;
-                const flareMaskId = `vyasa-tasks-edge-flare-${String(props.id || '').replace(/[^\w-]/g, '_')}`;
-                const flareKey = `${props.data?.flareKey || ''}|${flareActive}`;
                 const edgeArrowPath = tasksTaperedArrowHeadPath(
                     path,
                     Math.max(10, strokeWidth * 3.0)
@@ -6175,7 +6176,7 @@ async function renderTasksGraphs(rootElement = document) {
                         strokeLinejoin: 'round',
                         // While a flare sweeps, the ribbon underneath stays faint so
                         // the swept part reads as an opacity rise, then settles full.
-                        opacity: (props.style?.opacity ?? 1) * (flareBox ? 0.3 : 1),
+                        opacity: props.style?.opacity ?? 1,
                         pointerEvents: 'none',
                     }),
                     props.data?.edgeCardActive && React.createElement('path', {
@@ -6190,31 +6191,12 @@ async function renderTasksGraphs(rootElement = document) {
                         pointerEvents: 'none',
                         style: { filter: 'blur(14px)' },
                     }),
-                    flareBox && React.createElement('g', { key: flareKey, pointerEvents: 'none' },
-                        React.createElement('mask', {
-                            id: flareMaskId,
-                            maskUnits: 'userSpaceOnUse',
-                            x: flareBox.x,
-                            y: flareBox.y,
-                            width: flareBox.width,
-                            height: flareBox.height,
-                        },
+                    props.data?.pinBloomKey && React.createElement('g', { key: props.data.pinBloomKey, pointerEvents: 'none' },
                         React.createElement('path', {
-                            className: 'vyasa-tasks-edge-flare',
-                            d: path,
-                            pathLength: 1,
-                            fill: 'none',
-                            stroke: '#fff',
-                            strokeWidth: Math.max(20, strokeWidth * 8),
-                            strokeDasharray: '1 1',
-                            style: { filter: 'blur(3px)' },
-                        })),
-                        React.createElement('path', {
-                            d: taperPath,
-                            mask: `url(#${flareMaskId})`,
-                            fill: props.style?.stroke || 'currentColor',
-                            opacity: props.style?.opacity ?? 1,
-                        })),
+                            className: 'vyasa-tasks-edge-pin-bloom', d: path, pathLength: 1, fill: 'none',
+                            stroke: props.style?.stroke || 'currentColor', strokeLinecap: 'round', vectorEffect: 'non-scaling-stroke',
+                        })
+                    ),
                     React.createElement(rf.BaseEdge, {
                         ...props,
                         path,
@@ -6916,8 +6898,8 @@ async function renderTasksGraphs(rootElement = document) {
                 }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, panViewport, graphMinZoom]);
                 return null;
             };
-            const SelectedNodePanel = () => {
-                const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === selectedNodeId)?.data || null;
+            const SelectedNodePanel = (panelGraphNodeId = selectedNodeId, readOnly = false) => {
+                const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === panelGraphNodeId)?.data || null;
                 const sourceNodeId = selectedNode?.__kind__ === 'groupTitle'
                     ? selectedNode.sourceGroupId
                     : tasksLogicalNodeId(selectedNode, selectedNode?.id);
@@ -6989,13 +6971,13 @@ async function renderTasksGraphs(rootElement = document) {
                         },
                             React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
                                 React.createElement('span', { style: { fontWeight: 700, opacity: 0.7, flex: '1 1 auto' } }, 'Notes'),
-                                clearedNote ? React.createElement('button', {
+                                !readOnly && clearedNote ? React.createElement('button', {
                                     type: 'button',
                                     'data-vyasa-task-control': 'true',
                                     onClick: (e) => { e.preventDefault(); setNoteInputValue(clearedNote); updateNodeNote(panelNodeId, clearedNote); setClearedNote(null); window.clearTimeout(clearedNoteTimerRef.current); },
                                     style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--vyasa-primary)', fontWeight: 600, padding: '0', lineHeight: 1, opacity: 0.85 },
                                 }, 'Undo') : null,
-                                noteInputValue.trim() ? React.createElement('button', {
+                                !readOnly && noteInputValue.trim() ? React.createElement('button', {
                                     type: 'button',
                                     title: 'Clear note',
                                     'aria-label': 'Clear note',
@@ -7006,8 +6988,9 @@ async function renderTasksGraphs(rootElement = document) {
                             ),
                             renderTasksNoteTextarea(React, {
                                 ref: noteTextareaRef,
-                                value: noteInputValue,
-                                onChange: (event) => setNoteInputValue(event.target.value),
+                                value: readOnly ? nodeNotes[panelNodeId] : noteInputValue,
+                                readOnly,
+                                onChange: readOnly ? undefined : (event) => setNoteInputValue(event.target.value),
                             })
                         )
                     )
@@ -8759,7 +8742,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }, sourceModel?.kg_context?.id);
             };
             const RightRail = () => {
-                if (!selectedNodeId && !(edgeCardOpen && (selectedEdgeRecord || edgeCardError))) return null;
+                if (!selectedNodeId && !optionEdgeNodeCardId && !(edgeCardOpen && (selectedEdgeRecord || edgeCardError))) return null;
                 if (hoverCardsEnabled && hoverCardRightRail && groupHoverTooltip?.placement === 'rightRail'
                     && (groupHoverCardsEnabled || !groupHoverTooltip.group)) return null;
                 return window.React.createElement('div', {
@@ -8778,7 +8761,9 @@ async function renderTasksGraphs(rootElement = document) {
                         minHeight: 0,
                     },
                 },
-                    edgeCardOpen && (selectedEdgeRecord || edgeCardError) ? SelectedEdgePanel() : SelectedNodePanel()
+                    optionEdgeNodeCardId
+                        ? SelectedNodePanel(optionEdgeNodeCardId, true)
+                        : (edgeCardOpen && (selectedEdgeRecord || edgeCardError) ? SelectedEdgePanel() : SelectedNodePanel())
                 );
             };
             const EdgeLiveStatus = () => window.React.createElement('div', {

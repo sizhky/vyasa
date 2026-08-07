@@ -659,6 +659,27 @@ def test_tasks_hover_card_ctrl_click_builds_x_dismissible_stack():
     assert "groupHoverTooltipRef.current?.sticky" not in source
 
 
+def test_option_edge_control_temporarily_shows_other_node_card():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "optionEdgeOtherNodeIdRef.current = edge.source === nodeId ? edge.target : edge.source;" in source
+    assert "event.key !== 'Control' || !event.altKey" in source
+    assert "setOptionEdgeNodeCardId(optionEdgeOtherNodeIdRef.current);" in source
+    assert "if (event.key === 'Control')" in source
+    assert "SelectedNodePanel(optionEdgeNodeCardId, true)" in source
+
+
+def test_option_shift_pin_blooms_from_the_edge():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+
+    assert "setEdgePinBloom({ edgeId: selectedEdgeIdRef.current, key: bloomKey });" in source
+    assert "edgePinBloom?.edgeId === tasksEdgeRecordId(edge)" in source
+    assert "vyasa-tasks-edge-pin-bloom--late" not in source
+    assert "@keyframes vyasa-tasks-edge-pin-bloom" in css
+    assert "1720ms" in css
+
+
 def test_tasks_hover_card_stacks_title_above_node_id():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     tooltip_source = source.split("const GroupHoverTooltipCard = ({ card, stickyIndex = -1, inViewportPortal = false }) => {", 1)[1].split("const GroupHoverTooltip = () => {", 1)[0]
