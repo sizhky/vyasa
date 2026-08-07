@@ -905,6 +905,42 @@ function absoluteNodeRects(nodes) {
     return cache;
 }
 
+function tasksHandlePoint(rect, handle) {
+    if (!rect || !handle) return null;
+    const rawOffset = Number(handle.offsetPct);
+    const offset = Math.max(0, Math.min(100, Number.isFinite(rawOffset) ? rawOffset : 50)) / 100;
+    if (handle.side === 'left') return { x: rect.x, y: rect.y + rect.height * offset };
+    if (handle.side === 'right') return { x: rect.x + rect.width, y: rect.y + rect.height * offset };
+    if (handle.side === 'top') return { x: rect.x + rect.width * offset, y: rect.y };
+    if (handle.side === 'bottom') return { x: rect.x + rect.width * offset, y: rect.y + rect.height };
+    return null;
+}
+
+export function nearestTasksIncidentEdge(pointer, nodeId, nodes, edges) {
+    const activeId = String(nodeId || '');
+    const node = (nodes || []).find((item) => String(item.id || '') === activeId);
+    const rect = absoluteNodeRects(nodes)[activeId];
+    if (!node || !rect) return null;
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const edge of (edges || [])) {
+        const role = String(edge.source || '') === activeId
+            ? 'source'
+            : (String(edge.target || '') === activeId ? 'target' : '');
+        if (!role) continue;
+        const handleId = edge[`${role}Handle`];
+        const handle = (node.data?.handleLayout?.[role] || []).find((item) => item.id === handleId);
+        const point = tasksHandlePoint(rect, handle);
+        if (!point) continue;
+        const distance = Math.hypot(Number(pointer?.x) - point.x, Number(pointer?.y) - point.y);
+        if (distance < nearestDistance) {
+            nearest = edge;
+            nearestDistance = distance;
+        }
+    }
+    return nearest;
+}
+
 export function buildTaskEdgeAnchors(nodes, edges) {
     const rects = absoluteNodeRects(nodes);
     const nodesById = Object.fromEntries((nodes || []).map((node) => [node.id, node]));

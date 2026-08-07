@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
+import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
 import { buildTasksProjectionConfigText, normalizeTasksAttrText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksGroupHoverAttrRows, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
@@ -3895,6 +3895,7 @@ async function renderTasksGraphs(rootElement = document) {
             const [edgeCardError, setEdgeCardError] = React.useState('');
             const [edgeStatus, setEdgeStatus] = React.useState('');
             const edgeCycleNodeIdRef = React.useRef('');
+            const optionEdgeNodeIdRef = React.useRef('');
             const contextDiffSelectionRef = React.useRef({ key: '', ids: new Set() });
             const [dragSelection, setDragSelection] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
@@ -4167,6 +4168,57 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 logTasksDebug('edgeSelectionSet', { widgetId, edgeId, source: record.source || '', target: record.target || '', openCard });
             }, [activeContextId, edgeNodeLabels, model, widgetId]);
+            const edgeForOptionPointer = React.useCallback((event) => {
+                const reactFlow = reactFlowApiRef.current;
+                if (!reactFlow) return null;
+                const point = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+                const graph = graphBaseRef.current || { nodes: [], edges: [] };
+                let nodeId = selectedNodeIdRef.current || optionEdgeNodeIdRef.current;
+                if (!nodeId) {
+                    const hit = tasksGraphNodeAtFlowPoint(graph.nodes || [], point);
+                    if (hit) nodeId = hit.node.data?.__kind__ === 'groupTitle'
+                        ? (hit.node.data?.sourceGroupId || hit.node.id)
+                        : hit.node.id;
+                }
+                if (!nodeId) return null;
+                const edge = nearestTasksIncidentEdge(point, nodeId, graph.nodes || [], graph.edges || []);
+                return edge ? { edge, nodeId } : null;
+            }, []);
+            const previewOptionEdge = React.useCallback((edge, nodeId) => {
+                const edgeId = String(edge?.id || edge?.__source_edge_id || '').trim();
+                if (!edgeId) return;
+                optionEdgeNodeIdRef.current = nodeId;
+                edgeCycleNodeIdRef.current = nodeId;
+                selectedEdgeIdRef.current = edgeId;
+                setSelectedEdgeId(edgeId);
+                setEdgeCardOpen(true);
+                setEdgeCardField('');
+                setEdgeCardError('');
+                groupHoverTooltipRef.current = null;
+                setGroupHoverTooltip(null);
+                setEdgeStatus(`${edgeId}. Release Option to return to the node.`);
+            }, []);
+            const clearOptionEdgePreview = React.useCallback(() => {
+                if (!optionEdgeNodeIdRef.current) return;
+                optionEdgeNodeIdRef.current = '';
+                selectedEdgeIdRef.current = null;
+                setSelectedEdgeId(null);
+                setEdgeCardOpen(false);
+                setEdgeCardField('');
+                setEdgeCardError('');
+                setEdgeStatus('Edge preview closed.');
+            }, []);
+            React.useEffect(() => {
+                const releasePreview = (event) => {
+                    if (event.key === 'Alt') clearOptionEdgePreview();
+                };
+                window.addEventListener('keyup', releasePreview, true);
+                window.addEventListener('blur', clearOptionEdgePreview);
+                return () => {
+                    window.removeEventListener('keyup', releasePreview, true);
+                    window.removeEventListener('blur', clearOptionEdgePreview);
+                };
+            }, [clearOptionEdgePreview]);
             const selectGraphEdge = React.useCallback((event, edge) => {
                 event?.preventDefault?.();
                 event?.stopPropagation?.();
@@ -4377,6 +4429,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setSelectedNodeIds(new Set());
                 selectedEdgeIdRef.current = null;
                 edgeCycleNodeIdRef.current = '';
+                optionEdgeNodeIdRef.current = '';
                 setSelectedEdgeId(null);
                 setEdgeCardOpen(false);
                 setEdgeCardField('');
@@ -5388,7 +5441,7 @@ async function renderTasksGraphs(rootElement = document) {
                         return {
                             ...edge,
                             zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
-                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim', strokeMode: hit ? 'selected' : 'dim' },
+                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim', strokeMode: hit ? 'selected' : 'dim', edgeCardActive: hit },
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: hit ? 1 : 0.12 },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.86 : 0.04 },
                             style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: hit ? 1 : 0.08, strokeWidth: hit ? 4.5 : 2.5 },
@@ -6035,6 +6088,18 @@ async function renderTasksGraphs(rootElement = document) {
                         pointerEvents: 'stroke',
                         className: 'react-flow__edge-interaction vyasa-tasks-edge-hit-path',
                     }),
+                    props.data?.edgeCardActive && React.createElement('path', {
+                        d: path,
+                        fill: 'none',
+                        stroke: 'color-mix(in srgb, var(--vyasa-primary) 72%, white 28%)',
+                        strokeWidth: strokeWidth + 12,
+                        strokeOpacity: 0.72,
+                        strokeLinecap: 'round',
+                        strokeLinejoin: 'round',
+                        vectorEffect: 'non-scaling-stroke',
+                        pointerEvents: 'none',
+                        style: { filter: 'drop-shadow(0 0 7px color-mix(in srgb, var(--vyasa-primary) 86%, transparent))' },
+                    }),
                     !taperPath && React.createElement(rf.BaseEdge, {
                         ...props,
                         path,
@@ -6573,9 +6638,12 @@ async function renderTasksGraphs(rootElement = document) {
                             }
                             if (edgeCardOpen) {
                                 event.preventDefault();
+                                selectedEdgeIdRef.current = null;
+                                optionEdgeNodeIdRef.current = '';
+                                setSelectedEdgeId(null);
                                 setEdgeCardOpen(false);
                                 setEdgeCardField('');
-                                setEdgeStatus('Edge details closed. The edge stays selected.');
+                                setEdgeStatus('Edge details closed.');
                                 return;
                             }
                             event.preventDefault();
@@ -6900,7 +6968,7 @@ async function renderTasksGraphs(rootElement = document) {
                 };
                 return React.createElement('div', {
                     'data-vyasa-edge-card': selectedEdgeRecord.id,
-                    style: { width: `min(${nodeCardWidth}, 100%)`, maxWidth: '100%', minWidth: 'min(260px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto', minHeight: 0, maxHeight: '100%', overflowY: 'auto', overscrollBehavior: 'contain' },
+                    style: { width: `min(${nodeCardWidth}, 100%)`, maxWidth: '100%', minWidth: 'min(260px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '2px solid color-mix(in srgb, var(--vyasa-primary) 76%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12), 0 0 18px color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto', minHeight: 0, maxHeight: '100%', overflowY: 'auto', overscrollBehavior: 'contain' },
                 },
                     React.createElement('div', { style: { display: 'flex', alignItems: 'start', gap: '10px', marginBottom: '10px' } },
                         React.createElement('div', { style: { flex: '1 1 auto', minWidth: 0 } },
@@ -6910,7 +6978,14 @@ async function renderTasksGraphs(rootElement = document) {
                         ),
                         React.createElement('button', {
                             type: 'button', title: 'Close edge details', 'aria-label': 'Close edge details',
-                            onClick: () => { setEdgeCardOpen(false); setEdgeCardField(''); setEdgeStatus('Edge details closed. The edge stays selected.'); },
+                            onClick: () => {
+                                selectedEdgeIdRef.current = null;
+                                optionEdgeNodeIdRef.current = '';
+                                setSelectedEdgeId(null);
+                                setEdgeCardOpen(false);
+                                setEdgeCardField('');
+                                setEdgeStatus('Edge details closed.');
+                            },
                             style: { border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: 0, opacity: 0.62 },
                         }, '×')
                     ),
@@ -7914,6 +7989,7 @@ async function renderTasksGraphs(rootElement = document) {
                 selectedNodeIdsRef.current = new Set();
                 selectedEdgeIdRef.current = null;
                 edgeCycleNodeIdRef.current = '';
+                optionEdgeNodeIdRef.current = '';
                 setSelectedNodeId(null);
                 setSelectedNodeIds(new Set());
                 setSelectedEdgeId(null);
@@ -8026,6 +8102,12 @@ async function renderTasksGraphs(rootElement = document) {
                 const graphBase = graphBaseRef.current || {};
                 const target = event.target instanceof Element ? event.target : null;
                 const domNode = target?.closest?.('.react-flow__node') || null;
+                if (event.altKey) {
+                    const match = edgeForOptionPointer(event);
+                    if (match) previewOptionEdge(match.edge, match.nodeId);
+                    return;
+                }
+                if (optionEdgeNodeIdRef.current) clearOptionEdgePreview();
                 const traceHoverHit = (stage, extra = {}) => {
                     const key = [
                         stage,
@@ -8146,7 +8228,7 @@ async function renderTasksGraphs(rootElement = document) {
                 groupHoverTooltipRef.current = nextHoverCard;
                 setGroupHoverTooltip(nextHoverCard);
                 traceHoverHit('hit', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx, groupHoverChanged });
-            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, activeHoverAttrs, nodes, widgetId, model, egoMode, hoverInactiveNodes, hoverCardRightRail, hoveredNodeId, logHoverCycle, selectedNodeId]);
+            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, clearOptionEdgePreview, edgeForOptionPointer, previewOptionEdge, activeHoverAttrs, nodes, widgetId, model, egoMode, hoverInactiveNodes, hoverCardRightRail, hoveredNodeId, logHoverCycle, selectedNodeId]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -8219,6 +8301,7 @@ async function renderTasksGraphs(rootElement = document) {
                 });
                 markWidgetActive();
                 selectedEdgeIdRef.current = null;
+                optionEdgeNodeIdRef.current = '';
                 setSelectedEdgeId(null);
                 setEdgeCardOpen(false);
                 selectedNodeIdRef.current = sourceNodeId;
@@ -9023,6 +9106,7 @@ async function renderTasksGraphs(rootElement = document) {
                 onPointerCancelCapture: finishDragSelection,
                 onPointerLeave: (event) => {
                     finishDragSelection(event);
+                    clearOptionEdgePreview();
                     if (flowWrapperRef.current) delete flowWrapperRef.current.dataset.vyasaReviewPointerTarget;
                     clearGraphHoverState('wrapper-pointer-leave');
                 },
