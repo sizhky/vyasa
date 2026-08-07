@@ -167,6 +167,7 @@ const TASKS_ZOOM_MOMENTUM_RATE = 0.0007;
 // server, and localStorage is already scoped to the origin.
 const TASKS_EDGES_VISIBLE_KEY = 'vyasa:tasks:edges-visible';
 const TASKS_HOVER_CARD_MODE_KEY = 'vyasa:tasks:hover-card-mode';
+const TASKS_GROUP_HOVER_CARDS_KEY = 'vyasa:tasks:group-hover-cards';
 
 function nextTasksHoverCardMode(mode) {
     const index = TASKS_HOVER_CARD_MODES.indexOf(mode);
@@ -4096,6 +4097,17 @@ async function renderTasksGraphs(rootElement = document) {
             }, []);
             const hoverCardsEnabled = hoverCardMode !== 'off';
             const hoverCardRightRail = hoverCardMode === 'rightRail';
+            const [groupHoverCardsEnabled, setGroupHoverCardsEnabled] = React.useState(
+                () => readTasksGlobalToggle(TASKS_GROUP_HOVER_CARDS_KEY) !== 'false'
+            );
+            const setGroupHoverCardsEnabledGlobal = React.useCallback((update) => {
+                setGroupHoverCardsEnabled((current) => {
+                    const next = Boolean(typeof update === 'function' ? update(current) : update);
+                    writeTasksGlobalToggle(TASKS_GROUP_HOVER_CARDS_KEY, next);
+                    showTasksToast(`Group hover cards ${next ? 'on' : 'off'}`);
+                    return next;
+                });
+            }, []);
             // The toolbar button is still show/hide, so it needs to know which
             // placement to come back to.
             const lastHoverCardPlacementRef = React.useRef('cursor');
@@ -5032,7 +5044,9 @@ async function renderTasksGraphs(rootElement = document) {
                 );
                 clearTasksGlobalToggle(TASKS_EDGES_VISIBLE_KEY);
                 clearTasksGlobalToggle(TASKS_HOVER_CARD_MODE_KEY);
+                clearTasksGlobalToggle(TASKS_GROUP_HOVER_CARDS_KEY);
                 setEdgesVisible(typeof defaults.edgesVisible === 'boolean' ? defaults.edgesVisible : true);
+                setGroupHoverCardsEnabled(true);
                 setActivePulseEnabled(true);
                 setContextDiffEnabled(false);
                 setEdgeOpacity(defaults.edgeOpacity !== undefined ? defaults.edgeOpacity : defaultEdgeOpacity);
@@ -6759,6 +6773,11 @@ async function renderTasksGraphs(rootElement = document) {
                             setEdgesVisibleGlobal((current) => !current);
                             return;
                         }
+                        if (key === 'c' && event.shiftKey) {
+                            event.preventDefault();
+                            setGroupHoverCardsEnabledGlobal((current) => !current);
+                            return;
+                        }
                         if (key === 'c') {
                             event.preventDefault();
                             setHoverCardModeGlobal(nextTasksHoverCardMode);
@@ -6864,7 +6883,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.removeEventListener('blur', stopMomentum);
                         stopMomentum();
                     };
-                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, fitCurrentHighlight, panViewport, graphMinZoom]);
+                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, fitCurrentHighlight, panViewport, graphMinZoom]);
                 return null;
             };
             const PanControls = () => {
@@ -8243,10 +8262,16 @@ async function renderTasksGraphs(rootElement = document) {
                     traceHoverHit('sticky', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
                     return;
                 }
+                if (hoverGroupId && !groupHoverCardsEnabled) {
+                    clearGroupHoverTooltip();
+                    traceHoverHit('group-card-disabled', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx });
+                    return;
+                }
                 const hoverAnchor = reactFlow.screenToFlowPosition({ x: event.clientX + 12, y: event.clientY + 18 });
                 const hoverCard = {
                     label,
                     nodeId,
+                    group: Boolean(hoverGroupId),
                     image,
                     rows,
                     flowX: hoverAnchor.x,
@@ -8260,7 +8285,7 @@ async function renderTasksGraphs(rootElement = document) {
                 groupHoverTooltipRef.current = nextHoverCard;
                 setGroupHoverTooltip(nextHoverCard);
                 traceHoverHit('hit', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx, groupHoverChanged });
-            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, clearOptionEdgePreview, edgeForOptionPointer, previewOptionEdge, activeHoverAttrs, nodes, widgetId, model, egoMode, hoverInactiveNodes, hoverCardRightRail, hoveredNodeId, logHoverCycle, selectedNodeId]);
+            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, clearOptionEdgePreview, edgeForOptionPointer, previewOptionEdge, activeHoverAttrs, nodes, widgetId, model, egoMode, hoverInactiveNodes, hoverCardRightRail, groupHoverCardsEnabled, hoveredNodeId, logHoverCycle, selectedNodeId]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
@@ -8713,7 +8738,8 @@ async function renderTasksGraphs(rootElement = document) {
             };
             const RightRail = () => {
                 if (!selectedNodeId && !(edgeCardOpen && (selectedEdgeRecord || edgeCardError))) return null;
-                if (hoverCardsEnabled && hoverCardRightRail && groupHoverTooltip?.placement === 'rightRail') return null;
+                if (hoverCardsEnabled && hoverCardRightRail && groupHoverTooltip?.placement === 'rightRail'
+                    && (groupHoverCardsEnabled || !groupHoverTooltip.group)) return null;
                 return window.React.createElement('div', {
                     style: {
                         position: 'absolute',
@@ -8892,7 +8918,9 @@ async function renderTasksGraphs(rootElement = document) {
             }, [dismissStickyHoverCard, hoverFontSize, rf, sourceModel]);
             const GroupHoverTooltip = () => {
                 if (!hoverCardsEnabled) return null;
-                const stickyCards = stickyGroupHoverTooltips.map((card, index) => window.React.createElement(GroupHoverTooltipCard, {
+                const stickyCards = stickyGroupHoverTooltips
+                    .filter((card) => groupHoverCardsEnabled || !card.group)
+                    .map((card, index) => window.React.createElement(GroupHoverTooltipCard, {
                     key: card.stickyId,
                     card,
                     noteValue: nodeNotes[card.nodeId] || '',
@@ -8903,7 +8931,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const stickyLayer = rf.ViewportPortal
                     ? window.React.createElement(rf.ViewportPortal, null, ...stickyCards)
                     : window.React.createElement(window.React.Fragment, null, ...stickyCards);
-                const transientCard = groupHoverTooltip ? window.React.createElement(GroupHoverTooltipCard, {
+                const transientCard = groupHoverTooltip && (groupHoverCardsEnabled || !groupHoverTooltip.group) ? window.React.createElement(GroupHoverTooltipCard, {
                     key: '__transient__',
                     card: groupHoverTooltip,
                     noteValue: nodeNotes[groupHoverTooltip.nodeId] || '',
@@ -8966,6 +8994,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('S', 'toggle filters'),
                     row('E', 'toggle edges'),
                     row('C', 'hover cards: off, at cursor, right rail'),
+                    row('Shift + C', 'toggle group hover cards'),
                     row('T', 'toggle hovered group'),
                     row('I / O', 'expand / collapse one depth'),
                     row('U / P', 'unfold / collapse all'),
