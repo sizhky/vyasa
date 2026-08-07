@@ -169,6 +169,13 @@ test('sizeTaskNode grows height for long labels', () => {
     assert.ok(longNode.height > shortNode.height);
 });
 
+test('sizeTaskNode measures Markdown link labels instead of link targets', () => {
+    const linked = sizeTaskNode('One [live question](?term=t-live-question) does not load every [table schema](?term=t-schema)', 'task', null, { hasImage: true });
+    const visible = sizeTaskNode('One live question does not load every table schema', 'task', null, { hasImage: true });
+    assert.deepEqual(linked, visible);
+    assert.deepEqual(sizeTaskNode('One `live question` does not load every `table schema`', 'task', null, { hasImage: true }), visible);
+});
+
 test('sizeTaskNode grows group title height for wrapped text at runtime width', () => {
     const shortTitle = sizeTaskNode('Short title', 'groupTitle', 234);
     const longTitle = sizeTaskNode('Ground Truth Streams (Phase 2 input to A_17)', 'groupTitle', 234);
@@ -357,6 +364,37 @@ test('edge toggle header button warns when edges are hidden', () => {
     assert.ok(source.includes('data-vyasa-edges-off'), 'hidden edge state is marked on the E button');
     assert.ok(!stylesheetSource.includes('vyasa-edges-off-pulse'), 'hidden edge warning glow stays static');
     assert.ok(stylesheetSource.includes('0 0 34px rgba(239, 68, 68, 1)'), 'hidden edge warning keeps maximum glow');
+});
+
+test('Knowledge Graph styles backtick terms without code chrome', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const stylesheet = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.css', import.meta.url), 'utf8');
+    assert.ok(source.includes("className: 'vyasa-tasks-inline-term'"));
+    assert.ok(stylesheet.includes('.vyasa-task-node-card-value :not(pre) > code'));
+    assert.match(stylesheet, /\.vyasa-tasks-inline-term[^}]*font-family:\s*inherit/);
+    assert.match(stylesheet, /\.vyasa-tasks-inline-term[^}]*font-weight:\s*inherit/);
+    assert.match(stylesheet, /\.vyasa-tasks-inline-term[^}]*color:\s*color-mix/);
+    assert.match(stylesheet, /\.vyasa-tasks-inline-term[^}]*background:\s*color-mix/);
+    assert.match(stylesheet, /\.vyasa-tasks-inline-term[^}]*box-decoration-break:\s*clone/);
+});
+
+test('Knowledge Graph node card keeps styled title fragments in one flex child', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.match(source, /React\.createElement\('span', \{ style: \{ minWidth: 0 \} \},\s+renderTasksInlineLinks\(selectedNode\.label/);
+});
+
+test('Knowledge Graph edge card renders both endpoint titles with inline terms', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes('renderTasksInlineLinks(sourceLabel'));
+    assert.ok(source.includes('renderTasksInlineLinks(targetLabel'));
+    assert.ok(!source.includes("React.createElement('span', null, sourceLabel)"));
+    assert.ok(!source.includes("React.createElement('span', null, targetLabel)"));
+});
+
+test('Knowledge Graph fallback cards render inline terms safely', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes('tasksInlineTermHtml(n.label)'));
+    assert.ok(!source.includes('<span>${n.label}</span>'));
 });
 
 test('collapsed groups average both primary and secondary colors', () => {

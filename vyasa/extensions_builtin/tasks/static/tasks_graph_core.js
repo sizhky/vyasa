@@ -186,6 +186,12 @@ export function measureTextWidth(text, font = TASK_NODE_FONT) {
     return ctx.measureText(text).width;
 }
 
+export function tasksInlineLinkPlainText(value) {
+    return String(value || '')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+        .replace(/`([^`\n]+)`/g, '$1');
+}
+
 export function sizeTaskNode(label, kind = 'task', widthOverride = null, options = {}) {
     const spec = TASK_NODE_SPECS[kind] || TASK_NODE_SPECS.task;
     const width = Math.max(32, Number(widthOverride || spec.width));
@@ -193,7 +199,7 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
     const imageReserve = imageSpec ? imageSpec.size + imageSpec.gap : 0;
     const maxTextWidth = Math.max(32, width - spec.padX - spec.reserveX - imageReserve - 8);
     const widthBias = options?.hasImage ? 1.18 : 1.12;
-    const lines = String(label || '')
+    const lines = tasksInlineLinkPlainText(label)
         .split(/\r?\n/)
         .reduce((count, part) => count + Math.max(1, Math.ceil((measureTextWidth(part) * widthBias) / maxTextWidth)), 0);
     const textHeight = Math.max(24, lines * 21);
