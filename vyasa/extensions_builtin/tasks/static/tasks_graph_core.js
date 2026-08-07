@@ -186,8 +186,9 @@ export function measureTextWidth(text, font = TASK_NODE_FONT) {
     return ctx.measureText(text).width;
 }
 
-export function tasksInlineLinkPlainText(value) {
+export function tasksInlineLinkPlainText(value, nodeLabels = {}) {
     return String(value || '')
+        .replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]+))?\]\]/g, (_match, target, display) => display || nodeLabels[String(target).trim()] || String(target).trim())
         .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
         .replace(/`([^`\n]+)`/g, '$1');
 }
@@ -199,7 +200,7 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
     const imageReserve = imageSpec ? imageSpec.size + imageSpec.gap : 0;
     const maxTextWidth = Math.max(32, width - spec.padX - spec.reserveX - imageReserve - 8);
     const widthBias = options?.hasImage ? 1.18 : 1.12;
-    const lines = tasksInlineLinkPlainText(label)
+    const lines = tasksInlineLinkPlainText(label, options?.nodeLabels)
         .split(/\r?\n/)
         .reduce((count, part) => count + Math.max(1, Math.ceil((measureTextWidth(part) * widthBias) / maxTextWidth)), 0);
     const textHeight = Math.max(24, lines * 21);
@@ -947,7 +948,7 @@ export function nearestTasksIncidentEdge(pointer, nodeId, nodes, edges) {
     return nearest;
 }
 
-export function buildTaskEdgeAnchors(nodes, edges) {
+export function buildTaskEdgeAnchors(nodes, edges, handlePrefix = '') {
     const rects = absoluteNodeRects(nodes);
     const nodesById = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
     const outgoingGroups = new Map();
@@ -989,7 +990,7 @@ export function buildTaskEdgeAnchors(nodes, edges) {
             const slotOffset = role === 'source' ? peerEntries.length : 0;
             entries.sort((a, b) => (a.sortValue - b.sortValue) || (a.edge._anchorIndex - b.edge._anchorIndex));
             const handles = entries.map(({ edge }, index) => {
-                const handleId = `${role}-${side}-${index}`;
+                const handleId = `${handlePrefix}${role}-${side}-${index}`;
                 if (role === 'source') edge.sourceHandle = handleId;
                 else edge.targetHandle = handleId;
                 return { id: handleId, side, offsetPct: deterministicHandlePct(slotOffset + index, slotCount) };

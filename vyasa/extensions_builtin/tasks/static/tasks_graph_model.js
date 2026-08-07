@@ -22,7 +22,7 @@ const TASKS_INTERNAL_EDGE_META_KEYS = new Set([
     'id', 'source', 'target', 'relation', 'label', 'type', 'kind', 'animated',
     'markerend', 'labelstyle', 'labelbgstyle', 'style', 'data', 'zindex',
     'labelbgpadding', 'labelbgborderradius', 'labelzindex', 'labelmaxwidth',
-    'sourcehandle', 'targethandle', '__kg_sources', '__rendered_attrs__', '__edge_types__',
+    'sourcehandle', 'targethandle', '__kg_sources', '__rendered_attrs__', '__edge_types__', '__reference__',
 ]);
 
 export function normalizeTasksAttrText(value) {
@@ -45,6 +45,81 @@ export function tasksAttrValues(value) {
 
 export function tasksLogicalNodeId(node, fallback = '') {
     return String(node?.__source_node_id || fallback || node?.id || '').trim();
+}
+
+export function tasksNodeReferences(value) {
+    const values = Array.isArray(value) ? value : [value];
+    const references = [];
+    const pattern = /\[\[([^\]|\n]+)(?:\|([^\]\n]+))?\]\]/g;
+    for (const entry of values) {
+        let match;
+        while ((match = pattern.exec(String(entry ?? ''))) !== null) {
+            references.push({ target: match[1].trim(), display: String(match[2] || '').trim() });
+        }
+    }
+    return references.filter((reference) => reference.target);
+}
+
+export function tasksReferenceEdges(model, authoredEdges = model?.dependency_edges || []) {
+    const nodes = [...(model?.groups || []), ...(model?.tasks || [])];
+    const nodesByLogicalId = new Map();
+    for (const node of nodes) {
+        const logicalId = tasksLogicalNodeId(node);
+        nodesByLogicalId.set(logicalId, [...(nodesByLogicalId.get(logicalId) || []), node]);
+    }
+    const nodeIds = new Set([
+        ...nodesByLogicalId.keys(),
+        ...Object.keys(model?.node_reference_labels || {}),
+    ]);
+    const authored = new Set((authoredEdges || []).map((edge) => `${edge.source}\0${edge.target}`));
+    const seen = new Set();
+    return nodes.flatMap((node) => {
+        const source = String(node.id || '');
+        const logicalSource = tasksLogicalNodeId(node);
+        const values = [node.label, ...Object.entries(node).filter(([key]) => !tasksIsHiddenNodeMetaKey(key)).map(([, value]) => value)];
+        return values.flatMap(tasksNodeReferences).flatMap(({ target }) => {
+            if (!source || logicalSource === target || !nodeIds.has(target) || authored.has(`${target}\0${logicalSource}`)) return [];
+            const targets = nodesByLogicalId.get(target)?.map((targetNode) => String(targetNode.id || '')) || [target];
+            return targets.flatMap((targetId) => {
+                const key = `${source}\0${targetId}`;
+                if (!targetId || seen.has(key)) return [];
+                seen.add(key);
+                return [{
+                    id: `is-referred-by:${targetId}:${source}`,
+                    source: targetId,
+                    target: source,
+                    relation: 'is referred by',
+                    label: 'is referred by',
+                    __reference__: true,
+                }];
+            });
+        });
+    });
+}
+
+export function tasksVisibleReferenceEdges(referenceEdges, graphNodes, model) {
+    const visible = new Set((graphNodes || []).map((node) => String(node.id || '')));
+    const byId = new Map([...(model?.groups || []), ...(model?.tasks || [])].map((node) => [String(node.id || ''), node]));
+    const resolve = (nodeId) => {
+        let current = String(nodeId || '');
+        const seen = new Set();
+        while (current && !seen.has(current)) {
+            if (visible.has(current)) return current;
+            seen.add(current);
+            const node = byId.get(current);
+            current = String(node?.group_id || node?.parent_group_id || '');
+        }
+        return '';
+    };
+    const seen = new Set();
+    return (referenceEdges || []).flatMap((edge) => {
+        const source = resolve(edge.source);
+        const target = resolve(edge.target);
+        const key = `${source}\0${target}`;
+        if (!source || !target || source === target || seen.has(key)) return [];
+        seen.add(key);
+        return [{ ...edge, id: `is-referred-by:${source}:${target}`, source, target }];
+    });
 }
 
 export function tasksContextDiffSelectionIds(model, graphNodes, diffNodeIds) {

@@ -195,6 +195,10 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
         "title": schema.graph.get("title", ""),
         "groups": [],
         "tasks": [node for node_id, node in nodes_by_id.items() if node_id in present],
+        "node_reference_labels": {
+            node_id: str(node.get("label") or node_id)
+            for node_id, node in nodes_by_id.items()
+        },
         "dependency_edges": edges,
         "view_projections": _resolved_projections(active.views or schema.views, catalog, active.id),
         "slides": active.slides or schema.slides,

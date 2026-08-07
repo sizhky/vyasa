@@ -1,8 +1,8 @@
 .react-flow__node.vyasa-tasks-node--expanded-group { background: transparent !important; background-color: transparent !important; background-image: none !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--vyasa-ink) 52%, transparent), 0 24px 64px color-mix(in srgb, var(--vyasa-primary) 10%, transparent) !important; }
 .vyasa-task-link-badge { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.14rem; min-width: 0.8rem; height: 0.8rem; color: color-mix(in srgb, currentColor 58%, transparent); pointer-events: none; opacity: 0.72; }
 .vyasa-task-link-badge svg { width: 0.8rem; height: 0.8rem; stroke: currentColor !important; fill: none !important; }
-.vyasa-tasks-inline-term,
-.vyasa-task-node-card-value :not(pre) > code { color: color-mix(in srgb, var(--vyasa-primary) 78%, currentColor); font-family: inherit; font-weight: inherit; border: 0; background: color-mix(in srgb, var(--vyasa-primary) 22%, transparent); padding: 0.03em 0.2em; border-radius: 3px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.vyasa-tasks-node-reference { color: color-mix(in srgb, var(--vyasa-primary) 78%, currentColor); font-family: inherit; font-weight: inherit; border: 0; background: color-mix(in srgb, var(--vyasa-primary) 22%, transparent); padding: 0.03em 0.2em; border-radius: 3px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.vyasa-tasks-node-reference--broken { color: #ef4444; background: color-mix(in srgb, #ef4444 18%, transparent); text-decoration: wavy underline; text-decoration-thickness: 1px; }
 .vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }
 .vyasa-task-node-card-value :where(p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote) { font-size: inherit !important; line-height: inherit !important; color: inherit !important; }
 .vyasa-task-node-card-value :where(p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote) { margin: 0 !important; }

@@ -722,6 +722,7 @@ def test_w_edge_q_temporarily_shows_other_node_card():
 
     assert "optionEdgeOtherNodeIdRef.current = edge.source === nodeId ? edge.target : edge.source;" in source
     assert "event.code === 'KeyW'" in source
+    assert "const currentGraphEdges = React.useCallback" in source
     assert "event.code === 'KeyQ'" in source
     assert "setOptionEdgeNodeCardId(optionEdgeOtherNodeIdRef.current);" in source
     assert "event.key === 'Enter' && optionEdgePreviewHeldRef.current" in source
@@ -1571,6 +1572,53 @@ def test_tasks_block_serializes_rendered_attr_html_for_node_card():
     assert "<strong>Bold</strong>" in task["__rendered_attrs__"]["summary"]
     assert "<br" in task["__rendered_attrs__"]["summary"]
     assert 'href="/posts/docs/feed/guide#spec"' in task["__rendered_attrs__"]["summary"]
+
+
+def test_tasks_block_renders_node_references_inside_attributes():
+    md = dedent("""\
+    ```items
+    Foundation:
+      - source :: Source | summary: "Use [[target]] and [[target|custom text]]."
+      - target :: Target node
+    ```
+    """)
+
+    rendered = to_xml(from_md(md))
+    match = re.search(r"""data-tasks-payload=(["'])(.*?)\1""", rendered)
+
+    assert match is not None
+    payload = json.loads(html.unescape(match.group(2)))
+    summary_html = payload["tasks"][0]["__rendered_attrs__"]["summary"]
+    assert summary_html.count('data-vyasa-node-reference="target"') == 2
+    assert ">Target node</span>" in summary_html
+    assert ">custom text</span>" in summary_html
+    assert "href=" not in summary_html
+
+
+def test_context_attributes_resolve_references_to_hidden_pack_nodes(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        "@graph id=refs\npool=kg.nodes\nattrs=kg.attrs\ncontexts=*.context\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text(
+        "source: Source\nvisible: Visible\nhidden: Hidden target\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.attrs").write_text(
+        '@node_attrs\nsummary:\n  "See [[hidden]]": source\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "one.context").write_text(
+        "@context id=one seq=1\n@edges\n  source -> visible relates\n",
+        encoding="utf-8",
+    )
+
+    model, _ = _compile_schema_payload(tmp_path / "kg.schema", context_id="one")
+
+    assert {task["id"] for task in model["tasks"]} == {"source", "visible"}
+    source = next(task for task in model["tasks"] if task["id"] == "source")
+    assert ">Hidden target</span>" in source["__rendered_attrs__"]["summary"]
+    assert "vyasa-tasks-node-reference--broken" not in source["__rendered_attrs__"]["summary"]
 
 
 def test_tasks_block_renders_markdown_lists_without_trailing_breaks():

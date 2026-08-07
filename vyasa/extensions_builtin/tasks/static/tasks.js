@@ -1,7 +1,7 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
 import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksInlineLinkPlainText, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
-import { buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksPruneFilterQueryFields, tasksSelectionClickKey, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
+import { buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksPruneFilterQueryFields, tasksReferenceEdges, tasksSelectionClickKey, tasksVisibleReferenceEdges, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
 import { createMomentumRunner, shortcutsSuspended } from '/static/page_shell.js';
@@ -1033,8 +1033,21 @@ function escapeTasksHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
-function tasksInlineTermHtml(value) {
-    return escapeTasksHtml(value).replace(/`([^`\n]+)`/g, '<span class="vyasa-tasks-inline-term">$1</span>');
+function tasksInlineReferenceHtml(value, nodeLabels = {}) {
+    const text = String(value || '');
+    const pattern = /\[\[([^\]|\n]+)(?:\|([^\]\n]+))?\]\]/g;
+    let html = '';
+    let cursor = 0;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+        html += escapeTasksHtml(text.slice(cursor, match.index));
+        const target = match[1].trim();
+        const label = String(match[2] || nodeLabels[target] || target).trim();
+        const broken = nodeLabels[target] ? '' : ' vyasa-tasks-node-reference--broken';
+        html += `<span class="vyasa-tasks-node-reference${broken}" data-vyasa-node-reference="${escapeTasksHtml(target)}">${escapeTasksHtml(label)}</span>`;
+        cursor = pattern.lastIndex;
+    }
+    return html + escapeTasksHtml(text.slice(cursor));
 }
 
 function tasksOpenDecisionEntry(node) {
@@ -1434,7 +1447,8 @@ function buildTasksEgoState(sourceModel, sourceGraph, selectedIds, includeNeighb
     const tasksById = Object.fromEntries((sourceModel.tasks || []).map((task) => [task.id, task]));
     const visible = new Set(selected);
     if (includeNeighbors) {
-        for (const edge of sourceModel.dependency_edges || []) {
+        const neighborEdges = [...(sourceModel.dependency_edges || []), ...tasksReferenceEdges(sourceModel)];
+        for (const edge of neighborEdges) {
             if (selected.has(edge.source)) visible.add(edge.target);
             if (selected.has(edge.target)) visible.add(edge.source);
         }
@@ -2136,6 +2150,31 @@ function tasksHoverFocusEdge(edge, hoveredNodeId) {
     };
 }
 
+function tasksReferenceFlowEdge(edge, markerType, fontSize = '12px', labelMaxWidth = 240) {
+    const color = 'var(--vyasa-primary)';
+    return {
+        ...edge,
+        type: 'vyasaEdge',
+        data: { ...(edge.data || {}), __reference__: true, edgeColor: color, highlightMode: 'selected', strokeMode: 'selected' },
+        markerEnd: { type: markerType, width: 8, height: 8, color },
+        zIndex: TASKS_EDGE_FOCUS_Z,
+        labelZIndex: TASKS_EDGE_LABEL_FOCUS_Z,
+        labelMaxWidth,
+        labelBgPadding: [6, 3],
+        labelBgBorderRadius: 3,
+        labelStyle: { fontSize, fontWeight: 700, fill: color, opacity: 1 },
+        labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.86 },
+        style: { stroke: color, strokeWidth: 2.5, strokeLinecap: 'round', opacity: 1 },
+    };
+}
+
+function tasksMergeHandleLayouts(primary = {}, secondary = {}) {
+    return {
+        source: [...(primary.source || []), ...(secondary.source || [])],
+        target: [...(primary.target || []), ...(secondary.target || [])],
+    };
+}
+
 function tasksEdgeRecordId(edge) {
     return String(edge?.__source_edge_id || edge?.id || '').trim();
 }
@@ -2190,7 +2229,16 @@ function syncTasksCardScrollToggleButtons(widgetId, enabled) {
     syncTasksToggleButtons(widgetId, 'toggleCardScroll', enabled, 'data-vyasa-card-scroll-on', 'Toggle card scroll mode (V)', 'Card scroll mode is on (V)');
 }
 
+function tasksModelNodeLabels(model) {
+    return {
+        ...(model?.node_reference_labels || {}),
+        ...Object.fromEntries([...(model?.groups || []), ...(model?.tasks || [])]
+            .map((node) => [String(node.id || ''), String(node.label || node.id || '')])),
+    };
+}
+
 function buildVisibleTasksGraph(model, expanded) {
+    const nodeLabels = tasksModelNodeLabels(model);
     const groupsById = Object.fromEntries((model.groups || []).map((g) => [g.id, g]));
     const tasksById = Object.fromEntries((model.tasks || []).map((t) => [t.id, t]));
     const visibleGroups = new Set(model.group_tree?.["null"] || []);
@@ -2203,12 +2251,12 @@ function buildVisibleTasksGraph(model, expanded) {
         ...Array.from(visibleGroups).map((id) => {
             const source = groupsById[id] || {};
             const label = source.label || id;
-            return { ...source, id, label, __kind__: 'group', ...sizeTaskNode(label, 'group', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
+            return { ...source, id, label, __kind__: 'group', ...sizeTaskNode(label, 'group', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels }) };
         }),
         ...Array.from(visibleTasks).map((id) => {
             const source = tasksById[id] || {};
             const label = source.label || id;
-            return { ...source, id, label, __kind__: 'task', ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
+            return { ...source, id, label, __kind__: 'task', ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels }) };
         }),
     ];
     const parentOfGroup = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
@@ -2289,6 +2337,7 @@ function appendProjectedEdge(edges, seen, source, target, label = '', attrs = {}
 }
 
 function normalizeTasksGraphNodes(graph, model) {
+    const nodeLabels = tasksModelNodeLabels(model);
     const groupsById = Object.fromEntries((model.groups || []).map((g) => [g.id, g]));
     const tasksById = Object.fromEntries((model.tasks || []).map((t) => [t.id, t]));
     return {
@@ -2298,7 +2347,7 @@ function normalizeTasksGraphNodes(graph, model) {
             const { kind: _legacyNodeKind, ...nodeRest } = node;
             const kind = node.__kind__ || _legacyNodeKind || (groupsById[node.id] ? 'group' : 'task');
             const label = node.label || source.label || node.id;
-            return { ...source, ...nodeRest, __kind__: kind, label, ...sizeTaskNode(label, kind, null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
+            return { ...source, ...nodeRest, __kind__: kind, label, ...sizeTaskNode(label, kind, null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels }) };
         }),
     };
 }
@@ -2312,6 +2361,7 @@ function taskDurationUnits(task) {
 
 function buildGanttTasksGraph(model) {
     const tasks = model.tasks || [];
+    const nodeLabels = tasksModelNodeLabels(model);
     const byId = Object.fromEntries(tasks.map((task) => [task.id, task]));
     const outgoing = new Map();
     const incomingCount = new Map(tasks.map((task) => [task.id, 0]));
@@ -2354,7 +2404,7 @@ function buildGanttTasksGraph(model) {
         const task = byId[id];
         const time = timing[id] || { start: 0, duration: 1 };
         const width = Math.max(TASKS_GANTT_UNIT_WIDTH - 52, time.duration * TASKS_GANTT_UNIT_WIDTH - 68);
-        const sized = sizeTaskNode(task.label || id, 'task', width, { hasImage: Boolean(resolveTasksNodeImage(task, model)) });
+        const sized = sizeTaskNode(task.label || id, 'task', width, { hasImage: Boolean(resolveTasksNodeImage(task, model)), nodeLabels });
         const height = Math.max(TASKS_GANTT_BAR_MIN_HEIGHT, sized.height - 18);
         rowHeights.set(row, Math.max(rowHeights.get(row) || 0, height));
         return {
@@ -2483,6 +2533,7 @@ function stableTaskJitter(id, amplitudeX = 16, amplitudeY = 8) {
 }
 
 async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layoutConfig = {}) {
+    const nodeLabels = tasksModelNodeLabels(model);
     const nodeMap = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
     const layoutEdges = reduceTransitiveEdges(graph.edges || []);
     const parentOf = {};
@@ -2492,6 +2543,7 @@ async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layou
         const width = Math.max(80, Number(widthOverride || groupNode?.width || 250) - 16);
         const titleHeight = sizeTaskNode(groupNode?.label || groupNode?.id || '', 'groupTitle', width, {
             hasImage: Boolean(resolveTasksNodeImage(groupNode, model)),
+            nodeLabels,
         }).height;
         return groupPadding + titleHeight;
     };
@@ -2692,10 +2744,6 @@ function buildProjectedRootTasksGraph(rawGraph, model) {
     };
 }
 
-function hasExplicitGroupDirection(model) {
-    return (model.groups || []).some((group) => group && (group.direction || group.layout_direction));
-}
-
 // Read the layering ELK already worked out, rather than re-deriving ranks from
 // the edges. ELK breaks cycles as part of laying out; a longest-path rank of our
 // own cuts a cycle wherever its walk happens to enter it, which can drop a group
@@ -2721,6 +2769,7 @@ function tasksWaterfallBands(ids, edges, direction, positions = {}) {
 }
 
 async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig = {}, layoutConfig = {}, useElkForGroups = true) {
+    const nodeLabels = tasksModelNodeLabels(model);
     const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
     const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
     const groupDirection = readTasksDirection(groupsById[groupId]?.layout_direction || groupsById[groupId]?.direction || layoutConfig.elkDirection);
@@ -2728,18 +2777,19 @@ async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig
     const groupTitleWidth = Math.max(80, (childSizes[groupId]?.width || groupsById[groupId]?.width || 250) - 16);
     const groupTitleHeight = sizeTaskNode(groupsById[groupId]?.label || groupId, 'groupTitle', groupTitleWidth, {
         hasImage: Boolean(resolveTasksNodeImage(groupsById[groupId], model)),
+        nodeLabels,
     }).height;
     const groupPadTop = groupPadding + groupTitleHeight;
     const groupChildren = [
         ...(model.task_children?.[groupId] || []).map((id) => {
             const source = tasksById[id] || {};
             const label = source.label || id;
-            return { id, __kind__: 'task', label, ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
+            return { id, __kind__: 'task', label, ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels }) };
         }),
         ...(model.group_tree?.[groupId] || []).map((id) => {
             const source = groupsById[id] || {};
             const label = source.label || id;
-            return { id, __kind__: 'group', label, ...sizeTaskNode(label, 'group', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)) }) };
+            return { id, __kind__: 'group', label, ...sizeTaskNode(label, 'group', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels }) };
         }),
     ].map((child) => childSizes[child.id] ? { ...child, ...childSizes[child.id] } : child);
     if (groupChildren.length === 0) {
@@ -2934,6 +2984,13 @@ async function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseL
             edges: (baseGraph.edges || []).map((edge, index) => ({ id: `root-${index}`, sources: [edge.source], targets: [edge.target] })),
         });
         rootPositions = Object.fromEntries((rootLayout.children || []).map((node) => [node.id, { x: node.x || 0, y: node.y || 0 }]));
+        logTasksDebugVerbose('expandedRootLayout', {
+            edges: (baseGraph.edges || []).map((edge) => ({ source: edge.source, target: edge.target, reference: edge.__reference__ === true })),
+            positions: Object.fromEntries((rootLayout.children || []).map((node) => [node.id, {
+                x: Math.round(node.x || 0), y: Math.round(node.y || 0),
+                width: Math.round(node.width || 0), height: Math.round(node.height || 0),
+            }])),
+        });
         layoutTrace.rootElk = {
             width: Math.round(rootLayout.width || 0),
             height: Math.round(rootLayout.height || 0),
@@ -3120,6 +3177,7 @@ async function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseL
 }
 
 function paintTasksScene(scene, mount, graph, laidOut) {
+    const nodeLabels = Object.fromEntries((graph.nodes || []).map((node) => [String(node.id || ''), String(node.label || node.id || '')]));
     const positions = Object.fromEntries((laidOut.children || []).map((n) => [n.id, n]));
     const lines = (laidOut.edges || []).map((e) => {
         const s = e.sections?.[0];
@@ -3136,7 +3194,7 @@ function paintTasksScene(scene, mount, graph, laidOut) {
         const linkIcon = linkKinds.length
             ? `<span class="vyasa-task-link-badge" aria-hidden="true" style="position:absolute;top:8px;right:${n.__kind__ === 'group' ? '32px' : '10px'}">${linkKinds.map((kind) => `<span uk-icon="${kind === 'external' ? 'link-external' : 'link'}"></span>`).join('')}</span>`
             : '';
-        return `<div class="vyasa-task-card" data-node-id="${n.id}" data-node-kind="${n.__kind__}" style="position:absolute;left:${p.x}px;top:${p.y}px;width:${n.width}px;height:${n.height}px;border:1px solid color-mix(in srgb, currentColor 35%, transparent);border-radius:14px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;text-align:center;padding:8px;cursor:${n.__kind__ === 'group' ? 'pointer' : 'default'}"><span>${tasksInlineTermHtml(n.label)}</span>${linkIcon}${exp}</div>`;
+        return `<div class="vyasa-task-card" data-node-id="${n.id}" data-node-kind="${n.__kind__}" style="position:absolute;left:${p.x}px;top:${p.y}px;width:${n.width}px;height:${n.height}px;border:1px solid color-mix(in srgb, currentColor 35%, transparent);border-radius:14px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;text-align:center;padding:8px;cursor:${n.__kind__ === 'group' ? 'pointer' : 'default'}"><span>${tasksInlineReferenceHtml(n.label, nodeLabels)}</span>${linkIcon}${exp}</div>`;
     }).join('');
     scene.style.width = `${Math.max(laidOut.width || 1200, mount.clientWidth)}px`;
     scene.style.height = `${Math.max(laidOut.height || 420, mount.clientHeight)}px`;
@@ -3250,6 +3308,7 @@ function renderTasksInlineLinks(value, options = {}) {
     const interactive = options.interactive !== false;
     const onInactiveClick = typeof options.onInactiveClick === 'function' ? options.onInactiveClick : null;
     const currentPath = String(options.currentPath || '').trim();
+    const nodeLabels = options.nodeLabels || {};
     const parts = [];
     const linkPart = (label, href, key) => interactive
         ? window.React.createElement('a', {
@@ -3277,14 +3336,20 @@ function renderTasksInlineLinks(value, options = {}) {
         }
         if (cursor < plain.length) parts.push(plain.slice(cursor));
     };
-    const pattern = /\[([^\]]+)\]\(([^)\s]+(?:\s[^)]*)?)\)|`([^`\n]+)`/g;
+    const pattern = /\[([^\]]+)\]\(([^)\s]+(?:\s[^)]*)?)\)|\[\[([^\]|\n]+)(?:\|([^\]\n]+))?\]\]/g;
     let lastIndex = 0;
     let match;
     while ((match = pattern.exec(text)) !== null) {
         if (match.index > lastIndex) appendText(text.slice(lastIndex, match.index), lastIndex);
-        const [, label, href, term] = match;
-        parts.push(term
-            ? window.React.createElement('span', { key: `term-${match.index}`, className: 'vyasa-tasks-inline-term' }, term)
+        const [, label, href, targetText, displayText] = match;
+        const target = String(targetText || '').trim();
+        const referenceLabel = String(displayText || nodeLabels[target] || target).trim();
+        parts.push(target
+            ? window.React.createElement('span', {
+                key: `reference-${match.index}`,
+                className: `vyasa-tasks-node-reference${nodeLabels[target] ? '' : ' vyasa-tasks-node-reference--broken'}`,
+                'data-vyasa-node-reference': target,
+            }, referenceLabel)
             : linkPart(label, href, `${href}-${match.index}`));
         lastIndex = pattern.lastIndex;
     }
@@ -3666,7 +3731,13 @@ function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode, g
     }
     return {
         ...projectionState,
-        graph: buildGanttTasksGraph(projectionState.model),
+        graph: buildGanttTasksGraph({
+            ...projectionState.model,
+            dependency_edges: [
+                ...(projectionState.model.dependency_edges || []),
+                ...tasksReferenceEdges(projectionState.model),
+            ],
+        }),
         viewMode: 'gantt',
     };
 }
@@ -3897,6 +3968,7 @@ async function renderTasksGraphs(rootElement = document) {
             const baseLayoutRef = React.useRef(null);
             const groupLayoutsRef = React.useRef({});
             const graphBaseRef = React.useRef({ nodes: [], edges: [] });
+            const referenceEdgesRef = React.useRef([]);
             const flowWrapperRef = React.useRef(null);
             const filterPanelRef = React.useRef(null);
             const [graphRevision, setGraphRevision] = React.useState(0);
@@ -4237,9 +4309,26 @@ async function renderTasksGraphs(rootElement = document) {
             const [edges, setEdges] = React.useState([]);
             const visibleEdgesRef = React.useRef([]);
             visibleEdgesRef.current = edges;
-            const edgeNodeLabels = React.useMemo(() => Object.fromEntries(
-                [...(model?.groups || []), ...(model?.tasks || [])].map((node) => [String(node.id || ''), String(node.label || node.id || '')])
-            ), [model]);
+            const edgeNodeLabels = React.useMemo(() => tasksModelNodeLabels(model), [model]);
+            const referenceEdgeRecords = React.useMemo(
+                () => tasksReferenceEdges(model, sourceModel?.dependency_edges),
+                [model, sourceModel]
+            );
+            const layoutModel = React.useMemo(() => ({
+                ...model,
+                dependency_edges: [...(model?.dependency_edges || []), ...referenceEdgeRecords],
+            }), [model, referenceEdgeRecords]);
+            const layoutRawGraph = React.useMemo(() => ({
+                ...rawGraph,
+                edges: [
+                    ...(rawGraph?.edges || []),
+                    ...tasksVisibleReferenceEdges(referenceEdgeRecords, rawGraph?.nodes || [], model),
+                ],
+            }), [rawGraph, referenceEdgeRecords, model]);
+            const currentGraphEdges = React.useCallback(
+                () => [...(graphBaseRef.current.edges || []), ...referenceEdgesRef.current],
+                [],
+            );
             const edgeNodesById = React.useMemo(() => new Map([...(model?.groups || []), ...(model?.tasks || [])].map((node) => [String(node.id || ''), node])), [model]);
             const [selectedEdgeRecord, setSelectedEdgeRecord] = React.useState(null);
             const resolveEdgeRecord = React.useCallback((edge) => {
@@ -4253,7 +4342,9 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgeId = tasksEdgeRecordId(edge);
                 if (!edgeId) return;
                 const record = resolveEdgeRecord(edge);
-                const ordered = tasksOrderedEdges(visibleEdgesRef.current.length ? visibleEdgesRef.current : model?.dependency_edges || []);
+                const ordered = tasksOrderedEdges(visibleEdgesRef.current.length
+                    ? visibleEdgesRef.current
+                    : currentGraphEdges());
                 const index = ordered.findIndex((item) => tasksEdgeRecordId(item) === edgeId);
                 const sourceLabel = edgeNodeLabels[record.source] || record.source || '';
                 const targetLabel = edgeNodeLabels[record.target] || record.target || '';
@@ -4275,7 +4366,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${fragment}`);
                 }
                 logTasksDebug('edgeSelectionSet', { widgetId, edgeId, source: record.source || '', target: record.target || '', openCard });
-            }, [activeContextId, edgeNodeLabels, model, resolveEdgeRecord, widgetId]);
+            }, [activeContextId, currentGraphEdges, edgeNodeLabels, resolveEdgeRecord, widgetId]);
             const edgeForOptionPointer = React.useCallback((event) => {
                 const reactFlow = reactFlowApiRef.current;
                 if (!reactFlow) return null;
@@ -4289,9 +4380,14 @@ async function renderTasksGraphs(rootElement = document) {
                         : hit.node.id;
                 }
                 if (!nodeId) return null;
-                const edge = nearestTasksIncidentEdge(point, nodeId, graph.nodes || [], graph.edges || []);
+                const edge = nearestTasksIncidentEdge(
+                    point,
+                    nodeId,
+                    graph.nodes || [],
+                    currentGraphEdges(),
+                );
                 return edge ? { edge, nodeId } : null;
-            }, []);
+            }, [currentGraphEdges]);
             const previewOptionEdge = React.useCallback((edge, nodeId) => {
                 if (optionEdgePinnedRef.current) return;
                 const edgeId = tasksEdgeRecordId(edge);
@@ -4495,20 +4591,22 @@ async function renderTasksGraphs(rootElement = document) {
                 return id ? (projections.find((p) => p && p.id === id) || null) : null;
             }, [viewerState.model, activeProjectionId]);
             const edgeTypeOptions = React.useMemo(() => Array.from(new Set(
-                (model?.dependency_edges || [])
+                (layoutModel?.dependency_edges || [])
                     .map((edge) => resolveTasksEdgeLabel(edge, model, activeProjection))
                     .filter(Boolean)
-            )).sort((a, b) => a.localeCompare(b)), [model, activeProjection]);
+            )).sort((a, b) => a.localeCompare(b)), [layoutModel, model, activeProjection]);
             const edgeTypeColors = React.useMemo(() => {
                 const palette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
                 const colors = {};
-                for (const edge of model?.dependency_edges || []) {
+                for (const edge of layoutModel?.dependency_edges || []) {
                     const type = resolveTasksEdgeLabel(edge, model, activeProjection);
                     if (!type || colors[type]) continue;
-                    colors[type] = resolveTasksEdgeColor(edge, model, model?.edge_color_by, palette) || 'currentColor';
+                    colors[type] = edge.__reference__
+                        ? 'var(--vyasa-primary)'
+                        : (resolveTasksEdgeColor(edge, model, model?.edge_color_by, palette) || 'currentColor');
                 }
                 return colors;
-            }, [model, activeProjection]);
+            }, [layoutModel, model, activeProjection]);
             React.useEffect(() => {
                 const valid = new Set(edgeTypeOptions);
                 setActiveEdgeTypes((current) => current.filter((type) => valid.has(type)));
@@ -4596,6 +4694,7 @@ async function renderTasksGraphs(rootElement = document) {
                 baseLayoutRef.current = null;
                 groupLayoutsRef.current = {};
                 graphBaseRef.current = { nodes: [], edges: [] };
+                referenceEdgesRef.current = [];
                 const restoringEgo = !egoState && Boolean(pendingEgoViewportRestoreRef.current);
                 if (restoringEgo) {
                     setDragSelection(null);
@@ -4700,7 +4799,7 @@ async function renderTasksGraphs(rootElement = document) {
                 [egoMode, queryBuilderEnabled, activeFilters]
             );
             const searchMatches = React.useMemo(
-                () => tasksCollectSearchMatches(graphBaseRef.current.nodes || [], graphBaseRef.current.edges || [], !egoMode && searchEnabled ? searchQuery : '', nodeNotes),
+                () => tasksCollectSearchMatches(graphBaseRef.current.nodes || [], currentGraphEdges(), !egoMode && searchEnabled ? searchQuery : '', nodeNotes),
                 [graphRevision, egoMode, searchEnabled, searchQuery, nodeNotes]
             );
             const filteredSelectionIds = React.useCallback(() => {
@@ -4709,7 +4808,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const hasSearch = searchMatches.active && !searchMatches.error;
                 if (!hasFilters && !hasEdgeFilters && !hasSearch) return new Set();
                 const edgeNodeIds = hasEdgeFilters
-                    ? tasksEdgeFilterNodeIds(graphBaseRef.current.edges || [], effectiveEdgeTypes)
+                    ? tasksEdgeFilterNodeIds(currentGraphEdges(), effectiveEdgeTypes)
                     : null;
                 return new Set((graphBaseRef.current.nodes || [])
                     .filter((node) => node?.id && node.data?.__kind__ !== 'groupTitle')
@@ -4720,7 +4819,7 @@ async function renderTasksGraphs(rootElement = document) {
                         return filterHit && edgeHit && searchHit;
                     })
                     .map((node) => node.id));
-            }, [effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches]);
+            }, [currentGraphEdges, effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches]);
             const currentSelectionIds = React.useCallback(() => {
                 if (selectedNodeIdRef.current) return new Set([selectedNodeIdRef.current]);
                 if (selectedNodeIdsRef.current.size) {
@@ -4738,7 +4837,10 @@ async function renderTasksGraphs(rootElement = document) {
                 if (!selectedIds.size) return [];
                 // Equal-z hit paths use paint order. Stable edge order makes the
                 // overlap winner deterministic; keyboard cycling still reaches all edges.
-                const baseEdges = tasksOrderedEdges(tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], effectiveEdgeTypes));
+                const baseEdges = tasksOrderedEdges(tasksEdgesMatchingTypes(
+                    currentGraphEdges(),
+                    effectiveEdgeTypes,
+                ));
                 const fitIds = new Set(selectedIds);
                 for (const selectedId of selectedIds) {
                     for (const descendantId of collectTasksGroupDescendantIds(selectedId, model)) fitIds.add(descendantId);
@@ -4762,7 +4864,7 @@ async function renderTasksGraphs(rootElement = document) {
                     && node.data?.__kind__ !== 'groupTitle'
                     && fitIds.has(node.id)
                 ));
-            }, [currentSelectionIds, model, effectiveEdgeTypes]);
+            }, [currentGraphEdges, currentSelectionIds, model, effectiveEdgeTypes]);
             const tasksFitDebugPayload = React.useCallback((reason, matchedNodes = []) => {
                 const selectedIds = currentSelectionIds();
                 const hasQueryFilters = tasksFilterQueryHasRules(effectiveQueryFilters);
@@ -4815,7 +4917,7 @@ async function renderTasksGraphs(rootElement = document) {
             }, [currentHighlightedFitNodes, fitPaddingAroundCards, tasksFitDebugPayload]);
             const fitSelectedEdgeConnection = React.useCallback((reactFlow, duration = 300) => {
                 if (!reactFlow || !selectedEdgeIdRef.current) return 0;
-                const visibleEdge = (graphBaseRef.current.edges || []).find(
+                const visibleEdge = currentGraphEdges().find(
                     (edge) => tasksEdgeRecordId(edge) === selectedEdgeIdRef.current
                 );
                 const edge = visibleEdge || selectedEdgeRecord;
@@ -4825,7 +4927,7 @@ async function renderTasksGraphs(rootElement = document) {
                 if (!matched.length) return 0;
                 reactFlow.fitView({ nodes: matched, duration, padding: fitPaddingAroundCards(0.32), includeHiddenNodes: true });
                 return matched.length;
-            }, [fitPaddingAroundCards, selectedEdgeRecord]);
+            }, [currentGraphEdges, fitPaddingAroundCards, selectedEdgeRecord]);
             React.useEffect(() => {
                 const baseModel = baseProjectionState.model;
                 const validFilterKeys = new Set(tasksFilterOptions(baseModel).map((option) => option.key));
@@ -5256,9 +5358,9 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             }, []);
             const ensureBaseLayout = React.useCallback(async () => {
-                if (!baseLayoutRef.current) baseLayoutRef.current = await layoutBaseTasksGraph(rawGraph, model, jitterConfig, layoutConfig);
+                if (!baseLayoutRef.current) baseLayoutRef.current = await layoutBaseTasksGraph(layoutRawGraph, layoutModel, jitterConfig, layoutConfig);
                 return baseLayoutRef.current;
-            }, [rawGraph, model, jitterConfig, layoutConfig]);
+            }, [layoutRawGraph, layoutModel, jitterConfig, layoutConfig]);
             const rebuildLayout = React.useCallback(async (expandedSet, mode = viewMode) => {
                 const layoutStart = tasksPerfNow();
                 const revisionKey = `${mode}|${String(model?.graph_id || '')}|${Array.from(expandedSet || []).sort().join(',')}`;
@@ -5317,7 +5419,10 @@ async function renderTasksGraphs(rootElement = document) {
                             selectable: true,
                         };
                     });
-                    const anchored = buildTaskEdgeAnchors(nodesWithStyle, rawGraph.edges);
+                    const authoredRawEdges = (rawGraph.edges || []).filter((edge) => !edge.__reference__);
+                    const anchored = buildTaskEdgeAnchors(nodesWithStyle, authoredRawEdges);
+                    const visibleReferenceRecords = tasksVisibleReferenceEdges(referenceEdgeRecords, nodesWithStyle, model);
+                    const referenceAnchored = buildTaskEdgeAnchors(nodesWithStyle, visibleReferenceRecords, 'reference-');
                     const baseEdges = anchored.edges.map((edge) => {
                         const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
                         const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
@@ -5333,7 +5438,11 @@ async function renderTasksGraphs(rootElement = document) {
                             style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: edgeColor || 'currentColor' },
                         };
                     });
-                    const anchoredNodes = nodesWithStyle.map((node) => ({ ...node, data: { ...node.data, handleLayout: anchored.nodeHandles[node.id] || { source: [], target: [] } } }));
+                    referenceEdgesRef.current = referenceAnchored.edges.map((edge) => tasksReferenceFlowEdge(edge, rf.MarkerType.ArrowClosed, hoverFontSize, layoutConfig.edgeLabelWidth));
+                    const anchoredNodes = nodesWithStyle.map((node) => ({
+                        ...node,
+                        data: { ...node.data, handleLayout: tasksMergeHandleLayouts(anchored.nodeHandles[node.id], referenceAnchored.nodeHandles[node.id]) },
+                    }));
                     graphBaseRef.current = { nodes: anchoredNodes, edges: baseEdges };
                     setNodes(anchoredNodes);
                     setEdges(edgesVisible ? baseEdges : []);
@@ -5354,19 +5463,10 @@ async function renderTasksGraphs(rootElement = document) {
                 const effectiveExpandedSet = effectiveExpandedGroups(model, expandedSet);
                 const baseLayout = await ensureBaseLayout();
                 const baseDone = tasksPerfNow();
-                groupLayoutsRef.current = await layoutExpandedGroups(model, effectiveExpandedSet, jitterConfig, layoutConfig, true);
+                groupLayoutsRef.current = await layoutExpandedGroups(layoutModel, effectiveExpandedSet, jitterConfig, layoutConfig, true);
                 const groupsDone = tasksPerfNow();
-                const rootGroupIds = new Set(model.group_tree?.["null"] || []);
-                const rootTaskIds = new Set(model.task_children?.["null"] || []);
-                const rootNodeIds = new Set([...rootGroupIds, ...rootTaskIds]);
-                const rootGraph = hasExplicitGroupDirection(model)
-                    ? { ...buildProjectedRootTasksGraph(rawGraph, model), enforceRootRank: true }
-                    : {
-                        nodes: rawGraph.nodes.filter((node) => rootNodeIds.has(node.id)),
-                        edges: (rawGraph.edges || []).filter((edge) => rootNodeIds.has(edge.source) && rootNodeIds.has(edge.target)),
-                        enforceRootRank: false,
-                    };
-                const derived = await deriveSquishedExpandedLayout(rootGraph, model, effectiveExpandedSet, baseLayout, groupLayoutsRef.current, layoutConfig);
+                const rootGraph = { ...buildProjectedRootTasksGraph(layoutRawGraph, layoutModel), enforceRootRank: true };
+                const derived = await deriveSquishedExpandedLayout(rootGraph, layoutModel, effectiveExpandedSet, baseLayout, groupLayoutsRef.current, layoutConfig);
                 const derivedDone = tasksPerfNow();
                 const derivedById = Object.fromEntries((derived.nodes || []).map((node) => [node.id, node]));
                 const unspecifiedProjectionGroupIds = new Set(
@@ -5489,7 +5589,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const titleZ = TASKS_TITLE_Z + depthOf(n);
                     const titleWidth = Math.max(80, n.width - 16);
                     const titleImage = resolveTasksNodeImage(n, model);
-                    const titleHeight = sizeTaskNode(n.label || n.id, 'groupTitle', titleWidth, { hasImage: Boolean(titleImage) }).height;
+                    const titleHeight = sizeTaskNode(n.label || n.id, 'groupTitle', titleWidth, { hasImage: Boolean(titleImage), nodeLabels: edgeNodeLabels }).height;
                     const titleOpacity = isInUnspecifiedProjectionBranch(n) ? projectionUnspecifiedContentOpacity : 1;
                     baseNodes.push({
                         id: `${n.id}__title`,
@@ -5514,7 +5614,10 @@ async function renderTasksGraphs(rootElement = document) {
                         selectable: isTasksGraphNodeSelectable('groupTitle'),
                     });
                 }
-                const anchored = buildTaskEdgeAnchors(baseNodes, derived.edges);
+                const authoredDerivedEdges = (derived.edges || []).filter((edge) => !edge.__reference__);
+                const anchored = buildTaskEdgeAnchors(baseNodes, authoredDerivedEdges);
+                const visibleReferenceRecords = tasksVisibleReferenceEdges(referenceEdgeRecords, baseNodes, model);
+                const referenceAnchored = buildTaskEdgeAnchors(baseNodes, visibleReferenceRecords, 'reference-');
                 const edgeColorPalette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
                 const baseEdges = anchored.edges.map((edge) => {
                     const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
@@ -5549,12 +5652,13 @@ async function renderTasksGraphs(rootElement = document) {
                         ...node.data,
                         handleLayout: nodeConnectionExperiment
                             ? TASKS_NODE_CONNECTION_HANDLES
-                            : (anchored.nodeHandles[node.id] || { source: [], target: [] }),
+                            : tasksMergeHandleLayouts(anchored.nodeHandles[node.id], referenceAnchored.nodeHandles[node.id]),
                         __debug_position__: showDebugPositions
                             ? { x: Math.round(absolutePosition(node).x), y: Math.round(absolutePosition(node).y) }
                             : undefined,
                     },
                 }));
+                referenceEdgesRef.current = referenceAnchored.edges.map((edge) => tasksReferenceFlowEdge(edge, rf.MarkerType.ArrowClosed, hoverFontSize, layoutConfig.edgeLabelWidth));
                 graphBaseRef.current = { nodes: anchoredNodes, edges: baseEdges };
                 window.__vyasaTasksDebug.latest = {
                     widgetId,
@@ -5602,7 +5706,7 @@ async function renderTasksGraphs(rootElement = document) {
                     deriveMs: Math.round((derivedDone - groupsDone) * 10) / 10,
                     totalMs: Math.round((tasksPerfNow() - layoutStart) * 10) / 10,
                 });
-            }, [ensureBaseLayout, model, sourceModel, activeColorBy, activeColorPalette, activeColorLevelSpecs, activeProjection, viewMode, edgesVisible, edgeOpacity, projectionUnspecifiedContentOpacity, checkedNodeIdSet, nodeStates, nodeNotes, cardStates, defaultNodeColor]);
+            }, [ensureBaseLayout, model, layoutModel, layoutRawGraph, sourceModel, activeColorBy, activeColorPalette, activeColorLevelSpecs, activeProjection, viewMode, edgesVisible, edgeOpacity, projectionUnspecifiedContentOpacity, checkedNodeIdSet, nodeStates, nodeNotes, cardStates, defaultNodeColor, referenceEdgeRecords, edgeNodeLabels]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: 'currentColor' },
@@ -5618,7 +5722,20 @@ async function renderTasksGraphs(rootElement = document) {
             }, []);
             const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null, selectedIds = new Set(), edgeId = '') => {
                 const baseNodes = graphBaseRef.current.nodes || [];
-                const baseEdges = tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], effectiveEdgeTypes);
+                const authoredEdges = tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], effectiveEdgeTypes);
+                const activeReferenceNodeIds = new Set([
+                    nodeId,
+                    hoveredNodeId,
+                    ...(selectedIds instanceof Set ? selectedIds : new Set(selectedIds || [])),
+                ].filter(Boolean));
+                const activeReferenceEdges = tasksEdgesMatchingTypes(referenceEdgesRef.current, effectiveEdgeTypes)
+                    .filter((edge) => (
+                        tasksEdgeRecordId(edge) === edgeId
+                        || activeReferenceNodeIds.has(edge.source)
+                        || activeReferenceNodeIds.has(edge.target)
+                    ));
+                const baseEdges = [...authoredEdges, ...activeReferenceEdges];
+                const displayedEdges = edgesVisible ? baseEdges : activeReferenceEdges;
                 const selectedEdge = edgeId ? baseEdges.find((edge) => tasksEdgeRecordId(edge) === edgeId) : null;
                 if (selectedEdge) {
                     const endpointIds = new Set([selectedEdge.source, selectedEdge.target]);
@@ -5637,7 +5754,7 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                         };
                     }));
-                    setEdgesReusing(edgesVisible ? baseEdges.map((edge) => {
+                    setEdgesReusing(displayedEdges.map((edge) => {
                         const hit = edge === selectedEdge;
                         const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
                         return {
@@ -5649,7 +5766,7 @@ async function renderTasksGraphs(rootElement = document) {
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.86 : 0.04 },
                             style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: hit ? 1 : 0.08, strokeWidth: hit ? 4.5 : 2.5 },
                         };
-                    }) : []);
+                    }));
                     return;
                 }
                 // When no single node is selected, hovering a node should still reveal
@@ -5705,7 +5822,7 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                         };
                     }));
-                    setEdgesReusing(edgesVisible ? baseEdges.map((edge) => {
+                    setEdgesReusing(displayedEdges.map((edge) => {
                         const touchesHover = Boolean(hoveredNodeId) && (edge.source === hoveredNodeId || edge.target === hoveredNodeId);
                         const hit = touchesHover
                             || (multiSelectedHighlightIds.has(edge.source) && multiSelectedHighlightIds.has(edge.target));
@@ -5724,7 +5841,7 @@ async function renderTasksGraphs(rootElement = document) {
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
                             style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity, strokeWidth: hit ? 4.5 : 2.5, strokeLinecap: hit ? 'round' : undefined, '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s' },
                         };
-                    }) : []);
+                    }));
                     return;
                 }
                 if (!hasNodeSelection) {
@@ -5765,12 +5882,12 @@ async function renderTasksGraphs(rootElement = document) {
                                 };
                             })
                             : baseNodes);
-                        setEdgesReusing(edgesVisible ? (hoveredNodeId
-                            ? baseEdges.map((edge) => {
+                        setEdgesReusing(hoveredNodeId
+                            ? displayedEdges.map((edge) => {
                                 if (edge.source !== hoveredNodeId && edge.target !== hoveredNodeId) return edge;
                                 return tasksHoverFocusEdge(edge, hoveredNodeId);
                             })
-                            : baseEdges) : []);
+                            : displayedEdges);
                         return;
                     }
                     const matchingIds = filteredSelectionIds();
@@ -5809,7 +5926,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ...(focused ? { zIndex: focusStyle.zIndex } : {}),
                         };
                     }));
-                    setEdgesReusing(edgesVisible ? baseEdges.map((edge) => {
+                    setEdgesReusing(displayedEdges.map((edge) => {
                         const hit = (visibleSelectionIds.has(edge.source) && visibleSelectionIds.has(edge.target)) || searchMatches.edgeIds.has(edge.id);
                         if (filterHoverFocus.edgeIds.has(edge.id)) {
                             return tasksHoverFocusEdge(edge, hoveredNodeId);
@@ -5835,7 +5952,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s',
                             },
                         };
-                    }) : []);
+                    }));
                     return;
                 }
                 const highlightedEdgeIds = new Set();
@@ -5924,10 +6041,11 @@ async function renderTasksGraphs(rootElement = document) {
                         zIndex,
                     };
                 });
-                const nextEdges = baseEdges.map((edge) => {
-                    const mode = focusedEdgeModes.get(edge.id)
+                const nextEdges = displayedEdges.map((edge) => {
+                    const requestedMode = focusedEdgeModes.get(edge.id)
                         ? focusedEdgeModes.get(edge.id)
                         : (highlightedEdgeIds.has(edge.id) ? 'selected' : 'dim');
+                    const mode = edge.data?.__reference__ && requestedMode !== 'dim' ? 'selected' : requestedMode;
                     const highlighted = mode !== 'dim';
                     const focused = mode === 'focused-in' || mode === 'focused-out';
                     const fixedFocusedLabel = Boolean(isFocusedNeighbor && focused);
@@ -6020,7 +6138,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setNodesReusing(nextNodes);
                 const edgePriority = { dim: 0, selected: 1, 'focused-in': 2, 'focused-out': 2 };
                 nextEdges.sort((a, b) => (edgePriority[a.data?.highlightMode || 'dim'] - edgePriority[b.data?.highlightMode || 'dim']));
-                setEdgesReusing(edgesVisible ? nextEdges : []);
+                setEdgesReusing(nextEdges);
             }, [effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches, model, activeColorBy, activeColorPalette, activeColorLevelSpecs, expanded, edgesVisible, edgeOpacity, edgePinBloom, filteredSelectionIds]);
             React.useLayoutEffect(() => {
                 const baseNodeIds = new Set((graphBaseRef.current.nodes || []).map((node) => node.id));
@@ -6528,7 +6646,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 overflowWrap: 'anywhere',
                                 wordBreak: 'break-word',
                             }
-                        }, renderNodeImage(20, { marginTop: '1px' }), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(data?.label || data.sourceGroupId || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick, currentPath: sourceModel?.document_path || '' }))),
+                        }, renderNodeImage(20, { marginTop: '1px' }), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(data?.label || data.sourceGroupId || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick, currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels }))),
                         egoMode ? null : React.createElement('button', {
                             onClick: handleCollapse,
                             style: { flex: '0 0 auto', border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', opacity: '0.55', padding: '0' }
@@ -6538,7 +6656,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const isGroup = data?.__kind__ === 'group';
                 const canExpand = tasksNodeHasChildren(id, model);
                 const isExpanded = expanded.has(id);
-                const labelContent = renderTasksInlineLinks(data?.label || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick, currentPath: sourceModel?.document_path || '' });
+                const labelContent = renderTasksInlineLinks(data?.label || id, { interactive: linksInteractive, onInactiveClick: handleInactiveLinkClick, currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels });
                 if (data?.__gantt) {
                     return React.createElement('div', {
                         ...reviewAttrs,
@@ -6871,7 +6989,8 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'enter' && selectedEdgeIdRef.current) {
                             event.preventDefault();
-                            const record = (model?.dependency_edges || []).find((edge) => tasksEdgeRecordId(edge) === selectedEdgeIdRef.current);
+                            const record = currentGraphEdges()
+                                .find((edge) => tasksEdgeRecordId(edge) === selectedEdgeIdRef.current);
                             if (record) selectEdgeRecord(record, true, edgeCardField);
                             return;
                         }
@@ -7039,7 +7158,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.removeEventListener('blur', stopMomentum);
                         stopMomentum();
                     };
-                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, releaseCardPin, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, panViewport, graphMinZoom]);
+                }, [reactFlow, currentGraphEdges, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, releaseCardPin, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, panViewport, graphMinZoom]);
                 return null;
             };
             const SelectedNodePanel = (panelGraphNodeId = selectedNodeId, readOnly = false, hoverCard = null) => {
@@ -7103,7 +7222,7 @@ async function renderTasksGraphs(rootElement = document) {
                             React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px', fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' } },
                                 renderTasksCardNodeIcon(React, selectedNode, model),
                                 React.createElement('span', { style: { minWidth: 0 } },
-                                    renderTasksInlineLinks(selectedNode.label || selectedNode.id, { currentPath: sourceModel?.document_path || '' }))
+                                    renderTasksInlineLinks(selectedNode.label || selectedNode.id, { currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels }))
                             ),
                             panelNodeId ? React.createElement('div', { style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', textAlign: 'right' } }, panelNodeId) : null,
                         ),
@@ -7133,7 +7252,9 @@ async function renderTasksGraphs(rootElement = document) {
                 const relation = selectedEdgeRecord.relation || selectedEdgeRecord.label || '';
                 const sourceNode = edgeNodesById.get(String(selectedEdgeRecord.source || '')) || { id: selectedEdgeRecord.source, __kind__: 'task' };
                 const targetNode = edgeNodesById.get(String(selectedEdgeRecord.target || '')) || { id: selectedEdgeRecord.target, __kind__: 'task' };
-                const edgeCardColor = resolveTasksEdgeColor(selectedEdgeRecord, model, model?.edge_color_by, tasksEdgeColorPaletteFor(model, model?.edge_color_by)) || edgeTypeColors[relation] || 'currentColor';
+                const edgeCardColor = selectedEdgeRecord.__reference__
+                    ? 'var(--vyasa-primary)'
+                    : (resolveTasksEdgeColor(selectedEdgeRecord, model, model?.edge_color_by, tasksEdgeColorPaletteFor(model, model?.edge_color_by)) || edgeTypeColors[relation] || 'currentColor');
                 const entries = tasksEdgeMetaEntries(selectedEdgeRecord);
                 const edgeNotesEditor = renderTasksCardNoteEditor(React, {
                     ref: edgeNoteTextareaRef,
@@ -7152,9 +7273,9 @@ async function renderTasksGraphs(rootElement = document) {
                     React.createElement('div', { style: { display: 'flex', alignItems: 'start', gap: '10px', marginBottom: '10px' } },
                         React.createElement('div', { style: { flex: '1 1 auto', minWidth: 0 } },
                             React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '14px', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' } },
-                                React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px' } }, renderTasksCardNodeIcon(React, sourceNode, model), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(sourceLabel, { currentPath: sourceModel?.document_path || '' }))),
+                                React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px' } }, renderTasksCardNodeIcon(React, sourceNode, model), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(sourceLabel, { currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels }))),
                                 relation ? React.createElement('div', { style: { paddingLeft: '29px', fontSize: '12px', fontWeight: 600, color: edgeCardColor, opacity: 0.82 } }, relation) : null,
-                                React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px' } }, renderTasksCardNodeIcon(React, targetNode, model), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(targetLabel, { currentPath: sourceModel?.document_path || '' })))
+                                React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px' } }, renderTasksCardNodeIcon(React, targetNode, model), React.createElement('span', { style: { minWidth: 0 } }, renderTasksInlineLinks(targetLabel, { currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels })))
                             ),
                             React.createElement('div', { style: { marginTop: '4px', fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', opacity: 0.7, overflowWrap: 'anywhere' } }, selectedEdgeRecord.id),
                             sourceModel?.kg_context?.label ? React.createElement('div', { style: { marginTop: '3px', fontSize: '12px', lineHeight: 1.3, opacity: 0.62 } }, sourceModel.kg_context.label) : null
@@ -8317,7 +8438,7 @@ async function renderTasksGraphs(rootElement = document) {
                     if (!selectedNodeId) {
                         setHoveredNodeId((current) => current === sourceNodeId ? current : sourceNodeId);
                     } else {
-                        const baseEdges = graphBase.edges || [];
+                        const baseEdges = currentGraphEdges();
                         const isNeighbor = baseEdges.some((edge) =>
                             (edge.source === selectedNodeId && edge.target === sourceNodeId) ||
                             (edge.source === sourceNodeId && edge.target === selectedNodeId)
@@ -8343,7 +8464,7 @@ async function renderTasksGraphs(rootElement = document) {
                 groupHoverTooltipRef.current = hoverCard;
                 setGroupHoverTooltip(hoverCard);
                 traceHoverHit('hit', { hitId: hit.node.id, kind: nodeData.__kind__ || '', edgePx, groupHoverChanged });
-            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, clearOptionEdgePreview, edgeForOptionPointer, previewOptionEdge, nodes, widgetId, model, egoMode, hoverInactiveNodes, groupHoverCardsEnabled, hoveredNodeId, logHoverCycle, selectedNodeId]);
+            }, [expanded, clearGroupHoverTooltip, clearGraphHoverState, clearOptionEdgePreview, currentGraphEdges, edgeForOptionPointer, previewOptionEdge, nodes, widgetId, model, egoMode, hoverInactiveNodes, groupHoverCardsEnabled, hoveredNodeId, logHoverCycle, selectedNodeId]);
             const selectGroupDescendants = React.useCallback((node) => {
                 const kind = node?.data?.__kind__;
                 if (kind !== 'group' && kind !== 'groupTitle') return false;
