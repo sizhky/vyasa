@@ -6669,7 +6669,8 @@ async function renderTasksGraphs(rootElement = document) {
                         const target = event.target instanceof Element ? event.target : null;
                         const key = event.key.toLowerCase();
                         const optionZoom = event.altKey && !event.shiftKey && (key === 'arrowup' || key === 'arrowdown');
-                        if (event.metaKey || event.ctrlKey || (event.altKey && !optionZoom)) return;
+                        const optionEdgeFit = event.altKey && !event.shiftKey && event.code === 'KeyF' && Boolean(selectedEdgeIdRef.current);
+                        if (event.metaKey || event.ctrlKey || (event.altKey && !optionZoom && !optionEdgeFit)) return;
                         // A held key still has to reach the claim below, or the document
                         // shortcuts scroll the page under the graph on every repeat.
                         if (event.repeat && !TASKS_SHORTCUT_KEYS.has(key)) return;
@@ -6722,6 +6723,7 @@ async function renderTasksGraphs(rootElement = document) {
                         // Hovering never marks the widget active, so the shortcuts that
                         // act on what the cursor is over need their own way past this gate.
                         if (!widgetFocused
+                            && !optionEdgeFit
                             && !(key === 't' && groupToggleHoverIdRef.current)
                             && !(key === 'g' && hoveredNodeIdRef.current)) return;
                         // The document shortcuts in scripts.js bind J/K to scroll, C to
@@ -6729,7 +6731,7 @@ async function renderTasksGraphs(rootElement = document) {
                         // handler ever sees the key. So this handler listens in the
                         // capture phase and claims its own keys while the graph is
                         // focused, leaving every other key to the document.
-                        if (TASKS_SHORTCUT_KEYS.has(key)) event.stopPropagation();
+                        if (optionEdgeFit || TASKS_SHORTCUT_KEYS.has(key)) event.stopPropagation();
                         if (event.repeat) return;
                         if (key === '[' || key === ']') {
                             event.preventDefault();
@@ -6752,14 +6754,16 @@ async function renderTasksGraphs(rootElement = document) {
                             if (record) selectEdgeRecord(record, true, edgeCardField);
                             return;
                         }
-                        if (key === 'f' && event.shiftKey) {
+                        if (key === 'f' && event.shiftKey && !event.metaKey) {
                             event.preventDefault();
                             window.openTasksFullscreen?.(widgetId);
                             return;
                         }
-                        if (key === 'f') {
+                        if (key === 'f' || optionEdgeFit) {
                             event.preventDefault();
-                            if (!edgeCardOpen || !fitSelectedEdgeConnection(reactFlow)) {
+                            if (optionEdgeFit) {
+                                fitSelectedEdgeConnection(reactFlow);
+                            } else if (!edgeCardOpen || !fitSelectedEdgeConnection(reactFlow)) {
                                 fitCurrentHighlight(reactFlow, { reason: 'shortcut-f' });
                             }
                             return;
@@ -9006,6 +9010,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('[ / ]', 'select previous / next visible edge'),
                     row('Enter', 'open selected edge details'),
                     row('F', 'fit view or active edge'),
+                    row('Option + F', 'fit highlighted edge'),
                     row('Shift + F', 'toggle fullscreen'),
                     row('G', 'open EG+ for hovered or selected node'),
                     row('Shift + G', 'open EG for hovered or selected node'),
