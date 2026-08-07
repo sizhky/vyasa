@@ -156,7 +156,7 @@ const TASKS_HOVER_CARD_MODES = ['off', 'cursor', 'rightRail'];
 // document's key.
 const TASKS_SHORTCUT_KEYS = new Set([
     'f', 'g', 's', 'e', 'c', 't', 'i', 'o', 'u', 'p',
-    'h', 'j', 'k', 'l',
+    'h', 'j', 'k', 'l', 'v',
     '[', ']', 'enter',
     'arrowup', 'arrowdown', 'arrowleft', 'arrowright',
 ]);
@@ -168,6 +168,7 @@ const TASKS_ZOOM_MOMENTUM_RATE = 0.0007;
 const TASKS_EDGES_VISIBLE_KEY = 'vyasa:tasks:edges-visible';
 const TASKS_HOVER_CARD_MODE_KEY = 'vyasa:tasks:hover-card-mode';
 const TASKS_GROUP_HOVER_CARDS_KEY = 'vyasa:tasks:group-hover-cards';
+const TASKS_HOVER_CARD_SCROLL_KEY = 'vyasa:tasks:hover-card-scroll';
 
 function nextTasksHoverCardMode(mode) {
     const index = TASKS_HOVER_CARD_MODES.indexOf(mode);
@@ -2116,42 +2117,31 @@ window.runTasksHeaderAction = function(widgetId, action) {
     actions[action]();
 };
 
-function syncTasksEdgeToggleButtons(widgetId, edgesVisible) {
+function syncTasksToggleButtons(widgetId, action, emphasized, attribute, normalTitle, emphasizedTitle) {
     const id = String(widgetId || '');
-    document.querySelectorAll('button[data-vyasa-tasks-action="toggleEdges"], button[onclick*="toggleEdges"]').forEach((button) => {
+    document.querySelectorAll(`button[data-vyasa-tasks-action="${action}"], button[onclick*="${action}"]`).forEach((button) => {
         const buttonWidgetId = button.getAttribute('data-vyasa-tasks-widget-id') || '';
         const onclick = button.getAttribute('onclick') || '';
         if (buttonWidgetId && buttonWidgetId !== id) return;
         if (!buttonWidgetId && !onclick.includes(`'${id}'`)) return;
         button.setAttribute('data-vyasa-tasks-widget-id', id);
-        button.setAttribute('data-vyasa-tasks-action', 'toggleEdges');
-        if (edgesVisible) {
-            button.removeAttribute('data-vyasa-edges-off');
-            button.title = 'Toggle edges';
-        } else {
-            button.setAttribute('data-vyasa-edges-off', 'true');
-            button.title = 'Edges are hidden (E)';
-        }
+        button.setAttribute('data-vyasa-tasks-action', action);
+        if (emphasized) button.setAttribute(attribute, 'true');
+        else button.removeAttribute(attribute);
+        button.title = emphasized ? emphasizedTitle : normalTitle;
     });
 }
 
+function syncTasksEdgeToggleButtons(widgetId, edgesVisible) {
+    syncTasksToggleButtons(widgetId, 'toggleEdges', !edgesVisible, 'data-vyasa-edges-off', 'Toggle edges', 'Edges are hidden (E)');
+}
+
 function syncTasksHoverCardToggleButtons(widgetId, hoverCardsEnabled) {
-    const id = String(widgetId || '');
-    document.querySelectorAll('button[data-vyasa-tasks-action="toggleHoverCards"], button[onclick*="toggleHoverCards"]').forEach((button) => {
-        const buttonWidgetId = button.getAttribute('data-vyasa-tasks-widget-id') || '';
-        const onclick = button.getAttribute('onclick') || '';
-        if (buttonWidgetId && buttonWidgetId !== id) return;
-        if (!buttonWidgetId && !onclick.includes(`'${id}'`)) return;
-        button.setAttribute('data-vyasa-tasks-widget-id', id);
-        button.setAttribute('data-vyasa-tasks-action', 'toggleHoverCards');
-        if (hoverCardsEnabled) {
-            button.removeAttribute('data-vyasa-hover-cards-off');
-            button.title = 'Toggle hover cards';
-        } else {
-            button.setAttribute('data-vyasa-hover-cards-off', 'true');
-            button.title = 'Hover cards are hidden (H)';
-        }
-    });
+    syncTasksToggleButtons(widgetId, 'toggleHoverCards', !hoverCardsEnabled, 'data-vyasa-hover-cards-off', 'Toggle hover cards', 'Hover cards are hidden (H)');
+}
+
+function syncTasksCardScrollToggleButtons(widgetId, enabled) {
+    syncTasksToggleButtons(widgetId, 'toggleCardScroll', enabled, 'data-vyasa-card-scroll-on', 'Toggle card scroll mode (V)', 'Card scroll mode is on (V)');
 }
 
 function buildVisibleTasksGraph(model, expanded) {
@@ -3878,6 +3868,7 @@ async function renderTasksGraphs(rootElement = document) {
             const [edgeStatus, setEdgeStatus] = React.useState('');
             const edgeCycleNodeIdRef = React.useRef('');
             const optionEdgeNodeIdRef = React.useRef('');
+            const optionEdgePreviewHeldRef = React.useRef(false);
             const optionEdgeOtherNodeIdRef = React.useRef('');
             const optionEdgeNodeCardHeldRef = React.useRef(false);
             const [optionEdgeNodeCardId, setOptionEdgeNodeCardId] = React.useState(null);
@@ -3894,6 +3885,19 @@ async function renderTasksGraphs(rootElement = document) {
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
             const groupHoverTooltipRef = React.useRef(null);
             groupHoverTooltipRef.current = groupHoverTooltip;
+            const [hoverCardScrollMode, setHoverCardScrollMode] = React.useState(
+                () => readTasksGlobalToggle(TASKS_HOVER_CARD_SCROLL_KEY) === 'true'
+            );
+            const hoverCardScrollRef = React.useRef(null);
+            const detailCardScrollRef = React.useRef(null);
+            const setHoverCardScrollModeGlobal = React.useCallback((update) => {
+                setHoverCardScrollMode((current) => {
+                    const next = Boolean(typeof update === 'function' ? update(current) : update);
+                    writeTasksGlobalToggle(TASKS_HOVER_CARD_SCROLL_KEY, next);
+                    logTasksDebug('hoverCardScrollMode', { widgetId, enabled: next });
+                    return next;
+                });
+            }, [widgetId]);
             const [stickyGroupHoverTooltips, setStickyGroupHoverTooltips] = React.useState([]);
             const stickyGroupHoverTooltipsRef = React.useRef([]);
             stickyGroupHoverTooltipsRef.current = stickyGroupHoverTooltips;
@@ -4101,6 +4105,9 @@ async function renderTasksGraphs(rootElement = document) {
                 syncTasksHoverCardToggleButtons(widgetId, hoverCardsEnabled);
                 logTasksDebug('hoverCardsState', { widgetId, egoMode, enabled: hoverCardsEnabled, mode: hoverCardMode });
             }, [widgetId, egoMode, hoverCardsEnabled, hoverCardMode]);
+            React.useEffect(() => {
+                syncTasksCardScrollToggleButtons(widgetId, hoverCardScrollMode);
+            }, [widgetId, hoverCardScrollMode]);
             const defaultEdgeOpacity = React.useMemo(
                 () => tasksDefaultEdgeOpacity((sourceModel?.dependency_edges || []).length),
                 [sourceModel]
@@ -4205,10 +4212,9 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdgeCardError('');
                 groupHoverTooltipRef.current = null;
                 setGroupHoverTooltip(null);
-                setEdgeStatus(`${edgeId}. Release Option to return to the node.`);
+                setEdgeStatus(`${edgeId}. Release W to return to the node.`);
             }, [resolveEdgeRecord]);
             const clearOptionEdgePreview = React.useCallback(() => {
-                optionEdgeNodeCardHeldRef.current = false;
                 optionEdgeOtherNodeIdRef.current = '';
                 setOptionEdgeNodeCardId(null);
                 if (optionEdgePinnedRef.current) {
@@ -4228,40 +4234,62 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdgeStatus('Edge preview closed.');
             }, []);
             React.useEffect(() => {
-                const pinPreview = (event) => {
-                    if (event.key !== 'Shift' || !event.altKey || event.repeat) return;
-                    if (!optionEdgeNodeIdRef.current || !selectedEdgeIdRef.current) return;
+                const pinPreview = () => {
+                    if (!optionEdgeNodeIdRef.current || !selectedEdgeIdRef.current) return false;
                     optionEdgePinnedRef.current = true;
                     const bloomKey = `${selectedEdgeIdRef.current}:${++edgePinBloomIdRef.current}`;
                     setEdgePinBloom({ edgeId: selectedEdgeIdRef.current, key: bloomKey });
                     window.setTimeout(() => setEdgePinBloom((current) => current?.key === bloomKey ? null : current), 1800);
                     logTasksDebug('optionEdgePinned', { widgetId, edgeId: selectedEdgeIdRef.current, bloomKey });
                     setEdgeStatus(`${selectedEdgeIdRef.current}. Edge details pinned.`);
+                    return true;
                 };
-                const releasePreview = (event) => {
-                    if (event.key === 'Alt') clearOptionEdgePreview();
-                    if (event.key === 'Control') {
-                        optionEdgeNodeCardHeldRef.current = false;
-                        setOptionEdgeNodeCardId(null);
-                        logTasksDebug('optionEdgeNodeCardClear', { widgetId, reason: 'control-up' });
+                const edgeKeyApplies = (event) => {
+                    const target = event.target instanceof Element ? event.target : null;
+                    const editable = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName));
+                    return !editable && Boolean(flowWrapperRef.current?.matches(':hover') || optionEdgeNodeIdRef.current);
+                };
+                const onKeyDown = (event) => {
+                    if (event.repeat || !edgeKeyApplies(event)) return;
+                    if (event.code === 'KeyW') {
+                        optionEdgePreviewHeldRef.current = true;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (event.shiftKey) pinPreview();
+                    } else if (event.key === 'Shift' && optionEdgePreviewHeldRef.current) {
+                        if (pinPreview()) event.preventDefault();
+                    } else if (event.code === 'KeyQ') {
+                        optionEdgeNodeCardHeldRef.current = true;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (optionEdgeOtherNodeIdRef.current) {
+                            setOptionEdgeNodeCardId(optionEdgeOtherNodeIdRef.current);
+                            logTasksDebug('optionEdgeNodeCardSet', { widgetId, nodeId: optionEdgeOtherNodeIdRef.current });
+                        }
                     }
                 };
-                const previewOtherNode = (event) => {
-                    if (event.key !== 'Control' || !event.altKey || event.repeat) return;
-                    if (!optionEdgeNodeIdRef.current || !optionEdgeOtherNodeIdRef.current) return;
-                    optionEdgeNodeCardHeldRef.current = true;
-                    setOptionEdgeNodeCardId(optionEdgeOtherNodeIdRef.current);
-                    logTasksDebug('optionEdgeNodeCardSet', { widgetId, nodeId: optionEdgeOtherNodeIdRef.current });
+                const onKeyUp = (event) => {
+                    if (event.code === 'KeyW') {
+                        optionEdgePreviewHeldRef.current = false;
+                        clearOptionEdgePreview();
+                    } else if (event.code === 'KeyQ') {
+                        optionEdgeNodeCardHeldRef.current = false;
+                        setOptionEdgeNodeCardId(null);
+                        logTasksDebug('optionEdgeNodeCardClear', { widgetId, reason: 'q-up' });
+                    }
                 };
-                window.addEventListener('keydown', previewOtherNode, true);
-                window.addEventListener('keydown', pinPreview, true);
-                window.addEventListener('keyup', releasePreview, true);
-                window.addEventListener('blur', clearOptionEdgePreview);
+                const clearKeys = () => {
+                    optionEdgePreviewHeldRef.current = false;
+                    optionEdgeNodeCardHeldRef.current = false;
+                    clearOptionEdgePreview();
+                };
+                window.addEventListener('keydown', onKeyDown, true);
+                window.addEventListener('keyup', onKeyUp, true);
+                window.addEventListener('blur', clearKeys);
                 return () => {
-                    window.removeEventListener('keydown', previewOtherNode, true);
-                    window.removeEventListener('keydown', pinPreview, true);
-                    window.removeEventListener('keyup', releasePreview, true);
-                    window.removeEventListener('blur', clearOptionEdgePreview);
+                    window.removeEventListener('keydown', onKeyDown, true);
+                    window.removeEventListener('keyup', onKeyUp, true);
+                    window.removeEventListener('blur', clearKeys);
                 };
             }, [clearOptionEdgePreview, widgetId]);
             const selectGraphEdge = React.useCallback((event, edge) => {
@@ -6707,6 +6735,7 @@ async function renderTasksGraphs(rootElement = document) {
                         if (!widgetFocused
                             && !optionEdgeFit
                             && !(key === 't' && groupToggleHoverIdRef.current)
+                            && !(key === 'v' && (groupHoverTooltipRef.current || edgeCardOpen || selectedNodeIdRef.current))
                             && !(key === 'g' && hoveredNodeIdRef.current)) return;
                         // The document shortcuts in scripts.js bind J/K to scroll, C to
                         // fold and P to slides, and they preventDefault before this
@@ -6793,6 +6822,11 @@ async function renderTasksGraphs(rootElement = document) {
                         if (key === 'c') {
                             event.preventDefault();
                             setHoverCardModeGlobal(nextTasksHoverCardMode);
+                            return;
+                        }
+                        if (key === 'v') {
+                            event.preventDefault();
+                            setHoverCardScrollModeGlobal((current) => !current);
                             return;
                         }
                         if (key === 't') {
@@ -6895,7 +6929,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.removeEventListener('blur', stopMomentum);
                         stopMomentum();
                     };
-                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, panViewport, graphMinZoom]);
+                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, panViewport, graphMinZoom]);
                 return null;
             };
             const SelectedNodePanel = (panelGraphNodeId = selectedNodeId, readOnly = false) => {
@@ -6919,6 +6953,8 @@ async function renderTasksGraphs(rootElement = document) {
                     await copyTasksText(selectedNode.label || selectedNode.id);
                 };
                 return React.createElement('div', {
+                    ref: detailCardScrollRef,
+                    className: hoverCardScrollMode ? 'vyasa-tasks-hover-card--scroll' : undefined,
                     'data-vyasa-node-card': 'true',
                     style: { width: `min(${panelWidth}px, 100%)`, maxWidth: '100%', minWidth: 'min(220px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto', minHeight: 0, flex: '0 1 auto', overflowY: 'auto', overscrollBehavior: 'contain' },
                 },
@@ -7012,6 +7048,8 @@ async function renderTasksGraphs(rootElement = document) {
                     fitSelectedEdgeConnection(reactFlowApiRef.current);
                 };
                 return React.createElement('div', {
+                    ref: detailCardScrollRef,
+                    className: hoverCardScrollMode ? 'vyasa-tasks-hover-card--scroll' : undefined,
                     'data-vyasa-edge-card': selectedEdgeRecord.id,
                     style: { width: `min(${nodeCardWidth}, 100%)`, maxWidth: '100%', minWidth: 'min(260px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '2px solid color-mix(in srgb, var(--vyasa-primary) 76%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12), 0 0 18px color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto', minHeight: 0, maxHeight: '100%', overflowY: 'auto', overscrollBehavior: 'contain' },
                 },
@@ -8158,7 +8196,7 @@ async function renderTasksGraphs(rootElement = document) {
                     clearGraphHoverState('detail-card');
                     return;
                 }
-                if (event.altKey) {
+                if (optionEdgePreviewHeldRef.current) {
                     const match = edgeForOptionPointer(event);
                     if (match) previewOptionEdge(match.edge, match.nodeId);
                     return;
@@ -8615,12 +8653,13 @@ async function renderTasksGraphs(rootElement = document) {
                             current === 'off' ? clampTasksHoverCardMode(lastHoverCardPlacementRef.current) : 'off'
                         )),
                         toggleEdges: () => setEdgesVisibleGlobal((current) => !current),
+                        toggleCardScroll: () => setHoverCardScrollModeGlobal((current) => !current),
                         toggleHelp: () => setHelpOpen((current) => !current),
                     };
                     return () => {
                         delete window.__vyasaTasksActions[widgetId];
                     };
-                }, [reactFlow, currentSelectionIds, baseProjectionState.model, baseRawGraph, expanded, egoMode, egoState, activeColorBy, closeEgo, fitCurrentHighlight]);
+                }, [reactFlow, currentSelectionIds, baseProjectionState.model, baseRawGraph, expanded, egoMode, egoState, activeColorBy, closeEgo, fitCurrentHighlight, setHoverCardScrollModeGlobal]);
                 return null;
             };
             const RestoreEgoViewport = () => {
@@ -8801,6 +8840,8 @@ async function renderTasksGraphs(rootElement = document) {
                 card,
                 noteValue = '',
                 onNoteChange,
+                scrollRef,
+                scrollMode = false,
                 stickyIndex = -1,
                 inViewportPortal = false,
             }) {
@@ -8895,7 +8936,8 @@ async function renderTasksGraphs(rootElement = document) {
                     })
                 ));
                 return window.React.createElement('div', {
-                    ref: tooltipRef,
+                    ref: (node) => { tooltipRef.current = node; if (scrollRef) scrollRef.current = node; },
+                    className: scrollMode ? 'vyasa-tasks-hover-card--scroll' : undefined,
                     'data-vyasa-hover-card-sticky': card.sticky ? 'true' : undefined,
                     style: {
                         position: rightRailPlacement ? 'relative' : 'absolute',
@@ -8942,6 +8984,8 @@ async function renderTasksGraphs(rootElement = document) {
                     key: '__transient__',
                     card: groupHoverTooltip,
                     noteValue: nodeNotes[groupHoverTooltip.nodeId] || '',
+                    scrollRef: hoverCardScrollRef,
+                    scrollMode: hoverCardScrollMode,
                 }) : null;
                 const transientLayer = hoverCardRightRail ? window.React.createElement('div', {
                     style: {
@@ -8953,7 +8997,6 @@ async function renderTasksGraphs(rootElement = document) {
                         alignItems: 'flex-end',
                         gap: '10px',
                         maxWidth: 'calc(100% - 24px)',
-                        overflowY: 'auto',
                         pointerEvents: 'none',
                     },
                 }, transientCard) : transientCard;
@@ -8996,12 +9039,15 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Enter', 'open selected edge details'),
                     row('F', 'fit view or active edge'),
                     row('Option + F', 'fit highlighted edge'),
+                    row('W / Q', 'hold edge preview / opposite node card'),
+                    row('Shift + W', 'pin edge details'),
                     row('Shift + F', 'toggle fullscreen'),
                     row('G', 'open EG+ for hovered or selected node'),
                     row('Shift + G', 'open EG for hovered or selected node'),
                     row('S', 'toggle filters'),
                     row('E', 'toggle edges'),
                     row('C', 'hover cards: off, at cursor, right rail'),
+                    row('V', 'toggle hover card scroll mode'),
                     row('Shift + C', 'toggle group hover cards'),
                     row('T', 'toggle hovered group'),
                     row('I / O', 'expand / collapse one depth'),
@@ -9162,6 +9208,13 @@ async function renderTasksGraphs(rootElement = document) {
                 onPointerDownCapture: startDragSelection,
                 onPointerMove: updateGroupHoverTooltip,
                 onWheelCapture: (event) => {
+                    const scrollCard = hoverCardScrollRef.current || detailCardScrollRef.current;
+                    if (hoverCardScrollMode && scrollCard) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        scrollCard.scrollBy({ top: event.deltaY, left: event.deltaX });
+                        return;
+                    }
                     if (!window.__vyasaTasksPerf.enabled) return;
                     markTasksFrameProbe(widgetId, flowWrapperRef.current, model, graphBaseRef.current, 'wheel', currentPerfViewState());
                     traceTasksInteractionFrame('wheel', {

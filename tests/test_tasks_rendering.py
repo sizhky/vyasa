@@ -659,17 +659,18 @@ def test_tasks_hover_card_ctrl_click_builds_x_dismissible_stack():
     assert "groupHoverTooltipRef.current?.sticky" not in source
 
 
-def test_option_edge_control_temporarily_shows_other_node_card():
+def test_w_edge_q_temporarily_shows_other_node_card():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "optionEdgeOtherNodeIdRef.current = edge.source === nodeId ? edge.target : edge.source;" in source
-    assert "event.key !== 'Control' || !event.altKey" in source
+    assert "event.code === 'KeyW'" in source
+    assert "event.code === 'KeyQ'" in source
     assert "setOptionEdgeNodeCardId(optionEdgeOtherNodeIdRef.current);" in source
-    assert "if (event.key === 'Control')" in source
+    assert "event.key === 'Shift' && optionEdgePreviewHeldRef.current" in source
     assert "SelectedNodePanel(optionEdgeNodeCardId, true)" in source
 
 
-def test_option_shift_pin_blooms_from_the_edge():
+def test_shift_w_pin_blooms_from_the_edge():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
@@ -678,6 +679,33 @@ def test_option_shift_pin_blooms_from_the_edge():
     assert "vyasa-tasks-edge-pin-bloom--late" not in source
     assert "@keyframes vyasa-tasks-edge-pin-bloom" in css
     assert "1720ms" in css
+
+
+def test_v_toggles_off_cursor_hover_card_scroll_mode():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+    render_source = Path("vyasa/extensions_builtin/tasks/render.py").read_text()
+
+    assert "'h', 'j', 'k', 'l', 'v'" in source
+    assert "TASKS_HOVER_CARD_SCROLL_KEY = 'vyasa:tasks:hover-card-scroll'" in source
+    assert "readTasksGlobalToggle(TASKS_HOVER_CARD_SCROLL_KEY) === 'true'" in source
+    assert "writeTasksGlobalToggle(TASKS_HOVER_CARD_SCROLL_KEY, next)" in source
+    assert "const scrollCard = hoverCardScrollRef.current || detailCardScrollRef.current;" in source
+    assert "scrollCard.scrollBy" in source
+    assert source.count("ref: detailCardScrollRef") == 2
+    assert "row('V', 'toggle hover card scroll mode')" in source
+    assert "syncTasksCardScrollToggleButtons(widgetId, hoverCardScrollMode)" in source
+    assert "toggleCardScroll: () => setHoverCardScrollModeGlobal" in source
+    assert "button.setAttribute(attribute, 'true')" in source
+    assert "button.toggleAttribute(attribute, emphasized)" not in source
+    assert 'data-vyasa-card-scroll-on="true"' in css
+    assert 'data-vyasa-tasks-action="toggleCardScroll"' in render_source
+    assert "0%, 100%" in css
+    assert "50%" in css
+    assert "vyasa-tasks-hover-card-scroll-pulse 2s cubic-bezier(0.37, 0, 0.63, 1)" in css
+    assert "drop-shadow(" not in css.split("@keyframes vyasa-tasks-hover-card-scroll-pulse", 1)[1].split("}", 4)[0]
+    right_rail = source.split("const transientLayer = hoverCardRightRail", 1)[1].split("}, transientCard)", 1)[0]
+    assert "overflowY: 'auto'" not in right_rail
 
 
 def test_tasks_hover_card_stacks_title_above_node_id():
