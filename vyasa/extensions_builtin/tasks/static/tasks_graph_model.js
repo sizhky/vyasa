@@ -21,6 +21,7 @@ const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity']);
 const TASKS_INTERNAL_EDGE_META_KEYS = new Set([
     'id', 'source', 'target', 'relation', 'label', 'type', 'kind', 'animated',
     'markerend', 'labelstyle', 'labelbgstyle', 'style', 'data', 'zindex',
+    'labelbgpadding', 'labelbgborderradius', 'labelzindex', 'labelmaxwidth',
     'sourcehandle', 'targethandle', '__kg_sources', '__rendered_attrs__', '__edge_types__',
 ]);
 
