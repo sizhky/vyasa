@@ -4143,13 +4143,18 @@ async function renderTasksGraphs(rootElement = document) {
             const edgeNodeLabels = React.useMemo(() => Object.fromEntries(
                 [...(model?.groups || []), ...(model?.tasks || [])].map((node) => [String(node.id || ''), String(node.label || node.id || '')])
             ), [model]);
-            const selectedEdgeRecord = React.useMemo(() => (
-                (model?.dependency_edges || []).find((edge) => tasksEdgeRecordId(edge) === String(selectedEdgeId || '')) || null
-            ), [model, selectedEdgeId]);
+            const [selectedEdgeRecord, setSelectedEdgeRecord] = React.useState(null);
+            const resolveEdgeRecord = React.useCallback((edge) => {
+                const edgeId = tasksEdgeRecordId(edge);
+                if (!edgeId) return null;
+                return (model?.dependency_edges || []).find((item) => tasksEdgeRecordId(item) === edgeId)
+                    || (sourceModel?.dependency_edges || []).find((item) => tasksEdgeRecordId(item) === edgeId)
+                    || edge;
+            }, [model, sourceModel]);
             const selectEdgeRecord = React.useCallback((edge, openCard = true, field = '') => {
                 const edgeId = tasksEdgeRecordId(edge);
                 if (!edgeId) return;
-                const record = (model?.dependency_edges || []).find((item) => tasksEdgeRecordId(item) === edgeId) || edge;
+                const record = resolveEdgeRecord(edge);
                 const ordered = tasksOrderedEdges(visibleEdgesRef.current.length ? visibleEdgesRef.current : model?.dependency_edges || []);
                 const index = ordered.findIndex((item) => tasksEdgeRecordId(item) === edgeId);
                 const sourceLabel = edgeNodeLabels[record.source] || record.source || '';
@@ -4161,6 +4166,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setSelectedNodeId(null);
                 setSelectedNodeIds(new Set());
                 setSelectedEdgeId(edgeId);
+                setSelectedEdgeRecord(record);
                 setEdgeCardOpen(openCard);
                 setEdgeCardField(field);
                 setEdgeCardError('');
@@ -4171,7 +4177,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${fragment}`);
                 }
                 logTasksDebug('edgeSelectionSet', { widgetId, edgeId, source: record.source || '', target: record.target || '', openCard });
-            }, [activeContextId, edgeNodeLabels, model, widgetId]);
+            }, [activeContextId, edgeNodeLabels, model, resolveEdgeRecord, widgetId]);
             const edgeForOptionPointer = React.useCallback((event) => {
                 const reactFlow = reactFlowApiRef.current;
                 if (!reactFlow) return null;
@@ -4195,18 +4201,20 @@ async function renderTasksGraphs(rootElement = document) {
                 edgeCycleNodeIdRef.current = nodeId;
                 selectedEdgeIdRef.current = edgeId;
                 setSelectedEdgeId(edgeId);
+                setSelectedEdgeRecord(resolveEdgeRecord(edge));
                 setEdgeCardOpen(true);
                 setEdgeCardField('');
                 setEdgeCardError('');
                 groupHoverTooltipRef.current = null;
                 setGroupHoverTooltip(null);
                 setEdgeStatus(`${edgeId}. Release Option to return to the node.`);
-            }, []);
+            }, [resolveEdgeRecord]);
             const clearOptionEdgePreview = React.useCallback(() => {
                 if (!optionEdgeNodeIdRef.current) return;
                 optionEdgeNodeIdRef.current = '';
                 selectedEdgeIdRef.current = null;
                 setSelectedEdgeId(null);
+                setSelectedEdgeRecord(null);
                 setEdgeCardOpen(false);
                 setEdgeCardField('');
                 setEdgeCardError('');
@@ -4435,6 +4443,7 @@ async function renderTasksGraphs(rootElement = document) {
                 edgeCycleNodeIdRef.current = '';
                 optionEdgeNodeIdRef.current = '';
                 setSelectedEdgeId(null);
+                setSelectedEdgeRecord(null);
                 setEdgeCardOpen(false);
                 setEdgeCardField('');
                 setEdgeCardError('');
@@ -6644,6 +6653,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 selectedEdgeIdRef.current = null;
                                 optionEdgeNodeIdRef.current = '';
                                 setSelectedEdgeId(null);
+                                setSelectedEdgeRecord(null);
                                 setEdgeCardOpen(false);
                                 setEdgeCardField('');
                                 setEdgeStatus('Edge details closed.');
@@ -6985,6 +6995,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 selectedEdgeIdRef.current = null;
                                 optionEdgeNodeIdRef.current = '';
                                 setSelectedEdgeId(null);
+                                setSelectedEdgeRecord(null);
                                 setEdgeCardOpen(false);
                                 setEdgeCardField('');
                                 setEdgeStatus('Edge details closed.');
@@ -7996,6 +8007,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setSelectedNodeId(null);
                 setSelectedNodeIds(new Set());
                 setSelectedEdgeId(null);
+                setSelectedEdgeRecord(null);
                 setEdgeCardOpen(false);
                 setEdgeCardField('');
                 setEdgeCardError('');
@@ -8306,6 +8318,7 @@ async function renderTasksGraphs(rootElement = document) {
                 selectedEdgeIdRef.current = null;
                 optionEdgeNodeIdRef.current = '';
                 setSelectedEdgeId(null);
+                setSelectedEdgeRecord(null);
                 setEdgeCardOpen(false);
                 selectedNodeIdRef.current = sourceNodeId;
                 selectedNodeIdsRef.current = new Set();
