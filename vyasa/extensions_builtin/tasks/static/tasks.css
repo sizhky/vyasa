@@ -1,9 +1,12 @@
 .react-flow__node.vyasa-tasks-node--expanded-group { background: transparent !important; background-color: transparent !important; background-image: none !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--vyasa-ink) 52%, transparent), 0 24px 64px color-mix(in srgb, var(--vyasa-primary) 10%, transparent) !important; }
 .vyasa-task-link-badge { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.14rem; min-width: 0.8rem; height: 0.8rem; color: color-mix(in srgb, currentColor 58%, transparent); pointer-events: none; opacity: 0.72; }
 .vyasa-task-link-badge svg { width: 0.8rem; height: 0.8rem; stroke: currentColor !important; fill: none !important; }
-.vyasa-task-node-card-value > :first-child { margin-top: 0 !important; }
-.vyasa-task-node-card-value > :last-child { margin-bottom: 0 !important; }
 .vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }
+.vyasa-task-node-card-value :where(p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote) { font-size: inherit !important; line-height: inherit !important; color: inherit !important; }
+.vyasa-task-node-card-value :where(p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote) { margin: 0 !important; }
+.vyasa-task-node-card-value > * + * { margin-top: 0.45em !important; }
+.vyasa-task-node-card-value :where(ul, ol) { padding-left: 1.25em !important; }
+.vyasa-task-node-card-value li > p { margin: 0 !important; }
 .vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }
 .vyasa-task-node-card-row:hover .vyasa-task-node-card-copy,
 .vyasa-task-node-card-row:focus-within .vyasa-task-node-card-copy { opacity: 0.72; pointer-events: auto; }

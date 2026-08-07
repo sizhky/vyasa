@@ -3482,7 +3482,7 @@ function renderTasksCardDetailsAndNotes(React, options = {}) {
 }
 
 function renderTasksDetailEntries(React, entries, options = {}) {
-    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '12px', lineHeight: options.lineHeight || 1.35 } },
+    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '14px', lineHeight: options.lineHeight || 1.35 } },
         ...(entries || []).map((entry, index) => {
             const canCopy = options.copyValues && String(entry?.value ?? '').trim();
             const urls = tasksExtractUrls(entry?.value);
