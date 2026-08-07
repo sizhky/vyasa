@@ -3900,6 +3900,7 @@ async function renderTasksGraphs(rootElement = document) {
             const [edgeStatus, setEdgeStatus] = React.useState('');
             const edgeCycleNodeIdRef = React.useRef('');
             const optionEdgeNodeIdRef = React.useRef('');
+            const optionEdgePinnedRef = React.useRef(false);
             const contextDiffSelectionRef = React.useRef({ key: '', ids: new Set() });
             const [dragSelection, setDragSelection] = React.useState(null);
             const [hoveredNodeId, setHoveredNodeId] = React.useState(null);
@@ -4195,6 +4196,7 @@ async function renderTasksGraphs(rootElement = document) {
                 return edge ? { edge, nodeId } : null;
             }, []);
             const previewOptionEdge = React.useCallback((edge, nodeId) => {
+                if (optionEdgePinnedRef.current) return;
                 const edgeId = tasksEdgeRecordId(edge);
                 if (!edgeId) return;
                 optionEdgeNodeIdRef.current = nodeId;
@@ -4210,6 +4212,12 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdgeStatus(`${edgeId}. Release Option to return to the node.`);
             }, [resolveEdgeRecord]);
             const clearOptionEdgePreview = React.useCallback(() => {
+                if (optionEdgePinnedRef.current) {
+                    optionEdgePinnedRef.current = false;
+                    optionEdgeNodeIdRef.current = '';
+                    setEdgeStatus('Edge details pinned.');
+                    return;
+                }
                 if (!optionEdgeNodeIdRef.current) return;
                 optionEdgeNodeIdRef.current = '';
                 selectedEdgeIdRef.current = null;
@@ -4221,12 +4229,20 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdgeStatus('Edge preview closed.');
             }, []);
             React.useEffect(() => {
+                const pinPreview = (event) => {
+                    if (event.key !== 'Shift' || !event.altKey || event.repeat) return;
+                    if (!optionEdgeNodeIdRef.current || !selectedEdgeIdRef.current) return;
+                    optionEdgePinnedRef.current = true;
+                    setEdgeStatus(`${selectedEdgeIdRef.current}. Edge details pinned.`);
+                };
                 const releasePreview = (event) => {
                     if (event.key === 'Alt') clearOptionEdgePreview();
                 };
+                window.addEventListener('keydown', pinPreview, true);
                 window.addEventListener('keyup', releasePreview, true);
                 window.addEventListener('blur', clearOptionEdgePreview);
                 return () => {
+                    window.removeEventListener('keydown', pinPreview, true);
                     window.removeEventListener('keyup', releasePreview, true);
                     window.removeEventListener('blur', clearOptionEdgePreview);
                 };
