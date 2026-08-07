@@ -6937,6 +6937,7 @@ async function renderTasksGraphs(rootElement = document) {
                     await copyTasksText(selectedNode.label || selectedNode.id);
                 };
                 return React.createElement('div', {
+                    'data-vyasa-node-card': 'true',
                     style: { width: `min(${panelWidth}px, 100%)`, maxWidth: '100%', minWidth: 'min(220px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', padding: '12px', pointerEvents: 'auto', minHeight: 0, flex: '0 1 auto', overflowY: 'auto', overscrollBehavior: 'contain' },
                 },
                     React.createElement('div', { style: { position: 'relative', paddingRight: panelLinkKinds.length ? '56px' : '28px', marginBottom: '10px' } },
@@ -7016,6 +7017,7 @@ async function renderTasksGraphs(rootElement = document) {
                 if (!edgeCardOpen) return null;
                 if (edgeCardError) return React.createElement('div', {
                     role: 'alert',
+                    'data-vyasa-edge-card': 'error',
                     style: { width: `min(${nodeCardWidth}, 100%)`, marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, #dc2626 45%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, #dc2626 8%)', padding: '12px', pointerEvents: 'auto', fontSize: '12px', lineHeight: 1.45 },
                 }, edgeCardError);
                 if (!selectedEdgeRecord) return null;
@@ -8164,6 +8166,11 @@ async function renderTasksGraphs(rootElement = document) {
                 const graphBase = graphBaseRef.current || {};
                 const target = event.target instanceof Element ? event.target : null;
                 const domNode = target?.closest?.('.react-flow__node') || null;
+                if (target?.closest?.('[data-vyasa-node-card], [data-vyasa-edge-card]')) {
+                    delete wrapper?.dataset.vyasaReviewPointerTarget;
+                    clearGraphHoverState('detail-card');
+                    return;
+                }
                 if (event.altKey) {
                     const match = edgeForOptionPointer(event);
                     if (match) previewOptionEdge(match.edge, match.nodeId);
