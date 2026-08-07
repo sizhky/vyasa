@@ -6111,7 +6111,7 @@ async function renderTasksGraphs(rootElement = document) {
                     Math.max(10, strokeWidth * 3.0)
                 );
                 const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
-                const prominentLabel = showFullLabel;
+                const prominentLabel = showFullLabel && !props.data?.edgeCardActive;
                 const displayLabel = showFullLabel
                     ? fullLabel
                     : (labelLines.length > 1 ? `${labelLines[0]}...` : fullLabel);
