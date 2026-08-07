@@ -7002,9 +7002,9 @@ async function renderTasksGraphs(rootElement = document) {
                 },
                     React.createElement('div', { style: { display: 'flex', alignItems: 'start', gap: '10px', marginBottom: '10px' } },
                         React.createElement('div', { style: { flex: '1 1 auto', minWidth: 0 } },
-                            React.createElement('div', { style: { fontSize: '14px', fontWeight: 750, lineHeight: 1.4, overflowWrap: 'anywhere' } }, `${sourceLabel} —${relation}→ ${targetLabel}`),
-                            React.createElement('div', { style: { marginTop: '4px', fontSize: '11px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', opacity: 0.68, overflowWrap: 'anywhere' } }, selectedEdgeRecord.id),
-                            sourceModel?.kg_context?.label ? React.createElement('div', { style: { marginTop: '3px', fontSize: '11px', opacity: 0.62 } }, sourceModel.kg_context.label) : null
+                            React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' } }, `${sourceLabel} —${relation}→ ${targetLabel}`),
+                            React.createElement('div', { style: { marginTop: '4px', fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', opacity: 0.7, overflowWrap: 'anywhere' } }, selectedEdgeRecord.id),
+                            sourceModel?.kg_context?.label ? React.createElement('div', { style: { marginTop: '3px', fontSize: '12px', lineHeight: 1.3, opacity: 0.62 } }, sourceModel.kg_context.label) : null
                         ),
                         React.createElement('button', {
                             type: 'button', title: 'Close edge details', 'aria-label': 'Close edge details',
@@ -7023,7 +7023,7 @@ async function renderTasksGraphs(rootElement = document) {
                     renderTasksDetailEntries(React, entries, { copyValues: true, edgeFields: true, currentPath: sourceModel?.document_path || '' }),
                     React.createElement('button', {
                         type: 'button', onClick: fitConnection,
-                        style: { marginTop: entries.length ? '12px' : 0, border: '1px solid color-mix(in srgb, currentColor 24%, transparent)', borderRadius: '8px', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', color: 'inherit', cursor: 'pointer', padding: '6px 9px', fontSize: '11px', fontWeight: 700 },
+                        style: { marginTop: entries.length ? '12px' : 0, border: '1px solid color-mix(in srgb, currentColor 24%, transparent)', borderRadius: '8px', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', color: 'inherit', cursor: 'pointer', padding: '6px 9px', fontSize: '12px', lineHeight: 1.35, fontWeight: 700 },
                     }, 'Fit connection')
                 );
             };
