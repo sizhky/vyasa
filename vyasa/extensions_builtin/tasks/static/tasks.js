@@ -2111,6 +2111,10 @@ function tasksHoverFocusEdge(edge, hoveredNodeId) {
     };
 }
 
+function tasksEdgeRecordId(edge) {
+    return String(edge?.__source_edge_id || edge?.id || '').trim();
+}
+
 // Build an inset SVG overlay element drawing the diagonal-band / horizontal-strip fill.
 function tasksColorOverlay(React, levels, width, height) {
     const w = Math.max(1, Number(width) || 100);
@@ -4140,14 +4144,14 @@ async function renderTasksGraphs(rootElement = document) {
                 [...(model?.groups || []), ...(model?.tasks || [])].map((node) => [String(node.id || ''), String(node.label || node.id || '')])
             ), [model]);
             const selectedEdgeRecord = React.useMemo(() => (
-                (model?.dependency_edges || []).find((edge) => String(edge.id || '') === String(selectedEdgeId || '')) || null
+                (model?.dependency_edges || []).find((edge) => tasksEdgeRecordId(edge) === String(selectedEdgeId || '')) || null
             ), [model, selectedEdgeId]);
             const selectEdgeRecord = React.useCallback((edge, openCard = true, field = '') => {
-                const edgeId = String(edge?.id || edge?.__source_edge_id || '').trim();
+                const edgeId = tasksEdgeRecordId(edge);
                 if (!edgeId) return;
-                const record = (model?.dependency_edges || []).find((item) => String(item.id || '') === edgeId) || edge;
+                const record = (model?.dependency_edges || []).find((item) => tasksEdgeRecordId(item) === edgeId) || edge;
                 const ordered = tasksOrderedEdges(visibleEdgesRef.current.length ? visibleEdgesRef.current : model?.dependency_edges || []);
-                const index = ordered.findIndex((item) => String(item.id || item.__source_edge_id || '') === edgeId);
+                const index = ordered.findIndex((item) => tasksEdgeRecordId(item) === edgeId);
                 const sourceLabel = edgeNodeLabels[record.source] || record.source || '';
                 const targetLabel = edgeNodeLabels[record.target] || record.target || '';
                 const relation = record.relation || record.label || '';
@@ -4185,7 +4189,7 @@ async function renderTasksGraphs(rootElement = document) {
                 return edge ? { edge, nodeId } : null;
             }, []);
             const previewOptionEdge = React.useCallback((edge, nodeId) => {
-                const edgeId = String(edge?.id || edge?.__source_edge_id || '').trim();
+                const edgeId = tasksEdgeRecordId(edge);
                 if (!edgeId) return;
                 optionEdgeNodeIdRef.current = nodeId;
                 edgeCycleNodeIdRef.current = nodeId;
@@ -5417,7 +5421,7 @@ async function renderTasksGraphs(rootElement = document) {
             const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null, selectedIds = new Set(), edgeId = '') => {
                 const baseNodes = graphBaseRef.current.nodes || [];
                 const baseEdges = tasksEdgesMatchingTypes(graphBaseRef.current.edges || [], effectiveEdgeTypes);
-                const selectedEdge = edgeId ? baseEdges.find((edge) => String(edge.id || edge.__source_edge_id || '') === edgeId) : null;
+                const selectedEdge = edgeId ? baseEdges.find((edge) => tasksEdgeRecordId(edge) === edgeId) : null;
                 if (selectedEdge) {
                     const endpointIds = new Set([selectedEdge.source, selectedEdge.target]);
                     setNodesReusing(baseNodes.map((node) => {
@@ -6088,18 +6092,6 @@ async function renderTasksGraphs(rootElement = document) {
                         pointerEvents: 'stroke',
                         className: 'react-flow__edge-interaction vyasa-tasks-edge-hit-path',
                     }),
-                    props.data?.edgeCardActive && React.createElement('path', {
-                        d: path,
-                        fill: 'none',
-                        stroke: 'color-mix(in srgb, var(--vyasa-primary) 72%, white 28%)',
-                        strokeWidth: strokeWidth + 12,
-                        strokeOpacity: 0.72,
-                        strokeLinecap: 'round',
-                        strokeLinejoin: 'round',
-                        vectorEffect: 'non-scaling-stroke',
-                        pointerEvents: 'none',
-                        style: { filter: 'drop-shadow(0 0 7px color-mix(in srgb, var(--vyasa-primary) 86%, transparent))' },
-                    }),
                     !taperPath && React.createElement(rf.BaseEdge, {
                         ...props,
                         path,
@@ -6121,6 +6113,17 @@ async function renderTasksGraphs(rootElement = document) {
                         // While a flare sweeps, the ribbon underneath stays faint so
                         // the swept part reads as an opacity rise, then settles full.
                         opacity: (props.style?.opacity ?? 1) * (flareBox ? 0.3 : 1),
+                        pointerEvents: 'none',
+                    }),
+                    props.data?.edgeCardActive && React.createElement('path', {
+                        d: path,
+                        fill: 'none',
+                        stroke: props.style?.stroke || 'currentColor',
+                        strokeWidth: strokeWidth + 6,
+                        strokeOpacity: 0.22,
+                        strokeLinecap: 'round',
+                        strokeLinejoin: 'round',
+                        vectorEffect: 'non-scaling-stroke',
                         pointerEvents: 'none',
                     }),
                     flareBox && React.createElement('g', { key: flareKey, pointerEvents: 'none' },
@@ -6672,7 +6675,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 setEdgeStatus(incidentNodeId ? `No visible edges connect to ${incidentNodeId}.` : 'No visible edges.');
                                 return;
                             }
-                            const currentIndex = ordered.findIndex((edge) => String(edge.id || edge.__source_edge_id || '') === String(selectedEdgeIdRef.current || ''));
+                            const currentIndex = ordered.findIndex((edge) => tasksEdgeRecordId(edge) === String(selectedEdgeIdRef.current || ''));
                             const delta = key === ']' ? 1 : -1;
                             const nextIndex = currentIndex < 0 ? (delta > 0 ? 0 : ordered.length - 1) : (currentIndex + delta + ordered.length) % ordered.length;
                             selectEdgeRecord(ordered[nextIndex], edgeCardOpen, edgeCardField);
@@ -6680,7 +6683,7 @@ async function renderTasksGraphs(rootElement = document) {
                         }
                         if (key === 'enter' && selectedEdgeIdRef.current) {
                             event.preventDefault();
-                            const record = (model?.dependency_edges || []).find((edge) => String(edge.id || '') === selectedEdgeIdRef.current);
+                            const record = (model?.dependency_edges || []).find((edge) => tasksEdgeRecordId(edge) === selectedEdgeIdRef.current);
                             if (record) selectEdgeRecord(record, true, edgeCardField);
                             return;
                         }

@@ -47,7 +47,8 @@ test('Knowledge Graph wires Option preview and the selected edge halo', () => {
     assert.ok(source.includes('const match = edgeForOptionPointer(event);'));
     assert.ok(source.includes('previewOptionEdge(match.edge, match.nodeId);'));
     assert.ok(source.includes('props.data?.edgeCardActive'));
-    assert.ok(source.includes("strokeWidth: strokeWidth + 12"));
+    assert.ok(source.includes("strokeWidth: strokeWidth + 6"));
+    assert.ok(source.includes("return String(edge?.__source_edge_id || edge?.id || '').trim();"));
 });
 
 test('Knowledge Graph notes backup round-trips one graph preference record', () => {
