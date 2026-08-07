@@ -148,6 +148,7 @@ def test_tasks_node_detail_rows_always_stack_values_below_labels():
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "`${entry.label}:`" in source
+    assert "fontSize: options.fontSize || '14px'" in source
     assert "display: 'block', marginBottom: '4px'" in source
     assert "return Math.max(keyWidth, valueWidth * weight);" in source
     assert "overflowWrap: 'anywhere'" in source
@@ -155,7 +156,9 @@ def test_tasks_node_detail_rows_always_stack_values_below_labels():
     assert "tasksIsLongFormEntry" not in source
     assert ".vyasa-task-node-card-value > p:first-child { display: inline; }" not in css
     assert ".vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }" in css
-    assert ".vyasa-task-node-card-value li > p { margin: 0; }" in css
+    assert ".vyasa-task-node-card-value :where(p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote) { font-size: inherit !important; line-height: inherit !important; color: inherit !important; }" in css
+    assert ".vyasa-task-node-card-value > * + * { margin-top: 0.45em !important; }" in css
+    assert ".vyasa-task-node-card-value li > p { margin: 0 !important; }" in css
     assert ".vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }" in css
 
 
@@ -552,6 +555,18 @@ def test_tasks_node_and_edge_cards_share_note_access_and_rendering():
     assert "edgeNotes," in source
 
 
+def test_tasks_node_and_edge_cards_share_node_icon_rendering():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    edge_panel = source.split("const SelectedEdgePanel = () =>", 1)[1].split("const FilterPanel = () =>", 1)[0]
+
+    assert "function renderTasksCardNodeIcon(React, node, model, options = {})" in source
+    assert source.count("renderTasksCardNodeIcon(React") == 4
+    assert "node?.__kind__ === 'group' || node?.__kind__ === 'groupTitle' ? 'folder' : 'file-text'" in source
+    assert "color: edgeCardColor" in edge_panel
+    assert "fontStyle: 'italic'" not in edge_panel
+    assert "↓" not in edge_panel
+
+
 def test_tasks_node_cards_share_the_configured_default_width():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     panel_source = source.split("const SelectedNodePanel = (", 1)[1].split("const SelectedEdgePanel = () =>", 1)[0]
@@ -586,6 +601,8 @@ def test_tasks_node_and_edge_cards_keep_notes_below_scrolling_details():
     assert "style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto'" in layout
     assert "style: { flex: '0 0 auto', padding: '12px', borderTop:" in layout
     assert "background: 'color-mix(in srgb, var(--vyasa-primary) 8%, var(--vyasa-paper) 92%)'" in layout
+    assert "fontSize: '14px'" in layout
+    assert "font = '500 14px ui-sans-serif" in source
     assert "renderTasksCardDetailsAndNotes(React" in node_panel
     assert "renderTasksCardDetailsAndNotes(React" in edge_panel
 
@@ -601,6 +618,16 @@ def test_enter_selects_hovered_node_in_right_rail_and_focuses_notes():
     assert "row('Enter', 'pin hovered node and focus Notes / open selected edge')" in source
     shortcut = source.split("const clearGroupHoverTooltip", 1)[1].split("const hoverTraceKeyRef", 1)[0]
     assert "event.key === 'Control'" not in shortcut
+
+
+def test_escape_in_card_notes_releases_focus_before_card_dismissal():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    hotkeys = source.split("const FitViewHotkey = () =>", 1)[1].split("const SelectedNodePanel = (", 1)[0]
+
+    notes_escape = "event.key === 'Escape' && target?.closest?.('[data-vyasa-card-notes]')"
+    assert notes_escape in hotkeys
+    assert hotkeys.index(notes_escape) < hotkeys.index("event.key === 'Escape' && !event.shiftKey && widgetFocused")
+    assert "event.stopImmediatePropagation();" in hotkeys.split(notes_escape, 1)[1].split("return;", 1)[0]
 
 
 def test_tasks_node_card_attr_values_can_be_copied_from_hover_button():
@@ -745,7 +772,8 @@ def test_v_toggles_right_side_hover_card_scroll_mode():
     assert 'data-vyasa-tasks-action="toggleCardScroll"' in render_source
     assert "0%, 100%" in css
     assert "50%" in css
-    assert "vyasa-tasks-hover-card-scroll-pulse 2s cubic-bezier(0.37, 0, 0.63, 1)" in css
+    assert "0 0 18px 8px color-mix(in srgb, var(--vyasa-primary) 68%, transparent)" in css
+    assert "vyasa-tasks-hover-card-scroll-pulse 4s cubic-bezier(0.37, 0, 0.63, 1)" in css
     assert "drop-shadow(" not in css.split("@keyframes vyasa-tasks-hover-card-scroll-pulse", 1)[1].split("}", 4)[0]
     assert "hoverCardRightRail" not in source
 
@@ -1049,7 +1077,7 @@ def test_tasks_edge_cards_share_pointer_keyboard_and_deep_link_selection():
     assert "'aria-live': 'polite'" in source
     assert "hash.startsWith('#kg/')" in source
     assert "data-vyasa-edge-field" in source
-    assert "Fit connection" in source
+    assert "Fit connection" not in source
 
 
 def test_tasks_edge_type_filter_is_searchable_persisted_and_applied():

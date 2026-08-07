@@ -3361,6 +3361,25 @@ function renderTasksNodeLinkBadge(React, options = {}) {
     })));
 }
 
+function renderTasksCardNodeIcon(React, node, model, options = {}) {
+    const size = Number(options.size) || 22;
+    const image = normalizeTasksNodeImageUrl(node?.__node_image__ || resolveTasksNodeImage(node, model));
+    const style = { width: `${size}px`, height: `${size}px`, flex: '0 0 auto', ...options.style };
+    if (image) return React.createElement('img', {
+        src: image,
+        alt: '',
+        loading: 'lazy',
+        draggable: false,
+        className: tasksIsIconifyImage(image) ? 'vyasa-tasks-node-image vyasa-tasks-node-image--icon' : 'vyasa-tasks-node-image',
+        style: { ...style, objectFit: 'contain' },
+    });
+    return React.createElement('span', {
+        'uk-icon': node?.__kind__ === 'group' || node?.__kind__ === 'groupTitle' ? 'folder' : 'file-text',
+        'aria-hidden': 'true',
+        style: { ...style, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: 0.68 },
+    });
+}
+
 function tasksDetailPanelWidth(options = {}) {
     const title = options.title || '';
     const nodeId = options.nodeId || '';
@@ -3389,7 +3408,7 @@ function tasksDetailPanelWidth(options = {}) {
     return Math.round(Math.min(options.maxWidth || 720, Math.max(options.minWidth || 280, headerWidth, weightedWidth + 136)));
 }
 
-function tasksNoteEditorMetrics(note, font = '500 12px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif') {
+function tasksNoteEditorMetrics(note, font = '500 14px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif') {
     const text = String(note || '').replace(/\r\n/g, '\n');
     const lines = text.split('\n');
     const widestLine = lines.reduce((widest, line) => (
@@ -3430,7 +3449,7 @@ function renderTasksNoteTextarea(React, options = {}) {
             borderRadius: '8px',
             background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)',
             color: 'var(--vyasa-ink)',
-            fontSize: '12px',
+            fontSize: '14px',
             lineHeight: 1.35,
             padding: '8px',
             boxSizing: 'border-box',
@@ -3476,13 +3495,13 @@ function renderTasksCardDetailsAndNotes(React, options = {}) {
         }, React.createElement('div', { className: 'vyasa-tasks-card-scroll-body' }, options.details)),
         React.createElement('div', {
             'data-vyasa-card-notes': 'true',
-            style: { flex: '0 0 auto', padding: '12px', borderTop: '1px dashed color-mix(in srgb, currentColor 18%, transparent)', background: 'color-mix(in srgb, var(--vyasa-primary) 8%, var(--vyasa-paper) 92%)', fontSize: '12px', lineHeight: 1.35 },
+            style: { flex: '0 0 auto', padding: '12px', borderTop: '1px dashed color-mix(in srgb, currentColor 18%, transparent)', background: 'color-mix(in srgb, var(--vyasa-primary) 8%, var(--vyasa-paper) 92%)', fontSize: '14px', lineHeight: 1.35 },
         }, options.notes)
     );
 }
 
 function renderTasksDetailEntries(React, entries, options = {}) {
-    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '12px', lineHeight: options.lineHeight || 1.35 } },
+    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', fontSize: options.fontSize || '14px', lineHeight: options.lineHeight || 1.35 } },
         ...(entries || []).map((entry, index) => {
             const canCopy = options.copyValues && String(entry?.value ?? '').trim();
             const urls = tasksExtractUrls(entry?.value);
@@ -3942,6 +3961,29 @@ async function renderTasksGraphs(rootElement = document) {
                 setSelectedNodeIds(new Set());
                 setHoveredNodeId(null);
             }, [markWidgetActive, widgetId]);
+            const releaseCardPin = React.useCallback(() => {
+                optionEdgePinnedRef.current = false;
+                const nodeId = selectedNodeIdRef.current;
+                if (!nodeId) return;
+                const graphNode = (graphBaseRef.current.nodes || []).find((node) => (
+                    node.id === nodeId || node.data?.sourceGroupId === nodeId
+                ));
+                const nodeData = graphNode?.data || {};
+                const hoverCard = {
+                    label: nodeData.label || nodeId,
+                    nodeId,
+                    group: nodeData.__kind__ === 'group' || nodeData.__kind__ === 'groupTitle',
+                    placement: 'rightRail',
+                };
+                selectedNodeIdRef.current = null;
+                selectedNodeIdsRef.current = new Set();
+                setSelectedNodeId(null);
+                setSelectedNodeIds(new Set());
+                setHoveredNodeId(nodeId);
+                groupHoverTooltipRef.current = hoverCard;
+                setGroupHoverTooltip(hoverCard);
+                logTasksDebug('cardPinReleased', { widgetId, nodeId, reason: 'notes-escape' });
+            }, [widgetId]);
             const [hoverCardScrollMode, setHoverCardScrollMode] = React.useState(
                 () => readTasksGlobalToggle(TASKS_HOVER_CARD_SCROLL_KEY) === 'true'
             );
@@ -4196,6 +4238,7 @@ async function renderTasksGraphs(rootElement = document) {
             const edgeNodeLabels = React.useMemo(() => Object.fromEntries(
                 [...(model?.groups || []), ...(model?.tasks || [])].map((node) => [String(node.id || ''), String(node.label || node.id || '')])
             ), [model]);
+            const edgeNodesById = React.useMemo(() => new Map([...(model?.groups || []), ...(model?.tasks || [])].map((node) => [String(node.id || ''), node])), [model]);
             const [selectedEdgeRecord, setSelectedEdgeRecord] = React.useState(null);
             const resolveEdgeRecord = React.useCallback((edge) => {
                 const edgeId = tasksEdgeRecordId(edge);
@@ -6757,6 +6800,13 @@ async function renderTasksGraphs(rootElement = document) {
                                 ...tasksSelectionDebugPayload(selectedNodeIdRef.current, selectedNodeIdsRef.current, hoveredNodeId),
                             });
                         }
+                        if (event.key === 'Escape' && target?.closest?.('[data-vyasa-card-notes]')) {
+                            event.preventDefault();
+                            event.stopImmediatePropagation();
+                            target.blur?.();
+                            releaseCardPin();
+                            return;
+                        }
                         if (event.key === 'Escape' && !event.shiftKey && egoMode && widgetFocused) {
                             event.preventDefault();
                             clearSelection('escape');
@@ -6987,7 +7037,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.removeEventListener('blur', stopMomentum);
                         stopMomentum();
                     };
-                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, panViewport, graphMinZoom]);
+                }, [reactFlow, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, releaseCardPin, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, panViewport, graphMinZoom]);
                 return null;
             };
             const SelectedNodePanel = (panelGraphNodeId = selectedNodeId, readOnly = false, hoverCard = null) => {
@@ -7048,7 +7098,8 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                         }, '⧉'),
                         React.createElement('div', { style: { display: 'grid', gridTemplateColumns: panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', columnGap: '12px', alignItems: 'start' } },
-                            React.createElement('div', { style: { fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' } },
+                            React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px', fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' } },
+                                renderTasksCardNodeIcon(React, selectedNode, model),
                                 renderTasksInlineLinks(selectedNode.label || selectedNode.id, { currentPath: sourceModel?.document_path || '' })
                             ),
                             panelNodeId ? React.createElement('div', { style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', textAlign: 'right' } }, panelNodeId) : null,
@@ -7077,10 +7128,10 @@ async function renderTasksGraphs(rootElement = document) {
                 const sourceLabel = edgeNodeLabels[selectedEdgeRecord.source] || selectedEdgeRecord.source || '';
                 const targetLabel = edgeNodeLabels[selectedEdgeRecord.target] || selectedEdgeRecord.target || '';
                 const relation = selectedEdgeRecord.relation || selectedEdgeRecord.label || '';
+                const sourceNode = edgeNodesById.get(String(selectedEdgeRecord.source || '')) || { id: selectedEdgeRecord.source, __kind__: 'task' };
+                const targetNode = edgeNodesById.get(String(selectedEdgeRecord.target || '')) || { id: selectedEdgeRecord.target, __kind__: 'task' };
+                const edgeCardColor = resolveTasksEdgeColor(selectedEdgeRecord, model, model?.edge_color_by, tasksEdgeColorPaletteFor(model, model?.edge_color_by)) || edgeTypeColors[relation] || 'currentColor';
                 const entries = tasksEdgeMetaEntries(selectedEdgeRecord);
-                const fitConnection = () => {
-                    fitSelectedEdgeConnection(reactFlowApiRef.current);
-                };
                 const edgeNotesEditor = renderTasksCardNoteEditor(React, {
                     ref: edgeNoteTextareaRef,
                     value: edgeNotes[selectedEdgeRecord.id] || '',
@@ -7097,10 +7148,10 @@ async function renderTasksGraphs(rootElement = document) {
                     details: React.createElement(React.Fragment, null,
                     React.createElement('div', { style: { display: 'flex', alignItems: 'start', gap: '10px', marginBottom: '10px' } },
                         React.createElement('div', { style: { flex: '1 1 auto', minWidth: 0 } },
-                            React.createElement('div', { style: { display: 'grid', gap: '2px', fontSize: '14px', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' } },
-                                React.createElement('div', null, sourceLabel),
-                                React.createElement('div', { style: { fontSize: '12px', fontWeight: 600, fontStyle: 'italic', opacity: 0.7 } }, `${relation}${relation ? ' ' : ''}↓`),
-                                React.createElement('div', null, targetLabel)
+                            React.createElement('div', { style: { display: 'grid', gap: '4px', fontSize: '14px', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' } },
+                                React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px' } }, renderTasksCardNodeIcon(React, sourceNode, model), React.createElement('span', null, sourceLabel)),
+                                relation ? React.createElement('div', { style: { paddingLeft: '29px', fontSize: '12px', fontWeight: 600, color: edgeCardColor, opacity: 0.82 } }, relation) : null,
+                                React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px' } }, renderTasksCardNodeIcon(React, targetNode, model), React.createElement('span', null, targetLabel))
                             ),
                             React.createElement('div', { style: { marginTop: '4px', fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', opacity: 0.7, overflowWrap: 'anywhere' } }, selectedEdgeRecord.id),
                             sourceModel?.kg_context?.label ? React.createElement('div', { style: { marginTop: '3px', fontSize: '12px', lineHeight: 1.3, opacity: 0.62 } }, sourceModel.kg_context.label) : null
@@ -7119,10 +7170,6 @@ async function renderTasksGraphs(rootElement = document) {
                             style: { border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: 0, opacity: 0.62 },
                         }, '×')
                     ),
-                    React.createElement('button', {
-                        type: 'button', onClick: fitConnection,
-                        style: { marginBottom: entries.length ? '12px' : 0, border: '1px solid color-mix(in srgb, currentColor 24%, transparent)', borderRadius: '8px', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', color: 'inherit', cursor: 'pointer', padding: '6px 9px', fontSize: '12px', lineHeight: 1.35, fontWeight: 700 },
-                    }, 'Fit connection'),
                     renderTasksDetailEntries(React, entries, { copyValues: true, edgeFields: true, currentPath: sourceModel?.document_path || '' })
                     ),
                     notes: edgeNotesEditor,
