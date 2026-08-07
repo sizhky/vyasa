@@ -1028,7 +1028,7 @@ def _apply_kg_schema(graph: dict, current_path: str | Path | None) -> None:
         return
     schema_path = _resolve_required_source(current_path, schema_source)
     compiled = read_kg_pack(schema_path, str(graph.get("kg_context_id") or ""))
-    for key in ("id", "title", "default_projection", "default_group_by", "default_color_by", "default_secondary_color_by", "default_open_depth", "edge_color_by", "edge_label_from", "view_projections", "slides", "hover_attrs", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "kg_context", "kg_contexts", "index_attributes", "filter_attributes", "card_states", "acl"):
+    for key in ("id", "title", "default_projection", "default_group_by", "default_color_by", "default_secondary_color_by", "default_open_depth", "edge_color_by", "edge_label_from", "view_projections", "slides", "hover_attrs", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "kg_context", "kg_contexts", "index_attributes", "edge_index_attributes", "filter_attributes", "card_states", "acl"):
         if compiled.get(key) and not graph.get(key):
             graph[key] = compiled[key]
     graph["groups"].extend(compiled.get("groups", []))
@@ -1249,6 +1249,7 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "default_design_palette": graph.get("default_design_palette", ""),
         "filter_attributes": graph.get("filter_attributes", []),
         "index_attributes": graph.get("index_attributes", []),
+        "edge_index_attributes": graph.get("edge_index_attributes", []),
         "filter_whitelist": graph.get("filter_whitelist", []),
         "filter_blacklist": graph.get("filter_blacklist", []),
         "hover_attrs": graph.get("hover_attrs", []),

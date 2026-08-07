@@ -18,6 +18,11 @@ const TASKS_INTERNAL_NODE_META_KEYS = new Set([
     'active_projection', 'graph_x', 'graph_y', '__gantt', '__projection_branch_opacity__',
 ]);
 const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity']);
+const TASKS_INTERNAL_EDGE_META_KEYS = new Set([
+    'id', 'source', 'target', 'relation', 'label', 'type', 'kind', 'animated',
+    'markerend', 'labelstyle', 'labelbgstyle', 'style', 'data', 'zindex',
+    'sourcehandle', 'targethandle', '__kg_sources', '__rendered_attrs__', '__edge_types__',
+]);
 
 export function normalizeTasksAttrText(value) {
     if (Array.isArray(value)) return value.map(normalizeTasksAttrText).filter(Boolean).join(', ');
@@ -89,6 +94,37 @@ export function tasksNodeMetaEntries(node) {
             value: normalizeTasksAttrText(value),
             renderedValue: typeof node?.__rendered_attrs__?.[key] === 'string' ? node.__rendered_attrs__[key] : '',
         }));
+}
+
+export function tasksEdgeMetaEntries(edge) {
+    if (!edge) return [];
+    const tailOrder = new Map([
+        ['evidence', 100], ['introduced_context', 101], ['introduced_stage', 102], ['definition', 103],
+    ]);
+    return Object.entries(edge)
+        .filter(([key, value]) => !TASKS_INTERNAL_EDGE_META_KEYS.has(String(key).toLowerCase()) && tasksAttrValues(value).length)
+        .map(([key, value], index) => ({
+            key,
+            label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
+            value: normalizeTasksAttrText(value),
+            renderedValue: edge?.__rendered_attrs__?.[key] || '',
+            order: key === 'summary' ? -1 : (tailOrder.get(key) ?? index),
+        }))
+        .sort((a, b) => a.order - b.order)
+        .map(({ order: _order, ...entry }) => entry);
+}
+
+export function tasksOrderedEdges(edges, incidentNodeId = '') {
+    const nodeId = String(incidentNodeId || '').trim();
+    return (edges || [])
+        .filter((edge) => !nodeId || edge?.source === nodeId || edge?.target === nodeId)
+        .slice()
+        .sort((a, b) => [a?.source, a?.relation || a?.label, a?.target, a?.id]
+            .map((value) => String(value || ''))
+            .join('\u0000')
+            .localeCompare([b?.source, b?.relation || b?.label, b?.target, b?.id]
+                .map((value) => String(value || ''))
+                .join('\u0000')));
 }
 
 export function tasksGroupHoverAttrRows(directRows, detailEntries, hoverAttrs) {

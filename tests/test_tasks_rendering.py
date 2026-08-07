@@ -947,6 +947,43 @@ def test_tasks_edge_type_filter_uses_or_and_returns_endpoints():
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
+def test_tasks_edge_cards_keep_field_order_lists_and_stable_cycle_order():
+    script = """
+        import { tasksEdgeMetaEntries, tasksOrderedEdges } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        const edge = {
+            id: 'm4-uses-li3', source: 'm4', target: 'li3', relation: 'uses',
+            failure: 'Returns an error string.', summary: 'Calls the data agent.',
+            evidence: ['query', 'ask'], introduced_stage: '30-Module-Interfaces', definition: 'edge-proxies/m4-uses-li3.md',
+            __rendered_attrs__: { evidence: ['<a>query</a>', '<a>ask</a>'] },
+        };
+        const entries = tasksEdgeMetaEntries(edge);
+        if (entries.map((entry) => entry.key).join(',') !== 'summary,failure,evidence,introduced_stage,definition') throw new Error('field order changed');
+        if (!Array.isArray(entries[2].renderedValue) || entries[2].renderedValue.length !== 2) throw new Error('rendered evidence list was joined');
+        const ordered = tasksOrderedEdges([
+            { id: 'z', source: 'm4', target: 'li3', relation: 'uses' },
+            { id: 'a', source: 'm1', target: 'm4', relation: 'calls' },
+        ]);
+        if (ordered.map((item) => item.id).join(',') !== 'a,z') throw new Error('edge cycle order is unstable');
+        if (tasksOrderedEdges(ordered, 'li3').map((item) => item.id).join(',') !== 'z') throw new Error('incident edge cycle is wrong');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_tasks_edge_cards_share_pointer_keyboard_and_deep_link_selection():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "onEdgeClick: selectGraphEdge" in source
+    assert "strokeWidth: 24" in source
+    assert "vectorEffect: 'non-scaling-stroke'" in source
+    assert "tasksOrderedEdges(visibleEdgesRef.current" in source
+    assert "key === '[' || key === ']'" in source
+    assert "key === 'enter' && selectedEdgeIdRef.current" in source
+    assert "'aria-live': 'polite'" in source
+    assert "hash.startsWith('#kg/')" in source
+    assert "data-vyasa-edge-field" in source
+    assert "Fit connection" in source
+
+
 def test_tasks_edge_type_filter_is_searchable_persisted_and_applied():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 

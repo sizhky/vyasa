@@ -9,6 +9,7 @@ from fasthtml.common import to_xml
 from vyasa.config import reload_config
 from vyasa.extensions_builtin.markdown.renderer import MarkdownRenderer, RenderContext, _render_markdown_fragment, from_md
 from vyasa.extensions_builtin.slides.deck import present_href_for_anchor
+from vyasa.extensions_builtin.tasks.render import _attach_rendered_node_attrs
 from vyasa.helpers import expand_markdown_includes_for_reading
 
 
@@ -24,6 +25,27 @@ def test_single_newlines_follow_soft_break_behavior():
 
     assert "<br" not in html
     assert "<p" in html
+
+
+def test_edge_markdown_renders_each_list_member():
+    model = {
+        "groups": [],
+        "tasks": [],
+        "dependency_edges": [{
+            "id": "m4-uses-li3",
+            "source": "m4",
+            "target": "li3",
+            "relation": "uses",
+            "evidence": ["[query](agent.py?symbol=query)", "[ask](agent.py?symbol=ask)"],
+        }],
+    }
+
+    _attach_rendered_node_attrs(model, "docs/graph.md")
+
+    rendered = model["dependency_edges"][0]["__rendered_attrs__"]["evidence"]
+    assert len(rendered) == 2
+    assert "agent.py?symbol=query" in rendered[0]
+    assert "agent.py?symbol=ask" in rendered[1]
 
 
 def test_markdown_task_list_loads_its_card_styles_without_tasks_runtime():

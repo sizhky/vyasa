@@ -20,6 +20,7 @@ _RENDERABLE_NODE_KEYS = {
     "card_state", "__checked__", "__card_state__", "__card_state_color__", "__has_note__",
     "__rendered_attrs__",
 }
+_RENDERABLE_EDGE_KEYS = _RENDERABLE_NODE_KEYS | {"source", "target", "relation"}
 
 
 _MARKDOWN_BLOCK_LINE_RE = re.compile(
@@ -58,21 +59,24 @@ def _prepare_node_attr_markdown(value) -> str:
 
 
 def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
-    for bucket in ("groups", "tasks"):
+    for bucket in ("groups", "tasks", "dependency_edges"):
+        reserved = _RENDERABLE_EDGE_KEYS if bucket == "dependency_edges" else _RENDERABLE_NODE_KEYS
         for node in model.get(bucket, []):
             rendered_attrs = {}
             for key, value in node.items():
                 lowered = str(key).lower()
-                if lowered in _RENDERABLE_NODE_KEYS:
+                if lowered in reserved:
                     continue
                 if value is None or value == "":
                     continue
-                if not isinstance(value, (str, int, float, bool)):
+                values = value if isinstance(value, list) else [value]
+                if not all(isinstance(item, (str, int, float, bool)) for item in values):
                     continue
-                rendered_attrs[key] = _render_markdown_fragment(
-                    _prepare_node_attr_markdown(value),
-                    current_path=current_path,
-                )
+                rendered = [
+                    _render_markdown_fragment(_prepare_node_attr_markdown(item), current_path=current_path)
+                    for item in values
+                ]
+                rendered_attrs[key] = rendered if isinstance(value, list) else rendered[0]
             if rendered_attrs:
                 node["__rendered_attrs__"] = rendered_attrs
     for entry in (model.get("projection_models") or {}).values():
