@@ -1665,10 +1665,18 @@ def test_context_attributes_resolve_references_to_hidden_pack_nodes(tmp_path):
 
     model, _ = _compile_schema_payload(tmp_path / "kg.schema", context_id="one")
 
-    assert {task["id"] for task in model["tasks"]} == {"source", "visible"}
+    assert {task["id"] for task in model["tasks"]} == {"source", "visible", "hidden"}
     source = next(task for task in model["tasks"] if task["id"] == "source")
     assert ">Hidden target</span>" in source["__rendered_attrs__"]["summary"]
     assert "vyasa-tasks-node-reference--broken" not in source["__rendered_attrs__"]["summary"]
+    script = f"""
+        import {{ tasksReferenceEdges }} from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        const edges = tasksReferenceEdges({json.dumps(model)});
+        if (!edges.some((edge) => edge.source === 'hidden' && edge.target === 'source')) {{
+            throw new Error(JSON.stringify(edges));
+        }}
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
 def test_tasks_block_renders_markdown_lists_without_trailing_breaks():

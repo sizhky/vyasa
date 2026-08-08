@@ -20,6 +20,36 @@ PathLike = Union[Path, "VirtualPath"]
 NODE_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 EDGE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 EDGE_RESERVED_FIELDS = {"id", "source", "target", "relation", "label"}
+NODE_REFERENCE_RE = re.compile(r"\[\[([^\]|\n]+)(?:\|[^\]\n]+)?\]\]")
+
+
+def _referenced_node_ids(node: dict[str, Any]) -> set[str]:
+    values = (
+        item
+        for value in node.values()
+        for item in (value if isinstance(value, list) else [value])
+        if isinstance(item, (str, int, float, bool))
+    )
+    return {
+        match.group(1).strip()
+        for value in values
+        for match in NODE_REFERENCE_RE.finditer(str(value))
+        if match.group(1).strip()
+    }
+
+
+def _reference_closure(nodes_by_id: dict[str, dict[str, Any]], roots: set[str]) -> set[str]:
+    included = set(roots)
+    pending = list(roots)
+    while pending:
+        node = nodes_by_id.get(pending.pop())
+        if not node:
+            continue
+        for target in _referenced_node_ids(node):
+            if target in nodes_by_id and target not in included:
+                included.add(target)
+                pending.append(target)
+    return included
 
 
 def _as_pathlike(p: "str | PathLike") -> PathLike:
@@ -190,6 +220,7 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
     _apply_context_attrs(active, nodes_by_id)
     _apply_status_defaults(schema, nodes_by_id, edges)
     present = {node_id for edge in edges for node_id in (edge.get("source"), edge.get("target")) if node_id}
+    present = _reference_closure(nodes_by_id, present)
     graph = {
         "id": schema.graph.get("id", ""),
         "title": schema.graph.get("title", ""),
