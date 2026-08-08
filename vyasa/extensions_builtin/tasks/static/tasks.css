@@ -8,6 +8,7 @@
     text-underline-offset: 2px;
 }
 .vyasa-tasks-node-reference--broken { color: #ef4444; background: color-mix(in srgb, #ef4444 18%, transparent); text-decoration: wavy underline; text-decoration-thickness: 1px; }
+.vyasa-tasks-pinned-card:focus-visible { outline: 3px solid color-mix(in srgb, var(--vyasa-primary) 72%, transparent); outline-offset: 3px; }
 .vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }
 .vyasa-task-node-card-value :where(p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote) { font-size: inherit !important; line-height: inherit !important; color: inherit !important; }
 .vyasa-task-node-card-value :where(p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote) { margin: 0 !important; }

@@ -3500,12 +3500,6 @@ function renderTasksNoteTextarea(React, options = {}) {
         rows: Math.min(15, tasksNoteEditorMetrics(value).lines),
         onChange: options.onChange,
         onKeyDown: (event) => {
-            if (event.key === 'Enter' && event.shiftKey && options.onShiftEnter) {
-                event.preventDefault();
-                event.stopPropagation();
-                options.onShiftEnter();
-                return;
-            }
             if (event.key !== 'Escape') return;
             event.preventDefault();
             event.stopPropagation();
@@ -4047,8 +4041,11 @@ async function renderTasksGraphs(rootElement = document) {
             const [groupHoverTooltip, setGroupHoverTooltip] = React.useState(null);
             const groupHoverTooltipRef = React.useRef(null);
             groupHoverTooltipRef.current = groupHoverTooltip;
-            const pendingNodeNoteFocusRef = React.useRef('');
-            const selectNodeCard = React.useCallback((sourceNodeId, nodeId, kind, focusNotes = false) => {
+            const detailCardRef = React.useRef(null);
+            const focusDetailCard = React.useCallback(() => {
+                window.requestAnimationFrame(() => detailCardRef.current?.focus());
+            }, []);
+            const selectNodeCard = React.useCallback((sourceNodeId, nodeId, kind, focusCard = false) => {
                 logTasksDebug('selectionSetNode', {
                     widgetId,
                     sourceNodeId,
@@ -4064,34 +4061,11 @@ async function renderTasksGraphs(rootElement = document) {
                 setEdgeCardOpen(false);
                 selectedNodeIdRef.current = sourceNodeId;
                 selectedNodeIdsRef.current = new Set();
-                if (focusNotes) pendingNodeNoteFocusRef.current = sourceNodeId;
+                if (focusCard) focusDetailCard();
                 setSelectedNodeId(sourceNodeId);
                 setSelectedNodeIds(new Set());
                 setHoveredNodeId(null);
-            }, [markWidgetActive, widgetId]);
-            const releaseCardPin = React.useCallback(() => {
-                optionEdgePinnedRef.current = false;
-                const nodeId = selectedNodeIdRef.current;
-                if (!nodeId) return;
-                const graphNode = (graphBaseRef.current.nodes || []).find((node) => (
-                    node.id === nodeId || node.data?.sourceGroupId === nodeId
-                ));
-                const nodeData = graphNode?.data || {};
-                const hoverCard = {
-                    label: nodeData.label || nodeId,
-                    nodeId,
-                    group: nodeData.__kind__ === 'group' || nodeData.__kind__ === 'groupTitle',
-                    placement: 'rightRail',
-                };
-                selectedNodeIdRef.current = null;
-                selectedNodeIdsRef.current = new Set();
-                setSelectedNodeId(null);
-                setSelectedNodeIds(new Set());
-                setHoveredNodeId(nodeId);
-                groupHoverTooltipRef.current = hoverCard;
-                setGroupHoverTooltip(hoverCard);
-                logTasksDebug('cardPinReleased', { widgetId, nodeId, reason: 'notes-escape' });
-            }, [widgetId]);
+            }, [focusDetailCard, markWidgetActive, widgetId]);
             const [hoverCardScrollMode, setHoverCardScrollMode] = React.useState(
                 () => readTasksGlobalToggle(TASKS_HOVER_CARD_SCROLL_KEY) === 'true'
             );
@@ -4468,7 +4442,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.setTimeout(() => setEdgePinBloom((current) => current?.key === bloomKey ? null : current), 1800);
                     logTasksDebug('optionEdgePinned', { widgetId, edgeId: selectedEdgeIdRef.current, bloomKey });
                     setEdgeStatus(`${selectedEdgeIdRef.current}. Edge details pinned.`);
-                    window.requestAnimationFrame(() => edgeNoteTextareaRef.current?.focus());
+                    focusDetailCard();
                     return true;
                 };
                 const edgeKeyApplies = (event) => {
@@ -4530,7 +4504,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.removeEventListener('keyup', onKeyUp, true);
                     window.removeEventListener('blur', clearKeys);
                 };
-            }, [clearOptionEdgePreview, selectNodeCard, widgetId]);
+            }, [clearOptionEdgePreview, focusDetailCard, selectNodeCard, widgetId]);
             const selectGraphEdge = React.useCallback((event, edge) => {
                 event?.preventDefault?.();
                 event?.stopPropagation?.();
@@ -5371,10 +5345,6 @@ async function renderTasksGraphs(rootElement = document) {
             React.useLayoutEffect(() => {
                 const textarea = noteTextareaRef.current;
                 if (!textarea) return;
-                if (pendingNodeNoteFocusRef.current === selectedLogicalNodeId) {
-                    pendingNodeNoteFocusRef.current = '';
-                    textarea.focus();
-                }
                 textarea.style.height = 'auto';
                 const computed = window.getComputedStyle(textarea);
                 const lineHeight = Number.parseFloat(computed.lineHeight) || 16;
@@ -7001,8 +6971,7 @@ async function renderTasksGraphs(rootElement = document) {
                         if (event.key === 'Escape' && target?.closest?.('[data-vyasa-card-notes]')) {
                             event.preventDefault();
                             event.stopImmediatePropagation();
-                            target.blur?.();
-                            releaseCardPin();
+                            focusDetailCard();
                             return;
                         }
                         if (event.key === 'Escape' && !event.shiftKey && egoMode && widgetFocused) {
@@ -7035,6 +7004,7 @@ async function renderTasksGraphs(rootElement = document) {
                             clearSelection('escape');
                             return;
                         }
+                        if (target?.matches?.('.vyasa-tasks-pinned-card')) return;
                         if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName))) return;
                         // Hovering never marks the widget active, so the shortcuts that
                         // act on what the cursor is over need their own way past this gate.
@@ -7069,7 +7039,10 @@ async function renderTasksGraphs(rootElement = document) {
                             event.preventDefault();
                             const record = currentGraphEdges()
                                 .find((edge) => tasksEdgeRecordId(edge) === selectedEdgeIdRef.current);
-                            if (record) selectEdgeRecord(record, true, edgeCardField);
+                            if (record) {
+                                selectEdgeRecord(record, true, edgeCardField);
+                                focusDetailCard();
+                            }
                             return;
                         }
                         if (key === 'f' && event.shiftKey && !event.metaKey) {
@@ -7236,8 +7209,14 @@ async function renderTasksGraphs(rootElement = document) {
                         window.removeEventListener('blur', stopMomentum);
                         stopMomentum();
                     };
-                }, [reactFlow, currentGraphEdges, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, releaseCardPin, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, panViewport, graphMinZoom]);
+                }, [reactFlow, currentGraphEdges, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, focusDetailCard, panViewport, graphMinZoom]);
                 return null;
+            };
+            const handlePinnedCardKeyDown = (event, notesRef, navigate) => {
+                if (event.target !== event.currentTarget || event.key !== 'Enter') return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (event.shiftKey) navigate(); else notesRef.current?.focus();
             };
             const SelectedNodePanel = (panelGraphNodeId = selectedNodeId, readOnly = false, hoverCard = null) => {
                 const selectedNode = (graphBaseRef.current.nodes || []).find((node) => node.id === panelGraphNodeId)?.data || null;
@@ -7269,13 +7248,16 @@ async function renderTasksGraphs(rootElement = document) {
                     value: readOnly ? nodeNotes[panelNodeId] : noteInputValue,
                     readOnly,
                     onChange: readOnly ? undefined : (event) => setNoteInputValue(event.target.value),
-                    onShiftEnter: readOnly ? undefined : () => focusGraphNode(panelGraphNodeId),
                     clearedValue: readOnly ? '' : clearedNote,
                     onUndo: readOnly ? undefined : (event) => { event.preventDefault(); setNoteInputValue(clearedNote); updateNodeNote(panelNodeId, clearedNote); setClearedNote(null); window.clearTimeout(clearedNoteTimerRef.current); },
                     onClear: readOnly ? undefined : (event) => { event.preventDefault(); const prev = noteInputValue; setNoteInputValue(''); updateNodeNote(panelNodeId, ''); setClearedNote(prev); },
                 });
                 return renderTasksCardDetailsAndNotes(React, {
                     props: {
+                        ref: readOnly ? undefined : detailCardRef,
+                        tabIndex: readOnly ? undefined : -1,
+                        className: readOnly ? undefined : 'vyasa-tasks-pinned-card',
+                        onKeyDown: readOnly ? undefined : (event) => handlePinnedCardKeyDown(event, noteTextareaRef, () => focusGraphNode(panelGraphNodeId)),
                         'data-vyasa-node-card': 'true',
                         style: { width: `min(${nodeCardWidth}, 100%)`, maxWidth: '100%', minWidth: 'min(220px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', flex: '0 1 auto' },
                     },
@@ -7346,10 +7328,13 @@ async function renderTasksGraphs(rootElement = document) {
                     value: edgeNotes[selectedEdgeRecord.id] || '',
                     ariaLabel: `Notes for edge ${selectedEdgeRecord.id}`,
                     onChange: (event) => updateEdgeNote(selectedEdgeRecord.id, event.target.value),
-                    onShiftEnter: () => fitSelectedEdgeConnection(reactFlowApiRef.current),
                 });
                 return renderTasksCardDetailsAndNotes(React, {
                     props: {
+                        ref: detailCardRef,
+                        tabIndex: -1,
+                        className: 'vyasa-tasks-pinned-card',
+                        onKeyDown: (event) => handlePinnedCardKeyDown(event, edgeNoteTextareaRef, () => fitSelectedEdgeConnection(reactFlowApiRef.current)),
                         'data-vyasa-edge-card': selectedEdgeRecord.id,
                         style: { width: `min(${nodeCardWidth}, 100%)`, maxWidth: '100%', minWidth: 'min(260px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '2px solid color-mix(in srgb, var(--vyasa-primary) 76%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12), 0 0 18px color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', backdropFilter: 'blur(8px)' },
                     },
@@ -9085,7 +9070,8 @@ async function renderTasksGraphs(rootElement = document) {
                     heading('Keys'),
                     row('?', 'toggle this help'),
                     row('[ / ]', 'select previous / next visible edge'),
-                    row('Enter', 'pin hovered node and focus Notes / open selected edge'),
+                    row('Enter', 'pin hovered node / open selected edge'),
+                    row('Enter on card', 'focus Notes'),
                     row('Shift + Enter', 'center pinned node or fit pinned edge'),
                     row('F', 'fit view or active edge'),
                     row('Option + F', 'fit highlighted edge'),

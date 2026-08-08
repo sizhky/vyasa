@@ -607,37 +607,45 @@ def test_tasks_node_and_edge_cards_keep_notes_below_scrolling_details():
     assert "renderTasksCardDetailsAndNotes(React" in edge_panel
 
 
-def test_enter_selects_hovered_node_in_right_rail_and_focuses_notes():
+def test_enter_selects_hovered_node_and_focuses_the_pinned_card():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "key !== 'enter' || !current" in source
     assert "selectNodeCard(current.nodeId, current.nodeId, current.group ? 'group' : 'task', true)" in source
-    assert "if (focusNotes) pendingNodeNoteFocusRef.current = sourceNodeId" in source
-    assert "pendingNodeNoteFocusRef.current === selectedLogicalNodeId" in source
-    assert "textarea.focus()" in source
-    assert "row('Enter', 'pin hovered node and focus Notes / open selected edge')" in source
+    assert "if (focusCard) focusDetailCard();" in source
+    assert "window.requestAnimationFrame(() => detailCardRef.current?.focus())" in source
+    assert "className: readOnly ? undefined : 'vyasa-tasks-pinned-card'" in source
+    assert "row('Enter', 'pin hovered node / open selected edge')" in source
+    assert "row('Enter on card', 'focus Notes')" in source
     shortcut = source.split("const clearGroupHoverTooltip", 1)[1].split("const hoverTraceKeyRef", 1)[0]
     assert "event.key === 'Control'" not in shortcut
 
 
-def test_escape_in_card_notes_releases_focus_before_card_dismissal():
+def test_escape_in_card_notes_returns_focus_to_the_pinned_card():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     hotkeys = source.split("const FitViewHotkey = () =>", 1)[1].split("const SelectedNodePanel = (", 1)[0]
 
     notes_escape = "event.key === 'Escape' && target?.closest?.('[data-vyasa-card-notes]')"
     assert notes_escape in hotkeys
     assert hotkeys.index(notes_escape) < hotkeys.index("event.key === 'Escape' && !event.shiftKey && widgetFocused")
-    assert "event.stopImmediatePropagation();" in hotkeys.split(notes_escape, 1)[1].split("return;", 1)[0]
+    escape_branch = hotkeys.split(notes_escape, 1)[1].split("return;", 1)[0]
+    assert "event.stopImmediatePropagation();" in escape_branch
+    assert "focusDetailCard();" in escape_branch
+    assert "target.blur" not in escape_branch
+    assert "releaseCardPin" not in escape_branch
 
 
-def test_shift_enter_in_card_notes_centers_node_or_fits_edge():
+def test_pinned_card_enter_focuses_notes_and_shift_enter_navigates():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     textarea = source.split("function renderTasksNoteTextarea", 1)[1].split("function renderTasksCardNoteEditor", 1)[0]
 
-    assert "event.key === 'Enter' && event.shiftKey && options.onShiftEnter" in textarea
-    assert "options.onShiftEnter();" in textarea
-    assert "onShiftEnter: readOnly ? undefined : () => focusGraphNode(panelGraphNodeId)" in source
-    assert "onShiftEnter: () => fitSelectedEdgeConnection(reactFlowApiRef.current)" in source
+    assert "options.onShiftEnter" not in textarea
+    assert "const handlePinnedCardKeyDown" in source
+    assert "event.target !== event.currentTarget || event.key !== 'Enter'" in source
+    assert "if (event.shiftKey) navigate(); else notesRef.current?.focus();" in source
+    assert "handlePinnedCardKeyDown(event, noteTextareaRef, () => focusGraphNode(panelGraphNodeId))" in source
+    assert "handlePinnedCardKeyDown(event, edgeNoteTextareaRef, () => fitSelectedEdgeConnection(reactFlowApiRef.current))" in source
+    assert "if (target?.matches?.('.vyasa-tasks-pinned-card')) return;" in source
     assert "row('Shift + Enter', 'center pinned node or fit pinned edge')" in source
 
 
@@ -748,7 +756,8 @@ def test_w_enter_pin_blooms_from_the_edge():
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "setEdgePinBloom({ edgeId: selectedEdgeIdRef.current, key: bloomKey });" in source
-    assert "window.requestAnimationFrame(() => edgeNoteTextareaRef.current?.focus())" in source
+    assert "focusDetailCard();" in source
+    assert "ref: detailCardRef" in source
     assert "ref: edgeNoteTextareaRef" in source
     assert "row('W + Enter', 'pin edge details')" in source
     assert "if (event.shiftKey) pinPreview();" not in source
