@@ -1087,6 +1087,19 @@ def test_tasks_edge_cards_keep_field_order_lists_and_stable_cycle_order():
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
+def test_tasks_card_attr_config_orders_and_hides_attrs():
+    script = """
+        import { tasksEdgeMetaEntries, tasksNodeMetaEntries } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        const record = { id: 'n1', summary: 'Summary', status: 'Done', owner: 'Yesh' };
+        if (tasksNodeMetaEntries(record, ['status', 'summary'], ['owner']).map(({key}) => key).join(',') !== 'status,summary') throw new Error('node card config ignored');
+        if (tasksEdgeMetaEntries(record, ['owner', 'summary'], ['status']).map(({key}) => key).join(',') !== 'owner,summary') throw new Error('edge card config ignored');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    assert "tasksNodeMetaEntries(selectedNode, model.node_attr_order, model.node_hidden_attrs)" in source
+    assert "tasksEdgeMetaEntries(selectedEdgeRecord, model.edge_attr_order, model.edge_hidden_attrs)" in source
+
+
 def test_tasks_edge_cards_share_pointer_keyboard_and_deep_link_selection():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 

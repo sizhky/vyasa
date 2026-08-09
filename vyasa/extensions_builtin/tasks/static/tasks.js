@@ -1190,7 +1190,7 @@ function tasksGroupDetailEntries(nodeId, model) {
             counts.set(value, (counts.get(value) || 0) + 1);
         }
     }
-    const detailEntries = [...tasksNodeMetaEntries(group)]
+    const detailEntries = [...tasksNodeMetaEntries(group, model.node_attr_order, model.node_hidden_attrs)]
         .filter((entry) => !excludedDerivedKeys.has(String(entry?.key || '').toLowerCase()));
     if (sampleNodes.length) {
         detailEntries.push({
@@ -7225,7 +7225,7 @@ async function renderTasksGraphs(rootElement = document) {
                     : tasksLogicalNodeId(selectedNode, selectedNode?.id);
                 const baseEntries = selectedNode?.__kind__ === 'group'
                     ? tasksGroupDetailEntries(sourceNodeId, model)
-                    : tasksNodeMetaEntries(selectedNode);
+                    : tasksNodeMetaEntries(selectedNode, model.node_attr_order, model.node_hidden_attrs);
                 if (!selectedNode) return null;
                 const panelNodeId = sourceNodeId || selectedNode.id || '';
                 const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
@@ -7322,7 +7322,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const edgeCardColor = selectedEdgeRecord.__reference__
                     ? 'var(--vyasa-primary)'
                     : (resolveTasksEdgeColor(selectedEdgeRecord, model, model?.edge_color_by, tasksEdgeColorPaletteFor(model, model?.edge_color_by)) || edgeTypeColors[relation] || 'currentColor');
-                const entries = tasksEdgeMetaEntries(selectedEdgeRecord);
+                const entries = tasksEdgeMetaEntries(selectedEdgeRecord, model.edge_attr_order, model.edge_hidden_attrs);
                 const edgeNotesEditor = renderTasksCardNoteEditor(React, {
                     ref: edgeNoteTextareaRef,
                     value: edgeNotes[selectedEdgeRecord.id] || '',

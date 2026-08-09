@@ -160,25 +160,40 @@ export function tasksIsHiddenNodeMetaKey(key) {
         || TASKS_DERIVED_METRIC_KEYS.has(normalized);
 }
 
-export function tasksNodeMetaEntries(node) {
+function tasksOrderMetaEntries(entries, attrOrder) {
+    const preferred = new Map();
+    for (const key of (attrOrder || [])) {
+        const normalized = String(key || '').trim();
+        if (normalized && !preferred.has(normalized)) preferred.set(normalized, preferred.size);
+    }
+    if (!preferred.size) return entries;
+    return entries.map((entry, index) => ({ entry, index }))
+        .sort((a, b) => (preferred.get(a.entry.key) ?? preferred.size + a.index)
+            - (preferred.get(b.entry.key) ?? preferred.size + b.index))
+        .map(({ entry }) => entry);
+}
+
+export function tasksNodeMetaEntries(node, attrOrder = [], hiddenAttrs = []) {
     if (!node) return [];
-    return Object.entries(node)
-        .filter(([key, value]) => !tasksIsHiddenNodeMetaKey(key) && tasksAttrValues(value).length)
+    const hidden = new Set(hiddenAttrs || []);
+    return tasksOrderMetaEntries(Object.entries(node)
+        .filter(([key, value]) => !hidden.has(key) && !tasksIsHiddenNodeMetaKey(key) && tasksAttrValues(value).length)
         .map(([key, value]) => ({
             key,
             label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
             value: normalizeTasksAttrText(value),
             renderedValue: typeof node?.__rendered_attrs__?.[key] === 'string' ? node.__rendered_attrs__[key] : '',
-        }));
+        })), attrOrder);
 }
 
-export function tasksEdgeMetaEntries(edge) {
+export function tasksEdgeMetaEntries(edge, attrOrder = [], hiddenAttrs = []) {
     if (!edge) return [];
+    const hidden = new Set(hiddenAttrs || []);
     const tailOrder = new Map([
         ['evidence', 100], ['introduced_context', 101], ['introduced_stage', 102], ['definition', 103],
     ]);
-    return Object.entries(edge)
-        .filter(([key, value]) => !TASKS_INTERNAL_EDGE_META_KEYS.has(String(key).toLowerCase()) && tasksAttrValues(value).length)
+    const entries = Object.entries(edge)
+        .filter(([key, value]) => !hidden.has(key) && !TASKS_INTERNAL_EDGE_META_KEYS.has(String(key).toLowerCase()) && tasksAttrValues(value).length)
         .map(([key, value], index) => ({
             key,
             label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
@@ -188,6 +203,7 @@ export function tasksEdgeMetaEntries(edge) {
         }))
         .sort((a, b) => a.order - b.order)
         .map(({ order: _order, ...entry }) => entry);
+    return tasksOrderMetaEntries(entries, attrOrder);
 }
 
 export function tasksOrderedEdges(edges, incidentNodeId = '') {
