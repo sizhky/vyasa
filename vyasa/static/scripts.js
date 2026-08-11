@@ -1660,6 +1660,7 @@ const documentScroll = createMomentumRunner({
     },
     stepStatic: (direction) => window.scrollBy({ top: direction * 40 }),
 });
+let documentTopPrefix = false;
 
 function stopDocumentScroll() {
     documentScroll.stop();
@@ -1675,7 +1676,7 @@ function initDocumentShortcutHelp() {
     ensureShortcutHelp({
         title: 'Document shortcuts',
         groups: [
-            ['Document', [['P', 'Slides'], ['J / K', 'Scroll'], ['C', 'Fold / Unfold'], ['?', 'Shortcuts']]],
+            ['Document', [['P', 'Slides'], ['J / K', 'Scroll'], ['g g / G', 'Top / Bottom'], ['C', 'Fold / Unfold'], ['?', 'Shortcuts']]],
             ['Panels', [['Z', 'Posts'], ['X', 'Contents'], ['Shift+1', 'Expand Posts'], ['R', 'Review']]],
         ],
     });
@@ -1691,6 +1692,26 @@ function initKeyboardShortcuts() {
         if (e.metaKey || e.ctrlKey || e.altKey) return;
 
         const mainContent = document.getElementById('main-content');
+        const isDocument = mainContent && !mainContent.classList.contains('vyasa-zen-present');
+        if (isDocument && e.key === 'G') {
+            e.preventDefault();
+            documentTopPrefix = false;
+            stopDocumentScroll();
+            window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+            return;
+        }
+        if (isDocument && e.key === 'g' && !e.repeat) {
+            if (documentTopPrefix) {
+                e.preventDefault();
+                documentTopPrefix = false;
+                stopDocumentScroll();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+            documentTopPrefix = true;
+        } else {
+            documentTopPrefix = false;
+        }
         if (e.key.toLowerCase() === 'p') {
             const presentLink = mainContent?.querySelector('[data-vyasa-present-document="true"]');
             if (presentLink) {

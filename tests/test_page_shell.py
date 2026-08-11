@@ -254,6 +254,16 @@ def test_document_keyboard_shortcuts_scroll_with_j_and_k():
     assert "prefers-reduced-motion: reduce" in shell
 
 
+def test_document_keyboard_shortcuts_jump_to_top_and_bottom():
+    source = Path("vyasa/static/scripts.js").read_text()
+
+    assert "e.key === 'g' && !e.repeat" in source
+    assert "window.scrollTo({ top: 0, behavior: 'smooth' })" in source
+    assert "e.key === 'G'" in source
+    assert "window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })" in source
+    assert "['g g / G', 'Top / Bottom']" in source
+
+
 def test_sidebars_bound_main_content_width():
     source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
