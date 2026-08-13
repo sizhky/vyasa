@@ -48,6 +48,37 @@ def test_bundle_asset_nodes_emit_css_and_js_once():
     assert rendered[2]["src"].startswith("/static/b.js")
 
 
+def test_bundle_asset_nodes_emit_dependencies_first():
+    runtime = ExtensionRuntime(
+        plan=ExtensionPlan("default", {}, ()),
+        catalog={},
+        bundles={
+            "code": AssetBundle("code", js=("/static/code.js",)),
+            "preview": AssetBundle("preview", js=("/static/preview.js",), depends_on=("code",)),
+        },
+    )
+
+    nodes = bundle_asset_nodes(("preview",), runtime=runtime)
+
+    assert [getattr(node, "attrs", {})["src"].split("?", 1)[0] for node in nodes] == [
+        "/static/code.js",
+        "/static/preview.js",
+    ]
+
+
+def test_bundle_asset_nodes_keep_classic_scripts_out_of_module_scope():
+    runtime = ExtensionRuntime(
+        plan=ExtensionPlan("default", {}, ()),
+        catalog={},
+        bundles={"code": AssetBundle("code", classic_js=("/static/highlight.js",), js=("/static/code.js",))},
+    )
+
+    nodes = bundle_asset_nodes(("code",), runtime=runtime)
+
+    assert "type" not in getattr(nodes[0], "attrs", {})
+    assert getattr(nodes[1], "attrs", {})["type"] == "module"
+
+
 def test_extension_assets_require_browser_revalidation():
     response = asyncio.run(extension_static_asset("tasks", "tasks_graph_core.js"))
 

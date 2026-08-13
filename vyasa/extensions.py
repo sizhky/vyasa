@@ -80,8 +80,10 @@ class ExtensionConfigError(ValueError):
 class AssetBundle:
     name: str
     css: tuple[str, ...] = ()
+    classic_js: tuple[str, ...] = ()
     js: tuple[str, ...] = ()
     static_dir: Path | None = None
+    depends_on: tuple[str, ...] = ()
 
 
 @dataclass

@@ -13,7 +13,7 @@ from ...helpers import (
     content_slug_for_path,
     find_folder_note_file,
 )
-from ..markdown.renderer import from_md
+from ..markdown.renderer import from_md, infer_code_language, render_code_shell
 
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
@@ -104,7 +104,12 @@ def render_link_preview_html(*, href: str, current_path: str | None = None) -> s
         page_slug = content_slug_for_path(file_path) or slug
         preview_html = from_md(section, current_path=page_slug)
     else:
-        preview_html = f'<pre class="vyasa-link-preview-plain-text">{html.escape(source)}</pre>'
+        language = infer_code_language(file_path.name)
+        preview_html = (
+            render_code_shell(source, language, line_numbers=True)
+            if language
+            else f'<pre class="vyasa-link-preview-plain-text">{html.escape(source)}</pre>'
+        )
     relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
     return (
         f'<div class="vyasa-link-preview-shell" data-relative-path="{html.escape(relative_path, quote=True)}" '

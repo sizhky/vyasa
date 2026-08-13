@@ -100,10 +100,18 @@ def bundle_asset_nodes(bundle_names: tuple[str, ...] | list[str], runtime=None) 
         return ()
     nodes: list[object] = []
     seen: set[str] = set()
-    for bundle_name in bundle_names:
+    emitted_bundles: set[str] = set()
+    visiting: set[str] = set()
+
+    def append_bundle(bundle_name: str) -> None:
+        if bundle_name in emitted_bundles or bundle_name in visiting:
+            return
         bundle = runtime.bundles.get(bundle_name)
         if not bundle:
-            continue
+            return
+        visiting.add(bundle_name)
+        for dependency in bundle.depends_on:
+            append_bundle(dependency)
         for href in bundle.css:
             if href not in seen:
                 seen.add(href)
@@ -113,6 +121,16 @@ def bundle_asset_nodes(bundle_names: tuple[str, ...] | list[str], runtime=None) 
                         href=asset_url(href),
                         data_vyasa_bundle_asset="true",
                         data_vyasa_bundle_kind="css",
+                    )
+                )
+        for src in bundle.classic_js:
+            if src not in seen:
+                seen.add(src)
+                nodes.append(
+                    Script(
+                        src=asset_url(src),
+                        data_vyasa_bundle_asset="true",
+                        data_vyasa_bundle_kind="js",
                     )
                 )
         for src in bundle.js:
@@ -126,6 +144,11 @@ def bundle_asset_nodes(bundle_names: tuple[str, ...] | list[str], runtime=None) 
                         data_vyasa_bundle_kind="js",
                     )
                 )
+        visiting.remove(bundle_name)
+        emitted_bundles.add(bundle_name)
+
+    for bundle_name in bundle_names:
+        append_bundle(bundle_name)
     return tuple(nodes)
 
 

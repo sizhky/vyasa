@@ -23,6 +23,7 @@ CODE_SUFFIXES = frozenset({
 def open_in_vscode(
     slug: str,
     *,
+    line: int | None = None,
     resolve: Callable[[str], Path | None] | None = None,
     launch: Callable[..., object] = subprocess.Popen,
 ) -> Path:
@@ -32,9 +33,12 @@ def open_in_vscode(
         raise FileNotFoundError(slug)
     if path.suffix.lower() not in CODE_SUFFIXES:
         raise ValueError(f"Unsupported code file: {path.name}")
+    if line is not None and line < 1:
+        raise ValueError("Line must be a positive integer")
     resolved = path.resolve()
+    target = f"{resolved}:{line}" if line is not None else str(resolved)
     launch(
-        ["code", "--goto", str(resolved)],
+        ["code", "--goto", target],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
@@ -87,6 +91,7 @@ def register_vscode_routes(rt: Callable[..., Any], _runtime: object) -> None:
             "path": "Content path such as src/app.py.",
             "symbol": "Optional document symbol name.",
             "kind": "Optional VS Code symbol kind.",
+            "line": "Optional one-based line number.",
         },
         local_only=True,
     )
@@ -100,10 +105,12 @@ def register_vscode_routes(rt: Callable[..., Any], _runtime: object) -> None:
             slug = str(payload.get("path") or "")
             symbol = str(payload.get("symbol") or "").strip()
             kind = str(payload.get("kind") or "").strip()
+            line_value = payload.get("line")
+            line = int(line_value) if line_value is not None else None
             if symbol:
                 uri = vscode_symbol_uri(slug, symbol, kind=kind)
                 return JSONResponse({"ok": True, "uri": uri}, status_code=202)
-            path = open_in_vscode(slug)
+            path = open_in_vscode(slug, line=line)
         except ValueError as error:
             return JSONResponse({"ok": False, "message": str(error)}, status_code=400)
         except FileNotFoundError:

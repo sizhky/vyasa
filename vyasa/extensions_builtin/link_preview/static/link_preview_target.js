@@ -101,13 +101,18 @@ export function linkPreviewHashMatch(href, ids) {
     return (ids || []).find((id) => String(id).toLocaleLowerCase() === folded) || null;
 }
 
-export function linkPreviewLineMatch(href, chunks) {
+export function linkPreviewLineNumber(href) {
     const url = new URL(href || '', 'http://vyasa.local');
     let path = url.pathname;
     try { path = decodeURIComponent(path); } catch (_) {}
     const suffix = path.match(/:(\d+)(?::\d+)?$/);
     const line = Number(suffix?.[1]);
-    if (!Number.isSafeInteger(line) || line < 1) return null;
+    return Number.isSafeInteger(line) && line > 0 ? line : null;
+}
+
+export function linkPreviewLineMatch(href, chunks) {
+    const line = linkPreviewLineNumber(href);
+    if (!line) return null;
     let remaining = line;
     for (let chunkIndex = 0; chunkIndex < (chunks || []).length; chunkIndex += 1) {
         const text = String(chunks[chunkIndex] || '');

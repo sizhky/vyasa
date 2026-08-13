@@ -129,15 +129,21 @@
 }
 
 .vyasa-link-preview-bar [data-vyasa-link-preview-origin] {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     overflow-wrap: anywhere;
     line-height: 1.35;
     white-space: normal;
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
 }
+
+.vyasa-link-preview-bar [data-vyasa-link-preview-origin]:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 
 .vyasa-link-preview-actions {
     display: grid;
+    margin-left: auto;
     grid-template-columns: repeat(4, 1.5rem);
     align-items: center;
     gap: 0.35rem;
@@ -209,6 +215,14 @@
 .vyasa-link-preview-body .text-base {
     font-size: inherit;
 }
+
+.vyasa-link-preview-body:has(> .code-block:only-child) {
+    padding: 0;
+    background: var(--vyasa-code-bg);
+}
+
+.vyasa-link-preview-body > .code-block:only-child { min-width: 100%; min-height: 100%; margin: 0; }
+.vyasa-link-preview-body > .code-block:only-child pre { width: max-content; min-width: 100%; min-height: 100%; margin: 0 !important; overflow: visible; border: 0; border-radius: 0 !important; box-shadow: none; }
 
 .vyasa-link-preview-body .vyasa-doc-h1 {
     font-size: 1.75em;

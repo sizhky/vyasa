@@ -26,8 +26,15 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert "data-vyasa-link-preview-font-increase" in source
     assert "event.shiftKey ? shell?.dataset.absolutePath : shell?.dataset.relativePath" in source
     assert "sourceLabel.title = relativePath;" in source
+    assert "sourceLabel.href = link.getAttribute('href')" in source
+    assert "event.target.closest('button,a')" in source
+    assert "cursor: pointer;" in css.split("[data-vyasa-link-preview-origin]", 1)[1].split("}", 1)[0]
+    assert "flex: 0 1 auto;" in css
+    assert "margin-left: auto;" in css
     assert "overflow-wrap: anywhere;" in css
     assert "white-space: normal;" in css
+    assert "width: max-content;" in css.split(".vyasa-link-preview-body > .code-block:only-child pre", 1)[1].split("}", 1)[0]
+    assert "overflow: visible;" in css.split(".vyasa-link-preview-body > .code-block:only-child pre", 1)[1].split("}", 1)[0]
     assert "--vyasa-link-preview-font-size" in css
     assert "font-size: 1.75em;" in css
     assert "width: max-content;" in css
@@ -86,7 +93,8 @@ def test_link_preview_refreshes_pointer_during_canvas_pan():
 def test_link_preview_finds_symbol_position_from_link_query():
     source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
     script = """
-        import { linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewSymbolMatch } from './vyasa/extensions_builtin/link_preview/static/link_preview_target.js';
+        import { linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './vyasa/extensions_builtin/link_preview/static/link_preview_target.js';
+        if (linkPreviewLineNumber('/posts/code.py%3A3') !== 3) throw new Error('line number lost');
         const line = linkPreviewLineMatch(
             '/posts/genhrx.ai/apps/ai/app/api/routes/agent_runtime.py%3A3',
             ['first\\nsecond\\nthird\\nfourth'],
@@ -102,6 +110,11 @@ def test_link_preview_finds_symbol_position_from_link_query():
         if (variable?.lineStart !== python.indexOf('_POLICY_MAP:')) {
             throw new Error(`variable definition lost: ${JSON.stringify(variable)}`);
         }
+        const renderedVariable = linkPreviewSymbolMatch(
+            '/posts/agent_runtime.py?symbol=_POLICY_MAP&kind=Variable',
+            ['Flow: _POLICY_MAP selects a policy.', '_POLICY_MAP: dict[str, str] = {'],
+        );
+        if (renderedVariable?.chunkIndex !== 1) throw new Error('rendered variable definition lost');
         const match = linkPreviewSymbolMatch(
             '/posts/src/kitchen/story.md?symbol=story&kind=File',
             ['Introduction', 'The Supply Chain Planner\\'s Story'],
@@ -133,6 +146,8 @@ def test_link_preview_finds_symbol_position_from_link_query():
     assert "scrollLinkPreviewToTarget(content, link.getAttribute('href') || '')" in source
     assert "target.scrollIntoView({ block: 'center' })" in source
     assert "target.className = 'vyasa-link-preview-target-line'" in source
+    assert "[data-source-line=\"${sourceLine}\"]" in source
+    assert "body.querySelectorAll('.vyasa-code-line')" in source
 
 
 def test_link_preview_resizes_from_each_edge():
@@ -158,10 +173,18 @@ def test_link_preview_resizes_from_each_edge():
 
 def test_link_preview_remembers_latest_width_for_new_popups():
     script = """
-        import { linkPreviewPreferredWidth, rememberLinkPreviewWidth } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';
+        const values = new Map();
+        globalThis.localStorage = {
+            getItem: (key) => values.get(key) ?? null,
+            setItem: (key, value) => values.set(key, value),
+        };
+        const module = await import('./vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js?first');
+        const { linkPreviewPreferredWidth, rememberLinkPreviewWidth } = module;
         if (linkPreviewPreferredWidth(560, 1000) !== 560) throw new Error('default width lost');
         rememberLinkPreviewWidth(720);
         if (linkPreviewPreferredWidth(560, 1000) !== 720) throw new Error('resized width not reused');
+        const reloaded = await import('./vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js?reloaded');
+        if (reloaded.linkPreviewPreferredWidth(560, 1000) !== 720) throw new Error('stored width not restored');
         rememberLinkPreviewWidth(420);
         if (linkPreviewPreferredWidth(560, 1000) !== 420) throw new Error('latest width not used');
         if (linkPreviewPreferredWidth(560, 400) !== 376) throw new Error('width exceeds viewport');
@@ -179,6 +202,22 @@ def test_link_preview_renders_unknown_extension_as_escaped_text(tmp_path, monkey
 
     assert result is not None
     assert '<pre class="vyasa-link-preview-plain-text">&lt;node&gt;value&lt;/node&gt;</pre>' in result
+
+
+def test_link_preview_renders_code_with_highlight_contract(tmp_path, monkeypatch):
+    source = tmp_path / "sample.py"
+    source.write_text("def run():\n    return True\n")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "sample.py")
+
+    result = routes.render_link_preview_html(href="sample.py")
+
+    assert result is not None
+    assert '<code class="language-python"' in result
+    assert 'data-code-line-numbers="true"' in result
+    assert "window.__vyasaInitCodeTools?.(content);" in Path(
+        "vyasa/extensions_builtin/link_preview/static/link_preview.js"
+    ).read_text()
 
 
 def test_link_preview_resolves_mounted_source_path_with_line_suffix(tmp_path, monkeypatch):
