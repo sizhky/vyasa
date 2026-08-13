@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 from fasthtml.common import to_xml
 import pytest
@@ -341,6 +342,23 @@ def test_inline_code_requests_copy_tools():
     assert "code_tools.runtime" in collector.requested
     source = Path("vyasa/extensions_builtin/code_tools/static/code_tools.js").read_text()
     assert "initInlineCodeCopyButtons" in source
+
+
+def test_code_line_wrappers_preserve_multiline_token_spans():
+    script = r"""
+        import { highlightedLineFragments } from './vyasa/extensions_builtin/code_tools/static/code_tools_lines.js';
+        const element = (name, children = []) => ({ nodeType: 1, name, childNodes: children,
+            cloneNode: () => element(name), append(node) { this.childNodes.push(node); } });
+        const text = (value) => ({ nodeType: 3, textContent: value });
+        const quotes = String.fromCharCode(34).repeat(3);
+        const token = element('hljs-string', [text(`${quotes}first\nsecond\nthird${quotes}`)]);
+        const lines = highlightedLineFragments([token], () => element('fragment'), text);
+        if (lines.length !== 3) throw new Error(`expected 3 lines, got ${lines.length}`);
+        if (lines.some((line) => line.childNodes[0]?.name !== 'hljs-string')) {
+            throw new Error('multiline token span was not preserved');
+        }
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
 def test_internal_links_request_preview_bundle_and_keep_current_path():
