@@ -1,10 +1,12 @@
 import { LinkPreviewStack } from './link_preview_stack.js';
 import {
     installLinkPreviewPanTracking,
+    linkPreviewPreferredWidth,
     linkPreviewPointerGeometry,
+    rememberLinkPreviewWidth,
     resizeLinkPreviewRect,
 } from './link_preview_geometry.js';
-import { linkPreviewHashMatch, linkPreviewSymbolMatch } from './link_preview_target.js';
+import { linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewSymbolMatch } from './link_preview_target.js';
 
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 let hoveredLink = null;
@@ -80,6 +82,7 @@ function installResizeHandles(popover, raise) {
                 width: `${rect.width}px`,
                 height: `${rect.height}px`,
             });
+            if (edge.includes('left') || edge.includes('right')) rememberLinkPreviewWidth(rect.width);
             schedulePointerRefresh();
         });
         const finish = (event) => {
@@ -189,6 +192,8 @@ function createPreviewView({ point, link, onClose }) {
     installResizeHandles(popover, raise);
     document.body.appendChild(pointer);
     document.body.appendChild(popover);
+    const initialWidth = popover.getBoundingClientRect().width;
+    popover.style.width = `${linkPreviewPreferredWidth(initialWidth, window.innerWidth)}px`;
     positionPopover(popover, point);
     raise();
     const resizeObserver = new ResizeObserver(schedulePointerRefresh);
@@ -210,7 +215,10 @@ function createPreviewView({ point, link, onClose }) {
             content.className = 'vyasa-link-preview-content';
             content.innerHTML = html;
             const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
-            if (relativePath) sourceLabel.textContent = relativePath;
+            if (relativePath) {
+                sourceLabel.textContent = relativePath;
+                sourceLabel.title = relativePath;
+            }
             requestAnimationFrame(() => scrollLinkPreviewToTarget(content, link.getAttribute('href') || ''));
             schedulePointerRefresh();
         },
@@ -236,7 +244,8 @@ function scrollLinkPreviewToTarget(content, href) {
     while (walker.nextNode()) {
         if (walker.currentNode.textContent) textNodes.push(walker.currentNode);
     }
-    const match = linkPreviewSymbolMatch(href, textNodes.map((node) => node.textContent));
+    const chunks = textNodes.map((node) => node.textContent);
+    const match = linkPreviewLineMatch(href, chunks) || linkPreviewSymbolMatch(href, chunks);
     if (!match) return;
     if (match.chunkIndex < 0) {
         if (match.kind.toLocaleLowerCase() === 'file') body.scrollTop = 0;

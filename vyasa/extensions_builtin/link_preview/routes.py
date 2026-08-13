@@ -48,6 +48,7 @@ def _normalize_preview_slug(href: str, current_path: str | None) -> tuple[str, s
         base = path[len("posts/"):]
     else:
         base = path
+    base = re.sub(r":\d+(?::\d+)?$", "", base)
     if base.endswith(".md"):
         base = base[:-3]
     return base, fragment

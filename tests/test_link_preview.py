@@ -25,7 +25,9 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert "data-vyasa-link-preview-font-decrease" in source
     assert "data-vyasa-link-preview-font-increase" in source
     assert "event.shiftKey ? shell?.dataset.absolutePath : shell?.dataset.relativePath" in source
-    assert "if (relativePath) sourceLabel.textContent = relativePath;" in source
+    assert "sourceLabel.title = relativePath;" in source
+    assert "overflow-wrap: anywhere;" in css
+    assert "white-space: normal;" in css
     assert "--vyasa-link-preview-font-size" in css
     assert "font-size: 1.75em;" in css
     assert "width: max-content;" in css
@@ -84,7 +86,22 @@ def test_link_preview_refreshes_pointer_during_canvas_pan():
 def test_link_preview_finds_symbol_position_from_link_query():
     source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
     script = """
-        import { linkPreviewHashMatch, linkPreviewSymbolMatch } from './vyasa/extensions_builtin/link_preview/static/link_preview_target.js';
+        import { linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewSymbolMatch } from './vyasa/extensions_builtin/link_preview/static/link_preview_target.js';
+        const line = linkPreviewLineMatch(
+            '/posts/genhrx.ai/apps/ai/app/api/routes/agent_runtime.py%3A3',
+            ['first\\nsecond\\nthird\\nfourth'],
+        );
+        if (line?.chunkIndex !== 0 || line?.lineStart !== 13 || line?.lineEnd !== 18) {
+            throw new Error(`line match lost: ${JSON.stringify(line)}`);
+        }
+        const python = 'Flow: _POLICY_MAP selects a policy.\\n\\n_POLICY_MAP: dict[str, str] = {';
+        const variable = linkPreviewSymbolMatch(
+            '/posts/agent_runtime.py?symbol=_POLICY_MAP&kind=Variable',
+            [python],
+        );
+        if (variable?.lineStart !== python.indexOf('_POLICY_MAP:')) {
+            throw new Error(`variable definition lost: ${JSON.stringify(variable)}`);
+        }
         const match = linkPreviewSymbolMatch(
             '/posts/src/kitchen/story.md?symbol=story&kind=File',
             ['Introduction', 'The Supply Chain Planner\\'s Story'],
@@ -139,6 +156,19 @@ def test_link_preview_resizes_from_each_edge():
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
+def test_link_preview_remembers_latest_width_for_new_popups():
+    script = """
+        import { linkPreviewPreferredWidth, rememberLinkPreviewWidth } from './vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js';
+        if (linkPreviewPreferredWidth(560, 1000) !== 560) throw new Error('default width lost');
+        rememberLinkPreviewWidth(720);
+        if (linkPreviewPreferredWidth(560, 1000) !== 720) throw new Error('resized width not reused');
+        rememberLinkPreviewWidth(420);
+        if (linkPreviewPreferredWidth(560, 1000) !== 420) throw new Error('latest width not used');
+        if (linkPreviewPreferredWidth(560, 400) !== 376) throw new Error('width exceeds viewport');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
 def test_link_preview_renders_unknown_extension_as_escaped_text(tmp_path, monkeypatch):
     source = tmp_path / "sample.xyz"
     source.write_text("<node>value</node>")
@@ -149,6 +179,22 @@ def test_link_preview_renders_unknown_extension_as_escaped_text(tmp_path, monkey
 
     assert result is not None
     assert '<pre class="vyasa-link-preview-plain-text">&lt;node&gt;value&lt;/node&gt;</pre>' in result
+
+
+def test_link_preview_resolves_mounted_source_path_with_line_suffix(tmp_path, monkeypatch):
+    source = tmp_path / "agent_runtime.py"
+    source.write_text("def register_agent_runtime():\n    return True\n")
+    slug = "genhrx.ai/apps/ai/app/api/routes/agent_runtime.py"
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda value: source if value == slug else None)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: slug)
+
+    result = routes.render_link_preview_html(
+        href=f"/posts/{slug}:32",
+        current_path="genhrx.ai/docs/ai-presentation/02-one-hour-structure",
+    )
+
+    assert result is not None
+    assert "register_agent_runtime" in result
 
 
 def test_link_preview_renders_full_markdown_for_symbol_position(tmp_path, monkeypatch):

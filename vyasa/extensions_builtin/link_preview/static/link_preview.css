@@ -131,9 +131,9 @@
 .vyasa-link-preview-bar [data-vyasa-link-preview-origin] {
     flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+    white-space: normal;
 }
 
 .vyasa-link-preview-actions {

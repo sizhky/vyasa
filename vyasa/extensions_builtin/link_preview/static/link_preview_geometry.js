@@ -1,3 +1,13 @@
+let preferredWidth = null;
+
+export function rememberLinkPreviewWidth(width) {
+    if (Number.isFinite(width) && width > 0) preferredWidth = width;
+}
+
+export function linkPreviewPreferredWidth(fallback, viewportWidth, margin = 12) {
+    return Math.min(preferredWidth ?? fallback, viewportWidth - margin * 2);
+}
+
 export function installLinkPreviewPanTracking(target, refresh) {
     target.addEventListener('pointermove', refresh, true);
     target.addEventListener('wheel', refresh, true);
