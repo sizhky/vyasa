@@ -113,6 +113,20 @@ def test_posts_and_slides_share_shortcut_help():
     assert "title: 'Document shortcuts'" in scripts
 
 
+def test_posts_and_slides_share_image_focus():
+    scripts = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+
+    assert "#main-content img, .vyasa-zen-slide-body img" in scripts
+    assert "dialog.showModal()" in scripts
+    assert "event.target.setPointerCapture(event.pointerId)" in scripts
+    assert "{ passive: false }" in scripts
+    assert "-event.deltaY * 0.001" in scripts
+    assert ".image-focus-dialog::backdrop" in css
+    assert "image-focus-zoom-in" in css
+    assert "image-focus-zoom-out" in css
+
+
 def test_theme_toggle_icon_keeps_ink_color_on_focus():
     css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
 
