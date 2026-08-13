@@ -13,6 +13,7 @@ from vyasa.extensions import (
     ContentRootRequest,
     NavigationAction,
     build_extension_runtime,
+    bind_asset_collector,
     builtin_extension_catalog,
     get_extension_runtime,
     resolve_extension_plan,
@@ -329,6 +330,17 @@ def test_code_tools_bundle_is_requested_only_when_code_renders():
         set_extension_runtime(previous)
 
     assert "code_tools.runtime" in collector.requested
+
+
+def test_inline_code_requests_copy_tools():
+    runtime = build_extension_runtime({})
+    collector = runtime.new_asset_collector()
+    with bind_asset_collector(collector):
+        from_md("Use `git status`.", current_path="guide", emit_bundle_nodes=False)
+
+    assert "code_tools.runtime" in collector.requested
+    source = Path("vyasa/extensions_builtin/code_tools/static/code_tools.js").read_text()
+    assert "initInlineCodeCopyButtons" in source
 
 
 def test_internal_links_request_preview_bundle_and_keep_current_path():

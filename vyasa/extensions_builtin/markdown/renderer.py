@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from functools import partial
 from itertools import count
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 from urllib.parse import urlsplit
 
 import mistletoe as mst
@@ -461,6 +461,10 @@ class ContentRenderer(FrankenRenderer):
         self.heading_counts = {}
         self.mermaid_counter = 0
         self.iframe_counter = 0
+
+    def render_inline_code(self, token: Any) -> str:
+        request_asset_bundle("code_tools.runtime")
+        return super().render_inline_code(token)
 
     def render_line_break(self, token):
         return "\n" if token.soft else "<br />\n"

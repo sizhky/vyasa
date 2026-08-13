@@ -70,16 +70,36 @@ function copyCodeText(text) {
 }
 
 function handleCodeCopyClick(event) {
-    const button = event.target.closest('.code-copy-button, .hljs-copy-button');
+    const button = event.target.closest('.code-copy-button, .hljs-copy-button, .vyasa-inline-code-copy');
     if (!button) return;
     event.preventDefault();
     event.stopPropagation();
+    if (button.classList.contains('vyasa-inline-code-copy')) {
+        const code = button.parentElement?.querySelector(':scope > code');
+        if (code) copyCodeText(code.textContent || '');
+        return;
+    }
     const container = button.closest('.code-block') || button.closest('pre') || button.parentElement;
     const codeEl = (container && container.querySelector('pre > code')) ||
         (container && container.querySelector('code')) ||
         button.closest('pre');
     if (!codeEl) return;
     copyCodeText(codeEl.innerText || codeEl.textContent || '');
+}
+
+function initInlineCodeCopyButtons(rootElement = document) {
+    rootElement.querySelectorAll(':not(pre) > code').forEach((code) => {
+        if (code.parentElement?.classList.contains('vyasa-inline-code-shell')) return;
+        const shell = document.createElement('span');
+        shell.className = 'vyasa-inline-code-shell';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'vyasa-inline-code-copy';
+        button.setAttribute('aria-label', 'Copy inline code');
+        button.textContent = '⧉';
+        code.before(shell);
+        shell.append(code, button);
+    });
 }
 
 function initCodeBlockCopyButtons(rootElement = document) {
@@ -166,6 +186,7 @@ function scheduleHighlightedCodeIncludes(rootElement = document) {
 function initCodeTools(rootElement = document) {
     ensureCodeThemeLinks();
     initCodeBlockCopyButtons(rootElement);
+    initInlineCodeCopyButtons(rootElement);
     scheduleHighlightedCodeIncludes(rootElement);
 }
 
