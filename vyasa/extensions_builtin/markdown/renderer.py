@@ -191,7 +191,7 @@ def _render_markdown_fragment(body, img_dir=None, current_path=None, slide_mode=
     return re.sub(r"\s*</div>\s*$", "", rendered)
 
 
-def _infer_code_language(path):
+def infer_code_language(path):
     mapping = {
         ".py": "python", ".js": "javascript", ".ts": "typescript", ".tsx": "tsx",
         ".jsx": "jsx", ".json": "json", ".toml": "toml", ".md": "markdown",
@@ -295,7 +295,7 @@ def _resolve_line_numbers(default_enabled, attrs=None, spec=""):
     return default_enabled
 
 
-def _emit_code_shell(snippet, lang="", *, start=1, highlight_spec="", title="", line_numbers=False, wrap=False):
+def render_code_shell(snippet, lang="", *, start=1, highlight_spec="", title="", line_numbers=False, wrap=False):
     request_asset_bundle("code_tools.runtime")
     attrs = [f'data-code-source-start="{start}"']
     if highlight_spec:
@@ -318,7 +318,7 @@ def _emit_code_shell(snippet, lang="", *, start=1, highlight_spec="", title="", 
 
 
 def _render_code_include(snippet, lang="", start=1, highlight_spec="", title="", line_numbers=False):
-    return _emit_code_shell(snippet, lang, start=start, highlight_spec=highlight_spec, title=title, line_numbers=line_numbers)
+    return render_code_shell(snippet, lang, start=start, highlight_spec=highlight_spec, title=title, line_numbers=line_numbers)
 
 
 def _render_todo_html(html_out):
@@ -719,7 +719,7 @@ class ContentRenderer(FrankenRenderer):
                 return handler(code, context, attrs)
         line_numbers = bool(lang) and _resolve_line_numbers(get_config().get_code_line_numbers(), attrs=attrs)
         highlight_spec = str(attrs.get("hl", "")).replace(":", "-").replace(" ", "")
-        return _emit_code_shell(
+        return render_code_shell(
             code,
             lang,
             start=1,
@@ -873,7 +873,7 @@ def from_md(content: str, img_dir: str | None = None, current_path: str | None =
             for include_id, include in code_include_store.items():
                 if include["file_path"].exists():
                     text = include["file_path"].read_text(encoding="utf-8")
-                    lang = _infer_code_language(include.get("path_only") or include["path_text"])
+                    lang = infer_code_language(include.get("path_only") or include["path_text"])
                     if lang == "markdown":
                         include_current_path = content_slug_for_path(include["file_path"])
                         snippet = None

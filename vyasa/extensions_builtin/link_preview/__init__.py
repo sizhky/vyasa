@@ -9,6 +9,7 @@ class LinkPreviewExtension(VyasaExtensionBase):
                 "link_preview.runtime",
                 css=("/static/extensions/link_preview/link_preview.css",),
                 js=("/static/extensions/link_preview/link_preview.js",),
+                depends_on=("code_tools.runtime",),
             )
         )
         app.routes.add("/preview/link", register_link_preview_routes)
@@ -19,7 +20,7 @@ EXTENSION = LinkPreviewExtension(
         "link_preview",
         "render",
         ("bundle:link_preview.runtime",),
-        requires=("cap:markdown_pipeline",),
+        requires=("cap:markdown_pipeline", "bundle:code_tools.runtime"),
         route_prefixes=("/preview/link",),
     )
 )

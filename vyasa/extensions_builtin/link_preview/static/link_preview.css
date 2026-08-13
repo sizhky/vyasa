@@ -210,6 +210,14 @@
     font-size: inherit;
 }
 
+.vyasa-link-preview-body:has(> .code-block:only-child) {
+    padding: 0;
+    background: var(--vyasa-code-bg);
+}
+
+.vyasa-link-preview-body > .code-block:only-child { min-width: 100%; min-height: 100%; margin: 0; }
+.vyasa-link-preview-body > .code-block:only-child pre { width: max-content; min-width: 100%; min-height: 100%; margin: 0 !important; overflow: visible; border: 0; border-radius: 0 !important; box-shadow: none; }
+
 .vyasa-link-preview-body .vyasa-doc-h1 {
     font-size: 1.75em;
 }

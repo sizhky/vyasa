@@ -1,7 +1,20 @@
-let preferredWidth = null;
+const WIDTH_STORAGE_KEY = 'vyasa-link-preview-width';
+
+function storedPreferredWidth() {
+    try {
+        const width = Number(globalThis.localStorage?.getItem(WIDTH_STORAGE_KEY));
+        return Number.isFinite(width) && width > 0 ? width : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+let preferredWidth = storedPreferredWidth();
 
 export function rememberLinkPreviewWidth(width) {
-    if (Number.isFinite(width) && width > 0) preferredWidth = width;
+    if (!Number.isFinite(width) || width <= 0) return;
+    preferredWidth = width;
+    try { globalThis.localStorage?.setItem(WIDTH_STORAGE_KEY, String(width)); } catch (_) {}
 }
 
 export function linkPreviewPreferredWidth(fallback, viewportWidth, margin = 12) {
