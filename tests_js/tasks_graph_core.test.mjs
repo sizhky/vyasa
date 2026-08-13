@@ -5,7 +5,7 @@ import fs from 'node:fs';
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
 const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nearestTasksIncidentEdge, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReviewTarget, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
-const { buildTasksProjectionConfigText, parseTasksProjectionConfigText, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksNodeMatchesAllFilters, tasksNodeMatchesFilters, tasksSelectionClickKey } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+const { buildTasksProjectionConfigText, parseTasksProjectionConfigText, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksNodeMatchesAllFilters, tasksNodeMatchesFilters, tasksNodeReferences, tasksOrderedEdges, tasksReferenceEdges, tasksSelectionClickKey, tasksVisibleReferenceEdges } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
 
 function fakeStorage(initial = {}) {
     const values = new Map(Object.entries(initial));
@@ -58,7 +58,7 @@ test('Knowledge Graph notes backup round-trips one graph preference record', () 
         'vyasa:tasks:prefs:doc::graph-b': JSON.stringify({ nodeNotes: { b: 'second note' } }),
     });
     const backup = collectTasksStoredNotes(storage, graphKey, { a: 'Alpha title' }, { intro: 'Intro slide' });
-    assert.equal(backup, '# vyasa-notes 4\n\n@ node a [Done] Alpha title\n  first note\n\n@ slide intro Intro slide\n  slide note\n');
+    assert.equal(backup, 'vyasa-notes 4\n\n@ node a [Done] Alpha title\n  first note\n\n@ slide intro Intro slide\n  slide note\n');
 
     const target = fakeStorage({
         [graphKey]: JSON.stringify({ nodeNotes: { existing: 'keep me' }, nodeStates: { existing: 'Review' }, projectionId: 'main' }),
@@ -167,6 +167,14 @@ test('sizeTaskNode grows height for long labels', () => {
     const longNode = sizeTaskNode('Adhoc/flex-gateway-policies/security/ip-allowlist/ip-allowlist-prod', 'task');
     assert.equal(shortNode.width, 220);
     assert.ok(longNode.height > shortNode.height);
+});
+
+test('sizeTaskNode measures visible labels instead of reference syntax', () => {
+    const linked = sizeTaskNode('One [live question](?term=t-live-question) does not load every [table schema](?term=t-schema)', 'task', null, { hasImage: true });
+    const visible = sizeTaskNode('One live question does not load every table schema', 'task', null, { hasImage: true });
+    assert.deepEqual(linked, visible);
+    assert.deepEqual(sizeTaskNode('One [[live|live question]] does not load every [[schema|table schema]]', 'task', null, { hasImage: true }), visible);
+    assert.deepEqual(sizeTaskNode('One [[live]] does not load every [[schema]]', 'task', null, { hasImage: true, nodeLabels: { live: 'live question', schema: 'table schema' } }), visible);
 });
 
 test('sizeTaskNode grows group title height for wrapped text at runtime width', () => {
@@ -357,6 +365,100 @@ test('edge toggle header button warns when edges are hidden', () => {
     assert.ok(source.includes('data-vyasa-edges-off'), 'hidden edge state is marked on the E button');
     assert.ok(!stylesheetSource.includes('vyasa-edges-off-pulse'), 'hidden edge warning glow stays static');
     assert.ok(stylesheetSource.includes('0 0 34px rgba(239, 68, 68, 1)'), 'hidden edge warning keeps maximum glow');
+});
+
+test('Knowledge Graph styles node references without changing inline code', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const stylesheet = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.css', import.meta.url), 'utf8');
+    assert.ok(source.includes('vyasa-tasks-node-reference'));
+    assert.ok(!stylesheet.includes('.vyasa-task-node-card-value :not(pre) > code'));
+    assert.match(stylesheet, /\.vyasa-tasks-node-reference[^}]*font-family:\s*inherit/);
+    assert.match(stylesheet, /\.vyasa-tasks-node-reference[^}]*color:\s*color-mix/);
+    assert.match(stylesheet, /\.vyasa-tasks-node-reference[^}]*background:\s*color-mix/);
+    assert.match(stylesheet, /\.vyasa-tasks-node-reference[^}]*box-decoration-break:\s*clone/);
+});
+
+test('Knowledge Graph node card keeps styled title fragments in one flex child', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.match(source, /React\.createElement\('span', \{ style: \{ minWidth: 0 \} \},\s+renderTasksInlineLinks\(selectedNode\.label/);
+});
+
+test('Knowledge Graph edge card renders both endpoint titles with node references', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes('renderTasksInlineLinks(sourceLabel'));
+    assert.ok(source.includes('renderTasksInlineLinks(targetLabel'));
+    assert.ok(!source.includes("React.createElement('span', null, sourceLabel)"));
+    assert.ok(!source.includes("React.createElement('span', null, targetLabel)"));
+});
+
+test('Knowledge Graph fallback cards render node references safely', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.ok(source.includes('tasksInlineReferenceHtml(n.label, nodeLabels)'));
+    assert.ok(!source.includes('<span>${n.label}</span>'));
+});
+
+test('Knowledge Graph derives deduplicated references unless a reverse authored edge exists', () => {
+    assert.deepEqual(tasksNodeReferences('Use [[b]] and [[c|custom text]].'), [{ target: 'b', display: '' }, { target: 'c', display: 'custom text' }]);
+    const model = {
+        tasks: [{ id: 'a', label: 'A [[b]]', summary: 'Again [[b]] and [[c|C]]' }, { id: 'b', label: 'Bee' }, { id: 'c', label: 'Sea' }],
+        dependency_edges: [{ source: 'c', target: 'a', relation: 'blocks' }],
+    };
+    assert.deepEqual(tasksReferenceEdges(model), [{ id: 'is-referred-by:b:a', source: 'b', target: 'a', relation: 'is referred by', label: 'is referred by', __reference__: true }]);
+    assert.deepEqual(tasksOrderedEdges([{ source: 'a', target: 'b', data: { __reference__: true } }, { source: 'b', target: 'c' }]), [{ source: 'a', target: 'b', data: { __reference__: true } }, { source: 'b', target: 'c' }]);
+    assert.deepEqual(
+        tasksVisibleReferenceEdges([{ id: 'references:a:b', source: 'a', target: 'b' }], [{ id: 'group-a' }, { id: 'b' }], { groups: [{ id: 'group-a' }], tasks: [{ id: 'a', group_id: 'group-a' }, { id: 'b' }] }),
+        [{ id: 'is-referred-by:group-a:b', source: 'group-a', target: 'b' }]
+    );
+});
+
+test('Knowledge Graph resolves references to nodes outside the active context', () => {
+    const model = {
+        node_reference_labels: { hidden: 'Hidden target' },
+        tasks: [{ id: 'source', label: 'Source [[hidden]]' }],
+        dependency_edges: [],
+    };
+    const references = tasksReferenceEdges(model);
+    assert.deepEqual(references, [{ id: 'is-referred-by:hidden:source', source: 'hidden', target: 'source', relation: 'is referred by', label: 'is referred by', __reference__: true }]);
+    assert.deepEqual(tasksVisibleReferenceEdges(references, [{ id: 'source' }], model), []);
+});
+
+test('Knowledge Graph maps references and reverse edges through projected node ids', () => {
+    const model = {
+        tasks: [
+            { id: 'source-projected', __source_node_id: 'source', label: 'Source [[target]]' },
+            { id: 'target-one', __source_node_id: 'target', label: 'Target' },
+            { id: 'target-two', __source_node_id: 'target', label: 'Target' },
+        ],
+    };
+    assert.deepEqual(
+        tasksReferenceEdges(model).map((edge) => [edge.source, edge.target]),
+        [['target-one', 'source-projected'], ['target-two', 'source-projected']],
+    );
+    assert.deepEqual(tasksReferenceEdges(model, [{ source: 'target', target: 'source' }]), []);
+});
+
+test('Knowledge Graph reference edges use primary tapered styling and drive layouts', () => {
+    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    assert.match(source, /tasksReferenceFlowEdge[\s\S]*?var\(--vyasa-primary\)/);
+    assert.ok(!source.includes("const taperPath = props.data?.__reference__ ? ''"));
+    assert.ok(source.includes('dependency_edges: [...(model?.dependency_edges || []), ...referenceEdgeRecords]'));
+    assert.ok(source.includes('layoutBaseTasksGraph(layoutRawGraph, layoutModel'));
+    assert.ok(source.includes('const rootGraph = { ...buildProjectedRootTasksGraph(layoutRawGraph, layoutModel), enforceRootRank: true };'));
+    assert.ok(!source.includes('hasExplicitGroupDirection'));
+    assert.ok(!source.includes('enforceRootRank: false'));
+    assert.ok(source.includes('const neighborEdges = [...(sourceModel.dependency_edges || []), ...tasksReferenceEdges(sourceModel)];'));
+    assert.match(source, /activeReferenceNodeIds\.has\(edge\.source\)[\s\S]*?activeReferenceNodeIds\.has\(edge\.target\)/);
+    assert.ok(source.includes('const displayedEdges = edgesVisible ? baseEdges : activeReferenceEdges;'));
+    assert.ok(source.includes('const currentGraphEdges = React.useCallback'));
+    assert.ok(source.includes('nearestTasksIncidentEdge('));
+    assert.ok(source.includes('currentGraphEdges(),'));
+    assert.ok(!source.includes('if (edge?.data?.__reference__) return;'));
+    const anchored = buildTaskEdgeAnchors(
+        [{ id: 'a', position: { x: 0, y: 0 }, width: 100, height: 40 }, { id: 'b', position: { x: 0, y: 100 }, width: 100, height: 40 }],
+        [{ id: 'reference:a:b', source: 'a', target: 'b' }],
+        'reference-',
+    );
+    assert.equal(anchored.edges[0].sourceHandle, 'reference-source-bottom-0');
 });
 
 test('collapsed groups average both primary and secondary colors', () => {

@@ -131,9 +131,9 @@
 .vyasa-link-preview-bar [data-vyasa-link-preview-origin] {
     flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+    white-space: normal;
 }
 
 .vyasa-link-preview-actions {
@@ -210,6 +210,14 @@
     font-size: inherit;
 }
 
+.vyasa-link-preview-body:has(> .code-block:only-child) {
+    padding: 0;
+    background: var(--vyasa-code-bg);
+}
+
+.vyasa-link-preview-body > .code-block:only-child { min-width: 100%; min-height: 100%; margin: 0; }
+.vyasa-link-preview-body > .code-block:only-child pre { width: max-content; min-width: 100%; min-height: 100%; margin: 0 !important; overflow: visible; border: 0; border-radius: 0 !important; box-shadow: none; }
+
 .vyasa-link-preview-body .vyasa-doc-h1 {
     font-size: 1.75em;
 }
@@ -219,6 +227,12 @@
 .vyasa-link-preview-body .vyasa-doc-h4 { font-size: 1.125em; }
 .vyasa-link-preview-body .vyasa-doc-h5,
 .vyasa-link-preview-body .vyasa-doc-h6 { font-size: 1em; }
+
+.vyasa-link-preview-target-line {
+    border-radius: 0.2em;
+    background: color-mix(in srgb, var(--vyasa-primary) 22%, transparent);
+    box-shadow: 0 0 0 0.18em color-mix(in srgb, var(--vyasa-primary) 22%, transparent);
+}
 
 .vyasa-link-preview-plain-text {
     width: max-content;

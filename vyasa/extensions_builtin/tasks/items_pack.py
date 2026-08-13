@@ -20,6 +20,36 @@ PathLike = Union[Path, "VirtualPath"]
 NODE_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 EDGE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 EDGE_RESERVED_FIELDS = {"id", "source", "target", "relation", "label"}
+NODE_REFERENCE_RE = re.compile(r"\[\[([^\]|\n]+)(?:\|[^\]\n]+)?\]\]")
+
+
+def _referenced_node_ids(node: dict[str, Any]) -> set[str]:
+    values = (
+        item
+        for value in node.values()
+        for item in (value if isinstance(value, list) else [value])
+        if isinstance(item, (str, int, float, bool))
+    )
+    return {
+        match.group(1).strip()
+        for value in values
+        for match in NODE_REFERENCE_RE.finditer(str(value))
+        if match.group(1).strip()
+    }
+
+
+def _reference_closure(nodes_by_id: dict[str, dict[str, Any]], roots: set[str]) -> set[str]:
+    included = set(roots)
+    pending = list(roots)
+    while pending:
+        node = nodes_by_id.get(pending.pop())
+        if not node:
+            continue
+        for target in _referenced_node_ids(node):
+            if target in nodes_by_id and target not in included:
+                included.add(target)
+                pending.append(target)
+    return included
 
 
 def _as_pathlike(p: "str | PathLike") -> PathLike:
@@ -111,6 +141,10 @@ def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
         "edge_label_from": schema.graph.get("edge_label_from", ""),
         "default_open_depth": schema.graph.get("default_open_depth", ""),
         "hover_attrs": _list_value(schema.graph.get("hover_attrs", "")),
+        "node_attr_order": _list_value(schema.graph.get("node_attr_order", "")),
+        "edge_attr_order": _list_value(schema.graph.get("edge_attr_order", "")),
+        "node_hidden_attrs": _list_value(schema.graph.get("node_hidden_attrs", "")),
+        "edge_hidden_attrs": _list_value(schema.graph.get("edge_hidden_attrs", "")),
         "card_states": _list_value(schema.graph.get("card_states", "")),
         "acl": _acl_payload(schema),
     }
@@ -190,11 +224,16 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
     _apply_context_attrs(active, nodes_by_id)
     _apply_status_defaults(schema, nodes_by_id, edges)
     present = {node_id for edge in edges for node_id in (edge.get("source"), edge.get("target")) if node_id}
+    present = _reference_closure(nodes_by_id, present)
     graph = {
         "id": schema.graph.get("id", ""),
         "title": schema.graph.get("title", ""),
         "groups": [],
         "tasks": [node for node_id, node in nodes_by_id.items() if node_id in present],
+        "node_reference_labels": {
+            node_id: str(node.get("label") or node_id)
+            for node_id, node in nodes_by_id.items()
+        },
         "dependency_edges": edges,
         "view_projections": _resolved_projections(active.views or schema.views, catalog, active.id),
         "slides": active.slides or schema.slides,
@@ -206,6 +245,10 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
         "edge_label_from": schema.graph.get("edge_label_from", ""),
         "default_open_depth": schema.graph.get("default_open_depth", ""),
         "hover_attrs": _list_value(schema.graph.get("hover_attrs", "")),
+        "node_attr_order": _list_value(schema.graph.get("node_attr_order", "")),
+        "edge_attr_order": _list_value(schema.graph.get("edge_attr_order", "")),
+        "node_hidden_attrs": _list_value(schema.graph.get("node_hidden_attrs", "")),
+        "edge_hidden_attrs": _list_value(schema.graph.get("edge_hidden_attrs", "")),
         "card_states": _list_value(schema.graph.get("card_states", "")),
         "acl": _acl_payload(schema),
         "kg_context": {"id": active.id, "seq": active.seq, "label": active.label, "stage": active.stage, "caption": active.caption},

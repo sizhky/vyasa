@@ -1,0 +1,4 @@
+.vyasa-inline-code-shell { position: relative; display: inline-block; }
+.vyasa-inline-code-copy { position: absolute; z-index: 2; top: -1rem; right: -.65rem; width: 1.5rem; height: 1.5rem; padding: 0; border: 1px solid var(--vyasa-inline-code-border); border-radius: .3rem; background: var(--vyasa-paper); color: var(--vyasa-inline-code-fg); cursor: pointer; font: 1rem/1 var(--vyasa-font-ui); opacity: 0; pointer-events: none; transition: opacity 120ms ease; }
+.vyasa-inline-code-shell:hover > .vyasa-inline-code-copy,
+.vyasa-inline-code-copy:focus-visible { opacity: 1; pointer-events: auto; }

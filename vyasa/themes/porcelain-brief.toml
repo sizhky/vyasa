@@ -1,6 +1,6 @@
 theme_primary = "#456c9a"
 code_theme_light = "github"
-code_theme_dark = "night-owl"
+code_theme_dark = "github-dark-dimmed"
 theme_button_radius = "0.45rem"
 theme_heading_font = "\"PT Serif\", Georgia, serif"
 theme_body_font = "Mulish, sans-serif"

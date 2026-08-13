@@ -1,10 +1,12 @@
 import { LinkPreviewStack } from './link_preview_stack.js';
 import {
     installLinkPreviewPanTracking,
+    linkPreviewPreferredWidth,
     linkPreviewPointerGeometry,
+    rememberLinkPreviewWidth,
     resizeLinkPreviewRect,
 } from './link_preview_geometry.js';
-import { linkPreviewSymbolMatch } from './link_preview_target.js';
+import { linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './link_preview_target.js';
 
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 let hoveredLink = null;
@@ -80,6 +82,7 @@ function installResizeHandles(popover, raise) {
                 width: `${rect.width}px`,
                 height: `${rect.height}px`,
             });
+            if (edge.includes('left') || edge.includes('right')) rememberLinkPreviewWidth(rect.width);
             schedulePointerRefresh();
         });
         const finish = (event) => {
@@ -189,6 +192,8 @@ function createPreviewView({ point, link, onClose }) {
     installResizeHandles(popover, raise);
     document.body.appendChild(pointer);
     document.body.appendChild(popover);
+    const initialWidth = popover.getBoundingClientRect().width;
+    popover.style.width = `${linkPreviewPreferredWidth(initialWidth, window.innerWidth)}px`;
     positionPopover(popover, point);
     raise();
     const resizeObserver = new ResizeObserver(schedulePointerRefresh);
@@ -209,9 +214,13 @@ function createPreviewView({ point, link, onClose }) {
         setContent: (html) => {
             content.className = 'vyasa-link-preview-content';
             content.innerHTML = html;
+            window.__vyasaInitCodeTools?.(content);
             const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
-            if (relativePath) sourceLabel.textContent = relativePath;
-            requestAnimationFrame(() => scrollLinkPreviewToSymbol(content, link.getAttribute('href') || ''));
+            if (relativePath) {
+                sourceLabel.textContent = relativePath;
+                sourceLabel.title = relativePath;
+            }
+            requestAnimationFrame(() => scrollLinkPreviewToTarget(content, link.getAttribute('href') || ''));
             schedulePointerRefresh();
         },
     };
@@ -220,27 +229,50 @@ function createPreviewView({ point, link, onClose }) {
     return view;
 }
 
-function scrollLinkPreviewToSymbol(content, href) {
+function scrollLinkPreviewToTarget(content, href) {
     const body = content.querySelector('.vyasa-link-preview-body');
     if (!body) return;
+    const elementsWithIds = [...body.querySelectorAll('[id]')];
+    const matchedId = linkPreviewHashMatch(href, elementsWithIds.map((element) => element.id));
+    if (matchedId) {
+        const target = elementsWithIds.find((element) => element.id === matchedId);
+        target.classList.add('vyasa-link-preview-target-line');
+        target.scrollIntoView({ block: 'center' });
+        return;
+    }
+    const sourceLine = linkPreviewLineNumber(href);
+    const renderedLine = sourceLine && body.querySelector(`[data-source-line="${sourceLine}"]`);
+    if (renderedLine) {
+        renderedLine.classList.add('vyasa-link-preview-target-line');
+        renderedLine.scrollIntoView({ block: 'center' });
+        return;
+    }
     const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
     const textNodes = [];
     while (walker.nextNode()) {
         if (walker.currentNode.textContent) textNodes.push(walker.currentNode);
     }
-    const match = linkPreviewSymbolMatch(href, textNodes.map((node) => node.textContent));
+    const codeLines = [...body.querySelectorAll('.vyasa-code-line')];
+    const chunks = (codeLines.length ? codeLines : textNodes).map((node) => node.textContent);
+    const match = linkPreviewLineMatch(href, chunks) || linkPreviewSymbolMatch(href, chunks);
     if (!match) return;
     if (match.chunkIndex < 0) {
         if (match.kind.toLocaleLowerCase() === 'file') body.scrollTop = 0;
         return;
     }
+    if (codeLines.length) {
+        codeLines[match.chunkIndex].classList.add('vyasa-link-preview-target-line');
+        codeLines[match.chunkIndex].scrollIntoView({ block: 'center' });
+        return;
+    }
     const node = textNodes[match.chunkIndex];
     const range = document.createRange();
-    range.setStart(node, match.start);
-    range.setEnd(node, match.end);
-    const matchRect = range.getBoundingClientRect();
-    const bodyRect = body.getBoundingClientRect();
-    body.scrollTop += matchRect.top - bodyRect.top - Math.max(0, (body.clientHeight - matchRect.height) / 2);
+    range.setStart(node, match.lineStart);
+    range.setEnd(node, match.lineEnd);
+    const target = document.createElement('span');
+    target.className = 'vyasa-link-preview-target-line';
+    range.surroundContents(target);
+    target.scrollIntoView({ block: 'center' });
 }
 
 async function fetchPreview({ href, currentPath, signal }) {

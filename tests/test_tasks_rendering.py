@@ -478,7 +478,7 @@ def test_tasks_graph_highlights_use_separate_border_layer():
     assert "zIndex: TASKS_EDGE_FOCUS_Z - 1" in source
     assert "outline: `${hoverOutline ? 12 : 4}px solid ${activeBorderColor}`" in source
     assert (
-        '.vyasa-tasks-active-pulse .react-flow__node:has([data-vyasa-highlight-active="true"]) {\n'
+        '.vyasa-tasks-active-pulse .react-flow__node:not(.vyasa-tasks-pulse):has([data-vyasa-highlight-active="true"]) {\n'
         "    box-shadow: none !important;\n"
         "}"
     ) in css_source
@@ -550,9 +550,21 @@ def test_tasks_node_and_edge_cards_share_note_access_and_rendering():
     assert source.count("renderTasksCardDetailsAndNotes(React") == 3
     assert "GroupHoverTooltipCard" not in source
     assert "stickyGroupHoverTooltips" not in source
-    assert source.count("options.scrollMode ? 'vyasa-tasks-hover-card--scroll'") == 1
+    assert source.count("options.scrollMode ? 'vyasa-tasks-pulse'") == 1
     assert "value: edgeNotes[selectedEdgeRecord.id] || ''" in source
     assert "edgeNotes," in source
+
+
+def test_tasks_node_and_edge_cards_share_node_icon_rendering():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    edge_panel = source.split("const SelectedEdgePanel = () =>", 1)[1].split("const FilterPanel = () =>", 1)[0]
+
+    assert "function renderTasksCardNodeIcon(React, node, model, options = {})" in source
+    assert source.count("renderTasksCardNodeIcon(React") == 4
+    assert "node?.__kind__ === 'group' || node?.__kind__ === 'groupTitle' ? 'folder' : 'file-text'" in source
+    assert "color: edgeCardColor" in edge_panel
+    assert "fontStyle: 'italic'" not in edge_panel
+    assert "↓" not in edge_panel
 
 
 def test_tasks_node_cards_share_the_configured_default_width():
@@ -589,21 +601,52 @@ def test_tasks_node_and_edge_cards_keep_notes_below_scrolling_details():
     assert "style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto'" in layout
     assert "style: { flex: '0 0 auto', padding: '12px', borderTop:" in layout
     assert "background: 'color-mix(in srgb, var(--vyasa-primary) 8%, var(--vyasa-paper) 92%)'" in layout
+    assert "fontSize: '14px'" in layout
+    assert "font = '500 14px ui-sans-serif" in source
     assert "renderTasksCardDetailsAndNotes(React" in node_panel
     assert "renderTasksCardDetailsAndNotes(React" in edge_panel
 
 
-def test_enter_selects_hovered_node_in_right_rail_and_focuses_notes():
+def test_enter_selects_hovered_node_and_focuses_the_pinned_card():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
     assert "key !== 'enter' || !current" in source
     assert "selectNodeCard(current.nodeId, current.nodeId, current.group ? 'group' : 'task', true)" in source
-    assert "if (focusNotes) pendingNodeNoteFocusRef.current = sourceNodeId" in source
-    assert "pendingNodeNoteFocusRef.current === selectedLogicalNodeId" in source
-    assert "textarea.focus()" in source
-    assert "row('Enter', 'pin hovered node and focus Notes / open selected edge')" in source
+    assert "if (focusCard) focusDetailCard();" in source
+    assert "window.requestAnimationFrame(() => detailCardRef.current?.focus())" in source
+    assert "className: readOnly ? undefined : 'vyasa-tasks-pinned-card'" in source
+    assert "row('Enter', 'pin hovered node / open selected edge')" in source
+    assert "row('Enter on card', 'focus Notes')" in source
     shortcut = source.split("const clearGroupHoverTooltip", 1)[1].split("const hoverTraceKeyRef", 1)[0]
     assert "event.key === 'Control'" not in shortcut
+
+
+def test_escape_in_card_notes_returns_focus_to_the_pinned_card():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    hotkeys = source.split("const FitViewHotkey = () =>", 1)[1].split("const SelectedNodePanel = (", 1)[0]
+
+    notes_escape = "event.key === 'Escape' && target?.closest?.('[data-vyasa-card-notes]')"
+    assert notes_escape in hotkeys
+    assert hotkeys.index(notes_escape) < hotkeys.index("event.key === 'Escape' && !event.shiftKey && widgetFocused")
+    escape_branch = hotkeys.split(notes_escape, 1)[1].split("return;", 1)[0]
+    assert "event.stopImmediatePropagation();" in escape_branch
+    assert "focusDetailCard();" in escape_branch
+    assert "target.blur" not in escape_branch
+    assert "releaseCardPin" not in escape_branch
+
+
+def test_pinned_card_enter_focuses_notes_and_shift_enter_navigates():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    textarea = source.split("function renderTasksNoteTextarea", 1)[1].split("function renderTasksCardNoteEditor", 1)[0]
+
+    assert "options.onShiftEnter" not in textarea
+    assert "const handlePinnedCardKeyDown" in source
+    assert "event.target !== event.currentTarget || event.key !== 'Enter'" in source
+    assert "if (event.shiftKey) navigate(); else notesRef.current?.focus();" in source
+    assert "handlePinnedCardKeyDown(event, noteTextareaRef, () => focusGraphNode(panelGraphNodeId))" in source
+    assert "handlePinnedCardKeyDown(event, edgeNoteTextareaRef, () => fitSelectedEdgeConnection(reactFlowApiRef.current))" in source
+    assert "if (target?.matches?.('.vyasa-tasks-pinned-card')) return;" in source
+    assert "row('Shift + Enter', 'center pinned node or fit pinned edge')" in source
 
 
 def test_tasks_node_card_attr_values_can_be_copied_from_hover_button():
@@ -698,6 +741,7 @@ def test_w_edge_q_temporarily_shows_other_node_card():
 
     assert "optionEdgeOtherNodeIdRef.current = edge.source === nodeId ? edge.target : edge.source;" in source
     assert "event.code === 'KeyW'" in source
+    assert "const currentGraphEdges = React.useCallback" in source
     assert "event.code === 'KeyQ'" in source
     assert "setOptionEdgeNodeCardId(optionEdgeOtherNodeIdRef.current);" in source
     assert "event.key === 'Enter' && optionEdgePreviewHeldRef.current" in source
@@ -712,7 +756,8 @@ def test_w_enter_pin_blooms_from_the_edge():
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
     assert "setEdgePinBloom({ edgeId: selectedEdgeIdRef.current, key: bloomKey });" in source
-    assert "window.requestAnimationFrame(() => edgeNoteTextareaRef.current?.focus())" in source
+    assert "focusDetailCard();" in source
+    assert "ref: detailCardRef" in source
     assert "ref: edgeNoteTextareaRef" in source
     assert "row('W + Enter', 'pin edge details')" in source
     assert "if (event.shiftKey) pinPreview();" not in source
@@ -748,7 +793,9 @@ def test_v_toggles_right_side_hover_card_scroll_mode():
     assert 'data-vyasa-tasks-action="toggleCardScroll"' in render_source
     assert "0%, 100%" in css
     assert "50%" in css
-    assert "vyasa-tasks-hover-card-scroll-pulse 2s cubic-bezier(0.37, 0, 0.63, 1)" in css
+    assert "0 0 18px 8px color-mix(in srgb, var(--vyasa-primary) 68%, transparent)" in css
+    assert ".vyasa-tasks-pulse" in css
+    assert "vyasa-tasks-hover-card-scroll-pulse 4s cubic-bezier(0.37, 0, 0.63, 1)" in css
     assert "drop-shadow(" not in css.split("@keyframes vyasa-tasks-hover-card-scroll-pulse", 1)[1].split("}", 4)[0]
     assert "hoverCardRightRail" not in source
 
@@ -1040,6 +1087,19 @@ def test_tasks_edge_cards_keep_field_order_lists_and_stable_cycle_order():
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
+def test_tasks_card_attr_config_orders_and_hides_attrs():
+    script = """
+        import { tasksEdgeMetaEntries, tasksNodeMetaEntries } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        const record = { id: 'n1', summary: 'Summary', status: 'Done', owner: 'Yesh' };
+        if (tasksNodeMetaEntries(record, ['status', 'summary'], ['owner']).map(({key}) => key).join(',') !== 'status,summary') throw new Error('node card config ignored');
+        if (tasksEdgeMetaEntries(record, ['owner', 'summary'], ['status']).map(({key}) => key).join(',') !== 'owner,summary') throw new Error('edge card config ignored');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    assert "tasksNodeMetaEntries(selectedNode, model.node_attr_order, model.node_hidden_attrs)" in source
+    assert "tasksEdgeMetaEntries(selectedEdgeRecord, model.edge_attr_order, model.edge_hidden_attrs)" in source
+
+
 def test_tasks_edge_cards_share_pointer_keyboard_and_deep_link_selection():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
@@ -1052,7 +1112,7 @@ def test_tasks_edge_cards_share_pointer_keyboard_and_deep_link_selection():
     assert "'aria-live': 'polite'" in source
     assert "hash.startsWith('#kg/')" in source
     assert "data-vyasa-edge-field" in source
-    assert "Fit connection" in source
+    assert "Fit connection" not in source
 
 
 def test_tasks_edge_type_filter_is_searchable_persisted_and_applied():
@@ -1546,6 +1606,99 @@ def test_tasks_block_serializes_rendered_attr_html_for_node_card():
     assert "<strong>Bold</strong>" in task["__rendered_attrs__"]["summary"]
     assert "<br" in task["__rendered_attrs__"]["summary"]
     assert 'href="/posts/docs/feed/guide#spec"' in task["__rendered_attrs__"]["summary"]
+
+
+def test_tasks_block_renders_node_references_inside_attributes():
+    md = dedent("""\
+    ```items
+    Foundation:
+      - source :: Source | summary: "Use [[target]] and [[target|custom text]]."
+      - target :: Target node
+    ```
+    """)
+
+    rendered = to_xml(from_md(md))
+    match = re.search(r"""data-tasks-payload=(["'])(.*?)\1""", rendered)
+
+    assert match is not None
+    payload = json.loads(html.unescape(match.group(2)))
+    summary_html = payload["tasks"][0]["__rendered_attrs__"]["summary"]
+    assert summary_html.count('data-vyasa-node-reference="target"') == 2
+    assert ">Target node</span>" in summary_html
+    assert ">custom text</span>" in summary_html
+    assert "href=" not in summary_html
+
+
+def test_tasks_node_reference_navigation_preserves_zoom():
+    script = """
+        import { tasksCenteredViewport } from './vyasa/extensions_builtin/tasks/static/tasks_graph_core.js';
+        const next = tasksCenteredViewport({ x: 10, y: 20, zoom: 0.45 },
+            { left: 100, top: 50, width: 800, height: 600 }, { left: 200, top: 150, width: 120, height: 80 });
+        if (next.x !== 250 || next.y !== 180 || next.zoom !== 0.45) throw new Error(JSON.stringify(next));
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
+    assert "if (!reference || !nodeReferenceKeyHeldRef.current) return false;" in source
+    assert "const focusGraphNode = React.useCallback((targetId)" in source
+    assert "logTasksDebug('graphNodeFocus'" in source
+    assert "focusGraphNode(String(reference.dataset.vyasaNodeReference || '').trim());" in source
+    assert "nodeEl.classList.add('vyasa-tasks-pulse');" in source
+    assert "}, 8000)," in source
+    assert ".react-flow__node:not(.vyasa-tasks-pulse):has(" in css
+    assert "title: 'Center node', onClick: focusPanelNode" in source
+    assert "window.addEventListener('keydown', syncNodeReferenceModifier, true);" in source
+    assert "String(event.key || '').toLowerCase() !== 'd'" in source
+    assert "row('D + click [[node]]', 'go to referenced node')" in source
+    assert "renderTasksInlineLinks(data?.label || id" in source
+    drag_selection = source.split("const startDragSelection", 1)[1].split("const updateDragSelection", 1)[0]
+    assert "[data-vyasa-node-reference]" in drag_selection
+    assert ".vyasa-tasks-node-reference-modifier .vyasa-tasks-node-reference:not(" in css
+    assert "cursor: pointer;" in css
+    assert "text-decoration: underline;" in css
+
+
+def test_node_title_reference_click_routes_before_node_selection():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    node_capture = source.split("const handleSelectedNodeToggleCapture", 1)[1].split("if (data?.__kind__ === 'ganttHeader')", 1)[0]
+    flow_capture = source.split("const flowPointerHandlers", 1)[1].split("const flowWrapperStyle", 1)[0]
+
+    assert "if (focusNodeReferenceFromEvent(event)) return;" in node_capture
+    assert "onClickCapture: focusNodeReferenceFromEvent" in flow_capture
+
+
+def test_context_attributes_resolve_references_to_hidden_pack_nodes(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        "@graph id=refs\npool=kg.nodes\nattrs=kg.attrs\ncontexts=*.context\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text(
+        "source: Source\nvisible: Visible\nhidden: Hidden target\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.attrs").write_text(
+        '@node_attrs\nsummary:\n  "See [[hidden]]": source\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "one.context").write_text(
+        "@context id=one seq=1\n@edges\n  source -> visible relates\n",
+        encoding="utf-8",
+    )
+
+    model, _ = _compile_schema_payload(tmp_path / "kg.schema", context_id="one")
+
+    assert {task["id"] for task in model["tasks"]} == {"source", "visible", "hidden"}
+    source = next(task for task in model["tasks"] if task["id"] == "source")
+    assert ">Hidden target</span>" in source["__rendered_attrs__"]["summary"]
+    assert "vyasa-tasks-node-reference--broken" not in source["__rendered_attrs__"]["summary"]
+    script = f"""
+        import {{ tasksReferenceEdges }} from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        const edges = tasksReferenceEdges({json.dumps(model)});
+        if (!edges.some((edge) => edge.source === 'hidden' && edge.target === 'source')) {{
+            throw new Error(JSON.stringify(edges));
+        }}
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
 def test_tasks_block_renders_markdown_lists_without_trailing_breaks():

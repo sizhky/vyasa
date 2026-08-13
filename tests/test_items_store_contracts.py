@@ -695,6 +695,22 @@ mia:
     assert [task["id"] for task in model["projection_models"]["mia"]["model"]["tasks"]] == ["a1"]
 
 
+def test_kg_schema_sets_node_and_edge_card_attr_config(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        "@graph id=cards\nnode_attr_order=status,summary\nedge_attr_order=evidence,summary\nnode_hidden_attrs=owner\nedge_hidden_attrs=confidence,source_url\n@sources\nnodes=kg.nodes\nedges=kg.edges\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text("n1: One\nn2: Two\n", encoding="utf-8")
+    (tmp_path / "kg.edges").write_text("e1: n1 -> n2 joins\n", encoding="utf-8")
+
+    model = parse_tasks_text("```items\n---\nitems_schema: kg.schema\n---\n```", current_path=tmp_path / "graph.md")
+
+    assert model["node_attr_order"] == ["status", "summary"]
+    assert model["edge_attr_order"] == ["evidence", "summary"]
+    assert model["node_hidden_attrs"] == ["owner"]
+    assert model["edge_hidden_attrs"] == ["confidence", "source_url"]
+
+
 def test_context_kg_pack_can_load_explicit_context(tmp_path):
     (tmp_path / "kg.schema").write_text(
         """@graph id=bird

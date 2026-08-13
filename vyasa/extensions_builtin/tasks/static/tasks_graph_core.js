@@ -13,6 +13,14 @@ export function tasksReviewTarget(data, id, widgetId) {
     };
 }
 
+export function tasksCenteredViewport(viewport, canvasRect, nodeRect) {
+    return {
+        x: viewport.x + canvasRect.left + canvasRect.width / 2 - nodeRect.left - nodeRect.width / 2,
+        y: viewport.y + canvasRect.top + canvasRect.height / 2 - nodeRect.top - nodeRect.height / 2,
+        zoom: viewport.zoom,
+    };
+}
+
 export function nextWheelState(state, rect, point, deltaY, maxScale = 55) {
     const mouseX = point.x - rect.left - rect.width / 2;
     const mouseY = point.y - rect.top - rect.height / 2;
@@ -186,6 +194,13 @@ export function measureTextWidth(text, font = TASK_NODE_FONT) {
     return ctx.measureText(text).width;
 }
 
+export function tasksInlineLinkPlainText(value, nodeLabels = {}) {
+    return String(value || '')
+        .replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]+))?\]\]/g, (_match, target, display) => display || nodeLabels[String(target).trim()] || String(target).trim())
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+        .replace(/`([^`\n]+)`/g, '$1');
+}
+
 export function sizeTaskNode(label, kind = 'task', widthOverride = null, options = {}) {
     const spec = TASK_NODE_SPECS[kind] || TASK_NODE_SPECS.task;
     const width = Math.max(32, Number(widthOverride || spec.width));
@@ -193,7 +208,7 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
     const imageReserve = imageSpec ? imageSpec.size + imageSpec.gap : 0;
     const maxTextWidth = Math.max(32, width - spec.padX - spec.reserveX - imageReserve - 8);
     const widthBias = options?.hasImage ? 1.18 : 1.12;
-    const lines = String(label || '')
+    const lines = tasksInlineLinkPlainText(label, options?.nodeLabels)
         .split(/\r?\n/)
         .reduce((count, part) => count + Math.max(1, Math.ceil((measureTextWidth(part) * widthBias) / maxTextWidth)), 0);
     const textHeight = Math.max(24, lines * 21);
@@ -497,12 +512,12 @@ export function collectTasksStoredNotes(storage, storageKey, nodeTitles = {}, sl
         return `${header}\n${slideNotes[slideId].split('\n').map((line) => `  ${line}`).join('\n')}`;
     });
     const stanzas = [...nodeStanzas, ...slideStanzas];
-    return `# vyasa-notes 4\n${stanzas.length ? `\n${stanzas.join('\n\n')}\n` : ''}`;
+    return `vyasa-notes 4\n${stanzas.length ? `\n${stanzas.join('\n\n')}\n` : ''}`;
 }
 
 export function importTasksStoredNotes(storage, storageKey, backup) {
     const lines = String(backup || '').replace(/\r\n?/g, '\n').split('\n');
-    if (lines.shift()?.trim() !== '# vyasa-notes 4') {
+    if (lines.shift()?.trim() !== 'vyasa-notes 4') {
         throw new Error('Invalid Vyasa Knowledge Graph notes backup.');
     }
     const imported = {};
@@ -941,7 +956,7 @@ export function nearestTasksIncidentEdge(pointer, nodeId, nodes, edges) {
     return nearest;
 }
 
-export function buildTaskEdgeAnchors(nodes, edges) {
+export function buildTaskEdgeAnchors(nodes, edges, handlePrefix = '') {
     const rects = absoluteNodeRects(nodes);
     const nodesById = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
     const outgoingGroups = new Map();
@@ -983,7 +998,7 @@ export function buildTaskEdgeAnchors(nodes, edges) {
             const slotOffset = role === 'source' ? peerEntries.length : 0;
             entries.sort((a, b) => (a.sortValue - b.sortValue) || (a.edge._anchorIndex - b.edge._anchorIndex));
             const handles = entries.map(({ edge }, index) => {
-                const handleId = `${role}-${side}-${index}`;
+                const handleId = `${handlePrefix}${role}-${side}-${index}`;
                 if (role === 'source') edge.sourceHandle = handleId;
                 else edge.targetHandle = handleId;
                 return { id: handleId, side, offsetPct: deterministicHandlePct(slotOffset + index, slotCount) };

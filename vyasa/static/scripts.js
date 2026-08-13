@@ -1660,6 +1660,7 @@ const documentScroll = createMomentumRunner({
     },
     stepStatic: (direction) => window.scrollBy({ top: direction * 40 }),
 });
+let documentTopPrefix = false;
 
 function stopDocumentScroll() {
     documentScroll.stop();
@@ -1675,7 +1676,7 @@ function initDocumentShortcutHelp() {
     ensureShortcutHelp({
         title: 'Document shortcuts',
         groups: [
-            ['Document', [['P', 'Slides'], ['J / K', 'Scroll'], ['C', 'Fold / Unfold'], ['?', 'Shortcuts']]],
+            ['Document', [['P', 'Slides'], ['J / K', 'Scroll'], ['g g / G', 'Top / Bottom'], ['C', 'Fold / Unfold'], ['?', 'Shortcuts']]],
             ['Panels', [['Z', 'Posts'], ['X', 'Contents'], ['Shift+1', 'Expand Posts'], ['R', 'Review']]],
         ],
     });
@@ -1691,6 +1692,26 @@ function initKeyboardShortcuts() {
         if (e.metaKey || e.ctrlKey || e.altKey) return;
 
         const mainContent = document.getElementById('main-content');
+        const isDocument = mainContent && !mainContent.classList.contains('vyasa-zen-present');
+        if (isDocument && e.key === 'G') {
+            e.preventDefault();
+            documentTopPrefix = false;
+            stopDocumentScroll();
+            window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+            return;
+        }
+        if (isDocument && e.key === 'g' && !e.repeat) {
+            if (documentTopPrefix) {
+                e.preventDefault();
+                documentTopPrefix = false;
+                stopDocumentScroll();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+            documentTopPrefix = true;
+        } else {
+            documentTopPrefix = false;
+        }
         if (e.key.toLowerCase() === 'p') {
             const presentLink = mainContent?.querySelector('[data-vyasa-present-document="true"]');
             if (presentLink) {
@@ -1848,6 +1869,78 @@ function closeIframeFullscreen() {
     }
     overlay.style.display = 'none';
     document.body.classList.remove('iframe-fullscreen-open');
+}
+
+function initImageFocus() {
+    const dialog = document.createElement('dialog');
+    let scale = 1;
+    let offset = { x: 0, y: 0 };
+    let drag = null;
+    const render = () => {
+        const image = dialog.querySelector('img');
+        if (image) image.style.transform = `translate(${offset.x}px, ${offset.y}px) scale(${scale})`;
+        dialog.toggleAttribute('data-zoomed', scale > 1);
+    };
+    const close = () => {
+        if (!dialog.open || dialog.classList.contains('is-closing')) return;
+        scale = 1;
+        offset = { x: 0, y: 0 };
+        render();
+        dialog.classList.add('is-closing');
+        setTimeout(() => dialog.close(), 160);
+    };
+    dialog.className = 'image-focus-dialog';
+    dialog.setAttribute('aria-label', 'Expanded image');
+    dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) close();
+    });
+    dialog.addEventListener('cancel', (event) => { event.preventDefault(); close(); });
+    dialog.addEventListener('close', () => {
+        dialog.classList.remove('is-closing');
+        document.body.classList.remove('image-focus-open');
+    });
+    dialog.addEventListener('wheel', (event) => {
+        event.preventDefault();
+        const zoomStep = Math.max(-0.1, Math.min(0.1, -event.deltaY * 0.001));
+        scale = Math.min(4, Math.max(1, scale + zoomStep));
+        if (scale === 1) offset = { x: 0, y: 0 };
+        render();
+    }, { passive: false });
+    dialog.addEventListener('pointerdown', (event) => {
+        if (scale === 1 || event.target.tagName !== 'IMG') return;
+        event.target.setPointerCapture(event.pointerId);
+        drag = { x: event.clientX - offset.x, y: event.clientY - offset.y };
+    });
+    dialog.addEventListener('pointermove', (event) => {
+        if (!drag) return;
+        offset = { x: event.clientX - drag.x, y: event.clientY - drag.y };
+        render();
+    });
+    dialog.addEventListener('pointerup', () => { drag = null; });
+    document.body.appendChild(dialog);
+
+    document.addEventListener('click', (event) => {
+        const image = event.target.closest?.('#main-content img, .vyasa-zen-slide-body img');
+        if (!image) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const expanded = document.createElement('img');
+        expanded.src = image.currentSrc || image.src;
+        expanded.alt = image.alt || '';
+        expanded.draggable = false;
+        scale = 1;
+        offset = { x: 0, y: 0 };
+        dialog.replaceChildren(expanded);
+        render();
+        document.body.classList.add('image-focus-open');
+        dialog.showModal();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape' || !dialog.open) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        close();
+    }, true);
 }
 
 function initIframeFullscreenToggle() {
@@ -2211,6 +2304,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initDocumentShortcutHelp();
     initPdfFocusToggle();
     initIframeFullscreenToggle();
+    initImageFocus();
     initJsonFocusToggle();
     window.__vyasaInitSearchPlaceholderCycle?.(document);
     window.__vyasaInitPostsSearchPersistence?.(document);

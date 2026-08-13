@@ -610,7 +610,7 @@ def _extract_markdown_section_text(text: str, target_anchor: str) -> str | None:
     for index, match in enumerate(headings):
         level = len(match.group(1))
         heading_text, anchor = resolve_heading_anchor(match.group(2).strip(), counts)
-        if anchor != target_anchor:
+        if anchor.casefold() != target_anchor.casefold():
             continue
         end = len(body)
         for later in headings[index + 1:]:

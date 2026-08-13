@@ -102,6 +102,12 @@ def test_renderer_reads_one_complete_context(context_pack):
 
     assert {node["id"] for node in day1["tasks"]} == {"old", "claim", "jira"}
     assert {node["id"] for node in day2["tasks"]} == {"new", "claim", "jira"}
+    assert day1["node_reference_labels"] == {
+        "claim": "Delivery claim",
+        "jira": "Jira item",
+        "old": "Old requirement",
+        "new": "New requirement",
+    }
     assert {node["id"]: node["status"] for node in day1["tasks"]}["claim"] == "open"
     assert {node["id"]: node["status"] for node in day2["tasks"]}["claim"] == "done"
 

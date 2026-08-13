@@ -25,12 +25,17 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert "data-vyasa-link-preview-font-decrease" in source
     assert "data-vyasa-link-preview-font-increase" in source
     assert "event.shiftKey ? shell?.dataset.absolutePath : shell?.dataset.relativePath" in source
-    assert "if (relativePath) sourceLabel.textContent = relativePath;" in source
+    assert "sourceLabel.title = relativePath;" in source
+    assert "overflow-wrap: anywhere;" in css
+    assert "white-space: normal;" in css
+    assert "width: max-content;" in css.split(".vyasa-link-preview-body > .code-block:only-child pre", 1)[1].split("}", 1)[0]
+    assert "overflow: visible;" in css.split(".vyasa-link-preview-body > .code-block:only-child pre", 1)[1].split("}", 1)[0]
     assert "--vyasa-link-preview-font-size" in css
     assert "font-size: 1.75em;" in css
     assert "width: max-content;" in css
     assert ".vyasa-link-preview-body .vyasa-doc-h2 { font-size: 1.5em; }" in css
     assert ".vyasa-link-preview-body .vyasa-doc-h6 { font-size: 1em; }" in css
+    assert ".vyasa-link-preview-target-line" in css
 
 
 def test_link_preview_pointer_joins_source_to_nearest_popup_edge():
@@ -83,7 +88,28 @@ def test_link_preview_refreshes_pointer_during_canvas_pan():
 def test_link_preview_finds_symbol_position_from_link_query():
     source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
     script = """
-        import { linkPreviewSymbolMatch } from './vyasa/extensions_builtin/link_preview/static/link_preview_target.js';
+        import { linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './vyasa/extensions_builtin/link_preview/static/link_preview_target.js';
+        if (linkPreviewLineNumber('/posts/code.py%3A3') !== 3) throw new Error('line number lost');
+        const line = linkPreviewLineMatch(
+            '/posts/genhrx.ai/apps/ai/app/api/routes/agent_runtime.py%3A3',
+            ['first\\nsecond\\nthird\\nfourth'],
+        );
+        if (line?.chunkIndex !== 0 || line?.lineStart !== 13 || line?.lineEnd !== 18) {
+            throw new Error(`line match lost: ${JSON.stringify(line)}`);
+        }
+        const python = 'Flow: _POLICY_MAP selects a policy.\\n\\n_POLICY_MAP: dict[str, str] = {';
+        const variable = linkPreviewSymbolMatch(
+            '/posts/agent_runtime.py?symbol=_POLICY_MAP&kind=Variable',
+            [python],
+        );
+        if (variable?.lineStart !== python.indexOf('_POLICY_MAP:')) {
+            throw new Error(`variable definition lost: ${JSON.stringify(variable)}`);
+        }
+        const renderedVariable = linkPreviewSymbolMatch(
+            '/posts/agent_runtime.py?symbol=_POLICY_MAP&kind=Variable',
+            ['Flow: _POLICY_MAP selects a policy.', '_POLICY_MAP: dict[str, str] = {'],
+        );
+        if (renderedVariable?.chunkIndex !== 1) throw new Error('rendered variable definition lost');
         const match = linkPreviewSymbolMatch(
             '/posts/src/kitchen/story.md?symbol=story&kind=File',
             ['Introduction', 'The Supply Chain Planner\\'s Story'],
@@ -98,10 +124,25 @@ def test_link_preview_finds_symbol_position_from_link_query():
         if (exact?.chunkIndex !== 1 || exact?.start !== 9) {
             throw new Error(`exact symbol match lost: ${JSON.stringify(exact)}`);
         }
+        const code = linkPreviewSymbolMatch(
+            '/posts/code.py?symbol=run&kind=Function',
+            ['value = 1\\nfunction run(arg) {\\n  return arg;\\n}'],
+        );
+        if (code?.lineStart !== 10 || code?.lineEnd !== 29) {
+            throw new Error(`target line lost: ${JSON.stringify(code)}`);
+        }
+        const heading = linkPreviewHashMatch(
+            '/posts/doc#Likely-changes',
+            ['first', 'likely-changes'],
+        );
+        if (heading !== 'likely-changes') throw new Error(`fragment match lost: ${heading}`);
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
-    assert "scrollLinkPreviewToSymbol(content, link.getAttribute('href') || '')" in source
-    assert "body.scrollTop += matchRect.top - bodyRect.top" in source
+    assert "scrollLinkPreviewToTarget(content, link.getAttribute('href') || '')" in source
+    assert "target.scrollIntoView({ block: 'center' })" in source
+    assert "target.className = 'vyasa-link-preview-target-line'" in source
+    assert "[data-source-line=\"${sourceLine}\"]" in source
+    assert "body.querySelectorAll('.vyasa-code-line')" in source
 
 
 def test_link_preview_resizes_from_each_edge():
@@ -125,6 +166,27 @@ def test_link_preview_resizes_from_each_edge():
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
+def test_link_preview_remembers_latest_width_for_new_popups():
+    script = """
+        const values = new Map();
+        globalThis.localStorage = {
+            getItem: (key) => values.get(key) ?? null,
+            setItem: (key, value) => values.set(key, value),
+        };
+        const module = await import('./vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js?first');
+        const { linkPreviewPreferredWidth, rememberLinkPreviewWidth } = module;
+        if (linkPreviewPreferredWidth(560, 1000) !== 560) throw new Error('default width lost');
+        rememberLinkPreviewWidth(720);
+        if (linkPreviewPreferredWidth(560, 1000) !== 720) throw new Error('resized width not reused');
+        const reloaded = await import('./vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js?reloaded');
+        if (reloaded.linkPreviewPreferredWidth(560, 1000) !== 720) throw new Error('stored width not restored');
+        rememberLinkPreviewWidth(420);
+        if (linkPreviewPreferredWidth(560, 1000) !== 420) throw new Error('latest width not used');
+        if (linkPreviewPreferredWidth(560, 400) !== 376) throw new Error('width exceeds viewport');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
 def test_link_preview_renders_unknown_extension_as_escaped_text(tmp_path, monkeypatch):
     source = tmp_path / "sample.xyz"
     source.write_text("<node>value</node>")
@@ -135,6 +197,38 @@ def test_link_preview_renders_unknown_extension_as_escaped_text(tmp_path, monkey
 
     assert result is not None
     assert '<pre class="vyasa-link-preview-plain-text">&lt;node&gt;value&lt;/node&gt;</pre>' in result
+
+
+def test_link_preview_renders_code_with_highlight_contract(tmp_path, monkeypatch):
+    source = tmp_path / "sample.py"
+    source.write_text("def run():\n    return True\n")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "sample.py")
+
+    result = routes.render_link_preview_html(href="sample.py")
+
+    assert result is not None
+    assert '<code class="language-python"' in result
+    assert 'data-code-line-numbers="true"' in result
+    assert "window.__vyasaInitCodeTools?.(content);" in Path(
+        "vyasa/extensions_builtin/link_preview/static/link_preview.js"
+    ).read_text()
+
+
+def test_link_preview_resolves_mounted_source_path_with_line_suffix(tmp_path, monkeypatch):
+    source = tmp_path / "agent_runtime.py"
+    source.write_text("def register_agent_runtime():\n    return True\n")
+    slug = "genhrx.ai/apps/ai/app/api/routes/agent_runtime.py"
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda value: source if value == slug else None)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: slug)
+
+    result = routes.render_link_preview_html(
+        href=f"/posts/{slug}:32",
+        current_path="genhrx.ai/docs/ai-presentation/02-one-hour-structure",
+    )
+
+    assert result is not None
+    assert "register_agent_runtime" in result
 
 
 def test_link_preview_renders_full_markdown_for_symbol_position(tmp_path, monkeypatch):
@@ -148,6 +242,21 @@ def test_link_preview_renders_full_markdown_for_symbol_position(tmp_path, monkey
     assert result is not None
     assert "Opening." in result
     assert "Run the target." in result
+
+
+def test_link_preview_fragment_match_ignores_heading_case(tmp_path, monkeypatch):
+    source = tmp_path / "sample.md"
+    source.write_text("# First\n\nopening\n\n## Likely changes\n\ntarget\n\n## Later\n\nignore\n")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _path, strip_suffix=True: "sample.md")
+
+    result = routes.render_link_preview_html(href="/posts/sample#Likely-changes")
+
+    assert result is not None
+    assert "Likely changes" in result
+    assert "target" in result
+    assert "opening" not in result
+    assert "Later" not in result
 
 
 def test_link_preview_stack_keeps_nested_previews_until_each_is_closed():

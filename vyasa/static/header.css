@@ -945,6 +945,23 @@ body.iframe-fullscreen-open { overflow: hidden; }
 .iframe-fullscreen-body { flex: 1; padding: 0.75rem; }
 .iframe-fullscreen-frame { width: 100%; height: 100%; border: 0; border-radius: var(--vyasa-rect-radius) !important; background: #0f172a; }
 
+#main-content img, .vyasa-zen-slide-body img { cursor: zoom-in; }
+html:has(.image-focus-dialog[open]), body.image-focus-open { overflow: hidden; }
+.image-focus-dialog { padding: 0; border: 0; max-width: 94vw; max-height: 94vh; background: transparent; overflow: visible; animation: image-focus-fade-in 180ms ease-out; }
+.image-focus-dialog::backdrop { background: rgba(2, 6, 23, 0.88); animation: image-focus-backdrop-in 180ms ease-out; }
+.image-focus-dialog img { display: block; max-width: 94vw; max-height: 94vh; object-fit: contain; cursor: default; animation: image-focus-zoom-in 220ms cubic-bezier(.2, .8, .2, 1); touch-action: none; }
+.image-focus-dialog[data-zoomed] img { cursor: grab; }
+.image-focus-dialog[data-zoomed] img:active { cursor: grabbing; }
+.image-focus-dialog.is-closing { animation: image-focus-fade-out 160ms ease-in forwards; }
+.image-focus-dialog.is-closing::backdrop { animation: image-focus-backdrop-out 160ms ease-in forwards; }
+.image-focus-dialog.is-closing img { animation: image-focus-zoom-out 160ms ease-in forwards; }
+@keyframes image-focus-fade-in { from { opacity: 0; } }
+@keyframes image-focus-zoom-in { from { transform: scale(.9); } }
+@keyframes image-focus-fade-out { to { opacity: 0; } }
+@keyframes image-focus-zoom-out { to { transform: scale(.9); } }
+@keyframes image-focus-backdrop-in { from { background: transparent; } }
+@keyframes image-focus-backdrop-out { to { background: transparent; } }
+
 .layout-fluid {
     --layout-breakpoint: 1280px;
     --layout-blend: 240px;

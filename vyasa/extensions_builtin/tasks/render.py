@@ -26,6 +26,7 @@ _RENDERABLE_EDGE_KEYS = _RENDERABLE_NODE_KEYS | {"source", "target", "relation"}
 _MARKDOWN_BLOCK_LINE_RE = re.compile(
     r"^\s*(?:[-+*]\s+|\d+\.\s+|>\s+|#{1,6}\s+|```|~~~|\|{1,2}|(?: {4}|\t)\S)"
 )
+_NODE_REFERENCE_RE = re.compile(r"\[\[([^\]|\n]+)(?:\|([^\]\n]+))?\]\]")
 
 
 def _starts_markdown_block(line: str) -> bool:
@@ -58,7 +59,27 @@ def _prepare_node_attr_markdown(value) -> str:
     return "\n".join(rendered_lines)
 
 
+def _prepare_node_references(value: str, node_labels: dict[str, str]) -> str:
+    def replace(match: re.Match[str]) -> str:
+        target = match.group(1).strip()
+        label = (match.group(2) or node_labels.get(target) or target).strip()
+        broken = " vyasa-tasks-node-reference--broken" if target not in node_labels else ""
+        return (
+            f'<span class="vyasa-tasks-node-reference{broken}" '
+            f'data-vyasa-node-reference="{html.escape(target, quote=True)}">{html.escape(label)}</span>'
+        )
+
+    return _NODE_REFERENCE_RE.sub(replace, value)
+
+
 def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
+    node_labels = {
+        **(model.get("node_reference_labels") or {}),
+        **{
+            str(node.get("id") or ""): str(node.get("label") or node.get("id") or "")
+            for bucket in ("groups", "tasks") for node in model.get(bucket, [])
+        },
+    }
     for bucket in ("groups", "tasks", "dependency_edges"):
         reserved = _RENDERABLE_EDGE_KEYS if bucket == "dependency_edges" else _RENDERABLE_NODE_KEYS
         for node in model.get(bucket, []):
@@ -72,10 +93,13 @@ def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
                 values = value if isinstance(value, list) else [value]
                 if not all(isinstance(item, (str, int, float, bool)) for item in values):
                     continue
-                rendered = [
-                    _render_markdown_fragment(_prepare_node_attr_markdown(item), current_path=current_path)
-                    for item in values
-                ]
+                rendered = []
+                for item in values:
+                    prepared = _prepare_node_attr_markdown(item)
+                    rendered.append(_render_markdown_fragment(
+                        _prepare_node_references(prepared, node_labels),
+                        current_path=current_path,
+                    ))
                 rendered_attrs[key] = rendered if isinstance(value, list) else rendered[0]
             if rendered_attrs:
                 node["__rendered_attrs__"] = rendered_attrs
