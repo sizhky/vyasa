@@ -530,6 +530,9 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
             config=reveal_config,
         ) if reveal_config.enabled else []
         if reveal_units:
+            segment_offset = sum(segment_counts[:slide_num - 2])
+            segment_total = sum(segment_counts)
+            deck_progress = segment_offset / segment_total * 100 if segment_total else 100
             slide_body = Div(
                 *bundle_asset_nodes_for_collector(asset_collector, runtime=runtime),
                 *[
@@ -560,14 +563,16 @@ def render_slide_deck(path, htmx, request, *, get_root_folder, not_found, get_ro
                 Div(
                     Div(cls="vyasa-zen-slide-progress-track", aria_hidden="true"),
                     cls="vyasa-zen-slide-progress", role="progressbar",
-                    aria_label="Slide segments revealed", aria_value_min="0", aria_live="polite",
+                    aria_label="Slide segments revealed", aria_valuemin="0", aria_live="polite",
                 ),
                 Div(
                     Div(cls="vyasa-zen-deck-progress-track", aria_hidden="true"),
                     cls="vyasa-zen-deck-progress", role="progressbar",
-                    aria_label="Deck segments revealed", aria_value_min="0",
-                    data_segment_offset=str(sum(segment_counts[:slide_num - 2])),
-                    data_segment_total=str(sum(segment_counts)),
+                    aria_label="Deck segments revealed", aria_valuemin="0",
+                    aria_valuemax=str(segment_total), aria_valuenow=str(segment_offset),
+                    data_segment_offset=str(segment_offset),
+                    data_segment_total=str(segment_total),
+                    style=f"--vyasa-deck-progress: {deck_progress}%",
                 ),
                 cls="vyasa-zen-slide-body",
                 data_reveal_mode="stagger",

@@ -95,7 +95,7 @@ def test_tooltip_syntax_inside_code_stays_literal():
     assert "vyasa-page-action-tooltip-trigger" not in rendered
 
 
-def test_slide_route_keeps_tooltip_definition_with_its_reference(monkeypatch, tmp_path):
+def test_slide_route_keeps_tooltip_definition_and_seeds_deck_progress(monkeypatch, tmp_path):
     post = tmp_path / "deck.md"
     post.write_text(
         """# Deck
@@ -103,6 +103,10 @@ def test_slide_route_keeps_tooltip_definition_with_its_reference(monkeypatch, tm
 ## Search
 
 - Runs [hybrid search][?hybrid].
+
+## Next
+
+Done.
 
 [?hybrid]:
     First paragraph.
@@ -126,10 +130,13 @@ def test_slide_route_keeps_tooltip_definition_with_its_reference(monkeypatch, tm
     )
 
     rendered = to_xml(content_routes.render_slide_deck("notes/deck/slide-2", **kwargs))
+    next_rendered = to_xml(content_routes.render_slide_deck("notes/deck/slide-3", **kwargs))
 
     assert "vyasa-page-action-tooltip-trigger" in rendered
     assert "First paragraph." in rendered
     assert "Second paragraph." in rendered
+    assert 'style="--vyasa-deck-progress: 50.0%"' in next_rendered
+    assert 'aria-valuenow="1"' in next_rendered
 
 
 def test_edge_markdown_renders_each_list_member():
