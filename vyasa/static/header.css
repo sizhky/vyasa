@@ -1053,7 +1053,39 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .vyasa-heading-permalink.is-copied .vyasa-heading-permalink-icon { display: none; }
 .vyasa-heading-permalink.is-copied .vyasa-heading-permalink-copied { display: inline-flex; }
 .vyasa-heading-permalink:not(.is-copied) .vyasa-heading-permalink-copied { display: none; }
-.vyasa-doc-heading { display: flex; align-items: center; width: 100%; gap: 0.15rem; justify-content: flex-start; }
+.vyasa-doc-heading { position: relative; display: flex; align-items: center; width: 100%; gap: 0.15rem; justify-content: flex-start; }
+.vyasa-doc-heading > .vyasa-heading-level {
+    display: none;
+    position: absolute;
+    top: 50%;
+    right: 100%;
+    color: color-mix(in srgb, var(--vyasa-ink-soft) 72%, transparent);
+    font: 600 0.875rem/1 var(--vyasa-font-ui);
+    letter-spacing: 0.06em;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    padding-right: 0.55rem;
+    opacity: 0;
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transform: translate(0.2rem, -50%);
+    transition: opacity 120ms ease, transform 120ms ease;
+}
+@media (hover: hover) and (min-width: 768px) {
+    .vyasa-doc-heading > .vyasa-heading-level { display: block; }
+    .vyasa-doc-heading:hover > .vyasa-heading-level,
+    .vyasa-doc-heading:focus-within > .vyasa-heading-level {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translate(0, -50%);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .vyasa-heading-level { transition-duration: 0.01ms; }
+}
 .vyasa-heading-text { flex: 0 1 auto; min-width: 0; }
 .vyasa-heading-fold-summary .vyasa-heading-text::after {
     content: "";
@@ -1143,7 +1175,10 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
     transform: translateX(-50%);
     opacity: 0;
     pointer-events: none;
-    white-space: nowrap;
+    width: max-content;
+    max-width: min(24rem, calc(100vw - 2rem));
+    white-space: pre-line;
+    text-align: left;
     padding: 0.25rem 0.45rem;
     border-radius: 0.4rem;
     background: color-mix(in srgb, var(--vyasa-paper-raised) 84%, var(--vyasa-primary) 16%);

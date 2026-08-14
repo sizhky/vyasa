@@ -124,6 +124,22 @@ def test_rendered_heading_emits_doc_heading_class():
     assert 'class="vyasa-doc-heading' in html
 
 
+def test_rendered_headings_expose_interactive_level_for_all_levels():
+    markdown = "\n\n".join(f"{'#' * level} Heading {level}" for level in range(1, 7))
+    html = to_xml(from_md(markdown))
+
+    for level in range(1, 7):
+        assert f'data-tooltip="Click: heading\nShift+click: heading path\nShift+Option+click: absolute file + heading path"' in html
+        assert f'>H{level}</button>' in html
+
+
+def test_slide_heading_uses_the_shared_heading_level_indicator():
+    html = to_xml(from_md("### Detail", slide_mode=True))
+
+    assert 'class="vyasa-heading-level vyasa-page-action-tooltip"' in html
+    assert 'data-tooltip="Click: heading\nShift+click: heading path\nShift+Option+click: absolute file + heading path"' in html
+
+
 def test_present_heading_link_keeps_exact_deck_offset():
     markdown = "# Deck\n\nIntro\n\n## First\n\nBody\n\n## Second\n\nBody"
 

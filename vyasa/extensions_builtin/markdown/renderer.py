@@ -666,6 +666,10 @@ class ContentRenderer(FrankenRenderer):
         )
         return (
             f'<h{level} id="{anchor}" class="vyasa-doc-heading">'
+            f'<button type="button" class="vyasa-heading-level vyasa-page-action-tooltip" data-heading-copy '
+            f'data-tooltip="Click: heading&#10;Shift+click: heading path&#10;Shift+Option+click: absolute file + heading path" '
+            f'aria-label="Copy heading; Shift+click copies heading path; Shift+Option+click adds the absolute file path" '
+            f'>H{level}</button>'
             f'<span class="vyasa-heading-text">{html.escape(heading_text)}</span>'
             f"{fold_children}{present_here}{permalink}</h{level}>"
         )

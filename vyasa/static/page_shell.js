@@ -11,6 +11,19 @@ export function shortcutsSuspended() {
     return shortcutOwners.size > 0;
 }
 
+export function headingMarkdownCopyValue(headings, targetIndex, includeParents = false, prefix = '') {
+    const target = headings[targetIndex];
+    if (!target) return '';
+    const markdown = ({ level, text }) => `${'#'.repeat(level)} ${text.trim()}`;
+    if (!includeParents) return [prefix.trim(), markdown(target)].filter(Boolean).join(' > ');
+    const path = [];
+    headings.slice(0, targetIndex + 1).forEach((heading) => {
+        while (path.length && path.at(-1).level >= heading.level) path.pop();
+        path.push(heading);
+    });
+    return [prefix.trim(), ...path.map(markdown)].filter(Boolean).join(' > ');
+}
+
 // The held-key motion model behind J/K document scroll: hold to accelerate to a
 // ceiling, release to coast out under friction. Shared so graph pan and zoom feel
 // like the page scroll instead of growing a second set of numbers.
