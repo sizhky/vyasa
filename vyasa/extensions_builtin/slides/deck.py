@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass
 from ...helpers import _strip_leading_frontmatter_block, content_url_for_slug, resolve_heading_anchor
+from ..tooltip_syntax import extract_tooltips, format_tooltip_definitions
 
 
 @dataclass(frozen=True)
@@ -241,7 +242,9 @@ def build_slide_reveal_units(markdown_text, *, render_fragment, current_path, co
     pending = {}
     units = []
     if config.unit == "paragraph-groups":
-        for group in split_markdown_paragraph_groups(inject_reveal_directives(markdown_text)):
+        content, tooltips = extract_tooltips(inject_reveal_directives(markdown_text))
+        definitions = format_tooltip_definitions(tooltips)
+        for group in split_markdown_paragraph_groups(content):
             directive = _parse_reveal_directive_chunk(group)
             if directive:
                 pending.update(directive)
@@ -252,7 +255,11 @@ def build_slide_reveal_units(markdown_text, *, render_fragment, current_path, co
             elif _contains_list_group(group):
                 kind = "list"
             units.append({
-                "html": render_fragment(group, current_path=current_path, slide_mode=True),
+                "html": render_fragment(
+                    f"{group}\n\n{definitions}" if definitions else group,
+                    current_path=current_path,
+                    slide_mode=True,
+                ),
                 "kind": kind,
                 **pending,
             })
@@ -290,14 +297,17 @@ def count_slide_progress_segments(markdown_text, *, render_fragment, current_pat
 
 class ZenSlideDeck:
     def __init__(self, markdown_text):
-        self.slides = list(iter_zen_slides(markdown_text)) or [["# Empty deck"]]
+        content, tooltips = extract_tooltips(markdown_text)
+        self.tooltip_definitions = format_tooltip_definitions(tooltips)
+        self.slides = list(iter_zen_slides(content)) or [["# Empty deck"]]
         self.anchors = self._build_anchors()
 
     def clamp(self, index):
         return max(1, min(index, len(self.slides)))
 
     def body(self, index):
-        return "\n\n".join(self.slides[self.clamp(index) - 1])
+        content = "\n\n".join(self.slides[self.clamp(index) - 1])
+        return f"{content}\n\n{self.tooltip_definitions}" if self.tooltip_definitions else content
 
     def href(self, doc_path, index):
         return content_url_for_slug(doc_path, prefix="/slides", suffix=f"/{slide_slug(self.clamp(index))}")

@@ -2306,8 +2306,82 @@ function syncNavbarHeightVar() {
 }
 window.addEventListener('resize', syncNavbarHeightVar);
 
+function initPageActionTooltips() {
+    if (document.body.dataset.vyasaPageActionTooltips === 'ready') return;
+    document.body.dataset.vyasaPageActionTooltips = 'ready';
+
+    const pair = (target) => {
+        const trigger = target?.closest?.('[data-vyasa-page-action-tooltip-trigger]');
+        if (trigger) return [trigger, document.getElementById(trigger.getAttribute('popovertarget'))];
+        const popover = target?.closest?.('[data-vyasa-page-action-tooltip-content]');
+        if (!popover) return [];
+        return [document.querySelector(`[popovertarget="${popover.id}"]`), popover];
+    };
+    const position = (trigger, popover) => {
+        const gap = 8;
+        const edge = 8;
+        const rect = trigger.getBoundingClientRect();
+        const left = Math.min(window.innerWidth - popover.offsetWidth - edge, Math.max(edge, rect.left));
+        let top = rect.bottom + gap;
+        if (top + popover.offsetHeight > window.innerHeight - edge) {
+            top = Math.max(edge, rect.top - popover.offsetHeight - gap);
+        }
+        Object.assign(popover.style, { left: `${left}px`, top: `${top}px` });
+    };
+    const show = (trigger, popover, pinned = false) => {
+        if (!trigger || !popover?.showPopover) return;
+        if (!popover.matches(':popover-open')) popover.showPopover();
+        trigger.dataset.tooltipPinned = pinned ? 'true' : trigger.dataset.tooltipPinned || 'false';
+        trigger.setAttribute('aria-expanded', 'true');
+        window.requestAnimationFrame(() => position(trigger, popover));
+    };
+    const hide = (trigger, popover) => {
+        if (!trigger || trigger.dataset.tooltipPinned === 'true') return;
+        if (popover?.matches(':popover-open')) popover.hidePopover();
+        trigger.setAttribute('aria-expanded', 'false');
+    };
+    const hideAfterExit = (trigger, popover) => window.setTimeout(() => {
+        if (!trigger?.matches(':hover, :focus-visible') && !popover?.matches(':hover, :focus-within')) hide(trigger, popover);
+    }, 80);
+
+    document.body.addEventListener('pointerover', (event) => {
+        const [trigger, popover] = pair(event.target);
+        if (trigger && event.pointerType === 'mouse') show(trigger, popover);
+    });
+    document.body.addEventListener('pointerout', (event) => {
+        const [trigger, popover] = pair(event.target);
+        if (trigger && event.pointerType === 'mouse') hideAfterExit(trigger, popover);
+    });
+    document.body.addEventListener('focusin', (event) => {
+        const [trigger, popover] = pair(event.target);
+        if (trigger && event.target.closest('[data-vyasa-page-action-tooltip-trigger]')) show(trigger, popover);
+    });
+    document.body.addEventListener('focusout', (event) => {
+        const [trigger, popover] = pair(event.target);
+        if (trigger) hideAfterExit(trigger, popover);
+    });
+    document.body.addEventListener('click', (event) => {
+        const trigger = event.target.closest?.('[data-vyasa-page-action-tooltip-trigger]');
+        if (!trigger) return;
+        event.preventDefault();
+        const popover = document.getElementById(trigger.getAttribute('popovertarget'));
+        const pinned = trigger.dataset.tooltipPinned === 'true';
+        trigger.dataset.tooltipPinned = pinned ? 'false' : 'true';
+        if (pinned) hide(trigger, popover);
+        else show(trigger, popover, true);
+    });
+    document.addEventListener('toggle', (event) => {
+        if (!event.target.matches?.('[data-vyasa-page-action-tooltip-content]')) return;
+        const [trigger, popover] = pair(event.target);
+        const open = popover.matches(':popover-open');
+        trigger?.setAttribute('aria-expanded', String(open));
+        if (!open && trigger) trigger.dataset.tooltipPinned = 'false';
+    }, true);
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    initPageActionTooltips();
     installPostsSearchRequestState();
     syncNavbarHeightVar();
     ensureFragmentStylesheets(document);

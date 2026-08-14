@@ -1191,6 +1191,40 @@ details[open] > .vyasa-callout-summary .vyasa-callout-chevron { transform: rotat
 .vyasa-page-action-tooltip:focus-visible::after {
     opacity: 1;
 }
+.vyasa-page-action-tooltip:not([data-tooltip])::after { content: none; }
+.vyasa-page-action-tooltip-trigger {
+    appearance: none;
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-bottom: 1px dotted color-mix(in srgb, currentColor 58%, transparent);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+    text-align: inherit;
+    cursor: help;
+}
+.vyasa-page-action-tooltip-trigger:hover { border-bottom-style: solid; }
+.vyasa-page-action-tooltip-trigger:focus-visible { border-radius: 2px; outline: 2px solid var(--vyasa-primary); outline-offset: 3px; }
+.vyasa-page-action-tooltip-content {
+    position: fixed;
+    inset: auto;
+    width: min(34rem, calc(100vw - 2rem));
+    max-height: min(70vh, 36rem);
+    margin: 0;
+    padding: 1rem 1.15rem;
+    overflow: auto;
+    border: 1px solid var(--vyasa-outline-ghost);
+    border-radius: var(--vyasa-rect-radius);
+    background: color-mix(in srgb, var(--vyasa-paper-raised) 84%, var(--vyasa-primary) 16%);
+    color: var(--vyasa-ink);
+    box-shadow: 0 18px 48px -20px color-mix(in srgb, var(--vyasa-ink) 46%, transparent);
+    font: 500 0.95rem/1.55 var(--vyasa-font-ui);
+}
+.vyasa-page-action-tooltip-content::backdrop { background: transparent; }
+.vyasa-page-action-tooltip-content > :last-child { margin-bottom: 0 !important; }
 
 .vyasa-inline-action-demo {
     position: relative;

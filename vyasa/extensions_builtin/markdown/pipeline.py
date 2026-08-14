@@ -66,6 +66,7 @@ def extract_footnotes(content):
         content = content.replace(m.group(0), "", 1)
     return content.strip(), defs
 
+
 def preserve_newlines(md):
     return md
 
