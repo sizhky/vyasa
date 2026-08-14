@@ -93,7 +93,10 @@ def test_link_preview_refreshes_pointer_during_canvas_pan():
 def test_link_preview_finds_symbol_position_from_link_query():
     source = Path("vyasa/extensions_builtin/link_preview/static/link_preview.js").read_text()
     script = """
-        import { linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './vyasa/extensions_builtin/link_preview/static/link_preview_target.js';
+        import { linkPreviewCodeLineHref, linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './vyasa/extensions_builtin/link_preview/static/link_preview_target.js';
+        if (linkPreviewCodeLineHref('src/my file.py', 7) !== '/posts/src/my%20file.py%3A7') {
+            throw new Error('VS Code line link lost');
+        }
         if (linkPreviewLineNumber('/posts/code.py%3A3') !== 3) throw new Error('line number lost');
         const line = linkPreviewLineMatch(
             '/posts/genhrx.ai/apps/ai/app/api/routes/agent_runtime.py%3A3',
@@ -115,6 +118,11 @@ def test_link_preview_finds_symbol_position_from_link_query():
             ['Flow: _POLICY_MAP selects a policy.', '_POLICY_MAP: dict[str, str] = {'],
         );
         if (renderedVariable?.chunkIndex !== 1) throw new Error('rendered variable definition lost');
+        const pythonProperty = linkPreviewSymbolMatch(
+            '/posts/content_enrichment_agent.py?symbol=llm_quality_score&kind=Property',
+            ['llm_quality_score — 1–5 integer', 'llm_quality_score: int = Field('],
+        );
+        if (pythonProperty?.chunkIndex !== 1) throw new Error('Python property definition lost');
         const match = linkPreviewSymbolMatch(
             '/posts/src/kitchen/story.md?symbol=story&kind=File',
             ['Introduction', 'The Supply Chain Planner\\'s Story'],
@@ -215,8 +223,14 @@ def test_link_preview_renders_code_with_highlight_contract(tmp_path, monkeypatch
     assert result is not None
     assert '<code class="language-python"' in result
     assert 'data-code-line-numbers="true"' in result
-    assert "window.__vyasaInitCodeTools?.(content);" in Path(
+    preview_source = Path(
         "vyasa/extensions_builtin/link_preview/static/link_preview.js"
+    ).read_text()
+    assert "window.__vyasaInitCodeTools?.(content);" in preview_source
+    assert "installCodeLineLinks(content);" in preview_source
+    assert "dataset.vyasaLinkPreviewCodeLine = 'true'" in preview_source
+    assert ".vyasa-link-preview-code-line::before" in Path(
+        "vyasa/extensions_builtin/link_preview/static/link_preview.css"
     ).read_text()
 
 

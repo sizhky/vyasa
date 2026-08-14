@@ -223,6 +223,11 @@
 
 .vyasa-link-preview-body > .code-block:only-child { min-width: 100%; min-height: 100%; margin: 0; }
 .vyasa-link-preview-body > .code-block:only-child pre { width: max-content; min-width: 100%; min-height: 100%; margin: 0 !important; overflow: visible; border: 0; border-radius: 0 !important; box-shadow: none; }
+.vyasa-link-preview-body code[data-code-line-numbers="true"] .vyasa-code-line::before { content: none; }
+.vyasa-link-preview-code-line { position: absolute; left: 1rem; width: var(--vyasa-code-line-number-width); text-align: right; color: color-mix(in srgb, var(--vyasa-code-fg) 48%, transparent); font-variant-numeric: tabular-nums; cursor: pointer; }
+.vyasa-link-preview-code-line::before { content: attr(data-source-line); }
+.vyasa-link-preview-code-line:hover { color: var(--vyasa-link); text-decoration: underline; }
+.vyasa-link-preview-code-line:focus-visible { outline: 2px solid var(--vyasa-primary); outline-offset: 2px; }
 
 .vyasa-link-preview-body .vyasa-doc-h1 {
     font-size: 1.75em;

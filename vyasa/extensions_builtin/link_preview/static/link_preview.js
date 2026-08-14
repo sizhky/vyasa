@@ -6,7 +6,7 @@ import {
     rememberLinkPreviewWidth,
     resizeLinkPreviewRect,
 } from './link_preview_geometry.js';
-import { linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './link_preview_target.js';
+import { linkPreviewCodeLineHref, linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './link_preview_target.js';
 
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 let hoveredLink = null;
@@ -215,6 +215,7 @@ function createPreviewView({ point, link, onClose }) {
             content.className = 'vyasa-link-preview-content';
             content.innerHTML = html;
             window.__vyasaInitCodeTools?.(content);
+            installCodeLineLinks(content);
             const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
             if (relativePath) {
                 sourceLabel.textContent = relativePath;
@@ -229,6 +230,23 @@ function createPreviewView({ point, link, onClose }) {
     previewViews.add(view);
     updatePointer();
     return view;
+}
+
+function installCodeLineLinks(content) {
+    const shell = content.querySelector('.vyasa-link-preview-shell');
+    const relativePath = shell?.dataset.relativePath;
+    if (!relativePath) return;
+    for (const line of content.querySelectorAll('.vyasa-code-line[data-source-line]')) {
+        const href = linkPreviewCodeLineHref(relativePath, line.dataset.sourceLine);
+        if (!href || line.querySelector('[data-vyasa-link-preview-code-line]')) continue;
+        const anchor = document.createElement('a');
+        anchor.href = href;
+        anchor.className = 'vyasa-link-preview-code-line';
+        anchor.dataset.sourceLine = line.dataset.sourceLine;
+        anchor.dataset.vyasaLinkPreviewCodeLine = 'true';
+        anchor.setAttribute('aria-label', `Open ${relativePath} line ${line.dataset.sourceLine} in VS Code`);
+        line.prepend(anchor);
+    }
 }
 
 function scrollLinkPreviewToTarget(content, href) {
