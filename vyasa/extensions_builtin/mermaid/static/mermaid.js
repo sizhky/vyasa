@@ -221,6 +221,14 @@ function renderMermaidInScope(scope = document) {
         if (!wrapper.id) {
             return;
         }
+        const revealState = wrapper.closest('.vyasa-reveal-unit')?.dataset.revealState;
+        if (revealState === 'hidden' || revealState === 'leaving') {
+            window.__vyasaTasksPhaseLog?.('mermaid:scope-refresh:skipped-hidden', {
+                id: wrapper.id,
+                revealState,
+            });
+            return;
+        }
         delete mermaidStates[wrapper.id];
         delete wrapper.dataset.mermaidInteractive;
         if (wrapper.querySelector('svg')) {
@@ -321,19 +329,19 @@ window.openMermaidFullscreen = function(id) {
     
     // Create modal content container
     const modalContent = document.createElement('div');
-    modalContent.className = 'relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col';
+    modalContent.className = 'mermaid-fullscreen-content relative rounded-lg shadow-2xl w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col';
     
     // Create header with close button
     const header = document.createElement('div');
-    header.className = 'flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700';
+    header.className = 'mermaid-fullscreen-header flex items-center justify-between p-4 border-b';
     
     const title = document.createElement('h3');
-    title.className = 'text-lg font-semibold text-slate-800 dark:text-slate-200';
+    title.className = 'mermaid-fullscreen-title text-lg font-semibold';
     title.textContent = mermaidTitle;
     
     const closeBtn = document.createElement('button');
     closeBtn.innerHTML = '✕';
-    closeBtn.className = 'px-3 py-1 text-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors';
+    closeBtn.className = 'mermaid-fullscreen-close px-3 py-1 text-xl rounded transition-colors';
     closeBtn.title = 'Close (Esc)';
     closeBtn.onclick = () => document.body.removeChild(modal);
     

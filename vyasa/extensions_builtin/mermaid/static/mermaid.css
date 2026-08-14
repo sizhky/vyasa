@@ -11,3 +11,19 @@
     overflow: hidden !important;
     pointer-events: none !important;
 }
+
+.mermaid-fullscreen-content {
+    background: var(--vyasa-paper);
+    color: var(--vyasa-ink);
+}
+
+.mermaid-fullscreen-header {
+    border-color: color-mix(in srgb, var(--vyasa-ink) 14%, transparent);
+}
+
+.mermaid-fullscreen-title { color: var(--vyasa-ink); }
+.mermaid-fullscreen-close { color: var(--vyasa-ink-soft); }
+.mermaid-fullscreen-close:hover {
+    color: var(--vyasa-ink);
+    background: var(--vyasa-paper-raised);
+}
