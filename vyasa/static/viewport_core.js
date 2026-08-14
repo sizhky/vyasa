@@ -2,6 +2,12 @@ export function clampScale(value, maxScale = 55) {
     return Math.min(Math.max(0.1, value), maxScale);
 }
 
+export function initialViewportScale(scaleX, scaleY, aspectRatio, isFullscreen) {
+    if (aspectRatio <= 3) return Math.min(scaleX, scaleY, isFullscreen ? Number.POSITIVE_INFINITY : 1);
+    if (!isFullscreen) return Math.min(scaleX, 1);
+    return Math.max(scaleX, Math.min(scaleY, 2));
+}
+
 export function nextWheelState(state, rect, point, deltaY, maxScale = 55) {
     const mouseX = point.x - rect.left - rect.width / 2;
     const mouseY = point.y - rect.top - rect.height / 2;

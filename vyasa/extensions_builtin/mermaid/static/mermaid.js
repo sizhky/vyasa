@@ -1,15 +1,30 @@
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-import { bindPanZoomGestures } from '/static/viewport_core.js';
+import { bindPanZoomGestures, initialViewportScale } from '/static/viewport_core.js';
 
 const GANTT_WIDTH = 1200;
 const mermaidStates = {};
+const mermaidFileLogReset = new Set();
 const mermaidDebugEnabled = () => (
     window.VYASA_DEBUG_MERMAID === true ||
+    new URLSearchParams(window.location.search).has('mermaid_debug') ||
     localStorage.getItem('vyasaDebugMermaid') === '1'
 );
 const mermaidDebugLog = (...args) => {
     if (mermaidDebugEnabled()) {
         console.log('[vyasa][mermaid]', ...args);
+        const host = window.location.host;
+        const path = window.location.pathname;
+        const key = `${host}${path}`;
+        const body = JSON.stringify({
+            label: String(args[0] || ''),
+            at: new Date().toISOString(),
+            host,
+            path,
+            reset: !mermaidFileLogReset.has(key),
+            payload: args.length === 2 ? args[1] : { values: args.slice(1) },
+        });
+        mermaidFileLogReset.add(key);
+        fetch('/api/mermaid/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }).catch(() => {});
     }
 };
 const mermaidDebugSnapshot = (label) => {
@@ -88,7 +103,7 @@ function initMermaidInteraction() {
         const isRevealWrapper = !!wrapper.closest('.reveal, .vyasa-reveal-unit');
         const isLayoutUnstable = (
             (isRevealWrapper && wrapperRect.height < 120) ||
-            svgRect.height < 30 ||
+            (svgRect.height < 30 && !hasStableViewBox && !hasStableBBox) ||
             (!hasStableViewBox && !hasStableBBox) ||
             (svgRect.width < 30 && !hasStableViewBox && !hasStableBBox)
         );
@@ -115,15 +130,7 @@ function initMermaidInteraction() {
         // For very wide diagrams (like Gantt charts), prefer width scaling even if it exceeds height
         const aspectRatio = svgRect.width / svgRect.height;
         const isFullscreenWrapper = wrapper.dataset.mermaidFullscreen === 'true';
-        const maxUpscale = isFullscreenWrapper ? Number.POSITIVE_INFINITY : 1;
-        let initialScale;
-        if (aspectRatio > 3) {
-            // Wide diagram: scale to fit width, but do not upscale by default
-            initialScale = Math.min(scaleX, maxUpscale);
-        } else {
-            // Normal diagram: fit to smaller dimension, but do not upscale by default
-            initialScale = Math.min(scaleX, scaleY, maxUpscale);
-        }
+        const initialScale = initialViewportScale(scaleX, scaleY, aspectRatio, isFullscreenWrapper);
         if (!Number.isFinite(initialScale) || initialScale <= 0) {
             // Hidden/unstable layout (e.g., Reveal transition state) can yield tiny or negative sizes.
             // Skip now and let a later ready/slidechanged pass initialize interaction.
@@ -142,12 +149,17 @@ function initMermaidInteraction() {
                 wrapperHeight: wrapperRect.height,
                 svgWidth: svgRect.width,
                 svgHeight: svgRect.height,
+                scaleX,
+                scaleY,
+                aspectRatio,
+                isFullscreenWrapper,
                 initialScale
             });
         }
         
         const state = {
             scale: initialScale,
+            resetScale: isFullscreenWrapper ? initialScale : 1,
             translateX: 0,
             translateY: 0,
             isPanning: false,
@@ -282,11 +294,11 @@ window.vyasaRefreshDiagramInteractions = function(scope = document) {
 window.resetMermaidZoom = function(id) {
     const state = mermaidStates[id];
     if (state) {
-        state.scale = 1;
+        state.scale = state.resetScale;
         state.translateX = 0;
         state.translateY = 0;
         const svg = document.getElementById(id).querySelector('svg');
-        svg.style.transform = 'translate(0px, 0px) scale(1)';
+        svg.style.transform = `translate(0px, 0px) scale(${state.resetScale})`;
     }
 };
 
