@@ -49,9 +49,22 @@ def _normalize_preview_slug(href: str, current_path: str | None) -> tuple[str, s
     else:
         base = path
     base = re.sub(r":\d+(?::\d+)?$", "", base)
+    base = base.partition("$")[0]
     if base.endswith(".md"):
         base = base[:-3]
     return base, fragment
+
+
+def _markdown_target_line(source: str, href: str) -> int | None:
+    path = unquote(urlsplit(href or "").path)
+    numbered = re.search(r":(\d+)(?::\d+)?$", path)
+    if numbered:
+        line = int(numbered.group(1))
+        return line if 0 < line <= len(source.splitlines()) else None
+    if "$" not in path:
+        return None
+    prefix = path.partition("$")[2]
+    return next((number for number, text in enumerate(source.splitlines(), 1) if text.startswith(prefix)), None)
 
 
 def _default_section_markdown(text: str) -> str:
@@ -89,8 +102,9 @@ def render_link_preview_html(*, href: str, current_path: str | None = None) -> s
     if not file_path or not file_path.exists():
         return None
     source = file_path.read_text(encoding="utf-8", errors="replace")
+    target_line = _markdown_target_line(source, href) if file_path.suffix.lower() == ".md" else None
     if file_path.suffix.lower() == ".md":
-        section = (
+        section = None if target_line else (
             _extract_markdown_section_text(source, fragment)
             if fragment
             else _strip_leading_frontmatter_block(source).strip()
@@ -99,10 +113,13 @@ def render_link_preview_html(*, href: str, current_path: str | None = None) -> s
         )
         if not section and fragment:
             section = _default_section_markdown(source)
-        if not section:
+        if target_line:
+            preview_html = render_code_shell(source, "markdown", line_numbers=True)
+        elif not section:
             return None
-        page_slug = content_slug_for_path(file_path) or slug
-        preview_html = from_md(section, current_path=page_slug)
+        else:
+            page_slug = content_slug_for_path(file_path) or slug
+            preview_html = from_md(section, current_path=page_slug)
     else:
         language = infer_code_language(file_path.name)
         preview_html = (
@@ -113,6 +130,7 @@ def render_link_preview_html(*, href: str, current_path: str | None = None) -> s
     relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
     return (
         f'<div class="vyasa-link-preview-shell" data-relative-path="{html.escape(relative_path, quote=True)}" '
+        f'{f"data-target-line={target_line!r} " if target_line else ""}'
         f'data-absolute-path="{html.escape(str(file_path.resolve()), quote=True)}">'
         f'<div class="vyasa-link-preview-body">{preview_html}</div>'
         '</div>'

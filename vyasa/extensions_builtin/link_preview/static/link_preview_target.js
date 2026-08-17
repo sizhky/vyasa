@@ -59,7 +59,8 @@ function leadsDefinition(text, start, keywords) {
 function isDefinition(text, hit, path, kind, keywords) {
     if (keywords.length && leadsDefinition(text, hit.start, keywords)) return true;
     const suffix = String(path || '').split('.').pop().toLowerCase();
-    if (!['py', 'pyi'].includes(suffix) || String(kind || '').toLowerCase() !== 'variable') return false;
+    const pythonAssignmentKinds = ['variable', 'property'];
+    if (!['py', 'pyi'].includes(suffix) || !pythonAssignmentKinds.includes(String(kind || '').toLowerCase())) return false;
     const nextBreak = text.indexOf('\n', hit.end);
     const after = text.slice(hit.end, nextBreak < 0 ? text.length : nextBreak).trimStart();
     return /^(?::[^=]+)?=/.test(after);
@@ -108,6 +109,13 @@ export function linkPreviewLineNumber(href) {
     const suffix = path.match(/:(\d+)(?::\d+)?$/);
     const line = Number(suffix?.[1]);
     return Number.isSafeInteger(line) && line > 0 ? line : null;
+}
+
+export function linkPreviewCodeLineHref(relativePath, line) {
+    const encodedPath = String(relativePath || '').split('/').map(encodeURIComponent).join('/');
+    const sourceLine = Number(line);
+    if (!encodedPath || !Number.isSafeInteger(sourceLine) || sourceLine < 1) return '';
+    return `/posts/${encodedPath}%3A${sourceLine}`;
 }
 
 export function linkPreviewLineMatch(href, chunks) {

@@ -26,6 +26,17 @@ def test_open_in_vscode_launches_resolved_code_file(tmp_path):
     assert calls[0][1]["start_new_session"] is True
 
 
+def test_open_in_vscode_launches_requested_line(tmp_path):
+    code_file = tmp_path / "src" / "app.py"
+    code_file.parent.mkdir()
+    code_file.write_text("print('hello')\n", encoding="utf-8")
+    calls = []
+
+    open_in_vscode("src/app.py", line=7, resolve=lambda _slug: code_file, launch=lambda command, **_options: calls.append(command))
+
+    assert calls == [["code", "--goto", f"{code_file.resolve()}:7"]]
+
+
 @pytest.mark.parametrize("name", ["notes.md", "photo.png", "README"])
 def test_open_in_vscode_rejects_non_code_files(tmp_path, name):
     file_path = tmp_path / name
@@ -107,6 +118,8 @@ def test_vscode_link_detection():
         if (module.codePathFromHref('/posts/src/app.py', base, suffixes) !== 'src/app.py') process.exit(1);
         const ref = module.codeReferenceFromHref('/posts/src/app.py?symbol=App&kind=Class', base, suffixes);
         if (JSON.stringify(ref) !== JSON.stringify({{path: 'src/app.py', symbol: 'App', kind: 'Class'}})) process.exit(5);
+        const line = module.codeReferenceFromHref('/posts/src/app.py%3A32', base, suffixes);
+        if (JSON.stringify(line) !== JSON.stringify({{path: 'src/app.py', symbol: '', kind: '', line: 32}})) process.exit(6);
         if (module.codePathFromHref('/src/kitchen/models.py', base, suffixes) !== 'src/kitchen/models.py') process.exit(4);
         if (module.codePathFromHref('/posts/notes.md', base, suffixes) !== null) process.exit(2);
         if (module.codePathFromHref('https://example.com/app.py', base, suffixes) !== null) process.exit(3);

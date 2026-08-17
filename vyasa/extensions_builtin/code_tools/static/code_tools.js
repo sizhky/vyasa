@@ -1,3 +1,5 @@
+import { highlightedLineFragments } from './code_tools_lines.js';
+
 function getCodeThemeMeta(name) {
     return document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') || '';
 }
@@ -126,22 +128,24 @@ function initHighlightedCodeIncludes(rootElement = document) {
     rootElement.querySelectorAll('code[data-code-highlight-lines], code[data-code-line-numbers="true"]').forEach((code) => {
         if (code.querySelector('.vyasa-code-line')) return;
         const start = Number(code.dataset.codeSourceStart || '1');
-        const languageClass = Array.from(code.classList).find((cls) => cls.startsWith('language-'));
-        const language = languageClass ? languageClass.replace(/^language-/, '') : '';
         const ranges = String(code.dataset.codeHighlightLines || '').split(',').map((part) => part.trim()).filter(Boolean);
         const highlighted = new Set();
         ranges.forEach((part) => {
             const [a, b] = part.split('-').map((value) => Number(value));
             for (let n = a; n <= (b || a); n += 1) highlighted.add(n);
         });
-        const lines = code.textContent.split('\n');
-        if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+        const lines = highlightedLineFragments(
+            [...code.childNodes],
+            () => document.createDocumentFragment(),
+            (text) => document.createTextNode(text),
+        );
+        if (lines.length > 1 && !lines.at(-1).hasChildNodes()) lines.pop();
         if (code.dataset.codeLineNumbers === 'true') {
             const lastLine = start + Math.max(lines.length - 1, 0);
             const digits = Math.max(String(start).length, String(lastLine).length, 2);
             code.style.setProperty('--vyasa-code-line-number-width', `${digits}ch`);
         }
-        code.innerHTML = lines.map((line, index) => {
+        const wrapped = lines.flatMap((line, index) => {
             const lineNo = start + index;
             const isHighlighted = highlighted.has(lineNo);
             const isStart = isHighlighted && !highlighted.has(lineNo - 1);
@@ -152,16 +156,13 @@ function initHighlightedCodeIncludes(rootElement = document) {
                 isStart ? 'vyasa-code-line-highlight-start' : '',
                 isEnd ? 'vyasa-code-line-highlight-end' : '',
             ].filter(Boolean).join(' ');
-            let htmlLine = line ? line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '&nbsp;';
-            if (line && window.hljs) {
-                try {
-                    htmlLine = language && window.hljs.getLanguage(language)
-                        ? window.hljs.highlight(line, { language, ignoreIllegals: true }).value
-                        : window.hljs.highlightAuto(line).value;
-                } catch (_) {}
-            }
-            return `<span class="${cls}" data-source-line="${lineNo}">${htmlLine}</span>`;
-        }).join('\n');
+            const wrapper = document.createElement('span');
+            wrapper.className = cls;
+            wrapper.dataset.sourceLine = String(lineNo);
+            wrapper.append(line.hasChildNodes() ? line : document.createTextNode('\u00a0'));
+            return index < lines.length - 1 ? [wrapper, document.createTextNode('\n')] : [wrapper];
+        });
+        code.replaceChildren(...wrapped);
         code.classList.add('vyasa-code-lines');
         code.dataset.hljsBound = 'true';
     });

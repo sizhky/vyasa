@@ -6,9 +6,10 @@ import {
     rememberLinkPreviewWidth,
     resizeLinkPreviewRect,
 } from './link_preview_geometry.js';
-import { linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './link_preview_target.js';
+import { linkPreviewCodeLineHref, linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './link_preview_target.js';
 
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
+const WORD_WRAP_KEY = 'vyasa:link_preview:word_wrap';
 let hoveredLink = null;
 let modifierDown = false;
 // Above the tasks graph's maximized layer (z-index 10000, used by EG/EG+) and the
@@ -107,8 +108,9 @@ function createPreviewView({ point, link, onClose }) {
     popover.innerHTML = [
         '<div class="vyasa-link-preview-card">',
         '<div class="vyasa-link-preview-bar">',
-        '<span data-vyasa-link-preview-origin></span>',
+        '<a data-vyasa-link-preview-origin></a>',
         '<span class="vyasa-link-preview-actions">',
+        '<button type="button" data-vyasa-link-preview-wrap aria-label="Toggle word wrap" aria-pressed="false">↵</button>',
         '<button type="button" data-vyasa-link-preview-copy aria-label="Copy relative path; Shift-click copies absolute path"><uk-icon icon="copy" aria-hidden="true"></uk-icon></button>',
         '<button type="button" data-vyasa-link-preview-font-decrease aria-label="Decrease preview font size">−</button>',
         '<button type="button" data-vyasa-link-preview-font-increase aria-label="Increase preview font size">+</button>',
@@ -125,6 +127,19 @@ function createPreviewView({ point, link, onClose }) {
     const content = popover.querySelector('[data-vyasa-link-preview-content]');
     const bar = popover.querySelector('.vyasa-link-preview-bar');
     const sourceLabel = popover.querySelector('[data-vyasa-link-preview-origin]');
+    const wrapButton = popover.querySelector('[data-vyasa-link-preview-wrap]');
+    let wordWrap = false;
+    try { wordWrap = localStorage.getItem(WORD_WRAP_KEY) === '1'; } catch (_) {}
+    const applyWordWrap = () => {
+        content.querySelectorAll('pre').forEach((pre) => pre.classList.toggle('vyasa-code-wrap', wordWrap));
+        wrapButton.setAttribute('aria-pressed', String(wordWrap));
+    };
+    wrapButton.addEventListener('click', () => {
+        wordWrap = !wordWrap;
+        try { localStorage.setItem(WORD_WRAP_KEY, wordWrap ? '1' : '0'); } catch (_) {}
+        applyWordWrap();
+    });
+    applyWordWrap();
     sourceLabel.textContent = link.textContent.trim() || link.getAttribute('href') || 'Link';
     const normalFontPx = parseFloat(getComputedStyle(document.querySelector('#main-content') || document.body).fontSize);
     let fontSizePt = Math.max(6, (normalFontPx || 18) * 0.75 - 2);
@@ -164,7 +179,7 @@ function createPreviewView({ point, link, onClose }) {
     };
     let drag = null;
     bar.addEventListener('pointerdown', (event) => {
-        if (event.button !== 0 || event.target.closest('button')) return;
+        if (event.button !== 0 || event.target.closest('button,a')) return;
         const rect = popover.getBoundingClientRect();
         drag = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
         bar.setPointerCapture(event.pointerId);
@@ -214,11 +229,15 @@ function createPreviewView({ point, link, onClose }) {
         setContent: (html) => {
             content.className = 'vyasa-link-preview-content';
             content.innerHTML = html;
+            applyWordWrap();
             window.__vyasaInitCodeTools?.(content);
+            installCodeLineLinks(content);
             const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
             if (relativePath) {
                 sourceLabel.textContent = relativePath;
                 sourceLabel.title = relativePath;
+                sourceLabel.href = link.getAttribute('href')
+                    || `/posts/${relativePath.split('/').map(encodeURIComponent).join('/')}`;
             }
             requestAnimationFrame(() => scrollLinkPreviewToTarget(content, link.getAttribute('href') || ''));
             schedulePointerRefresh();
@@ -227,6 +246,23 @@ function createPreviewView({ point, link, onClose }) {
     previewViews.add(view);
     updatePointer();
     return view;
+}
+
+function installCodeLineLinks(content) {
+    const shell = content.querySelector('.vyasa-link-preview-shell');
+    const relativePath = shell?.dataset.relativePath;
+    if (!relativePath) return;
+    for (const line of content.querySelectorAll('.vyasa-code-line[data-source-line]')) {
+        const href = linkPreviewCodeLineHref(relativePath, line.dataset.sourceLine);
+        if (!href || line.querySelector('[data-vyasa-link-preview-code-line]')) continue;
+        const anchor = document.createElement('a');
+        anchor.href = href;
+        anchor.className = 'vyasa-link-preview-code-line';
+        anchor.dataset.sourceLine = line.dataset.sourceLine;
+        anchor.dataset.vyasaLinkPreviewCodeLine = 'true';
+        anchor.setAttribute('aria-label', `Open ${relativePath} line ${line.dataset.sourceLine} in VS Code`);
+        line.prepend(anchor);
+    }
 }
 
 function scrollLinkPreviewToTarget(content, href) {
@@ -240,7 +276,8 @@ function scrollLinkPreviewToTarget(content, href) {
         target.scrollIntoView({ block: 'center' });
         return;
     }
-    const sourceLine = linkPreviewLineNumber(href);
+    const sourceLine = Number(content.querySelector('.vyasa-link-preview-shell')?.dataset.targetLine)
+        || linkPreviewLineNumber(href);
     const renderedLine = sourceLine && body.querySelector(`[data-source-line="${sourceLine}"]`);
     if (renderedLine) {
         renderedLine.classList.add('vyasa-link-preview-target-line');

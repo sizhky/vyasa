@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 from fasthtml.common import Button, Li
@@ -299,6 +300,49 @@ def test_document_heading_spacing_uses_shared_before_and_after_gaps():
     assert "#main-content .vyasa-doc-heading {" in css
     assert "#main-content .vyasa-heading-fold {" in css
     assert "#main-content .vyasa-heading-fold-body > :last-child {" in css
+
+
+def test_heading_level_indicator_stays_out_of_document_and_slide_layout():
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+    level_rule = css.split(".vyasa-doc-heading > .vyasa-heading-level {", 1)[1].split("}", 1)[0]
+    tooltip_rule = css.split(".vyasa-page-action-tooltip::after {", 1)[1].split("}", 1)[0]
+
+    assert ".vyasa-doc-heading { position: relative;" in css
+    assert ".vyasa-doc-heading > .vyasa-heading-level {" in css
+    assert "position: absolute;" in css
+    assert "right: 100%;" in level_rule
+    assert "padding-right: 0.55rem;" in level_rule
+    assert "font: 600 0.875rem/1 var(--vyasa-font-ui);" in level_rule
+    assert "color: color-mix(in srgb, var(--vyasa-ink-soft) 72%, transparent);" in level_rule
+    assert "white-space: nowrap;" in level_rule
+    assert "cursor: pointer;" in level_rule
+    assert "@media (hover: hover) and (min-width: 768px)" in css
+    assert ".vyasa-doc-heading > .vyasa-heading-level { display: block; }" in css
+    assert ".vyasa-doc-heading:hover > .vyasa-heading-level" in css
+    assert ".vyasa-doc-heading:focus-within > .vyasa-heading-level" in css
+    assert "opacity: 1;\n        pointer-events: auto;" in css
+    assert "white-space: pre-line;" in tooltip_rule
+    assert "max-width: min(24rem, calc(100vw - 2rem));" in tooltip_rule
+
+
+def test_heading_copy_builds_markdown_heading_and_parent_path():
+    source = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+    script = """
+        import { headingMarkdownCopyValue } from './vyasa/static/page_shell.js';
+        const headings = [
+            { level: 1, text: 'Heading 1' }, { level: 2, text: 'Heading 2' },
+            { level: 3, text: 'Heading 3' }, { level: 2, text: 'Sibling' },
+        ];
+        if (headingMarkdownCopyValue(headings, 2) !== '### Heading 3') process.exit(1);
+        if (headingMarkdownCopyValue(headings, 2, true) !== '# Heading 1 > ## Heading 2 > ### Heading 3') process.exit(2);
+        if (headingMarkdownCopyValue(headings, 3, true) !== '# Heading 1 > ## Sibling') process.exit(3);
+        if (headingMarkdownCopyValue(headings, 2, true, '/path/to/file.md') !== '/path/to/file.md > # Heading 1 > ## Heading 2 > ### Heading 3') process.exit(4);
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+    assert "initHeadingLevelCopy(document);" in source
+    assert "headings.findIndex(({ node }) => node === target), event.shiftKey, absolutePath" in source
+    assert "event.shiftKey && event.altKey" in source
+    assert "pathButton?.dataset.copyAlternatePayload" in source
 
 
 def test_copy_markdown_button_keeps_raw_content_out_of_searchable_dom():

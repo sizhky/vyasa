@@ -2,6 +2,7 @@ import asyncio
 import json
 from pathlib import Path
 import sqlite3
+import subprocess
 from types import SimpleNamespace
 from typing import cast
 
@@ -336,6 +337,29 @@ def test_feedback_bundle_contains_browser_interfaces():
         "lavish-capture.js",
         "review_targets.js",
     }
+
+
+def test_review_keys_move_between_chat_and_annotation_mode():
+    module = (
+        Path(__file__).parents[1]
+        / "vyasa/extensions_builtin/feedback/static/review_keys.js"
+    ).resolve().as_uri()
+    script = f"""
+        const {{ reviewKeyAction }} = await import({json.dumps(module)});
+        const cases = [
+          [{{ key: 'Escape', open: true, editing: true }}, 'blur'],
+          [{{ key: 'a', open: true, editing: false }}, 'toggle-annotation'],
+          [{{ key: 'Enter', open: true, editing: false, bodyFocused: true }}, 'focus-chat'],
+          [{{ key: 'Enter', open: true, editing: false }}, null],
+          [{{ key: 'Escape', open: true, editing: false }}, 'close'],
+          [{{ key: 'a', open: true, editing: true }}, null],
+          [{{ key: 'r', open: false, editing: false }}, 'open'],
+        ];
+        for (const [input, expected] of cases) {{
+          if (reviewKeyAction(input) !== expected) process.exit(1);
+        }}
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
 def test_open_review_removes_launcher_from_floating_actions_layout():

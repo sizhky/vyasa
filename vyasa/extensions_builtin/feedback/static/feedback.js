@@ -1,5 +1,6 @@
 // Review interaction model derived from lavish-axi. See ../LAVISH_LICENSE.
 import { ensureFloatingActions, hydrateMarkdown, isEditableShortcutEvent, syncFloatingActions } from '/static/page_shell.js';
+import { reviewKeyAction } from './review_keys.js';
 
 const feedbackAssetVersion = new URL(import.meta.url).search;
 
@@ -428,23 +429,19 @@ const feedbackAssetVersion = new URL(import.meta.url).search;
   window.addEventListener('keydown', (event) => {
     const open = document.body.classList.contains('vyasa-feedback-open');
     const editing = isEditableShortcutEvent(event);
-    if (event.key === 'Escape' && open) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      closeReview();
-      return;
-    }
-    if (open && event.key.toLowerCase() === 'a' && !event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey && !editing) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      toggleAnnotationMode();
-      return;
-    }
-    if (open || event.key.toLowerCase() !== 'r' || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
-    if (editing) return;
+    const action = reviewKeyAction({
+      key: event.key, open, editing, repeat: event.repeat,
+      metaKey: event.metaKey, ctrlKey: event.ctrlKey, altKey: event.altKey,
+      bodyFocused: document.activeElement === document.body,
+    });
+    if (!action) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    openReview();
+    if (action === 'blur') document.activeElement?.blur();
+    if (action === 'close') closeReview();
+    if (action === 'toggle-annotation') toggleAnnotationMode();
+    if (action === 'focus-chat') input.focus();
+    if (action === 'open') openReview();
   }, true);
   document.addEventListener('DOMContentLoaded', init);
   document.body.addEventListener('htmx:afterSwap', init);

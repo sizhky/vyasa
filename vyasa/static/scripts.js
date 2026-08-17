@@ -1,4 +1,4 @@
-import { createMomentumRunner, ensureFloatingActions, ensureShortcutHelp, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
+import { createMomentumRunner, ensureFloatingActions, ensureShortcutHelp, headingMarkdownCopyValue, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
 
 function switchTab(tabsId, index) {
     const container = document.querySelector(`.tabs-container[data-tabs-id="${tabsId}"]`);
@@ -180,6 +180,33 @@ function initHeadingPermalinkCopy(root = document) {
                 clearTimeout(link._copiedTimer);
                 link._copiedTimer = setTimeout(() => link.classList.remove('is-copied'), 1400);
             });
+        });
+    });
+}
+
+function initHeadingLevelCopy(root = document) {
+    root.querySelectorAll('[data-heading-copy]').forEach((button) => {
+        if (button.dataset.copyBound === 'true') return;
+        button.dataset.copyBound = 'true';
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const target = button.closest('.vyasa-doc-heading');
+            const scope = target?.closest('.vyasa-zen-slide-body') || document.getElementById('main-content');
+            const headings = Array.from(scope?.querySelectorAll('.vyasa-doc-heading') || []).map((heading) => ({
+                node: heading,
+                level: Number(heading.tagName.slice(1)),
+                text: heading.querySelector('.vyasa-heading-text')?.textContent || '',
+            }));
+            const pathButton = document.querySelector('[data-copy-alternate-payload]');
+            const encodedPath = event.shiftKey && event.altKey ? pathButton?.dataset.copyAlternatePayload : '';
+            const absolutePath = encodedPath ? new TextDecoder().decode(Uint8Array.from(atob(encodedPath), (char) => char.charCodeAt(0))) : '';
+            if (event.shiftKey && event.altKey && !absolutePath) return showVyasaToast('Absolute file path unavailable', 'error');
+            const value = headingMarkdownCopyValue(
+                headings, headings.findIndex(({ node }) => node === target), event.shiftKey, absolutePath,
+            );
+            const message = absolutePath ? 'File and heading path copied' : event.shiftKey ? 'Heading path copied' : 'Heading copied';
+            if (value) copyText(value, () => showVyasaToast(message, 'success'));
         });
     });
 }
@@ -2279,8 +2306,82 @@ function syncNavbarHeightVar() {
 }
 window.addEventListener('resize', syncNavbarHeightVar);
 
+function initPageActionTooltips() {
+    if (document.body.dataset.vyasaPageActionTooltips === 'ready') return;
+    document.body.dataset.vyasaPageActionTooltips = 'ready';
+
+    const pair = (target) => {
+        const trigger = target?.closest?.('[data-vyasa-page-action-tooltip-trigger]');
+        if (trigger) return [trigger, document.getElementById(trigger.getAttribute('popovertarget'))];
+        const popover = target?.closest?.('[data-vyasa-page-action-tooltip-content]');
+        if (!popover) return [];
+        return [document.querySelector(`[popovertarget="${popover.id}"]`), popover];
+    };
+    const position = (trigger, popover) => {
+        const gap = 8;
+        const edge = 8;
+        const rect = trigger.getBoundingClientRect();
+        const left = Math.min(window.innerWidth - popover.offsetWidth - edge, Math.max(edge, rect.left));
+        let top = rect.bottom + gap;
+        if (top + popover.offsetHeight > window.innerHeight - edge) {
+            top = Math.max(edge, rect.top - popover.offsetHeight - gap);
+        }
+        Object.assign(popover.style, { left: `${left}px`, top: `${top}px` });
+    };
+    const show = (trigger, popover, pinned = false) => {
+        if (!trigger || !popover?.showPopover) return;
+        if (!popover.matches(':popover-open')) popover.showPopover();
+        trigger.dataset.tooltipPinned = pinned ? 'true' : trigger.dataset.tooltipPinned || 'false';
+        trigger.setAttribute('aria-expanded', 'true');
+        window.requestAnimationFrame(() => position(trigger, popover));
+    };
+    const hide = (trigger, popover) => {
+        if (!trigger || trigger.dataset.tooltipPinned === 'true') return;
+        if (popover?.matches(':popover-open')) popover.hidePopover();
+        trigger.setAttribute('aria-expanded', 'false');
+    };
+    const hideAfterExit = (trigger, popover) => window.setTimeout(() => {
+        if (!trigger?.matches(':hover, :focus-visible') && !popover?.matches(':hover, :focus-within')) hide(trigger, popover);
+    }, 80);
+
+    document.body.addEventListener('pointerover', (event) => {
+        const [trigger, popover] = pair(event.target);
+        if (trigger && event.pointerType === 'mouse') show(trigger, popover);
+    });
+    document.body.addEventListener('pointerout', (event) => {
+        const [trigger, popover] = pair(event.target);
+        if (trigger && event.pointerType === 'mouse') hideAfterExit(trigger, popover);
+    });
+    document.body.addEventListener('focusin', (event) => {
+        const [trigger, popover] = pair(event.target);
+        if (trigger && event.target.closest('[data-vyasa-page-action-tooltip-trigger]')) show(trigger, popover);
+    });
+    document.body.addEventListener('focusout', (event) => {
+        const [trigger, popover] = pair(event.target);
+        if (trigger) hideAfterExit(trigger, popover);
+    });
+    document.body.addEventListener('click', (event) => {
+        const trigger = event.target.closest?.('[data-vyasa-page-action-tooltip-trigger]');
+        if (!trigger) return;
+        event.preventDefault();
+        const popover = document.getElementById(trigger.getAttribute('popovertarget'));
+        const pinned = trigger.dataset.tooltipPinned === 'true';
+        trigger.dataset.tooltipPinned = pinned ? 'false' : 'true';
+        if (pinned) hide(trigger, popover);
+        else show(trigger, popover, true);
+    });
+    document.addEventListener('toggle', (event) => {
+        if (!event.target.matches?.('[data-vyasa-page-action-tooltip-content]')) return;
+        const [trigger, popover] = pair(event.target);
+        const open = popover.matches(':popover-open');
+        trigger?.setAttribute('aria-expanded', String(open));
+        if (!open && trigger) trigger.dataset.tooltipPinned = 'false';
+    }, true);
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    initPageActionTooltips();
     installPostsSearchRequestState();
     syncNavbarHeightVar();
     ensureFragmentStylesheets(document);
@@ -2309,6 +2410,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.__vyasaInitSearchPlaceholderCycle?.(document);
     window.__vyasaInitPostsSearchPersistence?.(document);
     initHeadingPermalinkCopy(document);
+    initHeadingLevelCopy(document);
     window.__vyasaInitCodeTools?.(document);
     window.__vyasaInitSearchClearButtons?.(document);
     ensurePdfFocusState();
@@ -2345,6 +2447,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
     initFolderHoverExpand(event.target || document);
     syncPostsHoverToggleButtons(event.target || document);
     initHeadingPermalinkCopy(event.target);
+    initHeadingLevelCopy(event.target);
     window.__vyasaInitCodeTools?.(event.target);
     window.__vyasaInitSearchClearButtons?.(event.target);
     ensurePdfFocusState();

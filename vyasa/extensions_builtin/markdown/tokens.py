@@ -1,5 +1,6 @@
 import re
 import mistletoe as mst
+from mistletoe.span_token import SpanToken
 
 
 def span_token(name, pat, attr, prec=5):
@@ -20,6 +21,17 @@ FootnoteRef = span_token("FootnoteRef", r"\[\^([^\]]+)\](?!:)", "target")
 YoutubeEmbed = span_token("YoutubeEmbed", r"\[yt:([a-zA-Z0-9_-]+)(?:\|(.+))?\]", "video_id", 6)
 IframeEmbed = span_token("IframeEmbed", r"\[iframe:([^\|\]]+)(?:\|(.+))?\]", "src", 6)
 DownloadEmbed = span_token("DownloadEmbed", r"\[download:([^\|\]]+)(?:\|(.+))?\]", "path", 6)
+
+
+class TooltipRef(SpanToken):
+    pattern = re.compile(r"\[([^\]\n]+)\]\[\?([^\]\n]+)\]")
+    parse_inner = True
+    parse_group = 1
+    precedence = 6
+
+    def __init__(self, match):
+        self.target = match.group(2)
+        self.children = []
 
 
 class Superscript(mst.span_token.SpanToken):

@@ -2,15 +2,18 @@ from pathlib import Path
 import html
 import json
 import re
+from types import SimpleNamespace
 
 from vyasa.extensions import refresh_extension_runtime
-from fasthtml.common import to_xml
+from fasthtml.common import Div, to_xml
 
+import vyasa.content_routes as content_routes
 from vyasa.config import reload_config
 from vyasa.extensions_builtin.markdown.renderer import MarkdownRenderer, RenderContext, _render_markdown_fragment, from_md
 from vyasa.extensions_builtin.slides.deck import present_href_for_anchor
 from vyasa.extensions_builtin.tasks.render import _attach_rendered_node_attrs
 from vyasa.helpers import expand_markdown_includes_for_reading
+from vyasa.extensions_builtin.tooltip_syntax import extract_tooltips
 
 
 def test_markdown_renderer_matches_from_md_wrapper():
@@ -25,6 +28,115 @@ def test_single_newlines_follow_soft_break_behavior():
 
     assert "<br" not in html
     assert "<p" in html
+
+
+def test_tooltip_definitions_support_markdown_paragraphs():
+    source = """Before [term][?why].
+
+[?why]:
+    First **paragraph**.
+
+    Second paragraph.
+
+After."""
+
+    markdown, tooltips = extract_tooltips(source)
+
+    assert markdown == "Before [term][?why].\n\nAfter."
+    assert tooltips == {"why": "First **paragraph**.\n\nSecond paragraph."}
+
+
+def test_tooltip_reference_renders_markdown_popover_for_posts_and_slides():
+    source = """A [hybrid **search**][?hybrid] result.
+
+[?hybrid]:
+    First **paragraph**.
+
+    Second paragraph."""
+
+    for slide_mode in (False, True):
+        rendered = to_xml(from_md(source, slide_mode=slide_mode))
+
+        assert 'class="vyasa-page-action-tooltip vyasa-page-action-tooltip-trigger"' in rendered
+        assert 'popover role="dialog"' in rendered
+        assert "<strong>search</strong>" in rendered
+        assert "<strong>paragraph</strong>" in rendered
+        assert rendered.count("Second paragraph.") == 1
+        assert "[?hybrid]" not in rendered
+
+
+def test_missing_tooltip_definition_stays_visible():
+    rendered = to_xml(from_md("A [term][?missing] result."))
+
+    assert "term[?missing]" in rendered
+    assert "vyasa-page-action-tooltip-trigger" not in rendered
+
+
+def test_tooltip_assets_define_popover_interaction_contract():
+    css = Path("vyasa/static/header.css").read_text(encoding="utf-8")
+    script = Path("vyasa/static/scripts.js").read_text(encoding="utf-8")
+
+    assert ".vyasa-page-action-tooltip-content" in css
+    assert "popover.showPopover()" in script
+    assert "initPageActionTooltips();" in script
+
+
+def test_tooltip_syntax_inside_code_stays_literal():
+    source = """```md
+[term][?why]
+
+[?why]: explanation
+```"""
+
+    rendered = to_xml(from_md(source))
+
+    assert "[term][?why]" in rendered
+    assert "[?why]: explanation" in rendered
+    assert "vyasa-page-action-tooltip-trigger" not in rendered
+
+
+def test_slide_route_keeps_tooltip_definition_and_seeds_deck_progress(monkeypatch, tmp_path):
+    post = tmp_path / "deck.md"
+    post.write_text(
+        """# Deck
+
+## Search
+
+- Runs [hybrid search][?hybrid].
+
+## Next
+
+Done.
+
+[?hybrid]:
+    First paragraph.
+
+    Second paragraph.
+""",
+        encoding="utf-8",
+    )
+    refresh_extension_runtime(None)
+    monkeypatch.setattr(content_routes, "content_root_and_relative", lambda path: (tmp_path, Path(path)))
+    monkeypatch.setattr(content_routes, "content_path_for_slug", lambda path, suffix=".md": post)
+    kwargs = dict(
+        htmx=True, request=SimpleNamespace(scope={"auth": None}), get_root_folder=lambda: tmp_path,
+        not_found=lambda **kwargs: "NF", get_roles_from_auth=lambda *args, **kwargs: [],
+        rbac_rules={}, rbac_cfg={}, google_oauth_cfg={}, coerce_list=lambda value: value,
+        is_allowed=lambda *args, **kwargs: True,
+        parse_frontmatter=lambda path: ({}, path.read_text(encoding="utf-8")),
+        resolve_markdown_title=lambda path, abbreviations=None: ("Deck", path.read_text(encoding="utf-8")),
+        slug_to_title=lambda value, abbreviations=None: value, effective_abbreviations=lambda root: {},
+        from_md=from_md, layout=lambda content, **kwargs: Div(content),
+    )
+
+    rendered = to_xml(content_routes.render_slide_deck("notes/deck/slide-2", **kwargs))
+    next_rendered = to_xml(content_routes.render_slide_deck("notes/deck/slide-3", **kwargs))
+
+    assert "vyasa-page-action-tooltip-trigger" in rendered
+    assert "First paragraph." in rendered
+    assert "Second paragraph." in rendered
+    assert 'style="--vyasa-deck-progress: 50.0%"' in next_rendered
+    assert 'aria-valuenow="1"' in next_rendered
 
 
 def test_edge_markdown_renders_each_list_member():
@@ -122,6 +234,22 @@ def test_rendered_heading_emits_doc_heading_class():
     html = to_xml(from_md("## Cave\n\ntext"))
 
     assert 'class="vyasa-doc-heading' in html
+
+
+def test_rendered_headings_expose_interactive_level_for_all_levels():
+    markdown = "\n\n".join(f"{'#' * level} Heading {level}" for level in range(1, 7))
+    html = to_xml(from_md(markdown))
+
+    for level in range(1, 7):
+        assert f'data-tooltip="Click: heading\nShift+click: heading path\nShift+Option+click: absolute file + heading path"' in html
+        assert f'>H{level}</button>' in html
+
+
+def test_slide_heading_uses_the_shared_heading_level_indicator():
+    html = to_xml(from_md("### Detail", slide_mode=True))
+
+    assert 'class="vyasa-heading-level vyasa-page-action-tooltip"' in html
+    assert 'data-tooltip="Click: heading\nShift+click: heading path\nShift+Option+click: absolute file + heading path"' in html
 
 
 def test_present_heading_link_keeps_exact_deck_offset():

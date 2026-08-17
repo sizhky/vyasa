@@ -129,16 +129,22 @@
 }
 
 .vyasa-link-preview-bar [data-vyasa-link-preview-origin] {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     overflow-wrap: anywhere;
     line-height: 1.35;
     white-space: normal;
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
 }
+
+.vyasa-link-preview-bar [data-vyasa-link-preview-origin]:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 
 .vyasa-link-preview-actions {
     display: grid;
-    grid-template-columns: repeat(4, 1.5rem);
+    margin-left: auto;
+    grid-template-columns: repeat(5, 1.5rem);
     align-items: center;
     gap: 0.35rem;
 }
@@ -153,6 +159,12 @@
     color: inherit;
     font: 700 0.85rem/1 var(--vyasa-font-ui, sans-serif);
     cursor: pointer;
+}
+
+.vyasa-link-preview-actions button[aria-pressed="true"] {
+    border-radius: 0.25rem;
+    background: color-mix(in srgb, var(--vyasa-primary) 18%, transparent);
+    color: var(--vyasa-primary);
 }
 
 .vyasa-link-preview-content {
@@ -217,6 +229,12 @@
 
 .vyasa-link-preview-body > .code-block:only-child { min-width: 100%; min-height: 100%; margin: 0; }
 .vyasa-link-preview-body > .code-block:only-child pre { width: max-content; min-width: 100%; min-height: 100%; margin: 0 !important; overflow: visible; border: 0; border-radius: 0 !important; box-shadow: none; }
+.vyasa-link-preview-body > .code-block:only-child pre.vyasa-code-wrap { width: 100%; }
+.vyasa-link-preview-body code[data-code-line-numbers="true"] .vyasa-code-line::before { content: none; }
+.vyasa-link-preview-code-line { position: absolute; left: 1rem; width: var(--vyasa-code-line-number-width); text-align: right; color: color-mix(in srgb, var(--vyasa-code-fg) 48%, transparent); font-variant-numeric: tabular-nums; cursor: pointer; }
+.vyasa-link-preview-code-line::before { content: attr(data-source-line); }
+.vyasa-link-preview-code-line:hover { color: var(--vyasa-link); text-decoration: underline; }
+.vyasa-link-preview-code-line:focus-visible { outline: 2px solid var(--vyasa-primary); outline-offset: 2px; }
 
 .vyasa-link-preview-body .vyasa-doc-h1 {
     font-size: 1.75em;
@@ -240,6 +258,12 @@
     margin: 0;
     font-family: var(--vyasa-font-mono, monospace);
     white-space: pre;
+}
+
+.vyasa-link-preview-plain-text.vyasa-code-wrap {
+    width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .vyasa-link-preview-body .w-full {

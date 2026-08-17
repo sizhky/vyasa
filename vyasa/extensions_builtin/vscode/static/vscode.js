@@ -10,14 +10,18 @@ export function codeReferenceFromHref(href, baseHref, codeSuffixes) {
         const routePath = url.pathname.startsWith('/posts/')
             ? url.pathname.slice('/posts/'.length)
             : url.pathname.replace(/^\/+/, '');
-        const path = decodeURIComponent(routePath);
+        const decodedPath = decodeURIComponent(routePath);
+        const lineMatch = decodedPath.match(/:(\d+)$/);
+        const path = lineMatch ? decodedPath.slice(0, lineMatch.index) : decodedPath;
         const suffix = path.includes('.') ? `.${path.split('.').pop().toLowerCase()}` : '';
         if (!codeSuffixes.has(suffix) || url.searchParams.has('ref')) return null;
-        return {
+        const reference = {
             path,
             symbol: url.searchParams.get('symbol') || '',
             kind: url.searchParams.get('kind') || '',
         };
+        if (lineMatch) reference.line = Number(lineMatch[1]);
+        return reference;
     } catch (_) {
         return null;
     }

@@ -33,6 +33,7 @@ from ...helpers import (
 from ...markdown_fence import get_root_folder as _shared_get_root_folder
 from ...runtime_context import traced
 from ..slides.deck import present_href_for_anchor
+from ..tooltip_syntax import extract_tooltips
 from .pipeline import (
     extract_footnotes,
     preprocess_callouts,
@@ -49,10 +50,12 @@ from .tokens import (
     Strikethrough,
     Subscript,
     Superscript,
+    TooltipRef,
     YoutubeEmbed,
 )
 
 _diagram_uid_counter = count(1)
+_tooltip_uid_counter = count(1)
 _CALLOUT_META = {
     "note": ("Note", "info"), "abstract": ("Abstract", "file-text"), "info": ("Info", "info"),
     "todo": ("Todo", "check"), "tip": ("Tip", "bolt"), "success": ("Success", "check"),
@@ -453,9 +456,10 @@ def _rewrite_raw_html_urls(content, current_path):
 
 
 class ContentRenderer(FrankenRenderer):
-    def __init__(self, *extras, img_dir=None, footnotes=None, current_path=None, slide_mode=False, **kwargs):
+    def __init__(self, *extras, img_dir=None, footnotes=None, tooltips=None, current_path=None, slide_mode=False, **kwargs):
         super().__init__(*extras, img_dir=img_dir, **kwargs)
         self.footnotes, self.fn_counter = footnotes or {}, 0
+        self.tooltips, self.tooltip_popovers = tooltips or {}, []
         self.current_path = current_path
         self.slide_mode = slide_mode
         self.heading_counts = {}
@@ -634,6 +638,27 @@ class ContentRenderer(FrankenRenderer):
             return to_xml(Span(content, cls="hidden", aria_hidden="true"))
         return hide(" (") + to_xml(ref) + to_xml(note) + hide(")")
 
+    def render_tooltip_ref(self, token):
+        label = self.render_inner(token)
+        content = self.tooltips.get(token.target)
+        if content is None:
+            return f"{label}[?{html.escape(token.target)}]"
+        tooltip_id = f"vyasa-tooltip-{next(_tooltip_uid_counter)}"
+        rendered = mst.markdown(
+            content,
+            partial(ContentRenderer, img_dir=self.img_dir, current_path=self.current_path),
+        ).strip()
+        plain_label = html.escape(_plain_text_from_html(label), quote=True)
+        self.tooltip_popovers.append(
+            f'<div id="{tooltip_id}" class="vyasa-page-action-tooltip-content" popover role="dialog" '
+            f'aria-label="Explanation for {plain_label}" data-vyasa-page-action-tooltip-content>{rendered}</div>'
+        )
+        return (
+            f'<button type="button" class="vyasa-page-action-tooltip vyasa-page-action-tooltip-trigger" '
+            f'popovertarget="{tooltip_id}" aria-expanded="false" '
+            f'data-vyasa-page-action-tooltip-trigger>{label}</button>'
+        )
+
     def render_heading(self, token):
         level = token.level
         inner = self.render_inner(token)
@@ -666,6 +691,10 @@ class ContentRenderer(FrankenRenderer):
         )
         return (
             f'<h{level} id="{anchor}" class="vyasa-doc-heading">'
+            f'<button type="button" class="vyasa-heading-level vyasa-page-action-tooltip" data-heading-copy '
+            f'data-tooltip="Click: heading&#10;Shift+click: heading path&#10;Shift+Option+click: absolute file + heading path" '
+            f'aria-label="Copy heading; Shift+click copies heading path; Shift+Option+click adds the absolute file path" '
+            f'>H{level}</button>'
             f'<span class="vyasa-heading-text">{html.escape(heading_text)}</span>'
             f"{fold_children}{present_here}{permalink}</h{level}>"
         )
@@ -751,6 +780,13 @@ class ContentRenderer(FrankenRenderer):
             original_href = href
             parsed = urlsplit(href)
             relative_path = parsed.path or ""
+            target_suffix = ""
+            line_target = re.search(r":\d+(?::\d+)?$", relative_path)
+            if line_target:
+                relative_path, target_suffix = relative_path[:line_target.start()], line_target.group()
+            elif "$" in relative_path:
+                relative_path, marker, prefix = relative_path.partition("$")
+                target_suffix = f"{marker}{prefix}"
             relative_suffix = ""
             if parsed.query:
                 relative_suffix += f"?{parsed.query}"
@@ -765,7 +801,7 @@ class ContentRenderer(FrankenRenderer):
                 logger.debug(f"DEBUG: original_href={original_href}, current_path={self.current_path}, current_dir={current_dir}, resolved={resolved}")
                 rel = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=not Path(relative_path).suffix) if resolved else None
                 if rel:
-                    href = content_url_for_slug(rel) + relative_suffix
+                    href = content_url_for_slug(rel) + target_suffix + relative_suffix
                     is_absolute_internal = True
                 else:
                     is_external = True
@@ -823,6 +859,7 @@ def from_md(content: str, img_dir: str | None = None, current_path: str | None =
         return md
 
     content = _protect_escaped_dollar(content)
+    content, tooltips = extract_tooltips(content)
     content, footnotes = extract_footnotes(content)
     content = preprocess_super_sub(content)
     include_root, include_rel = _current_content_root_and_relative(current_path) if current_path else (get_root_folder(), None)
@@ -849,17 +886,19 @@ def from_md(content: str, img_dir: str | None = None, current_path: str | None =
     with bind_asset_collector(asset_collector):
         with ContentRenderer(
             YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough, Highlight,
-            FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes,
+            TooltipRef, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, tooltips=tooltips,
             current_path=current_path, slide_mode=slide_mode,
         ) as renderer:
             html_out = renderer.render(mst.Document(content))
+            html_out += "".join(renderer.tooltip_popovers)
         def _render_tab_content(tab_content):
             with ContentRenderer(
                 YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough, Highlight,
-                FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes,
+                TooltipRef, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, tooltips=tooltips,
                 current_path=current_path,
             ) as renderer:
-                return renderer.render(mst.Document(tab_content))
+                rendered = renderer.render(mst.Document(tab_content))
+                return rendered + "".join(renderer.tooltip_popovers)
         html_out = pipeline.postprocess(html_out, context, extension_state, _render_tab_content)
         html_out = _restore_display_math(html_out, display_math_blocks)
         if callout_data_store:

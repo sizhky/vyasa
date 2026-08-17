@@ -24,5 +24,6 @@ todo::first-line { font-weight: 550; }
 todo .owner, todo .deadline { font-style: normal; }
 todo .owner, todo .deadline { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.85rem; padding: 0.32rem 0.72rem; border-radius: 999px; background: var(--vyasa-todo-chip-bg); color: var(--vyasa-todo-meta); font: 600 0.74rem/1.05 var(--vyasa-font-ui); letter-spacing: 0.04em; text-transform: uppercase; }
 todo .deadline { margin-left: 0.45rem; }
+
 .vyasa-todo-meta-icon { display: inline-flex; align-items: center; justify-content: center; width: 0.85rem; height: 0.85rem; flex: 0 0 0.85rem; color: currentColor; }
 .vyasa-todo-meta-icon svg { display: block; width: 100%; height: 100%; stroke-linecap: round; stroke-linejoin: round; }
