@@ -54,6 +54,23 @@ For user-facing navigation, prefer route slugs and anchors:
 Do not append `.md` unless the goal is raw markdown source.
 Exception: `.md` is valid inside Vyasa code-include syntax.
 
+## Link Preview Positions
+
+Add a position to an internal Markdown route when Cmd/Ctrl-hover must open and
+highlight one place in the source file:
+
+```md
+[Line 54](../notes/design:54)
+[Trade-offs](../notes/design#trade-offs)
+[First matching line](<../notes/design$Starting few characters>)
+```
+
+- `:54` selects source line 54.
+- `#trade-offs` selects the heading and its section.
+- `$Starting few characters` selects the first source line that starts with that exact text.
+- Use `<...>` around a destination that contains spaces, or URL-encode the spaces as `%20`.
+- When several lines start with the same `$` text, the first line wins; the author must add more characters when another line is intended.
+
 ## VS Code Symbol Links
 
 Use the installed `yeshwanth.vyasa` extension when a link must open one symbol inside one code file:

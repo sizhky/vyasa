@@ -24,6 +24,13 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert "(normalFontPx || 18) * 0.75 - 2" in source
     assert "data-vyasa-link-preview-font-decrease" in source
     assert "data-vyasa-link-preview-font-increase" in source
+    assert "data-vyasa-link-preview-wrap" in source
+    assert "pre.classList.toggle('vyasa-code-wrap', wordWrap)" in source
+    assert "localStorage.getItem(WORD_WRAP_KEY) === '1'" in source
+    assert "localStorage.setItem(WORD_WRAP_KEY, wordWrap ? '1' : '0')" in source
+    assert 'button[aria-pressed="true"]' in css
+    assert ".vyasa-link-preview-plain-text.vyasa-code-wrap" in css
+    assert ".vyasa-link-preview-body > .code-block:only-child pre.vyasa-code-wrap { width: 100%;" in css
     assert "event.shiftKey ? shell?.dataset.absolutePath : shell?.dataset.relativePath" in source
     assert "sourceLabel.title = relativePath;" in source
     assert "sourceLabel.href = link.getAttribute('href')" in source

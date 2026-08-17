@@ -780,6 +780,13 @@ class ContentRenderer(FrankenRenderer):
             original_href = href
             parsed = urlsplit(href)
             relative_path = parsed.path or ""
+            target_suffix = ""
+            line_target = re.search(r":\d+(?::\d+)?$", relative_path)
+            if line_target:
+                relative_path, target_suffix = relative_path[:line_target.start()], line_target.group()
+            elif "$" in relative_path:
+                relative_path, marker, prefix = relative_path.partition("$")
+                target_suffix = f"{marker}{prefix}"
             relative_suffix = ""
             if parsed.query:
                 relative_suffix += f"?{parsed.query}"
@@ -794,7 +801,7 @@ class ContentRenderer(FrankenRenderer):
                 logger.debug(f"DEBUG: original_href={original_href}, current_path={self.current_path}, current_dir={current_dir}, resolved={resolved}")
                 rel = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=not Path(relative_path).suffix) if resolved else None
                 if rel:
-                    href = content_url_for_slug(rel) + relative_suffix
+                    href = content_url_for_slug(rel) + target_suffix + relative_suffix
                     is_absolute_internal = True
                 else:
                     is_external = True
