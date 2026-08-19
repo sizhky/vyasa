@@ -20,7 +20,6 @@ from ...config import get_config
 from ...extensions import bind_asset_collector, current_asset_collector, get_extension_runtime, refresh_extension_runtime
 from ...helpers import (
     _plain_text_from_html,
-    _strip_leading_frontmatter_block,
     content_path_for_slug,
     content_url_for_slug,
     enabled_document_suffixes,
@@ -30,6 +29,7 @@ from ...helpers import (
     relative_content_directory,
     resolve_heading_anchor,
 )
+from ...sections import extract_markdown_section_by_anchor as _extract_markdown_section
 from ...markdown_fence import get_root_folder as _shared_get_root_folder
 from ...runtime_context import traced
 from ..slides.deck import present_href_for_anchor
@@ -206,26 +206,6 @@ def infer_code_language(path):
 def _parse_line_spec(spec):
     match = re.search(r"ln\[(\d+):(\d+)\]", spec)
     return (int(match.group(1)), int(match.group(2))) if match else None
-
-
-def _extract_markdown_section(text, target_anchor):
-    body = _strip_leading_frontmatter_block(text)
-    heading_re = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
-    headings = list(heading_re.finditer(body))
-    counts = {}
-    for index, match in enumerate(headings):
-        level = len(match.group(1))
-        heading_text, anchor = resolve_heading_anchor(match.group(2).strip(), counts)
-        if anchor != target_anchor:
-            continue
-        end = len(body)
-        for later in headings[index + 1:]:
-            if len(later.group(1)) <= level:
-                end = later.start()
-                break
-        section = body[match.start():end].strip()
-        return section if section.startswith("#") else f'{"#" * level} {heading_text}\n\n{section}'
-    return None
 
 
 def _parse_highlight_spec(spec):

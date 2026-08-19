@@ -603,23 +603,9 @@ def _parse_include_line_spec(spec: str) -> tuple[int, int] | None:
 
 
 def _extract_markdown_section_text(text: str, target_anchor: str) -> str | None:
-    body = _strip_leading_frontmatter_block(text)
-    heading_re = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
-    headings = list(heading_re.finditer(body))
-    counts: dict[str, int] = {}
-    for index, match in enumerate(headings):
-        level = len(match.group(1))
-        heading_text, anchor = resolve_heading_anchor(match.group(2).strip(), counts)
-        if anchor.casefold() != target_anchor.casefold():
-            continue
-        end = len(body)
-        for later in headings[index + 1:]:
-            if len(later.group(1)) <= level:
-                end = later.start()
-                break
-        section = body[match.start():end].strip()
-        return section if section.startswith("#") else f'{"#" * level} {heading_text}\n\n{section}'
-    return None
+    from .sections import extract_markdown_section_by_anchor
+
+    return extract_markdown_section_by_anchor(text, target_anchor)
 
 
 def expand_markdown_includes_for_reading(text: str, *, current_path: str | None, root_folder: str | Path, _seen: set[Path] | None = None) -> str:

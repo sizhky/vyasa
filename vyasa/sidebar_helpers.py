@@ -4,7 +4,8 @@ from typing import Any
 
 from fasthtml.common import *
 from monsterui.all import *
-from .helpers import content_root_and_relative, content_slug_for_path, content_url_for_slug, resolve_heading_anchor
+from .helpers import content_root_and_relative, content_slug_for_path, content_url_for_slug
+from .sections import markdown_headings
 
 
 def _scope_css(css_text, scope):
@@ -120,14 +121,10 @@ def sidebar_section(title, *content, is_open=True, data_section=None, body_cls="
 
 
 def extract_toc(content, strip_inline_markdown, text_to_anchor, unique_anchor):
-    content_no_code = re.sub(r"^```.*?^```", "", content, flags=re.MULTILINE | re.DOTALL)
-    content_no_code = re.sub(r"^~~~.*?^~~~", "", content_no_code, flags=re.MULTILINE | re.DOTALL)
-    headings, counts = [], {}
-    for match in re.finditer(r"^(#{1,6})\s+(.+)$", content_no_code, flags=re.MULTILINE):
-        raw_text = strip_inline_markdown(match.group(2).strip())
-        text, anchor = resolve_heading_anchor(raw_text, counts)
-        headings.append((len(match.group(1)), text, anchor))
-    return headings
+    return [
+        (level, strip_inline_markdown(text), anchor)
+        for level, text, anchor in markdown_headings(content)
+    ]
 
 
 def build_toc_items(headings):
