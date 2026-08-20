@@ -3,6 +3,7 @@ from fasthtml.common import to_xml
 import vyasa.core as core
 from vyasa.content_tree import CallableVisibility, ContentTree
 from vyasa.extensions import build_extension_runtime, get_extension_runtime, set_extension_runtime
+from vyasa.helpers import content_path_for_slug, content_slug_for_path
 
 
 def test_content_tree_lists_mounts_and_resolves_alias_slug(monkeypatch, tmp_path):
@@ -71,6 +72,43 @@ def test_content_tree_discovers_html_documents(tmp_path):
     assert resolved.path == page.resolve()
 
 
+def test_content_tree_resolves_symlinked_document_outside_root(tmp_path):
+    root = tmp_path / "site"
+    root.mkdir()
+    source = tmp_path / "source.md"
+    source.write_text("# Linked\n", encoding="utf-8")
+    link = root / "linked.md"
+    link.symlink_to(source)
+
+    tree = ContentTree(root=root)
+    resolved = tree.resolve_document("linked")
+
+    assert [(entry.slug, entry.kind) for entry in tree.list_entries()] == [("linked", "markdown")]
+    assert resolved is not None
+    assert resolved.path == link
+    assert tree.resolve_document("../source") is None
+
+
+def test_content_routes_keep_symlink_name(monkeypatch, tmp_path):
+    root = tmp_path / "site"
+    root.mkdir()
+    source = tmp_path / "source.md"
+    source.write_text("# Linked\n", encoding="utf-8")
+    link = root / "linked.md"
+    link.symlink_to(source)
+    (root / ".vyasa").write_text("", encoding="utf-8")
+    monkeypatch.chdir(root)
+    reload_config(root / ".vyasa")
+
+    try:
+        assert content_slug_for_path(link) == "linked"
+        assert content_path_for_slug("linked", ".md") == link
+        core._nav_entries_cache.clear()
+        assert "/posts/linked" in to_xml(core.build_post_tree(root))
+    finally:
+        reload_config()
+
+
 def test_content_tree_rejects_mdx_suffix(tmp_path):
     page = tmp_path / "dashboard.mdx"
     page.write_text("# Dashboard\n\n<Widget />\n", encoding="utf-8")
@@ -124,8 +162,10 @@ def test_content_tree_keeps_kg_pack_slug_when_markdown_shares_stem(tmp_path):
         ("chapter-1.kg", "kg"),
         ("chapter-1", "markdown"),
     ]
-    assert tree.resolve_document("chapter-1.kg").kind == "kg"
-    assert tree.resolve_document("chapter-1").kind == "markdown"
+    pack_document = tree.resolve_document("chapter-1.kg")
+    markdown_document = tree.resolve_document("chapter-1")
+    assert pack_document is not None and pack_document.kind == "kg"
+    assert markdown_document is not None and markdown_document.kind == "markdown"
 
 
 def test_sidebar_renders_kg_pack_row_when_markdown_shares_stem(monkeypatch, tmp_path):
