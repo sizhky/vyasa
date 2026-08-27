@@ -233,7 +233,20 @@ function createPreviewView({ point, link, onClose }) {
             applyWordWrap();
             window.__vyasaInitCodeTools?.(content);
             installCodeLineLinks(content);
-            installCodeReferences(content);
+            installCodeReferences(content, {
+                // The full-file view is fetched only when the reader asks, so a
+                // hover preview stays small.
+                load: (full) => fetchPreview({
+                    href: link.getAttribute('href') || '',
+                    currentPath: link.dataset.vyasaLinkPreviewCurrentPath || '',
+                    codeReference: link.dataset.vyasaCodeReference || '',
+                    full,
+                }),
+                onSwap: () => {
+                    window.__vyasaInitCodeTools?.(content);
+                    installCodeLineLinks(content);
+                },
+            });
             const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
             if (relativePath) {
                 sourceLabel.textContent = relativePath;
@@ -317,12 +330,13 @@ function scrollLinkPreviewToTarget(content, href) {
     target.scrollIntoView({ block: 'center' });
 }
 
-async function fetchPreview({ href, currentPath, codeReference, signal }) {
+async function fetchPreview({ href, currentPath, codeReference, full, signal }) {
     const url = new URL('/preview/link', window.location.origin);
     url.searchParams.set('href', href);
     const resolvedPath = currentPath || inferCurrentPath();
     if (resolvedPath) url.searchParams.set('current_path', resolvedPath);
     if (codeReference) url.searchParams.set('code_ref', codeReference);
+    if (full) url.searchParams.set('full', '1');
     const response = await fetch(url.toString(), { signal, credentials: 'same-origin' });
     return response.ok ? response.text() : null;
 }

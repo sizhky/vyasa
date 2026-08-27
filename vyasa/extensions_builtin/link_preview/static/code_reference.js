@@ -63,8 +63,8 @@ function markCurrent(reference, index, total) {
     if (position && total) position.textContent = `${index + 1} / ${total}`;
 }
 
-function installNavigation(reference, ranges) {
-    let current = 0;
+function installNavigation(reference, ranges, start = 0) {
+    let current = start;
     const step = (delta) => {
         if (!ranges.length) return;
         current = (current + delta + ranges.length) % ranges.length;
@@ -82,6 +82,7 @@ function installNavigation(reference, ranges) {
     });
     return {
         step,
+        index: () => current,
         show: (index) => {
             current = index;
             markCurrent(reference, current, ranges.length);
@@ -89,15 +90,42 @@ function installNavigation(reference, ranges) {
     };
 }
 
-export function installCodeReferences(root = document) {
+// Swap the focused view for the whole file, or back. The reader keeps the
+// block they were reading, so the toggle widens the view instead of losing
+// their place.
+async function toggleFullFile(reference, options, index) {
+    const button = reference.querySelector('[data-code-reference-toggle-full]');
+    const wantFull = reference.dataset.codeReferenceFull !== 'true';
+    if (!options.load || button?.disabled) return;
+    button.disabled = true;
+    try {
+        const markup = await options.load(wantFull);
+        const next = markup
+            && new DOMParser().parseFromString(markup, 'text/html')
+                .querySelector('.vyasa-code-reference');
+        if (!next) return;
+        reference.replaceWith(next);
+        options.onSwap?.(next);
+        installCodeReferences(next.parentElement || next, { ...options, startIndex: index });
+    } finally {
+        button.disabled = false;
+    }
+}
+
+export function installCodeReferences(root = document, options = {}) {
     for (const reference of root.querySelectorAll('.vyasa-code-reference')) {
         if (reference.dataset[BOUND] === 'true') continue;
         reference.dataset[BOUND] = 'true';
         const ranges = parseBlockRanges(reference.dataset.codeReferenceBlocks);
-        const navigation = installNavigation(reference, ranges);
-        navigation.show(0);
+        const start = Math.min(Math.max(options.startIndex || 0, 0), Math.max(ranges.length - 1, 0));
+        const navigation = installNavigation(reference, ranges, start);
+        navigation.show(start);
+        if (options.startIndex && ranges[start]) centreLine(reference, ranges[start].start, false);
         reference.querySelector('[data-code-reference-copy]')?.addEventListener('click', () => {
             copyText(textOf(reference.querySelector('.vyasa-code-reference-body code')));
+        });
+        reference.querySelector('[data-code-reference-toggle-full]')?.addEventListener('click', () => {
+            toggleFullFile(reference, options, navigation.index());
         });
     }
 }

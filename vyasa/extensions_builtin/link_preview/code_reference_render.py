@@ -13,6 +13,7 @@ from ..markdown.renderer import render_code_shell
 from .code_reference import (
     RENDERED_LINES_LIMIT,
     CodeReference,
+    _rendered_range,
     CodeReferenceError,
     ResolvedCodeReference,
     SourceRange,
@@ -96,8 +97,17 @@ def _header(resolved: ResolvedCodeReference, relative_path: str) -> str:
     )
 
 
-def _controls(focus_count: int) -> str:
+def _controls(focus_count: int, expandable: bool, full: bool) -> str:
     buttons = []
+    if expandable:
+        # The old previews always showed the whole file. Keep that one click
+        # away instead of making the reader leave the popup for it.
+        buttons.append(
+            '<button type="button" data-code-reference-toggle-full '
+            f'aria-pressed="{"true" if full else "false"}" '
+            'aria-label="Show the whole file in this preview">'
+            f'{"Focused" if full else "Full file"}</button>'
+        )
     if focus_count > 1:
         buttons.append(
             '<button type="button" data-code-reference-previous '
@@ -114,13 +124,12 @@ def _controls(focus_count: int) -> str:
     return f'<div class="vyasa-code-reference-controls">{"".join(buttons)}</div>'
 
 
-def _source_view(resolved: ResolvedCodeReference) -> str:
+def _source_view(resolved: ResolvedCodeReference, shown: SourceRange) -> str:
     """One continuous, scrollable view of the shown range.
 
     Folding saved payload but cost the reader: to read around a change they had
     to expand a row. One range means scrolling the preview scrolls the real file.
     """
-    shown = resolved.shown
     snippet = "\n".join(resolved.source_lines[shown.start - 1 : shown.end])
     return render_code_shell(
         snippet,
@@ -132,7 +141,13 @@ def _source_view(resolved: ResolvedCodeReference) -> str:
     )
 
 
-def _block_anchors(resolved: ResolvedCodeReference) -> str:
+def _full_file_range(resolved: ResolvedCodeReference) -> SourceRange:
+    """The whole side, clipped around the focus when the file is very large."""
+    whole = SourceRange(1, max(len(resolved.source_lines), 1))
+    return _rendered_range(whole, resolved.focused)
+
+
+def _block_anchors(resolved: ResolvedCodeReference, shown: SourceRange) -> str:
     """Navigation stops for the tick rail and the Prev/Next controls.
 
     These are the merged blocks, not the raw focus ranges. Six changed lines
@@ -267,9 +282,21 @@ def _diagnostic_card(code: str, message: str) -> str:
     )
 
 
-def render_resolved_code_reference(resolved: ResolvedCodeReference, relative_path: str) -> str:
-    """Emit the preview shell contents for one resolved reference."""
+def render_resolved_code_reference(
+    resolved: ResolvedCodeReference,
+    relative_path: str,
+    *,
+    full: bool = False,
+) -> str:
+    """Emit the preview shell contents for one resolved reference.
+
+    `full` widens the view to the whole file without changing what the
+    reference claims: the focus ranges stay the ones the author selected.
+    """
     reference = resolved.reference
+    whole = _full_file_range(resolved)
+    shown = whole if full else resolved.shown
+    expandable = resolved.shown != whole
     if reference.view == "diff":
         body = _diff_html(resolved)
         controls = ""
@@ -281,8 +308,8 @@ def render_resolved_code_reference(resolved: ResolvedCodeReference, relative_pat
         )
         controls = ""
     else:
-        body = _source_view(resolved)
-        controls = _controls(len(resolved.blocks))
+        body = _source_view(resolved, shown)
+        controls = _controls(len(resolved.blocks), expandable, full)
     return (
         f'<div class="vyasa-code-reference vyasa-code-reference-{_escape(reference.view)}"'
         f' data-code-reference-role="{_escape(reference.role)}"'
@@ -291,9 +318,10 @@ def render_resolved_code_reference(resolved: ResolvedCodeReference, relative_pat
         f' data-code-reference-head="{_escape(resolved.head_ref)}"'
         f' data-code-reference-path-before="{_escape(resolved.path_before)}"'
         f' data-code-reference-path-after="{_escape(resolved.path_after)}"'
-        f' data-code-reference-blocks="{_escape(_block_anchors(resolved))}"'
-        f' data-code-reference-first-line="{resolved.shown.start}"'
-        f' data-code-reference-last-line="{resolved.shown.end}">'
+        f' data-code-reference-blocks="{_escape(_block_anchors(resolved, shown))}"'
+        f' data-code-reference-first-line="{shown.start}"'
+        f' data-code-reference-last-line="{shown.end}"'
+        f' data-code-reference-full="{"true" if full else "false"}">'
         f'<div class="vyasa-code-reference-chrome">{_header(resolved, relative_path)}{controls}</div>'
         f'<div class="vyasa-code-reference-body" role="region" '
         f'aria-label="Source for {_escape(reference.label())}">{body}</div>'

@@ -99,17 +99,21 @@ def _resolve_preview_file(slug: str):
     return None
 
 
-def _render_code_reference_preview(file_path, code_ref: str, relative_path: str) -> str:
+def _render_code_reference_preview(
+    file_path, code_ref: str, relative_path: str, *, full: bool = False
+) -> str:
     """Resolve one code reference and render it, or render its diagnostic."""
     try:
         reference = parse_code_reference_json(code_ref)
         resolved = resolve_code_reference(file_path, reference)
     except CodeReferenceError as exc:
         return render_code_reference_diagnostic(exc)
-    return render_resolved_code_reference(resolved, relative_path)
+    return render_resolved_code_reference(resolved, relative_path, full=full)
 
 
-def render_link_preview_html(*, href: str, current_path: str | None = None, code_ref: str = "") -> str | None:
+def render_link_preview_html(
+    *, href: str, current_path: str | None = None, code_ref: str = "", full: bool = False
+) -> str | None:
     slug, fragment = _normalize_preview_slug(href, current_path)
     symbol = str(parse_qs(urlsplit(href or "").query).get("symbol", [""])[0]).strip()
     if not slug:
@@ -121,7 +125,9 @@ def render_link_preview_html(*, href: str, current_path: str | None = None, code
         return None
     if code_ref:
         relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
-        preview_html = _render_code_reference_preview(file_path, code_ref, relative_path)
+        preview_html = _render_code_reference_preview(
+            file_path, code_ref, relative_path, full=full
+        )
         return (
             f'<div class="vyasa-link-preview-shell" data-relative-path="{html.escape(relative_path, quote=True)}" '
             f'data-absolute-path="{html.escape(str(file_path.resolve()), quote=True)}">'
@@ -166,12 +172,15 @@ def render_link_preview_html(*, href: str, current_path: str | None = None, code
 
 def register_link_preview_routes(rt, runtime) -> None:
     @rt("/preview/link")
-    def preview_link(href: str = "", current_path: str = "", code_ref: str = "", request=None):
+    def preview_link(
+        href: str = "", current_path: str = "", code_ref: str = "", full: str = "", request=None
+    ):
         resolved_current_path = current_path or _current_path_from_request(request)
         html = render_link_preview_html(
             href=href,
             current_path=resolved_current_path or None,
             code_ref=code_ref,
+            full=str(full).lower() in {"1", "true", "yes"},
         )
         if not html:
             return Response("Not Found", status_code=404)

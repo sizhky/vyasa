@@ -1160,3 +1160,91 @@ def test_code_reference_does_not_create_a_second_scroll_container():
     assert "overflow: hidden" not in css.split(".vyasa-link-preview-body:has", 1)[1].split("}", 1)[0]
     assert "position: sticky" in css
     assert "vyasa-code-reference-rail" not in markup
+
+
+def test_code_reference_full_file_toggle_widens_the_view_and_keeps_the_focus(tmp_path, monkeypatch):
+    repo = _git_repo(tmp_path)
+    source = repo / "service.py"
+    source.write_text(
+        "def before():\n    return 0\n\n\n"
+        "def shown():\n    return 1\n\n\n"
+        "def after():\n    return 2\n",
+        encoding="utf-8",
+    )
+    _commit(repo, "base")
+    source.write_text(
+        "def before():\n    return 9\n\n\n"
+        "def shown():\n    return 3\n\n\n"
+        "def after():\n    return 2\n",
+        encoding="utf-8",
+    )
+    commit = _commit(repo, "edit")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _p, strip_suffix=True: "service.py")
+    code_ref = json.dumps(
+        {
+            "change": commit,
+            "show": "symbol",
+            "symbol": "shown",
+            "kind": "Function",
+            "focus": "changed",
+            "context": "0",
+        }
+    )
+
+    focused = routes.render_link_preview_html(href="service.py", code_ref=code_ref)
+    whole = routes.render_link_preview_html(href="service.py", code_ref=code_ref, full=True)
+
+    assert 'data-code-reference-full="false"' in focused
+    assert 'data-code-reference-first-line="5"' in focused
+    assert "def before" not in focused
+
+    # The whole file is on screen, but the reference still claims only the
+    # lines it selected: line 2 changed too and stays unhighlighted.
+    assert 'data-code-reference-full="true"' in whole
+    assert 'data-code-reference-first-line="1"' in whole
+    assert 'data-code-reference-last-line="10"' in whole
+    assert "def before" in whole and "def after" in whole
+    assert 'data-code-highlight-lines="6-6"' in whole
+    assert 'data-code-reference-blocks="6-6"' in whole
+
+    assert "data-code-reference-toggle-full" in focused
+    assert ">Full file<" in focused
+    assert ">Focused<" in whole
+
+
+def test_code_reference_hides_the_toggle_when_the_file_is_already_shown(tmp_path, monkeypatch):
+    source = tmp_path / "small.py"
+    source.write_text("a = 1\nb = 2\n", encoding="utf-8")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _p, strip_suffix=True: "small.py")
+
+    result = routes.render_link_preview_html(
+        href="small.py", code_ref=json.dumps({"show": "file", "focus": "all"})
+    )
+
+    assert "data-code-reference-toggle-full" not in result
+
+
+def test_preview_route_reads_the_full_flag(tmp_path, monkeypatch):
+    source = tmp_path / "svc.py"
+    source.write_text("def run():\n    return 1\n\n\ndef other():\n    return 2\n", encoding="utf-8")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _p, strip_suffix=True: "svc.py")
+    seen = {}
+
+    def capture(rt_path):
+        def register(fn):
+            seen[rt_path] = fn
+            return fn
+        return register
+
+    routes.register_link_preview_routes(capture, None)
+    handler = seen["/preview/link"]
+    code_ref = json.dumps({"show": "symbol", "symbol": "run", "kind": "Function"})
+
+    off = handler(href="svc.py", code_ref=code_ref).body.decode()
+    on = handler(href="svc.py", code_ref=code_ref, full="1").body.decode()
+
+    assert 'data-code-reference-full="false"' in off and "def other" not in off
+    assert 'data-code-reference-full="true"' in on and "def other" in on
