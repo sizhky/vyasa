@@ -1248,3 +1248,38 @@ def test_preview_route_reads_the_full_flag(tmp_path, monkeypatch):
 
     assert 'data-code-reference-full="false"' in off and "def other" not in off
     assert 'data-code-reference-full="true"' in on and "def other" in on
+
+
+def test_nearest_block_index_tracks_where_the_reader_is():
+    script = """
+        import { nearestBlockIndex, parseBlockRanges }
+            from './vyasa/extensions_builtin/link_preview/static/code_reference.js';
+
+        const ranges = parseBlockRanges('142-157,574-597,661-668,686-693');
+        // Inside a block, and on either edge of it.
+        if (nearestBlockIndex(ranges, 150) !== 0) throw new Error('inside the first block');
+        if (nearestBlockIndex(ranges, 574) !== 1) throw new Error('on a block start');
+        if (nearestBlockIndex(ranges, 693) !== 3) throw new Error('on a block end');
+        // Between two blocks it picks the closer one, so Next moves on rather
+        // than snapping back to the block the reader just left.
+        if (nearestBlockIndex(ranges, 600) !== 1) throw new Error('just past a block stays on it');
+        if (nearestBlockIndex(ranges, 655) !== 2) throw new Error('closer to the next block');
+        // Outside the whole set, at either end.
+        if (nearestBlockIndex(ranges, 1) !== 0) throw new Error('above every block');
+        if (nearestBlockIndex(ranges, 9000) !== 3) throw new Error('below every block');
+        if (nearestBlockIndex([], 5) !== 0) throw new Error('no blocks is index zero');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_code_reference_runtime_keeps_the_reader_in_place_across_the_toggle():
+    source = Path("vyasa/extensions_builtin/link_preview/static/code_reference.js").read_text()
+
+    # The swap must carry a line anchor, not a block index: index 0 is falsy and
+    # would silently drop the reader at the top of the file.
+    assert "startIndex" not in source
+    assert "const anchor = lineAtOffset(reference, 0);" in source
+    assert "installCodeReferences(parent || next, { ...options, anchor });" in source
+    # Prev/Next are computed from the current scroll, and always animate.
+    assert "centreLine(reference, ranges[index].start, true);" in source
+    assert "currentBlock(reference, ranges) + delta" in source
