@@ -39,6 +39,8 @@ dependencies = [
     "pillow>=10.0.0",
     "numpy>=1.26.0",
     "shapely>=2.0.0",
+    "tree-sitter>=0.26.0",
+    "tree-sitter-language-pack>=1.15.8",
 ]
 
 [project.optional-dependencies]

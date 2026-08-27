@@ -34,6 +34,7 @@ from ...markdown_fence import get_root_folder as _shared_get_root_folder
 from ...runtime_context import traced
 from ..slides.deck import present_href_for_anchor
 from ..tooltip_syntax import extract_tooltips
+from ..link_preview.code_reference_markdown import extract_code_reference
 from .pipeline import (
     extract_footnotes,
     preprocess_callouts,
@@ -278,11 +279,21 @@ def _resolve_line_numbers(default_enabled, attrs=None, spec=""):
     return default_enabled
 
 
-def render_code_shell(snippet, lang="", *, start=1, highlight_spec="", title="", line_numbers=False, wrap=False):
+def render_code_shell(snippet, lang="", *, start=1, highlight_spec="", title="", line_numbers=False, wrap=False, line_states="", line_number_map=""):
+    """Render one code block for the code-tools runtime.
+
+    `line_states` marks per-line change state ("3-5:added,9:deleted").
+    `line_number_map` overrides the printed numbers ("1:12,2:13") for views
+    such as a unified diff, where rendered order differs from the source.
+    """
     request_asset_bundle("code_tools.runtime")
     attrs = [f'data-code-source-start="{start}"']
     if highlight_spec:
         attrs.append(f'data-code-highlight-lines="{html.escape(highlight_spec)}"')
+    if line_states:
+        attrs.append(f'data-code-line-states="{html.escape(line_states)}"')
+    if line_number_map:
+        attrs.append(f'data-code-line-number-map="{html.escape(line_number_map)}"')
     if line_numbers:
         attrs.append('data-code-line-numbers="true"')
     lang_class = f' class="language-{lang}"' if lang else ""
@@ -740,6 +751,12 @@ class ContentRenderer(FrankenRenderer):
 
     def render_link(self, token):
         href, inner, title = token.target, self.render_inner(token), f' title="{token.title}"' if token.title else ""
+        href, code_reference = extract_code_reference(href)
+        code_reference_attr = (
+            f' data-vyasa-code-reference="{html.escape(code_reference, quote=True)}"'
+            if code_reference
+            else ""
+        )
         is_hash = href.startswith("#")
         is_external = href.startswith(("http://", "https://", "mailto:", "tel:", "vscode:", "//"))
         is_absolute_internal = href.startswith("/") and not href.startswith("//")
@@ -753,7 +770,7 @@ class ContentRenderer(FrankenRenderer):
         if is_hash:
             if not download_flag:
                 request_asset_bundle("link_preview.runtime")
-                preview_attrs = f' data-vyasa-link-preview="true"{current_path_attr}'
+                preview_attrs = f' data-vyasa-link-preview="true"{current_path_attr}{code_reference_attr}'
             link_class = "underline underline-offset-2 font-medium transition-colors"
             return f'<a href="{href}"{preview_attrs} class="{link_class}"{title}>{inner}</a>'
         if is_relative:
@@ -803,7 +820,7 @@ class ContentRenderer(FrankenRenderer):
             hx = ""
         if (is_internal or is_plain_text) and not download_flag:
             request_asset_bundle("link_preview.runtime")
-            preview_attrs = f' data-vyasa-link-preview="true"{current_path_attr}'
+            preview_attrs = f' data-vyasa-link-preview="true"{current_path_attr}{code_reference_attr}'
         link_class = "underline underline-offset-2 font-medium transition-colors"
         return f'<a href="{href}"{hx}{ext}{download_attr}{boost_attr}{preview_attrs} class="{link_class}"{title}>{inner}</a>'
 

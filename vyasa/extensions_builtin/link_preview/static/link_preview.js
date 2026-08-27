@@ -7,6 +7,7 @@ import {
     resizeLinkPreviewRect,
 } from './link_preview_geometry.js';
 import { linkPreviewCodeLineHref, linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './link_preview_target.js';
+import { installCodeReferences, scrollToFirstCodeReferenceFocus } from './code_reference.js';
 
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 const WORD_WRAP_KEY = 'vyasa:link_preview:word_wrap';
@@ -232,6 +233,7 @@ function createPreviewView({ point, link, onClose }) {
             applyWordWrap();
             window.__vyasaInitCodeTools?.(content);
             installCodeLineLinks(content);
+            installCodeReferences(content);
             const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
             if (relativePath) {
                 sourceLabel.textContent = relativePath;
@@ -268,6 +270,9 @@ function installCodeLineLinks(content) {
 function scrollLinkPreviewToTarget(content, href) {
     const body = content.querySelector('.vyasa-link-preview-body');
     if (!body) return;
+    // A code reference already carries server-resolved focus ranges, so the
+    // legacy symbol and line heuristics must not run for it.
+    if (scrollToFirstCodeReferenceFocus(body)) return;
     const elementsWithIds = [...body.querySelectorAll('[id]')];
     const matchedId = linkPreviewHashMatch(href, elementsWithIds.map((element) => element.id));
     if (matchedId) {
@@ -312,11 +317,12 @@ function scrollLinkPreviewToTarget(content, href) {
     target.scrollIntoView({ block: 'center' });
 }
 
-async function fetchPreview({ href, currentPath, signal }) {
+async function fetchPreview({ href, currentPath, codeReference, signal }) {
     const url = new URL('/preview/link', window.location.origin);
     url.searchParams.set('href', href);
     const resolvedPath = currentPath || inferCurrentPath();
     if (resolvedPath) url.searchParams.set('current_path', resolvedPath);
+    if (codeReference) url.searchParams.set('code_ref', codeReference);
     const response = await fetch(url.toString(), { signal, credentials: 'same-origin' });
     return response.ok ? response.text() : null;
 }

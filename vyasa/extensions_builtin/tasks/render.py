@@ -53,7 +53,11 @@ def _prepare_node_attr_markdown(value) -> str:
         next_line = lines[index + 1]
         if not line.strip() or not next_line.strip():
             continue
-        if _starts_markdown_block(line) or _starts_markdown_block(next_line):
+        line_is_block = _starts_markdown_block(line)
+        next_is_block = _starts_markdown_block(next_line)
+        if line_is_block or next_is_block:
+            if line_is_block and not next_is_block:
+                rendered_lines.append("")
             continue
         rendered_lines.append("<br>")
     return "\n".join(rendered_lines)

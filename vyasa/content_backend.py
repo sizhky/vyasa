@@ -179,6 +179,10 @@ class GitBackend:
         raw = name.encode()
         if len(raw) == 40 and raw in self._repo.object_store:
             return self._peel(raw).decode()
+        if 7 <= len(raw) < 40 and all(char in b"0123456789abcdef" for char in raw.lower()):
+            matches = list(self._repo.object_store.iter_prefix(raw.lower()))
+            if len(matches) == 1:
+                return self._peel(matches[0]).decode()
         return None
 
     def _remote_refs_by_short(self) -> dict[str, list[str]]:
@@ -267,6 +271,63 @@ class GitBackend:
             return float(self._repo.get_object(sha.encode()).commit_time)
         except (KeyError, AttributeError):
             return 0.0
+
+    # --- read-only change operations -----------------------------------
+    # Code references need parent lookup, path-pair diffs, and rename
+    # tracking. They must stay read-only and must never start a git
+    # subprocess, so they read the object store through dulwich only.
+
+    def commit_parents(self, ref: str) -> list[str]:
+        """Parent commit shas of `ref`, oldest first. Empty for a root commit."""
+        sha = self.resolve_ref(ref)
+        if sha is None:
+            return []
+        try:
+            return [parent.decode() for parent in self._repo.get_object(sha.encode()).parents]
+        except (KeyError, AttributeError):
+            return []
+
+    def changed_paths(self, base: str, head: str, *, detect_renames: bool = True) -> list[tuple[str, str]]:
+        """(old_path, new_path) pairs between two refs. "" marks an absent side."""
+        from dulwich.diff_tree import RenameDetector, tree_changes
+
+        base_tree, head_tree = self._tree_at(base), self._tree_at(head)
+        if base_tree is None or head_tree is None:
+            return []
+        detector = RenameDetector(self._repo.object_store) if detect_renames else None
+        pairs: list[tuple[str, str]] = []
+        for item in tree_changes(
+            self._repo.object_store, base_tree.id, head_tree.id, rename_detector=detector
+        ):
+            old = item.old.path.decode("utf-8") if item.old and item.old.path else ""
+            new = item.new.path.decode("utf-8") if item.new and item.new.path else ""
+            pairs.append((old, new))
+        return pairs
+
+    def rename_sources(self, rel: str, base: str, head: str) -> list[str]:
+        """Paths that `rel` was renamed from between two refs."""
+        return [
+            old
+            for old, new in self.changed_paths(base, head)
+            if new == rel and old and old != rel
+        ]
+
+
+def discover_git_backend(path: Path) -> "tuple[GitBackend, Path] | None":
+    """Find the repository that owns `path` and return (backend, work root).
+
+    Read-only: callers use it for change lookup, never for writes.
+    """
+    from dulwich.errors import NotGitRepository
+    from dulwich.repo import Repo
+
+    start = Path(path)
+    start = start if start.is_dir() else start.parent
+    try:
+        repo = Repo.discover(str(start))
+    except (NotGitRepository, FileNotFoundError):
+        return None
+    return GitBackend(Path(repo.path)), Path(repo.path).resolve()
 
 
 class _VStat:
