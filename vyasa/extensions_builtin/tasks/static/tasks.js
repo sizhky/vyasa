@@ -1,7 +1,7 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
 import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksCenteredViewport, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksInlineLinkPlainText, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
-import { buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksPruneFilterQueryFields, tasksReferenceEdges, tasksSelectionClickKey, tasksVisibleReferenceEdges, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
+import { buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksHopSeedIds, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNeighborHopIds, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksPruneFilterQueryFields, tasksReferenceEdges, tasksSameIdSet, tasksSelectionClickKey, tasksVisibleReferenceEdges, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
 import { createMomentumRunner, shortcutsSuspended } from '/static/page_shell.js';
@@ -158,6 +158,15 @@ const TASKS_SHORTCUT_KEYS = new Set([
     '[', ']', 'enter',
     'arrowup', 'arrowdown', 'arrowleft', 'arrowright',
 ]);
+// Growing and shrinking a selection by one hop, matched on the physical key rather
+// than the character it produces. A text expander that fires on a typed sequence
+// deletes the trigger and types its replacement, and those characters arrive as
+// trusted key events carrying a placeholder code -- a '-' reaching the page as code
+// 'Space'. Matching the code keeps injected text from driving the graph, and leaves
+// Shift free: '+' is still code Equal and '_' is still code Minus.
+const TASKS_HOP_GROW_CODES = new Set(['Equal', 'NumpadEqual', 'NumpadAdd']);
+const TASKS_HOP_SHRINK_CODES = new Set(['Minus', 'NumpadSubtract']);
+const isTasksHopCode = (code) => TASKS_HOP_GROW_CODES.has(code) || TASKS_HOP_SHRINK_CODES.has(code);
 // Momentum speed is in pixels per millisecond, so zoom turns that distance into a
 // factor: at the ceiling speed the graph doubles in about three quarters of a second.
 const TASKS_ZOOM_MOMENTUM_RATE = 0.0007;
@@ -475,6 +484,14 @@ function tasksIsIconifyImage(url) {
 
 window.__vyasaTasksActions = window.__vyasaTasksActions || {};
 window.__vyasaTasksConfig = window.__vyasaTasksConfig || {};
+
+// Every message carries its hop number, the floor included, so undoing reads as a
+// ladder: hop 3, hop 2, hop 1, hop 0. Without the zero the last step looks like a jump.
+function tasksHopSelectionLabel(hopCount, size, restarted = false) {
+    const nodes = `${size} node${size === 1 ? '' : 's'} selected`;
+    if (!hopCount) return `Hop 0: back to the ${nodes}.`;
+    return `Hop ${hopCount}${restarted ? ' of a new chain' : ''}: ${nodes}.`;
+}
 
 function tasksSelectionDebugPayload(selectedNodeId, selectedNodeIds, hoveredNodeId = '') {
     return {
@@ -4847,6 +4864,111 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 return filteredSelectionIds();
             }, [expanded, filteredSelectionIds]);
+            // `=` grows the selection by one hop, `-` takes that hop back. A hop is one
+            // pass over the edges already in memory, so neither key touches the server.
+            // Shrinking cannot be derived from the grown set, so each grow pushes the set
+            // it started from. The stack is dropped as soon as the selection moves by any
+            // other route, which the applied-set comparison detects without every click
+            // path having to know about hops.
+            const selectionHopsRef = React.useRef({ stack: [], applied: null });
+            const applyHopSelection = React.useCallback((ids, stack) => {
+                selectionHopsRef.current = { stack, applied: new Set(ids) };
+                markWidgetActive();
+                selectedNodeIdRef.current = null;
+                selectedNodeIdsRef.current = new Set(ids);
+                setSelectedNodeId(null);
+                setHoveredNodeId(null);
+                setSelectedNodeIds(new Set(ids));
+            }, [markWidgetActive]);
+            const announceHopSelection = React.useCallback((message, detail = {}) => {
+                logTasksDebug('selectionHopMessage', {
+                    widgetId,
+                    message,
+                    stackDepth: selectionHopsRef.current.stack.length,
+                    appliedCount: (selectionHopsRef.current.applied || new Set()).size,
+                    ...detail,
+                });
+                showTasksToast(message);
+                setEdgeStatus(message);
+            }, [widgetId]);
+            const growSelectionOneHop = React.useCallback((hoveredNodeId = '') => {
+                logTasksDebug('selectionHopAction', {
+                    widgetId,
+                    action: 'grow',
+                    stackDepth: selectionHopsRef.current.stack.length,
+                    appliedCount: (selectionHopsRef.current.applied || new Set()).size,
+                    liveCount: selectedNodeIdsRef.current.size,
+                    pinnedNodeId: String(selectedNodeIdRef.current || ''),
+                    hoveredNodeId: String(hoveredNodeId || ''),
+                });
+                const baseById = new Map((graphBaseRef.current.nodes || []).map((node) => [node.id, node]));
+                const isSelectable = (nodeId) => {
+                    const node = baseById.get(nodeId);
+                    if (!node || node.data?.__kind__ === 'groupTitle') return false;
+                    return isTasksGraphNodeSelectable(node.data?.__kind__, expanded.has(node.id));
+                };
+                const selectionSeeds = currentSelectionIds();
+                const hops = selectionHopsRef.current;
+                const continues = hops.stack.length > 0 && tasksSameIdSet(hops.applied, selectionSeeds);
+                const { seeds, fromHover } = tasksHopSeedIds(selectionSeeds, hoveredNodeId, isSelectable, continues);
+                if (!seeds.size) {
+                    announceHopSelection('Hover or select a node first, then press = to add its neighbours.');
+                    return;
+                }
+                const restarted = !continues && hops.stack.length > 0;
+                if (restarted) {
+                    logTasksDebug('selectionHopChainRestart', {
+                        widgetId,
+                        reason: fromHover ? 'hover-seed' : 'selection-drift',
+                        droppedHops: hops.stack.length,
+                        applied: Array.from(hops.applied || []),
+                        seeds: Array.from(seeds),
+                    });
+                }
+                const grown = tasksNeighborHopIds(
+                    tasksEdgesMatchingTypes(currentGraphEdges(), effectiveEdgeTypes),
+                    seeds,
+                    isSelectable,
+                );
+                if (grown.size === seeds.size) {
+                    announceHopSelection(`No further neighbours, ${seeds.size} node${seeds.size === 1 ? '' : 's'} selected.`);
+                    return;
+                }
+                const nextStack = [...(continues ? hops.stack : []), new Set(seeds)];
+                logTasksDebug('selectionGrowHop', {
+                    widgetId,
+                    hop: nextStack.length,
+                    fromHover,
+                    seedCount: seeds.size,
+                    selectedIds: Array.from(grown),
+                });
+                applyHopSelection(grown, nextStack);
+                announceHopSelection(tasksHopSelectionLabel(nextStack.length, grown.size, restarted));
+            }, [announceHopSelection, applyHopSelection, currentGraphEdges, currentSelectionIds, effectiveEdgeTypes, expanded, widgetId]);
+            const shrinkSelectionOneHop = React.useCallback(() => {
+                logTasksDebug('selectionHopAction', {
+                    widgetId,
+                    action: 'shrink',
+                    stackDepth: selectionHopsRef.current.stack.length,
+                    appliedCount: (selectionHopsRef.current.applied || new Set()).size,
+                    liveCount: selectedNodeIdsRef.current.size,
+                    pinnedNodeId: String(selectedNodeIdRef.current || ''),
+                });
+                const hops = selectionHopsRef.current;
+                if (!hops.stack.length || !tasksSameIdSet(hops.applied, currentSelectionIds())) {
+                    announceHopSelection('No expansion to undo.');
+                    return;
+                }
+                const previous = hops.stack[hops.stack.length - 1];
+                const stack = hops.stack.slice(0, -1);
+                logTasksDebug('selectionShrinkHop', {
+                    widgetId,
+                    hop: stack.length,
+                    selectedIds: Array.from(previous),
+                });
+                applyHopSelection(previous, stack);
+                announceHopSelection(tasksHopSelectionLabel(stack.length, previous.size));
+            }, [announceHopSelection, applyHopSelection, currentSelectionIds, widgetId]);
             const currentHighlightedFitNodes = React.useCallback(() => {
                 const selectedIds = currentSelectionIds();
                 if (!selectedIds.size) return [];
@@ -6959,7 +7081,7 @@ async function renderTasksGraphs(rootElement = document) {
                         if (event.metaKey || event.ctrlKey || (event.altKey && !optionZoom && !optionEdgeFit)) return;
                         // A held key still has to reach the claim below, or the document
                         // shortcuts scroll the page under the graph on every repeat.
-                        if (event.repeat && !TASKS_SHORTCUT_KEYS.has(key)) return;
+                        if (event.repeat && !TASKS_SHORTCUT_KEYS.has(key) && !isTasksHopCode(event.code)) return;
                         const flowWrapper = flowWrapperRef.current;
                         const widgetFocused = wrapper.contains(document.activeElement) || wrapper.contains(target) || window.__vyasaTasksActiveWidgetId === widgetId;
                         if ((event.key === 'Escape' || key === 'g') && window.__vyasaTasksDebug.enabled) {
@@ -7019,14 +7141,27 @@ async function renderTasksGraphs(rootElement = document) {
                             && !optionEdgeFit
                             && !(key === 't' && groupToggleHoverIdRef.current)
                             && !(key === 'v' && (groupHoverTooltipRef.current || edgeCardOpen || selectedNodeIdRef.current))
-                            && !(key === 'g' && hoveredNodeIdRef.current)) return;
+                            && !(key === 'g' && hoveredNodeIdRef.current)
+                            && !(isTasksHopCode(event.code) && hoveredNodeIdRef.current)) return;
                         // The document shortcuts in scripts.js bind J/K to scroll, C to
                         // fold and P to slides, and they preventDefault before this
                         // handler ever sees the key. So this handler listens in the
                         // capture phase and claims its own keys while the graph is
                         // focused, leaving every other key to the document.
-                        if (optionEdgeFit || TASKS_SHORTCUT_KEYS.has(key)) event.stopPropagation();
+                        if (optionEdgeFit || TASKS_SHORTCUT_KEYS.has(key) || isTasksHopCode(event.code)) event.stopPropagation();
                         if (event.repeat) return;
+                        if (TASKS_HOP_GROW_CODES.has(event.code)) {
+                            event.preventDefault();
+                            logTasksDebug('selectionHopKey', { widgetId, key, eventKey: event.key, code: event.code, trusted: event.isTrusted, repeat: event.repeat, shiftKey: event.shiftKey });
+                            growSelectionOneHop(hoveredNodeIdRef.current || '');
+                            return;
+                        }
+                        if (TASKS_HOP_SHRINK_CODES.has(event.code)) {
+                            event.preventDefault();
+                            logTasksDebug('selectionHopKey', { widgetId, key, eventKey: event.key, code: event.code, trusted: event.isTrusted, repeat: event.repeat, shiftKey: event.shiftKey });
+                            shrinkSelectionOneHop();
+                            return;
+                        }
                         if (key === '[' || key === ']') {
                             event.preventDefault();
                             const incidentNodeId = selectedNodeIdRef.current || edgeCycleNodeIdRef.current;
@@ -7216,7 +7351,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.removeEventListener('blur', stopMomentum);
                         stopMomentum();
                     };
-                }, [reactFlow, currentGraphEdges, currentSelectionIds, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, focusDetailCard, panViewport, graphMinZoom]);
+                }, [reactFlow, currentGraphEdges, currentSelectionIds, growSelectionOneHop, shrinkSelectionOneHop, model, rawGraph, sourceModel, egoMode, helpOpen, edgeCardOpen, edgeCardField, selectEdgeRecord, setFiltersCollapsedGuarded, setGroupHoverCardsEnabledGlobal, setHoverCardScrollModeGlobal, fitCurrentHighlight, fitSelectedEdgeConnection, focusDetailCard, panViewport, graphMinZoom]);
                 return null;
             };
             const handlePinnedCardKeyDown = (event, notesRef, navigate) => {
@@ -9095,6 +9230,8 @@ async function renderTasksGraphs(rootElement = document) {
                     row('T', 'toggle hovered group'),
                     row('I / O', 'expand / collapse one depth'),
                     row('U / P', 'unfold / collapse all'),
+                    row('=', 'grow hovered or selected node to its neighbours'),
+                    row('-', 'undo one growth step'),
                     row('Option + ↑ / ↓', 'zoom in / out'),
                     row('Arrows', 'pan'),
                     row('Shift + arrows', 'pan faster'),

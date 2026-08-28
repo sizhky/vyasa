@@ -1169,3 +1169,64 @@ test('tasksReuseGraphElements treats reorders and deep changes as changes', asyn
     assert.equal(tasksReuseGraphElements(prev, [prev[0]])[0], prev[0]);
     assert.equal(tasksReuseGraphElements([], reordered), reordered);
 });
+
+test('tasksNeighborHopIds grows a selection by exactly one hop', async () => {
+    const { tasksNeighborHopIds } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+    const edges = [
+        { source: 'a', target: 'b' },
+        { source: 'b', target: 'c' },
+        { source: 'd', target: 'a' },
+        { source: 'c', target: 'e' },
+    ];
+    const firstHop = tasksNeighborHopIds(edges, new Set(['a']));
+    assert.deepEqual(Array.from(firstHop).sort(), ['a', 'b', 'd']);
+    // Growing again reaches the next ring, so repeated presses walk outward.
+    const secondHop = tasksNeighborHopIds(edges, firstHop);
+    assert.deepEqual(Array.from(secondHop).sort(), ['a', 'b', 'c', 'd']);
+    // A saturated selection returns the same size, which is how the key reports
+    // "no further neighbours" instead of looping forever.
+    assert.equal(tasksNeighborHopIds(edges, new Set(['a', 'b', 'c', 'd', 'e'])).size, 5);
+});
+
+test('tasksNeighborHopIds skips neighbours the graph cannot select', async () => {
+    const { tasksNeighborHopIds } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+    const edges = [{ source: 'a', target: 'openGroup' }, { source: 'a', target: 'b' }];
+    const grown = tasksNeighborHopIds(edges, new Set(['a']), (id) => id !== 'openGroup');
+    assert.deepEqual(Array.from(grown).sort(), ['a', 'b']);
+    assert.deepEqual(Array.from(tasksNeighborHopIds(edges, new Set())), []);
+    assert.deepEqual(Array.from(tasksNeighborHopIds(null, ['a'])), ['a']);
+});
+
+test('tasksSameIdSet tells a hop selection apart from any other selection', async () => {
+    const { tasksSameIdSet } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+    assert.equal(tasksSameIdSet(new Set(['a', 'b']), new Set(['b', 'a'])), true);
+    assert.equal(tasksSameIdSet(new Set(['a']), new Set(['a', 'b'])), false);
+    assert.equal(tasksSameIdSet(new Set(['a']), new Set(['b'])), false);
+    assert.equal(tasksSameIdSet(null, new Set()), false);
+});
+
+test('tasksHopSeedIds lets hover start a chain without hijacking one', async () => {
+    const { tasksHopSeedIds } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+    // Nothing selected: the hovered node seeds the chain.
+    const fresh = tasksHopSeedIds(new Set(), 'a');
+    assert.deepEqual(Array.from(fresh.seeds), ['a']);
+    assert.equal(fresh.fromHover, true);
+    // Hovering inside the grown selection keeps going deeper instead of restarting.
+    const deeper = tasksHopSeedIds(new Set(['a', 'b']), 'a');
+    assert.deepEqual(Array.from(deeper.seeds).sort(), ['a', 'b']);
+    assert.equal(deeper.fromHover, false);
+    // Hovering outside it starts a new chain from the node under the pointer.
+    const moved = tasksHopSeedIds(new Set(['a', 'b']), 'z');
+    assert.deepEqual(Array.from(moved.seeds), ['z']);
+    assert.equal(moved.fromHover, true);
+    // But not while a chain is running: every hop refits the view, so a still mouse
+    // ends up over a different node and would restart the chain on the next press.
+    const running = tasksHopSeedIds(new Set(['a', 'b']), 'z', null, true);
+    assert.deepEqual(Array.from(running.seeds).sort(), ['a', 'b']);
+    assert.equal(running.fromHover, false);
+    // A group title under the pointer is not selectable, so the selection still wins.
+    const titleHover = tasksHopSeedIds(new Set(['a']), 'g1__title', (id) => !id.endsWith('__title'));
+    assert.deepEqual(Array.from(titleHover.seeds), ['a']);
+    assert.equal(titleHover.fromHover, false);
+    assert.deepEqual(Array.from(tasksHopSeedIds(new Set(), '').seeds), []);
+});

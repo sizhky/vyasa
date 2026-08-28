@@ -122,6 +122,47 @@ export function tasksVisibleReferenceEdges(referenceEdges, graphNodes, model) {
     });
 }
 
+// The whole graph is already in memory, so one hop is one pass over the edge list.
+// An adjacency index would only pay off past tens of thousands of edges, and the
+// graphs here are in the hundreds, so the scan stays and the code stays simple.
+export function tasksNeighborHopIds(edges, seedIds, isNodeSelectable) {
+    const seeds = seedIds instanceof Set ? seedIds : new Set(seedIds || []);
+    const grown = new Set(seeds);
+    if (!seeds.size) return grown;
+    const allowed = typeof isNodeSelectable === 'function' ? isNodeSelectable : () => true;
+    for (const edge of edges || []) {
+        const source = String(edge?.source || '');
+        const target = String(edge?.target || '');
+        if (!source || !target) continue;
+        if (seeds.has(source) && !grown.has(target) && allowed(target)) grown.add(target);
+        if (seeds.has(target) && !grown.has(source) && allowed(source)) grown.add(source);
+    }
+    return grown;
+}
+
+// Hover picks the chain the way G picks its EG target, but only while no chain is
+// running. Every hop refits the view, which slides a different node under a still
+// mouse, so a running chain that listened to the pointer would restart itself on the
+// next press. Escape or a click ends the chain and hands the pointer back.
+export function tasksHopSeedIds(selectionIds, hoveredNodeId, isNodeSelectable, chainActive = false) {
+    const selection = selectionIds instanceof Set ? selectionIds : new Set(selectionIds || []);
+    const hovered = String(hoveredNodeId || '');
+    const allowed = typeof isNodeSelectable === 'function' ? isNodeSelectable : () => true;
+    if (!chainActive && hovered && !selection.has(hovered) && allowed(hovered)) {
+        return { seeds: new Set([hovered]), fromHover: true };
+    }
+    return { seeds: selection, fromHover: false };
+}
+
+export function tasksSameIdSet(left, right) {
+    if (!(left instanceof Set) || !(right instanceof Set)) return false;
+    if (left.size !== right.size) return false;
+    for (const id of left) {
+        if (!right.has(id)) return false;
+    }
+    return true;
+}
+
 export function tasksContextDiffSelectionIds(model, graphNodes, diffNodeIds) {
     const changed = diffNodeIds instanceof Set ? diffNodeIds : new Set(diffNodeIds || []);
     const modelNodes = [...(model?.groups || []), ...(model?.tasks || [])];
