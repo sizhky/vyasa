@@ -466,6 +466,54 @@ def test_link_preview_remembers_latest_width_for_new_popups():
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
+def test_link_preview_remembers_latest_height_for_new_popups():
+    script = """
+        const values = new Map();
+        globalThis.localStorage = {
+            getItem: (key) => values.get(key) ?? null,
+            setItem: (key, value) => values.set(key, value),
+        };
+        const module = await import('./vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js?height');
+        const { linkPreviewPreferredHeight, rememberLinkPreviewHeight } = module;
+        if (linkPreviewPreferredHeight(420, 900) !== 420) throw new Error('default height lost');
+        rememberLinkPreviewHeight(640);
+        if (linkPreviewPreferredHeight(420, 900) !== 640) throw new Error('resized height not reused');
+        const reloaded = await import('./vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js?height_reloaded');
+        if (reloaded.linkPreviewPreferredHeight(420, 900) !== 640) throw new Error('stored height not restored');
+        if (linkPreviewPreferredHeight(420, 500) !== 476) throw new Error('height exceeds viewport');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_link_preview_opens_at_the_last_dragged_place():
+    script = """
+        const values = new Map();
+        globalThis.localStorage = {
+            getItem: (key) => values.get(key) ?? null,
+            setItem: (key, value) => values.set(key, value),
+        };
+        const module = await import('./vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js?place');
+        const { linkPreviewPreferredPosition, linkPreviewStoredPosition, rememberLinkPreviewPosition } = module;
+        const size = { width: 500, height: 400 };
+        const viewport = { width: 1400, height: 900 };
+        const pointer = { left: 300, top: 200 };
+        const atPointer = linkPreviewPreferredPosition(pointer, size, viewport);
+        if (atPointer.left !== 300 || atPointer.top !== 200) throw new Error('pointer place lost');
+        if (linkPreviewStoredPosition() !== null) throw new Error('position remembered without a drag');
+        rememberLinkPreviewPosition(700, 120);
+        const afterClose = linkPreviewPreferredPosition(pointer, size, viewport);
+        if (afterClose.left !== 700 || afterClose.top !== 120) throw new Error('dragged place not reused');
+        const cascade = linkPreviewPreferredPosition(pointer, size, viewport, { left: 700, top: 120 });
+        if (cascade.left !== 726 || cascade.top !== 146) throw new Error('open popup does not cascade');
+        const clamped = linkPreviewPreferredPosition(pointer, size, viewport, { left: 1300, top: 800 });
+        if (clamped.left !== 888 || clamped.top !== 488) throw new Error('cascade leaves the viewport');
+        const reloaded = await import('./vyasa/extensions_builtin/link_preview/static/link_preview_geometry.js?place_reloaded');
+        const restored = reloaded.linkPreviewPreferredPosition(pointer, size, viewport);
+        if (restored.left !== 700 || restored.top !== 120) throw new Error('stored place not restored');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
 def test_link_preview_renders_unknown_extension_as_escaped_text(tmp_path, monkeypatch):
     source = tmp_path / "sample.xyz"
     source.write_text("<node>value</node>")
@@ -1283,3 +1331,47 @@ def test_code_reference_runtime_keeps_the_reader_in_place_across_the_toggle():
     # Prev/Next are computed from the current scroll, and always animate.
     assert "centreLine(reference, ranges[index].start, true);" in source
     assert "currentBlock(reference, ranges) + delta" in source
+
+
+def test_code_reference_keeps_navigation_for_a_single_block(tmp_path, monkeypatch):
+    repo = _git_repo(tmp_path)
+    source = repo / "service.py"
+    source.write_text("def run():\n    return 1\n" + "\n".join(f"# pad {n}" for n in range(60)) + "\n",
+                      encoding="utf-8")
+    _commit(repo, "base")
+    source.write_text("def run():\n    return 2\n" + "\n".join(f"# pad {n}" for n in range(60)) + "\n",
+                      encoding="utf-8")
+    commit = _commit(repo, "edit")
+    monkeypatch.setattr(routes, "_resolve_preview_file", lambda _slug: source)
+    monkeypatch.setattr(routes, "content_slug_for_path", lambda _p, strip_suffix=True: "service.py")
+
+    result = routes.render_link_preview_html(
+        href="service.py",
+        code_ref=json.dumps({"change": commit, "show": "file", "focus": "changed"}),
+    )
+
+    # One changed block still gets Prev/Next: after scrolling down a long file
+    # they are the way back to the change.
+    # The default context of 3 widens the single changed line into one stop.
+    assert 'data-code-reference-blocks="1-5"' in result
+    assert "data-code-reference-previous" in result
+    assert "data-code-reference-next" in result
+    assert "1 / 1" in result
+
+
+def test_single_block_navigation_cycles_onto_itself():
+    script = """
+        import { nearestBlockIndex, parseBlockRanges }
+            from './vyasa/extensions_builtin/link_preview/static/code_reference.js';
+
+        // The runtime steps with (current + delta + n) % n. With one block that
+        // lands back on the same block for both directions, which is what makes
+        // Prev/Next a way back to the change.
+        const ranges = parseBlockRanges('1-5');
+        const current = nearestBlockIndex(ranges, 400);
+        for (const delta of [1, -1]) {
+            const index = (current + delta + ranges.length) % ranges.length;
+            if (index !== 0) throw new Error(`a single block must cycle onto itself, got ${index}`);
+        }
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)

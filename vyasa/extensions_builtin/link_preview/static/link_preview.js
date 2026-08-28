@@ -1,8 +1,13 @@
 import { LinkPreviewStack } from './link_preview_stack.js';
 import {
     installLinkPreviewPanTracking,
+    linkPreviewPreferredHeight,
+    linkPreviewPreferredPosition,
     linkPreviewPreferredWidth,
     linkPreviewPointerGeometry,
+    linkPreviewStoredPosition,
+    rememberLinkPreviewHeight,
+    rememberLinkPreviewPosition,
     rememberLinkPreviewWidth,
     resizeLinkPreviewRect,
 } from './link_preview_geometry.js';
@@ -34,16 +39,34 @@ function inferCurrentPath() {
     return decodeURIComponent(path.slice('/posts/'.length));
 }
 
+// The popup the reader dragged or opened last anchors the next one.
+let positionAnchor = null;
+
+function positionAnchorRect() {
+    if (!positionAnchor?.isConnected) return null;
+    const rect = positionAnchor.getBoundingClientRect();
+    return { left: rect.left, top: rect.top };
+}
+
 function positionPopover(popover, point) {
-    const height = Math.min(420, Math.max(220, window.innerHeight - 24));
+    const height = linkPreviewPreferredHeight(
+        Math.min(420, Math.max(220, window.innerHeight - 24)),
+        window.innerHeight,
+    );
     popover.style.height = `${height}px`;
     const width = popover.getBoundingClientRect().width;
-    const left = Math.min(point.clientX + 18, window.innerWidth - width - 12);
-    const top = Math.min(point.clientY + 18, window.innerHeight - height - 12);
+    const anchor = positionAnchorRect();
+    const place = linkPreviewPreferredPosition(
+        { left: point.clientX + 18, top: point.clientY + 18 },
+        { width, height },
+        { width: window.innerWidth, height: window.innerHeight },
+        anchor,
+    );
     Object.assign(popover.style, {
-        left: `${Math.max(12, left)}px`,
-        top: `${Math.max(12, top)}px`,
+        left: `${place.left}px`,
+        top: `${place.top}px`,
     });
+    if (anchor || linkPreviewStoredPosition()) positionAnchor = popover;
 }
 
 function installResizeHandles(popover, raise) {
@@ -85,6 +108,7 @@ function installResizeHandles(popover, raise) {
                 height: `${rect.height}px`,
             });
             if (edge.includes('left') || edge.includes('right')) rememberLinkPreviewWidth(rect.width);
+            if (edge.includes('top') || edge.includes('bottom')) rememberLinkPreviewHeight(rect.height);
             schedulePointerRefresh();
         });
         const finish = (event) => {
@@ -194,10 +218,18 @@ function createPreviewView({ point, link, onClose }) {
         const top = Math.min(window.innerHeight - rect.height - 8, drag.top + event.clientY - drag.y);
         popover.style.left = `${Math.max(8, left)}px`;
         popover.style.top = `${Math.max(8, top)}px`;
+        drag.moved = true;
         schedulePointerRefresh();
     });
     const finishDrag = (event) => {
         if (!drag || drag.id !== event.pointerId) return;
+        // Only a real drag sets the place for the next popup. A plain click on
+        // the bar must not move later popups away from the pointer.
+        if (drag.moved) {
+            const rect = popover.getBoundingClientRect();
+            rememberLinkPreviewPosition(rect.left, rect.top);
+            positionAnchor = popover;
+        }
         drag = null;
         if (bar.hasPointerCapture(event.pointerId)) bar.releasePointerCapture(event.pointerId);
     };

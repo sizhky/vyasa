@@ -125,7 +125,9 @@ function currentBlock(reference, ranges) {
 
 function installNavigation(reference, ranges) {
     const step = (delta) => {
-        if (ranges.length < 2) return;
+        // One block cycles onto itself, so the reader can always come back to
+        // the change after scrolling away.
+        if (!ranges.length) return;
         const index = (currentBlock(reference, ranges) + delta + ranges.length) % ranges.length;
         centreLine(reference, ranges[index].start, true);
         markCurrent(reference, index, ranges.length);

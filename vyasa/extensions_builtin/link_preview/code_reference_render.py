@@ -108,7 +108,9 @@ def _controls(focus_count: int, expandable: bool, full: bool) -> str:
             'aria-label="Show the whole file in this preview">'
             f'{"Focused" if full else "Full file"}</button>'
         )
-    if focus_count > 1:
+    if focus_count:
+        # Always offered, even for a single block. After scrolling away through
+        # the file, these are how the reader gets back to the change.
         buttons.append(
             '<button type="button" data-code-reference-previous '
             'aria-label="Previous changed block">\u2039 Prev</button>'
