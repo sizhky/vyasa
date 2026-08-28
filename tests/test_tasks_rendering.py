@@ -2035,3 +2035,37 @@ Foundation:
     assert '"document_path": "docs/feed/personalization"' in html
     assert '"storage_id": "tasks-block-' in html
     assert '"persistence_id":' in html
+
+
+def _write_kg_pack(root: Path) -> Path:
+    pack = root / "docs" / "blueprint.kg"
+    pack.mkdir(parents=True)
+    (root / "src").mkdir()
+    (root / "src" / "feed.ts").write_text("export const feed = 1;\n", encoding="utf-8")
+    (pack / "kg.schema").write_text(
+        "@graph id=bp title=Blueprint\n\n@sources\nnodes=kg.nodes\nbase:\n\tedges=kg.edges\n",
+        encoding="utf-8",
+    )
+    (pack / "kg.nodes").write_text(
+        "n1: Queue\n\tsources=[Feed](../../src/feed.ts)\n", encoding="utf-8"
+    )
+    (pack / "kg.edges").write_text("", encoding="utf-8")
+    return pack
+
+
+def test_kg_pack_links_resolve_from_pack_folder_on_every_referring_page(tmp_path, monkeypatch):
+    from vyasa.extensions_builtin.tasks.render import render_tasks_block
+
+    root = tmp_path / "root"
+    pack = _write_kg_pack(root)
+    monkeypatch.setenv("VYASA_CLI_ROOT", str(root))
+
+    from_pack_page = render_tasks_block(
+        f"---\nitems_schema: {pack / 'kg.schema'}\n---\n", "docs/blueprint.kg", "items"
+    )
+    from_document = render_tasks_block(
+        "---\nitems_schema: blueprint.kg/kg.schema\n---\n", "docs/blueprint", "items"
+    )
+
+    assert "/posts/src/feed.ts" in html.unescape(from_pack_page)
+    assert "/posts/src/feed.ts" in html.unescape(from_document)

@@ -5,7 +5,7 @@ import json
 import re
 from itertools import count
 
-from ...markdown_fence import normalize_items_model_hrefs, split_fence_frontmatter
+from ...markdown_fence import items_link_base_path, normalize_items_model_hrefs, split_fence_frontmatter
 from .layout import build_collapsed_graph
 from .model import apply_edge_label_fallbacks, parse_tasks_text
 from ..markdown.renderer import _render_markdown_fragment
@@ -203,9 +203,10 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             model["edge_color_palette"] = config["edge_color_palette"]
             model["edge_color_palettes"] = {**model.get("edge_color_palettes", {}), model.get("edge_color_by", ""): config["edge_color_palette"]}
         apply_edge_label_fallbacks(model)
-        normalize_items_model_hrefs(model, current_path)
-        _attach_rendered_node_attrs(model, current_path)
-        _attach_rendered_slide_attrs(model, current_path)
+        link_path = items_link_base_path(model, current_path)
+        normalize_items_model_hrefs(model, link_path)
+        _attach_rendered_node_attrs(model, link_path)
+        _attach_rendered_slide_attrs(model, link_path)
         graph = build_collapsed_graph(model)
     except Exception:
         model = {

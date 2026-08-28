@@ -75,6 +75,19 @@ def resolve_items_inline_links(value: object, current_path: object) -> str:
     )
 
 
+def items_link_base_path(model: dict[str, Any], current_path: object) -> object:
+    """Content path that relative links inside an items model resolve against.
+
+    A KG pack owns its links, so the same pack renders the same links from the
+    `.kg` page and from every document that references it. A model without a
+    pack keeps the referring document path.
+    """
+    schema = str((model or {}).get("kg_schema") or "").strip()
+    if not schema:
+        return current_path
+    return content_slug_for_path(Path(schema).parent) or current_path
+
+
 def normalize_items_model_hrefs(model: dict[str, Any], current_path: object) -> None:
     for bucket in ("groups", "tasks"):
         for node in model.get(bucket, []):
