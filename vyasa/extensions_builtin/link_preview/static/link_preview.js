@@ -39,13 +39,27 @@ function inferCurrentPath() {
     return decodeURIComponent(path.slice('/posts/'.length));
 }
 
-// The popup the reader dragged or opened last anchors the next one.
-let positionAnchor = null;
+// Placed popups form a stack, newest last. The newest one anchors the next, so
+// each new popup steps to its bottom right. A closed popup leaves the stack and
+// gives its place back. When the stack empties, the last dragged place is the
+// default again.
+const positionStack = [];
 
 function positionAnchorRect() {
-    if (!positionAnchor?.isConnected) return null;
-    const rect = positionAnchor.getBoundingClientRect();
+    const anchor = positionStack.at(-1);
+    if (!anchor?.isConnected) return null;
+    const rect = anchor.getBoundingClientRect();
     return { left: rect.left, top: rect.top };
+}
+
+function forgetPositionAnchor(popover) {
+    const index = positionStack.indexOf(popover);
+    if (index >= 0) positionStack.splice(index, 1);
+}
+
+function trackPositionAnchor(popover) {
+    forgetPositionAnchor(popover);
+    positionStack.push(popover);
 }
 
 function positionPopover(popover, point) {
@@ -66,7 +80,7 @@ function positionPopover(popover, point) {
         left: `${place.left}px`,
         top: `${place.top}px`,
     });
-    if (anchor || linkPreviewStoredPosition()) positionAnchor = popover;
+    if (anchor || linkPreviewStoredPosition()) trackPositionAnchor(popover);
 }
 
 function installResizeHandles(popover, raise) {
@@ -228,7 +242,7 @@ function createPreviewView({ point, link, onClose }) {
         if (drag.moved) {
             const rect = popover.getBoundingClientRect();
             rememberLinkPreviewPosition(rect.left, rect.top);
-            positionAnchor = popover;
+            trackPositionAnchor(popover);
         }
         drag = null;
         if (bar.hasPointerCapture(event.pointerId)) bar.releasePointerCapture(event.pointerId);
@@ -251,6 +265,7 @@ function createPreviewView({ point, link, onClose }) {
         updatePointer,
         remove: () => {
             resizeObserver.disconnect();
+            forgetPositionAnchor(popover);
             previewViews.delete(view);
             pointer.remove();
             popover.remove();
