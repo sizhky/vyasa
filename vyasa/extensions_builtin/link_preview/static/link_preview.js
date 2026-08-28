@@ -1,12 +1,18 @@
 import { LinkPreviewStack } from './link_preview_stack.js';
 import {
     installLinkPreviewPanTracking,
+    linkPreviewPreferredHeight,
+    linkPreviewPreferredPosition,
     linkPreviewPreferredWidth,
     linkPreviewPointerGeometry,
+    linkPreviewStoredPosition,
+    rememberLinkPreviewHeight,
+    rememberLinkPreviewPosition,
     rememberLinkPreviewWidth,
     resizeLinkPreviewRect,
 } from './link_preview_geometry.js';
 import { linkPreviewCodeLineHref, linkPreviewHashMatch, linkPreviewLineMatch, linkPreviewLineNumber, linkPreviewSymbolMatch } from './link_preview_target.js';
+import { installCodeReferences, scrollToFirstCodeReferenceFocus } from './code_reference.js';
 
 const LINK_SELECTOR = 'a[data-vyasa-link-preview="true"]';
 const WORD_WRAP_KEY = 'vyasa:link_preview:word_wrap';
@@ -33,16 +39,48 @@ function inferCurrentPath() {
     return decodeURIComponent(path.slice('/posts/'.length));
 }
 
+// Placed popups form a stack, newest last. The newest one anchors the next, so
+// each new popup steps to its bottom right. A closed popup leaves the stack and
+// gives its place back. When the stack empties, the last dragged place is the
+// default again.
+const positionStack = [];
+
+function positionAnchorRect() {
+    const anchor = positionStack.at(-1);
+    if (!anchor?.isConnected) return null;
+    const rect = anchor.getBoundingClientRect();
+    return { left: rect.left, top: rect.top };
+}
+
+function forgetPositionAnchor(popover) {
+    const index = positionStack.indexOf(popover);
+    if (index >= 0) positionStack.splice(index, 1);
+}
+
+function trackPositionAnchor(popover) {
+    forgetPositionAnchor(popover);
+    positionStack.push(popover);
+}
+
 function positionPopover(popover, point) {
-    const height = Math.min(420, Math.max(220, window.innerHeight - 24));
+    const height = linkPreviewPreferredHeight(
+        Math.min(420, Math.max(220, window.innerHeight - 24)),
+        window.innerHeight,
+    );
     popover.style.height = `${height}px`;
     const width = popover.getBoundingClientRect().width;
-    const left = Math.min(point.clientX + 18, window.innerWidth - width - 12);
-    const top = Math.min(point.clientY + 18, window.innerHeight - height - 12);
+    const anchor = positionAnchorRect();
+    const place = linkPreviewPreferredPosition(
+        { left: point.clientX + 18, top: point.clientY + 18 },
+        { width, height },
+        { width: window.innerWidth, height: window.innerHeight },
+        anchor,
+    );
     Object.assign(popover.style, {
-        left: `${Math.max(12, left)}px`,
-        top: `${Math.max(12, top)}px`,
+        left: `${place.left}px`,
+        top: `${place.top}px`,
     });
+    if (anchor || linkPreviewStoredPosition()) trackPositionAnchor(popover);
 }
 
 function installResizeHandles(popover, raise) {
@@ -84,6 +122,7 @@ function installResizeHandles(popover, raise) {
                 height: `${rect.height}px`,
             });
             if (edge.includes('left') || edge.includes('right')) rememberLinkPreviewWidth(rect.width);
+            if (edge.includes('top') || edge.includes('bottom')) rememberLinkPreviewHeight(rect.height);
             schedulePointerRefresh();
         });
         const finish = (event) => {
@@ -193,10 +232,18 @@ function createPreviewView({ point, link, onClose }) {
         const top = Math.min(window.innerHeight - rect.height - 8, drag.top + event.clientY - drag.y);
         popover.style.left = `${Math.max(8, left)}px`;
         popover.style.top = `${Math.max(8, top)}px`;
+        drag.moved = true;
         schedulePointerRefresh();
     });
     const finishDrag = (event) => {
         if (!drag || drag.id !== event.pointerId) return;
+        // Only a real drag sets the place for the next popup. A plain click on
+        // the bar must not move later popups away from the pointer.
+        if (drag.moved) {
+            const rect = popover.getBoundingClientRect();
+            rememberLinkPreviewPosition(rect.left, rect.top);
+            trackPositionAnchor(popover);
+        }
         drag = null;
         if (bar.hasPointerCapture(event.pointerId)) bar.releasePointerCapture(event.pointerId);
     };
@@ -218,6 +265,7 @@ function createPreviewView({ point, link, onClose }) {
         updatePointer,
         remove: () => {
             resizeObserver.disconnect();
+            forgetPositionAnchor(popover);
             previewViews.delete(view);
             pointer.remove();
             popover.remove();
@@ -232,6 +280,20 @@ function createPreviewView({ point, link, onClose }) {
             applyWordWrap();
             window.__vyasaInitCodeTools?.(content);
             installCodeLineLinks(content);
+            installCodeReferences(content, {
+                // The full-file view is fetched only when the reader asks, so a
+                // hover preview stays small.
+                load: (full) => fetchPreview({
+                    href: link.getAttribute('href') || '',
+                    currentPath: link.dataset.vyasaLinkPreviewCurrentPath || '',
+                    codeReference: link.dataset.vyasaCodeReference || '',
+                    full,
+                }),
+                onSwap: () => {
+                    window.__vyasaInitCodeTools?.(content);
+                    installCodeLineLinks(content);
+                },
+            });
             const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
             if (relativePath) {
                 sourceLabel.textContent = relativePath;
@@ -268,6 +330,9 @@ function installCodeLineLinks(content) {
 function scrollLinkPreviewToTarget(content, href) {
     const body = content.querySelector('.vyasa-link-preview-body');
     if (!body) return;
+    // A code reference already carries server-resolved focus ranges, so the
+    // legacy symbol and line heuristics must not run for it.
+    if (scrollToFirstCodeReferenceFocus(body)) return;
     const elementsWithIds = [...body.querySelectorAll('[id]')];
     const matchedId = linkPreviewHashMatch(href, elementsWithIds.map((element) => element.id));
     if (matchedId) {
@@ -312,11 +377,13 @@ function scrollLinkPreviewToTarget(content, href) {
     target.scrollIntoView({ block: 'center' });
 }
 
-async function fetchPreview({ href, currentPath, signal }) {
+async function fetchPreview({ href, currentPath, codeReference, full, signal }) {
     const url = new URL('/preview/link', window.location.origin);
     url.searchParams.set('href', href);
     const resolvedPath = currentPath || inferCurrentPath();
     if (resolvedPath) url.searchParams.set('current_path', resolvedPath);
+    if (codeReference) url.searchParams.set('code_ref', codeReference);
+    if (full) url.searchParams.set('full', '1');
     const response = await fetch(url.toString(), { signal, credentials: 'same-origin' });
     return response.ok ? response.text() : null;
 }

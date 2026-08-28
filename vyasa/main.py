@@ -134,6 +134,10 @@ def cli():
         from .extensions_builtin.tasks.query import query_command
 
         sys.exit(query_command(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] == 'sections':
+        from .sections import sections_command
+
+        sys.exit(sections_command(sys.argv[2:]))
     
     parser = argparse.ArgumentParser(description='Run Vyasa server')
     parser.add_argument('directory', nargs='?', help='Path to markdown files directory')

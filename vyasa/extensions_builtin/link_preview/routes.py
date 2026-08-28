@@ -14,6 +14,12 @@ from ...helpers import (
     find_folder_note_file,
 )
 from ..markdown.renderer import from_md, infer_code_language, render_code_shell
+from .code_reference import CodeReferenceError, resolve_code_reference
+from .code_reference_markdown import parse_code_reference_json
+from .code_reference_render import (
+    render_code_reference_diagnostic,
+    render_resolved_code_reference,
+)
 
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
@@ -93,14 +99,41 @@ def _resolve_preview_file(slug: str):
     return None
 
 
-def render_link_preview_html(*, href: str, current_path: str | None = None) -> str | None:
+def _render_code_reference_preview(
+    file_path, code_ref: str, relative_path: str, *, full: bool = False
+) -> str:
+    """Resolve one code reference and render it, or render its diagnostic."""
+    try:
+        reference = parse_code_reference_json(code_ref)
+        resolved = resolve_code_reference(file_path, reference)
+    except CodeReferenceError as exc:
+        return render_code_reference_diagnostic(exc)
+    return render_resolved_code_reference(resolved, relative_path, full=full)
+
+
+def render_link_preview_html(
+    *, href: str, current_path: str | None = None, code_ref: str = "", full: bool = False
+) -> str | None:
     slug, fragment = _normalize_preview_slug(href, current_path)
     symbol = str(parse_qs(urlsplit(href or "").query).get("symbol", [""])[0]).strip()
     if not slug:
         return None
     file_path = _resolve_preview_file(slug)
-    if not file_path or not file_path.exists():
+    if not file_path and code_ref:
+        file_path = content_path_for_slug(slug) or content_path_for_slug(slug, ".md")
+    if not file_path or (not file_path.exists() and not code_ref):
         return None
+    if code_ref:
+        relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
+        preview_html = _render_code_reference_preview(
+            file_path, code_ref, relative_path, full=full
+        )
+        return (
+            f'<div class="vyasa-link-preview-shell" data-relative-path="{html.escape(relative_path, quote=True)}" '
+            f'data-absolute-path="{html.escape(str(file_path.resolve()), quote=True)}">'
+            f'<div class="vyasa-link-preview-body">{preview_html}</div>'
+            '</div>'
+        )
     source = file_path.read_text(encoding="utf-8", errors="replace")
     target_line = _markdown_target_line(source, href) if file_path.suffix.lower() == ".md" else None
     if file_path.suffix.lower() == ".md":
@@ -139,9 +172,16 @@ def render_link_preview_html(*, href: str, current_path: str | None = None) -> s
 
 def register_link_preview_routes(rt, runtime) -> None:
     @rt("/preview/link")
-    def preview_link(href: str = "", current_path: str = "", request=None):
+    def preview_link(
+        href: str = "", current_path: str = "", code_ref: str = "", full: str = "", request=None
+    ):
         resolved_current_path = current_path or _current_path_from_request(request)
-        html = render_link_preview_html(href=href, current_path=resolved_current_path or None)
+        html = render_link_preview_html(
+            href=href,
+            current_path=resolved_current_path or None,
+            code_ref=code_ref,
+            full=str(full).lower() in {"1", "true", "yes"},
+        )
         if not html:
             return Response("Not Found", status_code=404)
         return Response(html, media_type="text/html")

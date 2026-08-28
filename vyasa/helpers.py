@@ -62,12 +62,19 @@ def slug_to_title(s: str, abbreviations=None) -> str:
 
 def _safe_child(base: Path, relative: str | Path) -> Path | None:
     base = base.resolve()
-    target = (base / relative).resolve()
+    target = Path(os.path.abspath(base / relative))
     try:
         target.relative_to(base)
     except ValueError:
         return None
-    return target
+    if target.is_symlink() and target.is_file():
+        return target
+    resolved = target.resolve()
+    try:
+        resolved.relative_to(base)
+    except ValueError:
+        return None
+    return resolved
 
 # (config generation, monotonic deadline, mounts). Mount resolution stats
 # every configured root on disk; per-fragment markdown rendering calls it
@@ -276,13 +283,15 @@ def content_slug_for_path(path: Path, strip_suffix: bool = True) -> str | None:
         if strip_suffix and not (path.is_dir() and path.suffix.lower() == ".kg") and path.suffix:
             slug = slug[: len(slug) - len(path.suffix)]
         return slug
-    resolved = path.resolve()
+    absolute = Path(os.path.abspath(path))
+    resolved = absolute.resolve()
     for alias, root in get_content_mounts():
-        try:
-            rel = resolved.relative_to(root.resolve())
-        except ValueError:
+        root = root.resolve()
+        candidate = absolute if absolute.is_relative_to(root) else resolved
+        if not candidate.is_relative_to(root):
             continue
-        if strip_suffix and not (resolved.is_dir() and rel.suffix.lower() == ".kg"):
+        rel = candidate.relative_to(root)
+        if strip_suffix and not (candidate.is_dir() and rel.suffix.lower() == ".kg"):
             rel = rel.with_suffix("")
         return (Path(alias) / rel).as_posix() if alias else rel.as_posix()
     return None
@@ -603,23 +612,9 @@ def _parse_include_line_spec(spec: str) -> tuple[int, int] | None:
 
 
 def _extract_markdown_section_text(text: str, target_anchor: str) -> str | None:
-    body = _strip_leading_frontmatter_block(text)
-    heading_re = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
-    headings = list(heading_re.finditer(body))
-    counts: dict[str, int] = {}
-    for index, match in enumerate(headings):
-        level = len(match.group(1))
-        heading_text, anchor = resolve_heading_anchor(match.group(2).strip(), counts)
-        if anchor.casefold() != target_anchor.casefold():
-            continue
-        end = len(body)
-        for later in headings[index + 1:]:
-            if len(later.group(1)) <= level:
-                end = later.start()
-                break
-        section = body[match.start():end].strip()
-        return section if section.startswith("#") else f'{"#" * level} {heading_text}\n\n{section}'
-    return None
+    from .sections import extract_markdown_section_by_anchor
+
+    return extract_markdown_section_by_anchor(text, target_anchor)
 
 
 def expand_markdown_includes_for_reading(text: str, *, current_path: str | None, root_folder: str | Path, _seen: set[Path] | None = None) -> str:

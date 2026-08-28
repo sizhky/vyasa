@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable, Literal, Protocol, cast
 
 from .helpers import (
+    _safe_child,
     _effective_abbreviations,
     _effective_ignore_list,
     _effective_include_list,
@@ -285,22 +286,19 @@ class ContentTree:
         root, relative = self._root_and_relative_for_slug(slug)
         if root is None:
             return None
-        target = (root / f"{relative.as_posix()}{suffix}").resolve()
-        try:
-            target.relative_to(root.resolve())
-        except ValueError:
-            return None
-        return target
+        return _safe_child(root, f"{relative.as_posix()}{suffix}")
 
     def _slug_for_path(self, path: Path, strip_suffix: bool = True) -> str | None:
-        resolved = path.resolve()
+        absolute = Path(os.path.abspath(path))
+        resolved = absolute.resolve()
         for alias, root in self._mounts():
-            try:
-                rel = resolved.relative_to(root.resolve())
-            except ValueError:
+            root = root.resolve()
+            candidate = absolute if absolute.is_relative_to(root) else resolved
+            if not candidate.is_relative_to(root):
                 continue
+            rel = candidate.relative_to(root)
             if strip_suffix:
-                if not (resolved.is_dir() and rel.suffix.lower() == ".kg"):
+                if not (candidate.is_dir() and rel.suffix.lower() == ".kg"):
                     rel = rel.with_suffix("")
             return (Path(alias) / rel).as_posix() if alias else rel.as_posix()
         return content_slug_for_path(path, strip_suffix=strip_suffix)

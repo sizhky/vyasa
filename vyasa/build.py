@@ -48,6 +48,8 @@ def generate_static_html(title, body_content, blog_title, favicon_href, extra_he
         }
         details.is-open > summary .folder-chevron { transform: rotate(45deg); }
         details { border: none !important; box-shadow: none !important; }
+        #main-content details:not([class*="vyasa-"]) { --vyasa-details-indent: 1.1rem; padding-left: var(--vyasa-details-indent); }
+        #main-content details:not([class*="vyasa-"]) > summary { margin-left: calc(-1 * var(--vyasa-details-indent)); }
         h1, h2, h3, h4, h5, h6 { scroll-margin-top: 7rem; }
         
         /* Ultra thin scrollbar styles */

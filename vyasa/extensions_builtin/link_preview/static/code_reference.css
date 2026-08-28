@@ -1,0 +1,184 @@
+/* Code reference preview: sticky chrome, one continuous source view, and
+   diff states. */
+
+/* The preview body stays the scroller. Do not give the reference its own
+   scroll: the popup card sizes itself with `min-height`, so a percentage
+   height inside it resolves to `auto` and the scroller gets no overflow. */
+.vyasa-link-preview-body:has(> .vyasa-code-reference) {
+    padding: 0;
+    background: var(--vyasa-code-bg);
+}
+
+.vyasa-code-reference {
+    background: var(--vyasa-code-bg);
+}
+
+/* The header and the controls stick together as one block, so the path and
+   the changed-line count stay readable while the file moves. One sticky
+   element means no height to measure and keep in sync. */
+.vyasa-code-reference-chrome {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: color-mix(in srgb, var(--vyasa-code-bg) 92%, var(--vyasa-link));
+}
+
+.vyasa-code-reference-header {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.6rem;
+    padding: 0.5rem 0.85rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--vyasa-code-fg) 16%, transparent);
+    background: color-mix(in srgb, var(--vyasa-code-bg) 90%, var(--vyasa-link));
+    font-size: 0.78em;
+}
+
+.vyasa-code-reference-path {
+    font-family: var(--vyasa-font-mono, monospace);
+    font-weight: 600;
+    color: var(--vyasa-code-fg);
+    overflow-wrap: anywhere;
+}
+
+.vyasa-code-reference-selection,
+.vyasa-code-reference-omission-note {
+    color: color-mix(in srgb, var(--vyasa-code-fg) 62%, transparent);
+}
+
+.vyasa-code-reference-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.vyasa-code-reference-badge {
+    padding: 0.05rem 0.4rem;
+    border: 1px solid color-mix(in srgb, var(--vyasa-code-fg) 26%, transparent);
+    border-radius: 999px;
+    color: color-mix(in srgb, var(--vyasa-code-fg) 78%, transparent);
+    font-size: 0.92em;
+    white-space: nowrap;
+}
+
+.vyasa-code-reference-badge[data-badge="change"] { border-color: color-mix(in srgb, var(--vyasa-link) 55%, transparent); }
+.vyasa-code-reference-badge[data-badge="rename"],
+.vyasa-code-reference-badge[data-badge="no_changed_lines"] {
+    border-color: color-mix(in srgb, #b45309 60%, transparent);
+    color: #b45309;
+}
+
+.vyasa-code-reference-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-inline-start: auto;
+}
+
+.vyasa-code-reference-action { color: var(--vyasa-link); text-decoration: underline; }
+.vyasa-code-reference-action:focus-visible,
+.vyasa-code-reference-controls button:focus-visible,
+.vyasa-code-reference-omission button:focus-visible {
+    outline: 2px solid var(--vyasa-primary);
+    outline-offset: 2px;
+}
+
+.vyasa-code-reference-rename { font-family: var(--vyasa-font-mono, monospace); }
+
+.vyasa-code-reference-controls {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.4rem 0.85rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--vyasa-code-fg) 12%, transparent);
+}
+
+.vyasa-code-reference-controls button,
+.vyasa-code-reference-omission button {
+    padding: 0.15rem 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--vyasa-link) 42%, transparent);
+    border-radius: 0.3rem;
+    background: transparent;
+    color: var(--vyasa-link);
+    font-size: 0.78em;
+    cursor: pointer;
+}
+
+.vyasa-code-reference-body > .code-block { margin: 0; min-width: 100%; width: max-content; }
+.vyasa-code-reference-body > .code-block pre {
+    margin: 0 !important;
+    border: 0;
+    border-radius: 0 !important;
+    box-shadow: none;
+    overflow: visible;
+}
+
+/* Tick rail: one mark per changed block, placed by its share of the file.
+   It reads as a map of the change, not as a second scrollbar. */
+.vyasa-code-reference-position {
+    align-self: center;
+    color: color-mix(in srgb, var(--vyasa-code-fg) 62%, transparent);
+    font-family: var(--vyasa-font-mono, monospace);
+    font-size: 0.78em;
+    font-variant-numeric: tabular-nums;
+}
+
+.vyasa-code-reference-omission {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.85rem;
+    border-block: 1px dashed color-mix(in srgb, var(--vyasa-code-fg) 24%, transparent);
+    background: color-mix(in srgb, var(--vyasa-code-bg) 92%, var(--vyasa-link));
+    font-family: var(--vyasa-font-mono, monospace);
+    font-size: 0.78em;
+}
+
+.vyasa-code-reference-diagnostic {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin: 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid color-mix(in srgb, #b91c1c 45%, transparent);
+    border-radius: 0.4rem;
+    color: #b91c1c;
+}
+
+.vyasa-code-reference-diagnostic-code {
+    font-family: var(--vyasa-font-mono, monospace);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.72em;
+}
+
+.vyasa-code-reference-panes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    background: color-mix(in srgb, var(--vyasa-code-fg) 20%, transparent);
+}
+
+.vyasa-code-reference-pane { background: var(--vyasa-code-bg); overflow-x: auto; }
+
+@media (max-width: 900px) {
+    .vyasa-code-reference-panes { grid-template-columns: 1fr; }
+}
+
+/* Change state. Colour is a second signal: every line also carries a
+   text label for assistive technology. */
+.code-block .vyasa-code-line[data-code-change="added"] {
+    background: color-mix(in srgb, #16a34a 16%, transparent);
+}
+
+.code-block .vyasa-code-line[data-code-change="deleted"] {
+    background: color-mix(in srgb, #dc2626 16%, transparent);
+}
+
+.code-block .vyasa-code-line[data-code-change="added"][data-code-focus="true"],
+.code-block .vyasa-code-line[data-code-change="deleted"][data-code-focus="true"] {
+    box-shadow: inset 0.18em 0 0 var(--vyasa-code-highlight-accent, var(--vyasa-primary));
+}

@@ -4094,8 +4094,15 @@ async function renderTasksGraphs(rootElement = document) {
                 const slide = slideIndex >= 0 ? slides[slideIndex] : null;
                 if (!slide) return;
                 const ids = new Set((slide.nodes || []).map((id) => String(id || '').trim()).filter(Boolean));
+                selectedNodeIdRef.current = null;
+                selectedNodeIdsRef.current = new Set(ids);
                 setSelectedNodeId(null);
                 setSelectedNodeIds(new Set(ids));
+            }, [slideIndex, slides]);
+            React.useEffect(() => {
+                const slide = slideIndex >= 0 ? slides[slideIndex] : null;
+                if (!slide) return;
+                const ids = new Set((slide.nodes || []).map((id) => String(id || '').trim()).filter(Boolean));
                 const timer = window.setTimeout(() => {
                     const reactFlow = reactFlowApiRef.current;
                     const matched = tasksMatchedSlideNodes(slides, slideIndex, graphBaseRef.current.nodes);

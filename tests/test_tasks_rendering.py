@@ -158,6 +158,7 @@ def test_tasks_node_detail_rows_always_stack_values_below_labels():
     assert ".vyasa-task-node-card-value { display: block; min-width: 0; max-width: 100%; white-space: normal; }" in css
     assert ".vyasa-task-node-card-value :where(p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote) { font-size: inherit !important; line-height: inherit !important; color: inherit !important; }" in css
     assert ".vyasa-task-node-card-value > * + * { margin-top: 0.45em !important; }" in css
+    assert "#main-content .vyasa-task-node-card-value .uk-list > li + li { margin-top: 0.15em !important; }" in css
     assert ".vyasa-task-node-card-value li > p { margin: 0 !important; }" in css
     assert ".vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }" in css
 
@@ -1770,6 +1771,31 @@ items_schema: {tmp_path / "kg.schema"}
     assert "<strong>DGA domains</strong>" in desc_html
 
 
+def test_node_multiline_markdown_handles_mixed_block_indent(tmp_path):
+    (tmp_path / "kg.schema").write_text(
+        "@graph id=deck\n@sources\nnodes=kg.nodes\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "kg.nodes").write_text(
+        """t1: Operations
+\tsources=|
+\t \tCRoUD Activities
+\t\t\t- [Create](create.md)
+\t\t\t- [Delete](delete.md)
+\t\t[Ordered mutations](ordered.md)
+\t\t[Service tests](tests.md)
+""",
+        encoding="utf-8",
+    )
+
+    model, _graph = _compile_schema_payload(tmp_path / "kg.schema", str(tmp_path / "graph.md"))
+    sources_html = model["tasks"][0]["__rendered_attrs__"]["sources"]
+
+    assert "<p" in sources_html and ">CRoUD Activities</p>" in sources_html
+    assert sources_html.count("<li") == 2
+    assert sources_html.index("</ul>") < sources_html.index(">Ordered mutations</a>")
+
+
 def test_tasks_block_serializes_rendered_slide_description_markdown(tmp_path):
     (tmp_path / "kg.schema").write_text(
         """@graph id=deck
@@ -1933,6 +1959,15 @@ def test_selected_node_panel_gives_title_and_id_bounded_columns():
 
     assert "panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)'" in source
     assert "overflowWrap: 'anywhere', wordBreak: 'break-word', textAlign: 'right'" in source
+
+
+def test_slide_selection_is_not_reapplied_when_graph_layout_changes():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    selection_start = source.index("const ids = new Set((slide.nodes || [])", source.index("const [slideIndex"))
+    refit_start = source.index("const timer = window.setTimeout", selection_start)
+
+    selection_effect = source[selection_start:refit_start]
+    assert "}, [slideIndex, slides]);" in selection_effect
 
 
 def test_context_graphs_have_day_switch_contract():

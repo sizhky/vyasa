@@ -25,7 +25,12 @@ export class LinkPreviewStack {
         };
         this.entries.add(entry);
         this.entriesByLink.set(link, entry);
-        this.load(entry, href, link.dataset.vyasaLinkPreviewCurrentPath || '');
+        this.load(
+            entry,
+            href,
+            link.dataset.vyasaLinkPreviewCurrentPath || '',
+            link.dataset.vyasaCodeReference || '',
+        );
         return entry;
     }
 
@@ -47,11 +52,12 @@ export class LinkPreviewStack {
         Array.from(this.entries).reverse().forEach((entry) => this.close(entry));
     }
 
-    async load(entry, href, currentPath) {
+    async load(entry, href, currentPath, codeReference) {
         try {
             const content = await this.fetchPreview({
                 href,
                 currentPath,
+                codeReference,
                 signal: entry.abort.signal,
             });
             if (!this.entries.has(entry)) return;

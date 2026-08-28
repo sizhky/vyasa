@@ -191,8 +191,9 @@ def test_document_extensions_register_document_type_renderers():
 
 def test_filesystem_routes_register_static_build_provider():
     runtime = build_extension_runtime({})
+    names = {provider.__name__ for provider in runtime.static_build_providers}
 
-    assert len(runtime.static_build_providers) == 1
+    assert "copy_static_filesystem_routes" in names
 
 
 def test_extensions_duplicate_slot_provider_is_rejected():

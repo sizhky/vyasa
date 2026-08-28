@@ -321,6 +321,32 @@ def test_relative_code_symbol_link_preserves_symbol_query():
     assert 'href="/posts/src/views/doing.js?symbol=DoingView&amp;kind=Class"' in rendered
 
 
+def test_code_reference_attributes_keep_clean_href_and_emit_metadata():
+    rendered = to_xml(
+        from_md(
+            "[Queue](../src/feed.ts){change=dc4967f show=file focus=changed}",
+            current_path="docs/blueprint.md",
+        )
+    )
+
+    assert 'href="/posts/src/feed.ts"' in rendered
+    assert 'data-vyasa-code-reference=' in rendered
+    assert 'data-vyasa-code-reference=\'{"change":"dc4967f","focus":"changed","show":"file"}\'' in rendered
+    assert "{change=dc4967f" not in rendered
+
+
+def test_code_reference_attributes_inside_code_stay_literal():
+    rendered = to_xml(
+        from_md(
+            "```markdown\n[Queue](../src/feed.ts){change=dc4967f show=file focus=changed}\n```",
+            current_path="docs/blueprint.md",
+        )
+    )
+
+    assert "{change=dc4967f show=file focus=changed}" in rendered
+    assert "data-vyasa-code-reference" not in rendered
+
+
 def test_markdown_include_renders_native_markdown_lines(tmp_path, monkeypatch):
     root = tmp_path / "site"
     root.mkdir()
@@ -529,3 +555,48 @@ def test_expand_markdown_includes_for_reading_counts_md_sections(tmp_path, monke
         assert "{ ./doc.md#part }" not in expanded
     finally:
         reload_config()
+
+
+def test_code_reference_attributes_survive_a_link_title_and_leave_prose_alone():
+    rendered = to_xml(
+        from_md(
+            '[Queue](../src/feed.ts "Feed queue"){show=symbol symbol=useQueue focus="ln[3,8:12]"}\n\n'
+            "Plain [link](../src/other.ts) and text {not a reference}.",
+            current_path="docs/blueprint.md",
+        )
+    )
+
+    assert 'href="/posts/src/feed.ts"' in rendered
+    assert 'title="Feed queue"' in rendered
+    assert '"focus":"ln[3,8:12]"' in rendered
+    assert "{show=symbol" not in rendered
+    assert "{not a reference}" in rendered
+    assert rendered.count("data-vyasa-code-reference") == 1
+
+
+def test_code_reference_attributes_work_in_kg_card_markdown():
+    from vyasa.extensions_builtin.markdown.renderer import _render_markdown_fragment
+
+    rendered = _render_markdown_fragment(
+        "[Queue](../src/feed.ts){change=dc4967f show=file focus=changed}",
+        current_path="docs/blueprint.md",
+    )
+
+    assert "data-vyasa-code-reference" in rendered
+    assert 'href="/posts/src/feed.ts"' in rendered
+
+
+def test_invalid_code_reference_attributes_leave_the_link_and_record_an_error():
+    from vyasa.extensions_builtin.link_preview.code_reference_markdown import REPORT
+
+    REPORT.clear()
+    rendered = to_xml(
+        from_md(
+            "[Queue](../src/feed.ts){show=symbol focus=all}",
+            current_path="docs/blueprint.md",
+        )
+    )
+
+    assert "data-vyasa-code-reference" not in rendered
+    assert [record.diagnostic.code for record in REPORT.errors] == ["missing_attribute"]
+    REPORT.clear()

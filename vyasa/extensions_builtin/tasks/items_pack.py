@@ -5,7 +5,6 @@ from pathlib import Path
 import json
 import shlex
 import re
-import textwrap
 from typing import TYPE_CHECKING, Any, Union
 
 from .query import resolve_context_id
@@ -625,7 +624,12 @@ def _read_indented_multiline(raw_lines: list[str], start_index: int, parent_inde
             break
         block_lines.append(block_line)
         line_index += 1
-    return textwrap.dedent("\n".join(block_lines)).strip("\n"), line_index - start_index
+    content_indent = next((_indent_width(line) for line in block_lines if line.strip()), 0)
+    normalized = [
+        line[min(_indent_width(line), content_indent):] if line.strip() else ""
+        for line in block_lines
+    ]
+    return "\n".join(normalized).strip("\n"), line_index - start_index
 
 
 def read_edges(path: PathLike, relations: dict[str, dict[str, str]] | None = None) -> list[dict[str, Any]]:

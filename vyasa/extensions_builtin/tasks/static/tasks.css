@@ -14,6 +14,7 @@
 .vyasa-task-node-card-value :where(p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote) { margin: 0 !important; }
 .vyasa-task-node-card-value > * + * { margin-top: 0.45em !important; }
 .vyasa-task-node-card-value :where(ul, ol) { padding-left: 1.25em !important; }
+#main-content .vyasa-task-node-card-value .uk-list > li + li { margin-top: 0.15em !important; }
 .vyasa-task-node-card-value li > p { margin: 0 !important; }
 .vyasa-task-node-card-value pre { display: block; max-width: 100%; overflow-x: auto; white-space: pre; }
 .vyasa-task-node-card-row:hover .vyasa-task-node-card-copy,

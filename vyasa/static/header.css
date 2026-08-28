@@ -988,6 +988,18 @@ html:has(.image-focus-dialog[open]), body.image-focus-open { overflow: hidden; }
     .tab-panel { padding: 0.9rem; }
 }
 
+/* Author-written <details> in content: indent the body, keep the summary flush.
+   Padding on the details plus a negative summary margin gives one more indent
+   step at each nesting level. Vyasa-owned details (callouts, heading folds,
+   frontmatter, sidebar, tree) keep their own spacing. */
+#main-content details:not([class*="vyasa-"]) {
+    --vyasa-details-indent: 1.1rem;
+    padding-left: var(--vyasa-details-indent);
+}
+#main-content details:not([class*="vyasa-"]) > summary {
+    margin-left: calc(-1 * var(--vyasa-details-indent));
+}
+
 .vyasa-callout { --vyasa-callout-accent: var(--vyasa-primary); background: var(--vyasa-paper-low); border: 1px solid color-mix(in srgb, var(--vyasa-callout-accent) 16%, transparent); box-shadow: 0 22px 34px -30px rgba(45, 52, 52, 0.24); }
 .dark .vyasa-callout { background: var(--vyasa-paper-low); }
 .vyasa-callout-summary { list-style: none; }

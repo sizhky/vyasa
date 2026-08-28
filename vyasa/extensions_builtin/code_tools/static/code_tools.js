@@ -1,4 +1,4 @@
-import { highlightedLineFragments } from './code_tools_lines.js';
+import { CODE_LINE_STATE_LABELS, codeLineSpecMap, highlightedLineFragments } from './code_tools_lines.js';
 
 function getCodeThemeMeta(name) {
     return document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') || '';
@@ -71,6 +71,15 @@ function copyCodeText(text) {
     fallback();
 }
 
+// Line wrappers can carry an sr-only change label and a line-number anchor.
+// Neither belongs in copied code.
+function codeTextOf(element) {
+    if (!element) return '';
+    const clone = element.cloneNode(true);
+    clone.querySelectorAll('.sr-only, .vyasa-link-preview-code-line').forEach((node) => node.remove());
+    return clone.textContent || '';
+}
+
 function handleCodeCopyClick(event) {
     const button = event.target.closest('.code-copy-button, .hljs-copy-button, .vyasa-inline-code-copy');
     if (!button) return;
@@ -86,7 +95,7 @@ function handleCodeCopyClick(event) {
         (container && container.querySelector('code')) ||
         button.closest('pre');
     if (!codeEl) return;
-    copyCodeText(codeEl.innerText || codeEl.textContent || '');
+    copyCodeText(codeTextOf(codeEl));
 }
 
 function initInlineCodeCopyButtons(rootElement = document) {
@@ -125,9 +134,11 @@ function initCodeHighlighting(rootElement = document) {
 }
 
 function initHighlightedCodeIncludes(rootElement = document) {
-    rootElement.querySelectorAll('code[data-code-highlight-lines], code[data-code-line-numbers="true"]').forEach((code) => {
+    rootElement.querySelectorAll('code[data-code-highlight-lines], code[data-code-line-states], code[data-code-line-numbers="true"]').forEach((code) => {
         if (code.querySelector('.vyasa-code-line')) return;
         const start = Number(code.dataset.codeSourceStart || '1');
+        const states = codeLineSpecMap(code.dataset.codeLineStates);
+        const numbers = codeLineSpecMap(code.dataset.codeLineNumberMap);
         const ranges = String(code.dataset.codeHighlightLines || '').split(',').map((part) => part.trim()).filter(Boolean);
         const highlighted = new Set();
         ranges.forEach((part) => {
@@ -158,7 +169,18 @@ function initHighlightedCodeIncludes(rootElement = document) {
             ].filter(Boolean).join(' ');
             const wrapper = document.createElement('span');
             wrapper.className = cls;
-            wrapper.dataset.sourceLine = String(lineNo);
+            wrapper.dataset.sourceLine = String(numbers.get(lineNo) ?? lineNo);
+            if (isHighlighted) wrapper.dataset.codeFocus = 'true';
+            const state = states.get(lineNo);
+            if (state) {
+                wrapper.dataset.codeChange = state;
+                // Colour alone must not carry the meaning, so name the state
+                // for assistive technology.
+                const label = document.createElement('span');
+                label.className = 'sr-only';
+                label.textContent = `${CODE_LINE_STATE_LABELS[state] || state}${isHighlighted ? ', focused' : ''}: `;
+                wrapper.append(label);
+            }
             wrapper.append(line.hasChildNodes() ? line : document.createTextNode('\u00a0'));
             return index < lines.length - 1 ? [wrapper, document.createTextNode('\n')] : [wrapper];
         });
@@ -196,5 +218,7 @@ if (!window.__vyasaCodeToolsBound) {
     document.addEventListener('click', handleCodeCopyClick, true);
 }
 
+window.__vyasaCopyCode = copyCodeText;
+window.__vyasaCodeTextOf = codeTextOf;
 window.__vyasaInitCodeTools = initCodeTools;
 window.__vyasaSyncCodeThemeLinks = ensureCodeThemeLinks;

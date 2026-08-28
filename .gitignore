@@ -11,6 +11,7 @@ docs/*
 !docs/refactor/
 docs/refactor/*
 !docs/refactor/extensions.md
+!docs/refactor/code-reference-highlighting-spec.md
 tests/
 .vyasa*
 .omx
