@@ -45,7 +45,9 @@ const TASKS_EDGE_LABEL_NODE_SIZE_RATIO = 1.35;
 const TASKS_EDGE_LABEL_FOCUS_FONT_SIZE = 16;
 const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
 const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
-const TASKS_FILTER_PANEL_WIDTH = 440;
+// A share of the widget, not a pixel count, so the panel keeps its
+// proportion on any screen. The 24px subtraction keeps the gutter.
+const TASKS_FILTER_PANEL_WIDTH = '12.5%';
 const TASKS_PROJECTION_GROUP_OPACITY_DEFAULT = 12;
 const TASKS_PROJECTION_UNSPECIFIED_GROUP_OPACITY_DEFAULT = 7;
 const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;
@@ -3946,7 +3948,7 @@ async function renderTasksGraphs(rootElement = document) {
                 y: Number.parseFloat(tasksModelSetting(model, 'jitter_y', wrapper.dataset.tasksJitterY || wrapper.dataset.tasksJitter || '0')),
             }), [model]);
             const layoutConfig = React.useMemo(() => readTasksLayoutConfigForModel(wrapper, model), [model]);
-            const nodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '480px')).trim() || '480px';
+            const nodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '12.5%')).trim() || '12.5%';
             const hoverFontSize = String(tasksModelSetting(model, 'hover-font-size', wrapper.dataset.tasksHoverFontSize || '12px')).trim() || '12px';
             const colorMix = readTasksColorMixConfigForModel(wrapper, model);
             const projectionGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(tasksModelSetting(model, 'projection-group-opacity', wrapper.dataset.tasksProjectionGroupOpacity || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`)) || TASKS_PROJECTION_GROUP_OPACITY_DEFAULT));
@@ -7600,7 +7602,7 @@ async function renderTasksGraphs(rootElement = document) {
                         className: readOnly ? undefined : 'vyasa-tasks-pinned-card',
                         onKeyDown: readOnly ? undefined : (event) => handlePinnedCardKeyDown(event, noteTextareaRef, () => focusGraphNode(panelGraphNodeId)),
                         'data-vyasa-node-card': 'true',
-                        style: { width: `min(${nodeCardWidth}, 100%)`, maxWidth: '100%', minWidth: 'min(220px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', flex: '0 1 auto' },
+                        style: { width: '100%', maxWidth: '100%', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 28%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', flex: '0 1 auto' },
                     },
                     scrollRef: hoverCard ? hoverCardScrollRef : detailCardScrollRef,
                     scrollMode: hoverCardScrollMode,
@@ -7652,7 +7654,7 @@ async function renderTasksGraphs(rootElement = document) {
                 if (edgeCardError) return React.createElement('div', {
                     role: 'alert',
                     'data-vyasa-edge-card': 'error',
-                    style: { width: `min(${nodeCardWidth}, 100%)`, marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, #dc2626 45%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, #dc2626 8%)', padding: '12px', pointerEvents: 'auto', fontSize: '12px', lineHeight: 1.45 },
+                    style: { width: '100%', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '1px solid color-mix(in srgb, #dc2626 45%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 92%, #dc2626 8%)', padding: '12px', pointerEvents: 'auto', fontSize: '12px', lineHeight: 1.45 },
                 }, edgeCardError);
                 if (!selectedEdgeRecord) return null;
                 const sourceLabel = edgeNodeLabels[selectedEdgeRecord.source] || selectedEdgeRecord.source || '';
@@ -7677,7 +7679,7 @@ async function renderTasksGraphs(rootElement = document) {
                         className: 'vyasa-tasks-pinned-card',
                         onKeyDown: (event) => handlePinnedCardKeyDown(event, edgeNoteTextareaRef, () => fitSelectedEdgeConnection(reactFlowApiRef.current)),
                         'data-vyasa-edge-card': selectedEdgeRecord.id,
-                        style: { width: `min(${nodeCardWidth}, 100%)`, maxWidth: '100%', minWidth: 'min(260px, 100%)', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '2px solid color-mix(in srgb, var(--vyasa-primary) 76%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12), 0 0 18px color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', backdropFilter: 'blur(8px)' },
+                        style: { width: '100%', maxWidth: '100%', marginLeft: 'auto', boxSizing: 'border-box', borderRadius: '12px', border: '2px solid color-mix(in srgb, var(--vyasa-primary) 76%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 94%, transparent)', boxShadow: '0 10px 30px rgba(0,0,0,0.12), 0 0 18px color-mix(in srgb, var(--vyasa-primary) 24%, transparent)', backdropFilter: 'blur(8px)' },
                     },
                     scrollRef: detailCardScrollRef,
                     scrollMode: hoverCardScrollMode,
@@ -8026,7 +8028,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }),
                 React.createElement('span', null, 'Active'));
                 const isOpen = !filtersCollapsed;
-                const filterPanelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`;
+                const filterPanelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}, calc(100% - 24px))`;
                 return React.createElement('aside', {
                     'aria-hidden': !isOpen,
                     style: {
@@ -9456,7 +9458,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const close = () => { setSlideFocusMode('off'); setSlideIndex(-1); setSelectedNodeId(null); setSelectedNodeIds(new Set()); };
                 const go = (delta) => setSlideIndex((index) => Math.min(slides.length - 1, Math.max(0, index + delta)));
                 const focusBtn = (active) => ({ flex: '1 1 0', height: '30px', border: `1px solid ${active ? 'var(--vyasa-primary)' : 'color-mix(in srgb, var(--vyasa-primary) 26%, transparent)'}`, background: active ? 'color-mix(in srgb, var(--vyasa-primary) 86%, transparent)' : 'color-mix(in srgb, var(--vyasa-paper) 90%, transparent)', color: active ? 'var(--vyasa-paper)' : 'inherit', borderRadius: '8px', padding: '0 10px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', boxShadow: active ? '0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 22%, transparent)' : 'none' });
-                const panelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}px, calc(100% - 24px))`;
+                const panelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}, calc(100% - 24px))`;
                 return window.React.createElement('aside', {
                     style: { flex: `0 0 ${panelWidth}`, width: panelWidth, minWidth: 0, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: '16px', borderRadius: '14px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 26%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 95%, transparent)', boxShadow: '0 14px 36px rgba(0,0,0,0.16)', pointerEvents: 'auto' },
                 },

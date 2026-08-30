@@ -242,7 +242,8 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     open_filters_by_default = _should_open_filters_by_default(width)
     min_height = config.get("min_height") or ("420px" if fence_name != "tasks" else "")
     flow_height = html.escape(str(config.get("height") or "70vh"))
-    node_card_width = html.escape(str(config.get("node-card-width") or "480px"))
+    # A share of the widget, so the card keeps its proportion on any screen.
+    node_card_width = html.escape(str(config.get("node-card-width") or "12.5%"))
     hover_font_size = html.escape(str(config.get("hover-font-size") or "12px"))
     color_mix = html.escape(str(config.get("color_mix", True)).lower())
     color_mix_intensity = html.escape(str(config.get("color_mix_intensity") or "22"))

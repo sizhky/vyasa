@@ -397,7 +397,7 @@ def test_tasks_query_builder_controls_use_filter_panel_css():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
-    assert "const TASKS_FILTER_PANEL_WIDTH = 440;" in source
+    assert "const TASKS_FILTER_PANEL_WIDTH = '12.5%';" in source
     assert "muteGroupAction: null" in source
     assert "React.createElement('span', null, 'Active')" in source
     assert ".vyasa-tasks-filter-card .betweenRules" in css
@@ -573,7 +573,9 @@ def test_tasks_node_cards_share_the_configured_default_width():
     panel_source = source.split("const SelectedNodePanel = (", 1)[1].split("const SelectedEdgePanel = () =>", 1)[0]
 
     assert "const nodeNotesEditor = renderTasksCardNoteEditor(React" in panel_source
-    assert "width: `min(${nodeCardWidth}, 100%)`" in panel_source
+    # The absolute wrapper carries nodeCardWidth; the card inside fills it.
+    # Re-applying the width here would compound once it became a percentage.
+    assert "style: { width: '100%', maxWidth: '100%'," in panel_source
     assert "tasksDetailPanelWidth" not in panel_source
 
 
