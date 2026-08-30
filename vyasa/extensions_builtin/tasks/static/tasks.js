@@ -1,7 +1,8 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
 import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksCenteredViewport, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksInlineLinkPlainText, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
-import { buildSequenceTasksGraph, buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksHopSeedIds, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNeighborHopIds, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksProjectionById, tasksProjectionLayout, tasksPruneFilterQueryFields, tasksReferenceEdges, tasksSameIdSet, tasksSelectionClickKey, tasksVisibleReferenceEdges, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
+import { buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksHopSeedIds, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNeighborHopIds, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksProjectionById, tasksProjectionLayout, tasksPruneFilterQueryFields, tasksReferenceEdges, tasksSameIdSet, tasksSelectionClickKey, tasksVisibleReferenceEdges, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
+import { tasksLayoutById, tasksLayoutChromeKinds } from '/static/extensions/tasks/tasks_layouts.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
 import { createMomentumRunner, shortcutsSuspended } from '/static/page_shell.js';
@@ -101,7 +102,11 @@ const TASKS_GANTT_BAR_MIN_HEIGHT = 34;
 const TASKS_GANTT_LEFT = 210;
 const TASKS_GANTT_TOP = 86;
 const TASKS_GANTT_PROJECTION_ID = '__gantt__';
-const TASKS_PASSIVE_NODE_KINDS = new Set(['ganttHeader', 'sequencePhase']);
+// Chrome kinds are whatever the layouts declare. Adding a layout must not
+// mean remembering to edit a set over here.
+const TASKS_PASSIVE_NODE_KINDS = new Set(['ganttHeader', ...tasksLayoutChromeKinds()]);
+// A fixed layout places every node itself, so ELK never runs for it.
+const tasksFixedLayout = (mode) => tasksLayoutById(mode);
 const TASKS_SEQUENCE_LABEL_LIFT = 12;
 const TASKS_PROJECTION_UNSPECIFIED_LABEL = 'Unspecified';
 const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity']);
@@ -3745,11 +3750,12 @@ function selectTasksProjectionState(sourceModel, sourceGraph, projectionId) {
 
 function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode, groupByEnabled = false, groupByHierarchy = [], preserveGrouping = false) {
     const projectionState = selectTasksProjectionState(sourceModel, sourceGraph, projectionId);
-    if (tasksProjectionLayout(sourceModel, projectionId) === 'sequence') {
+    const fixedLayout = tasksLayoutById(tasksProjectionLayout(sourceModel, projectionId));
+    if (fixedLayout) {
         return {
             ...projectionState,
-            graph: buildSequenceTasksGraph(projectionState.model, tasksProjectionById(sourceModel, projectionId) || {}),
-            viewMode: 'sequence',
+            graph: fixedLayout.build(projectionState.model, tasksProjectionById(sourceModel, projectionId) || {}),
+            viewMode: fixedLayout.id,
         };
     }
     if (preserveGrouping) return projectionState;
@@ -3906,9 +3912,9 @@ async function renderTasksGraphs(rootElement = document) {
             const initialGraphProjectionId = initialProjectionId === TASKS_GANTT_PROJECTION_ID ? '' : initialProjectionId;
             const [activeProjectionId, setActiveProjectionId] = React.useState(initialGraphProjectionId);
             const [viewMode, setViewMode] = React.useState(() => (
-                defaultViewMode === 'graph' && tasksProjectionLayout(sourceModel, initialGraphProjectionId) === 'sequence'
-                    ? 'sequence'
-                    : defaultViewMode
+                (defaultViewMode === 'graph'
+                    && tasksLayoutById(tasksProjectionLayout(sourceModel, initialGraphProjectionId))?.id)
+                    || defaultViewMode
             ));
             const initialProjectionPrefs = React.useMemo(
                 () => readTasksProjectionPrefsForModel(sourceModel, { ...sourcePrefsRef.current, projectionPrefs: storedProjectionPrefsRef.current }, initialGraphProjectionId),
@@ -5200,7 +5206,7 @@ async function renderTasksGraphs(rootElement = document) {
                 return true;
             }, [model, nodeNotes, activeProjectionId]);
             const handleDefaultViewPaste = React.useCallback((event) => {
-                if (viewMode === 'gantt' || String(activeProjectionId || '').trim()) return;
+                if (viewMode === 'gantt' || tasksFixedLayout(viewMode) || String(activeProjectionId || '').trim()) return;
                 const text = event.clipboardData?.getData('text/plain') || '';
                 const cfg = parseTasksProjectionConfigText(text);
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return;
@@ -5562,7 +5568,7 @@ async function renderTasksGraphs(rootElement = document) {
                 lastLayoutRevisionKeyRef.current = revisionKey;
                 lastGraphRevisionCauseRef.current = revisionCause;
                 logTasksColorDebug(model, rawGraph.nodes, activeColorBy, activeColorPalette, colorMix);
-                if (mode === 'gantt' || mode === 'sequence') {
+                if (mode === 'gantt' || tasksFixedLayout(mode)) {
                     const edgeColorPalette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
                     const nodesWithStyle = rawGraph.nodes.map((node) => {
                         if (TASKS_PASSIVE_NODE_KINDS.has(node.__kind__)) {
@@ -5628,9 +5634,10 @@ async function renderTasksGraphs(rootElement = document) {
                         };
                     });
                     const authoredRawEdges = (rawGraph.edges || []).filter((edge) => !edge.__reference__);
-                    // A sequence row pins both of its handles to the row height, so the
-                    // generic anchor solver must not spread them around the node.
-                    const anchored = mode === 'sequence'
+                    // A layout that declares authoredHandles has already pinned every
+                    // handle itself -- a sequence row puts both ends at the row height --
+                    // so the generic anchor solver must not spread them around the node.
+                    const anchored = tasksFixedLayout(mode)?.authoredHandles
                         ? {
                             edges: authoredRawEdges,
                             nodeHandles: Object.fromEntries((rawGraph.nodes || [])
@@ -5654,7 +5661,7 @@ async function renderTasksGraphs(rootElement = document) {
                             markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: edgeColor || 'currentColor' },
                             // A lifeline is a full-height column, so a row that crosses one
                             // must draw over it, not behind it.
-                            zIndex: mode === 'sequence' ? TASKS_TASK_Z + 10 : TASKS_EDGE_Z,
+                            zIndex: tasksFixedLayout(mode)?.edgesOverNodes ? TASKS_TASK_Z + 10 : TASKS_EDGE_Z,
                             labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || TASKS_EDGE_LABEL_TEXT, opacity: edgeOpacity },
                             labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
                             style: {
@@ -6824,6 +6831,63 @@ async function renderTasksGraphs(rootElement = document) {
                         suppressNextGraphClickRef.current = false;
                     }, 0);
                 };
+                if (data?.__kind__ === 'layeredBand') {
+                    const palette = model?.node_color_palettes?.[data.__layered_attr__ || ''] || {};
+                    const tint = palette[data.__layered_value__] || 'currentColor';
+                    const aside = Boolean(data.__layered_aside__);
+                    return React.createElement('div', {
+                        style: {
+                            width: '100%',
+                            height: '100%',
+                            boxSizing: 'border-box',
+                            background: `color-mix(in srgb, ${tint} ${aside ? 12 : 7}%, transparent)`,
+                            border: `1px ${aside ? 'dashed' : 'solid'} color-mix(in srgb, ${tint} 30%, transparent)`,
+                            borderRadius: '10px',
+                            color: `color-mix(in srgb, ${tint} 74%, var(--vyasa-ink))`,
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            letterSpacing: '.08em',
+                            textTransform: 'uppercase',
+                            padding: '7px 0 0 12px',
+                        },
+                    }, data?.label || '');
+                }
+                if (data?.__kind__ === 'matrixHeader') {
+                    return React.createElement('div', {
+                        style: {
+                            width: '100%',
+                            height: '100%',
+                            boxSizing: 'border-box',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: data.__matrix_row_header__ ? 'flex-end' : 'center',
+                            textAlign: data.__matrix_row_header__ ? 'right' : 'center',
+                            color: 'color-mix(in srgb, var(--vyasa-ink) 72%, transparent)',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            letterSpacing: '.06em',
+                            textTransform: 'uppercase',
+                            padding: '0 8px',
+                            overflowWrap: 'anywhere',
+                        },
+                    }, data?.label || '');
+                }
+                if (data?.__kind__ === 'matrixCell') {
+                    // An empty cell is a finding, not a gap. It gets a visible box so
+                    // "this flow never touches this layer" reads as a statement.
+                    return React.createElement('div', {
+                        style: {
+                            width: '100%',
+                            height: '100%',
+                            boxSizing: 'border-box',
+                            background: data.__matrix_empty__
+                                ? 'color-mix(in srgb, var(--vyasa-ink) 3%, transparent)'
+                                : 'transparent',
+                            border: '1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent)',
+                            borderRadius: '8px',
+                        },
+                    });
+                }
                 if (data?.__kind__ === 'sequencePhase') {
                     const phasePalette = model?.edge_color_palettes?.[data.__sequence_phase_attr__ || ''] || {};
                     const tint = phasePalette[data.label] || 'currentColor';
@@ -7651,13 +7715,13 @@ async function renderTasksGraphs(rootElement = document) {
                         ? projection.id === TASKS_GANTT_PROJECTION_ID
                         : projection.id === activeProjectionId
                 )) || null;
-                const customGroupingAvailable = viewMode !== 'gantt';
+                const customGroupingAvailable = viewMode !== 'gantt' && !tasksFixedLayout(viewMode);
                 const groupByControlsEnabled = customGroupingAvailable && groupByEnabled;
                 const displayedGroupByHierarchy = customGroupingAvailable ? groupByHierarchy : [];
                 const activeGroupByCount = groupByControlsEnabled ? activeGroupByHierarchy.length : 0;
                 const groupByLevels = displayedGroupByHierarchy.filter(Boolean);
                 if (customGroupingAvailable && groupByEnabled) groupByLevels.push('');
-                if (!groupByLevels.length && viewMode !== 'gantt') groupByLevels.push('');
+                if (!groupByLevels.length && viewMode !== 'gantt' && !tasksFixedLayout(viewMode)) groupByLevels.push('');
                 const activeCount = (queryBuilderEnabled ? tasksCountFilterRules(activeFilters) : 0) + tasksCountFilterRules(activeSwatchFilters) + effectiveEdgeTypes.length + activeColorHierarchy.length + (searchMatches.active ? 1 : 0) + activeGroupByCount;
                 const normalizedEdgeTypeQuery = edgeTypeQuery.trim().toLowerCase();
                 const visibleEdgeTypeOptions = edgeTypeOptions.filter((type) => (
@@ -8128,7 +8192,7 @@ async function renderTasksGraphs(rootElement = document) {
                                         if (nextProjectionId === TASKS_GANTT_PROJECTION_ID) setViewMode('gantt');
                                         else {
                                             setActiveProjectionId(nextProjectionId);
-                                            setViewMode(tasksProjectionLayout(sourceModel, nextProjectionId) === 'sequence' ? 'sequence' : 'graph');
+                                            setViewMode(tasksLayoutById(tasksProjectionLayout(sourceModel, nextProjectionId))?.id || 'graph');
                                         }
                                         pendingFitActionRef.current = 'mode';
                                     },
@@ -9211,7 +9275,7 @@ async function renderTasksGraphs(rootElement = document) {
             const buildProjectionConfigText = (projection) => {
                 const pid = String(projection?.id || '');
                 const def = (Array.isArray(viewerState.model?.view_projections) ? viewerState.model.view_projections : []).find((p) => p && p.id === pid) || null;
-                const isActiveLive = viewMode !== 'gantt' && pid === String(activeProjectionId || '');
+                const isActiveLive = viewMode !== 'gantt' && !tasksFixedLayout(viewMode) && pid === String(activeProjectionId || '');
                 const defGroups = def ? (Array.isArray(def.groups_from) ? def.groups_from : [def.groups_from]) : [];
                 const fallbackGroups = defGroups.length ? defGroups : tasksProjectionGroupByHierarchy(viewerState.model, pid);
                 const groupBy = (isActiveLive && !pid) ? activeGroupByHierarchy : fallbackGroups;

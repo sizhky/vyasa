@@ -6,6 +6,7 @@ from collections import defaultdict
 from itertools import product
 
 from .layout import build_collapsed_graph
+from .layouts import all_layout_keys, apply_layout_aliases, unknown_layout_keys
 
 TASKS_PROJECTION_UNSPECIFIED_LABEL = "Unspecified"
 PROJECTION_DISPLAY_KEYS = {
@@ -14,8 +15,8 @@ PROJECTION_DISPLAY_KEYS = {
     "projection-unspecified-content-opacity", "jitter", "jitter_y",
     "spacing", "node_spacing", "layer_spacing", "group_padding",
     "layout_direction", "collision_gap", "edge_label_width",
-    "layout", "sequence_role", "sequence_phase",
-}
+    "layout",
+} | all_layout_keys()
 
 
 def _slugify(value: str) -> str:
@@ -138,6 +139,10 @@ def normalize_projections(value) -> list[dict]:
             continue
         seen.add(projection_id)
         default_label = " / ".join(attr.replace("_", " ").title() for attr in groups_from) or projection_id.replace("-", " ").title()
+        apply_layout_aliases(raw)
+        # A misspelt layout key used to vanish here. Name it instead.
+        for stray in unknown_layout_keys(raw):
+            raise ValueError(f"view {projection_id!r}: layout={raw.get('layout')} has no key {stray!r}")
         hover_attrs = _normalize_hover_attrs(raw.get("hover_attrs"))
         projection = {
             "id": projection_id,

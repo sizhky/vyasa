@@ -1,0 +1,53 @@
+{
+  "node_color_palettes": {
+    "layer": {
+      "surface": "#2563eb",
+      "core": "#7c3aed",
+      "pipeline": "#0891b2",
+      "extension": "#ea580c",
+      "content": "#ca8a04",
+      "configuration": "#64748b"
+    }
+  },
+  "edge_color_palettes": {
+    "relation": {
+      "selects": "#7c3aed",
+      "registers": "#ea580c",
+      "claims": "#c026d3",
+      "routes_to": "#2563eb",
+      "reads": "#ca8a04",
+      "feeds": "#0f766e",
+      "renders": "#16a34a",
+      "wraps": "#16a34a",
+      "resolves": "#0891b2",
+      "picks": "#0891b2",
+      "serves": "#ca8a04",
+      "shapes": "#64748b",
+      "gates": "#dc2626",
+      "notifies": "#db2777"
+    },
+    "role": {
+      "message": "#2563eb",
+      "standing": "#64748b",
+      "blocking": "#dc2626"
+    },
+    "flow": {
+      "startup": "#7c3aed",
+      "page-render": "#2563eb",
+      "asset-serve": "#ea580c",
+      "live-reload": "#db2777",
+      "shared": "#64748b"
+    },
+    "phase": {
+      "boot": "#7c3aed",
+      "register": "#8b5cf6",
+      "ready": "#16a34a",
+      "route": "#2563eb",
+      "read": "#ca8a04",
+      "render": "#0891b2",
+      "wrap": "#16a34a",
+      "assets": "#ea580c",
+      "reload": "#db2777"
+    }
+  }
+}

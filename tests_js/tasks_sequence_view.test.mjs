@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { buildSequenceTasksGraph, tasksProjectionLayout } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+const { tasksProjectionLayout } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+const { buildSequenceTasksGraph } = await import('../vyasa/extensions_builtin/tasks/static/tasks_layouts.js');
 
 // Two lanes that talk to each other, one lane that only holds a standing rule.
 function fixture() {
