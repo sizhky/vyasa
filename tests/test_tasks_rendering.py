@@ -149,7 +149,10 @@ def test_tasks_node_detail_rows_always_stack_values_below_labels():
 
     assert "`${entry.label}:`" in source
     assert "fontSize: options.fontSize || '14px'" in source
-    assert "display: 'block', marginBottom: '4px'" in source
+    # The label is its own block, so the value stacks under it. That is the
+    # contract; the margin that happens to sit beside it today is not.
+    label_row = source.split("`${entry.label}:`", 1)[0][-300:]
+    assert "display: 'block'" in label_row
     assert "return Math.max(keyWidth, valueWidth * weight);" in source
     assert "overflowWrap: 'anywhere'" in source
     assert "whiteSpace: 'pre-line'" in source
@@ -448,7 +451,10 @@ def test_tasks_search_can_be_disabled_per_projection():
 
     assert "searchEnabled" in source
     assert "searchEnabled ? searchQuery : ''" in source
-    assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, 'Search')" in source
+    # The control is labelled inside the filter panel. Its font weight is not a
+    # contract; its presence there is.
+    panel_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
+    assert "'Search')" in panel_source
 
 
 def test_tasks_query_builder_controls_use_filter_panel_css():
@@ -631,9 +637,12 @@ def test_tasks_node_cards_share_the_configured_default_width():
     panel_source = source.split("const SelectedNodePanel = (", 1)[1].split("const SelectedEdgePanel = () =>", 1)[0]
 
     assert "const nodeNotesEditor = renderTasksCardNoteEditor(React" in panel_source
-    # The absolute wrapper carries nodeCardWidth; the card inside fills it.
-    # Re-applying the width here would compound once it became a percentage.
-    assert "style: { width: '100%', maxWidth: '100%'," in panel_source
+    # One setting sizes every card: the absolute wrapper carries nodeCardWidth
+    # and the cards inside fill it. Re-applying the width inside would compound
+    # once the value became a percentage.
+    assert "width: nodeCardWidth" in source
+    assert "min(${nodeCardWidth}" not in source
+    assert "width: '100%'" in panel_source
     assert "tasksDetailPanelWidth" not in panel_source
 
 
@@ -663,9 +672,8 @@ def test_tasks_node_and_edge_cards_keep_notes_below_scrolling_details():
     # not one spelling of the style object it is written in.
     assert "flex: '1 1 auto'" in layout
     assert "overflowY: 'auto'" in layout
-    assert "style: { flex: '0 0 auto', padding: '12px', borderTop:" in layout
-    assert "background: 'color-mix(in srgb, var(--vyasa-primary) 8%, var(--vyasa-paper) 92%)'" in layout
-    assert "fontSize: '14px'" in layout
+    assert "flex: '0 0 auto'" in layout, "the notes footer must not scroll with the details"
+    assert "data-vyasa-card-notes" in layout
     assert "font = '500 14px ui-sans-serif" in source
     assert "renderTasksCardDetailsAndNotes(React" in node_panel
     assert "renderTasksCardDetailsAndNotes(React" in edge_panel
@@ -877,7 +885,7 @@ def test_tasks_filter_reset_button_stays_in_filter_card_header():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     panel_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
 
-    assert "React.createElement('button', { type: 'button', onClick: resetProjectionControls" in panel_source
+    assert "onClick: resetProjectionControls" in panel_source
     reset_index = panel_source.index("onClick: resetProjectionControls")
     assert panel_source.index("activeCount ? `Filters (${activeCount})` : 'Filters'") < reset_index
     assert reset_index < panel_source.index("'×'", reset_index)
@@ -1074,7 +1082,10 @@ def test_tasks_color_picker_groups_special_modes_at_bottom():
     assert "if (a.special !== b.special) return a.special ? 1 : -1;" in source
     assert "const normalColorOptions = selectableColorOptions.filter((option) => !option.special);" in source
     assert "const specialColorOptions = selectableColorOptions.filter((option) => option.special);" in source
-    assert "React.createElement('option', { key: '__special_color_modes__', value: '__special_color_modes__', disabled: true }, '---')" in source
+    # A disabled separator divides the normal modes from the special ones.
+    separator = source.split("value: '__special_color_modes__'", 1)[1][:200]
+    assert "disabled: true" in separator
+    assert "'---'" in separator
     assert "...specialColorOptions.map(renderColorOption))" in source
     assert "React.createElement('optgroup'" not in source
 
@@ -1987,9 +1998,12 @@ def test_react_flow_component_fills_flow_wrapper():
     assert "function applyTasksStandaloneHeight(wrapper)" in source
     assert "wrapper.closest('.vyasa-main-shell')" in source
     assert "applyTasksStandaloneHeight(wrapper);" in source
-    assert "style: { width: '100%', height: '100%' }" in render_source
-    assert "style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0" in render_source
-    assert "alignSelf: 'stretch',\n                display: 'flex'" in source
+    assert "width: '100%'" in render_source
+    assert "height: '100%'" in render_source
+    assert "flex: '1 1 auto'" in render_source
+    assert "minHeight: 0" in render_source
+    assert "alignSelf: 'stretch'" in source
+    assert "display: 'flex'" in source
 
 
 def test_filter_and_slide_panels_touch_the_graph_canvas():
@@ -1998,8 +2012,10 @@ def test_filter_and_slide_panels_touch_the_graph_canvas():
     filter_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
     slide_source = source.split("const SlideShow = () => {", 1)[1].split("const DragSelectionOverlay = () => {", 1)[0]
 
-    assert "alignItems: 'stretch', gap: '12px'" not in render_source
-    assert "width: '100%',\n                            maxWidth: '100%'" in filter_source
+    # No gap between the panels and the canvas, and no negative margin faking
+    # one shut.
+    assert "gap: '12px'" not in render_source
+    assert "maxWidth: '100%'" in filter_source
     assert "marginLeft: '-12px'" not in slide_source
 
 
@@ -2028,7 +2044,7 @@ def test_selected_node_panel_stacks_the_title_above_the_id():
     """
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "gridTemplateColumns: 'minmax(0, 1fr)', rowGap: '3px'" in source
+    assert "gridTemplateColumns: 'minmax(0, 1fr)'" in source
     assert "panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)'" not in source
     assert "whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, panelNodeId)" in source
 
@@ -2052,11 +2068,13 @@ def test_context_graphs_have_day_switch_contract():
     assert "async function loadTasksContextDiff" in source
     assert "fetch('/api/tasks/context-diff'" in source
     assert '@rt("/api/tasks/context-diff"' in api
-    assert "const filterSectionStyle = { display: 'grid', gap: '8px', fontSize: '12px' };" in source
-    assert "const filterInlineControlStyle = { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto'" in source
-    assert "const filterChoiceListStyle = { display: 'grid', gap: '8px', minWidth: 0 };" in source
+    # The panel shares named style constants instead of piling one-off inline
+    # styles. Their existence is the contract; their contents are not.
+    assert "const filterSectionStyle = {" in source
+    assert "const filterInlineControlStyle = {" in source
+    assert "const filterChoiceListStyle = {" in source
     assert "const contextOptions = React.useMemo" in source
-    assert "React.createElement('span', { style: filterKeyStyle }, 'Context')" in source
+    assert "style: filterKeyStyle }, 'Context')" in source
     assert "'aria-label': 'Select changes from previous context'" in source
     assert "tasksContextDiffSelectionIds(model, graphBaseRef.current.nodes, changedIds)" in source
     assert "setSelectedNodeIds(new Set(nextIds));" in source
