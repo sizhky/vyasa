@@ -265,3 +265,40 @@ test('a layout that throws is caught, not left to blank the widget', () => {
     }
     assert.match(message, /^layout=matrix needs matrix_col=/);
 });
+
+const { tasksIsHiddenNodeMetaKey, tasksEdgeMetaEntries } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js');
+
+test('card meta: every key a layout writes stays out of the reader\'s card', () => {
+    // Collected from the three layouts. Each is machinery, not content.
+    const written = [
+        '__kind__', '__fixed_size__', '__z__', '__source_node_id',
+        '__sequence_lifeline__', '__sequence_stage__', '__sequence_step__', '__sequence_standing__',
+        '__layered_value__', '__layered_attr__', '__layered_aside__',
+        '__matrix_attr__', '__matrix_axis__', '__matrix_tint__', '__matrix_row_header__',
+        '__matrix_col_attr__', '__matrix_col_value__', '__matrix_row_attr__', '__matrix_row_value__',
+        '__matrix_empty__', '__layout_error_view__',
+    ];
+    for (const key of written) {
+        assert.ok(tasksIsHiddenNodeMetaKey(key), `${key} would show up in a node card`);
+    }
+});
+
+test('card meta: an authored attribute is still shown', () => {
+    for (const key of ['layer', 'flow', 'role', 'phase', 'description', 'example', 'note']) {
+        assert.ok(!tasksIsHiddenNodeMetaKey(key), `${key} is authored and must stay visible`);
+    }
+});
+
+test('card meta: the rule covers an internal key nobody has written yet', () => {
+    assert.ok(tasksIsHiddenNodeMetaKey('__some_future_layout_flag__'));
+    assert.ok(!tasksIsHiddenNodeMetaKey('_single_underscore'));
+});
+
+test('card meta: an edge card hides the same machinery', () => {
+    const shown = tasksEdgeMetaEntries({
+        id: 'e1', source: 'a', target: 'b',
+        flow: 'page-render', role: 'standing',
+        __sequence_step__: '3', __sequence_standing__: true, __kg_sources: ['base'],
+    }).map((entry) => entry.key);
+    assert.deepEqual(shown.sort(), ['flow', 'role']);
+});

@@ -47,7 +47,7 @@ const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
 const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
 // A share of the widget, not a pixel count, so the panel keeps its
 // proportion on any screen. The 24px subtraction keeps the gutter.
-const TASKS_FILTER_PANEL_WIDTH = '12.5%'; // default; `filter-panel-width` overrides it
+const TASKS_FILTER_PANEL_WIDTH = '20%'; // default; `filter-panel-width` overrides it
 const TASKS_NODE_CARD_CONTENT_SCALE = 2; // default; `node-card-content-scale` overrides it
 const TASKS_PROJECTION_GROUP_OPACITY_DEFAULT = 12;
 const TASKS_PROJECTION_UNSPECIFIED_GROUP_OPACITY_DEFAULT = 7;
@@ -3995,7 +3995,7 @@ async function renderTasksGraphs(rootElement = document) {
                 y: Number.parseFloat(tasksModelSetting(model, 'jitter_y', wrapper.dataset.tasksJitterY || wrapper.dataset.tasksJitter || '0')),
             }), [model]);
             const layoutConfig = React.useMemo(() => readTasksLayoutConfigForModel(wrapper, model), [model]);
-            const nodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '12.5%')).trim() || '12.5%';
+            const nodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '20%')).trim() || '20%';
             const filterPanelWidthSetting = String(tasksModelSetting(model, 'filter-panel-width', wrapper.dataset.tasksFilterPanelWidth || TASKS_FILTER_PANEL_WIDTH)).trim() || TASKS_FILTER_PANEL_WIDTH;
             // How many card widths the details body is drawn at. Sideways scroll
             // pans across it, so a narrow card can still hold wide content.

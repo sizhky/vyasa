@@ -239,7 +239,7 @@ foundation :: Foundation:
     assert 'data-tasks-filter-panel-width="22%"' in html
 
 
-def test_tasks_side_panels_default_to_an_eighth_of_the_width():
+def test_tasks_side_panels_default_to_the_same_share_of_the_width():
     """Both panels default to the same share, and both stay overridable."""
     md = """```tasks
 ---
@@ -250,8 +250,8 @@ foundation :: Foundation:
 
     html = to_xml(from_md(md))
 
-    assert 'data-tasks-node-card-width="12.5%"' in html
-    assert 'data-tasks-filter-panel-width="12.5%"' in html
+    assert 'data-tasks-node-card-width="20%"' in html
+    assert 'data-tasks-filter-panel-width="20%"' in html
 
 
 def test_tasks_block_reads_node_card_content_scale_option():
@@ -461,7 +461,7 @@ def test_tasks_query_builder_controls_use_filter_panel_css():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
-    assert "const TASKS_FILTER_PANEL_WIDTH = '12.5%';" in source
+    assert "const TASKS_FILTER_PANEL_WIDTH = '20%';" in source
     assert "muteGroupAction: null" in source
     assert "React.createElement('span', null, 'Active')" in source
     assert ".vyasa-tasks-filter-card .betweenRules" in css
