@@ -858,6 +858,10 @@ function deterministicHandlePct(index, count) {
     return edgeHandlePct(index, count);
 }
 
+// Below this much clear space between two facing sides, a straight edge is
+// mostly arrowhead. Such an edge arcs out of a shared side instead.
+export const TASKS_TIGHT_GAP = 60;
+
 function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode = null) {
     const sourceCenterX = sourceRect.x + sourceRect.width / 2;
     const sourceCenterY = sourceRect.y + sourceRect.height / 2;
@@ -873,6 +877,21 @@ function edgeAnchorSides(sourceRect, targetRect, sourceNode = null, targetNode =
     const verticalSide = dy >= 0
         ? { sourceSide: 'bottom', targetSide: 'top', sortAxis: 'x' }
         : { sourceSide: 'top', targetSide: 'bottom', sortAxis: 'x' };
+    // Two nodes almost touching leave no room for a line between them: the
+    // arrowhead eats the gap and the edge vanishes. Route such an edge out of a
+    // side both ends share, so its visible length is the arc height and no
+    // longer depends on the gap at all.
+    //
+    // The side also carries the direction, so a request and its answer between
+    // one pair draw as two arcs that never sit on top of each other.
+    if (gapY === 0 && gapX > 0 && gapX < TASKS_TIGHT_GAP) {
+        const side = dx >= 0 ? 'top' : 'bottom';
+        return { sourceSide: side, targetSide: side, sortAxis: 'x' };
+    }
+    if (gapX === 0 && gapY > 0 && gapY < TASKS_TIGHT_GAP) {
+        const side = dy >= 0 ? 'right' : 'left';
+        return { sourceSide: side, targetSide: side, sortAxis: 'y' };
+    }
     const sourceKind = sourceNode?.data?.__kind__ || sourceNode?.__kind__;
     const targetKind = targetNode?.data?.__kind__ || targetNode?.__kind__;
     if (sourceKind === 'group' && targetKind === 'group' && Math.abs(dx) >= Math.abs(dy) * 0.8) {

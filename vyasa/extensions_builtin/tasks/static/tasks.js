@@ -6593,9 +6593,14 @@ async function renderTasksGraphs(rootElement = document) {
                     Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42)
                 );
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
+                const fullArrow = Math.max(10, strokeWidth * 3.0);
+                const chord = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY);
+                // Both ends on one side means the path arcs away and comes back,
+                // so its chord says nothing about how long it is drawn.
+                const isArcEdge = props.sourcePosition === props.targetPosition;
                 const edgeArrowPath = tasksTaperedArrowHeadPath(
                     path,
-                    Math.max(10, strokeWidth * 3.0)
+                    isArcEdge ? fullArrow : Math.max(6, Math.min(fullArrow, chord * 0.22))
                 );
                 const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
                 const prominentLabel = showFullLabel;
