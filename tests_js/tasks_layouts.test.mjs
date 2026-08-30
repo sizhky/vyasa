@@ -5,6 +5,7 @@ const {
     TASKS_LAYOUTS,
     buildLayeredTasksGraph,
     buildMatrixTasksGraph,
+    buildSequenceTasksGraph,
     tasksLayoutById,
     tasksLayoutChromeKinds,
 } = await import('../vyasa/extensions_builtin/tasks/static/tasks_layouts.js');
@@ -164,4 +165,74 @@ test('matrix: nothing overlaps, and a full cell grows its row', () => {
 
 test('matrix: a missing key is named', () => {
     assert.throws(() => buildMatrixTasksGraph(fixture(), { layout: 'matrix', matrix_col: 'layer' }), /needs matrix_row/);
+});
+
+const LONG_LABEL = 'Knowledge graph pack and then a good deal more words than fit on one line';
+
+test('layered: a node is as tall as its label needs', () => {
+    const short = buildLayeredTasksGraph(fixture(), LAYERED_VIEW);
+    const model = fixture();
+    model.tasks.find((task) => task.id === 'render').label = LONG_LABEL;
+    const long = buildLayeredTasksGraph(model, LAYERED_VIEW);
+    const heightOf = (graph) => placementsOf(graph, 'layered').find((node) => node.id === 'render').height;
+    assert.ok(heightOf(long) > heightOf(short), 'a long label must not be clipped');
+});
+
+test('layered: a long label pushes the rungs below it down', () => {
+    const model = fixture();
+    model.tasks.find((task) => task.id === 'route').label = LONG_LABEL;
+    const graph = buildLayeredTasksGraph(model, LAYERED_VIEW);
+    const placements = placementsOf(graph, 'layered');
+    const route = placements.find((node) => node.id === 'route');
+    const render = placements.find((node) => node.id === 'render');
+    assert.ok(render.position.y >= route.position.y + route.height, 'the next rung must clear the tall one');
+});
+
+test('layered: every node stays inside its own band', () => {
+    const model = fixture();
+    model.tasks.find((task) => task.id === 'route').label = LONG_LABEL;
+    const graph = buildLayeredTasksGraph(model, LAYERED_VIEW);
+    const bands = graph.nodes.filter((node) => node.__kind__ === 'layeredBand' && !node.__layered_aside__);
+    for (const node of placementsOf(graph, 'layered')) {
+        if (node.layer === 'configuration') continue; // the aside band is its own column
+        const band = bands.find((b) => node.position.y >= b.position.y
+            && node.position.y + node.height <= b.position.y + b.height);
+        assert.ok(band, `${node.id} escapes every band`);
+    }
+});
+
+test('matrix: a chip is as tall as its label, and its cell grows to hold it', () => {
+    const model = fixture();
+    model.tasks.find((task) => task.id === 'render').label = LONG_LABEL;
+    const graph = buildMatrixTasksGraph(model, MATRIX_VIEW);
+    const chips = placementsOf(graph, 'matrix').filter((node) => node.__source_node_id === 'render');
+    assert.ok(chips.length);
+    for (const chip of chips) {
+        assert.ok(chip.height > 26, 'a wrapped label needs more than one line');
+        // Cells in one column share an x range, so the y range has to pin the row.
+        const cell = graph.nodes.find((node) => node.__kind__ === 'matrixCell'
+            && chip.position.x >= node.position.x
+            && chip.position.x + chip.width <= node.position.x + node.width
+            && chip.position.y >= node.position.y
+            && chip.position.y < node.position.y + node.height);
+        assert.ok(cell, `${chip.id} sits in no cell`);
+        assert.ok(chip.position.y + chip.height <= cell.position.y + cell.height, 'a chip must not spill out of its cell');
+    }
+});
+
+test('sequence: the first row clears the deepest lifeline cap', () => {
+    const model = {
+        tasks: [
+            { id: 'a', label: LONG_LABEL, layer: 'surface' },
+            { id: 'b', label: 'B', layer: 'surface' },
+        ],
+        dependency_edges: [{ id: 'e1', source: 'a', target: 'b', role: 'message' }],
+    };
+    const view = { layout: 'sequence', sequence_role: 'role' };
+    const graph = buildSequenceTasksGraph(model, view);
+    const lifeline = graph.nodes.find((node) => node.__sequence_lifeline__);
+    const firstOffset = Math.min(...lifeline.handleLayout.source.concat(lifeline.handleLayout.target)
+        .map((handle) => handle.offsetPct));
+    const capShare = (72 / lifeline.height) * 100; // a three-line cap, roughly
+    assert.ok(firstOffset > capShare, 'row one must start below the cap, not behind it');
 });

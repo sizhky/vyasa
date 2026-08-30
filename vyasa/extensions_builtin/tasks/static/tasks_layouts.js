@@ -10,15 +10,26 @@
 // multi-valued group_by, so selection, colour, notes and slides all keep
 // working on the logical node. The matrix layout relies on this.
 
+// Relative, so the same specifier resolves in the browser and under node --test.
+import { sizeTaskNode } from './tasks_graph_core.js';
+
+// A fixed layout still has to make room for the words. Rather than guess, ask
+// the same sizer the ordinary graph uses, pinning the width the layout owns and
+// letting it report the height the label needs.
+//
+// `task` is the full card. `groupTitle` is the compact labelled box, which is
+// what a matrix chip and a lifeline cap both are.
+const labelHeight = (label, width, kind = 'task') => sizeTaskNode(String(label || ''), kind, width).height;
+
 const TASKS_SEQUENCE_LANE_WIDTH = 196;
 const TASKS_SEQUENCE_LANE_GAP = 102;
 const TASKS_SEQUENCE_LEFT = 148;
 const TASKS_SEQUENCE_LIFELINE_TOP = 40;
 const TASKS_SEQUENCE_FIRST_ROW = 136;
 const TASKS_SEQUENCE_ROW_HEIGHT = 46;
-const TASKS_LAYERED_BAND_HEIGHT = 210;
+const TASKS_LAYERED_BAND_PAD = 148;
 const TASKS_LAYERED_NODE_WIDTH = 168;
-const TASKS_LAYERED_NODE_HEIGHT = 62;
+const TASKS_LAYERED_NODE_MIN_HEIGHT = 62;
 const TASKS_LAYERED_GAP = 48;
 const TASKS_LAYERED_LEFT = 168;
 const TASKS_LAYERED_TOP = 40;
@@ -80,8 +91,13 @@ export function buildSequenceTasksGraph(model, projection = {}) {
     const laneIndex = Object.fromEntries(lanes.map((id, index) => [id, index]));
 
     const bodyTop = TASKS_SEQUENCE_LIFELINE_TOP;
-    const bodyHeight = (TASKS_SEQUENCE_FIRST_ROW - bodyTop) + (rows.length + 1) * TASKS_SEQUENCE_ROW_HEIGHT;
-    const rowY = (index) => TASKS_SEQUENCE_FIRST_ROW + index * TASKS_SEQUENCE_ROW_HEIGHT;
+    const capWidth = TASKS_SEQUENCE_LANE_WIDTH - TASKS_SEQUENCE_LANE_GAP;
+    // The first row starts below the deepest cap, so a three-line participant
+    // name never sits on top of step one.
+    const capHeight = Math.max(0, ...lanes.map((id) => labelHeight(byId[id].label || id, capWidth, 'groupTitle')));
+    const firstRow = Math.max(TASKS_SEQUENCE_FIRST_ROW, bodyTop + capHeight + 34);
+    const bodyHeight = (firstRow - bodyTop) + (rows.length + 1) * TASKS_SEQUENCE_ROW_HEIGHT;
+    const rowY = (index) => firstRow + index * TASKS_SEQUENCE_ROW_HEIGHT;
     const offsetPct = (index) => ((rowY(index) - bodyTop) / bodyHeight) * 100;
 
     const handles = {};
@@ -176,10 +192,20 @@ export function buildLayeredTasksGraph(model, projection = {}) {
         if (aside.has(value)) asideRow.push(task);
         else if (value in rungIndex) rows[rungIndex[value]].push(task);
     }
+    const heightOf = (task) => Math.max(
+        TASKS_LAYERED_NODE_MIN_HEIGHT,
+        labelHeight(task.label || task.id, TASKS_LAYERED_NODE_WIDTH),
+    );
+    // A band is as tall as the longest label on its rung, so nothing clips and
+    // the rungs below simply start lower.
+    const rungHeight = rows.map((row) => Math.max(TASKS_LAYERED_NODE_MIN_HEIGHT, ...row.map(heightOf)));
+    const bandHeight = rungHeight.map((height) => height + TASKS_LAYERED_BAND_PAD);
+    const bandTop = bandHeight.map((_, index) => TASKS_LAYERED_TOP + bandHeight.slice(0, index).reduce((sum, value) => sum + value, 0));
+    const asideHeights = asideRow.map(heightOf);
     const widest = Math.max(1, ...rows.map((row) => row.length));
     const bodyWidth = TASKS_LAYERED_LEFT + widest * (TASKS_LAYERED_NODE_WIDTH + TASKS_LAYERED_GAP) + TASKS_LAYERED_GAP;
     const asideLeft = bodyWidth + TASKS_LAYERED_GAP;
-    const bodyHeight = rungs.length * TASKS_LAYERED_BAND_HEIGHT;
+    const bodyHeight = bandHeight.reduce((sum, value) => sum + value, 0);
 
     const nodes = [];
     rungs.forEach((value, index) => {
@@ -191,9 +217,9 @@ export function buildLayeredTasksGraph(model, projection = {}) {
             __layered_attr__: tierAttr,
             __fixed_size__: true,
             __z__: 0,
-            position: { x: 8, y: TASKS_LAYERED_TOP + index * TASKS_LAYERED_BAND_HEIGHT - 20 },
+            position: { x: 8, y: bandTop[index] - 20 },
             width: asideLeft + TASKS_LAYERED_NODE_WIDTH + TASKS_LAYERED_GAP,
-            height: TASKS_LAYERED_BAND_HEIGHT - 12,
+            height: bandHeight[index] - 12,
         });
     });
     if (asideRow.length) {
@@ -208,7 +234,10 @@ export function buildLayeredTasksGraph(model, projection = {}) {
             __z__: 0,
             position: { x: asideLeft - TASKS_LAYERED_GAP, y: TASKS_LAYERED_TOP - 34 },
             width: TASKS_LAYERED_NODE_WIDTH + TASKS_LAYERED_GAP * 2,
-            height: Math.max(bodyHeight, asideRow.length * (TASKS_LAYERED_NODE_HEIGHT + TASKS_LAYERED_GAP)) + 24,
+            height: Math.max(
+                bodyHeight,
+                asideHeights.reduce((sum, value) => sum + value + TASKS_LAYERED_GAP, 0),
+            ) + 24,
         });
     }
     rows.forEach((row, tier) => {
@@ -219,10 +248,10 @@ export function buildLayeredTasksGraph(model, projection = {}) {
                 __fixed_size__: true,
                 position: {
                     x: TASKS_LAYERED_LEFT + column * (TASKS_LAYERED_NODE_WIDTH + TASKS_LAYERED_GAP),
-                    y: TASKS_LAYERED_TOP + tier * TASKS_LAYERED_BAND_HEIGHT + 34,
+                    y: bandTop[tier] + 34,
                 },
                 width: TASKS_LAYERED_NODE_WIDTH,
-                height: TASKS_LAYERED_NODE_HEIGHT,
+                height: heightOf(task),
             });
         });
     });
@@ -231,9 +260,12 @@ export function buildLayeredTasksGraph(model, projection = {}) {
             ...task,
             __kind__: 'task',
             __fixed_size__: true,
-            position: { x: asideLeft, y: TASKS_LAYERED_TOP + index * (TASKS_LAYERED_NODE_HEIGHT + TASKS_LAYERED_GAP) + 6 },
+            position: {
+                x: asideLeft,
+                y: TASKS_LAYERED_TOP + asideHeights.slice(0, index).reduce((sum, value) => sum + value + TASKS_LAYERED_GAP, 0) + 6,
+            },
             width: TASKS_LAYERED_NODE_WIDTH,
-            height: TASKS_LAYERED_NODE_HEIGHT,
+            height: asideHeights[index],
         });
     });
     const placed = new Set(nodes.filter((node) => node.__kind__ === 'task').map((node) => node.id));
@@ -276,11 +308,21 @@ export function buildMatrixTasksGraph(model, projection = {}) {
             if (!bucket.some((entry) => entry.id === nodeId)) bucket.push(task);
         }
     }
-    // A row is as tall as its fullest cell, so no cell ever clips its members.
-    const rowHeights = rowValues.map((row) => {
-        const deepest = Math.max(0, ...colValues.map((col) => (cells.get(`${col} ${row}`) || []).length));
-        return Math.max(TASKS_MATRIX_ROW_HEIGHT, deepest * (TASKS_MATRIX_CHIP_HEIGHT + 6) + TASKS_MATRIX_CELL_PAD * 2 + 8);
-    });
+    const chipWidth = TASKS_MATRIX_COL_WIDTH - 8 - TASKS_MATRIX_CELL_PAD * 2;
+    const chipHeight = (task) => Math.max(
+        TASKS_MATRIX_CHIP_HEIGHT,
+        labelHeight(task.label || task.id, chipWidth, 'groupTitle'),
+    );
+    // A cell is as tall as its members stacked, and a row as tall as its fullest
+    // cell, so a long label pushes the row down instead of spilling out of it.
+    const cellHeight = (col, row) => {
+        const members = cells.get(`${col} ${row}`) || [];
+        return members.reduce((sum, task) => sum + chipHeight(task) + 6, 0) - (members.length ? 6 : 0);
+    };
+    const rowHeights = rowValues.map((row) => Math.max(
+        TASKS_MATRIX_ROW_HEIGHT,
+        Math.max(0, ...colValues.map((col) => cellHeight(col, row))) + TASKS_MATRIX_CELL_PAD * 2 + 8,
+    ));
     const rowTop = rowHeights.map((_, index) => TASKS_MATRIX_TOP + rowHeights.slice(0, index).reduce((sum, value) => sum + value, 0));
 
     const nodes = [];
@@ -326,7 +368,9 @@ export function buildMatrixTasksGraph(model, projection = {}) {
                 width: TASKS_MATRIX_COL_WIDTH - 8,
                 height: rowHeights[rowIndex] - 8,
             });
-            members.forEach((task, memberIndex) => {
+            let stackY = rowTop[rowIndex] + TASKS_MATRIX_CELL_PAD;
+            members.forEach((task) => {
+                const height = chipHeight(task);
                 nodes.push({
                     ...task,
                     // One placement per cell. The logical node is __source_node_id.
@@ -334,13 +378,11 @@ export function buildMatrixTasksGraph(model, projection = {}) {
                     __source_node_id: task.id,
                     __kind__: 'task',
                     __fixed_size__: true,
-                    position: {
-                        x: x + TASKS_MATRIX_CELL_PAD,
-                        y: rowTop[rowIndex] + TASKS_MATRIX_CELL_PAD + memberIndex * (TASKS_MATRIX_CHIP_HEIGHT + 6),
-                    },
-                    width: TASKS_MATRIX_COL_WIDTH - 8 - TASKS_MATRIX_CELL_PAD * 2,
-                    height: TASKS_MATRIX_CHIP_HEIGHT,
+                    position: { x: x + TASKS_MATRIX_CELL_PAD, y: stackY },
+                    width: chipWidth,
+                    height,
                 });
+                stackY += height + 6;
             });
         });
     });
