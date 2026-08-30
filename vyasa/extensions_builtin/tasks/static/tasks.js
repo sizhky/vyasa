@@ -107,9 +107,29 @@ const TASKS_GANTT_TOP = 86;
 const TASKS_GANTT_PROJECTION_ID = '__gantt__';
 // Chrome kinds are whatever the layouts declare. Adding a layout must not
 // mean remembering to edit a set over here.
-const TASKS_PASSIVE_NODE_KINDS = new Set(['ganttHeader', ...tasksLayoutChromeKinds()]);
+const TASKS_PASSIVE_NODE_KINDS = new Set(['ganttHeader', 'layoutError', ...tasksLayoutChromeKinds()]);
 // A fixed layout places every node itself, so ELK never runs for it.
 const tasksFixedLayout = (mode) => tasksLayoutById(mode);
+// A view that cannot be laid out still occupies the dropdown and still draws
+// something: its own error, where the graph would have been.
+const TASKS_LAYOUT_ERROR_MODE = 'layout-error';
+const tasksIsFixedMode = (mode) => mode === 'gantt' || mode === TASKS_LAYOUT_ERROR_MODE || Boolean(tasksLayoutById(mode));
+function buildLayoutErrorGraph(message, viewId) {
+    return {
+        nodes: [{
+            id: '__layout_error',
+            label: String(message || 'This view cannot be drawn.'),
+            __kind__: 'layoutError',
+            __layout_error_view__: String(viewId || ''),
+            __fixed_size__: true,
+            __z__: 1,
+            position: { x: 40, y: 40 },
+            width: 620,
+            height: 132,
+        }],
+        edges: [],
+    };
+}
 const TASKS_SEQUENCE_LABEL_LIFT = 12;
 const TASKS_PROJECTION_UNSPECIFIED_LABEL = 'Unspecified';
 const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity']);
@@ -3763,13 +3783,29 @@ function selectTasksProjectionState(sourceModel, sourceGraph, projectionId) {
 
 function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode, groupByEnabled = false, groupByHierarchy = [], preserveGrouping = false) {
     const projectionState = selectTasksProjectionState(sourceModel, sourceGraph, projectionId);
+    const projection = tasksProjectionById(sourceModel, projectionId) || {};
     const fixedLayout = tasksLayoutById(tasksProjectionLayout(sourceModel, projectionId));
+    // Two ways a view can be unusable: a key the schema reader rejected, or a
+    // build that throws on the pack's own data. Both end up on screen.
+    const declaredError = String(projection.layout_error || '');
+    if (declaredError) {
+        return { ...projectionState, graph: buildLayoutErrorGraph(declaredError, projectionId), viewMode: TASKS_LAYOUT_ERROR_MODE };
+    }
     if (fixedLayout) {
-        return {
-            ...projectionState,
-            graph: fixedLayout.build(projectionState.model, tasksProjectionById(sourceModel, projectionId) || {}),
-            viewMode: fixedLayout.id,
-        };
+        try {
+            return {
+                ...projectionState,
+                graph: fixedLayout.build(projectionState.model, projection),
+                viewMode: fixedLayout.id,
+            };
+        } catch (error) {
+            logTasksDebug('layoutError', { projectionId, layout: fixedLayout.id, message: String(error?.message || error) });
+            return {
+                ...projectionState,
+                graph: buildLayoutErrorGraph(String(error?.message || error), projectionId),
+                viewMode: TASKS_LAYOUT_ERROR_MODE,
+            };
+        }
     }
     if (preserveGrouping) return projectionState;
     if (viewMode !== 'gantt') {
@@ -5225,7 +5261,7 @@ async function renderTasksGraphs(rootElement = document) {
                 return true;
             }, [model, nodeNotes, activeProjectionId]);
             const handleDefaultViewPaste = React.useCallback((event) => {
-                if (viewMode === 'gantt' || tasksFixedLayout(viewMode) || String(activeProjectionId || '').trim()) return;
+                if (tasksIsFixedMode(viewMode) || String(activeProjectionId || '').trim()) return;
                 const text = event.clipboardData?.getData('text/plain') || '';
                 const cfg = parseTasksProjectionConfigText(text);
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return;
@@ -5587,7 +5623,7 @@ async function renderTasksGraphs(rootElement = document) {
                 lastLayoutRevisionKeyRef.current = revisionKey;
                 lastGraphRevisionCauseRef.current = revisionCause;
                 logTasksColorDebug(model, rawGraph.nodes, activeColorBy, activeColorPalette, colorMix);
-                if (mode === 'gantt' || tasksFixedLayout(mode)) {
+                if (tasksIsFixedMode(mode)) {
                     const edgeColorPalette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
                     const nodesWithStyle = rawGraph.nodes.map((node) => {
                         if (TASKS_PASSIVE_NODE_KINDS.has(node.__kind__)) {
@@ -6857,6 +6893,35 @@ async function renderTasksGraphs(rootElement = document) {
                         suppressNextGraphClickRef.current = false;
                     }, 0);
                 };
+                if (data?.__kind__ === 'layoutError') {
+                    return React.createElement('div', {
+                        style: {
+                            width: '100%',
+                            height: '100%',
+                            boxSizing: 'border-box',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '7px',
+                            justifyContent: 'center',
+                            padding: '16px 18px',
+                            borderRadius: '12px',
+                            border: '1px solid color-mix(in srgb, #dc2626 55%, transparent)',
+                            background: 'color-mix(in srgb, var(--vyasa-paper) 92%, #dc2626 8%)',
+                            color: 'var(--vyasa-ink)',
+                            pointerEvents: 'auto',
+                        },
+                    },
+                        React.createElement('div', {
+                            style: { fontSize: '12px', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'color-mix(in srgb, #dc2626 78%, var(--vyasa-ink))' },
+                        }, data.__layout_error_view__ ? `View "${data.__layout_error_view__}" cannot be drawn` : 'This view cannot be drawn'),
+                        React.createElement('div', {
+                            style: { fontSize: '13px', lineHeight: 1.45, overflowWrap: 'anywhere' },
+                        }, data.label || ''),
+                        React.createElement('div', {
+                            style: { fontSize: '12px', opacity: 0.72, lineHeight: 1.4 },
+                        }, 'Fix the view in the pack schema. Every other view still works.')
+                    );
+                }
                 if (data?.__kind__ === 'layeredBand') {
                     const palette = model?.node_color_palettes?.[data.__layered_attr__ || ''] || {};
                     const tint = palette[data.__layered_value__] || 'currentColor';
@@ -7771,13 +7836,13 @@ async function renderTasksGraphs(rootElement = document) {
                         ? projection.id === TASKS_GANTT_PROJECTION_ID
                         : projection.id === activeProjectionId
                 )) || null;
-                const customGroupingAvailable = viewMode !== 'gantt' && !tasksFixedLayout(viewMode);
+                const customGroupingAvailable = !tasksIsFixedMode(viewMode);
                 const groupByControlsEnabled = customGroupingAvailable && groupByEnabled;
                 const displayedGroupByHierarchy = customGroupingAvailable ? groupByHierarchy : [];
                 const activeGroupByCount = groupByControlsEnabled ? activeGroupByHierarchy.length : 0;
                 const groupByLevels = displayedGroupByHierarchy.filter(Boolean);
                 if (customGroupingAvailable && groupByEnabled) groupByLevels.push('');
-                if (!groupByLevels.length && viewMode !== 'gantt' && !tasksFixedLayout(viewMode)) groupByLevels.push('');
+                if (!groupByLevels.length && !tasksIsFixedMode(viewMode)) groupByLevels.push('');
                 const activeCount = (queryBuilderEnabled ? tasksCountFilterRules(activeFilters) : 0) + tasksCountFilterRules(activeSwatchFilters) + effectiveEdgeTypes.length + activeColorHierarchy.length + (searchMatches.active ? 1 : 0) + activeGroupByCount;
                 const normalizedEdgeTypeQuery = edgeTypeQuery.trim().toLowerCase();
                 const visibleEdgeTypeOptions = edgeTypeOptions.filter((type) => (
@@ -9331,7 +9396,7 @@ async function renderTasksGraphs(rootElement = document) {
             const buildProjectionConfigText = (projection) => {
                 const pid = String(projection?.id || '');
                 const def = (Array.isArray(viewerState.model?.view_projections) ? viewerState.model.view_projections : []).find((p) => p && p.id === pid) || null;
-                const isActiveLive = viewMode !== 'gantt' && !tasksFixedLayout(viewMode) && pid === String(activeProjectionId || '');
+                const isActiveLive = !tasksIsFixedMode(viewMode) && pid === String(activeProjectionId || '');
                 const defGroups = def ? (Array.isArray(def.groups_from) ? def.groups_from : [def.groups_from]) : [];
                 const fallbackGroups = defGroups.length ? defGroups : tasksProjectionGroupByHierarchy(viewerState.model, pid);
                 const groupBy = (isActiveLive && !pid) ? activeGroupByHierarchy : fallbackGroups;

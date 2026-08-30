@@ -904,7 +904,7 @@ def test_named_views_keep_grouping_overrides_in_projection_preferences():
     assert "buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, groupByEnabled, activeGroupByHierarchy, initialEgoMode)" in source
     # Custom grouping is off wherever the view places its own nodes: Gantt, and
     # every fixed layout. Assert that contract, not one spelling of the line.
-    assert "const customGroupingAvailable = viewMode !== 'gantt' && !tasksFixedLayout(viewMode);" in source
+    assert "const customGroupingAvailable = !tasksIsFixedMode(viewMode);" in source
     assert "Custom grouping applies to Default view." not in source
     assert "setActiveProjectionId('');" not in group_panel
     assert "setGroupByEnabled(defaults.groupByEnabled === true);" in reset

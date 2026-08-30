@@ -252,3 +252,16 @@ test('sequence: the first row clears the deepest lifeline cap', () => {
     const capShare = (72 / lifeline.height) * 100; // a three-line cap, roughly
     assert.ok(firstOffset > capShare, 'row one must start below the cap, not behind it');
 });
+
+test('a layout that throws is caught, not left to blank the widget', () => {
+    // requireLayoutAttr throws on a missing key. The viewer turns that into an
+    // error card; here we only assert the build still reports it as an Error
+    // with a sentence a reader can act on.
+    let message = '';
+    try {
+        buildMatrixTasksGraph(fixture(), { layout: 'matrix' });
+    } catch (error) {
+        message = String(error.message || '');
+    }
+    assert.match(message, /^layout=matrix needs matrix_col=/);
+});

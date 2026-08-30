@@ -35,14 +35,34 @@ def test_authored_layout_keys_reach_the_projection_model():
     assert "layout" not in views["layers"]
 
 
-def test_a_misspelt_layout_key_is_named_not_dropped():
-    bad = [{"id": "m", "layout": "matrix", "matrix_col": "layer", "matrix_rows": "flow"}]
-    try:
-        normalize_projections(bad)
-    except ValueError as error:
-        assert "matrix_rows" in str(error)
-    else:
-        raise AssertionError("a misspelt layout key must be reported")
+def test_a_broken_view_spoils_only_itself():
+    """The bad view keeps its place and carries its error; the rest are clean."""
+    views = normalize_projections([
+        {"id": "good", "layout": "matrix", "matrix_col": "layer", "matrix_row": "flow"},
+        {"id": "typo", "layout": "matrix", "matrix_col": "layer", "matrix_rows": "flow"},
+        {"id": "unknown", "layout": "spiral"},
+        {"id": "plain", "group_by": "kind"},
+    ])
+
+    by_id = {view["id"]: view for view in views}
+    assert set(by_id) == {"good", "typo", "unknown", "plain"}, "no view may be dropped"
+    assert "layout_error" not in by_id["good"]
+    assert "layout_error" not in by_id["plain"]
+    assert "matrix_rows" in by_id["typo"]["layout_error"]
+    assert "matrix_col" in by_id["typo"]["layout_error"], "the message must list what is accepted"
+    assert "spiral" in by_id["unknown"]["layout_error"]
+
+
+def test_a_layout_error_reaches_the_viewer():
+    model = attach_projection_models({
+        "graph_id": "g",
+        "tasks": [{"id": "a", "label": "A", "layer": "surface"}],
+        "groups": [],
+        "dependency_edges": [],
+        "view_projections": [{"id": "typo", "layout": "matrix", "matrix_rows": "flow"}],
+    })
+    carried = model["projection_models"]["typo"]["model"]["layout_error"]
+    assert "matrix_rows" in carried
 
 
 def test_a_key_from_another_layout_is_left_alone():
