@@ -6590,7 +6590,9 @@ async function renderTasksGraphs(rootElement = document) {
                 const taperPath = tasksTaperedBezierPath(
                     path,
                     (Number(props.style?.strokeWidth) || 4) * 2.65,
-                    Math.max(1.4, (Number(props.style?.strokeWidth) || 4) * 0.42)
+                    // The tail keeps enough body to read on its own. A taper this
+                    // steep used to thin the arrival end down to a hairline.
+                    Math.max(2.6, (Number(props.style?.strokeWidth) || 4) * 0.85)
                 );
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
                 const fullArrow = Math.max(10, strokeWidth * 3.0);
