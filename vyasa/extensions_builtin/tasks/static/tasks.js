@@ -48,6 +48,7 @@ const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
 // A share of the widget, not a pixel count, so the panel keeps its
 // proportion on any screen. The 24px subtraction keeps the gutter.
 const TASKS_FILTER_PANEL_WIDTH = '12.5%'; // default; `filter-panel-width` overrides it
+const TASKS_NODE_CARD_CONTENT_SCALE = 2; // default; `node-card-content-scale` overrides it
 const TASKS_PROJECTION_GROUP_OPACITY_DEFAULT = 12;
 const TASKS_PROJECTION_UNSPECIFIED_GROUP_OPACITY_DEFAULT = 7;
 const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;
@@ -3589,8 +3590,18 @@ function renderTasksCardDetailsAndNotes(React, options = {}) {
     },
         React.createElement('div', {
             ref: options.scrollRef,
-            style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '12px' },
-        }, React.createElement('div', { className: 'vyasa-tasks-card-scroll-body' }, options.details)),
+            style: {
+                flex: '1 1 auto',
+                minHeight: 0,
+                overflowY: 'auto',
+                overflowX: (options.contentScale || 1) > 1 ? 'auto' : 'hidden',
+                overscrollBehavior: 'contain',
+                padding: '12px',
+            },
+        }, React.createElement('div', {
+            className: 'vyasa-tasks-card-scroll-body',
+            style: (options.contentScale || 1) > 1 ? { width: `${(options.contentScale || 1) * 100}%` } : undefined,
+        }, options.details)),
         React.createElement('div', {
             'data-vyasa-card-notes': 'true',
             style: { flex: '0 0 auto', padding: '12px', borderTop: '1px dashed color-mix(in srgb, currentColor 18%, transparent)', background: 'color-mix(in srgb, var(--vyasa-primary) 8%, var(--vyasa-paper) 92%)', fontSize: '14px', lineHeight: 1.35 },
@@ -3950,6 +3961,11 @@ async function renderTasksGraphs(rootElement = document) {
             const layoutConfig = React.useMemo(() => readTasksLayoutConfigForModel(wrapper, model), [model]);
             const nodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '12.5%')).trim() || '12.5%';
             const filterPanelWidthSetting = String(tasksModelSetting(model, 'filter-panel-width', wrapper.dataset.tasksFilterPanelWidth || TASKS_FILTER_PANEL_WIDTH)).trim() || TASKS_FILTER_PANEL_WIDTH;
+            // How many card widths the details body is drawn at. Sideways scroll
+            // pans across it, so a narrow card can still hold wide content.
+            const nodeCardContentScale = Math.max(1, Number(
+                tasksModelSetting(model, 'node-card-content-scale', wrapper.dataset.tasksNodeCardContentScale || TASKS_NODE_CARD_CONTENT_SCALE)
+            ) || TASKS_NODE_CARD_CONTENT_SCALE);
             const hoverFontSize = String(tasksModelSetting(model, 'hover-font-size', wrapper.dataset.tasksHoverFontSize || '12px')).trim() || '12px';
             const colorMix = readTasksColorMixConfigForModel(wrapper, model);
             const projectionGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(tasksModelSetting(model, 'projection-group-opacity', wrapper.dataset.tasksProjectionGroupOpacity || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`)) || TASKS_PROJECTION_GROUP_OPACITY_DEFAULT));
@@ -7607,6 +7623,7 @@ async function renderTasksGraphs(rootElement = document) {
                     },
                     scrollRef: hoverCard ? hoverCardScrollRef : detailCardScrollRef,
                     scrollMode: hoverCardScrollMode,
+                    contentScale: nodeCardContentScale,
                     details: React.createElement(React.Fragment, null,
                     React.createElement('div', { style: { position: 'relative', paddingRight: panelLinkKinds.length ? '56px' : '28px', marginBottom: '10px' } },
                         panelLinkKinds.length ? renderTasksNodeLinkBadge(React, { kinds: panelLinkKinds, right: '0', top: '0' }) : null,
@@ -7684,6 +7701,7 @@ async function renderTasksGraphs(rootElement = document) {
                     },
                     scrollRef: detailCardScrollRef,
                     scrollMode: hoverCardScrollMode,
+                    contentScale: nodeCardContentScale,
                     details: React.createElement(React.Fragment, null,
                     React.createElement('div', { style: { display: 'flex', alignItems: 'start', gap: '10px', marginBottom: '10px' } },
                         React.createElement('div', { style: { flex: '1 1 auto', minWidth: 0 } },
@@ -9593,6 +9611,13 @@ async function renderTasksGraphs(rootElement = document) {
                 onWheelCapture: (event) => {
                     const scrollCard = hoverCardScrollRef.current || detailCardScrollRef.current;
                     const maxScrollTop = scrollCard ? Math.max(0, scrollCard.scrollHeight - scrollCard.clientHeight) : 0;
+                    const maxScrollLeft = scrollCard ? Math.max(0, scrollCard.scrollWidth - scrollCard.clientWidth) : 0;
+                    if (hoverCardScrollMode && scrollCard && maxScrollLeft > 0 && Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        scrollCard.scrollLeft = Math.max(0, Math.min(maxScrollLeft, scrollCard.scrollLeft + event.deltaX));
+                        return;
+                    }
                     if (hoverCardScrollMode && scrollCard && maxScrollTop > 0) {
                         event.preventDefault();
                         event.stopPropagation();

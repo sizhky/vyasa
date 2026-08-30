@@ -251,6 +251,35 @@ foundation :: Foundation:
     assert 'data-tasks-filter-panel-width="12.5%"' in html
 
 
+def test_tasks_block_reads_node_card_content_scale_option():
+    md = """```tasks
+---
+title: Card Content Scale
+node-card-content-scale: 3.5
+---
+foundation :: Foundation:
+```"""
+
+    html = to_xml(from_md(md))
+
+    assert 'data-tasks-node-card-content-scale="3.5"' in html
+
+
+def test_card_body_is_drawn_wider_than_the_card_and_pans_sideways():
+    """A narrow card holds wide content by scrolling across it.
+
+    The body is drawn at contentScale card widths, and the wheel hijack pans
+    it whenever the gesture leans horizontal. A scale of 1 turns both off.
+    """
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const TASKS_NODE_CARD_CONTENT_SCALE = 2;" in source
+    assert "overflowX: (options.contentScale || 1) > 1 ? 'auto' : 'hidden'" in source
+    assert "width: `${(options.contentScale || 1) * 100}%`" in source
+    assert "Math.abs(event.deltaX) > Math.abs(event.deltaY)" in source
+    assert "scrollCard.scrollLeft = Math.max(0, Math.min(maxScrollLeft," in source
+
+
 def test_tasks_block_defaults_to_95vw_width():
     html = to_xml(from_md("""```tasks
 foundation :: Foundation:
@@ -630,7 +659,10 @@ def test_tasks_node_and_edge_cards_keep_notes_below_scrolling_details():
     edge_panel = source.split("const SelectedEdgePanel = () =>", 1)[1].split("const FilterPanel = () =>", 1)[0]
 
     assert layout.index("ref: options.scrollRef") < layout.index("data-vyasa-card-notes")
-    assert "style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto'" in layout
+    # The details region scrolls; the notes footer does not. Assert that pair,
+    # not one spelling of the style object it is written in.
+    assert "flex: '1 1 auto'" in layout
+    assert "overflowY: 'auto'" in layout
     assert "style: { flex: '0 0 auto', padding: '12px', borderTop:" in layout
     assert "background: 'color-mix(in srgb, var(--vyasa-primary) 8%, var(--vyasa-paper) 92%)'" in layout
     assert "fontSize: '14px'" in layout
