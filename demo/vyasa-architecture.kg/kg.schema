@@ -53,7 +53,9 @@ matrix:
 	matrix_col=layer
 	matrix_row=flow
 	color_by=layer
-	caption="Which layers each flow touches. No arrows: a node's cell is the fact. Read the empty cells first, because they say what a flow never needs."
+	matrix_tint=14
+	edge_color_by=flow
+	caption="Which layers each flow touches. Every cell is washed by its column colour and its row colour, so the composite names the intersection. Edges join their endpoints inside one row; hide them to read the cells alone. Read the empty cells first, because they say what a flow never needs."
 render:
 	source=render
 	layout=sequence

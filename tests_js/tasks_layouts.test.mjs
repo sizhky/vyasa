@@ -128,8 +128,24 @@ test('matrix: every placement names its logical node', () => {
     }
 });
 
-test('matrix: no arrows, because the cell is the adjacency', () => {
-    assert.deepEqual(buildMatrixTasksGraph(fixture(), MATRIX_VIEW).edges, []);
+test('matrix: an edge joins its endpoints inside one row', () => {
+    const graph = buildMatrixTasksGraph(fixture(), MATRIX_VIEW);
+    assert.equal(graph.edges.length, 3, 'every edge with a row value is drawn');
+    const byId = Object.fromEntries(graph.nodes.map((node) => [node.id, node]));
+    for (const edge of graph.edges) {
+        const source = byId[edge.source];
+        const target = byId[edge.target];
+        assert.ok(source && target, `${edge.id} points at a placement that is not drawn`);
+        // Both placements share a row, so both sit at the same band.
+        assert.equal(source.id.split('_').pop(), target.id.split('_').pop());
+    }
+});
+
+test('matrix: an edge whose row value is missing is left out, not guessed', () => {
+    const model = fixture();
+    model.dependency_edges.push({ id: 'orphan', source: 'route', target: 'shell' });
+    const graph = buildMatrixTasksGraph(model, MATRIX_VIEW);
+    assert.ok(!graph.edges.some((edge) => edge.id === 'orphan'));
 });
 
 test('matrix: an empty cell is drawn and flagged', () => {

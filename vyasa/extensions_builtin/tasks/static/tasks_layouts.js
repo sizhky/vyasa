@@ -283,6 +283,9 @@ export function buildLayeredTasksGraph(model, projection = {}) {
 // A node touched by three flows is drawn three times. That duplication is the
 // message here, not a defect: it is the answer to "what does this flow touch".
 // Each copy carries __source_node_id, so selecting one selects the node.
+//
+// Edges are drawn between placements in the same row. The reader can hide them
+// with the ordinary edge toggle when the cells alone are enough.
 export function buildMatrixTasksGraph(model, projection = {}) {
     const colAttr = requireLayoutAttr('matrix', projection, 'matrix_col');
     const rowAttr = requireLayoutAttr('matrix', projection, 'matrix_row');
@@ -291,6 +294,9 @@ export function buildMatrixTasksGraph(model, projection = {}) {
     const colValues = declaredCols.length
         ? declaredCols
         : Array.from(new Set((model.tasks || []).map((task) => layoutAttrOf(task, colAttr)).filter(Boolean)));
+    // How strongly each axis washes a cell, as a percentage. Two washes at this
+    // strength compose into a third colour at every intersection.
+    const tint = Math.max(0, Math.min(50, Number(projection.matrix_tint) || 14));
     const rowValues = [];
     const cells = new Map();
     for (const edge of model.dependency_edges || []) {
@@ -332,6 +338,8 @@ export function buildMatrixTasksGraph(model, projection = {}) {
             label: col,
             __kind__: 'matrixHeader',
             __matrix_attr__: colAttr,
+            __matrix_axis__: 'col',
+            __matrix_tint__: tint,
             __fixed_size__: true,
             __z__: 0,
             position: { x: TASKS_MATRIX_LEFT + index * TASKS_MATRIX_COL_WIDTH, y: 16 },
@@ -345,6 +353,8 @@ export function buildMatrixTasksGraph(model, projection = {}) {
             label: row,
             __kind__: 'matrixHeader',
             __matrix_attr__: rowAttr,
+            __matrix_axis__: 'row',
+            __matrix_tint__: tint,
             __matrix_row_header__: true,
             __fixed_size__: true,
             __z__: 0,
@@ -362,6 +372,11 @@ export function buildMatrixTasksGraph(model, projection = {}) {
                 label: '',
                 __kind__: 'matrixCell',
                 __matrix_empty__: members.length === 0,
+                __matrix_col_attr__: colAttr,
+                __matrix_col_value__: col,
+                __matrix_row_attr__: rowAttr,
+                __matrix_row_value__: row,
+                __matrix_tint__: tint,
                 __fixed_size__: true,
                 __z__: 0,
                 position: { x, y: rowTop[rowIndex] },
@@ -386,9 +401,22 @@ export function buildMatrixTasksGraph(model, projection = {}) {
             });
         });
     });
-    // No arrows. A node's cell is the adjacency, so drawing edges would say the
-    // same thing twice and cross every column doing it.
-    return { nodes, edges: [] };
+    // An edge carries exactly one row value, so it joins its two endpoints
+    // inside that row and nowhere else. Arrows therefore stay in their band and
+    // run column to column, which is the reading the matrix is for.
+    const placementId = (nodeId, rowIndex) => {
+        const colIndex = colValues.indexOf(layoutAttrOf(byId[nodeId], colAttr));
+        return colIndex < 0 ? '' : `${nodeId}__${colIndex}_${rowIndex}`;
+    };
+    const edges = (model.dependency_edges || []).map((edge) => {
+        if (!byId[edge.source] || !byId[edge.target]) return null;
+        const rowIndex = rowValues.indexOf(layoutAttrOf(edge, rowAttr));
+        if (rowIndex < 0) return null;
+        const source = placementId(edge.source, rowIndex);
+        const target = placementId(edge.target, rowIndex);
+        return source && target ? { ...edge, source, target } : null;
+    }).filter(Boolean);
+    return { nodes, edges };
 }
 
 export const TASKS_LAYOUTS = {
@@ -414,7 +442,7 @@ export const TASKS_LAYOUTS = {
     matrix: {
         id: 'matrix',
         label: 'Matrix',
-        keys: ['matrix_col', 'matrix_row', 'matrix_col_order'],
+        keys: ['matrix_col', 'matrix_row', 'matrix_col_order', 'matrix_tint'],
         chromeKinds: ['matrixHeader', 'matrixCell'],
         authoredHandles: false,
         edgesOverNodes: false,

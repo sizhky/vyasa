@@ -6878,7 +6878,19 @@ async function renderTasksGraphs(rootElement = document) {
                         },
                     }, data?.label || '');
                 }
+                // A matrix column reads a node attribute and a row reads an edge
+                // attribute, so each axis looks up its own palette. Falling back to
+                // the other map keeps a pack working when an attribute is coloured
+                // on the side the layout did not expect.
+                const matrixAxisColor = (attr, value) => (
+                    model?.node_color_palettes?.[attr || '']?.[value]
+                    || model?.edge_color_palettes?.[attr || '']?.[value]
+                    || ''
+                );
+                const matrixWash = (color, strength) => `linear-gradient(color-mix(in srgb, ${color} ${strength}%, transparent), color-mix(in srgb, ${color} ${strength}%, transparent))`;
                 if (data?.__kind__ === 'matrixHeader') {
+                    const axisColor = matrixAxisColor(data.__matrix_attr__, data.label) || 'currentColor';
+                    const isRow = Boolean(data.__matrix_row_header__);
                     return React.createElement('div', {
                         style: {
                             width: '100%',
@@ -6886,9 +6898,14 @@ async function renderTasksGraphs(rootElement = document) {
                             boxSizing: 'border-box',
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: data.__matrix_row_header__ ? 'flex-end' : 'center',
-                            textAlign: data.__matrix_row_header__ ? 'right' : 'center',
-                            color: 'color-mix(in srgb, var(--vyasa-ink) 72%, transparent)',
+                            justifyContent: isRow ? 'flex-end' : 'center',
+                            textAlign: isRow ? 'right' : 'center',
+                            // The header carries its own wash at double strength, so a
+                            // reader can trace which colour each axis contributed.
+                            background: `color-mix(in srgb, ${axisColor} ${(Number(data.__matrix_tint__) || 14) * 2}%, transparent)`,
+                            [isRow ? 'borderRight' : 'borderBottom']: `2px solid color-mix(in srgb, ${axisColor} 62%, transparent)`,
+                            borderRadius: '6px',
+                            color: `color-mix(in srgb, ${axisColor} 74%, var(--vyasa-ink))`,
                             fontSize: '12px',
                             fontWeight: 700,
                             letterSpacing: '.06em',
@@ -6899,17 +6916,28 @@ async function renderTasksGraphs(rootElement = document) {
                     }, data?.label || '');
                 }
                 if (data?.__kind__ === 'matrixCell') {
-                    // An empty cell is a finding, not a gap. It gets a visible box so
-                    // "this flow never touches this layer" reads as a statement.
+                    // Two translucent washes, column over row. Their composite is what
+                    // names the intersection, so a cell's colour says where it sits
+                    // without the reader tracing back to either header.
+                    const strength = Number(data.__matrix_tint__) || 14;
+                    const colColor = matrixAxisColor(data.__matrix_col_attr__, data.__matrix_col_value__);
+                    const rowColor = matrixAxisColor(data.__matrix_row_attr__, data.__matrix_row_value__);
+                    const washes = [
+                        colColor ? matrixWash(colColor, strength) : '',
+                        rowColor ? matrixWash(rowColor, strength) : '',
+                    ].filter(Boolean).join(', ');
                     return React.createElement('div', {
                         style: {
                             width: '100%',
                             height: '100%',
                             boxSizing: 'border-box',
-                            background: data.__matrix_empty__
-                                ? 'color-mix(in srgb, var(--vyasa-ink) 3%, transparent)'
-                                : 'transparent',
-                            border: '1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent)',
+                            backgroundImage: washes || undefined,
+                            // An empty cell keeps the composite but states its emptiness
+                            // with a dashed edge. It is a finding, not a gap.
+                            border: data.__matrix_empty__
+                                ? '1px dashed color-mix(in srgb, var(--vyasa-ink) 22%, transparent)'
+                                : '1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent)',
+                            opacity: data.__matrix_empty__ ? 0.55 : 1,
                             borderRadius: '8px',
                         },
                     });
