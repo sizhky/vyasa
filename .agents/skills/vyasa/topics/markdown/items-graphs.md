@@ -84,6 +84,32 @@ dependency:
 - `group_by,color_by=status` expands to `group_by=status color_by=status`; `X,Y,Z=value` is valid for simple scalar values.
 - Projection display controls may live on views: `hover_attrs`, `edge_color_by`, `edge_label_from`, `aggregate_edges`, `default_open_depth`, and spacing/layout keys.
 
+## Sequence Views
+
+`layout=sequence` swaps the free graph for a fixed grid: one lane per group across the top, one row per edge down the page.
+
+```text
+@views
+sequence:
+	source=base
+	layout=sequence
+	sequence_role=role
+	sequence_phase=phase
+	edge_color_by=role
+```
+
+- A lifeline is one tall node. Every participant is drawn exactly once, spanning the whole diagram, with its label in a cap at the top.
+- Each edge meets a lifeline at a handle whose `offsetPct` is that edge's row. Both ends of a row share one offset, so every arrow is horizontal, and one lifeline takes as many handles as it has rows.
+- Row order is the order the edges are written in the view's edge source. The pack states no step number, so declaration order is the only ordering the author gives.
+- To tell one flow from another, point the view at its own edge file (`@sources`) and write that file in flow order.
+- Lane order is the stage the node belongs to, then the order the nodes are written inside that stage.
+- The step number rides on the edge label (`3 · checks`), so the view needs no gutter column.
+- `sequence_role` names an edge attr. Value `standing` marks a rule that already holds: it carries no step number and draws dashed. Value `blocking` marks one step holding back another.
+- `sequence_phase` names an edge attr. Runs of rows that share a value get a tinted band with a label on the left.
+- Lanes are as wide as participants, so a large flow is wide. Pan, or collapse a stage.
+- Slides work here with no extra keys. A slide's `nodes` select their lifelines, and a row lights up when both of its ends are in the slide. Name the step range in the slide title so the reader can find it on the page.
+- See `demo/browser-page-load.kg` for a worked pack.
+
 ## Slides
 
 Author new slide sequences inside `@views`. Each view owns zero or one ordered sequence, so one graph can keep several explanations:

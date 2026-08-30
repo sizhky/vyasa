@@ -1,7 +1,7 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
 import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksCenteredViewport, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksInlineLinkPlainText, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
-import { buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksHopSeedIds, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNeighborHopIds, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksPruneFilterQueryFields, tasksReferenceEdges, tasksSameIdSet, tasksSelectionClickKey, tasksVisibleReferenceEdges, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
+import { buildSequenceTasksGraph, buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksHopSeedIds, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNeighborHopIds, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksProjectionById, tasksProjectionLayout, tasksPruneFilterQueryFields, tasksReferenceEdges, tasksSameIdSet, tasksSelectionClickKey, tasksVisibleReferenceEdges, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
 import { createMomentumRunner, shortcutsSuspended } from '/static/page_shell.js';
@@ -101,6 +101,8 @@ const TASKS_GANTT_BAR_MIN_HEIGHT = 34;
 const TASKS_GANTT_LEFT = 210;
 const TASKS_GANTT_TOP = 86;
 const TASKS_GANTT_PROJECTION_ID = '__gantt__';
+const TASKS_PASSIVE_NODE_KINDS = new Set(['ganttHeader', 'sequencePhase']);
+const TASKS_SEQUENCE_LABEL_LIFT = 12;
 const TASKS_PROJECTION_UNSPECIFIED_LABEL = 'Unspecified';
 const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity']);
 const TASKS_SPECIAL_COLOR_MODE_KEYS = new Set(['connectivity', 'rank']);
@@ -2364,7 +2366,12 @@ function normalizeTasksGraphNodes(graph, model) {
             const { kind: _legacyNodeKind, ...nodeRest } = node;
             const kind = node.__kind__ || _legacyNodeKind || (groupsById[node.id] ? 'group' : 'task');
             const label = node.label || source.label || node.id;
-            return { ...source, ...nodeRest, __kind__: kind, label, ...sizeTaskNode(label, kind, null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels }) };
+            // A fixed-layout node (a sequence lifeline, a phase band) states its own
+            // box. Auto-sizing it to a card would throw that away.
+            const size = node.__fixed_size__
+                ? { width: node.width, height: node.height }
+                : sizeTaskNode(label, kind, null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels });
+            return { ...source, ...nodeRest, __kind__: kind, label, ...size };
         }),
     };
 }
@@ -3738,6 +3745,13 @@ function selectTasksProjectionState(sourceModel, sourceGraph, projectionId) {
 
 function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode, groupByEnabled = false, groupByHierarchy = [], preserveGrouping = false) {
     const projectionState = selectTasksProjectionState(sourceModel, sourceGraph, projectionId);
+    if (tasksProjectionLayout(sourceModel, projectionId) === 'sequence') {
+        return {
+            ...projectionState,
+            graph: buildSequenceTasksGraph(projectionState.model, tasksProjectionById(sourceModel, projectionId) || {}),
+            viewMode: 'sequence',
+        };
+    }
     if (preserveGrouping) return projectionState;
     if (viewMode !== 'gantt') {
         if (!tasksGroupByPrefsDifferFromSchema(sourceModel, projectionId, groupByEnabled, groupByHierarchy)) return projectionState;
@@ -3891,7 +3905,11 @@ async function renderTasksGraphs(rootElement = document) {
             }, [projectionOptions]);
             const initialGraphProjectionId = initialProjectionId === TASKS_GANTT_PROJECTION_ID ? '' : initialProjectionId;
             const [activeProjectionId, setActiveProjectionId] = React.useState(initialGraphProjectionId);
-            const [viewMode, setViewMode] = React.useState(defaultViewMode);
+            const [viewMode, setViewMode] = React.useState(() => (
+                defaultViewMode === 'graph' && tasksProjectionLayout(sourceModel, initialGraphProjectionId) === 'sequence'
+                    ? 'sequence'
+                    : defaultViewMode
+            ));
             const initialProjectionPrefs = React.useMemo(
                 () => readTasksProjectionPrefsForModel(sourceModel, { ...sourcePrefsRef.current, projectionPrefs: storedProjectionPrefsRef.current }, initialGraphProjectionId),
                 [sourceModel, initialGraphProjectionId]
@@ -5544,17 +5562,18 @@ async function renderTasksGraphs(rootElement = document) {
                 lastLayoutRevisionKeyRef.current = revisionKey;
                 lastGraphRevisionCauseRef.current = revisionCause;
                 logTasksColorDebug(model, rawGraph.nodes, activeColorBy, activeColorPalette, colorMix);
-                if (mode === 'gantt') {
+                if (mode === 'gantt' || mode === 'sequence') {
                     const edgeColorPalette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
                     const nodesWithStyle = rawGraph.nodes.map((node) => {
-                        if (node.__kind__ === 'ganttHeader') {
+                        if (TASKS_PASSIVE_NODE_KINDS.has(node.__kind__)) {
+                            const passiveZ = Number.isFinite(node.__z__) ? node.__z__ : 1;
                             return {
                                 id: node.id,
                                 type: 'vyasaTask',
                                 position: node.position,
                                 data: node,
-                                style: { width: node.width, height: node.height, zIndex: 1, background: 'transparent', border: 'none', pointerEvents: 'none' },
-                                zIndex: 1,
+                                style: { width: node.width, height: node.height, zIndex: passiveZ, background: 'transparent', border: 'none', pointerEvents: 'none' },
+                                zIndex: passiveZ,
                                 className: 'vyasa-tasks-node--passive',
                                 draggable: false,
                                 selectable: false,
@@ -5570,6 +5589,19 @@ async function renderTasksGraphs(rootElement = document) {
                         const useOverlay = tasksUseColorOverlay(colorLevels);
                         const cardState = tasksCardStateForNode(sourceModel, nodeStates, logicalNodeId, cardStates);
                         const stateAccent = cardState.color || TASKS_DONE_ACCENT;
+                        if (node.__sequence_lifeline__) {
+                            return {
+                                id: node.id,
+                                type: 'vyasaTask',
+                                position: node.position,
+                                data: { ...node, __sequence_color__: nodeColor, __checked__: isChecked, __has_note__: hasNote, __card_state__: cardState.label, __card_state_color__: cardState.color },
+                                style: { width: node.width, height: node.height, zIndex: TASKS_TASK_Z, background: 'transparent', border: 'none', overflow: 'visible' },
+                                zIndex: TASKS_TASK_Z,
+                                className: 'vyasa-tasks-node--selectable',
+                                draggable: false,
+                                selectable: true,
+                            };
+                        }
                         return {
                             id: node.id,
                             type: 'vyasaTask',
@@ -5596,22 +5628,41 @@ async function renderTasksGraphs(rootElement = document) {
                         };
                     });
                     const authoredRawEdges = (rawGraph.edges || []).filter((edge) => !edge.__reference__);
-                    const anchored = buildTaskEdgeAnchors(nodesWithStyle, authoredRawEdges);
+                    // A sequence row pins both of its handles to the row height, so the
+                    // generic anchor solver must not spread them around the node.
+                    const anchored = mode === 'sequence'
+                        ? {
+                            edges: authoredRawEdges,
+                            nodeHandles: Object.fromEntries((rawGraph.nodes || [])
+                                .filter((node) => node.handleLayout)
+                                .map((node) => [node.id, node.handleLayout])),
+                        }
+                        : buildTaskEdgeAnchors(nodesWithStyle, authoredRawEdges);
                     const visibleReferenceRecords = tasksVisibleReferenceEdges(referenceEdgeRecords, nodesWithStyle, model);
                     const referenceAnchored = buildTaskEdgeAnchors(nodesWithStyle, visibleReferenceRecords, 'reference-');
                     const baseEdges = anchored.edges.map((edge) => {
                         const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
                         const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
+                        const rowLabel = edge.__sequence_step__
+                            ? `${edge.__sequence_step__} \u00b7 ${resolvedLabel}`.trim()
+                            : resolvedLabel;
                         return {
                             ...edge,
-                            label: resolvedLabel,
+                            label: rowLabel,
                             type: 'vyasaEdge',
-                            data: { ...(edge.data || {}), edgeColor },
+                            data: { ...(edge.data || {}), edgeColor, __sequence_label_lift__: mode === 'sequence' ? TASKS_SEQUENCE_LABEL_LIFT : 0 },
                             markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: edgeColor || 'currentColor' },
-                            zIndex: TASKS_EDGE_Z,
+                            // A lifeline is a full-height column, so a row that crosses one
+                            // must draw over it, not behind it.
+                            zIndex: mode === 'sequence' ? TASKS_TASK_Z + 10 : TASKS_EDGE_Z,
                             labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || TASKS_EDGE_LABEL_TEXT, opacity: edgeOpacity },
                             labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
-                            style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: edgeColor || 'currentColor' },
+                            style: {
+                                strokeWidth: 2.5,
+                                opacity: edgeOpacity,
+                                stroke: edgeColor || 'currentColor',
+                                ...(edge.__sequence_standing__ ? { strokeDasharray: '6 5', strokeWidth: 1.8 } : {}),
+                            },
                         };
                     });
                     referenceEdgesRef.current = referenceAnchored.edges.map((edge) => tasksReferenceFlowEdge(edge, rf.MarkerType.ArrowClosed, hoverFontSize, layoutConfig.edgeLabelWidth));
@@ -6508,7 +6559,10 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             };
             const CustomEdge = React.memo((props) => {
-                const [path, labelX, labelY] = tasksEdgePath(props);
+                const [path, labelX, rawLabelY] = tasksEdgePath(props);
+                // A sequence row is a horizontal line, so a centred label sits right on
+                // top of it. Lift it clear of the stroke.
+                const labelY = rawLabelY - (Number(props.data?.__sequence_label_lift__) || 0);
                 React.useEffect(() => {
                     traceTasksEdge('render', props, {
                         sourceX: props.sourceX,
@@ -6770,6 +6824,80 @@ async function renderTasksGraphs(rootElement = document) {
                         suppressNextGraphClickRef.current = false;
                     }, 0);
                 };
+                if (data?.__kind__ === 'sequencePhase') {
+                    const phasePalette = model?.edge_color_palettes?.[data.__sequence_phase_attr__ || ''] || {};
+                    const tint = phasePalette[data.label] || 'currentColor';
+                    return React.createElement('div', {
+                        style: {
+                            width: '100%',
+                            height: '100%',
+                            boxSizing: 'border-box',
+                            background: `color-mix(in srgb, ${tint} 10%, transparent)`,
+                            borderTop: `1px solid color-mix(in srgb, ${tint} 32%, transparent)`,
+                            borderRadius: '8px',
+                            color: `color-mix(in srgb, ${tint} 72%, var(--vyasa-ink))`,
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            letterSpacing: '.07em',
+                            textTransform: 'uppercase',
+                            padding: '6px 0 0 12px',
+                        },
+                    }, data?.label || '');
+                }
+                if (data?.__sequence_lifeline__) {
+                    const accent = data.__sequence_color__ || 'currentColor';
+                    return React.createElement('div', {
+                        ...reviewAttrs,
+                        style: {
+                            position: 'relative',
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'stretch',
+                            cursor: 'pointer',
+                        },
+                    },
+                        ...renderHandles('target'),
+                        ...renderHandles('source'),
+                        React.createElement('div', {
+                            style: {
+                                boxSizing: 'border-box',
+                                padding: '6px 6px 7px',
+                                borderRadius: '8px 8px 0 0',
+                                background: `color-mix(in srgb, ${accent} 24%, transparent)`,
+                                border: `1px solid color-mix(in srgb, ${accent} 55%, transparent)`,
+                                textAlign: 'center',
+                                lineHeight: 1.22,
+                                overflowWrap: 'anywhere',
+                            },
+                        },
+                            data.__sequence_stage__ ? React.createElement('div', {
+                                style: {
+                                    fontSize: '9px',
+                                    fontWeight: 700,
+                                    letterSpacing: '.07em',
+                                    textTransform: 'uppercase',
+                                    opacity: 0.6,
+                                    marginBottom: '2px',
+                                },
+                            }, data.__sequence_stage__) : null,
+                            React.createElement('div', { style: { fontSize: '11px', fontWeight: 700 } }, data?.label || '')
+                        ),
+                        // The lifeline body is a tinted column, not a hairline, so it
+                        // still reads when the whole diagram is zoomed to fit.
+                        React.createElement('div', {
+                            style: {
+                                flex: '1 1 auto',
+                                background: `color-mix(in srgb, ${accent} 11%, transparent)`,
+                                borderLeft: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`,
+                                borderRight: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`,
+                                borderBottom: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`,
+                                borderRadius: '0 0 8px 8px',
+                            },
+                        })
+                    );
+                }
                 if (data?.__kind__ === 'ganttHeader') {
                     return React.createElement('div', {
                         style: {
@@ -8000,7 +8128,7 @@ async function renderTasksGraphs(rootElement = document) {
                                         if (nextProjectionId === TASKS_GANTT_PROJECTION_ID) setViewMode('gantt');
                                         else {
                                             setActiveProjectionId(nextProjectionId);
-                                            setViewMode('graph');
+                                            setViewMode(tasksProjectionLayout(sourceModel, nextProjectionId) === 'sequence' ? 'sequence' : 'graph');
                                         }
                                         pendingFitActionRef.current = 'mode';
                                     },

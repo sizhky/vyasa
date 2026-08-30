@@ -1,0 +1,100 @@
+intent: Navigation
+	description=What the person asked the browser to do.
+	url: URL
+		description=The address the person typed or clicked.
+		example=The address bar holds `example.com/pricing`.
+	nav-request: Navigation request
+		description=The browser's decision to fetch one top-level document.
+		example=The browser commits to loading the pricing page.
+policy: Standing rules
+	description=Rules that already hold before the request leaves. They apply to every step, so they have no place in the order.
+	hsts: HSTS list
+		description=A list of sites the browser must reach over https.
+		example=The browser rewrites `http://example.com` to `https://example.com` without asking the network.
+	cookie-jar: Cookie jar
+		description=Stored cookies the browser attaches to a matching request.
+		example=The session cookie for `example.com` rides along with the request.
+	cache-policy: Cache policy
+		description=The response headers that say how long a copy stays fresh.
+		example=`Cache-Control: max-age=600` lets the browser reuse the page for ten minutes.
+store: Stored copies
+	description=Copies the browser keeps so it can skip work.
+	dns-cache: DNS cache
+		description=Names the browser resolved recently.
+		example=The browser already knows the address for `example.com` and skips the lookup.
+	http-cache: HTTP cache
+		description=Responses the browser already downloaded.
+		example=A fresh copy of the pricing page is still in the cache.
+naming: Name lookup
+	description=Turning a name into an address.
+	dns-query: DNS query
+		description=A question sent to a resolver asking where a name lives.
+		example=The browser asks the resolver for `example.com`.
+	ip-address: IP address
+		description=The address the browser will connect to.
+		example=The resolver answers `93.184.216.34`.
+connect: Connection
+	description=Opening a channel the browser can trust.
+	tcp-handshake: TCP handshake
+		description=Three messages that open a reliable connection.
+		example=SYN, SYN-ACK, ACK complete in one round trip.
+	tls-handshake: TLS handshake
+		description=The exchange that agrees on keys and checks the certificate.
+		example=The browser verifies the certificate for `example.com`.
+	secure-channel: Secure channel
+		description=An open connection the browser can send private bytes over.
+		example=The connection is ready to carry the request.
+transfer: Transfer
+	description=Asking for bytes and receiving them.
+	http-request: HTTP request
+		description=The message that asks the server for one resource.
+		example=`GET /pricing` goes out with the session cookie.
+	http-response: HTTP response
+		description=The server's reply: a status, headers, and a body.
+		example=`200 OK` arrives with the page body.
+	html-bytes: HTML bytes
+		description=The raw document body, arriving in pieces.
+		example=The first chunk of markup reaches the parser before the last chunk leaves the server.
+	subresource-request: Subresource request
+		description=A request for a file the page refers to.
+		example=The browser asks for the stylesheet named in the head.
+	css-bytes: CSS bytes
+		description=The raw stylesheet body.
+		example=`main.css` arrives.
+	js-bytes: JavaScript bytes
+		description=The raw script body.
+		example=`app.js` arrives.
+parse: Parsing
+	description=Turning bytes into trees the renderer can use.
+	token-stream: Token stream
+		description=The markup broken into tags, attributes, and text.
+		example=The parser emits a `<head>` start tag, then a `<link>` tag.
+	preload-scanner: Preload scanner
+		description=A second reader that races ahead of the parser to find files worth fetching early. It runs beside the main path, not inside it.
+		example=While the parser is still in the head, the scanner already asked for the hero image.
+	dom-tree: DOM tree
+		description=The document as a tree of nodes.
+		example=The body, its sections, and its text become linked nodes.
+	cssom-tree: CSSOM tree
+		description=The stylesheet as a tree of rules the browser can match.
+		example=Selectors and their declarations become a queryable tree.
+	script-execution: Script execution
+		description=Running a script that can read and change the document.
+		example=`app.js` runs and inserts a banner into the body.
+render: Rendering
+	description=Turning trees into pixels.
+	render-tree: Render tree
+		description=Only the nodes that will be drawn, each with its computed style.
+		example=A `display: none` menu is left out of the tree.
+	layout-boxes: Layout boxes
+		description=The size and position of every drawn node.
+		example=The hero heading gets a box 1180 pixels wide at the top of the page.
+	paint-records: Paint records
+		description=The ordered drawing instructions for those boxes.
+		example=Fill this rectangle, then draw this text on top.
+	composited-frame: Composited frame
+		description=The painted layers combined into one image.
+		example=The fixed header layer sits over the scrolling content layer.
+	first-paint: First contentful paint
+		description=The moment the person first sees real content.
+		example=The heading appears on screen.

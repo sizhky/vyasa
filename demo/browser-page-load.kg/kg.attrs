@@ -1,0 +1,21 @@
+@node_attrs
+kind:
+  Rule: hsts cookie-jar cache-policy
+  Store: dns-cache http-cache
+  Message: nav-request dns-query http-request http-response subresource-request
+  Action: tcp-handshake tls-handshake preload-scanner script-execution
+  Artifact: url ip-address secure-channel html-bytes css-bytes js-bytes token-stream dom-tree cssom-tree render-tree layout-boxes paint-records composited-frame
+  Milestone: first-paint
+
+@edge_attrs
+role:
+  message: e1 e3 e4 e5 e7 e8 e9 e10 e11 e13 e14 e16 e17 e18 e19 e20 e21 e22 e23 e24 e25 e27 e28 e29 e30 e31 e32
+  standing: e2 e6 e12 e15
+  blocking: e26
+phase:
+  request: e1 e2 e3 e4 e5
+  resolve: e6 e7
+  connect: e8 e9 e10
+  transfer: e11 e12 e13 e14 e15 e16
+  parse: e17 e18 e19 e20 e21 e22 e23 e24 e25 e26
+  render: e27 e28 e29 e30 e31 e32

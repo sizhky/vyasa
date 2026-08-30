@@ -14,6 +14,7 @@ PROJECTION_DISPLAY_KEYS = {
     "projection-unspecified-content-opacity", "jitter", "jitter_y",
     "spacing", "node_spacing", "layer_spacing", "group_padding",
     "layout_direction", "collision_gap", "edge_label_width",
+    "layout", "sequence_role", "sequence_phase",
 }
 
 
