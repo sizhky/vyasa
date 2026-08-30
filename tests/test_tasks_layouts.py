@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from vyasa.extensions_builtin.tasks.items_pack import read_kg_pack
@@ -49,6 +50,23 @@ def test_a_key_from_another_layout_is_left_alone():
     # may still carry unrelated display keys.
     assert unknown_layout_keys({"layout": "matrix", "matrix_col": "layer", "sequence_role": "role"}) == []
     assert layout_keys("layered") == ("layered_tier", "layered_order", "layered_aside")
+
+
+def test_python_and_javascript_agree_on_every_layout_key():
+    """The registry lives in JS; the key names are repeated in Python.
+
+    A key added on one side only is invisible until a pack uses it, and then
+    the pack fails to load entirely. This locks the two lists together.
+    """
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks_layouts.js").read_text()
+    blocks = re.findall(r"id: '(\w+)',\n\s+label: '[^']*',\n\s+keys: \[([^\]]*)\]", source)
+    assert blocks, "could not read the layout registry"
+
+    from_js = {name: tuple(re.findall(r"'([^']+)'", keys)) for name, keys in blocks}
+    assert from_js, "no layouts parsed out of the registry"
+    assert set(from_js) == set(LAYOUT_KEYS), f"layouts differ: {set(from_js) ^ set(LAYOUT_KEYS)}"
+    for name, keys in from_js.items():
+        assert set(keys) == set(LAYOUT_KEYS[name]), f"{name}: {set(keys) ^ set(LAYOUT_KEYS[name])}"
 
 
 def test_every_demo_pack_still_parses():

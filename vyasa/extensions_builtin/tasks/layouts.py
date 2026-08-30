@@ -25,7 +25,7 @@ from __future__ import annotations
 LAYOUT_KEYS: dict[str, tuple[str, ...]] = {
     "sequence": ("sequence_role", "sequence_phase"),
     "layered": ("layered_tier", "layered_order", "layered_aside"),
-    "matrix": ("matrix_col", "matrix_row", "matrix_col_order"),
+    "matrix": ("matrix_col", "matrix_row", "matrix_col_order", "matrix_tint"),
 }
 
 # Old name -> current name. A pack written before a rename keeps working.
