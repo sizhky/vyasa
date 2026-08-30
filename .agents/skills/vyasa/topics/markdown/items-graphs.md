@@ -83,15 +83,27 @@ dependency:
 - A view accepts `context=active` (default), `context=latest`, or one exact context id. `active` follows the context selected by the request or UI; the other values select their resolved context when the view opens.
 - `group_by,color_by=status` expands to `group_by=status color_by=status`; `X,Y,Z=value` is valid for simple scalar values.
 - Projection display controls may live on views: `hover_attrs`, `edge_color_by`, `edge_label_from`, `aggregate_edges`, `default_open_depth`, and spacing/layout keys.
+- Panel sizing lives on the graph or a view: `node-card-width` and `filter-panel-width` both default to `20%` of the widget, so the panels keep their share on any screen. Any CSS length works (`30rem`, `440px`).
+- `node-card-content-scale` draws the node card's details wider than the card and lets sideways scroll pan across it. Default `2`. Set `1` to turn it off.
 
-## Sequence Views
+## Fixed Layouts
 
-`layout=sequence` swaps the free graph for a fixed grid: one lane per group across the top, one row per edge down the page.
+`layout=` replaces the free graph with a layout that places every node itself. Three exist: `sequence`, `layered`, and `matrix`.
+
+Each layout owns its own keys and validates them. There is no shared grammar of `row=`/`col=` keys, because the same word would mean different things in different layouts. Write the keys of the layout you chose.
+
+A view with a bad layout key fails alone. It keeps its place in the dropdown and draws an error card naming the problem, and every other view still renders. An unknown layout name is reported the same way.
+
+Grouping controls are off in a fixed layout. The layout decides placement, so `group_by` on the same view has nothing to act on.
+
+### `layout=sequence`
+
+One lane per participant across the page, one row per edge down it.
 
 ```text
 @views
-sequence:
-	source=base
+render:
+	source=render
 	layout=sequence
 	sequence_role=role
 	sequence_phase=phase
@@ -106,9 +118,56 @@ sequence:
 - The step number rides on the edge label (`3 · checks`), so the view needs no gutter column.
 - `sequence_role` names an edge attr. Value `standing` marks a rule that already holds: it carries no step number and draws dashed. Value `blocking` marks one step holding back another.
 - `sequence_phase` names an edge attr. Runs of rows that share a value get a tinted band with a label on the left.
-- Lanes are as wide as participants, so a large flow is wide. Pan, or collapse a stage.
+- Lanes are as wide as participants, so a large flow is wide. Pan, or split the flow across views.
 - Slides work here with no extra keys. A slide's `nodes` select their lifelines, and a row lights up when both of its ends are in the slide. Name the step range in the slide title so the reader can find it on the page.
-- See `demo/browser-page-load.kg` for a worked pack.
+- Only this layout draws its arrows over the nodes, because a lifeline stands between the two ends of most rows.
+
+### `layout=layered`
+
+Horizontal bands down the page. A node's y is its band and nothing else.
+
+```text
+@views
+layered:
+	source=base
+	layout=layered
+	layered_tier=layer
+	layered_order=surface,core,pipeline,extension,content
+	layered_aside=configuration
+	color_by=layer
+```
+
+- `layered_tier` names a node attr. Its values become the bands.
+- `layered_order` lists the bands top to bottom. Omit it and the layout uses the order the values appear. Give it, and a value with no band is reported by name rather than dropped, so state the order once you know it.
+- `layered_aside` lists values that leave the ladder for a band down the right side. Use it for a concern that touches every band, because putting such a node on one rung makes the rung lie.
+- Direction then carries meaning on its own: down is the request going in, up is the answer coming back.
+- A band grows to fit the longest label on its rung, so nothing clips.
+
+### `layout=matrix`
+
+A grid. Columns come from a node attr, rows from an edge attr.
+
+```text
+@views
+matrix:
+	source=base
+	layout=matrix
+	matrix_col=layer
+	matrix_row=flow
+	matrix_tint=14
+	color_by=layer
+```
+
+- `matrix_col` names a **node** attr; `matrix_row` names an **edge** attr. A node lands in a cell when one of its edges carries that row value.
+- `matrix_col_order` lists the columns. Omit it and the layout uses the order the values appear.
+- A node touched by three rows is drawn three times. That duplication is the answer to "what does this row touch", not a defect. Each copy still selects and colours as the one node.
+- Each cell is washed by its column colour and its row colour, so the composite names the intersection. Colours come from the pack: a column reads `node_color_palettes`, a row reads `edge_color_palettes`.
+- `matrix_tint` sets the wash strength as a percentage. Default `14`, maximum `50`.
+- An edge joins its endpoints inside one row, so arrows stay in their band. Hide them with the edge toggle to read the cells alone.
+- An empty cell is drawn with a dashed edge. Read the empty cells first, because they say what a row never needs.
+- A cell grows to hold its members, and a row to hold its fullest cell.
+
+See `demo/vyasa-architecture.kg` for all three layouts over one pack, and `demo/browser-page-load.kg` for a sequence-only pack.
 
 ## Slides
 
