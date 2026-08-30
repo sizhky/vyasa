@@ -10,7 +10,7 @@ from .layouts import all_layout_keys, apply_layout_aliases, unknown_layout_keys
 
 TASKS_PROJECTION_UNSPECIFIED_LABEL = "Unspecified"
 PROJECTION_DISPLAY_KEYS = {
-    "default_open_depth", "node-card-width", "hover-font-size", "color_mix",
+    "default_open_depth", "node-card-width", "filter-panel-width", "hover-font-size", "color_mix",
     "color_mix_intensity", "projection-group-opacity", "projection-unspecified-group-opacity",
     "projection-unspecified-content-opacity", "jitter", "jitter_y",
     "spacing", "node_spacing", "layer_spacing", "group_padding",

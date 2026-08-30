@@ -47,7 +47,7 @@ const TASKS_AUTO_FIT_ON_EXPAND_DEFAULT = false;
 const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
 // A share of the widget, not a pixel count, so the panel keeps its
 // proportion on any screen. The 24px subtraction keeps the gutter.
-const TASKS_FILTER_PANEL_WIDTH = '12.5%';
+const TASKS_FILTER_PANEL_WIDTH = '12.5%'; // default; `filter-panel-width` overrides it
 const TASKS_PROJECTION_GROUP_OPACITY_DEFAULT = 12;
 const TASKS_PROJECTION_UNSPECIFIED_GROUP_OPACITY_DEFAULT = 7;
 const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;
@@ -3949,6 +3949,7 @@ async function renderTasksGraphs(rootElement = document) {
             }), [model]);
             const layoutConfig = React.useMemo(() => readTasksLayoutConfigForModel(wrapper, model), [model]);
             const nodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '12.5%')).trim() || '12.5%';
+            const filterPanelWidthSetting = String(tasksModelSetting(model, 'filter-panel-width', wrapper.dataset.tasksFilterPanelWidth || TASKS_FILTER_PANEL_WIDTH)).trim() || TASKS_FILTER_PANEL_WIDTH;
             const hoverFontSize = String(tasksModelSetting(model, 'hover-font-size', wrapper.dataset.tasksHoverFontSize || '12px')).trim() || '12px';
             const colorMix = readTasksColorMixConfigForModel(wrapper, model);
             const projectionGroupOpacity = Math.max(0, Math.min(100, Number.parseFloat(tasksModelSetting(model, 'projection-group-opacity', wrapper.dataset.tasksProjectionGroupOpacity || `${TASKS_PROJECTION_GROUP_OPACITY_DEFAULT}`)) || TASKS_PROJECTION_GROUP_OPACITY_DEFAULT));
@@ -7628,13 +7629,13 @@ async function renderTasksGraphs(rootElement = document) {
                                 padding: '0',
                             },
                         }, '⧉'),
-                        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', columnGap: '12px', alignItems: 'start' } },
-                            React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px', fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' } },
+                        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', rowGap: '3px', alignItems: 'start' } },
+                            React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '7px', fontSize: '14px', fontWeight: 700, lineHeight: 1.3, minWidth: 0, overflowWrap: 'break-word' } },
                                 renderTasksCardNodeIcon(React, selectedNode, model),
                                 React.createElement('span', { role: 'button', tabIndex: 0, title: 'Center node', onClick: focusPanelNode, onKeyDown: focusPanelNode, style: { minWidth: 0, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '2px' } },
                                     renderTasksInlineLinks(selectedNode.label || selectedNode.id, { currentPath: sourceModel?.document_path || '', nodeLabels: edgeNodeLabels }))
                             ),
-                            panelNodeId ? React.createElement('div', { style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', textAlign: 'right' } }, panelNodeId) : null,
+                            panelNodeId ? React.createElement('div', { title: panelNodeId, style: { fontSize: '12px', lineHeight: 1.3, fontWeight: 600, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.7, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, panelNodeId) : null,
                         ),
                         panelHref ? React.createElement('a', {
                             href: panelHref,
@@ -8028,7 +8029,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }),
                 React.createElement('span', null, 'Active'));
                 const isOpen = !filtersCollapsed;
-                const filterPanelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}, calc(100% - 24px))`;
+                const filterPanelWidth = `min(${filterPanelWidthSetting}, calc(100% - 24px))`;
                 return React.createElement('aside', {
                     'aria-hidden': !isOpen,
                     style: {
@@ -9458,7 +9459,7 @@ async function renderTasksGraphs(rootElement = document) {
                 const close = () => { setSlideFocusMode('off'); setSlideIndex(-1); setSelectedNodeId(null); setSelectedNodeIds(new Set()); };
                 const go = (delta) => setSlideIndex((index) => Math.min(slides.length - 1, Math.max(0, index + delta)));
                 const focusBtn = (active) => ({ flex: '1 1 0', height: '30px', border: `1px solid ${active ? 'var(--vyasa-primary)' : 'color-mix(in srgb, var(--vyasa-primary) 26%, transparent)'}`, background: active ? 'color-mix(in srgb, var(--vyasa-primary) 86%, transparent)' : 'color-mix(in srgb, var(--vyasa-paper) 90%, transparent)', color: active ? 'var(--vyasa-paper)' : 'inherit', borderRadius: '8px', padding: '0 10px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', boxShadow: active ? '0 0 0 3px color-mix(in srgb, var(--vyasa-primary) 22%, transparent)' : 'none' });
-                const panelWidth = `min(${TASKS_FILTER_PANEL_WIDTH}, calc(100% - 24px))`;
+                const panelWidth = `min(${filterPanelWidthSetting}, calc(100% - 24px))`;
                 return window.React.createElement('aside', {
                     style: { flex: `0 0 ${panelWidth}`, width: panelWidth, minWidth: 0, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: '16px', borderRadius: '14px', border: '1px solid color-mix(in srgb, var(--vyasa-primary) 26%, transparent)', background: 'color-mix(in srgb, var(--vyasa-paper) 95%, transparent)', boxShadow: '0 14px 36px rgba(0,0,0,0.16)', pointerEvents: 'auto' },
                 },

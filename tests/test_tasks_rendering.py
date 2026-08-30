@@ -222,6 +222,35 @@ foundation :: Foundation:
     assert 'data-tasks-node-card-width="36rem"' in html
 
 
+def test_tasks_block_reads_filter_panel_width_option():
+    md = """```tasks
+---
+title: Filter Panel Width
+filter-panel-width: 22%
+---
+foundation :: Foundation:
+```"""
+
+    html = to_xml(from_md(md))
+
+    assert 'data-tasks-filter-panel-width="22%"' in html
+
+
+def test_tasks_side_panels_default_to_an_eighth_of_the_width():
+    """Both panels default to the same share, and both stay overridable."""
+    md = """```tasks
+---
+title: Defaults
+---
+foundation :: Foundation:
+```"""
+
+    html = to_xml(from_md(md))
+
+    assert 'data-tasks-node-card-width="12.5%"' in html
+    assert 'data-tasks-filter-panel-width="12.5%"' in html
+
+
 def test_tasks_block_defaults_to_95vw_width():
     html = to_xml(from_md("""```tasks
 foundation :: Foundation:
@@ -1958,11 +1987,18 @@ def test_tasks_slide_show_nav_stays_above_title_and_supports_jump_select():
     assert "nodes: matched" in ready_fit_source
 
 
-def test_selected_node_panel_gives_title_and_id_bounded_columns():
+def test_selected_node_panel_stacks_the_title_above_the_id():
+    """The title owns the full card width; the id sits under it and truncates.
+
+    Side by side, each got half a narrow card, and `overflowWrap: anywhere`
+    drove the column's min-content width to one glyph, so a title broke one
+    character per line.
+    """
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)'" in source
-    assert "overflowWrap: 'anywhere', wordBreak: 'break-word', textAlign: 'right'" in source
+    assert "gridTemplateColumns: 'minmax(0, 1fr)', rowGap: '3px'" in source
+    assert "panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)'" not in source
+    assert "whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, panelNodeId)" in source
 
 
 def test_slide_selection_is_not_reapplied_when_graph_layout_changes():
