@@ -8870,6 +8870,7 @@ async function renderTasksGraphs(rootElement = document) {
                 setHoveredNodeId(null);
             }, [clearGroupHoverTooltip, logHoverCycle]);
             const updateGroupHoverTooltip = React.useCallback((event) => {
+                if (document.pointerLockElement) return;
                 const reactFlow = reactFlowApiRef.current;
                 const wrapper = flowWrapperRef.current;
                 const graphBase = graphBaseRef.current || {};
@@ -9516,6 +9517,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Click edge', 'open edge details'),
                     row('Click canvas', 'clear selection'),
                     row('D + click [[node]]', 'go to referenced node'),
+                    row('Drag canvas', 'pan, cursor stays put'),
                     row('Shift + drag', 'box select'),
                     row('Cmd + drag', 'lasso select'),
                     row('Alt + Shift + drag', 'append lasso selection'),
@@ -9682,6 +9684,79 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 clearSelection('paneClick');
             };
+            // A drag on the pane pans with the cursor locked in place. The browser
+            // hides the cursor for the length of the drag and puts it back at the
+            // press point, so a long pan never runs the pointer into a screen edge.
+            //
+            //   pointerdown on the pane  -> arm, but do not touch the cursor yet
+            //   pointermove past 3px     -> take the lock, then pan by movementX/Y
+            //   pointerup                -> give the cursor back, drop the click
+            //
+            // The lock waits for real movement so a plain click never hides the
+            // cursor. A pointerdown grants transient activation for several seconds,
+            // so the later request still counts as a user gesture.
+            //
+            // React Flow's own pan stays on as the fallback. The spec holds clientX
+            // and clientY constant while the pointer is locked, so its d3 drag reads
+            // no movement once the lock lands. A browser that refuses the lock pans
+            // that way for the whole drag, with a visible cursor that travels.
+            const lockedPanRef = React.useRef({ active: false, engaged: false, distance: 0 });
+            React.useEffect(() => {
+                const onPointerLockChange = () => {
+                    if (document.pointerLockElement !== flowWrapperRef.current) return;
+                    // The lock is asynchronous and can land after the drag ended.
+                    // Hand the cursor straight back rather than stranding it.
+                    if (lockedPanRef.current.active) lockedPanRef.current.engaged = true;
+                    else document.exitPointerLock?.();
+                };
+                document.addEventListener('pointerlockchange', onPointerLockChange);
+                return () => document.removeEventListener('pointerlockchange', onPointerLockChange);
+            }, []);
+            const startLockedPan = (event) => {
+                if (event.pointerType === 'mouse' && event.button !== 0) return;
+                if (event.shiftKey || event.metaKey || event.altKey) return;
+                if (!event.target?.closest?.('.react-flow__pane')) return;
+                if (!flowWrapperRef.current?.requestPointerLock) return;
+                lockedPanRef.current = { active: true, engaged: false, distance: 0 };
+            };
+            const updateLockedPan = (event) => {
+                const pan = lockedPanRef.current;
+                if (!pan.active) return;
+                const el = flowWrapperRef.current;
+                const dx = event.movementX || 0;
+                const dy = event.movementY || 0;
+                if (!dx && !dy) return;
+                if (document.pointerLockElement !== el) {
+                    pan.distance += Math.hypot(dx, dy);
+                    if (pan.distance < 3) return;
+                    try {
+                        const request = el.requestPointerLock();
+                        if (request?.catch) request.catch(() => { pan.active = false; });
+                    } catch {
+                        pan.active = false;
+                    }
+                    return;
+                }
+                const reactFlow = reactFlowApiRef.current;
+                if (!reactFlow) return;
+                const viewport = reactFlow.getViewport();
+                reactFlow.setViewport({ x: viewport.x + dx, y: viewport.y + dy, zoom: viewport.zoom }, { duration: 0 });
+            };
+            const stopLockedPan = () => {
+                const pan = lockedPanRef.current;
+                if (!pan.active) return;
+                const engaged = pan.engaged;
+                lockedPanRef.current = { active: false, engaged: false, distance: 0 };
+                if (document.pointerLockElement === flowWrapperRef.current) document.exitPointerLock?.();
+                // A locked pan retargets mouseup to the wrapper, so React Flow reads
+                // no pane click. A pan that never locked keeps its own click, and a
+                // plain click must still reach the pane and clear the selection.
+                if (!engaged) return;
+                suppressNextGraphClickRef.current = true;
+                window.setTimeout(() => {
+                    suppressNextGraphClickRef.current = false;
+                }, 0);
+            };
             const flowPointerHandlers = {
                 onClickCapture: focusNodeReferenceFromEvent,
                 onPointerDown: (event) => {
@@ -9698,9 +9773,15 @@ async function renderTasksGraphs(rootElement = document) {
                     if (!event.shiftKey && !event.metaKey && !event.target?.closest?.('button, input, textarea, select, a, .react-flow__controls, .vyasa-tasks-filter-card, .react-flow__node')) {
                         clearGraphHoverState('pointer-down');
                     }
+                    startLockedPan(event);
                 },
                 onPointerDownCapture: startDragSelection,
-                onPointerMove: updateGroupHoverTooltip,
+                onPointerMove: (event) => {
+                    updateLockedPan(event);
+                    updateGroupHoverTooltip(event);
+                },
+                onPointerUp: stopLockedPan,
+                onPointerCancel: stopLockedPan,
                 onWheelCapture: (event) => {
                     const scrollCard = hoverCardScrollRef.current || detailCardScrollRef.current;
                     const maxScrollTop = scrollCard ? Math.max(0, scrollCard.scrollHeight - scrollCard.clientHeight) : 0;
@@ -9733,6 +9814,7 @@ async function renderTasksGraphs(rootElement = document) {
                 onPointerUpCapture: finishDragSelection,
                 onPointerCancelCapture: finishDragSelection,
                 onPointerLeave: (event) => {
+                    stopLockedPan();
                     finishDragSelection(event);
                     clearOptionEdgePreview();
                     if (flowWrapperRef.current) delete flowWrapperRef.current.dataset.vyasaReviewPointerTarget;

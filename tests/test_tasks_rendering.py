@@ -839,6 +839,35 @@ def test_w_enter_pin_blooms_from_the_edge():
     assert "1720ms" in css
 
 
+def test_kg_pane_drag_pans_with_a_locked_cursor():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    # A pane drag takes the cursor, then moves the viewport by raw pointer movement.
+    assert "if (!event.target?.closest?.('.react-flow__pane')) return;" in source
+    # The lock waits for real movement, so a plain click never hides the cursor.
+    assert "if (pan.distance < 3) return;" in source
+    assert "const request = el.requestPointerLock();" in source
+    # A lock that lands after the drag ended gives the cursor straight back.
+    assert "document.addEventListener('pointerlockchange', onPointerLockChange)" in source
+    assert "else document.exitPointerLock?.();" in source
+    assert "reactFlow.setViewport({ x: viewport.x + dx, y: viewport.y + dy, zoom: viewport.zoom }, { duration: 0 })" in source
+
+    # Box select and lasso keep the plain drag.
+    assert "if (event.shiftKey || event.metaKey || event.altKey) return;" in source
+
+    # React Flow's own pan is the fallback when a browser refuses the lock,
+    # so panOnDrag stays at its default.
+    assert "panOnDrag" not in source
+
+    # A locked pointer reports a frozen clientX, so hover work on it is skipped.
+    assert "if (document.pointerLockElement) return;" in source
+
+    # A locked pan must not clear the selection. A press that never locked keeps
+    # its own native pane click.
+    assert "if (!engaged) return;" in source
+    assert "suppressNextGraphClickRef.current = true;" in source
+
+
 def test_v_toggles_right_side_hover_card_scroll_mode():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
