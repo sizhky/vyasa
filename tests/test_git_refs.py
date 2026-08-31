@@ -152,7 +152,7 @@ def test_ref_kg_document_renders_pack_from_objects(site):
             "path": "repo@feature/roadmap.kg",
             "breadcrumbs": None,
             "document": type("Document", (), {"path": ref_doc.vpath})(),
-            "layout": lambda self, body, **kwargs: (*kwargs.get("extra_head_nodes", ()), body),
+            "layout": lambda self, *body, **kwargs: (*kwargs.get("extra_head_nodes", ()), *body),
             "htmx": False,
             "blog_title": "Site",
             "auth": None,
@@ -230,7 +230,7 @@ def test_ref_markdown_renders_document_actions(site):
             htmx=False,
             request=type("Request", (), {"scope": {"auth": None}})(),
             slug_to_title=lambda value, abbreviations=None: value,
-            layout=lambda body, **kwargs: body,
+            layout=lambda *body, **kwargs: body[0],
             get_blog_title=lambda: "Site",
             from_md=lambda body, current_path=None: NotStr(body),
             not_found=None,
@@ -269,7 +269,7 @@ def test_ref_slide_route_reads_ref_query_from_objects(site):
         slug_to_title=lambda value, abbreviations=None: value,
         effective_abbreviations=lambda root: {},
         from_md=lambda body, current_path=None, slide_mode=False: NotStr(body),
-        layout=lambda content, **kwargs: Div(content),
+        layout=lambda *content, **kwargs: Div(*content),
     )
     html = to_xml(page)
 

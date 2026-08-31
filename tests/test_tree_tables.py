@@ -1,7 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from fasthtml.common import to_xml
+from fasthtml.common import Div, to_xml
 
 from vyasa.build import build_post_tree_static, build_static_site
 from vyasa.content_tree import ContentTree
@@ -59,7 +59,7 @@ def test_html_document_runtime_uses_raw_html_route(tmp_path):
     page.write_text("<h1>Dashboard</h1>", encoding="utf-8")
     context = SimpleNamespace(
         path="dashboard", abbreviations=[], slug_to_title=lambda value, abbreviations=None: value.title(),
-        breadcrumbs=None, document=SimpleNamespace(path=page), layout=lambda body, **kwargs: body,
+        breadcrumbs=None, document=SimpleNamespace(path=page), layout=lambda *body, **kwargs: body[0],
         htmx=False, blog_title="Site", auth=None,
     )
 
@@ -80,7 +80,7 @@ def test_kg_document_runtime_includes_tasks_assets(tmp_path):
     try:
         context = SimpleNamespace(
             path="kickoff.kg", breadcrumbs=None, document=SimpleNamespace(path=pack),
-            layout=lambda body, **kwargs: (*kwargs.get("extra_head_nodes", ()), body),
+            layout=lambda *body, **kwargs: (*kwargs.get("extra_head_nodes", ()), *body),
             htmx=False, blog_title="Site", auth=None,
         )
         html = to_xml(render_kg_document(context))
@@ -223,3 +223,54 @@ def test_static_build_copies_raw_and_download_files_through_filesystem_routes(tm
     assert (output / "download" / "data.json").read_text(encoding="utf-8") == '{"ok":true}\n'
     assert (output / "posts" / "guide.md").read_text(encoding="utf-8").startswith("# Guide")
     assert (output / "posts" / "data.json").read_text(encoding="utf-8") == '{"ok":true}\n'
+
+
+def _render_kind(kind, doc_path, *, slug):
+    """Render one document kind through its registered renderer."""
+    from vyasa.extensions_builtin.mdx.render import render_mdx_document
+    from vyasa.extensions_builtin.pdf_viewer import render_pdf_document
+    from vyasa.extensions_builtin.tree_table import render_tree_document
+
+    renderers = {
+        "html": render_html_document, "pdf": render_pdf_document, "tree": render_tree_document,
+        "mdx": render_mdx_document, "kg": render_kg_document,
+    }
+    context = SimpleNamespace(
+        path=slug, abbreviations=[], slug_to_title=lambda value, abbreviations=None: str(value).title(),
+        breadcrumbs=None, document=SimpleNamespace(path=doc_path),
+        layout=lambda *body, **kwargs: Div(*body), htmx=False, blog_title="Site", auth=None,
+    )
+    return to_xml(renderers[kind](context))
+
+
+def test_every_document_kind_stamps_its_absolute_disk_path(tmp_path):
+    """The copy-path shortcut reads this marker, so each kind must carry one."""
+    pack = tmp_path / "kickoff.kg"
+    pack.mkdir()
+    (pack / "kg.schema").write_text("@graph id=kickoff title=Kickoff\n@sources\nnodes=kg.nodes\n", encoding="utf-8")
+    (pack / "kg.nodes").write_text("n1: Start\n", encoding="utf-8")
+    tree = tmp_path / "scope.tree"
+    tree.write_text("# sheet: Scope\n# hierarchy: Module\n# columns: Hours\n\nOps\t3\n", encoding="utf-8")
+    cases = {
+        "html": (_write(tmp_path / "dash.html", "<h1>Dash</h1>"), "dash.html"),
+        "pdf": (_write(tmp_path / "paper.pdf", "%PDF-1.4"), "paper.pdf"),
+        "tree": (tree, "scope.tree"),
+        "mdx": (_write(tmp_path / "note.mdx", "export const x = 1\n\n# Note\n"), "note.mdx"),
+        "kg": (pack, "kickoff.kg"),
+    }
+    runtime = build_extension_runtime({})
+    previous = get_extension_runtime()
+    set_extension_runtime(runtime)
+    try:
+        rendered = {kind: _render_kind(kind, path, slug=slug) for kind, (path, slug) in cases.items()}
+    finally:
+        set_extension_runtime(previous)
+
+    for kind, (path, _) in cases.items():
+        expected = str(path / "kg.schema") if kind == "kg" else str(path)
+        assert f'data-vyasa-file-path="{expected}"' in rendered[kind], kind
+
+
+def _write(path: Path, text: str) -> Path:
+    path.write_text(text, encoding="utf-8")
+    return path
