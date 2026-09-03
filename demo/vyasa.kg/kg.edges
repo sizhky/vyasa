@@ -49,7 +49,7 @@ e10: content-route -> document-page renders
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[result = DocumentPage(post_title]" context=3}
 e11: document-page -> content-route returns
 	pair=p-page
-	note=→  result: HTML response
+	note=←  result: HTML response
 	description=The finished HTML response lands in result. This is the value the route returns.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[result = DocumentPage(post_title]" context=3}
 e12: content-route -> browser-ui shows
