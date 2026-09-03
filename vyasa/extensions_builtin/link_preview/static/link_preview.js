@@ -280,6 +280,7 @@ function createPreviewView({ point, link, onClose }) {
             applyWordWrap();
             window.__vyasaInitCodeTools?.(content);
             installCodeLineLinks(content);
+            announceSwap(content);
             installCodeReferences(content, {
                 // The full-file view is fetched only when the reader asks, so a
                 // hover preview stays small.
@@ -292,6 +293,7 @@ function createPreviewView({ point, link, onClose }) {
                 onSwap: () => {
                     window.__vyasaInitCodeTools?.(content);
                     installCodeLineLinks(content);
+                    announceSwap(content);
                 },
             });
             const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
@@ -392,6 +394,16 @@ const previews = new LinkPreviewStack({
     createView: createPreviewView,
     fetchPreview,
 });
+
+// `innerHTML` runs no `<script>` tag, so a preview built from a document with
+// a Vega, Mermaid, or D2 block arrives as inert markup. The page-wide swap
+// pipeline in `scripts.js` already loads the bundle assets a subtree asks for
+// and mounts those blocks, and it hangs off `htmx:afterSwap` on `document.body`.
+// Dispatch from the preview body, not from body itself: the event bubbles up
+// carrying the new subtree as `event.target`, so nothing rescans the page.
+function announceSwap(root) {
+    root.dispatchEvent(new CustomEvent('htmx:afterSwap', { bubbles: true, detail: {} }));
+}
 
 function linkFromEvent(event) {
     return event.target?.closest?.(LINK_SELECTOR) || null;
