@@ -3,6 +3,7 @@ hover_attrs=description,code
 pair_by=pair
 edge_color_by=step
 edge_label_from=note
+default_view=flow
 
 @sources
 nodes=kg.nodes
