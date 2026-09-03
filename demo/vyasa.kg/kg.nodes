@@ -1,6 +1,6 @@
-page-file: Markdown page
-	description=The document the browser asks Vyasa to show.
-	code=[demo/vyasa.md](demo/vyasa.md)
+browser-ui: Browser
+	description=The browser asks Vyasa for a page and displays the HTML response it gets back.
+	code=The browser is outside Vyasa; no Vyasa function runs beyond this boundary.
 content-route: Content route
 	description=The request handler that owns the whole page pipeline.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[def render_post_detail(path, htmx, request]" context=1}
@@ -16,9 +16,6 @@ filesystem-backend: Ref-backed reader
 markdown-renderer: Markdown renderer
 	description=The pipeline that turns Markdown text into HTML nodes.
 	code=[from_md](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=from_md kind=Function focus="match[def from_md(content]" context=3}
-html-response: HTML response
-	description=The page response that holds the rendered content and its required assets.
-	code=[DocumentPage.render](vyasa/document_pages.py){show=symbol symbol=DocumentPage.render kind=Method focus="match[def render(self, layout]" context=3}
-browser-ui: Browser UI
-	description=The browser receives the HTML response and displays the page.
-	code=The browser consumes this response; no Vyasa function runs after this boundary.
+document-page: DocumentPage
+	description=The page object that holds the rendered content and returns the finished HTML response.
+	code=[DocumentPage](vyasa/document_pages.py){show=symbol symbol=DocumentPage kind=Class focus="match[class DocumentPage]" context=4}

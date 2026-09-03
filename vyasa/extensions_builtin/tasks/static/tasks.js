@@ -486,12 +486,21 @@ function tasksTaperedArrowHeadPath(bezierPath, size, side = 0) {
     const baseY = y3 - uy * arrowLength;
     // A harpoon keeps one barb. Two of them, mirrored, are how a pair of edges
     // reads as one exchange rather than two arrows that happen to overlap.
+    //
+    // A barb is a slim flag swept back along its own line, not half of a wide
+    // arrowhead: the full width is squat at this length and the trailing vertex
+    // sits close behind the tip, so the shape hugs the line instead of reading
+    // as a blunt wedge. The wing goes on the side the line was nudged toward,
+    // which is away from the mate.
     if (side) {
         const sign = side > 0 ? 1 : -1;
+        const wing = arrowLength * 0.55;
+        const tailX = x3 - ux * arrowLength * 0.42;
+        const tailY = y3 - uy * arrowLength * 0.42;
         return [
             `M ${x3} ${y3}`,
-            `L ${baseX + sign * nx * arrowWidth / 2} ${baseY + sign * ny * arrowWidth / 2}`,
-            `L ${baseX} ${baseY}`,
+            `L ${baseX + sign * nx * wing} ${baseY + sign * ny * wing}`,
+            `L ${tailX} ${tailY}`,
             'Z',
         ].join(' ');
     }
@@ -538,6 +547,34 @@ function tasksEdgePath(props) {
         (props.sourceY + 3 * sourceStub.y + 3 * targetStub.y + props.targetY) / 8,
     ];
 }
+
+// Both halves of a pair must be offsets of ONE curve. Solving the reply's own
+// bezier re-derives the control points from its swapped source/target
+// positions, so the two halves converge at the ends and bow apart in the
+// belly. Solve the call's orientation for both, lift each half to its own
+// side, then run the reply's path backwards so its barb still lands on its own
+// target.
+function tasksReverseCubicPath(path) {
+    const nums = String(path || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
+    if (nums.length < 8) return path;
+    const [x0, y0, c1x, c1y, c2x, c2y, x3, y3] = nums;
+    return `M ${x3} ${y3} C ${c2x} ${c2y} ${c1x} ${c1y} ${x0} ${y0}`;
+}
+
+function tasksPairedEdgePath(props, lift, half) {
+    if (!lift) return tasksEdgePath(props);
+    const reply = half === 'reply';
+    const call = reply ? {
+        ...props,
+        sourceX: props.targetX, sourceY: props.targetY, sourcePosition: props.targetPosition,
+        targetX: props.sourceX, targetY: props.sourceY, targetPosition: props.sourcePosition,
+    } : props;
+    // One shared chord means one shared normal, so the reply takes the other
+    // sign of the same lift to land on the opposite side.
+    const [path, labelX, labelY] = tasksEdgePath(tasksPairShiftedProps(call, reply ? -lift : lift));
+    return [reply ? tasksReverseCubicPath(path) : path, labelX, labelY];
+}
+
 
 function tasksIsIconifyImage(url) {
     return /^https:\/\/api\.iconify\.design\/.+\.svg(?:\?.*)?$/i.test(String(url || '').trim());
@@ -6772,7 +6809,7 @@ async function renderTasksGraphs(rootElement = document) {
                 // keeps the arrowhead and the label solver working on the line
                 // that is actually drawn.
                 const pairLift = Number(props.data?.__pair_lift__) || 0;
-                const [path, labelX, rawLabelY] = tasksEdgePath(tasksPairShiftedProps(props, pairLift));
+                const [path, labelX, rawLabelY] = tasksPairedEdgePath(props, pairLift, props.data?.__pair_half__ || '');
                 // A sequence row is a horizontal line, so a centred label sits right on
                 // top of it. Lift it clear of the stroke.
                 const labelY = rawLabelY - (Number(props.data?.__sequence_label_lift__) || 0);
@@ -6803,6 +6840,13 @@ async function renderTasksGraphs(rootElement = document) {
                     Math.max(2.6, (Number(props.style?.strokeWidth) || 4) * 0.85)
                 );
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
+                // A pair's two lanes sit 2x|lift| apart. A casing wider than one lane
+                // crosses the centerline and clips the other half's line, which is why
+                // a pair used to read as one fat cased blob. Fit the casing to the lane.
+                const casingWidth = pairLift
+                    ? Math.max(strokeWidth + 0.6, Math.abs(pairLift) * 2)
+                    : strokeWidth + 8;
+                const casingStroke = pairLift ? 2 : 8;
                 const fullArrow = Math.max(10, strokeWidth * 3.0);
                 const chord = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY);
                 // Both ends on one side means the path arcs away and comes back,
@@ -6875,19 +6919,27 @@ async function renderTasksGraphs(rootElement = document) {
                             ...(props.style || {}),
                             strokeLinejoin: 'round',
                             stroke: 'var(--vyasa-paper)',
-                            strokeWidth: strokeWidth + 8,
+                            strokeWidth: casingWidth,
                         },
                     }),
+                    // Every paper casing paints BEFORE every coloured shape, so the
+                    // line, its taper and its head merge into one silhouette with one
+                    // outer border. Casing a head after the line drew its own border
+                    // between the two and split the arrow from its shaft.
                     taperPath && React.createElement('path', {
                         d: taperPath,
-                        fill: props.style?.stroke || 'currentColor',
+                        fill: 'var(--vyasa-paper)',
                         stroke: 'var(--vyasa-paper)',
-                        strokeWidth: 8,
-                        paintOrder: 'stroke fill',
+                        strokeWidth: casingStroke,
                         strokeLinejoin: 'round',
-                        // While a flare sweeps, the ribbon underneath stays faint so
-                        // the swept part reads as an opacity rise, then settles full.
-                        opacity: props.style?.opacity ?? 1,
+                        pointerEvents: 'none',
+                    }),
+                    edgeArrowPath && React.createElement('path', {
+                        d: edgeArrowPath,
+                        fill: 'var(--vyasa-paper)',
+                        stroke: 'var(--vyasa-paper)',
+                        strokeWidth: casingStroke,
+                        strokeLinejoin: 'round',
                         pointerEvents: 'none',
                     }),
                     props.data?.edgeCardActive && React.createElement('path', {
@@ -6916,13 +6968,19 @@ async function renderTasksGraphs(rootElement = document) {
                             ? { ...(props.style || {}), strokeWidth: 0.1 }
                             : props.style,
                     }),
+                    taperPath && React.createElement('path', {
+                        d: taperPath,
+                        fill: props.style?.stroke || 'currentColor',
+                        stroke: 'none',
+                        // While a flare sweeps, the ribbon underneath stays faint so
+                        // the swept part reads as an opacity rise, then settles full.
+                        opacity: props.style?.opacity ?? 1,
+                        pointerEvents: 'none',
+                    }),
                     edgeArrowPath && React.createElement('path', {
                         d: edgeArrowPath,
                         fill: props.style?.stroke || 'currentColor',
-                        stroke: 'var(--vyasa-paper)',
-                        strokeWidth: 8,
-                        paintOrder: 'stroke fill',
-                        strokeLinejoin: 'round',
+                        stroke: 'none',
                         opacity: props.style?.opacity ?? 1,
                         pointerEvents: 'none',
                     }),
