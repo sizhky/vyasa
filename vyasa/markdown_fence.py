@@ -47,6 +47,34 @@ def slug_for_resolved_path(resolved, current_path, strip_suffix=True):
     return rel.with_suffix("").as_posix() if strip_suffix else rel.as_posix()
 
 
+FENCE_DATA_SUFFIXES = frozenset({".json", ".yaml", ".yml", ".csv"})
+
+
+def resolve_fence_data_path(src, current_path, suffixes=FENCE_DATA_SUFFIXES) -> Path:
+    """Resolve a fence `src=` against the current document, confined to its root.
+
+    A fence body is author-supplied text, so the resolved path must stay under
+    the content root that serves the document and must carry a known data
+    suffix. Raises ValueError with a message the author can act on.
+    """
+    candidate = str(src or "").strip()
+    if not candidate:
+        raise ValueError("src is empty")
+    if "://" in candidate or candidate.startswith(("/", "~")):
+        raise ValueError("src must be a path relative to the document")
+    if Path(candidate).suffix.lower() not in suffixes:
+        raise ValueError(f"src must end in {', '.join(sorted(suffixes))}")
+    if not current_path:
+        raise ValueError("src needs a document path")
+    root = Path(current_content_root_and_relative(current_path)[0]).resolve()
+    resolved = (current_content_path(current_path).parent / candidate).resolve()
+    if not resolved.is_relative_to(root):
+        raise ValueError("src escapes the content root")
+    if not resolved.is_file():
+        raise ValueError(f"src not found: {candidate}")
+    return resolved
+
+
 def resolve_items_node_href(href: object, current_path: object) -> str:
     href = str(href or "").strip()
     if not href:

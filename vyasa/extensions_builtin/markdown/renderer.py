@@ -443,7 +443,20 @@ def _rewrite_raw_html_urls(content, current_path):
         else:
             value = _resolve_raw_html_url(value, current_path)
         return f'{name}={quote}{value}{quote}'
-    return re.sub(r'\b(src|href|poster|srcset)=(["\'])(.*?)\2', rewrite_attr, content, flags=re.IGNORECASE)
+    # A fenced block is text, not markup. Rewriting inside one corrupts both a
+    # documented HTML sample and a fence info string such as `bar src="x.json"`,
+    # so stash fences first and put them back untouched.
+    fences = []
+
+    def stash_fence(match):
+        fences.append(match.group(0))
+        return f"__VYASA_URLFENCE_{len(fences) - 1}__"
+
+    content = re.sub(r"(?m)^(`{3,}|~{3,}).*?^\1[ \t]*$", stash_fence, content, flags=re.DOTALL)
+    content = re.sub(r'\b(src|href|poster|srcset)=(["\'])(.*?)\2', rewrite_attr, content, flags=re.IGNORECASE)
+    for index, fence in enumerate(fences):
+        content = content.replace(f"__VYASA_URLFENCE_{index}__", fence)
+    return content
 
 
 class ContentRenderer(FrankenRenderer):
@@ -725,7 +738,10 @@ class ContentRenderer(FrankenRenderer):
         return f"<span{attr_str}>{code}</span>"
 
     def render_block_code(self, token):
-        lang, attrs = _parse_fence_attrs(getattr(token, "language", ""))
+        # mistletoe puts only the first word in `language`; the options live in
+        # `info_string`. Reading `language` here silently dropped every attribute.
+        info = getattr(token, "info_string", None) or getattr(token, "language", "")
+        lang, attrs = _parse_fence_attrs(info)
         code = _normalized_fence_code(token)
         runtime = get_extension_runtime()
         if runtime:

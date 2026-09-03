@@ -1,4 +1,4 @@
-import { createMomentumRunner, ensureFloatingActions, ensureShortcutHelp, headingMarkdownCopyValue, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
+import { createMomentumRunner, documentAbsolutePath, ensureFloatingActions, ensureShortcutHelp, headingMarkdownCopyValue, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
 
 function switchTab(tabsId, index) {
     const container = document.querySelector(`.tabs-container[data-tabs-id="${tabsId}"]`);
@@ -165,20 +165,6 @@ function fallbackCopyText(text, done) {
     document.execCommand('copy');
     document.body.removeChild(textarea);
     done();
-}
-
-function decodeCopyPayload(encoded) {
-    if (!encoded) return '';
-    return new TextDecoder().decode(Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0)));
-}
-
-// Every DocumentPage stamps its on-disk path into #main-content. Zen slides render
-// their own layout, so fall back to the Copy Path button there. Both are already in
-// the page, so the shortcut needs no extra request and works in static builds.
-function documentAbsolutePath() {
-    const stamped = document.querySelector('#main-content [data-vyasa-file-path]')?.dataset.vyasaFilePath;
-    if (stamped) return stamped;
-    return decodeCopyPayload(document.querySelector('[data-copy-alternate-payload]')?.dataset.copyAlternatePayload);
 }
 
 function copyDocumentAbsolutePath() {

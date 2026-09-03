@@ -1,0 +1,215 @@
+/* Visuals registry styles.
+   Renderers emit classes and one inline width. Every colour and gap lives here,
+   so a theme restyles the whole registry in one place. */
+
+.vyasa-visual {
+    margin: 1.5rem 0;
+    font-family: var(--vyasa-font-ui, inherit);
+}
+
+.vyasa-visual__title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--vyasa-ink, #1a1f1d);
+    margin-bottom: 0.75rem;
+}
+
+.vyasa-visual__note {
+    margin-top: 0.7rem;
+    font-size: 0.8rem;
+    line-height: 1.55;
+    color: var(--vyasa-ink-soft, #5a6060);
+}
+
+/* Tone palette. Muted on purpose: bars sit inside prose, not on a dashboard. */
+.vyasa-visual {
+    --tone-base: #6f9f7d;
+    --tone-accent: #d3a75c;
+    --tone-muted: #8e968f;
+    --tone-good: #5f9b74;
+    --tone-warn: #c9743f;
+    --tone-series-0: #6f9f7d;
+    --tone-series-1: #d3a75c;
+    --tone-series-2: #8e968f;
+    --tone-series-3: #7f9bb0;
+    --tone-series-4: #b08f9b;
+    --vyasa-visual-track: color-mix(in srgb, var(--vyasa-ink, #222) 9%, transparent);
+    --vyasa-visual-edge: color-mix(in srgb, var(--vyasa-ink, #222) 12%, transparent);
+    --vyasa-visual-face: color-mix(in srgb, var(--vyasa-ink, #222) 5%, transparent);
+}
+
+.dark .vyasa-visual {
+    --tone-base: #7fb08a;
+    --tone-accent: #ddb267;
+    --tone-muted: #9aa39c;
+    --tone-good: #74b189;
+    --tone-warn: #d98a58;
+    --tone-series-0: #7fb08a;
+    --tone-series-1: #ddb267;
+    --tone-series-2: #9aa39c;
+    --tone-series-3: #8fabc0;
+    --tone-series-4: #c09fab;
+}
+
+[data-tone="base"] { --tone: var(--tone-base); }
+[data-tone="accent"] { --tone: var(--tone-accent); }
+[data-tone="muted"] { --tone: var(--tone-muted); }
+[data-tone="good"] { --tone: var(--tone-good); }
+[data-tone="warn"] { --tone: var(--tone-warn); }
+[data-tone="series-0"] { --tone: var(--tone-series-0); }
+[data-tone="series-1"] { --tone: var(--tone-series-1); }
+[data-tone="series-2"] { --tone: var(--tone-series-2); }
+[data-tone="series-3"] { --tone: var(--tone-series-3); }
+[data-tone="series-4"] { --tone: var(--tone-series-4); }
+
+/* bar ------------------------------------------------------------------ */
+
+.vyasa-visual__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.vyasa-bar {
+    display: grid;
+    grid-template-columns: minmax(5rem, 11rem) 1fr minmax(6rem, 8rem);
+    gap: 0.9rem;
+    align-items: center;
+    font-size: 0.85rem;
+}
+
+.vyasa-bar__label {
+    color: var(--vyasa-ink-soft, #5a6060);
+    overflow-wrap: anywhere;
+}
+
+.vyasa-bar__track {
+    height: 1.55rem;
+    border-radius: 0.4rem;
+    background: var(--vyasa-visual-track);
+    overflow: hidden;
+}
+
+.vyasa-bar__fill {
+    display: block;
+    height: 100%;
+    border-radius: 0.4rem;
+    background: var(--tone, var(--tone-base));
+}
+
+.vyasa-bar__value {
+    text-align: right;
+    font-family: var(--vyasa-font-mono, ui-monospace, monospace);
+    font-size: 0.8rem;
+    color: var(--vyasa-ink, #1a1f1d);
+    white-space: nowrap;
+}
+
+/* card ----------------------------------------------------------------- */
+
+.vyasa-visual__grid {
+    display: grid;
+    grid-template-columns: repeat(var(--vyasa-card-columns, auto-fit), minmax(9rem, 1fr));
+    gap: 0.75rem;
+}
+
+.vyasa-card {
+    padding: 0.85rem 1rem;
+    border-radius: 0.6rem;
+    background: var(--vyasa-visual-face);
+    border: 1px solid var(--vyasa-visual-edge);
+    border-left: 3px solid var(--tone, var(--tone-base));
+}
+
+.vyasa-card__value {
+    font-family: var(--vyasa-font-mono, ui-monospace, monospace);
+    font-size: 1.6rem;
+    font-weight: 600;
+    line-height: 1.1;
+    color: var(--vyasa-ink, #1a1f1d);
+}
+
+.vyasa-card__label {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--vyasa-ink-soft, #5a6060);
+}
+
+.vyasa-card__note {
+    margin-top: 0.4rem;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: var(--vyasa-ink-soft, #5a6060);
+    opacity: 0.85;
+}
+
+/* stack ---------------------------------------------------------------- */
+
+.vyasa-stack {
+    display: flex;
+    height: 2.15rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.vyasa-stack__segment {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    background: var(--tone, var(--tone-base));
+}
+
+.vyasa-stack__share {
+    font-family: var(--vyasa-font-mono, ui-monospace, monospace);
+    font-size: 0.72rem;
+    color: #12160f;
+    padding: 0 0.2rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vyasa-stack__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.15rem;
+    margin-top: 0.7rem;
+    font-family: var(--vyasa-font-mono, ui-monospace, monospace);
+    font-size: 0.72rem;
+    color: var(--vyasa-ink-soft, #5a6060);
+}
+
+.vyasa-stack__swatch {
+    display: inline-block;
+    width: 0.85rem;
+    height: 0.2rem;
+    margin-right: 0.4rem;
+    vertical-align: middle;
+    background: var(--tone, var(--tone-base));
+}
+
+/* error ---------------------------------------------------------------- */
+
+.vyasa-visual--error {
+    padding: 0.75rem 0.9rem;
+    border-radius: 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--tone-warn, #c9743f) 45%, transparent);
+    background: color-mix(in srgb, var(--tone-warn, #c9743f) 8%, transparent);
+}
+
+.vyasa-visual__error {
+    font-family: var(--vyasa-font-mono, ui-monospace, monospace);
+    font-size: 0.78rem;
+    color: var(--vyasa-ink, #1a1f1d);
+}
+
+@media (max-width: 34rem) {
+    .vyasa-bar {
+        grid-template-columns: 1fr;
+        gap: 0.2rem;
+    }
+    .vyasa-bar__value {
+        text-align: left;
+    }
+}

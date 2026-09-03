@@ -24,6 +24,27 @@ export function headingMarkdownCopyValue(headings, targetIndex, includeParents =
     return [prefix.trim(), ...path.map(markdown)].filter(Boolean).join(' > ');
 }
 
+function decodeCopyPayload(encoded) {
+    if (!encoded) return '';
+    return new TextDecoder().decode(Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0)));
+}
+
+// Every DocumentPage stamps its on-disk path into #main-content. Zen slides render
+// their own layout, so fall back to the Copy Path button there. Both are already in
+// the page, so a caller needs no extra request and this works in a static build.
+export function documentAbsolutePath() {
+    const stamped = document.querySelector('#main-content [data-vyasa-file-path]')?.dataset.vyasaFilePath;
+    if (stamped) return stamped;
+    return decodeCopyPayload(document.querySelector('[data-copy-alternate-payload]')?.dataset.copyAlternatePayload);
+}
+
+// A markdown blockquote of the selected text, with the document path under it, so a
+// paste into notes carries its source. Same prefix idea as headingMarkdownCopyValue.
+export function quoteMarkdownCopyValue(text, prefix = '') {
+    const quote = (text || '').trim().split('\n').map((line) => `> ${line.trim()}`.trimEnd()).join('\n');
+    return [quote, prefix.trim()].filter(Boolean).join('\n\n');
+}
+
 // The held-key motion model behind J/K document scroll: hold to accelerate to a
 // ceiling, release to coast out under friction. Shared so graph pan and zoom feel
 // like the page scroll instead of growing a second set of numbers.
