@@ -1,0 +1,39 @@
+@graph id=vyasa-kernel title="From files on disk to the Vyasa UI"
+hover_attrs=description,code
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+base:
+	edges=kg.edges
+palette=kg.palette
+
+@relations
+reads color=relation.reads
+dispatches color=relation.dispatches
+loads color=relation.loads
+builds color=relation.builds
+returns color=relation.returns
+shows color=relation.shows
+
+@views
+flow:
+	source=base
+	layout=sequence
+	sequence_role=role
+	sequence_phase=phase
+	color_by=layer
+	edge_color_by=role
+	edge_label_from=note
+	hover_attrs=description,code
+	caption="Read the handoffs from left to right. Vyasa keeps the file on disk, the renderer, and the browser as separate responsibilities."
+	slides:
+		disk: Steps 1 to 3 — find the source
+			nodes=page-file,content-route,filesystem-backend
+			caption="The browser asks for a page. The route uses the filesystem backend to find the Markdown file."
+		render: Steps 4 to 6 — turn the source into a graph
+			nodes=filesystem-backend,markdown-renderer,fence-handler,graph-pack,tasks-extension
+			caption="Markdown rendering dispatches the items fence. The Tasks extension loads the KG Pack and builds the graph model."
+		ui: Steps 7 to 8 — show the result
+			nodes=tasks-extension,html-response,browser-ui
+			caption="The graph becomes part of the HTML response. The browser turns that response into the visible UI."

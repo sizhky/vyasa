@@ -1,0 +1,15 @@
+@node_attrs
+layer:
+  content: page-file graph-pack
+  core: content-route filesystem-backend
+  pipeline: markdown-renderer fence-handler
+  extension: tasks-extension
+  surface: html-response browser-ui
+
+@edge_attrs
+role:
+  message: e1 e2 e3 e4 e5 e6 e7 e8
+phase:
+  read: e1 e2 e3
+  render: e4 e5 e6
+  show: e7 e8

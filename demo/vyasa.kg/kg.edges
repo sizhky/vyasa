@@ -1,0 +1,8 @@
+e1: page-file -> content-route reads note="1 · resolves the page"
+e2: content-route -> filesystem-backend reads note="2 · asks for bytes"
+e3: filesystem-backend -> markdown-renderer returns note="3 · supplies Markdown"
+e4: markdown-renderer -> fence-handler dispatches note="4 · render_block_code reads runtime.markdown_fences[lang] at renderer.py:807, then calls handler(code, context, attrs) at renderer.py:809"
+e5: fence-handler -> graph-pack loads note="5 · reads the KG Pack"
+e6: graph-pack -> tasks-extension builds note="6 · builds the graph model"
+e7: tasks-extension -> html-response returns note="7 · adds graph HTML"
+e8: html-response -> browser-ui shows note="8 · displays the graph"

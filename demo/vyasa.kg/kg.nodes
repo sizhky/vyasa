@@ -1,0 +1,27 @@
+page-file: Markdown page
+	description=The document the browser asks Vyasa to show.
+	code=[demo/vyasa.md](demo/vyasa.md)
+content-route: Content route
+	description=The request handler that resolves a page path and asks for its content.
+	code=[content route](vyasa/content_routes.py?symbol=render_post_detail&kind=function)
+filesystem-backend: Filesystem backend
+	description=The reader that returns bytes from the working tree.
+	code=[FilesystemBackend](vyasa/content_backend.py?symbol=FilesystemBackend&kind=class)
+markdown-renderer: Markdown renderer
+	description=The pipeline that turns Markdown text into HTML nodes.
+	code=[from_md](vyasa/extensions_builtin/markdown/renderer.py?symbol=from_md&kind=function)
+fence-handler: Fence handler
+	description=The dispatcher that sends an items fence to its owning extension.
+	code=[markdown fence](vyasa/markdown_fence.py?symbol=split_fence_frontmatter&kind=function)
+graph-pack: KG Pack
+	description=The folder holding nodes, edges, attributes, schema, and palette.
+	code=[demo/vyasa.kg](demo/vyasa.kg)
+tasks-extension: Tasks extension
+	description=The built-in extension that loads a KG Pack and renders its interactive graph.
+	code=[TasksExtension](vyasa/extensions_builtin/tasks/__init__.py?symbol=TasksExtension&kind=class)
+html-response: HTML response
+	description=The page response containing the rendered graph and its required assets.
+	code=[DocumentPage](vyasa/document_pages.py?symbol=DocumentPage&kind=class)
+browser-ui: Browser UI
+	description=The browser displays the HTML and runs the graph interaction code.
+	code=[tasks.js](vyasa/extensions_builtin/tasks/tasks.js)

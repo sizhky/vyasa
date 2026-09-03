@@ -1,0 +1,16 @@
+{
+  "node_color_palettes": {
+    "layer": {
+      "content": "#64748b",
+      "core": "#2563eb",
+      "pipeline": "#7c3aed",
+      "extension": "#c2410c",
+      "surface": "#059669"
+    }
+  },
+  "edge_color_palettes": {
+    "role": {
+      "message": "#475569"
+    }
+  }
+}
