@@ -6920,13 +6920,36 @@ async function renderTasksGraphs(rootElement = document) {
                 // Both ends on one side means the path arcs away and comes back,
                 // so its chord says nothing about how long it is drawn.
                 const isArcEdge = props.sourcePosition === props.targetPosition;
+                const arrowSize = isArcEdge ? fullArrow : Math.max(6, Math.min(fullArrow, chord * 0.22));
                 const edgeArrowPath = tasksTaperedArrowHeadPath(
                     path,
-                    isArcEdge ? fullArrow : Math.max(6, Math.min(fullArrow, chord * 0.22)),
+                    arrowSize,
                     // The barb sits on the side the line was nudged toward, so a
                     // pair reads as one double harpoon rather than two arrows.
                     pairLift ? Math.sign(pairLift) : 0
                 );
+                // Both halves of a pair are drawn HERE, in the call's element. React
+                // Flow paints every edge as its own group, so a mate drawn in its own
+                // group laid its paper casing over this half's colour and ate its barb
+                // -- and the authoring order decided which half won. One group means
+                // one paint order for the whole exchange. The reply's element keeps
+                // only its label.
+                const pairHalf = String(props.data?.__pair_half__ || '');
+                const pairCall = Boolean(pairLift) && pairHalf === 'call';
+                const pairReply = Boolean(pairLift) && pairHalf === 'reply';
+                // The mate is anchored on these same two points, so swapping them
+                // yields exactly the props React Flow would have handed the mate.
+                const matePath = pairCall ? tasksPairedEdgePath({
+                    ...props,
+                    sourceX: props.targetX, sourceY: props.targetY, sourcePosition: props.targetPosition,
+                    targetX: props.sourceX, targetY: props.sourceY, targetPosition: props.sourcePosition,
+                }, pairLift, 'reply')[0] : '';
+                const pairRibbonWidth = Number(props.style?.strokeWidth) || 1.9;
+                const mateTaperPath = matePath ? tasksTaperedBezierPath(matePath, pairRibbonWidth, 0) : '';
+                const mateCasingPath = matePath
+                    ? tasksSideWeightedRibbonPath(matePath, pairRibbonWidth, 0, casingStroke, Math.sign(pairLift))
+                    : '';
+                const mateArrowPath = matePath ? tasksTaperedArrowHeadPath(matePath, arrowSize, Math.sign(pairLift)) : '';
                 const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
                 const prominentLabel = showFullLabel;
                 // React Flow forwards only its own edge props, so a top-level
@@ -6996,7 +7019,7 @@ async function renderTasksGraphs(rootElement = document) {
                     // line, its taper and its head merge into one silhouette with one
                     // outer border. Casing a head after the line drew its own border
                     // between the two and split the arrow from its shaft.
-                    taperCasingPath && React.createElement('path', {
+                    !pairReply && taperCasingPath && React.createElement('path', {
                         d: taperCasingPath,
                         fill: 'var(--vyasa-paper)',
                         stroke: pairLift ? 'none' : 'var(--vyasa-paper)',
@@ -7004,8 +7027,22 @@ async function renderTasksGraphs(rootElement = document) {
                         strokeLinejoin: 'round',
                         pointerEvents: 'none',
                     }),
-                    edgeArrowPath && React.createElement('path', {
+                    !pairReply && edgeArrowPath && React.createElement('path', {
                         d: edgeArrowPath,
+                        fill: 'var(--vyasa-paper)',
+                        stroke: 'var(--vyasa-paper)',
+                        strokeWidth: casingStroke,
+                        strokeLinejoin: 'round',
+                        pointerEvents: 'none',
+                    }),
+                    mateCasingPath && React.createElement('path', {
+                        d: mateCasingPath,
+                        fill: 'var(--vyasa-paper)',
+                        stroke: 'none',
+                        pointerEvents: 'none',
+                    }),
+                    mateArrowPath && React.createElement('path', {
+                        d: mateArrowPath,
                         fill: 'var(--vyasa-paper)',
                         stroke: 'var(--vyasa-paper)',
                         strokeWidth: casingStroke,
@@ -7038,7 +7075,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ? { ...(props.style || {}), strokeWidth: 0.1 }
                             : props.style,
                     }),
-                    taperPath && React.createElement('path', {
+                    !pairReply && taperPath && React.createElement('path', {
                         d: taperPath,
                         fill: props.style?.stroke || 'currentColor',
                         stroke: 'none',
@@ -7047,8 +7084,22 @@ async function renderTasksGraphs(rootElement = document) {
                         opacity: props.style?.opacity ?? 1,
                         pointerEvents: 'none',
                     }),
-                    edgeArrowPath && React.createElement('path', {
+                    mateTaperPath && React.createElement('path', {
+                        d: mateTaperPath,
+                        fill: props.style?.stroke || 'currentColor',
+                        stroke: 'none',
+                        opacity: props.style?.opacity ?? 1,
+                        pointerEvents: 'none',
+                    }),
+                    !pairReply && edgeArrowPath && React.createElement('path', {
                         d: edgeArrowPath,
+                        fill: props.style?.stroke || 'currentColor',
+                        stroke: 'none',
+                        opacity: props.style?.opacity ?? 1,
+                        pointerEvents: 'none',
+                    }),
+                    mateArrowPath && React.createElement('path', {
+                        d: mateArrowPath,
                         fill: props.style?.stroke || 'currentColor',
                         stroke: 'none',
                         opacity: props.style?.opacity ?? 1,
