@@ -518,10 +518,41 @@ def region_range(source: str, name: str) -> SourceRange:
     return SourceRange(start_line + 1, end_line - 1)
 
 
+def match_ranges(source: str, text: str) -> tuple[SourceRange, ...]:
+    """Lines that contain one literal substring. Every hit is focused.
+
+    A name that a function rebinds many times has no single symbol range, so
+    the author points at the statement text instead. The text cannot hold a
+    `]`, because that closes the `match[...]` form.
+
+    Pros: the reference survives line moves and edits elsewhere in the file.
+    Cons: a reworded statement stops matching and needs an author fix.
+
+    >>> match_ranges("a = 1\\nb = 2\\na = 1\\n", "a = 1")
+    (SourceRange(start=1, end=1), SourceRange(start=3, end=3))
+    """
+    wanted = str(text).strip()
+    if not wanted:
+        raise CodeReferenceError("invalid_attribute", "match needs literal text")
+    ranges = [
+        SourceRange(number, number)
+        for number, line in enumerate(source.splitlines(), start=1)
+        if wanted in line
+    ]
+    if not ranges:
+        raise CodeReferenceError("match_not_found", f"No line contains: {wanted}")
+    _guard_focus_count(ranges)
+    return tuple(ranges)
+
+
 def _named_focus_ranges(source: str, path: Path, focus: str, kind: str) -> tuple[SourceRange, ...]:
     text = str(focus).strip()
     ranges: list[SourceRange] = []
-    for match in re.finditer(r"(symbol|region)\[([^\]]+)\]", text):
+    for match in re.finditer(r"(symbol|region|match)\[([^\]]+)\]", text):
+        if match.group(1) == "match":
+            # The literal may hold commas, so it is never split.
+            ranges.extend(match_ranges(source, match.group(2)))
+            continue
         for name in match.group(2).split(","):
             item = name.strip()
             if not item:

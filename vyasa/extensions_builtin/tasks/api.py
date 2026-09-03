@@ -7,7 +7,7 @@ from typing import Iterable, cast
 
 from starlette.responses import Response
 
-from ...markdown_fence import items_link_base_path
+from ...markdown_fence import items_code_source, items_link_base_path
 from .layout import build_collapsed_graph
 from .items_pack import _tmp_view_sidecar_dir
 from .model import parse_tasks_text
@@ -68,7 +68,7 @@ def _compile_schema_payload(schema_path: Path, current_path: str = "", context_i
     source = f"```items\n---\nitems_schema: {schema_path}\n{context_line}---\n```"
     model = parse_tasks_text(source, current_path=current_path or schema_path)
     link_path = items_link_base_path(model, current_path or str(schema_path))
-    _attach_rendered_node_attrs(model, link_path)
+    _attach_rendered_node_attrs(model, link_path, items_code_source(model))
     _attach_rendered_slide_attrs(model, link_path)
     return model, build_collapsed_graph(model)
 

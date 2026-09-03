@@ -56,7 +56,7 @@ def _read_fence_frontmatter(body: str) -> tuple[dict, str]:
                 continue
             key = line[:key_index].strip()
             value = line[key_index + 1:].strip()
-            if key in {"id", "title", "group_by", "default_group_by", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "kg_context_id", "default_open_depth"}:
+            if key in {"id", "title", "group_by", "default_group_by", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "pair_by", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "kg_context_id", "default_open_depth"}:
                 config[key] = _read_string(value)
                 cursor += 1
                 continue
@@ -688,7 +688,7 @@ def _parse_items_graph(body: str) -> dict:
         if indent == 0 and _find_unquoted(line, ":") > 0 and _find_unquoted(line, "->") < 0:
             key, value = line.split(":", 1)
             key = key.strip()
-            if key in {"id", "title", "group_by", "default_group_by", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "kg_context_id"}:
+            if key in {"id", "title", "group_by", "default_group_by", "default_color_by", "default_secondary_color_by", "secondary_color_by", "default_image_by", "default_design_palette", "default_projection", "base_view_label", "edge_color_by", "edge_label_from", "pair_by", "image_by", "color_palette_source", "edge_color_palette_source", "items_schema", "kg_context_id"}:
                 graph[key] = _read_string(value.strip())
                 index += 1
                 continue
@@ -1028,7 +1028,7 @@ def _apply_kg_schema(graph: dict, current_path: str | Path | None) -> None:
         return
     schema_path = _resolve_required_source(current_path, schema_source)
     compiled = read_kg_pack(schema_path, str(graph.get("kg_context_id") or ""))
-    for key in ("id", "title", "default_projection", "default_group_by", "default_color_by", "default_secondary_color_by", "default_open_depth", "edge_color_by", "edge_label_from", "view_projections", "slides", "hover_attrs", "node_attr_order", "edge_attr_order", "node_hidden_attrs", "edge_hidden_attrs", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "kg_context", "kg_contexts", "index_attributes", "edge_index_attributes", "filter_attributes", "card_states", "node_reference_labels", "acl"):
+    for key in ("id", "title", "default_projection", "default_group_by", "default_color_by", "default_secondary_color_by", "default_open_depth", "edge_color_by", "edge_label_from", "pair_by", "view_projections", "slides", "hover_attrs", "node_attr_order", "edge_attr_order", "node_hidden_attrs", "edge_hidden_attrs", "color_palette_source", "kg_schema", "kg_cache", "kg_sources", "kg_context", "kg_contexts", "index_attributes", "edge_index_attributes", "filter_attributes", "card_states", "node_reference_labels", "acl"):
         if compiled.get(key) and not graph.get(key):
             graph[key] = compiled[key]
     graph["groups"].extend(compiled.get("groups", []))
@@ -1272,6 +1272,7 @@ def parse_tasks_text(text: str, current_path: str | Path | None = None) -> dict:
         "edge_color_palette_source": graph.get("edge_color_palette_source", ""),
         "edge_kinds": graph.get("edge_kinds", {}),
         "edge_label_from": graph.get("edge_label_from", ""),
+        "pair_by": graph.get("pair_by", ""),
         "default_projection": graph.get("default_projection", ""),
         "base_view_label": graph.get("base_view_label", ""),
         "view_projections": graph.get("view_projections", []),

@@ -144,3 +144,83 @@ test('only a view that declares layout=sequence opens in the sequence layout', (
     assert.equal(tasksProjectionLayout(model, 'phases'), '');
     assert.equal(tasksProjectionLayout(model, ''), '');
 });
+
+// A call and its reply. `p1` pairs them; `p2` is written only once, so it
+// stays an ordinary row and proves an unmatched key is not an error.
+function pairFixture() {
+    return {
+        groups: [{ id: 'client', label: 'Client' }, { id: 'server', label: 'Server' }],
+        tasks: [
+            { id: 'request', label: 'Request', group_id: 'client' },
+            { id: 'handler', label: 'Handler', group_id: 'server' },
+        ],
+        dependency_edges: [
+            { id: 'e1', source: 'request', target: 'handler', role: 'message', phase: 'serve', pair: 'p1' },
+            { id: 'e2', source: 'handler', target: 'request', role: 'message', phase: 'serve', pair: 'p1' },
+            { id: 'e3', source: 'request', target: 'handler', role: 'message', phase: 'serve', pair: 'p2' },
+        ],
+    };
+}
+
+const pairProjection = { sequence_role: 'role', sequence_phase: 'phase', pair_by: 'pair' };
+const buildPaired = (model = pairFixture()) => buildSequenceTasksGraph(model, pairProjection);
+
+test('a call and its reply share one row, so both halves sit at the same height', () => {
+    const graph = buildPaired();
+    const [call, reply] = graph.edges;
+    const callOut = handleFor(graph, 'request', 'source', call.sourceHandle);
+    const replyIn = handleFor(graph, 'request', 'target', reply.targetHandle);
+    assert.equal(callOut.offsetPct, replyIn.offsetPct);
+});
+
+test('a reply takes no step number of its own, because it is not a further step', () => {
+    const graph = buildPaired();
+    assert.deepEqual(graph.edges.map((edge) => edge.__sequence_step__), ['1', '', '2']);
+});
+
+test('both halves take the same lift, because each is offset along its own normal', () => {
+    const graph = buildPaired();
+    const [call, reply, single] = graph.edges;
+    assert.equal(call.__pair_half__, 'call');
+    assert.equal(reply.__pair_half__, 'reply');
+    // A reply's chord runs the other way, so one signed value lands them on
+    // opposite sides of the path they share.
+    assert.equal(call.__pair_lift__, reply.__pair_lift__);
+    assert.ok(call.__pair_lift__ !== 0);
+    // An unmatched pair key draws like any other row.
+    assert.equal(single.__pair_half__, '');
+    assert.equal(single.__pair_lift__, 0);
+});
+
+test('a pair occupies one row, so the rows below it do not skip a slot', () => {
+    const graph = buildPaired();
+    const [call, , single] = graph.edges;
+    const callOut = handleFor(graph, 'request', 'source', call.sourceHandle);
+    const singleOut = handleFor(graph, 'request', 'source', single.sourceHandle);
+    const rows = buildSequenceTasksGraph(
+        { ...pairFixture(), dependency_edges: pairFixture().dependency_edges.slice(0, 1) },
+        pairProjection,
+    );
+    // Two rows for three edges: the reply rides the call's row.
+    assert.ok(singleOut.offsetPct > callOut.offsetPct);
+    assert.ok(rows.edges.length === 1);
+});
+
+test('a reply never opens a phase band, because its call already opened one', () => {
+    const bands = buildPaired().nodes.filter((node) => node.__kind__ === 'sequencePhase');
+    assert.deepEqual(bands.map((band) => band.label), ['serve']);
+});
+
+test('without pair_by a pair attribute means nothing and both rows stand alone', () => {
+    const graph = buildSequenceTasksGraph(pairFixture(), projection);
+    assert.deepEqual(graph.edges.map((edge) => edge.__sequence_step__), ['1', '2', '3']);
+    assert.deepEqual(graph.edges.map((edge) => edge.__pair_lift__), [0, 0, 0]);
+});
+
+test('pair_by set on the graph works too, so the base view pairs without a projection', () => {
+    const graph = buildSequenceTasksGraph(
+        { ...pairFixture(), pair_by: 'pair' },
+        { sequence_role: 'role', sequence_phase: 'phase' },
+    );
+    assert.deepEqual(graph.edges.map((edge) => edge.__pair_half__), ['call', 'reply', '']);
+});

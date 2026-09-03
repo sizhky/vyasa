@@ -204,12 +204,14 @@ export function installCodeReferences(root = document, options = {}) {
     }
 }
 
-// Open on the first changed block. The reader can then scroll the whole file
-// from there in either direction.
+// Open on the first focused line. A block is the focus plus its context, so
+// its first line is context, not the line the author pointed at. Falling back
+// to the block start keeps older markup working.
 export function scrollToFirstCodeReferenceFocus(root) {
     const reference = root.querySelector('.vyasa-code-reference');
     if (!reference) return false;
-    const ranges = parseBlockRanges(reference.dataset.codeReferenceBlocks);
+    const focus = parseBlockRanges(reference.dataset.codeReferenceFocus);
+    const ranges = focus.length ? focus : parseBlockRanges(reference.dataset.codeReferenceBlocks);
     if (!ranges.length) return true;
     if (!centreLine(reference, ranges[0].start, false)) return true;
     lineElement(reference, ranges[0].start)?.classList.add('vyasa-link-preview-target-line');

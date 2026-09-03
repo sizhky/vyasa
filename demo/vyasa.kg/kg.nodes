@@ -1,0 +1,21 @@
+browser-ui: Browser
+	description=The browser asks Vyasa for a page and displays the HTML response it gets back.
+	code=The browser is outside Vyasa; no Vyasa function runs beyond this boundary.
+content-route: Content route
+	description=The request handler that owns the whole page pipeline.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[def render_post_detail(path, htmx, request]" context=1}
+path-resolver: Path resolver
+	description=The step that turns a page slug into a file path under a content root.
+	code=[content_path_for_slug](vyasa/helpers.py){show=symbol symbol=content_path_for_slug kind=Function}
+frontmatter-reader: Frontmatter reader
+	description=The step that reads the file and splits it into metadata and Markdown body.
+	code=[parse_frontmatter](vyasa/helpers.py){show=symbol symbol=parse_frontmatter kind=Function focus="match[def parse_frontmatter(file_path]" context=4}
+filesystem-backend: Ref-backed reader
+	description=The reader used only for git-ref pages, where the path is a VirtualPath instead of a Path.
+	code=[FilesystemBackend.read_bytes](vyasa/content_backend.py){show=symbol symbol=FilesystemBackend.read_bytes kind=Method}
+markdown-renderer: Markdown renderer
+	description=The pipeline that turns Markdown text into HTML nodes.
+	code=[from_md](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=from_md kind=Function focus="match[def from_md(content]" context=3}
+document-page: DocumentPage
+	description=The page object that holds the rendered content and returns the finished HTML response.
+	code=[DocumentPage](vyasa/document_pages.py){show=symbol symbol=DocumentPage kind=Class focus="match[class DocumentPage]" context=4}

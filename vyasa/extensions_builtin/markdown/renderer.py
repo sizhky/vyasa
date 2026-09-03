@@ -32,6 +32,7 @@ from ...helpers import (
 )
 from ...sections import extract_markdown_section_by_anchor as _extract_markdown_section
 from ...markdown_fence import get_root_folder as _shared_get_root_folder
+from ...markdown_fence import parse_fence_attrs
 from ...runtime_context import traced
 from ..slides.deck import present_href_for_anchor
 from ..tooltip_syntax import extract_tooltips
@@ -73,6 +74,9 @@ class RenderContext:
     slide_mode: bool = False
     content_tree: object | None = None
     asset_collector: object | None = None
+    # Per-render scratch shared by preprocessors, fence handlers and
+    # postprocessors, so a fence can read what an earlier pass captured.
+    extension_state: dict | None = None
 
 
 class MarkdownFeature(Protocol):
@@ -215,19 +219,7 @@ def _parse_highlight_spec(spec):
     return match.group(1).replace(":", "-").replace(" ", "") if match else ""
 
 
-def _parse_fence_attrs(info_string):
-    parts = shlex.split((info_string or "").strip())
-    if not parts:
-        return "", {}
-    lang = parts[0]
-    attrs = {}
-    for part in parts[1:]:
-        if "=" in part:
-            key, value = part.split("=", 1)
-            attrs[key] = value
-        else:
-            attrs[part] = True
-    return lang, attrs
+_parse_fence_attrs = parse_fence_attrs
 
 
 def _normalized_fence_code(token):
@@ -514,12 +506,13 @@ def _rewrite_raw_html_urls(content, current_path):
 
 
 class ContentRenderer(FrankenRenderer):
-    def __init__(self, *extras, img_dir=None, footnotes=None, tooltips=None, current_path=None, slide_mode=False, **kwargs):
+    def __init__(self, *extras, img_dir=None, footnotes=None, tooltips=None, current_path=None, slide_mode=False, extension_state=None, **kwargs):
         super().__init__(*extras, img_dir=img_dir, **kwargs)
         self.footnotes, self.fn_counter = footnotes or {}, 0
         self.tooltips, self.tooltip_popovers = tooltips or {}, []
         self.current_path = current_path
         self.slide_mode = slide_mode
+        self.extension_state = extension_state
         self.heading_counts = {}
         self.mermaid_counter = 0
         self.iframe_counter = 0
@@ -803,6 +796,7 @@ class ContentRenderer(FrankenRenderer):
                 current_path=self.current_path,
                 img_dir=self.img_dir,
                 slide_mode=self.slide_mode,
+                extension_state=self.extension_state,
             )
             handler = runtime.markdown_fences.get(lang)
             if handler:
@@ -956,7 +950,7 @@ def from_md(content: str, img_dir: str | None = None, current_path: str | None =
         with ContentRenderer(
             YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough, Highlight,
             TooltipRef, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, tooltips=tooltips,
-            current_path=current_path, slide_mode=slide_mode,
+            current_path=current_path, slide_mode=slide_mode, extension_state=extension_state,
         ) as renderer:
             html_out = renderer.render(mst.Document(content))
             html_out += "".join(renderer.tooltip_popovers)
@@ -964,7 +958,7 @@ def from_md(content: str, img_dir: str | None = None, current_path: str | None =
             with ContentRenderer(
                 YoutubeEmbed, IframeEmbed, DownloadEmbed, InlineCodeAttr, Strikethrough, Highlight,
                 TooltipRef, FootnoteRef, Superscript, Subscript, img_dir=img_dir, footnotes=footnotes, tooltips=tooltips,
-                current_path=current_path,
+                current_path=current_path, extension_state=extension_state,
             ) as renderer:
                 rendered = renderer.render(mst.Document(tab_content))
                 return rendered + "".join(renderer.tooltip_popovers)

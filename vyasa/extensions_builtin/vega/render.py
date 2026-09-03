@@ -16,9 +16,20 @@ import json
 import re
 from typing import Any, Mapping
 
-from ...markdown_fence import escape_attr
+from pathlib import Path
+
+from ...markdown_fence import escape_attr, parse_fence_attrs
 
 SPEC_SUFFIXES = frozenset({".json", ".yaml", ".yml"})
+CODE_SUFFIXES = frozenset({".py"})
+
+# Where captured `altair-data` blocks live inside the render's shared state.
+DATA_BLOCKS = "vega.altair_data"
+
+DATA_FENCE = re.compile(
+    r"^(?P<indent> {0,3})(?P<ticks>`{3,})[ \t]*(?P<info>altair-data[^\n]*)\n(?P<body>.*?)\n?^\1(?P=ticks)[ \t]*$",
+    re.DOTALL | re.MULTILINE,
+)
 
 
 CSS_LENGTH = re.compile(r"^\d{1,5}(?:\.\d{1,3})?(?:px|%|vw|vh|vmin|vmax|rem|em|ch)?$")
@@ -85,6 +96,115 @@ def render_vega_block(code: str, attrs: Mapping[str, Any], current_path: object)
         return _error(f"{type(error).__name__}: {error}")
     except Exception as error:
         return _error(f"{type(error).__name__}: {error}")
+    return render_spec(spec, attrs)
+
+
+def collect_data_blocks(content: str, context: object, state: dict) -> str:
+    r"""Capture every `altair-data` block before any fence renders.
+
+    Running as a preprocessor buys two things a fence handler cannot: an
+    `altair` block may sit above the data it uses, and each render starts from
+    an empty capture, so a block the author deleted cannot linger.
+
+    A block marked `hide` is removed here. One left visible stays in the
+    document and renders as Python source through the fence handler.
+
+    >>> state = {}
+    >>> md = "```altair-data id=curve hide\nrows = []\n```\ntext\n"
+    >>> collect_data_blocks(md, None, state).strip()
+    'text'
+    >>> state["vega.altair_data"]
+    {'curve': 'rows = []'}
+    """
+    blocks: dict[str, str] = {}
+
+    def capture(match: re.Match) -> str:
+        _, attrs = parse_fence_attrs(match.group("info"))
+        name = str(attrs.get("id") or "").strip()
+        if name:
+            blocks[name] = match.group("body")
+        return "" if attrs.get("hide") else match.group(0)
+
+    rewritten = DATA_FENCE.sub(capture, content)
+    if blocks:
+        state[DATA_BLOCKS] = blocks
+    return rewritten
+
+
+def render_altair_data_block(code: str, attrs: Mapping[str, Any], current_path: object) -> str:
+    """Render a visible `altair-data` block as the Python source it is.
+
+    The chart it feeds is drawn by the `altair` block that names it, so this
+    only has to show the derivation. A `hide` block never reaches here: the
+    preprocessor already removed it from the document.
+    """
+    from ..markdown.renderer import render_code_shell
+
+    return render_code_shell(
+        (code or "").rstrip(),
+        "python",
+        start=1,
+        title=str(attrs.get("title") or ""),
+    )
+
+
+def load_code(code: str, attrs: Mapping[str, Any], current_path: object, state: object = None) -> str:
+    r"""Read the fence body, with the `src=` code placed in front of it.
+
+    `src=` keeps its meaning from the `vega` fence -- the chart's source lives
+    there -- and the suffix says where "there" is. `src=recency.py` is a file
+    beside the document; `src=recency` is an `altair-data` block in it. Either
+    way the shared code runs first, in the same sandbox, under the same guard
+    as the body, so two charts state one derivation once.
+
+    >>> load_code("alt.Chart(rows)", {}, None)
+    'alt.Chart(rows)'
+    >>> load_code("curve", {"src": "d"}, None, {DATA_BLOCKS: {"d": "curve = 1"}})
+    'curve = 1\ncurve'
+    >>> load_code("curve", {"src": "d"}, None, {})
+    Traceback (most recent call last):
+    ...
+    ValueError: no altair-data block named 'd'
+    """
+    body = (code or "").strip()
+    src = str(attrs.get("src") or "").strip()
+    if not src:
+        if not body:
+            raise ValueError("empty altair block")
+        return body
+    if Path(src).suffix:
+        from ...markdown_fence import resolve_fence_data_path
+
+        path = resolve_fence_data_path(src, current_path, CODE_SUFFIXES)
+        shared = path.read_text(encoding="utf-8").strip()
+    else:
+        blocks = (state or {}).get(DATA_BLOCKS) or {}
+        if src not in blocks:
+            raise ValueError(f"no altair-data block named {src!r}")
+        shared = blocks[src].strip()
+    return f"{shared}\n{body}" if body else shared
+
+
+def render_altair_block(code: str, attrs: Mapping[str, Any], current_path: object, state: object = None) -> str:
+    """Render an Altair fence: Python in, the same Vega-Lite figure out.
+
+    A spec the author can derive should stay derived, so this fence takes the
+    code rather than the numbers it would produce. `chart.to_dict()` is already
+    a Vega-Lite spec, so the browser side is shared with `vega` unchanged.
+    """
+    try:
+        from .altair_run import altair_spec
+    except ImportError as error:
+        return _error(f"altair blocks need the extra: pip install 'vyasa[altair]' ({error})")
+    try:
+        spec = altair_spec(load_code(code, attrs, current_path, state))
+    except Exception as error:
+        return _error(f"{type(error).__name__}: {error}")
+    return render_spec(spec, attrs)
+
+
+def render_spec(spec: object, attrs: Mapping[str, Any]) -> str:
+    """Emit the figure both fences share, so one theme serves both."""
     if not isinstance(spec, dict):
         return _error("spec must be an object")
     # `</` cannot appear inside a JSON script tag or it closes the tag early.

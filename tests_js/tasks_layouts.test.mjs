@@ -302,3 +302,98 @@ test('card meta: an edge card hides the same machinery', () => {
     }).map((entry) => entry.key);
     assert.deepEqual(shown.sort(), ['flow', 'role']);
 });
+
+// Pairing is a view rule, not a layout rule: it reads edges alone, so every
+// layout gets the same answer from the same authored data.
+const { tasksEdgePairs, TASKS_PAIR_LIFT } = await import('../vyasa/extensions_builtin/tasks/static/tasks_layouts.js');
+
+test('two opposite edges with the same pair value are one call and one reply', () => {
+    const halves = tasksEdgePairs([
+        { id: 'a', source: 'x', target: 'y', pair: 'p' },
+        { id: 'b', source: 'y', target: 'x', pair: 'p' },
+    ], 'pair');
+    assert.equal(halves.get('a').half, 'call');
+    assert.equal(halves.get('b').half, 'reply');
+    assert.equal(halves.get('a').mate, 'b');
+    assert.equal(halves.get('b').mate, 'a');
+});
+
+test('two edges running the same way never pair, whatever they are tagged', () => {
+    const halves = tasksEdgePairs([
+        { id: 'a', source: 'x', target: 'y', pair: 'p' },
+        { id: 'b', source: 'x', target: 'y', pair: 'p' },
+    ], 'pair');
+    assert.equal(halves.size, 0);
+});
+
+test('an unmatched pair value leaves the edge alone', () => {
+    const halves = tasksEdgePairs([{ id: 'a', source: 'x', target: 'y', pair: 'p' }], 'pair');
+    assert.equal(halves.size, 0);
+});
+
+test('no pair attribute means no pairs, so an ordinary pack is untouched', () => {
+    const edges = [
+        { id: 'a', source: 'x', target: 'y', pair: 'p' },
+        { id: 'b', source: 'y', target: 'x', pair: 'p' },
+    ];
+    assert.equal(tasksEdgePairs(edges, '').size, 0);
+    assert.equal(tasksEdgePairs(edges, undefined).size, 0);
+});
+
+test('the lift is one signed value, since each half is offset along its own normal', () => {
+    assert.ok(Number.isFinite(TASKS_PAIR_LIFT) && TASKS_PAIR_LIFT !== 0);
+});
+
+// Re-anchoring a reply onto its call's two points. Handle ids are role-scoped,
+// so a reply needs handles of its own role at those points, not borrowed ids.
+const { tasksApplyEdgePairs } = await import('../vyasa/extensions_builtin/tasks/static/tasks_layouts.js');
+
+const anchorFixture = () => ({
+    edges: [
+        { id: 'call', source: 'x', target: 'y', pair: 'p', sourceHandle: 'source-right-0', targetHandle: 'target-left-0' },
+        { id: 'reply', source: 'y', target: 'x', pair: 'p', sourceHandle: 'source-left-0', targetHandle: 'target-right-0' },
+    ],
+    nodeHandles: {
+        x: {
+            source: [{ id: 'source-right-0', side: 'right', offsetPct: 30 }],
+            target: [{ id: 'target-right-0', side: 'right', offsetPct: 70 }],
+        },
+        y: {
+            source: [{ id: 'source-left-0', side: 'left', offsetPct: 70 }],
+            target: [{ id: 'target-left-0', side: 'left', offsetPct: 30 }],
+        },
+    },
+});
+
+test('a reply is re-anchored onto its call points, using handles of its own role', () => {
+    const out = tasksApplyEdgePairs(anchorFixture(), 'pair');
+    const reply = out.edges.find((edge) => edge.id === 'reply');
+    // The reply leaves from y at the point the call arrived at, and arrives at
+    // x where the call left, so both halves span the same two points.
+    const leaves = out.nodeHandles.y.source.find((handle) => handle.id === reply.sourceHandle);
+    const arrives = out.nodeHandles.x.target.find((handle) => handle.id === reply.targetHandle);
+    assert.deepEqual([leaves.side, leaves.offsetPct], ['left', 30]);
+    assert.deepEqual([arrives.side, arrives.offsetPct], ['right', 30]);
+});
+
+test('a reply never reuses a handle id of the other role, which would not resolve', () => {
+    const out = tasksApplyEdgePairs(anchorFixture(), 'pair');
+    const reply = out.edges.find((edge) => edge.id === 'reply');
+    assert.notEqual(reply.sourceHandle, 'target-left-0');
+    assert.notEqual(reply.targetHandle, 'source-right-0');
+    assert.ok(out.nodeHandles.y.source.some((handle) => handle.id === reply.sourceHandle));
+    assert.ok(out.nodeHandles.x.target.some((handle) => handle.id === reply.targetHandle));
+});
+
+test('an authored-handle layout keeps its own anchors and only takes the pair tags', () => {
+    const out = tasksApplyEdgePairs(anchorFixture(), 'pair', false);
+    const reply = out.edges.find((edge) => edge.id === 'reply');
+    assert.equal(reply.sourceHandle, 'source-left-0');
+    assert.equal(reply.targetHandle, 'target-right-0');
+    assert.equal(reply.__pair_half__, 'reply');
+});
+
+test('no pairs means the anchors come back untouched', () => {
+    const anchors = anchorFixture();
+    assert.equal(tasksApplyEdgePairs(anchors, ''), anchors);
+});

@@ -110,7 +110,7 @@ The parser uses the same quoting rules as `_parse_fence_attrs`. Keys are lowerca
 | `kind` | `Function`, `Method`, `Class`, and existing kinds | none | Narrow symbol lookup |
 | `region` | region name | none | Select a named source region |
 | `lines` | `start:end` | none | Select one explicit source range |
-| `focus` | `changed`, `all`, `ln[...]`, `symbol[...]`, `region[...]` | `all` | Select emphasized lines |
+| `focus` | `changed`, `all`, `ln[...]`, `symbol[...]`, `region[...]`, `match[...]` | `all` | Select emphasized lines |
 | `context` | integer from `0` to `20` | `3` | Add nearby lines around focus blocks |
 | `view` | `source`, `diff`, `split` | `source` | Select the preview layout |
 | `side` | `after`, `before`, `both` | `after` | Select source state |
@@ -300,6 +300,10 @@ If a language has no range adapter, Vyasa asks the author to use `show=region` o
 `focus=ln[...]` supports comma-separated single lines and ranges. Colons and hyphens are accepted as range separators.
 
 `focus=symbol[...]` and `focus=region[...]` can repeat inside one quoted value.
+
+`focus=match[...]` selects every line that contains the literal text. Use it for a name that one
+function rebinds many times, where no single symbol range exists. The literal keeps its commas and
+spaces, but it cannot hold a `]`. A literal that matches no line raises `match_not_found`.
 
 Vyasa adds `context` lines before and after each focus range. It clips context to the shown range.
 

@@ -2,7 +2,7 @@ import ELK from 'https://esm.sh/elkjs@0.10.0';
 import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksCenteredViewport, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksInlineLinkPlainText, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
 import { buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksHopSeedIds, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNeighborHopIds, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksProjectionById, tasksProjectionLayout, tasksPruneFilterQueryFields, tasksReferenceEdges, tasksSameIdSet, tasksSelectionClickKey, tasksVisibleReferenceEdges, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
-import { tasksLayoutById, tasksLayoutChromeKinds } from '/static/extensions/tasks/tasks_layouts.js';
+import { tasksApplyEdgePairs, tasksLayoutById, tasksLayoutChromeKinds } from '/static/extensions/tasks/tasks_layouts.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
 import { createMomentumRunner, shortcutsSuspended } from '/static/page_shell.js';
@@ -48,7 +48,7 @@ const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
 // A share of the widget, not a pixel count, so the panel keeps its
 // proportion on any screen. The 24px subtraction keeps the gutter.
 const TASKS_FILTER_PANEL_WIDTH = '20%'; // default; `filter-panel-width` overrides it
-const TASKS_NODE_CARD_CONTENT_SCALE = 2; // default; `node-card-content-scale` overrides it
+const TASKS_NODE_CARD_CONTENT_SCALE = 1; // default; `node-card-content-scale` overrides it
 const TASKS_PROJECTION_GROUP_OPACITY_DEFAULT = 12;
 const TASKS_PROJECTION_UNSPECIFIED_GROUP_OPACITY_DEFAULT = 7;
 const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;
@@ -131,6 +131,11 @@ function buildLayoutErrorGraph(message, viewId) {
     };
 }
 const TASKS_SEQUENCE_LABEL_LIFT = 12;
+// Half the clearance between a pair's two labels. Both halves share one
+// midpoint, so each label needs to move this far off it to stop overlapping.
+// A one-line label box is about 21px tall, so this is the smallest value that
+// keeps them apart.
+const TASKS_PAIR_LABEL_LIFT = 13;
 const TASKS_PROJECTION_UNSPECIFIED_LABEL = 'Unspecified';
 const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity']);
 const TASKS_SPECIAL_COLOR_MODE_KEYS = new Set(['connectivity', 'rank']);
@@ -458,8 +463,10 @@ function tasksTaperedBezierPath(bezierPath, sourceWidth, targetWidth) {
     };
     const n0 = normal(x0, y0, x1, y1);
     const n3 = normal(x2, y2, x3, y3);
-    const w0 = Math.max(0.5, Number(sourceWidth) || 1) / 2;
-    const w3 = Math.max(0.5, Number(targetWidth) || 1) / 2;
+    // A width of 0 is a real request: it lets an end taper to a point instead of
+    // arriving as a stub. Only a missing width falls back to 1.
+    const w0 = Math.max(0, Number.isFinite(Number(sourceWidth)) ? Number(sourceWidth) : 1) / 2;
+    const w3 = Math.max(0, Number.isFinite(Number(targetWidth)) ? Number(targetWidth) : 1) / 2;
     return [
         `M ${x0 + n0.x * w0} ${y0 + n0.y * w0}`,
         `C ${x1 + n0.x * w0} ${y1 + n0.y * w0} ${x2 + n3.x * w3} ${y2 + n3.y * w3} ${x3 + n3.x * w3} ${y3 + n3.y * w3}`,
@@ -469,7 +476,42 @@ function tasksTaperedBezierPath(bezierPath, sourceWidth, targetWidth) {
     ].join(' ');
 }
 
-function tasksTaperedArrowHeadPath(bezierPath, size) {
+// A pair wants its casing on the OUTER side only. A symmetric casing lays paper
+// into the gap between the two halves, where it reads as a seam down the middle
+// of what should be one exchange. This is the same ribbon math as
+// tasksTaperedBezierPath, but the inner boundary sits flush on the ribbon's own
+// inner edge while the outer one is padded, so no paper ever crosses the shared
+// centreline.
+function tasksSideWeightedRibbonPath(bezierPath, sourceWidth, targetWidth, outerPad, side) {
+    const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
+    if (nums.length < 8) return '';
+    const [x0, y0, x1, y1, x2, y2, x3, y3] = nums;
+    const normal = (ax, ay, bx, by) => {
+        const dx = bx - ax;
+        const dy = by - ay;
+        const len = Math.hypot(dx, dy) || 1;
+        return { x: -dy / len, y: dx / len };
+    };
+    const n0 = normal(x0, y0, x1, y1);
+    const n3 = normal(x2, y2, x3, y3);
+    const sign = side > 0 ? 1 : -1;
+    const w0 = Math.max(0, Number(sourceWidth) || 0) / 2;
+    const w3 = Math.max(0, Number(targetWidth) || 0) / 2;
+    const pad = Math.max(0, Number(outerPad) || 0);
+    const o0 = sign * (w0 + pad);
+    const o3 = sign * (w3 + pad);
+    const i0 = -sign * w0;
+    const i3 = -sign * w3;
+    return [
+        `M ${x0 + n0.x * o0} ${y0 + n0.y * o0}`,
+        `C ${x1 + n0.x * o0} ${y1 + n0.y * o0} ${x2 + n3.x * o3} ${y2 + n3.y * o3} ${x3 + n3.x * o3} ${y3 + n3.y * o3}`,
+        `L ${x3 + n3.x * i3} ${y3 + n3.y * i3}`,
+        `C ${x2 + n3.x * i3} ${y2 + n3.y * i3} ${x1 + n0.x * i0} ${y1 + n0.y * i0} ${x0 + n0.x * i0} ${y0 + n0.y * i0}`,
+        'Z',
+    ].join(' ');
+}
+
+function tasksTaperedArrowHeadPath(bezierPath, size, side = 0) {
     const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
     if (nums.length < 8) return '';
     const [, , , , x2, y2, x3, y3] = nums;
@@ -484,6 +526,24 @@ function tasksTaperedArrowHeadPath(bezierPath, size) {
     const arrowWidth = arrowLength * 1.18;
     const baseX = x3 - ux * arrowLength;
     const baseY = y3 - uy * arrowLength;
+    // A harpoon keeps one barb. Two of them, mirrored, are how a pair of edges
+    // reads as one exchange rather than two arrows that happen to overlap.
+    //
+    // A barb is a slim flag swept back along its own line, not half of a wide
+    // arrowhead: the full width is squat at this length and the trailing vertex
+    // sits close behind the tip, so the shape hugs the line instead of reading
+    // as a blunt wedge. The wing goes on the side the line was nudged toward,
+    // which is away from the mate.
+    if (side) {
+        const sign = side > 0 ? 1 : -1;
+        const wing = arrowLength * 0.55;
+        return [
+            `M ${x3} ${y3}`,
+            `L ${baseX + sign * nx * wing} ${baseY + sign * ny * wing}`,
+            `L ${baseX} ${baseY}`,
+            'Z',
+        ].join(' ');
+    }
     return [
         `M ${x3} ${y3}`,
         `L ${baseX + nx * arrowWidth / 2} ${baseY + ny * arrowWidth / 2}`,
@@ -491,6 +551,49 @@ function tasksTaperedArrowHeadPath(bezierPath, size) {
         'Z',
     ].join(' ');
 }
+
+// Slide the whole curve sideways, along the normal of its own chord. A reply
+// runs the other way, so its normal points the other way, and one signed lift
+// puts the two halves on opposite sides of the same path at any angle.
+//
+// The ENDS are the exception. A free normal offset has a component across the
+// node border whenever the chord runs diagonally, which pushes one half into
+// the node and pulls the other out, so a departing tail and an arriving head
+// stop being level. Each end therefore slides ALONG its own border -- vertical
+// for a left/right handle, horizontal for a top/bottom one -- keeping the full
+// gap while staying on the border line.
+function tasksPairShiftedProps(props, lift) {
+    if (!lift) return props;
+    const dx = props.targetX - props.sourceX;
+    const dy = props.targetY - props.sourceY;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = (-dy / len) * lift;
+    const ny = (dx / len) * lift;
+    const borderTangent = (position) => {
+        if (position === 'left' || position === 'right') return { x: 0, y: 1 };
+        if (position === 'top' || position === 'bottom') return { x: 1, y: 0 };
+        return null;
+    };
+    const slide = (position) => {
+        const tangent = borderTangent(position);
+        if (!tangent) return { x: nx, y: ny };
+        // Take the side the normal pointed to; a chord square to the border
+        // projects to nothing, so fall back to the lift's own sign.
+        const dot = (nx * tangent.x) + (ny * tangent.y);
+        const sign = dot !== 0 ? Math.sign(dot) : Math.sign(lift);
+        return { x: tangent.x * Math.abs(lift) * sign, y: tangent.y * Math.abs(lift) * sign };
+    };
+    const source = slide(props.sourcePosition);
+    const target = slide(props.targetPosition);
+    return {
+        ...props,
+        sourceX: props.sourceX + source.x,
+        sourceY: props.sourceY + source.y,
+        targetX: props.targetX + target.x,
+        targetY: props.targetY + target.y,
+    };
+}
+
 
 function tasksEdgePath(props) {
     const distance = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY);
@@ -507,6 +610,34 @@ function tasksEdgePath(props) {
         (props.sourceY + 3 * sourceStub.y + 3 * targetStub.y + props.targetY) / 8,
     ];
 }
+
+// Both halves of a pair must be offsets of ONE curve. Solving the reply's own
+// bezier re-derives the control points from its swapped source/target
+// positions, so the two halves converge at the ends and bow apart in the
+// belly. Solve the call's orientation for both, lift each half to its own
+// side, then run the reply's path backwards so its barb still lands on its own
+// target.
+function tasksReverseCubicPath(path) {
+    const nums = String(path || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
+    if (nums.length < 8) return path;
+    const [x0, y0, c1x, c1y, c2x, c2y, x3, y3] = nums;
+    return `M ${x3} ${y3} C ${c2x} ${c2y} ${c1x} ${c1y} ${x0} ${y0}`;
+}
+
+function tasksPairedEdgePath(props, lift, half) {
+    if (!lift) return tasksEdgePath(props);
+    const reply = half === 'reply';
+    const call = reply ? {
+        ...props,
+        sourceX: props.targetX, sourceY: props.targetY, sourcePosition: props.targetPosition,
+        targetX: props.sourceX, targetY: props.sourceY, targetPosition: props.sourcePosition,
+    } : props;
+    // One shared chord means one shared normal, so the reply takes the other
+    // sign of the same lift to land on the opposite side.
+    const [path, labelX, labelY] = tasksEdgePath(tasksPairShiftedProps(call, reply ? -lift : lift));
+    return [reply ? tasksReverseCubicPath(path) : path, labelX, labelY];
+}
+
 
 function tasksIsIconifyImage(url) {
     return /^https:\/\/api\.iconify\.design\/.+\.svg(?:\?.*)?$/i.test(String(url || '').trim());
@@ -572,14 +703,23 @@ function tasksPrefsKey(model) {
     return graphId ? `vyasa:tasks:prefs:${graphId}` : '';
 }
 
-function tasksCheckedStateKey(model) {
+// One key space per document+graph, so two KGs never share a stored value.
+function tasksModelScopeKey(model, kind) {
     const documentPath = String(model?.document_path || '').trim();
     const persistenceId = String(model?.persistence_id || '').trim();
     const graphId = String(model?.graph_id || '').trim();
     const title = String(model?.title || '').trim();
     const stableId = persistenceId || title || graphId;
     if (!stableId) return '';
-    return `vyasa:tasks:checked:${documentPath}::${stableId}`;
+    return `vyasa:tasks:${kind}:${documentPath}::${stableId}`;
+}
+
+function tasksCheckedStateKey(model) {
+    return tasksModelScopeKey(model, 'checked');
+}
+
+function tasksNodeCardWidthKey(model) {
+    return tasksModelScopeKey(model, 'node-card-width');
 }
 
 function tasksGetStorage() {
@@ -1816,9 +1956,15 @@ function tasksEdgeColorPaletteFor(model, colorBy) {
 
 function resolveTasksEdgeLabel(edge, model, activeProjection = null) {
     if (!edge) return '';
-    // 1. Inline pipe label (also serves as kind name) wins.
+    // 1. A hand-written inline pipe label wins. A relation verb does NOT: it
+    //    names the KIND of edge, and the pack echoes it into label, so it used
+    //    to shadow edge_label_from entirely and no note could ever show. An
+    //    authored edge_label_from is the more specific instruction, so a label
+    //    that is only the relation repeated yields to it, then falls back to
+    //    the verb at step 4 when the attr has nothing to say.
     const rawLabel = typeof edge.label === 'string' ? edge.label.trim() : '';
-    if (rawLabel) return rawLabel;
+    const relation = typeof edge.relation === 'string' ? edge.relation.trim() : '';
+    if (rawLabel && rawLabel !== relation) return rawLabel;
     // 2. Projection-requested attr.
     const projectionAttr = activeProjection && typeof activeProjection.edge_label_from === 'string'
         ? activeProjection.edge_label_from.trim() : '';
@@ -1829,7 +1975,9 @@ function resolveTasksEdgeLabel(edge, model, activeProjection = null) {
         const values = tasksAttrValues(edge[requestedAttr]);
         if (values.length) return values.join(', ');
     }
-    // 4. Empty — user said this is fine.
+    // 4. The relation verb, if that is all there is.
+    if (rawLabel) return rawLabel;
+    // 5. Empty — user said this is fine.
     return '';
 }
 
@@ -3291,7 +3439,9 @@ function tasksGraphNodeAbsoluteRect(node, byId) {
 function tasksGraphNodeAtFlowPoint(nodes, point) {
     const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
     return (nodes || [])
-        .filter((node) => node.data?.__kind__ !== 'ganttHeader')
+        // Chrome is passive: a band or a cell must never become the anchor for
+        // an edge preview, because it has no incident edge and kills the hit.
+        .filter((node) => !TASKS_PASSIVE_NODE_KINDS.has(node.data?.__kind__))
         .map((node) => ({ node, rect: tasksGraphNodeAbsoluteRect(node, byId), z: Number(node.zIndex || node.style?.zIndex || 0) }))
         .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
         .sort((a, b) => b.z - a.z)[0] || null;
@@ -3614,7 +3764,9 @@ function renderTasksCardDetailsAndNotes(React, options = {}) {
                 flex: '1 1 auto',
                 minHeight: 0,
                 overflowY: 'auto',
-                overflowX: (options.contentScale || 1) > 1 ? 'auto' : 'hidden',
+                // Always scrollable: at scale 1 the body keeps its natural width, so
+                // this only bites when a child cannot wrap into a narrow card.
+                overflowX: 'auto',
                 overscrollBehavior: 'contain',
                 padding: '12px',
             },
@@ -3995,7 +4147,22 @@ async function renderTasksGraphs(rootElement = document) {
                 y: Number.parseFloat(tasksModelSetting(model, 'jitter_y', wrapper.dataset.tasksJitterY || wrapper.dataset.tasksJitter || '0')),
             }), [model]);
             const layoutConfig = React.useMemo(() => readTasksLayoutConfigForModel(wrapper, model), [model]);
-            const nodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '20%')).trim() || '20%';
+            const configuredNodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '20%')).trim() || '20%';
+            // A drag on the rail handle overrides the frontmatter width for this
+            // graph only. Percent, not pixels, so a window resize stays sane.
+            const nodeCardWidthKey = tasksNodeCardWidthKey(model);
+            const [nodeCardWidthOverride, setNodeCardWidthOverride] = React.useState(null);
+            React.useEffect(() => {
+                const stored = nodeCardWidthKey ? readTasksGlobalToggle(nodeCardWidthKey) : null;
+                setNodeCardWidthOverride(/^\d+(\.\d+)?%$/.test(String(stored || '')) ? stored : null);
+            }, [nodeCardWidthKey]);
+            const applyNodeCardWidth = (value) => {
+                setNodeCardWidthOverride(value);
+                if (!nodeCardWidthKey) return;
+                if (value) writeTasksGlobalToggle(nodeCardWidthKey, value);
+                else clearTasksGlobalToggle(nodeCardWidthKey);
+            };
+            const nodeCardWidth = nodeCardWidthOverride || configuredNodeCardWidth;
             const filterPanelWidthSetting = String(tasksModelSetting(model, 'filter-panel-width', wrapper.dataset.tasksFilterPanelWidth || TASKS_FILTER_PANEL_WIDTH)).trim() || TASKS_FILTER_PANEL_WIDTH;
             // How many card widths the details body is drawn at. Sideways scroll
             // pans across it, so a narrow card can still hold wide content.
@@ -5050,19 +5217,36 @@ async function renderTasksGraphs(rootElement = document) {
             }, [announceHopSelection, applyHopSelection, currentSelectionIds, widgetId]);
             const currentHighlightedFitNodes = React.useCallback(() => {
                 const selectedIds = currentSelectionIds();
-                if (!selectedIds.size) return [];
+                // An open hover card names a focus node too, so F frames the hovered
+                // node and its edge neighbours the way a selection does. Selection
+                // wins when both are live.
+                const hoverTooltip = groupHoverTooltipRef.current;
+                const hoverCardOpen = hoverCardsEnabled
+                    && Boolean(hoverTooltip?.nodeId)
+                    && (groupHoverCardsEnabled || !hoverTooltip.group);
+                // The card is one way to name the hovered node, not the only one. It
+                // opens after a dwell and stays shut in some hover-card modes, so fall
+                // back to the plain hovered id. Otherwise F frames nothing on hover
+                // until a card happens to be open.
+                const hoverAnchorId = selectedIds.size
+                    ? ''
+                    : String((hoverCardOpen ? hoverTooltip.nodeId : '') || hoveredNodeIdRef.current || '');
+                if (!selectedIds.size && !hoverAnchorId) return [];
+                const seedIds = hoverAnchorId ? new Set([hoverAnchorId]) : selectedIds;
+                const anchorId = hoverAnchorId
+                    || (selectedNodeIdRef.current && selectedIds.has(selectedNodeIdRef.current) ? selectedNodeIdRef.current : '');
                 // Equal-z hit paths use paint order. Stable edge order makes the
                 // overlap winner deterministic; keyboard cycling still reaches all edges.
                 const baseEdges = tasksOrderedEdges(tasksEdgesMatchingTypes(
                     currentGraphEdges(),
                     effectiveEdgeTypes,
                 ));
-                const fitIds = new Set(selectedIds);
-                for (const selectedId of selectedIds) {
-                    for (const descendantId of collectTasksGroupDescendantIds(selectedId, model)) fitIds.add(descendantId);
+                const fitIds = new Set(seedIds);
+                for (const seedId of seedIds) {
+                    for (const descendantId of collectTasksGroupDescendantIds(seedId, model)) fitIds.add(descendantId);
                 }
-                if (selectedNodeIdRef.current && selectedIds.has(selectedNodeIdRef.current)) {
-                    const selectedScopeIds = new Set([selectedNodeIdRef.current, ...collectTasksGroupDescendantIds(selectedNodeIdRef.current, model)]);
+                if (anchorId) {
+                    const selectedScopeIds = new Set([anchorId, ...collectTasksGroupDescendantIds(anchorId, model)]);
                     const fitEdgeEndpointIds = new Set(selectedScopeIds);
                     for (const edge of baseEdges) {
                         if (selectedScopeIds.has(edge.source) || selectedScopeIds.has(edge.target)) {
@@ -5080,7 +5264,7 @@ async function renderTasksGraphs(rootElement = document) {
                     && node.data?.__kind__ !== 'groupTitle'
                     && fitIds.has(node.id)
                 ));
-            }, [currentGraphEdges, currentSelectionIds, model, effectiveEdgeTypes]);
+            }, [currentGraphEdges, currentSelectionIds, model, effectiveEdgeTypes, hoverCardsEnabled, groupHoverCardsEnabled]);
             const tasksFitDebugPayload = React.useCallback((reason, matchedNodes = []) => {
                 const selectedIds = currentSelectionIds();
                 const hasQueryFilters = tasksFilterQueryHasRules(effectiveQueryFilters);
@@ -5106,16 +5290,43 @@ async function renderTasksGraphs(rootElement = document) {
                     matchedNodeIds: matchedNodes.map((node) => node.id).slice(0, 80),
                 };
             }, [widgetId, currentSelectionIds, effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches]);
-            const fitPaddingAroundCards = React.useCallback((fallback) => {
+            // Width the open detail cards take from the right edge, gutter included.
+            const cardCoveredRight = React.useCallback(() => {
                 const canvas = flowWrapperRef.current;
-                if (!canvas) return fallback;
+                if (!canvas) return 0;
                 const canvasRect = canvas.getBoundingClientRect();
                 const cards = Array.from(canvas.querySelectorAll('[data-vyasa-node-card], [data-vyasa-edge-card]'));
                 const cardLeft = Math.min(...cards.map((card) => card.getBoundingClientRect().left));
-                if (!Number.isFinite(cardLeft)) return fallback;
-                const coveredRight = Math.max(0, canvasRect.right - Math.max(canvasRect.left, cardLeft));
-                return { top: '24px', right: `${Math.ceil(coveredRight + 12)}px`, bottom: '24px', left: '24px' };
+                if (!Number.isFinite(cardLeft)) return 0;
+                const covered = Math.max(0, canvasRect.right - Math.max(canvasRect.left, cardLeft));
+                return covered ? Math.ceil(covered + 12) : 0;
             }, []);
+            // xyflow treats fitView padding as a minimum gap and still centres the
+            // content in the whole canvas, so a narrow graph parks under the card.
+            // Size and centre against the uncovered strip ourselves instead.
+            // Returns false when no card is open, so the plain fitView still runs.
+            const fitNodesBesideCards = React.useCallback((reactFlow, nodes, duration) => {
+                const canvas = flowWrapperRef.current;
+                const coveredRight = cardCoveredRight();
+                if (!reactFlow || !canvas || !coveredRight) return false;
+                const bounds = reactFlow.getNodesBounds(nodes?.length ? nodes : reactFlow.getNodes());
+                if (!(bounds?.width > 0) || !(bounds?.height > 0)) return false;
+                const canvasRect = canvas.getBoundingClientRect();
+                const pad = 24;
+                const width = canvasRect.width - coveredRight - pad * 2;
+                const height = canvasRect.height - pad * 2;
+                if (width <= 0 || height <= 0) return false;
+                const zoom = Math.min(
+                    TASKS_GRAPH_MAX_ZOOM,
+                    Math.max(graphMinZoom, Math.min(width / bounds.width, height / bounds.height))
+                );
+                reactFlow.setViewport({
+                    x: pad + width / 2 - (bounds.x + bounds.width / 2) * zoom,
+                    y: pad + height / 2 - (bounds.y + bounds.height / 2) * zoom,
+                    zoom,
+                }, { duration });
+                return true;
+            }, [cardCoveredRight, graphMinZoom]);
             const fitCurrentHighlight = React.useCallback((reactFlow, options = {}) => {
                 const reason = String(options.reason || 'manual-fit');
                 if (!reactFlow) return 0;
@@ -5126,11 +5337,13 @@ async function renderTasksGraphs(rootElement = document) {
                     hasReactFlow: Boolean(reactFlow),
                     duration,
                 });
-                reactFlow.fitView(matched.length
-                    ? { nodes: matched, duration, padding: fitPaddingAroundCards(options.highlightPadding ?? 0.25), includeHiddenNodes: true }
-                    : { duration, padding: fitPaddingAroundCards(options.padding ?? 0.2), includeHiddenNodes: true });
+                if (!fitNodesBesideCards(reactFlow, matched, duration)) {
+                    reactFlow.fitView(matched.length
+                        ? { nodes: matched, duration, padding: options.highlightPadding ?? 0.25, includeHiddenNodes: true }
+                        : { duration, padding: options.padding ?? 0.2, includeHiddenNodes: true });
+                }
                 return matched.length;
-            }, [currentHighlightedFitNodes, fitPaddingAroundCards, tasksFitDebugPayload]);
+            }, [currentHighlightedFitNodes, fitNodesBesideCards, tasksFitDebugPayload]);
             const fitSelectedEdgeConnection = React.useCallback((reactFlow, duration = 300) => {
                 if (!reactFlow || !selectedEdgeIdRef.current) return 0;
                 const visibleEdge = currentGraphEdges().find(
@@ -5141,9 +5354,11 @@ async function renderTasksGraphs(rootElement = document) {
                 const endpointIds = new Set([edge.source, edge.target]);
                 const matched = (graphBaseRef.current.nodes || []).filter((node) => endpointIds.has(node.id));
                 if (!matched.length) return 0;
-                reactFlow.fitView({ nodes: matched, duration, padding: fitPaddingAroundCards(0.32), includeHiddenNodes: true });
+                if (!fitNodesBesideCards(reactFlow, matched, duration)) {
+                    reactFlow.fitView({ nodes: matched, duration, padding: 0.32, includeHiddenNodes: true });
+                }
                 return matched.length;
-            }, [currentGraphEdges, fitPaddingAroundCards, selectedEdgeRecord]);
+            }, [currentGraphEdges, fitNodesBesideCards, selectedEdgeRecord]);
             React.useEffect(() => {
                 const baseModel = baseProjectionState.model;
                 const validFilterKeys = new Set(tasksFilterOptions(baseModel).map((option) => option.key));
@@ -5692,7 +5907,8 @@ async function renderTasksGraphs(rootElement = document) {
                     // A layout that declares authoredHandles has already pinned every
                     // handle itself -- a sequence row puts both ends at the row height --
                     // so the generic anchor solver must not spread them around the node.
-                    const anchored = tasksFixedLayout(mode)?.authoredHandles
+                    const authoredHandles = Boolean(tasksFixedLayout(mode)?.authoredHandles);
+                    const solved = authoredHandles
                         ? {
                             edges: authoredRawEdges,
                             nodeHandles: Object.fromEntries((rawGraph.nodes || [])
@@ -5700,23 +5916,47 @@ async function renderTasksGraphs(rootElement = document) {
                                 .map((node) => [node.id, node.handleLayout])),
                         }
                         : buildTaskEdgeAnchors(nodesWithStyle, authoredRawEdges);
+                    // A layout that authors its own handles has already put both
+                    // halves on the same two points, so only the solved case
+                    // needs the reply to borrow its call's handles.
+                    const anchored = tasksApplyEdgePairs(solved, activeProjection?.pair_by || model?.pair_by, !authoredHandles);
                     const visibleReferenceRecords = tasksVisibleReferenceEdges(referenceEdgeRecords, nodesWithStyle, model);
                     const referenceAnchored = buildTaskEdgeAnchors(nodesWithStyle, visibleReferenceRecords, 'reference-');
+                    // A pair is drawn in one element, so the call needs its mate's colour
+                    // as well as its own. Resolve every colour up front rather than
+                    // reaching back into the map from inside it.
+                    const pairMateColors = new Map(anchored.edges.map((item) => [item.id, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette)]));
                     const baseEdges = anchored.edges.map((edge) => {
                         const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
                         const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
                         const rowLabel = edge.__sequence_step__
                             ? `${edge.__sequence_step__} \u00b7 ${resolvedLabel}`.trim()
                             : resolvedLabel;
+                        // A lifeline is a full-height column, so a row that crosses one
+                        // must draw over it, not behind it.
+                        const rowZ = tasksFixedLayout(mode)?.edgesOverNodes ? TASKS_TASK_Z + 10 : TASKS_EDGE_Z;
                         return {
                             ...edge,
                             label: rowLabel,
                             type: 'vyasaEdge',
-                            data: { ...(edge.data || {}), edgeColor, __sequence_label_lift__: mode === 'sequence' ? TASKS_SEQUENCE_LABEL_LIFT : 0 },
+                            data: {
+                                ...(edge.data || {}),
+                                edgeColor,
+                                // Both halves of a pair share a row, so their labels
+                                // must not share a side of it.
+                                __sequence_label_lift__: mode === 'sequence'
+                                    ? (edge.__pair_half__ === 'reply' ? -TASKS_SEQUENCE_LABEL_LIFT : TASKS_SEQUENCE_LABEL_LIFT)
+                                    : 0,
+                                __pair_half__: edge.__pair_half__ || '',
+                                __pair_mate__: edge.__pair_mate__ || '',
+                                __pair_lift__: Number(edge.__pair_lift__) || 0,
+                                __pair_mate_stroke__: pairMateColors.get(edge.__pair_mate__) || '',
+                                // The prominent label is an HTML overlay, so it needs a z of
+                                // its own to clear the ribbon this layout draws over the cards.
+                                __label_z__: rowZ + 1,
+                            },
                             markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: edgeColor || 'currentColor' },
-                            // A lifeline is a full-height column, so a row that crosses one
-                            // must draw over it, not behind it.
-                            zIndex: tasksFixedLayout(mode)?.edgesOverNodes ? TASKS_TASK_Z + 10 : TASKS_EDGE_Z,
+                            zIndex: rowZ,
                             labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || TASKS_EDGE_LABEL_TEXT, opacity: edgeOpacity },
                             labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
                             style: {
@@ -5724,6 +5964,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 opacity: edgeOpacity,
                                 stroke: edgeColor || 'currentColor',
                                 ...(edge.__sequence_standing__ ? { strokeDasharray: '6 5', strokeWidth: 1.8 } : {}),
+                                ...(edge.__pair_half__ ? { strokeWidth: 1.9 } : {}),
                             },
                         };
                     });
@@ -5904,10 +6145,15 @@ async function renderTasksGraphs(rootElement = document) {
                     });
                 }
                 const authoredDerivedEdges = (derived.edges || []).filter((edge) => !edge.__reference__);
-                const anchored = buildTaskEdgeAnchors(baseNodes, authoredDerivedEdges);
+                const solvedAnchors = buildTaskEdgeAnchors(baseNodes, authoredDerivedEdges);
+                const anchored = tasksApplyEdgePairs(solvedAnchors, activeProjection?.pair_by || model?.pair_by);
                 const visibleReferenceRecords = tasksVisibleReferenceEdges(referenceEdgeRecords, baseNodes, model);
                 const referenceAnchored = buildTaskEdgeAnchors(baseNodes, visibleReferenceRecords, 'reference-');
                 const edgeColorPalette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
+                // A pair is drawn in one element, so the call needs its mate's colour
+                // as well as its own. Resolve every colour up front rather than
+                // reaching back into the map from inside it.
+                const pairMateColors = new Map(anchored.edges.map((item) => [item.id, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette)]));
                 const baseEdges = anchored.edges.map((edge) => {
                     const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
                     const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
@@ -5918,7 +6164,15 @@ async function renderTasksGraphs(rootElement = document) {
                         ...edge,
                         label: resolvedLabel,
                         type: 'vyasaEdge',
-                        data: { ...(edge.data || {}), edgeColor, __projection_branch_opacity__: branchOpacity },
+                        data: {
+                            ...(edge.data || {}),
+                            edgeColor,
+                            __projection_branch_opacity__: branchOpacity,
+                            __pair_half__: edge.__pair_half__ || '',
+                            __pair_mate__: edge.__pair_mate__ || '',
+                            __pair_lift__: Number(edge.__pair_lift__) || 0,
+                            __pair_mate_stroke__: pairMateColors.get(edge.__pair_mate__) || '',
+                        },
                         markerEnd: {
                             type: rf.MarkerType.ArrowClosed,
                             width: 8,
@@ -6028,6 +6282,12 @@ async function renderTasksGraphs(rootElement = document) {
                 const selectedEdge = edgeId ? baseEdges.find((edge) => tasksEdgeRecordId(edge) === edgeId) : null;
                 if (selectedEdge) {
                     const endpointIds = new Set([selectedEdge.source, selectedEdge.target]);
+                    // A call and its reply are one exchange. Previewing half of a
+                    // double harpoon and leaving the other half dim would cut the
+                    // exchange in two, so the mate lights with it. Only the half
+                    // under the cursor keeps the bloom, so the open card is still
+                    // traceable to the line it came from.
+                    const mateId = String(selectedEdge.data?.__pair_mate__ || '');
                     setNodesReusing(baseNodes.map((node) => {
                         const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
                         const hit = endpointIds.has(sourceNodeId);
@@ -6044,16 +6304,20 @@ async function renderTasksGraphs(rootElement = document) {
                         };
                     }));
                     setEdgesReusing(displayedEdges.map((edge) => {
-                        const hit = edge === selectedEdge;
+                        const focused = edge === selectedEdge;
+                        const hit = focused || (Boolean(mateId) && tasksEdgeRecordId(edge) === mateId);
                         const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
+                        // A focus stroke of 4.5 would close the gap a pair is drawn
+                        // with, turning the two harpoons back into one fat line.
+                        const focusWidth = edge.data?.__pair_half__ ? 2.6 : 4.5;
                         return {
                             ...edge,
                             zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
                             labelZIndex: hit ? TASKS_EDGE_LABEL_FOCUS_Z : TASKS_EDGE_LABEL_Z,
-                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim', strokeMode: hit ? 'selected' : 'dim', edgeCardActive: hit, pinBloomKey: hit && edgePinBloom?.edgeId === tasksEdgeRecordId(edge) ? edgePinBloom.key : '' },
+                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim', strokeMode: hit ? 'selected' : 'dim', edgeCardActive: focused, pinBloomKey: focused && edgePinBloom?.edgeId === tasksEdgeRecordId(edge) ? edgePinBloom.key : '' },
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: hit ? 1 : 0.12 },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.86 : 0.04 },
-                            style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: hit ? 1 : 0.08, strokeWidth: hit ? 4.5 : 2.5 },
+                            style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: hit ? 1 : 0.08, strokeWidth: hit ? focusWidth : (edge.data?.__pair_half__ ? 1.9 : 2.5) },
                         };
                     }));
                     return;
@@ -6128,7 +6392,7 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
-                            style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity, strokeWidth: hit ? 4.5 : 2.5, strokeLinecap: hit ? 'round' : undefined, '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s' },
+                            style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity, strokeWidth: edge.data?.__pair_half__ ? (hit ? 2.6 : 1.9) : (hit ? 4.5 : 2.5), strokeLinecap: hit ? 'round' : undefined, '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s' },
                         };
                     }));
                     return;
@@ -6621,10 +6885,25 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             };
             const CustomEdge = React.memo((props) => {
-                const [path, labelX, rawLabelY] = tasksEdgePath(props);
+                // A pair draws two lines a few pixels apart, one either side of the
+                // path they share. Shifting the endpoints, not the finished path,
+                // keeps the arrowhead and the label solver working on the line
+                // that is actually drawn.
+                const pairLift = Number(props.data?.__pair_lift__) || 0;
+                const [path, rawLabelX, rawLabelY] = tasksPairedEdgePath(props, pairLift, props.data?.__pair_half__ || '');
                 // A sequence row is a horizontal line, so a centred label sits right on
                 // top of it. Lift it clear of the stroke.
-                const labelY = rawLabelY - (Number(props.data?.__sequence_label_lift__) || 0);
+                // A pair's two halves share one midpoint, so both labels land on the
+                // same spot. Push each along its OWN chord normal: a reply's chord
+                // runs the other way, so one signed value separates them at any
+                // angle. This replaces the sequence view's y-only lift for a pair,
+                // which was both too small and wrong for a diagonal row.
+                const labelChordLen = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY) || 1;
+                const labelLift = pairLift ? Math.sign(pairLift) * TASKS_PAIR_LABEL_LIFT : 0;
+                const labelX = rawLabelX + (-(props.targetY - props.sourceY) / labelChordLen) * labelLift;
+                const labelY = pairLift
+                    ? rawLabelY + ((props.targetX - props.sourceX) / labelChordLen) * labelLift
+                    : rawLabelY - (Number(props.data?.__sequence_label_lift__) || 0);
                 React.useEffect(() => {
                     traceTasksEdge('render', props, {
                         sourceX: props.sourceX,
@@ -6642,25 +6921,85 @@ async function renderTasksGraphs(rootElement = document) {
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
                 const strokeMode = props.data?.strokeMode || highlightMode;
-                const taperPath = tasksTaperedBezierPath(
+                // A pair half keeps its even width -- swelling it would close the gap
+                // between the two halves -- but it must still taper to nothing at the
+                // tip, or the shaft arrives at full width beside its own barb.
+                const taperPath = props.data?.__pair_half__ ? tasksTaperedBezierPath(
+                    path,
+                    Number(props.style?.strokeWidth) || 1.9,
+                    0
+                ) : tasksTaperedBezierPath(
                     path,
                     (Number(props.style?.strokeWidth) || 4) * 2.65,
-                    // The tail keeps enough body to read on its own. A taper this
-                    // steep used to thin the arrival end down to a hairline.
-                    Math.max(2.6, (Number(props.style?.strokeWidth) || 4) * 0.85)
+                    // The arrival end tapers to nothing. The head sits exactly there,
+                    // so any remaining body would arrive beside its own arrow.
+                    0
                 );
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
+                // A pair's two lanes sit 2x|lift| apart. A casing wider than one lane
+                // crosses the centerline and clips the other half's line, which is why
+                // a pair used to read as one fat cased blob. Fit the casing to the lane.
+                const casingWidth = pairLift
+                    ? Math.max(strokeWidth + 0.6, Math.abs(pairLift) * 2)
+                    : strokeWidth + 8;
+                const casingStroke = pairLift ? 2 : 8;
+                // A pair cases only its outer flank; every other edge keeps the plain
+                // stroked casing around its whole ribbon.
+                const taperCasingPath = pairLift
+                    ? tasksSideWeightedRibbonPath(path, Number(props.style?.strokeWidth) || 1.9, 0, casingStroke, Math.sign(pairLift))
+                    : taperPath;
                 const fullArrow = Math.max(10, strokeWidth * 3.0);
                 const chord = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY);
                 // Both ends on one side means the path arcs away and comes back,
                 // so its chord says nothing about how long it is drawn.
                 const isArcEdge = props.sourcePosition === props.targetPosition;
+                const arrowSize = isArcEdge ? fullArrow : Math.max(6, Math.min(fullArrow, chord * 0.22));
                 const edgeArrowPath = tasksTaperedArrowHeadPath(
                     path,
-                    isArcEdge ? fullArrow : Math.max(6, Math.min(fullArrow, chord * 0.22))
+                    arrowSize,
+                    // The barb sits on the side the line was nudged toward, so a
+                    // pair reads as one double harpoon rather than two arrows.
+                    pairLift ? Math.sign(pairLift) : 0
                 );
+                // Both halves of a pair are drawn HERE, in the call's element. React
+                // Flow paints every edge as its own group, so a mate drawn in its own
+                // group laid its paper casing over this half's colour and ate its barb
+                // -- and the authoring order decided which half won. One group means
+                // one paint order for the whole exchange. The reply's element keeps
+                // only its label.
+                const pairHalf = String(props.data?.__pair_half__ || '');
+                const pairCall = Boolean(pairLift) && pairHalf === 'call';
+                const pairReply = Boolean(pairLift) && pairHalf === 'reply';
+                // The mate is anchored on these same two points, so swapping them
+                // yields exactly the props React Flow would have handed the mate.
+                const matePath = pairCall ? tasksPairedEdgePath({
+                    ...props,
+                    sourceX: props.targetX, sourceY: props.targetY, sourcePosition: props.targetPosition,
+                    targetX: props.sourceX, targetY: props.sourceY, targetPosition: props.sourcePosition,
+                }, pairLift, 'reply')[0] : '';
+                const pairRibbonWidth = Number(props.style?.strokeWidth) || 1.9;
+                const mateTaperPath = matePath ? tasksTaperedBezierPath(matePath, pairRibbonWidth, 0) : '';
+                const mateCasingPath = matePath
+                    ? tasksSideWeightedRibbonPath(matePath, pairRibbonWidth, 0, casingStroke, Math.sign(pairLift))
+                    : '';
+                const mateArrowPath = matePath ? tasksTaperedArrowHeadPath(matePath, arrowSize, Math.sign(pairLift)) : '';
+                // The mate's colour must follow whatever state this half is in. The
+                // hover and selection passes rewrite style.stroke to a dim ink mix,
+                // so a mate painted from its own static palette colour stayed lit
+                // while its call went grey -- and the pair read as one grey band with
+                // one coloured half. When style.stroke still equals this edge's own
+                // resolved colour, nothing has dimmed it and each half takes its own.
+                const edgeUndimmed = !props.data?.edgeColor || props.style?.stroke === props.data.edgeColor;
+                const mateStroke = (edgeUndimmed && props.data?.__pair_mate_stroke__)
+                    || props.style?.stroke
+                    || 'currentColor';
                 const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
                 const prominentLabel = showFullLabel;
+                // React Flow forwards only its own edge props, so a top-level
+                // labelZIndex never reaches this component. Take the layout's value
+                // from data, else derive it from the highlight mode.
+                const labelZIndex = Number(props.data?.__label_z__)
+                    || tasksEdgeLabelZForMode(highlightMode, TASKS_EDGE_LABEL_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_FOCUS_Z);
                 const displayLabel = showFullLabel
                     ? fullLabel
                     : (labelLines.length > 1 ? `${labelLines[0]}...` : fullLabel);
@@ -6699,7 +7038,11 @@ async function renderTasksGraphs(rootElement = document) {
                         d: path,
                         fill: 'none',
                         stroke: 'transparent',
-                        strokeWidth: 24,
+                        // A wide hit area would swallow the other half of a pair,
+                        // so a paired line claims only the side it is drawn on. The
+                        // halves now touch, so this is as wide as it can be before
+                        // hovering one half starts picking the other.
+                        strokeWidth: pairLift ? 3 : 24,
                         vectorEffect: 'non-scaling-stroke',
                         pointerEvents: 'stroke',
                         className: 'react-flow__edge-interaction vyasa-tasks-edge-hit-path',
@@ -6712,19 +7055,41 @@ async function renderTasksGraphs(rootElement = document) {
                             ...(props.style || {}),
                             strokeLinejoin: 'round',
                             stroke: 'var(--vyasa-paper)',
-                            strokeWidth: strokeWidth + 8,
+                            strokeWidth: casingWidth,
                         },
                     }),
-                    taperPath && React.createElement('path', {
-                        d: taperPath,
-                        fill: props.style?.stroke || 'currentColor',
-                        stroke: 'var(--vyasa-paper)',
-                        strokeWidth: 8,
-                        paintOrder: 'stroke fill',
+                    // Every paper casing paints BEFORE every coloured shape, so the
+                    // line, its taper and its head merge into one silhouette with one
+                    // outer border. Casing a head after the line drew its own border
+                    // between the two and split the arrow from its shaft.
+                    !pairReply && taperCasingPath && React.createElement('path', {
+                        d: taperCasingPath,
+                        fill: 'var(--vyasa-paper)',
+                        stroke: pairLift ? 'none' : 'var(--vyasa-paper)',
+                        strokeWidth: casingStroke,
                         strokeLinejoin: 'round',
-                        // While a flare sweeps, the ribbon underneath stays faint so
-                        // the swept part reads as an opacity rise, then settles full.
-                        opacity: props.style?.opacity ?? 1,
+                        pointerEvents: 'none',
+                    }),
+                    !pairReply && edgeArrowPath && React.createElement('path', {
+                        d: edgeArrowPath,
+                        fill: 'var(--vyasa-paper)',
+                        stroke: 'var(--vyasa-paper)',
+                        strokeWidth: casingStroke,
+                        strokeLinejoin: 'round',
+                        pointerEvents: 'none',
+                    }),
+                    mateCasingPath && React.createElement('path', {
+                        d: mateCasingPath,
+                        fill: 'var(--vyasa-paper)',
+                        stroke: 'none',
+                        pointerEvents: 'none',
+                    }),
+                    mateArrowPath && React.createElement('path', {
+                        d: mateArrowPath,
+                        fill: 'var(--vyasa-paper)',
+                        stroke: 'var(--vyasa-paper)',
+                        strokeWidth: casingStroke,
+                        strokeLinejoin: 'round',
                         pointerEvents: 'none',
                     }),
                     props.data?.edgeCardActive && React.createElement('path', {
@@ -6753,13 +7118,33 @@ async function renderTasksGraphs(rootElement = document) {
                             ? { ...(props.style || {}), strokeWidth: 0.1 }
                             : props.style,
                     }),
-                    edgeArrowPath && React.createElement('path', {
+                    !pairReply && taperPath && React.createElement('path', {
+                        d: taperPath,
+                        fill: props.style?.stroke || 'currentColor',
+                        stroke: 'none',
+                        // While a flare sweeps, the ribbon underneath stays faint so
+                        // the swept part reads as an opacity rise, then settles full.
+                        opacity: props.style?.opacity ?? 1,
+                        pointerEvents: 'none',
+                    }),
+                    mateTaperPath && React.createElement('path', {
+                        d: mateTaperPath,
+                        fill: mateStroke,
+                        stroke: 'none',
+                        opacity: props.style?.opacity ?? 1,
+                        pointerEvents: 'none',
+                    }),
+                    !pairReply && edgeArrowPath && React.createElement('path', {
                         d: edgeArrowPath,
                         fill: props.style?.stroke || 'currentColor',
-                        stroke: 'var(--vyasa-paper)',
-                        strokeWidth: 8,
-                        paintOrder: 'stroke fill',
-                        strokeLinejoin: 'round',
+                        stroke: 'none',
+                        opacity: props.style?.opacity ?? 1,
+                        pointerEvents: 'none',
+                    }),
+                    mateArrowPath && React.createElement('path', {
+                        d: mateArrowPath,
+                        fill: mateStroke,
+                        stroke: 'none',
                         opacity: props.style?.opacity ?? 1,
                         pointerEvents: 'none',
                     }),
@@ -6793,7 +7178,7 @@ async function renderTasksGraphs(rootElement = document) {
                     displayLabel && prominentLabel && React.createElement(TasksProminentEdgeLabel, {
                         labelX,
                         labelY,
-                        labelZIndex: props.labelZIndex,
+                        labelZIndex,
                         labelBgPadding: props.labelBgPadding,
                         labelBgBorderRadius: props.labelBgBorderRadius,
                         labelMaxWidth: props.labelMaxWidth,
@@ -7452,6 +7837,7 @@ async function renderTasksGraphs(rootElement = document) {
                             && !optionEdgeFit
                             && !(key === 't' && groupToggleHoverIdRef.current)
                             && !(key === 'v' && (groupHoverTooltipRef.current || edgeCardOpen || selectedNodeIdRef.current))
+                            && !(key === 'f' && !event.shiftKey && (groupHoverTooltipRef.current || hoveredNodeIdRef.current))
                             && !(key === 'g' && hoveredNodeIdRef.current)
                             && !(isTasksHopCode(event.code) && hoveredNodeIdRef.current)) return;
                         // The document shortcuts in scripts.js bind J/K to scroll, C to
@@ -9426,6 +9812,45 @@ async function renderTasksGraphs(rootElement = document) {
                     defaultOpenDepth: effectiveDefaultOpenDepth,
                 }, sourceModel?.kg_context?.id);
             };
+            // Drag the rail's left edge to resize; double-click restores the
+            // frontmatter width. The hover card reads the same width.
+            const NodeCardResizeHandle = () => window.React.createElement('div', {
+                key: 'node-card-resize',
+                role: 'separator',
+                'aria-orientation': 'vertical',
+                'aria-label': 'Resize node card',
+                title: 'Drag to resize. Double-click to reset.',
+                onPointerDown: (event) => {
+                    const surface = flowWrapperRef.current;
+                    if (!surface || event.button !== 0) return;
+                    event.preventDefault();
+                    const rect = surface.getBoundingClientRect();
+                    const move = (moveEvent) => {
+                        const percent = ((rect.right - 12 - moveEvent.clientX) / Math.max(1, rect.width)) * 100;
+                        applyNodeCardWidth(`${Math.max(12, Math.min(80, percent)).toFixed(1)}%`);
+                    };
+                    const stop = () => {
+                        window.removeEventListener('pointermove', move);
+                        window.removeEventListener('pointerup', stop);
+                        window.removeEventListener('pointercancel', stop);
+                    };
+                    window.addEventListener('pointermove', move);
+                    window.addEventListener('pointerup', stop);
+                    window.addEventListener('pointercancel', stop);
+                },
+                onDoubleClick: () => applyNodeCardWidth(null),
+                style: {
+                    position: 'absolute',
+                    left: '-7px',
+                    top: 0,
+                    bottom: 0,
+                    width: '14px',
+                    cursor: 'ew-resize',
+                    pointerEvents: 'auto',
+                    touchAction: 'none',
+                    zIndex: 1,
+                },
+            });
             const RightRail = () => {
                 if (!selectedNodeId && !optionEdgeNodeCardId && !(edgeCardOpen && (selectedEdgeRecord || edgeCardError))) return null;
                 if (hoverCardsEnabled && groupHoverTooltip && (groupHoverCardsEnabled || !groupHoverTooltip.group)) return null;
@@ -9445,6 +9870,7 @@ async function renderTasksGraphs(rootElement = document) {
                         minHeight: 0,
                     },
                 },
+                    NodeCardResizeHandle(),
                     optionEdgeNodeCardId
                         ? SelectedNodePanel(optionEdgeNodeCardId, true)
                         : (edgeCardOpen && (selectedEdgeRecord || edgeCardError) ? SelectedEdgePanel() : SelectedNodePanel())

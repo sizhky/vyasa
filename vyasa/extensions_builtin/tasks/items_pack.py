@@ -102,6 +102,8 @@ class KgSchema:
     nodes: str = ""
     edges: str = ""
     attrs: str = ""
+    # Where the code files a node links live, relative to the pack folder.
+    code_source: str = ""
 
 
 @dataclass
@@ -138,6 +140,7 @@ def read_kg_pack(schema_path: PathLike, context_id: str = "") -> dict[str, Any]:
         "default_secondary_color_by": schema.graph.get("secondary_color_by", ""),
         "edge_color_by": schema.graph.get("edge_color_by", ""),
         "edge_label_from": schema.graph.get("edge_label_from", ""),
+        "pair_by": schema.graph.get("pair_by", ""),
         "default_open_depth": schema.graph.get("default_open_depth", ""),
         "hover_attrs": _list_value(schema.graph.get("hover_attrs", "")),
         "node_attr_order": _list_value(schema.graph.get("node_attr_order", "")),
@@ -242,6 +245,7 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
         "default_secondary_color_by": schema.graph.get("secondary_color_by", ""),
         "edge_color_by": schema.graph.get("edge_color_by", ""),
         "edge_label_from": schema.graph.get("edge_label_from", ""),
+        "pair_by": schema.graph.get("pair_by", ""),
         "default_open_depth": schema.graph.get("default_open_depth", ""),
         "hover_attrs": _list_value(schema.graph.get("hover_attrs", "")),
         "node_attr_order": _list_value(schema.graph.get("node_attr_order", "")),
@@ -840,6 +844,7 @@ def _read_source_line(schema: KgSchema, line: str) -> str:
     schema.nodes = payload.get("nodes", schema.nodes)
     schema.edges = payload.get("edges", schema.edges)
     schema.attrs = payload.get("attrs", schema.attrs)
+    schema.code_source = payload.get("code_source", schema.code_source)
     return ""
 
 

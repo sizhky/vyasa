@@ -13,5 +13,8 @@ Try the wiki link example:
 Try the SQLite internals KG demo:
 - [[sqlite-internals-as-kg]]
 
+Start with the smallest Vyasa architecture graph:
+- [[vyasa]]
+
 Try the Reveal.js presentation example:
 - [Reveal Slides Demo](./reveal-slides.md)

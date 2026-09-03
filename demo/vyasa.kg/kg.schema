@@ -1,0 +1,46 @@
+@graph id=vyasa-kernel title="From files on disk to the Vyasa UI"
+hover_attrs=description,code
+pair_by=pair
+edge_color_by=step
+edge_label_from=note
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+base:
+	edges=kg.edges
+palette=kg.palette
+code_source=../../
+
+@relations
+resolves color=relation.resolves
+reads color=relation.reads
+renders color=relation.renders
+shows color=relation.shows
+returns color=relation.returns
+replies color=relation.replies
+
+@views
+flow:
+	source=base
+	layout=sequence
+	sequence_role=role
+	sequence_phase=phase
+	color_by=layer
+	edge_color_by=step
+	edge_label_from=note
+	hover_attrs=description,code
+	caption="Read the rows from top to bottom. One lifeline owns the page, render_post_detail. A row with two lines is one exchange: the solid line is the call, the dashed line under it is the value coming back. Every lane is something that can receive a call, so a document and a response are values on the arrows, not lanes."
+	slides:
+		route: Steps 1 to 2 — the route takes over
+			nodes=browser-ui,content-route,path-resolver
+			caption="The browser asks for a page. post_detail hands it to render_post_detail, which turns the slug into a file path."
+		read: Steps 3 to 4 — read the file
+			nodes=content-route,frontmatter-reader,filesystem-backend
+			caption="The route reads the file through parse_frontmatter. A git-ref page takes the backend branch instead of a plain Path."
+		render: Steps 5 to 6 — build the page
+			nodes=content-route,markdown-renderer,document-page
+			caption="The route renders the Markdown body, then builds DocumentPage and calls render on it."
+		ui: Step 7 — show the result
+			nodes=content-route,document-page,browser-ui
+			caption="DocumentPage returns the finished HTML response. The route returns it and the browser displays the page."

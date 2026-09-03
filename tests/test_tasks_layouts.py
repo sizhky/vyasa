@@ -100,3 +100,37 @@ def test_every_demo_pack_still_parses():
             if edge["source"] not in node_ids or edge["target"] not in node_ids
         ]
         assert not dangling, f"{schema}: {dangling}"
+
+
+def test_view_keys_the_viewer_reads_survive_normalization():
+    """A view key the browser reads must reach the browser.
+
+    `normalize_projections` copies only listed keys, so a key added to the
+    viewer alone is silently dropped and the feature never runs. `pair_by` is
+    a view rule, not a layout rule, so `all_layout_keys()` does not cover it.
+    """
+    from vyasa.extensions_builtin.tasks.projections import normalize_projections
+
+    view = {"id": "flow", "layout": "sequence", "sequence_role": "role", "pair_by": "pair"}
+    normalized = normalize_projections([view])[0]
+    assert normalized["pair_by"] == "pair"
+    assert not normalized.get("layout_error")
+
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks_layouts.js").read_text()
+    assert "projection.pair_by" in source, "the viewer reads a key the server does not send"
+
+
+def test_pair_by_can_be_set_on_the_graph_so_the_base_view_pairs_too():
+    """A pack with no projection still has a view: the plain graph.
+
+    The base view reads the graph, not a projection, so `pair_by` has to reach
+    the model as well as the view or the double harpoon appears in one view only.
+    """
+    model = read_kg_pack(Path("demo/vyasa.kg/kg.schema"))
+    assert model["pair_by"] == "pair"
+    assert attach_projection_models(model)["projection_models"]["flow"]["model"]["pair_by"] == "pair"
+
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+    assert source.count("activeProjection?.pair_by || model?.pair_by") == 2, (
+        "both edge-building paths must fall back to the graph-level key"
+    )

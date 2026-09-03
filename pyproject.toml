@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vyasa"
-version = "0.6.111"
+version = "0.6.112"
 description = "A lightweight, elegant blogging platform built with FastHTML"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -50,6 +50,12 @@ dev = [
 ]
 auth = [
     "authlib>=1.3.0",
+]
+# `altair` fences execute Python, so safepyrun gates the side effects. It needs
+# `sys.monitoring`, which is 3.12+, while vyasa itself still supports 3.10.
+altair = [
+    "altair>=5.0.0",
+    "safepyrun>=0.2.7; python_version >= '3.12'",
 ]
 
 [project.scripts]

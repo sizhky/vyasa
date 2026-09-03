@@ -1,0 +1,31 @@
+@node_attrs
+layer:
+  core: content-route path-resolver frontmatter-reader filesystem-backend
+  pipeline: markdown-renderer
+  surface: document-page browser-ui
+
+@edge_attrs
+role:
+  call: e1 e2 e4 e8 e10
+  reply: e3 e5 e9 e11
+  branch: e6 e7
+  boundary: e12
+phase:
+  request: e1
+  resolve: e2 e3
+  read: e4 e5 e6 e7
+  render: e8 e9 e10 e11
+  show: e12
+step:
+  s1: e1
+  s2: e2
+  s3: e3
+  s4: e4
+  s5: e5
+  s6: e6
+  s7: e7
+  s8: e8
+  s9: e9
+  s10: e10
+  s11: e11
+  s12: e12

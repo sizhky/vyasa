@@ -16,6 +16,9 @@ PROJECTION_DISPLAY_KEYS = {
     "spacing", "node_spacing", "layer_spacing", "group_padding",
     "layout_direction", "collision_gap", "edge_label_width",
     "layout", "layout_error",
+    # Pairing a call with its reply is a view rule, not a layout rule, so it is
+    # not in all_layout_keys() and has to be named here.
+    "pair_by",
 } | all_layout_keys()
 
 
@@ -293,6 +296,7 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
         "default_secondary_color_by": str(projection.get("default_secondary_color_by") or base_model.get("default_secondary_color_by") or "").strip(),
         "edge_color_by": str(projection.get("edge_color_by") or base_model.get("edge_color_by") or "").strip(),
         "edge_label_from": str(projection.get("edge_label_from") or base_model.get("edge_label_from") or "").strip(),
+        "pair_by": str(projection.get("pair_by") or base_model.get("pair_by") or "").strip(),
         "hover_attrs": projection.get("hover_attrs") if projection.get("hover_attrs") is not None else base_model.get("hover_attrs", []),
         "aggregate_edges": projection.get("aggregate_edges") or base_model.get("aggregate_edges", {}),
         "slides": copy.deepcopy(projection.get("slides") or []),

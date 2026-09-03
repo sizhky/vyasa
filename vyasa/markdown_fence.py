@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import shlex
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +52,31 @@ def slug_for_resolved_path(resolved, current_path, strip_suffix=True):
 FENCE_DATA_SUFFIXES = frozenset({".json", ".yaml", ".yml", ".csv"})
 
 
+def parse_fence_attrs(info_string):
+    """Split a fence info string into its language and its attributes.
+
+    A bare word is a flag, so `hide` means `hide=True`. Lives here rather than
+    in the renderer because fence handlers and preprocessors both need it, and
+    two parsers would drift.
+
+    >>> parse_fence_attrs('altair-data id=recency hide')
+    ('altair-data', {'id': 'recency', 'hide': True})
+    >>> parse_fence_attrs('')
+    ('', {})
+    """
+    parts = shlex.split((info_string or "").strip())
+    if not parts:
+        return "", {}
+    attrs = {}
+    for part in parts[1:]:
+        if "=" in part:
+            key, value = part.split("=", 1)
+            attrs[key] = value
+        else:
+            attrs[part] = True
+    return parts[0], attrs
+
+
 def resolve_fence_data_path(src, current_path, suffixes=FENCE_DATA_SUFFIXES) -> Path:
     """Resolve a fence `src=` against the current document, confined to its root.
 
@@ -75,32 +102,75 @@ def resolve_fence_data_path(src, current_path, suffixes=FENCE_DATA_SUFFIXES) -> 
     return resolved
 
 
-def resolve_items_node_href(href: object, current_path: object) -> str:
+def resolve_items_node_href(href: object, current_path: object, code_source: str = "") -> str:
+    """Map one relative link inside an items model onto a content route.
+
+    `code_source` is the pack's fallback folder for code files. The pack folder
+    is tried first, so a file that sits beside the pack keeps working; the
+    fallback runs only when that path holds no file.
+    """
     href = str(href or "").strip()
     if not href:
         return href
     if href.startswith(("#", "/", "//")) or re.match(r"^[a-zA-Z][\w+.-]*:", href):
         return href
     base, frag = href.split("#", 1) if "#" in href else (href, "")
-    if not current_path:
+    # A code link carries its symbol in the query. Keep the query out of the
+    # path, or the route encodes the `?` and the preview loses the symbol.
+    base, query = base.split("?", 1) if "?" in base else (base, "")
+    if not current_path or not base:
         return href
     current_file = current_content_path(current_path)
     current_dir = relative_content_directory(current_file)
     resolved = (current_dir / base).resolve() if current_dir else None
+    if resolved is not None and code_source and not resolved.exists():
+        candidate = (current_dir / code_source / base).resolve()
+        if candidate.exists():
+            resolved = candidate
     rel = slug_for_resolved_path(resolved, current_path, strip_suffix=not Path(base).suffix) if resolved else None
     if not rel:
         return href
     mapped = content_url_for_slug(rel)
-    return f"{mapped}#{frag}" if frag else mapped
+    return f"{mapped}{f'?{query}' if query else ''}{f'#{frag}' if frag else ''}"
 
 
-def resolve_items_inline_links(value: object, current_path: object) -> str:
+def resolve_items_inline_links(value: object, current_path: object, code_source: str = "") -> str:
     text = str(value or "")
     return re.sub(
         r"\[([^\]]+)\]\(([^)\s]+)\)",
-        lambda match: f"[{match.group(1)}]({resolve_items_node_href(match.group(2), current_path)})",
+        lambda match: f"[{match.group(1)}]({resolve_items_node_href(match.group(2), current_path, code_source)})",
         text,
     )
+
+
+@lru_cache(maxsize=256)
+def _pack_code_source(schema_path: str, stamp: float) -> str:
+    """Read `code_source` from one `kg.schema`, cached by the file's mtime."""
+    from .extensions_builtin.tasks.items_pack import read_schema
+
+    try:
+        return str(read_schema(Path(schema_path)).code_source or "").strip()
+    except Exception:
+        return ""
+
+
+def items_code_source(model: dict[str, Any]) -> str:
+    """Fallback folder for the code links inside one items model.
+
+    Empty when the model has no KG pack, or when the pack sets no
+    `code_source` in its `@sources` block.
+
+    Pros: the pack states the path once, so every node link stays short.
+    Cons: the schema is read again whenever it changes on disk.
+    """
+    schema = str((model or {}).get("kg_schema") or "").strip()
+    if not schema:
+        return ""
+    try:
+        stamp = Path(schema).stat().st_mtime
+    except OSError:
+        return ""
+    return _pack_code_source(schema, stamp)
 
 
 def items_link_base_path(model: dict[str, Any], current_path: object) -> object:
@@ -116,18 +186,18 @@ def items_link_base_path(model: dict[str, Any], current_path: object) -> object:
     return content_slug_for_path(Path(schema).parent) or current_path
 
 
-def normalize_items_model_hrefs(model: dict[str, Any], current_path: object) -> None:
+def normalize_items_model_hrefs(model: dict[str, Any], current_path: object, code_source: str = "") -> None:
     for bucket in ("groups", "tasks"):
         for node in model.get(bucket, []):
             if "href" in node:
-                node["href"] = resolve_items_node_href(node.get("href"), current_path)
+                node["href"] = resolve_items_node_href(node.get("href"), current_path, code_source)
             if "label" in node:
-                node["label"] = resolve_items_inline_links(node.get("label"), current_path)
+                node["label"] = resolve_items_inline_links(node.get("label"), current_path, code_source)
     for collection in ("projection_models", "viewer_models"):
         for entry in (model.get(collection) or {}).values():
             nested = entry.get("model") if isinstance(entry, dict) else None
             if isinstance(nested, dict):
-                normalize_items_model_hrefs(nested, current_path)
+                normalize_items_model_hrefs(nested, current_path, code_source)
 
 
 def escape_attr(value):

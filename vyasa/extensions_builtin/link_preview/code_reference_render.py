@@ -321,6 +321,7 @@ def render_resolved_code_reference(
         f' data-code-reference-path-before="{_escape(resolved.path_before)}"'
         f' data-code-reference-path-after="{_escape(resolved.path_after)}"'
         f' data-code-reference-blocks="{_escape(_block_anchors(resolved, shown))}"'
+        f' data-code-reference-focus="{_escape(_highlight_spec(resolved, resolved.shown))}"'
         f' data-code-reference-first-line="{shown.start}"'
         f' data-code-reference-last-line="{shown.end}"'
         f' data-code-reference-full="{"true" if full else "false"}">'
