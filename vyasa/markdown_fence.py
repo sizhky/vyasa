@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,31 @@ def slug_for_resolved_path(resolved, current_path, strip_suffix=True):
 
 
 FENCE_DATA_SUFFIXES = frozenset({".json", ".yaml", ".yml", ".csv"})
+
+
+def parse_fence_attrs(info_string):
+    """Split a fence info string into its language and its attributes.
+
+    A bare word is a flag, so `hide` means `hide=True`. Lives here rather than
+    in the renderer because fence handlers and preprocessors both need it, and
+    two parsers would drift.
+
+    >>> parse_fence_attrs('altair-data id=recency hide')
+    ('altair-data', {'id': 'recency', 'hide': True})
+    >>> parse_fence_attrs('')
+    ('', {})
+    """
+    parts = shlex.split((info_string or "").strip())
+    if not parts:
+        return "", {}
+    attrs = {}
+    for part in parts[1:]:
+        if "=" in part:
+            key, value = part.split("=", 1)
+            attrs[key] = value
+        else:
+            attrs[part] = True
+    return parts[0], attrs
 
 
 def resolve_fence_data_path(src, current_path, suffixes=FENCE_DATA_SUFFIXES) -> Path:

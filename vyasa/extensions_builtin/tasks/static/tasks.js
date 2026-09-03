@@ -131,6 +131,11 @@ function buildLayoutErrorGraph(message, viewId) {
     };
 }
 const TASKS_SEQUENCE_LABEL_LIFT = 12;
+// Half the clearance between a pair's two labels. Both halves share one
+// midpoint, so each label needs to move this far off it to stop overlapping.
+// A one-line label box is about 21px tall, so this is the smallest value that
+// keeps them apart.
+const TASKS_PAIR_LABEL_LIFT = 13;
 const TASKS_PROJECTION_UNSPECIFIED_LABEL = 'Unspecified';
 const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity']);
 const TASKS_SPECIAL_COLOR_MODE_KEYS = new Set(['connectivity', 'rank']);
@@ -1951,9 +1956,15 @@ function tasksEdgeColorPaletteFor(model, colorBy) {
 
 function resolveTasksEdgeLabel(edge, model, activeProjection = null) {
     if (!edge) return '';
-    // 1. Inline pipe label (also serves as kind name) wins.
+    // 1. A hand-written inline pipe label wins. A relation verb does NOT: it
+    //    names the KIND of edge, and the pack echoes it into label, so it used
+    //    to shadow edge_label_from entirely and no note could ever show. An
+    //    authored edge_label_from is the more specific instruction, so a label
+    //    that is only the relation repeated yields to it, then falls back to
+    //    the verb at step 4 when the attr has nothing to say.
     const rawLabel = typeof edge.label === 'string' ? edge.label.trim() : '';
-    if (rawLabel) return rawLabel;
+    const relation = typeof edge.relation === 'string' ? edge.relation.trim() : '';
+    if (rawLabel && rawLabel !== relation) return rawLabel;
     // 2. Projection-requested attr.
     const projectionAttr = activeProjection && typeof activeProjection.edge_label_from === 'string'
         ? activeProjection.edge_label_from.trim() : '';
@@ -1964,7 +1975,9 @@ function resolveTasksEdgeLabel(edge, model, activeProjection = null) {
         const values = tasksAttrValues(edge[requestedAttr]);
         if (values.length) return values.join(', ');
     }
-    // 4. Empty — user said this is fine.
+    // 4. The relation verb, if that is all there is.
+    if (rawLabel) return rawLabel;
+    // 5. Empty — user said this is fine.
     return '';
 }
 
@@ -5909,6 +5922,10 @@ async function renderTasksGraphs(rootElement = document) {
                     const anchored = tasksApplyEdgePairs(solved, activeProjection?.pair_by || model?.pair_by, !authoredHandles);
                     const visibleReferenceRecords = tasksVisibleReferenceEdges(referenceEdgeRecords, nodesWithStyle, model);
                     const referenceAnchored = buildTaskEdgeAnchors(nodesWithStyle, visibleReferenceRecords, 'reference-');
+                    // A pair is drawn in one element, so the call needs its mate's colour
+                    // as well as its own. Resolve every colour up front rather than
+                    // reaching back into the map from inside it.
+                    const pairMateColors = new Map(anchored.edges.map((item) => [item.id, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette)]));
                     const baseEdges = anchored.edges.map((edge) => {
                         const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
                         const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
@@ -5933,6 +5950,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 __pair_half__: edge.__pair_half__ || '',
                                 __pair_mate__: edge.__pair_mate__ || '',
                                 __pair_lift__: Number(edge.__pair_lift__) || 0,
+                                __pair_mate_stroke__: pairMateColors.get(edge.__pair_mate__) || '',
                                 // The prominent label is an HTML overlay, so it needs a z of
                                 // its own to clear the ribbon this layout draws over the cards.
                                 __label_z__: rowZ + 1,
@@ -6132,6 +6150,10 @@ async function renderTasksGraphs(rootElement = document) {
                 const visibleReferenceRecords = tasksVisibleReferenceEdges(referenceEdgeRecords, baseNodes, model);
                 const referenceAnchored = buildTaskEdgeAnchors(baseNodes, visibleReferenceRecords, 'reference-');
                 const edgeColorPalette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
+                // A pair is drawn in one element, so the call needs its mate's colour
+                // as well as its own. Resolve every colour up front rather than
+                // reaching back into the map from inside it.
+                const pairMateColors = new Map(anchored.edges.map((item) => [item.id, resolveTasksEdgeColor(item, model, model?.edge_color_by, edgeColorPalette)]));
                 const baseEdges = anchored.edges.map((edge) => {
                     const edgeColor = resolveTasksEdgeColor(edge, model, model?.edge_color_by, edgeColorPalette);
                     const resolvedLabel = resolveTasksEdgeLabel(edge, model, activeProjection);
@@ -6149,6 +6171,7 @@ async function renderTasksGraphs(rootElement = document) {
                             __pair_half__: edge.__pair_half__ || '',
                             __pair_mate__: edge.__pair_mate__ || '',
                             __pair_lift__: Number(edge.__pair_lift__) || 0,
+                            __pair_mate_stroke__: pairMateColors.get(edge.__pair_mate__) || '',
                         },
                         markerEnd: {
                             type: rf.MarkerType.ArrowClosed,
@@ -6867,10 +6890,20 @@ async function renderTasksGraphs(rootElement = document) {
                 // keeps the arrowhead and the label solver working on the line
                 // that is actually drawn.
                 const pairLift = Number(props.data?.__pair_lift__) || 0;
-                const [path, labelX, rawLabelY] = tasksPairedEdgePath(props, pairLift, props.data?.__pair_half__ || '');
+                const [path, rawLabelX, rawLabelY] = tasksPairedEdgePath(props, pairLift, props.data?.__pair_half__ || '');
                 // A sequence row is a horizontal line, so a centred label sits right on
                 // top of it. Lift it clear of the stroke.
-                const labelY = rawLabelY - (Number(props.data?.__sequence_label_lift__) || 0);
+                // A pair's two halves share one midpoint, so both labels land on the
+                // same spot. Push each along its OWN chord normal: a reply's chord
+                // runs the other way, so one signed value separates them at any
+                // angle. This replaces the sequence view's y-only lift for a pair,
+                // which was both too small and wrong for a diagonal row.
+                const labelChordLen = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY) || 1;
+                const labelLift = pairLift ? Math.sign(pairLift) * TASKS_PAIR_LABEL_LIFT : 0;
+                const labelX = rawLabelX + (-(props.targetY - props.sourceY) / labelChordLen) * labelLift;
+                const labelY = pairLift
+                    ? rawLabelY + ((props.targetX - props.sourceX) / labelChordLen) * labelLift
+                    : rawLabelY - (Number(props.data?.__sequence_label_lift__) || 0);
                 React.useEffect(() => {
                     traceTasksEdge('render', props, {
                         sourceX: props.sourceX,
@@ -6950,6 +6983,16 @@ async function renderTasksGraphs(rootElement = document) {
                     ? tasksSideWeightedRibbonPath(matePath, pairRibbonWidth, 0, casingStroke, Math.sign(pairLift))
                     : '';
                 const mateArrowPath = matePath ? tasksTaperedArrowHeadPath(matePath, arrowSize, Math.sign(pairLift)) : '';
+                // The mate's colour must follow whatever state this half is in. The
+                // hover and selection passes rewrite style.stroke to a dim ink mix,
+                // so a mate painted from its own static palette colour stayed lit
+                // while its call went grey -- and the pair read as one grey band with
+                // one coloured half. When style.stroke still equals this edge's own
+                // resolved colour, nothing has dimmed it and each half takes its own.
+                const edgeUndimmed = !props.data?.edgeColor || props.style?.stroke === props.data.edgeColor;
+                const mateStroke = (edgeUndimmed && props.data?.__pair_mate_stroke__)
+                    || props.style?.stroke
+                    || 'currentColor';
                 const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
                 const prominentLabel = showFullLabel;
                 // React Flow forwards only its own edge props, so a top-level
@@ -7086,7 +7129,7 @@ async function renderTasksGraphs(rootElement = document) {
                     }),
                     mateTaperPath && React.createElement('path', {
                         d: mateTaperPath,
-                        fill: props.style?.stroke || 'currentColor',
+                        fill: mateStroke,
                         stroke: 'none',
                         opacity: props.style?.opacity ?? 1,
                         pointerEvents: 'none',
@@ -7100,7 +7143,7 @@ async function renderTasksGraphs(rootElement = document) {
                     }),
                     mateArrowPath && React.createElement('path', {
                         d: mateArrowPath,
-                        fill: props.style?.stroke || 'currentColor',
+                        fill: mateStroke,
                         stroke: 'none',
                         opacity: props.style?.opacity ?? 1,
                         pointerEvents: 'none',
