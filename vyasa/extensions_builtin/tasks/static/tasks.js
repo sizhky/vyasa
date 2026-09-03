@@ -4107,15 +4107,38 @@ async function renderTasksGraphs(rootElement = document) {
             const initialProjectionId = React.useMemo(() => {
                 if (defaultViewMode === 'gantt') return TASKS_GANTT_PROJECTION_ID;
                 // A reader who has chosen a view keeps it, so the pack's
-                // `default_view` only decides the first visit.
-                const saved = String(sourcePrefsRef.current?.projectionId || '').trim();
-                if (projectionOptions.some((option) => option.id === saved)) return saved;
+                // `default_view` only decides the first visit. Presence, not
+                // value, marks a stored choice: the base view's id is '', which
+                // is also what no preference at all reads as, and the base
+                // option is always in the list.
+                const storedProjectionId = sourcePrefsRef.current?.projectionId;
+                if (typeof storedProjectionId === 'string') {
+                    const saved = storedProjectionId.trim();
+                    if (projectionOptions.some((option) => option.id === saved)) return saved;
+                }
                 const declared = String(sourceModel?.default_projection || '').trim();
                 if (projectionOptions.some((option) => option.id === declared)) return declared;
                 return '';
             }, [projectionOptions, sourceModel]);
             const initialGraphProjectionId = initialProjectionId === TASKS_GANTT_PROJECTION_ID ? '' : initialProjectionId;
             const [activeProjectionId, setActiveProjectionId] = React.useState(initialGraphProjectionId);
+            // `useState` keeps only the value from the first render, and on that
+            // render the option list can still be empty -- the viewer model is
+            // not resolved yet. Without this the widget locks onto the base view
+            // and neither the saved preference nor `default_view` ever applies.
+            const appliedInitialProjectionRef = React.useRef(false);
+            React.useEffect(() => {
+                if (appliedInitialProjectionRef.current) return;
+                if (initialProjectionId === TASKS_GANTT_PROJECTION_ID) {
+                    appliedInitialProjectionRef.current = true;
+                    return;
+                }
+                if (!projectionOptions.some((option) => option.id === initialGraphProjectionId)) return;
+                appliedInitialProjectionRef.current = true;
+                if (initialGraphProjectionId === activeProjectionId) return;
+                setActiveProjectionId(initialGraphProjectionId);
+                setViewMode(tasksLayoutById(tasksProjectionLayout(sourceModel, initialGraphProjectionId))?.id || 'graph');
+            }, [projectionOptions, initialProjectionId, initialGraphProjectionId, activeProjectionId, sourceModel]);
             const [viewMode, setViewMode] = React.useState(() => (
                 (defaultViewMode === 'graph'
                     && tasksLayoutById(tasksProjectionLayout(sourceModel, initialGraphProjectionId))?.id)
