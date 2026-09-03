@@ -48,7 +48,7 @@ const TASKS_AUTO_FIT_ON_FILTER_DEFAULT = true;
 // A share of the widget, not a pixel count, so the panel keeps its
 // proportion on any screen. The 24px subtraction keeps the gutter.
 const TASKS_FILTER_PANEL_WIDTH = '20%'; // default; `filter-panel-width` overrides it
-const TASKS_NODE_CARD_CONTENT_SCALE = 2; // default; `node-card-content-scale` overrides it
+const TASKS_NODE_CARD_CONTENT_SCALE = 1; // default; `node-card-content-scale` overrides it
 const TASKS_PROJECTION_GROUP_OPACITY_DEFAULT = 12;
 const TASKS_PROJECTION_UNSPECIFIED_GROUP_OPACITY_DEFAULT = 7;
 const TASKS_PROJECTION_UNSPECIFIED_CONTENT_OPACITY_DEFAULT = 0.82;
@@ -572,14 +572,23 @@ function tasksPrefsKey(model) {
     return graphId ? `vyasa:tasks:prefs:${graphId}` : '';
 }
 
-function tasksCheckedStateKey(model) {
+// One key space per document+graph, so two KGs never share a stored value.
+function tasksModelScopeKey(model, kind) {
     const documentPath = String(model?.document_path || '').trim();
     const persistenceId = String(model?.persistence_id || '').trim();
     const graphId = String(model?.graph_id || '').trim();
     const title = String(model?.title || '').trim();
     const stableId = persistenceId || title || graphId;
     if (!stableId) return '';
-    return `vyasa:tasks:checked:${documentPath}::${stableId}`;
+    return `vyasa:tasks:${kind}:${documentPath}::${stableId}`;
+}
+
+function tasksCheckedStateKey(model) {
+    return tasksModelScopeKey(model, 'checked');
+}
+
+function tasksNodeCardWidthKey(model) {
+    return tasksModelScopeKey(model, 'node-card-width');
 }
 
 function tasksGetStorage() {
@@ -3614,7 +3623,9 @@ function renderTasksCardDetailsAndNotes(React, options = {}) {
                 flex: '1 1 auto',
                 minHeight: 0,
                 overflowY: 'auto',
-                overflowX: (options.contentScale || 1) > 1 ? 'auto' : 'hidden',
+                // Always scrollable: at scale 1 the body keeps its natural width, so
+                // this only bites when a child cannot wrap into a narrow card.
+                overflowX: 'auto',
                 overscrollBehavior: 'contain',
                 padding: '12px',
             },
@@ -3995,7 +4006,22 @@ async function renderTasksGraphs(rootElement = document) {
                 y: Number.parseFloat(tasksModelSetting(model, 'jitter_y', wrapper.dataset.tasksJitterY || wrapper.dataset.tasksJitter || '0')),
             }), [model]);
             const layoutConfig = React.useMemo(() => readTasksLayoutConfigForModel(wrapper, model), [model]);
-            const nodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '20%')).trim() || '20%';
+            const configuredNodeCardWidth = String(tasksModelSetting(model, 'node-card-width', wrapper.dataset.tasksNodeCardWidth || '20%')).trim() || '20%';
+            // A drag on the rail handle overrides the frontmatter width for this
+            // graph only. Percent, not pixels, so a window resize stays sane.
+            const nodeCardWidthKey = tasksNodeCardWidthKey(model);
+            const [nodeCardWidthOverride, setNodeCardWidthOverride] = React.useState(null);
+            React.useEffect(() => {
+                const stored = nodeCardWidthKey ? readTasksGlobalToggle(nodeCardWidthKey) : null;
+                setNodeCardWidthOverride(/^\d+(\.\d+)?%$/.test(String(stored || '')) ? stored : null);
+            }, [nodeCardWidthKey]);
+            const applyNodeCardWidth = (value) => {
+                setNodeCardWidthOverride(value);
+                if (!nodeCardWidthKey) return;
+                if (value) writeTasksGlobalToggle(nodeCardWidthKey, value);
+                else clearTasksGlobalToggle(nodeCardWidthKey);
+            };
+            const nodeCardWidth = nodeCardWidthOverride || configuredNodeCardWidth;
             const filterPanelWidthSetting = String(tasksModelSetting(model, 'filter-panel-width', wrapper.dataset.tasksFilterPanelWidth || TASKS_FILTER_PANEL_WIDTH)).trim() || TASKS_FILTER_PANEL_WIDTH;
             // How many card widths the details body is drawn at. Sideways scroll
             // pans across it, so a narrow card can still hold wide content.
@@ -5050,19 +5076,30 @@ async function renderTasksGraphs(rootElement = document) {
             }, [announceHopSelection, applyHopSelection, currentSelectionIds, widgetId]);
             const currentHighlightedFitNodes = React.useCallback(() => {
                 const selectedIds = currentSelectionIds();
-                if (!selectedIds.size) return [];
+                // An open hover card names a focus node too, so F frames the hovered
+                // node and its edge neighbours the way a selection does. Selection
+                // wins when both are live.
+                const hoverTooltip = groupHoverTooltipRef.current;
+                const hoverCardOpen = hoverCardsEnabled
+                    && Boolean(hoverTooltip?.nodeId)
+                    && (groupHoverCardsEnabled || !hoverTooltip.group);
+                const hoverAnchorId = selectedIds.size || !hoverCardOpen ? '' : String(hoverTooltip.nodeId);
+                if (!selectedIds.size && !hoverAnchorId) return [];
+                const seedIds = hoverAnchorId ? new Set([hoverAnchorId]) : selectedIds;
+                const anchorId = hoverAnchorId
+                    || (selectedNodeIdRef.current && selectedIds.has(selectedNodeIdRef.current) ? selectedNodeIdRef.current : '');
                 // Equal-z hit paths use paint order. Stable edge order makes the
                 // overlap winner deterministic; keyboard cycling still reaches all edges.
                 const baseEdges = tasksOrderedEdges(tasksEdgesMatchingTypes(
                     currentGraphEdges(),
                     effectiveEdgeTypes,
                 ));
-                const fitIds = new Set(selectedIds);
-                for (const selectedId of selectedIds) {
-                    for (const descendantId of collectTasksGroupDescendantIds(selectedId, model)) fitIds.add(descendantId);
+                const fitIds = new Set(seedIds);
+                for (const seedId of seedIds) {
+                    for (const descendantId of collectTasksGroupDescendantIds(seedId, model)) fitIds.add(descendantId);
                 }
-                if (selectedNodeIdRef.current && selectedIds.has(selectedNodeIdRef.current)) {
-                    const selectedScopeIds = new Set([selectedNodeIdRef.current, ...collectTasksGroupDescendantIds(selectedNodeIdRef.current, model)]);
+                if (anchorId) {
+                    const selectedScopeIds = new Set([anchorId, ...collectTasksGroupDescendantIds(anchorId, model)]);
                     const fitEdgeEndpointIds = new Set(selectedScopeIds);
                     for (const edge of baseEdges) {
                         if (selectedScopeIds.has(edge.source) || selectedScopeIds.has(edge.target)) {
@@ -5080,7 +5117,7 @@ async function renderTasksGraphs(rootElement = document) {
                     && node.data?.__kind__ !== 'groupTitle'
                     && fitIds.has(node.id)
                 ));
-            }, [currentGraphEdges, currentSelectionIds, model, effectiveEdgeTypes]);
+            }, [currentGraphEdges, currentSelectionIds, model, effectiveEdgeTypes, hoverCardsEnabled, groupHoverCardsEnabled]);
             const tasksFitDebugPayload = React.useCallback((reason, matchedNodes = []) => {
                 const selectedIds = currentSelectionIds();
                 const hasQueryFilters = tasksFilterQueryHasRules(effectiveQueryFilters);
@@ -5106,16 +5143,43 @@ async function renderTasksGraphs(rootElement = document) {
                     matchedNodeIds: matchedNodes.map((node) => node.id).slice(0, 80),
                 };
             }, [widgetId, currentSelectionIds, effectiveQueryFilters, effectiveSwatchFilters, effectiveEdgeTypes, searchMatches]);
-            const fitPaddingAroundCards = React.useCallback((fallback) => {
+            // Width the open detail cards take from the right edge, gutter included.
+            const cardCoveredRight = React.useCallback(() => {
                 const canvas = flowWrapperRef.current;
-                if (!canvas) return fallback;
+                if (!canvas) return 0;
                 const canvasRect = canvas.getBoundingClientRect();
                 const cards = Array.from(canvas.querySelectorAll('[data-vyasa-node-card], [data-vyasa-edge-card]'));
                 const cardLeft = Math.min(...cards.map((card) => card.getBoundingClientRect().left));
-                if (!Number.isFinite(cardLeft)) return fallback;
-                const coveredRight = Math.max(0, canvasRect.right - Math.max(canvasRect.left, cardLeft));
-                return { top: '24px', right: `${Math.ceil(coveredRight + 12)}px`, bottom: '24px', left: '24px' };
+                if (!Number.isFinite(cardLeft)) return 0;
+                const covered = Math.max(0, canvasRect.right - Math.max(canvasRect.left, cardLeft));
+                return covered ? Math.ceil(covered + 12) : 0;
             }, []);
+            // xyflow treats fitView padding as a minimum gap and still centres the
+            // content in the whole canvas, so a narrow graph parks under the card.
+            // Size and centre against the uncovered strip ourselves instead.
+            // Returns false when no card is open, so the plain fitView still runs.
+            const fitNodesBesideCards = React.useCallback((reactFlow, nodes, duration) => {
+                const canvas = flowWrapperRef.current;
+                const coveredRight = cardCoveredRight();
+                if (!reactFlow || !canvas || !coveredRight) return false;
+                const bounds = reactFlow.getNodesBounds(nodes?.length ? nodes : reactFlow.getNodes());
+                if (!(bounds?.width > 0) || !(bounds?.height > 0)) return false;
+                const canvasRect = canvas.getBoundingClientRect();
+                const pad = 24;
+                const width = canvasRect.width - coveredRight - pad * 2;
+                const height = canvasRect.height - pad * 2;
+                if (width <= 0 || height <= 0) return false;
+                const zoom = Math.min(
+                    TASKS_GRAPH_MAX_ZOOM,
+                    Math.max(graphMinZoom, Math.min(width / bounds.width, height / bounds.height))
+                );
+                reactFlow.setViewport({
+                    x: pad + width / 2 - (bounds.x + bounds.width / 2) * zoom,
+                    y: pad + height / 2 - (bounds.y + bounds.height / 2) * zoom,
+                    zoom,
+                }, { duration });
+                return true;
+            }, [cardCoveredRight, graphMinZoom]);
             const fitCurrentHighlight = React.useCallback((reactFlow, options = {}) => {
                 const reason = String(options.reason || 'manual-fit');
                 if (!reactFlow) return 0;
@@ -5126,11 +5190,13 @@ async function renderTasksGraphs(rootElement = document) {
                     hasReactFlow: Boolean(reactFlow),
                     duration,
                 });
-                reactFlow.fitView(matched.length
-                    ? { nodes: matched, duration, padding: fitPaddingAroundCards(options.highlightPadding ?? 0.25), includeHiddenNodes: true }
-                    : { duration, padding: fitPaddingAroundCards(options.padding ?? 0.2), includeHiddenNodes: true });
+                if (!fitNodesBesideCards(reactFlow, matched, duration)) {
+                    reactFlow.fitView(matched.length
+                        ? { nodes: matched, duration, padding: options.highlightPadding ?? 0.25, includeHiddenNodes: true }
+                        : { duration, padding: options.padding ?? 0.2, includeHiddenNodes: true });
+                }
                 return matched.length;
-            }, [currentHighlightedFitNodes, fitPaddingAroundCards, tasksFitDebugPayload]);
+            }, [currentHighlightedFitNodes, fitNodesBesideCards, tasksFitDebugPayload]);
             const fitSelectedEdgeConnection = React.useCallback((reactFlow, duration = 300) => {
                 if (!reactFlow || !selectedEdgeIdRef.current) return 0;
                 const visibleEdge = currentGraphEdges().find(
@@ -5141,9 +5207,11 @@ async function renderTasksGraphs(rootElement = document) {
                 const endpointIds = new Set([edge.source, edge.target]);
                 const matched = (graphBaseRef.current.nodes || []).filter((node) => endpointIds.has(node.id));
                 if (!matched.length) return 0;
-                reactFlow.fitView({ nodes: matched, duration, padding: fitPaddingAroundCards(0.32), includeHiddenNodes: true });
+                if (!fitNodesBesideCards(reactFlow, matched, duration)) {
+                    reactFlow.fitView({ nodes: matched, duration, padding: 0.32, includeHiddenNodes: true });
+                }
                 return matched.length;
-            }, [currentGraphEdges, fitPaddingAroundCards, selectedEdgeRecord]);
+            }, [currentGraphEdges, fitNodesBesideCards, selectedEdgeRecord]);
             React.useEffect(() => {
                 const baseModel = baseProjectionState.model;
                 const validFilterKeys = new Set(tasksFilterOptions(baseModel).map((option) => option.key));
@@ -5708,15 +5776,23 @@ async function renderTasksGraphs(rootElement = document) {
                         const rowLabel = edge.__sequence_step__
                             ? `${edge.__sequence_step__} \u00b7 ${resolvedLabel}`.trim()
                             : resolvedLabel;
+                        // A lifeline is a full-height column, so a row that crosses one
+                        // must draw over it, not behind it.
+                        const rowZ = tasksFixedLayout(mode)?.edgesOverNodes ? TASKS_TASK_Z + 10 : TASKS_EDGE_Z;
                         return {
                             ...edge,
                             label: rowLabel,
                             type: 'vyasaEdge',
-                            data: { ...(edge.data || {}), edgeColor, __sequence_label_lift__: mode === 'sequence' ? TASKS_SEQUENCE_LABEL_LIFT : 0 },
+                            data: {
+                                ...(edge.data || {}),
+                                edgeColor,
+                                __sequence_label_lift__: mode === 'sequence' ? TASKS_SEQUENCE_LABEL_LIFT : 0,
+                                // The prominent label is an HTML overlay, so it needs a z of
+                                // its own to clear the ribbon this layout draws over the cards.
+                                __label_z__: rowZ + 1,
+                            },
                             markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: edgeColor || 'currentColor' },
-                            // A lifeline is a full-height column, so a row that crosses one
-                            // must draw over it, not behind it.
-                            zIndex: tasksFixedLayout(mode)?.edgesOverNodes ? TASKS_TASK_Z + 10 : TASKS_EDGE_Z,
+                            zIndex: rowZ,
                             labelStyle: { fontSize: hoverFontSize, fontWeight: 600, fill: edgeColor || TASKS_EDGE_LABEL_TEXT, opacity: edgeOpacity },
                             labelBgStyle: { fill: TASKS_EDGE_LABEL_BG, fillOpacity: 0.82 },
                             style: {
@@ -6661,6 +6737,11 @@ async function renderTasksGraphs(rootElement = document) {
                 );
                 const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
                 const prominentLabel = showFullLabel;
+                // React Flow forwards only its own edge props, so a top-level
+                // labelZIndex never reaches this component. Take the layout's value
+                // from data, else derive it from the highlight mode.
+                const labelZIndex = Number(props.data?.__label_z__)
+                    || tasksEdgeLabelZForMode(highlightMode, TASKS_EDGE_LABEL_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_FOCUS_Z);
                 const displayLabel = showFullLabel
                     ? fullLabel
                     : (labelLines.length > 1 ? `${labelLines[0]}...` : fullLabel);
@@ -6793,7 +6874,7 @@ async function renderTasksGraphs(rootElement = document) {
                     displayLabel && prominentLabel && React.createElement(TasksProminentEdgeLabel, {
                         labelX,
                         labelY,
-                        labelZIndex: props.labelZIndex,
+                        labelZIndex,
                         labelBgPadding: props.labelBgPadding,
                         labelBgBorderRadius: props.labelBgBorderRadius,
                         labelMaxWidth: props.labelMaxWidth,
@@ -7452,6 +7533,7 @@ async function renderTasksGraphs(rootElement = document) {
                             && !optionEdgeFit
                             && !(key === 't' && groupToggleHoverIdRef.current)
                             && !(key === 'v' && (groupHoverTooltipRef.current || edgeCardOpen || selectedNodeIdRef.current))
+                            && !(key === 'f' && !event.shiftKey && groupHoverTooltipRef.current)
                             && !(key === 'g' && hoveredNodeIdRef.current)
                             && !(isTasksHopCode(event.code) && hoveredNodeIdRef.current)) return;
                         // The document shortcuts in scripts.js bind J/K to scroll, C to
@@ -9426,6 +9508,45 @@ async function renderTasksGraphs(rootElement = document) {
                     defaultOpenDepth: effectiveDefaultOpenDepth,
                 }, sourceModel?.kg_context?.id);
             };
+            // Drag the rail's left edge to resize; double-click restores the
+            // frontmatter width. The hover card reads the same width.
+            const NodeCardResizeHandle = () => window.React.createElement('div', {
+                key: 'node-card-resize',
+                role: 'separator',
+                'aria-orientation': 'vertical',
+                'aria-label': 'Resize node card',
+                title: 'Drag to resize. Double-click to reset.',
+                onPointerDown: (event) => {
+                    const surface = flowWrapperRef.current;
+                    if (!surface || event.button !== 0) return;
+                    event.preventDefault();
+                    const rect = surface.getBoundingClientRect();
+                    const move = (moveEvent) => {
+                        const percent = ((rect.right - 12 - moveEvent.clientX) / Math.max(1, rect.width)) * 100;
+                        applyNodeCardWidth(`${Math.max(12, Math.min(80, percent)).toFixed(1)}%`);
+                    };
+                    const stop = () => {
+                        window.removeEventListener('pointermove', move);
+                        window.removeEventListener('pointerup', stop);
+                        window.removeEventListener('pointercancel', stop);
+                    };
+                    window.addEventListener('pointermove', move);
+                    window.addEventListener('pointerup', stop);
+                    window.addEventListener('pointercancel', stop);
+                },
+                onDoubleClick: () => applyNodeCardWidth(null),
+                style: {
+                    position: 'absolute',
+                    left: '-7px',
+                    top: 0,
+                    bottom: 0,
+                    width: '14px',
+                    cursor: 'ew-resize',
+                    pointerEvents: 'auto',
+                    touchAction: 'none',
+                    zIndex: 1,
+                },
+            });
             const RightRail = () => {
                 if (!selectedNodeId && !optionEdgeNodeCardId && !(edgeCardOpen && (selectedEdgeRecord || edgeCardError))) return null;
                 if (hoverCardsEnabled && groupHoverTooltip && (groupHoverCardsEnabled || !groupHoverTooltip.group)) return null;
@@ -9445,6 +9566,7 @@ async function renderTasksGraphs(rootElement = document) {
                         minHeight: 0,
                     },
                 },
+                    NodeCardResizeHandle(),
                     optionEdgeNodeCardId
                         ? SelectedNodePanel(optionEdgeNodeCardId, true)
                         : (edgeCardOpen && (selectedEdgeRecord || edgeCardError) ? SelectedEdgePanel() : SelectedNodePanel())

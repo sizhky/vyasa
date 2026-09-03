@@ -272,12 +272,13 @@ def test_card_body_is_drawn_wider_than_the_card_and_pans_sideways():
     """A narrow card holds wide content by scrolling across it.
 
     The body is drawn at contentScale card widths, and the wheel hijack pans
-    it whenever the gesture leans horizontal. A scale of 1 turns both off.
+    it whenever the gesture leans horizontal. A scale of 1 drops the extra
+    width, but the body still scrolls when a child cannot wrap.
     """
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "const TASKS_NODE_CARD_CONTENT_SCALE = 2;" in source
-    assert "overflowX: (options.contentScale || 1) > 1 ? 'auto' : 'hidden'" in source
+    assert "const TASKS_NODE_CARD_CONTENT_SCALE = 1;" in source
+    assert "overflowX: 'auto'," in source
     assert "width: `${(options.contentScale || 1) * 100}%`" in source
     assert "Math.abs(event.deltaX) > Math.abs(event.deltaY)" in source
     assert "scrollCard.scrollLeft = Math.max(0, Math.min(maxScrollLeft," in source

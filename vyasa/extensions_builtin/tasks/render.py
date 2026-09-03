@@ -258,7 +258,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     # A share of the widget, so the card keeps its proportion on any screen.
     node_card_width = html.escape(str(config.get("node-card-width") or "20%"))
     filter_panel_width = html.escape(str(config.get("filter-panel-width") or "20%"))
-    node_card_content_scale = html.escape(str(config.get("node-card-content-scale") or "2"))
+    node_card_content_scale = html.escape(str(config.get("node-card-content-scale") or "1"))
     hover_font_size = html.escape(str(config.get("hover-font-size") or "12px"))
     color_mix = html.escape(str(config.get("color_mix", True)).lower())
     color_mix_intensity = html.escape(str(config.get("color_mix_intensity") or "22"))
