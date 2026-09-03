@@ -88,6 +88,29 @@ When a document refers to a code file, link the symbol and not the bare file:
 Link the bare file when the whole file is the point.
 Use a `:54` position instead when a line number is the stable fact and no symbol name fits.
 
+### Code Root
+
+Set `code_root` in the frontmatter when the code files sit outside the document folder:
+
+```yaml
+---
+code_root: ../..
+code_extensions: [py, js, ts]
+---
+```
+
+- `code_root` is relative to the document's folder, the same rule as any relative link.
+- `code_extensions` limits the fallback to those suffixes. Leave it out to allow every suffix.
+- Vyasa tries the document folder first. It uses `code_root` only when that path holds no file.
+- The resolved path must stay inside a content mount. A `code_root` that points outside the served tree gives no preview.
+- Both the link target and the Cmd/Ctrl-hover preview use the same resolved path, so a click and a hover agree.
+
+```md
+[registry](vyasa/extensions_builtin/visuals/registry.py)
+```
+
+From `demo/visuals/index.md` with `code_root: ../..`, that link resolves to the repository copy of the file.
+
 ### Available Kinds
 
 `kind` is case-insensitive. Vyasa reads these five values:

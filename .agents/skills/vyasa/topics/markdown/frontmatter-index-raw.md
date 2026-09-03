@@ -3,6 +3,12 @@
 Frontmatter is YAML at the top of markdown files.
 Use supported keys only.
 
+Code-link keys:
+
+- `code_root`: a path, relative to the document's folder, that holds the code files the document links.
+- `code_extensions`: the suffixes that may use that fallback, such as `[py, js, ts]`.
+- See `topics/markdown/code-includes-links.md` for the resolution order.
+
 Index behavior:
 
 - Folder notes can act as landing pages.

@@ -21,5 +21,6 @@ Rules:
 - Prefer existing Obsidian-compatible syntax where supported.
 - For new `items` / `tasks` Knowledge Graphs, default to KG Pack sidecars. Use lite inline graph syntax when the graph is small and does not need sidecars, or when the existing document already uses inline syntax.
 - When a document refers to a code file, link the symbol with `[symbol](path/to/file.ext?symbol=X&kind=Y)`. See `topics/markdown/code-includes-links.md` for the allowed `kind` values.
+- When the code files sit outside the document folder, set `code_root` and `code_extensions` in the frontmatter instead of writing `../../..` in every link.
 - Render charts with the `visuals` fences. Do not hand-write inline-CSS bars or stat tiles.
 - Do not invent parser syntax until existing drawers prove no fit.

@@ -1,5 +1,5 @@
 ---
-code_root: ../../..
+code_root: ../..
 code_extensions: [py, js, ts]
 ---
 # Visuals
