@@ -10,31 +10,33 @@ palette=kg.palette
 code_source=../../
 
 @relations
+resolves color=relation.resolves
 reads color=relation.reads
-dispatches color=relation.dispatches
-loads color=relation.loads
-builds color=relation.builds
-returns color=relation.returns
+renders color=relation.renders
 shows color=relation.shows
 
 @views
 flow:
 	source=base
-	layout=sequence
-	sequence_role=role
-	sequence_phase=phase
+	layout=layered
+	layered_tier=tier
+	layered_order=request,route,steps,browser
+	layered_aside=ref-read
 	color_by=layer
 	edge_color_by=role
 	edge_label_from=note
 	hover_attrs=description,code
-	caption="Read the handoffs from left to right. Vyasa keeps the file on disk, the renderer, and the browser as separate responsibilities."
+	caption="One function owns the page: render_post_detail. Every arrow out of it is a real call, and its code link shows the exact line. The helpers do not call each other."
 	slides:
-		disk: Steps 1 to 3 — find the source
-			nodes=page-file,content-route,filesystem-backend
-			caption="The browser asks for a page. The route uses the filesystem backend to find the Markdown file."
-		render: Steps 4 to 6 — turn the source into a graph
-			nodes=filesystem-backend,markdown-renderer,fence-handler,graph-pack,tasks-extension
-			caption="Markdown rendering dispatches the items fence. The Tasks extension loads the KG Pack and builds the graph model."
-		ui: Steps 7 to 8 — show the result
-			nodes=tasks-extension,html-response,browser-ui
-			caption="The graph becomes part of the HTML response. The browser turns that response into the visible UI."
+		route: Steps 1 to 2 — the route takes over
+			nodes=page-file,content-route,path-resolver
+			caption="post_detail hands the request to render_post_detail. The route turns the slug into a file path."
+		read: Step 3 — read the file
+			nodes=content-route,frontmatter-reader,filesystem-backend
+			caption="The route reads the file through parse_frontmatter. A git-ref page takes the backend branch instead of a plain Path."
+		render: Steps 4 to 5 — build the page
+			nodes=content-route,markdown-renderer,html-response
+			caption="The route renders the Markdown body, then puts the content into DocumentPage."
+		ui: Step 6 — show the result
+			nodes=html-response,browser-ui
+			caption="The HTML response leaves Vyasa and the browser displays the page."

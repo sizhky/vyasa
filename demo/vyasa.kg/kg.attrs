@@ -1,15 +1,18 @@
 @node_attrs
+tier:
+  request: page-file
+  route: content-route
+  steps: path-resolver frontmatter-reader markdown-renderer html-response
+  browser: browser-ui
+  ref-read: filesystem-backend
 layer:
-  content: page-file graph-pack
-  core: content-route filesystem-backend
-  pipeline: markdown-renderer fence-handler
-  extension: tasks-extension
+  content: page-file
+  core: content-route path-resolver frontmatter-reader filesystem-backend
+  pipeline: markdown-renderer
   surface: html-response browser-ui
 
 @edge_attrs
 role:
-  message: e1 e2 e3 e4 e5 e6 e7 e8
-phase:
-  read: e1 e2 e3
-  render: e4 e5 e6
-  show: e7 e8
+  call: e1 e2 e3 e4 e5
+  branch: e6
+  boundary: e7

@@ -10,7 +10,9 @@
   },
   "edge_color_palettes": {
     "role": {
-      "message": "#475569"
+      "call": "#475569",
+      "branch": "#a16207",
+      "boundary": "#059669"
     }
   }
 }

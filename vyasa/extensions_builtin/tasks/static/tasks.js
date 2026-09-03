@@ -5083,7 +5083,13 @@ async function renderTasksGraphs(rootElement = document) {
                 const hoverCardOpen = hoverCardsEnabled
                     && Boolean(hoverTooltip?.nodeId)
                     && (groupHoverCardsEnabled || !hoverTooltip.group);
-                const hoverAnchorId = selectedIds.size || !hoverCardOpen ? '' : String(hoverTooltip.nodeId);
+                // The card is one way to name the hovered node, not the only one. It
+                // opens after a dwell and stays shut in some hover-card modes, so fall
+                // back to the plain hovered id. Otherwise F frames nothing on hover
+                // until a card happens to be open.
+                const hoverAnchorId = selectedIds.size
+                    ? ''
+                    : String((hoverCardOpen ? hoverTooltip.nodeId : '') || hoveredNodeIdRef.current || '');
                 if (!selectedIds.size && !hoverAnchorId) return [];
                 const seedIds = hoverAnchorId ? new Set([hoverAnchorId]) : selectedIds;
                 const anchorId = hoverAnchorId
@@ -7533,7 +7539,7 @@ async function renderTasksGraphs(rootElement = document) {
                             && !optionEdgeFit
                             && !(key === 't' && groupToggleHoverIdRef.current)
                             && !(key === 'v' && (groupHoverTooltipRef.current || edgeCardOpen || selectedNodeIdRef.current))
-                            && !(key === 'f' && !event.shiftKey && groupHoverTooltipRef.current)
+                            && !(key === 'f' && !event.shiftKey && (groupHoverTooltipRef.current || hoveredNodeIdRef.current))
                             && !(key === 'g' && hoveredNodeIdRef.current)
                             && !(isTasksHopCode(event.code) && hoveredNodeIdRef.current)) return;
                         // The document shortcuts in scripts.js bind J/K to scroll, C to

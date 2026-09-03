@@ -1,57 +1,27 @@
-e1: page-file -> content-route reads
-	note=1 · the route resolves the requested page
-	description=The post_detail route delegates to render_post_detail. That function resolves the requested path and selects the Markdown document.
-	code=|
-		Caller: [post_detail](vyasa/core.py){show=symbol symbol=post_detail kind=Function} delegates to [render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[ContentTree.from_runtime().resolve_document(path)]" context=2}
-		Resolver: [ContentTree.resolve_document](vyasa/content_tree.py){show=symbol symbol=ContentTree.resolve_document kind=Method} resolves the page path
-e2: content-route -> filesystem-backend reads
-	note=2 · the route resolves a document path
-	description=render_post_detail asks ContentTree to resolve the document. The working-tree path becomes a Path, while ref-backed paths can remain VirtualPath objects.
-	code=|
-		Caller: [render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[ContentTree.from_runtime().resolve_document(path)]" context=2}
-		Resolver: [ContentTree.resolve_document](vyasa/content_tree.py){show=symbol symbol=ContentTree.resolve_document kind=Method}
-		Working tree: [content_path_for_slug](vyasa/helpers.py){show=symbol symbol=content_path_for_slug kind=Function}
-		Reader: [FilesystemBackend.read_bytes](vyasa/content_backend.py){show=symbol symbol=FilesystemBackend.read_bytes kind=Method} or the Path reader
-e3: filesystem-backend -> markdown-renderer returns
-	note=3 · the file reader supplies Markdown text
-	description=parse_frontmatter reads the Markdown source, and render_post_detail passes the body into from_md.
-	code=|
-		Reader: [parse_frontmatter](vyasa/helpers.py){show=symbol symbol=parse_frontmatter kind=Function} reads the file text
-		Caller: [render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[content = from_md(strip_more_marker(render_content)]" context=2} passes `render_content` to [from_md](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=from_md kind=Function}
-e4: markdown-renderer -> fence-handler dispatches
-	note=4 · from_md sends the document into token dispatch
-	description=from_md calls renderer.render with the Markdown document. The inherited BaseRenderer.render selects a method from render_map. The BlockCode entry points to render_block_code, which looks up runtime.markdown_fences[lang] and calls the registered handler.
-	code=|
-		Caller: [from_md](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=from_md kind=Function focus="match[html_out = renderer.render]" context=2}
-		Dispatch owner: [ContentRenderer](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer kind=Class} inherits [FrankenRenderer](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=FrankenRenderer kind=Class}
-		Dispatch step: mistletoe BaseRenderer.render uses `render_map[ token.__class__.__name__ ]`
-		Token mapping: `BlockCode` maps to `self.render_block_code`
-		Callee: [render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=render_block_code kind=Method}, then `runtime.markdown_fences[lang]`, then the registered handler
-e5: fence-handler -> graph-pack loads
-	note=5 · the registered items handler loads the pack
-	description=The items fence handler calls render_tasks_block. That function parses the fence configuration and resolves the KG schema and sidecars.
-	code=|
-		Registration: [TasksExtension](vyasa/extensions_builtin/tasks/__init__.py){show=symbol symbol=TasksExtension kind=Class} registers the `items` handler
-		Handler: [render_tasks_block](vyasa/extensions_builtin/tasks/render.py){show=symbol symbol=render_tasks_block kind=Function focus="match[model = parse_tasks_text(]" context=2}
-		Pack reader: [read_kg_pack](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=read_kg_pack kind=Function}
-e6: graph-pack -> tasks-extension builds
-	note=6 · the parser builds the graph model
-	description=render_tasks_block calls parse_tasks_text. The parser reads the KG schema, nodes, edges, attributes, and palette, then builds the graph model.
-	code=|
-		Parser: [parse_tasks_text](vyasa/extensions_builtin/tasks/model.py){show=symbol symbol=parse_tasks_text kind=Function}
-		Pack: [read_kg_pack](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=read_kg_pack kind=Function}
-		Graph: [build_collapsed_graph](vyasa/extensions_builtin/tasks/layout.py){show=symbol symbol=build_collapsed_graph kind=Function}
-e7: tasks-extension -> html-response returns
-	note=7 · the extension returns graph markup
-	description=render_tasks_block serializes the graph model and graph payload into the tasks container returned to the Markdown renderer.
-	code=|
-		Builder: [render_tasks_block](vyasa/extensions_builtin/tasks/render.py){show=symbol symbol=render_tasks_block kind=Function focus="match[data-tasks-payload=]" context=2}
-		Payload: `data-tasks-payload` and `data-tasks-graph` carry the model and graph
-		Caller: [from_md](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=from_md kind=Function focus="match[html_out = renderer.render]" context=2} receives the handler result
-e8: html-response -> browser-ui shows
-	note=8 · the page shell sends graph markup and assets
-	description=render_post_detail wraps rendered content in DocumentPage. The layout returns the HTML response, and tasks.js reads the graph payload in the browser.
-	code=|
-		Page: [DocumentPage.render](vyasa/document_pages.py){show=symbol symbol=DocumentPage.render kind=Method}
-		Shell: [layout](vyasa/core.py){show=symbol symbol=layout kind=Function}
-		Client: [tasks.js](vyasa/extensions_builtin/tasks/static/tasks.js)
+e1: page-file -> content-route resolves
+	note=1 · the route takes the request
+	description=post_detail calls render_post_detail, which owns every step below.
+	code=[post_detail](vyasa/core.py){show=symbol symbol=post_detail kind=Function focus="match[return render_post_detail(]" context=2}
+e2: content-route -> path-resolver resolves
+	note=2 · slug to file path
+	description=The route calls content_path_for_slug and gets back a Path under a content root. The helper reads nothing.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[file_path = content_path_for_slug(path]" context=3}
+e3: content-route -> frontmatter-reader reads
+	note=3 · read and split the file
+	description=The route calls parse_frontmatter with that path. It returns the metadata and the raw Markdown body.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[metadata, raw_content = parse_frontmatter(file_path]" context=3}
+e4: content-route -> markdown-renderer renders
+	note=4 · body to HTML nodes
+	description=The route calls from_md with the Markdown body and gets rendered HTML content.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[content = from_md(strip_more_marker(render_content]" context=3}
+e5: content-route -> html-response renders
+	note=5 · content into the page
+	description=The route builds DocumentPage from that content and calls render, which returns the HTML response.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[result = DocumentPage(post_title]" context=3}
+e6: frontmatter-reader -> filesystem-backend reads
+	note=git-ref pages only
+	description=A working-tree page is a plain Path and is read directly. A git-ref page arrives as a VirtualPath, so parse_frontmatter reads it through the backend instead.
+	code=[parse_frontmatter](vyasa/helpers.py){show=symbol symbol=parse_frontmatter kind=Function focus="match[if isinstance(file_path, VirtualPath)]" context=5}
+e7: html-response -> browser-ui shows
+	note=6 · the browser displays the response
+	description=The HTML response leaves Vyasa. The browser consumes it at the system boundary, so no Vyasa function runs after this point.

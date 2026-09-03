@@ -2,26 +2,23 @@ page-file: Markdown page
 	description=The document the browser asks Vyasa to show.
 	code=[demo/vyasa.md](demo/vyasa.md)
 content-route: Content route
-	description=The request handler that resolves a page path and asks for its content.
-	code=[content route](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function}
-filesystem-backend: Filesystem backend
-	description=The reader that returns bytes from the working tree.
-	code=[FilesystemBackend](vyasa/content_backend.py){show=symbol symbol=FilesystemBackend kind=Class}
+	description=The request handler that owns the whole page pipeline.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[def render_post_detail(path, htmx, request]" context=1}
+path-resolver: Path resolver
+	description=The step that turns a page slug into a file path under a content root.
+	code=[content_path_for_slug](vyasa/helpers.py){show=symbol symbol=content_path_for_slug kind=Function}
+frontmatter-reader: Frontmatter reader
+	description=The step that reads the file and splits it into metadata and Markdown body.
+	code=[parse_frontmatter](vyasa/helpers.py){show=symbol symbol=parse_frontmatter kind=Function focus="match[def parse_frontmatter(file_path]" context=4}
+filesystem-backend: Ref-backed reader
+	description=The reader used only for git-ref pages, where the path is a VirtualPath instead of a Path.
+	code=[FilesystemBackend.read_bytes](vyasa/content_backend.py){show=symbol symbol=FilesystemBackend.read_bytes kind=Method}
 markdown-renderer: Markdown renderer
 	description=The pipeline that turns Markdown text into HTML nodes.
-	code=[from_md](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=from_md kind=Function}
-fence-handler: Fence handler
-	description=The dispatcher that sends an items fence to its owning extension.
-	code=[markdown fence](vyasa/markdown_fence.py){show=symbol symbol=split_fence_frontmatter kind=Function}
-graph-pack: KG Pack
-	description=The folder holding nodes, edges, attributes, schema, and palette.
-	code=[demo/vyasa.kg](demo/vyasa.kg)
-tasks-extension: Tasks extension
-	description=The built-in extension that loads a KG Pack and renders its interactive graph.
-	code=[TasksExtension](vyasa/extensions_builtin/tasks/__init__.py){show=symbol symbol=TasksExtension kind=Class}
+	code=[from_md](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=from_md kind=Function focus="match[def from_md(content]" context=3}
 html-response: HTML response
-	description=The page response containing the rendered graph and its required assets.
-	code=[DocumentPage](vyasa/document_pages.py){show=symbol symbol=DocumentPage kind=Class}
+	description=The page response that holds the rendered content and its required assets.
+	code=[DocumentPage.render](vyasa/document_pages.py){show=symbol symbol=DocumentPage.render kind=Method focus="match[def render(self, layout]" context=3}
 browser-ui: Browser UI
-	description=The browser displays the HTML and runs the graph interaction code.
-	code=[tasks.js](vyasa/extensions_builtin/tasks/static/tasks.js)
+	description=The browser receives the HTML response and displays the page.
+	code=The browser consumes this response; no Vyasa function runs after this boundary.
