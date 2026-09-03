@@ -49,7 +49,12 @@ const TASKS_MATRIX_CHIP_HEIGHT = 26;
 // Both halves get the SAME lift. Each is offset along its own chord normal, and
 // a reply's chord runs the other way, so one signed value puts them on opposite
 // sides whatever direction the edge takes.
-export const TASKS_PAIR_LIFT = -2.75;
+//
+// The magnitude is HALF the pair stroke width (1.9), so each ribbon spans from
+// the shared centreline out to its own full width and the two halves touch with
+// no gap. A wider lift left a channel between them, and an exchange drawn with
+// a channel down its middle reads as two lines rather than one double harpoon.
+export const TASKS_PAIR_LIFT = -0.95;
 
 export function tasksEdgePairs(edges, pairAttr) {
     const halves = new Map();

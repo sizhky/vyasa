@@ -471,6 +471,41 @@ function tasksTaperedBezierPath(bezierPath, sourceWidth, targetWidth) {
     ].join(' ');
 }
 
+// A pair wants its casing on the OUTER side only. A symmetric casing lays paper
+// into the gap between the two halves, where it reads as a seam down the middle
+// of what should be one exchange. This is the same ribbon math as
+// tasksTaperedBezierPath, but the inner boundary sits flush on the ribbon's own
+// inner edge while the outer one is padded, so no paper ever crosses the shared
+// centreline.
+function tasksSideWeightedRibbonPath(bezierPath, sourceWidth, targetWidth, outerPad, side) {
+    const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
+    if (nums.length < 8) return '';
+    const [x0, y0, x1, y1, x2, y2, x3, y3] = nums;
+    const normal = (ax, ay, bx, by) => {
+        const dx = bx - ax;
+        const dy = by - ay;
+        const len = Math.hypot(dx, dy) || 1;
+        return { x: -dy / len, y: dx / len };
+    };
+    const n0 = normal(x0, y0, x1, y1);
+    const n3 = normal(x2, y2, x3, y3);
+    const sign = side > 0 ? 1 : -1;
+    const w0 = Math.max(0, Number(sourceWidth) || 0) / 2;
+    const w3 = Math.max(0, Number(targetWidth) || 0) / 2;
+    const pad = Math.max(0, Number(outerPad) || 0);
+    const o0 = sign * (w0 + pad);
+    const o3 = sign * (w3 + pad);
+    const i0 = -sign * w0;
+    const i3 = -sign * w3;
+    return [
+        `M ${x0 + n0.x * o0} ${y0 + n0.y * o0}`,
+        `C ${x1 + n0.x * o0} ${y1 + n0.y * o0} ${x2 + n3.x * o3} ${y2 + n3.y * o3} ${x3 + n3.x * o3} ${y3 + n3.y * o3}`,
+        `L ${x3 + n3.x * i3} ${y3 + n3.y * i3}`,
+        `C ${x2 + n3.x * i3} ${y2 + n3.y * i3} ${x1 + n0.x * i0} ${y1 + n0.y * i0} ${x0 + n0.x * i0} ${y0 + n0.y * i0}`,
+        'Z',
+    ].join(' ');
+}
+
 function tasksTaperedArrowHeadPath(bezierPath, size, side = 0) {
     const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
     if (nums.length < 8) return '';
@@ -515,6 +550,13 @@ function tasksTaperedArrowHeadPath(bezierPath, size, side = 0) {
 // Slide the whole curve sideways, along the normal of its own chord. A reply
 // runs the other way, so its normal points the other way, and one signed lift
 // puts the two halves on opposite sides of the same path at any angle.
+//
+// The ENDS are the exception. A free normal offset has a component across the
+// node border whenever the chord runs diagonally, which pushes one half into
+// the node and pulls the other out, so a departing tail and an arriving head
+// stop being level. Each end therefore slides ALONG its own border -- vertical
+// for a left/right handle, horizontal for a top/bottom one -- keeping the full
+// gap while staying on the border line.
 function tasksPairShiftedProps(props, lift) {
     if (!lift) return props;
     const dx = props.targetX - props.sourceX;
@@ -522,12 +564,28 @@ function tasksPairShiftedProps(props, lift) {
     const len = Math.hypot(dx, dy) || 1;
     const nx = (-dy / len) * lift;
     const ny = (dx / len) * lift;
+    const borderTangent = (position) => {
+        if (position === 'left' || position === 'right') return { x: 0, y: 1 };
+        if (position === 'top' || position === 'bottom') return { x: 1, y: 0 };
+        return null;
+    };
+    const slide = (position) => {
+        const tangent = borderTangent(position);
+        if (!tangent) return { x: nx, y: ny };
+        // Take the side the normal pointed to; a chord square to the border
+        // projects to nothing, so fall back to the lift's own sign.
+        const dot = (nx * tangent.x) + (ny * tangent.y);
+        const sign = dot !== 0 ? Math.sign(dot) : Math.sign(lift);
+        return { x: tangent.x * Math.abs(lift) * sign, y: tangent.y * Math.abs(lift) * sign };
+    };
+    const source = slide(props.sourcePosition);
+    const target = slide(props.targetPosition);
     return {
         ...props,
-        sourceX: props.sourceX + nx,
-        sourceY: props.sourceY + ny,
-        targetX: props.targetX + nx,
-        targetY: props.targetY + ny,
+        sourceX: props.sourceX + source.x,
+        sourceY: props.sourceY + source.y,
+        targetX: props.targetX + target.x,
+        targetY: props.targetY + target.y,
     };
 }
 
@@ -6852,6 +6910,11 @@ async function renderTasksGraphs(rootElement = document) {
                     ? Math.max(strokeWidth + 0.6, Math.abs(pairLift) * 2)
                     : strokeWidth + 8;
                 const casingStroke = pairLift ? 2 : 8;
+                // A pair cases only its outer flank; every other edge keeps the plain
+                // stroked casing around its whole ribbon.
+                const taperCasingPath = pairLift
+                    ? tasksSideWeightedRibbonPath(path, Number(props.style?.strokeWidth) || 1.9, 0, casingStroke, Math.sign(pairLift))
+                    : taperPath;
                 const fullArrow = Math.max(10, strokeWidth * 3.0);
                 const chord = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY);
                 // Both ends on one side means the path arcs away and comes back,
@@ -6910,8 +6973,10 @@ async function renderTasksGraphs(rootElement = document) {
                         fill: 'none',
                         stroke: 'transparent',
                         // A wide hit area would swallow the other half of a pair,
-                        // so a paired line claims only the side it is drawn on.
-                        strokeWidth: pairLift ? 6 : 24,
+                        // so a paired line claims only the side it is drawn on. The
+                        // halves now touch, so this is as wide as it can be before
+                        // hovering one half starts picking the other.
+                        strokeWidth: pairLift ? 3 : 24,
                         vectorEffect: 'non-scaling-stroke',
                         pointerEvents: 'stroke',
                         className: 'react-flow__edge-interaction vyasa-tasks-edge-hit-path',
@@ -6931,10 +6996,10 @@ async function renderTasksGraphs(rootElement = document) {
                     // line, its taper and its head merge into one silhouette with one
                     // outer border. Casing a head after the line drew its own border
                     // between the two and split the arrow from its shaft.
-                    taperPath && React.createElement('path', {
-                        d: taperPath,
+                    taperCasingPath && React.createElement('path', {
+                        d: taperCasingPath,
                         fill: 'var(--vyasa-paper)',
-                        stroke: 'var(--vyasa-paper)',
+                        stroke: pairLift ? 'none' : 'var(--vyasa-paper)',
                         strokeWidth: casingStroke,
                         strokeLinejoin: 'round',
                         pointerEvents: 'none',
