@@ -10,18 +10,18 @@ e3: content-route -> frontmatter-reader reads
 	note=3 · read and split the file
 	description=The route calls parse_frontmatter with that path. It returns the metadata and the raw Markdown body.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[metadata, raw_content = parse_frontmatter(file_path]" context=3}
-e4: content-route -> markdown-renderer renders
+e4: frontmatter-reader -> filesystem-backend reads
+	note=3b · git-ref pages only
+	description=A working-tree page is a plain Path and is read directly. A git-ref page arrives as a VirtualPath, so parse_frontmatter reads it through the backend instead.
+	code=[parse_frontmatter](vyasa/helpers.py){show=symbol symbol=parse_frontmatter kind=Function focus="match[if isinstance(file_path, VirtualPath)]" context=5}
+e5: content-route -> markdown-renderer renders
 	note=4 · body to HTML nodes
 	description=The route calls from_md with the Markdown body and gets rendered HTML content.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[content = from_md(strip_more_marker(render_content]" context=3}
-e5: content-route -> html-response renders
+e6: content-route -> html-response renders
 	note=5 · content into the page
 	description=The route builds DocumentPage from that content and calls render, which returns the HTML response.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[result = DocumentPage(post_title]" context=3}
-e6: frontmatter-reader -> filesystem-backend reads
-	note=git-ref pages only
-	description=A working-tree page is a plain Path and is read directly. A git-ref page arrives as a VirtualPath, so parse_frontmatter reads it through the backend instead.
-	code=[parse_frontmatter](vyasa/helpers.py){show=symbol symbol=parse_frontmatter kind=Function focus="match[if isinstance(file_path, VirtualPath)]" context=5}
 e7: html-response -> browser-ui shows
 	note=6 · the browser displays the response
 	description=The HTML response leaves Vyasa. The browser consumes it at the system boundary, so no Vyasa function runs after this point.

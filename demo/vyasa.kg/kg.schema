@@ -18,15 +18,14 @@ shows color=relation.shows
 @views
 flow:
 	source=base
-	layout=layered
-	layered_tier=tier
-	layered_order=request,route,steps,browser
-	layered_aside=ref-read
+	layout=sequence
+	sequence_role=role
+	sequence_phase=phase
 	color_by=layer
 	edge_color_by=role
 	edge_label_from=note
 	hover_attrs=description,code
-	caption="One function owns the page: render_post_detail. Every arrow out of it is a real call, and its code link shows the exact line. The helpers do not call each other."
+	caption="Read the rows from top to bottom. One lifeline owns the page, render_post_detail, and each row is a call it makes. Every code link shows the exact line of that call."
 	slides:
 		route: Steps 1 to 2 — the route takes over
 			nodes=page-file,content-route,path-resolver

@@ -1,10 +1,4 @@
 @node_attrs
-tier:
-  request: page-file
-  route: content-route
-  steps: path-resolver frontmatter-reader markdown-renderer html-response
-  browser: browser-ui
-  ref-read: filesystem-backend
 layer:
   content: page-file
   core: content-route path-resolver frontmatter-reader filesystem-backend
@@ -13,6 +7,12 @@ layer:
 
 @edge_attrs
 role:
-  call: e1 e2 e3 e4 e5
-  branch: e6
+  call: e1 e2 e3 e5 e6
+  branch: e4
   boundary: e7
+phase:
+  request: e1
+  resolve: e2
+  read: e3 e4
+  render: e5 e6
+  show: e7

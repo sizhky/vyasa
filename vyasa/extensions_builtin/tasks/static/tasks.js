@@ -3300,7 +3300,9 @@ function tasksGraphNodeAbsoluteRect(node, byId) {
 function tasksGraphNodeAtFlowPoint(nodes, point) {
     const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
     return (nodes || [])
-        .filter((node) => node.data?.__kind__ !== 'ganttHeader')
+        // Chrome is passive: a band or a cell must never become the anchor for
+        // an edge preview, because it has no incident edge and kills the hit.
+        .filter((node) => !TASKS_PASSIVE_NODE_KINDS.has(node.data?.__kind__))
         .map((node) => ({ node, rect: tasksGraphNodeAbsoluteRect(node, byId), z: Number(node.zIndex || node.style?.zIndex || 0) }))
         .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
         .sort((a, b) => b.z - a.z)[0] || null;
