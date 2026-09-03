@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import html
+from pathlib import Path as PathCls
 from dataclasses import dataclass
 from typing import Any
 
@@ -72,6 +73,9 @@ class DocumentPage:
     def render(self, layout, *, htmx, blog_title: str, auth):
         return layout(
             self.body,
+            # Carries the on-disk path for the copy-path shortcut. It sits inside
+            # #main-content so an htmx navigation replaces it with the new page's path.
+            Span(data_vyasa_file_path=self.file_path, hidden=True) if self._absolute_file_path() else None,
             htmx=htmx,
             title=f"{self.title} - {blog_title}",
             show_sidebar=self.show_sidebar,
@@ -84,6 +88,15 @@ class DocumentPage:
             current_updated_label=format_last_modified_label(self.file_path) if self.file_path else None,
             extra_head_nodes=self.extra_head_nodes,
         )
+
+    def _absolute_file_path(self) -> bool:
+        """True when file_path names a real place on disk.
+
+        A document read at a git ref carries a VirtualPath, whose str() is a
+        content-root-relative slug. Stamping that would label a relative slug an
+        absolute path, so leave the marker off and let the shortcut say so.
+        """
+        return bool(self.file_path) and PathCls(self.file_path).is_absolute()
 
 
 @dataclass(frozen=True)

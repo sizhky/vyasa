@@ -1,0 +1,38 @@
+{
+  "node_color_palettes": {
+    "kind": {
+      "Rule": "#dc2626",
+      "Store": "#ca8a04",
+      "Message": "#2563eb",
+      "Action": "#7c3aed",
+      "Artifact": "#0891b2",
+      "Milestone": "#16a34a"
+    }
+  },
+  "edge_color_palettes": {
+    "relation": {
+      "produces": "#6d28d9",
+      "becomes": "#7c3aed",
+      "enables": "#16a34a",
+      "carries": "#2563eb",
+      "serves": "#ca8a04",
+      "checks": "#0891b2",
+      "fills": "#0f766e",
+      "shapes": "#64748b",
+      "blocks": "#dc2626"
+    },
+    "role": {
+      "message": "#2563eb",
+      "standing": "#64748b",
+      "blocking": "#dc2626"
+    },
+    "phase": {
+      "request": "#2563eb",
+      "resolve": "#0891b2",
+      "connect": "#7c3aed",
+      "transfer": "#ca8a04",
+      "parse": "#ea580c",
+      "render": "#16a34a"
+    }
+  }
+}

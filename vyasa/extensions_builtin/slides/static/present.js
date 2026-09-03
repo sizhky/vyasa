@@ -17,7 +17,7 @@ if (!window.__vyasaZenBound) {
     title: 'Slide shortcuts',
     groups: [
       ['Exit', [['Shift+Esc', 'Document']]],
-      ['Slides', [['M', 'Overview'], ['?', 'Shortcuts'], ['J / K', 'Scroll / Reveal / Rewind'], ['H / L', 'Previous / Next']]],
+      ['Slides', [['M / Esc', 'Overview'], ['?', 'Shortcuts'], ['J / K', 'Scroll / Reveal / Rewind'], ['H / L', 'Previous / Next']]],
       ['Overview', [['J / K', 'Move Selection'], ['H / L', 'Collapse / Expand'], ['Enter', 'Open Slide'], ['Esc', 'Close']]],
     ],
   });
@@ -567,9 +567,6 @@ if (!window.__vyasaZenBound) {
       event.preventDefault();
       return;
     }
-    if (event.key === 'Escape') {
-      document.getElementById('slide-overview')?.classList.add('hidden');
-    }
     if (event.metaKey || event.ctrlKey || event.altKey
       || event.target?.matches?.('input, textarea, select') || event.target?.isContentEditable) return;
     const key = event.key.toLowerCase();
@@ -581,7 +578,7 @@ if (!window.__vyasaZenBound) {
       if (moveOverviewSelection(key === 'j' ? 1 : -1)) event.preventDefault();
       return;
     }
-    if (key === 'm') {
+    if (key === 'm' || key === 'escape') {
       toggleOverview();
       event.preventDefault();
     }

@@ -6,15 +6,17 @@ from collections import defaultdict
 from itertools import product
 
 from .layout import build_collapsed_graph
+from .layouts import all_layout_keys, apply_layout_aliases, layout_error
 
 TASKS_PROJECTION_UNSPECIFIED_LABEL = "Unspecified"
 PROJECTION_DISPLAY_KEYS = {
-    "default_open_depth", "node-card-width", "hover-font-size", "color_mix",
+    "default_open_depth", "node-card-width", "filter-panel-width", "node-card-content-scale", "hover-font-size", "color_mix",
     "color_mix_intensity", "projection-group-opacity", "projection-unspecified-group-opacity",
     "projection-unspecified-content-opacity", "jitter", "jitter_y",
     "spacing", "node_spacing", "layer_spacing", "group_padding",
     "layout_direction", "collision_gap", "edge_label_width",
-}
+    "layout", "layout_error",
+} | all_layout_keys()
 
 
 def _slugify(value: str) -> str:
@@ -137,6 +139,11 @@ def normalize_projections(value) -> list[dict]:
             continue
         seen.add(projection_id)
         default_label = " / ".join(attr.replace("_", " ").title() for attr in groups_from) or projection_id.replace("-", " ").title()
+        apply_layout_aliases(raw)
+        # A broken view keeps its place in the list and carries its own error,
+        # so the reader can still open every other view and can see what is
+        # wrong with this one.
+        raw_layout_error = layout_error(raw)
         hover_attrs = _normalize_hover_attrs(raw.get("hover_attrs"))
         projection = {
             "id": projection_id,
@@ -167,6 +174,7 @@ def normalize_projections(value) -> list[dict]:
             "edge_label_from": str(raw.get("edge_label_from") or "").strip(),
             "hover_attrs": hover_attrs,
             "aggregate_edges": _normalize_aggregate_edges(raw.get("aggregate_edges")),
+            "layout_error": raw_layout_error,
             **{key: raw[key] for key in PROJECTION_DISPLAY_KEYS if key in raw},
         }
         normalized = {key: item for key, item in projection.items() if item not in ("", [], (), {}, None)}

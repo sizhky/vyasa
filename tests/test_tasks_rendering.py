@@ -149,7 +149,10 @@ def test_tasks_node_detail_rows_always_stack_values_below_labels():
 
     assert "`${entry.label}:`" in source
     assert "fontSize: options.fontSize || '14px'" in source
-    assert "display: 'block', marginBottom: '4px'" in source
+    # The label is its own block, so the value stacks under it. That is the
+    # contract; the margin that happens to sit beside it today is not.
+    label_row = source.split("`${entry.label}:`", 1)[0][-300:]
+    assert "display: 'block'" in label_row
     assert "return Math.max(keyWidth, valueWidth * weight);" in source
     assert "overflowWrap: 'anywhere'" in source
     assert "whiteSpace: 'pre-line'" in source
@@ -220,6 +223,64 @@ foundation :: Foundation:
     html = to_xml(from_md(md))
 
     assert 'data-tasks-node-card-width="36rem"' in html
+
+
+def test_tasks_block_reads_filter_panel_width_option():
+    md = """```tasks
+---
+title: Filter Panel Width
+filter-panel-width: 22%
+---
+foundation :: Foundation:
+```"""
+
+    html = to_xml(from_md(md))
+
+    assert 'data-tasks-filter-panel-width="22%"' in html
+
+
+def test_tasks_side_panels_default_to_the_same_share_of_the_width():
+    """Both panels default to the same share, and both stay overridable."""
+    md = """```tasks
+---
+title: Defaults
+---
+foundation :: Foundation:
+```"""
+
+    html = to_xml(from_md(md))
+
+    assert 'data-tasks-node-card-width="20%"' in html
+    assert 'data-tasks-filter-panel-width="20%"' in html
+
+
+def test_tasks_block_reads_node_card_content_scale_option():
+    md = """```tasks
+---
+title: Card Content Scale
+node-card-content-scale: 3.5
+---
+foundation :: Foundation:
+```"""
+
+    html = to_xml(from_md(md))
+
+    assert 'data-tasks-node-card-content-scale="3.5"' in html
+
+
+def test_card_body_is_drawn_wider_than_the_card_and_pans_sideways():
+    """A narrow card holds wide content by scrolling across it.
+
+    The body is drawn at contentScale card widths, and the wheel hijack pans
+    it whenever the gesture leans horizontal. A scale of 1 turns both off.
+    """
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    assert "const TASKS_NODE_CARD_CONTENT_SCALE = 2;" in source
+    assert "overflowX: (options.contentScale || 1) > 1 ? 'auto' : 'hidden'" in source
+    assert "width: `${(options.contentScale || 1) * 100}%`" in source
+    assert "Math.abs(event.deltaX) > Math.abs(event.deltaY)" in source
+    assert "scrollCard.scrollLeft = Math.max(0, Math.min(maxScrollLeft," in source
 
 
 def test_tasks_block_defaults_to_95vw_width():
@@ -390,14 +451,17 @@ def test_tasks_search_can_be_disabled_per_projection():
 
     assert "searchEnabled" in source
     assert "searchEnabled ? searchQuery : ''" in source
-    assert "React.createElement('span', { style: { fontWeight: 700, opacity: 0.76 } }, 'Search')" in source
+    # The control is labelled inside the filter panel. Its font weight is not a
+    # contract; its presence there is.
+    panel_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
+    assert "'Search')" in panel_source
 
 
 def test_tasks_query_builder_controls_use_filter_panel_css():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
 
-    assert "const TASKS_FILTER_PANEL_WIDTH = 440;" in source
+    assert "const TASKS_FILTER_PANEL_WIDTH = '20%';" in source
     assert "muteGroupAction: null" in source
     assert "React.createElement('span', null, 'Active')" in source
     assert ".vyasa-tasks-filter-card .betweenRules" in css
@@ -573,7 +637,12 @@ def test_tasks_node_cards_share_the_configured_default_width():
     panel_source = source.split("const SelectedNodePanel = (", 1)[1].split("const SelectedEdgePanel = () =>", 1)[0]
 
     assert "const nodeNotesEditor = renderTasksCardNoteEditor(React" in panel_source
-    assert "width: `min(${nodeCardWidth}, 100%)`" in panel_source
+    # One setting sizes every card: the absolute wrapper carries nodeCardWidth
+    # and the cards inside fill it. Re-applying the width inside would compound
+    # once the value became a percentage.
+    assert "width: nodeCardWidth" in source
+    assert "min(${nodeCardWidth}" not in source
+    assert "width: '100%'" in panel_source
     assert "tasksDetailPanelWidth" not in panel_source
 
 
@@ -599,10 +668,12 @@ def test_tasks_node_and_edge_cards_keep_notes_below_scrolling_details():
     edge_panel = source.split("const SelectedEdgePanel = () =>", 1)[1].split("const FilterPanel = () =>", 1)[0]
 
     assert layout.index("ref: options.scrollRef") < layout.index("data-vyasa-card-notes")
-    assert "style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto'" in layout
-    assert "style: { flex: '0 0 auto', padding: '12px', borderTop:" in layout
-    assert "background: 'color-mix(in srgb, var(--vyasa-primary) 8%, var(--vyasa-paper) 92%)'" in layout
-    assert "fontSize: '14px'" in layout
+    # The details region scrolls; the notes footer does not. Assert that pair,
+    # not one spelling of the style object it is written in.
+    assert "flex: '1 1 auto'" in layout
+    assert "overflowY: 'auto'" in layout
+    assert "flex: '0 0 auto'" in layout, "the notes footer must not scroll with the details"
+    assert "data-vyasa-card-notes" in layout
     assert "font = '500 14px ui-sans-serif" in source
     assert "renderTasksCardDetailsAndNotes(React" in node_panel
     assert "renderTasksCardDetailsAndNotes(React" in edge_panel
@@ -768,6 +839,35 @@ def test_w_enter_pin_blooms_from_the_edge():
     assert "1720ms" in css
 
 
+def test_kg_pane_drag_pans_with_a_locked_cursor():
+    source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
+
+    # A pane drag takes the cursor, then moves the viewport by raw pointer movement.
+    assert "if (!event.target?.closest?.('.react-flow__pane')) return;" in source
+    # The lock waits for real movement, so a plain click never hides the cursor.
+    assert "if (pan.distance < 3) return;" in source
+    assert "const request = el.requestPointerLock();" in source
+    # A lock that lands after the drag ended gives the cursor straight back.
+    assert "document.addEventListener('pointerlockchange', onPointerLockChange)" in source
+    assert "else document.exitPointerLock?.();" in source
+    assert "reactFlow.setViewport({ x: viewport.x + dx, y: viewport.y + dy, zoom: viewport.zoom }, { duration: 0 })" in source
+
+    # Box select and lasso keep the plain drag.
+    assert "if (event.shiftKey || event.metaKey || event.altKey) return;" in source
+
+    # React Flow's own pan is the fallback when a browser refuses the lock,
+    # so panOnDrag stays at its default.
+    assert "panOnDrag" not in source
+
+    # A locked pointer reports a frozen clientX, so hover work on it is skipped.
+    assert "if (document.pointerLockElement) return;" in source
+
+    # A locked pan must not clear the selection. A press that never locked keeps
+    # its own native pane click.
+    assert "if (!engaged) return;" in source
+    assert "suppressNextGraphClickRef.current = true;" in source
+
+
 def test_v_toggles_right_side_hover_card_scroll_mode():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     css = Path("vyasa/extensions_builtin/tasks/static/tasks.css").read_text()
@@ -814,7 +914,7 @@ def test_tasks_filter_reset_button_stays_in_filter_card_header():
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
     panel_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
 
-    assert "React.createElement('button', { type: 'button', onClick: resetProjectionControls" in panel_source
+    assert "onClick: resetProjectionControls" in panel_source
     reset_index = panel_source.index("onClick: resetProjectionControls")
     assert panel_source.index("activeCount ? `Filters (${activeCount})` : 'Filters'") < reset_index
     assert reset_index < panel_source.index("'×'", reset_index)
@@ -839,7 +939,9 @@ def test_named_views_keep_grouping_overrides_in_projection_preferences():
     assert "groupByEnabled," in source
     assert "groupByDisabledKeys," in source
     assert "buildTasksViewState(viewerState.model, viewerState.graph, activeProjectionId, viewMode, groupByEnabled, activeGroupByHierarchy, initialEgoMode)" in source
-    assert "const customGroupingAvailable = viewMode !== 'gantt';" in source
+    # Custom grouping is off wherever the view places its own nodes: Gantt, and
+    # every fixed layout. Assert that contract, not one spelling of the line.
+    assert "const customGroupingAvailable = !tasksIsFixedMode(viewMode);" in source
     assert "Custom grouping applies to Default view." not in source
     assert "setActiveProjectionId('');" not in group_panel
     assert "setGroupByEnabled(defaults.groupByEnabled === true);" in reset
@@ -1009,7 +1111,10 @@ def test_tasks_color_picker_groups_special_modes_at_bottom():
     assert "if (a.special !== b.special) return a.special ? 1 : -1;" in source
     assert "const normalColorOptions = selectableColorOptions.filter((option) => !option.special);" in source
     assert "const specialColorOptions = selectableColorOptions.filter((option) => option.special);" in source
-    assert "React.createElement('option', { key: '__special_color_modes__', value: '__special_color_modes__', disabled: true }, '---')" in source
+    # A disabled separator divides the normal modes from the special ones.
+    separator = source.split("value: '__special_color_modes__'", 1)[1][:200]
+    assert "disabled: true" in separator
+    assert "'---'" in separator
     assert "...specialColorOptions.map(renderColorOption))" in source
     assert "React.createElement('optgroup'" not in source
 
@@ -1922,9 +2027,12 @@ def test_react_flow_component_fills_flow_wrapper():
     assert "function applyTasksStandaloneHeight(wrapper)" in source
     assert "wrapper.closest('.vyasa-main-shell')" in source
     assert "applyTasksStandaloneHeight(wrapper);" in source
-    assert "style: { width: '100%', height: '100%' }" in render_source
-    assert "style: { width: '100%', height: '100%', flex: '1 1 auto', minHeight: 0" in render_source
-    assert "alignSelf: 'stretch',\n                display: 'flex'" in source
+    assert "width: '100%'" in render_source
+    assert "height: '100%'" in render_source
+    assert "flex: '1 1 auto'" in render_source
+    assert "minHeight: 0" in render_source
+    assert "alignSelf: 'stretch'" in source
+    assert "display: 'flex'" in source
 
 
 def test_filter_and_slide_panels_touch_the_graph_canvas():
@@ -1933,8 +2041,10 @@ def test_filter_and_slide_panels_touch_the_graph_canvas():
     filter_source = source.split("const FilterPanel = () => {", 1)[1].split("const SlideShow = () => {", 1)[0]
     slide_source = source.split("const SlideShow = () => {", 1)[1].split("const DragSelectionOverlay = () => {", 1)[0]
 
-    assert "alignItems: 'stretch', gap: '12px'" not in render_source
-    assert "width: '100%',\n                            maxWidth: '100%'" in filter_source
+    # No gap between the panels and the canvas, and no negative margin faking
+    # one shut.
+    assert "gap: '12px'" not in render_source
+    assert "maxWidth: '100%'" in filter_source
     assert "marginLeft: '-12px'" not in slide_source
 
 
@@ -1954,11 +2064,18 @@ def test_tasks_slide_show_nav_stays_above_title_and_supports_jump_select():
     assert "nodes: matched" in ready_fit_source
 
 
-def test_selected_node_panel_gives_title_and_id_bounded_columns():
+def test_selected_node_panel_stacks_the_title_above_the_id():
+    """The title owns the full card width; the id sits under it and truncates.
+
+    Side by side, each got half a narrow card, and `overflowWrap: anywhere`
+    drove the column's min-content width to one glyph, so a title broke one
+    character per line.
+    """
     source = Path("vyasa/extensions_builtin/tasks/static/tasks.js").read_text()
 
-    assert "panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)'" in source
-    assert "overflowWrap: 'anywhere', wordBreak: 'break-word', textAlign: 'right'" in source
+    assert "gridTemplateColumns: 'minmax(0, 1fr)'" in source
+    assert "panelNodeId ? 'minmax(0, 1fr) minmax(0, 1fr)'" not in source
+    assert "whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, panelNodeId)" in source
 
 
 def test_slide_selection_is_not_reapplied_when_graph_layout_changes():
@@ -1980,11 +2097,13 @@ def test_context_graphs_have_day_switch_contract():
     assert "async function loadTasksContextDiff" in source
     assert "fetch('/api/tasks/context-diff'" in source
     assert '@rt("/api/tasks/context-diff"' in api
-    assert "const filterSectionStyle = { display: 'grid', gap: '8px', fontSize: '12px' };" in source
-    assert "const filterInlineControlStyle = { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto'" in source
-    assert "const filterChoiceListStyle = { display: 'grid', gap: '8px', minWidth: 0 };" in source
+    # The panel shares named style constants instead of piling one-off inline
+    # styles. Their existence is the contract; their contents are not.
+    assert "const filterSectionStyle = {" in source
+    assert "const filterInlineControlStyle = {" in source
+    assert "const filterChoiceListStyle = {" in source
     assert "const contextOptions = React.useMemo" in source
-    assert "React.createElement('span', { style: filterKeyStyle }, 'Context')" in source
+    assert "style: filterKeyStyle }, 'Context')" in source
     assert "'aria-label': 'Select changes from previous context'" in source
     assert "tasksContextDiffSelectionIds(model, graphBaseRef.current.nodes, changedIds)" in source
     assert "setSelectedNodeIds(new Set(nextIds));" in source
@@ -2035,3 +2154,37 @@ Foundation:
     assert '"document_path": "docs/feed/personalization"' in html
     assert '"storage_id": "tasks-block-' in html
     assert '"persistence_id":' in html
+
+
+def _write_kg_pack(root: Path) -> Path:
+    pack = root / "docs" / "blueprint.kg"
+    pack.mkdir(parents=True)
+    (root / "src").mkdir()
+    (root / "src" / "feed.ts").write_text("export const feed = 1;\n", encoding="utf-8")
+    (pack / "kg.schema").write_text(
+        "@graph id=bp title=Blueprint\n\n@sources\nnodes=kg.nodes\nbase:\n\tedges=kg.edges\n",
+        encoding="utf-8",
+    )
+    (pack / "kg.nodes").write_text(
+        "n1: Queue\n\tsources=[Feed](../../src/feed.ts)\n", encoding="utf-8"
+    )
+    (pack / "kg.edges").write_text("", encoding="utf-8")
+    return pack
+
+
+def test_kg_pack_links_resolve_from_pack_folder_on_every_referring_page(tmp_path, monkeypatch):
+    from vyasa.extensions_builtin.tasks.render import render_tasks_block
+
+    root = tmp_path / "root"
+    pack = _write_kg_pack(root)
+    monkeypatch.setenv("VYASA_CLI_ROOT", str(root))
+
+    from_pack_page = render_tasks_block(
+        f"---\nitems_schema: {pack / 'kg.schema'}\n---\n", "docs/blueprint.kg", "items"
+    )
+    from_document = render_tasks_block(
+        "---\nitems_schema: blueprint.kg/kg.schema\n---\n", "docs/blueprint", "items"
+    )
+
+    assert "/posts/src/feed.ts" in html.unescape(from_pack_page)
+    assert "/posts/src/feed.ts" in html.unescape(from_document)

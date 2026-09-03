@@ -1,0 +1,78 @@
+@graph id=browser-page-load title="How a browser loads a page"
+hover_attrs=description,example
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+base:
+	edges=kg.edges
+palette=kg.palette
+
+@relations
+produces label=produces
+becomes label=becomes
+enables label=enables
+carries label=carries
+serves label=serves
+checks label=checks
+fills label=fills
+shapes label=shapes
+blocks label=blocks
+
+@views
+phases:
+	source=base
+	group_by=kind
+	color_by=kind
+	edge_color_by=phase
+	edge_label_from=label
+	hover_attrs=description,example
+	caption="The nearest thing to order this graph can say today: six phases, coloured. Inside a phase the sequence is still invisible."
+	slides:
+		request: Decide what to fetch
+			nodes=url,nav-request,hsts,http-cache,cache-policy
+			caption="The rules apply first, then the browser checks for a stored copy. A fresh copy ends the load right here."
+		resolve: Find the server
+			nodes=nav-request,dns-cache,dns-query,ip-address
+			caption="Only a cache miss reaches the network. A recent answer skips the round trip."
+		connect: Open a trusted channel
+			nodes=ip-address,tcp-handshake,tls-handshake,secure-channel
+			caption="Two exchanges before a single byte of the page moves."
+		transfer: Ask and receive
+			nodes=secure-channel,cookie-jar,http-request,http-response,html-bytes
+			caption="The cookie jar shapes the request. The body streams back in pieces."
+		parse: Build the trees
+			nodes=html-bytes,token-stream,preload-scanner,subresource-request,dom-tree,cssom-tree,script-execution
+			caption="The preload scanner runs beside the parser, not after it. That is concurrency this graph cannot draw."
+		render: Turn trees into pixels
+			nodes=dom-tree,cssom-tree,render-tree,layout-boxes,paint-records,composited-frame,first-paint
+			caption="Style and structure meet, get measured, get drawn, and reach the screen."
+sequence:
+	source=base
+	layout=sequence
+	sequence_role=role
+	sequence_phase=phase
+	color_by=kind
+	edge_color_by=role
+	edge_label_from=label
+	hover_attrs=description,example
+	caption="One lane per participant, one row per edge, read top to bottom. Row order is the order the edges are written in kg.edges. An edge with no step number is a standing rule that never takes a turn."
+	slides:
+		request: Steps 1 to 4 — decide what to fetch
+			nodes=url,nav-request,hsts,http-cache,html-bytes,dns-query
+			caption="The HSTS list carries no step number. It already holds. Step 2 asks the cache before the network, and step 3 is the short circuit that ends the load right there."
+		resolve: Step 5 — find the server
+			nodes=dns-cache,dns-query,ip-address
+			caption="Only a cache miss gets this far. The DNS cache has no step either; a recent answer just skips the round trip."
+		connect: Steps 6 to 8 — open a trusted channel
+			nodes=ip-address,tcp-handshake,tls-handshake,secure-channel
+			caption="Three steps before one byte of the page moves. Read the lifelines: the work walks right and never comes back."
+		transfer: Steps 9 to 12 — ask and receive
+			nodes=secure-channel,cookie-jar,http-request,http-response,html-bytes,http-cache,cache-policy
+			caption="The cookie jar and the cache policy shape the request without taking a turn. Step 12 fills the cache beside the render, not before it. The cache-hit row from step 3 lights up here too, because it is the path this replaces."
+		parse: Steps 13 to 22 — build the trees
+			nodes=html-bytes,token-stream,preload-scanner,subresource-request,dom-tree,cssom-tree,script-execution,css-bytes,js-bytes
+			caption="Watch the Subresource request lifeline. It is touched at steps 16 to 18 by the preload scanner while the parser is still working, which is the concurrency the plain graph cannot show."
+		render: Steps 23 to 28 — turn trees into pixels
+			nodes=dom-tree,cssom-tree,render-tree,layout-boxes,paint-records,composited-frame,first-paint
+			caption="Structure and style meet at the render tree, get measured, get drawn, and reach the screen."

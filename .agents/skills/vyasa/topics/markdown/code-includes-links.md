@@ -71,6 +71,61 @@ highlight one place in the source file:
 - Use `<...>` around a destination that contains spaces, or URL-encode the spaces as `%20`.
 - When several lines start with the same `$` text, the first line wins; the author must add more characters when another line is intended.
 
+## Code File Links
+
+When a document refers to a code file, link the symbol and not the bare file:
+
+```md
+[quoteMarkdownCopyValue](../../vyasa/static/page_shell.js?symbol=quoteMarkdownCopyValue&kind=function)
+```
+
+- Use the symbol name as the link label, so the reader knows what to look for.
+- Use a relative path that resolves to the code file, with its real extension.
+- Set `symbol` to the exact identifier. A dotted name such as `DocumentPage.render` is allowed. When the whole dotted name is absent, the preview falls back to the last segment.
+- Set `kind` when the file holds that name more than once. Cmd/Ctrl-hover then highlights the definition instead of the first use.
+- URL-encode any character that would break a query value.
+
+Link the bare file when the whole file is the point.
+Use a `:54` position instead when a line number is the stable fact and no symbol name fits.
+
+### Code Root
+
+Set `code_root` in the frontmatter when the code files sit outside the document folder:
+
+```yaml
+---
+code_root: ../..
+code_extensions: [py, js, ts]
+---
+```
+
+- `code_root` is relative to the document's folder, the same rule as any relative link.
+- `code_extensions` limits the fallback to those suffixes. Leave it out to allow every suffix.
+- Vyasa tries the document folder first. It uses `code_root` only when that path holds no file.
+- The resolved path must stay inside a content mount. A `code_root` that points outside the served tree gives no preview.
+- Both the link target and the Cmd/Ctrl-hover preview use the same resolved path, so a click and a hover agree.
+
+```md
+[registry](vyasa/extensions_builtin/visuals/registry.py)
+```
+
+From `demo/visuals/index.md` with `code_root: ../..`, that link resolves to the repository copy of the file.
+
+### Available Kinds
+
+`kind` is case-insensitive. Vyasa reads these five values:
+
+| Kind | Python (`.py`, `.pyi`) | JavaScript family (`.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx`) |
+| --- | --- | --- |
+| `class` | `class` | `class` |
+| `function` | `def`, `async def` | `function`, `async function`, `const`, `let`, `var` |
+| `method` | `def`, `async def` | `function`, `async function` |
+| `property` | `def`, `async def`, or an assignment line | `get`, `set` |
+| `variable` | an assignment line, such as `NAME =` or `NAME: int =` | `const`, `let`, `var` |
+
+- A file with any other suffix has no keyword table. The preview highlights the first whole-word match.
+- An unknown `kind` value behaves the same way. Prefer no `kind` over a guessed one.
+
 ## VS Code Symbol Links
 
 Use the installed `yeshwanth.vyasa` extension when a link must open one symbol inside one code file:

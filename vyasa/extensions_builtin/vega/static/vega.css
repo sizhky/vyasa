@@ -1,0 +1,67 @@
+/* Vega-Lite mount. The chart paints its own marks, so this file only places
+   the block and keeps the canvas transparent against the page. */
+
+.vyasa-visual--vega {
+    /* Charts read as figures: room above and below so they do not crowd the
+       paragraphs either side. */
+    margin: 2rem 0;
+    /* Centres the caption and the note over the chart. The chart itself is
+       centred by an auto margin on its SVG, further down. */
+    text-align: center;
+}
+
+.vyasa-vega {
+    /* No default width: a chart fills its column. `width=` on the fence lands
+       here as an inline rule when an author wants it narrower. */
+    margin: 0 auto;
+    padding: 0.5rem 0;
+    /* Cap a `width=90vw` so it cannot scroll the whole page, and floor a small
+       one so it does not collapse into an unreadable sliver. The floor reacts
+       to the column the chart is in, not to the size of the window. */
+    max-width: 100%;
+    min-width: min(100%, 24rem);
+    overflow-x: auto;
+}
+
+.vyasa-vega__mount {
+    min-height: 2rem;
+}
+
+/* This element is what Vega measures to resolve `width: "container"`.
+   It MUST keep a real width. Giving it `display: inline-block` makes it
+   shrink-to-fit, which measures 0 before the chart exists, and the plot area
+   then renders zero-wide with only the axes visible. */
+.vyasa-vega .vega-embed {
+    display: block;
+    width: 100%;
+    background: transparent;
+}
+
+/* Centre the chart itself. A composed or fixed-width spec (a projection, an
+   hconcat, a repeat) is narrower than the column and would otherwise sit hard
+   left with dead space beside it.
+
+   `margin-inline: auto` on the SVG rather than `text-align` on an ancestor:
+   vega-embed sets text-align on its own wrapper, so inherited centring does
+   not reach the chart. Auto margins also collapse to 0 when the chart is wider
+   than its box, so an oversized chart still scrolls from its left edge instead
+   of being clipped there. */
+.vyasa-vega .vega-embed svg,
+.vyasa-vega .vega-embed canvas {
+    display: block;
+    margin-inline: auto;
+}
+
+.vyasa-vega .vega-embed summary {
+    opacity: 0.35;
+}
+
+.vyasa-vega .vega-embed summary:hover {
+    opacity: 1;
+}
+
+.vyasa-vega__failed {
+    font-family: var(--vyasa-font-mono, ui-monospace, monospace);
+    font-size: 0.78rem;
+    color: var(--vyasa-ink-soft, #5a6060);
+}

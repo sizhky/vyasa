@@ -1,0 +1,94 @@
+@graph id=vyasa-architecture title="How Vyasa serves a page"
+group_by=layer
+color_by=layer
+hover_attrs=description,note,example
+default_open_depth=2
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+base:
+	edges=kg.edges
+render:
+	edges=kg.render.edges
+startup:
+	edges=kg.startup.edges
+palette=kg.palette
+
+@relations
+selects color=relation.selects
+registers color=relation.registers
+claims color=relation.claims
+routes_to color=relation.routes_to
+reads color=relation.reads
+feeds color=relation.feeds
+renders color=relation.renders
+wraps color=relation.wraps
+resolves color=relation.resolves
+picks color=relation.picks
+serves color=relation.serves
+shapes color=relation.shapes
+gates color=relation.gates
+notifies color=relation.notifies
+
+@views
+layers:
+	source=base
+	group_by=layer
+	color_by=layer
+	edge_color_by=flow
+	caption="Every layer and every flow at once. Four flows drawn on top of each other, which is why the picture is hard to read. The views below take them apart."
+layered:
+	source=base
+	layout=layered
+	layered_tier=layer
+	layered_order=surface,core,pipeline,extension,content
+	layered_aside=configuration
+	color_by=layer
+	edge_color_by=flow
+	caption="Five bands, top to bottom. A node sits in its own band and nowhere else, so direction now means something: down is the request going in, up is the answer coming back. Configuration sits beside the stack because it touches every band."
+matrix:
+	source=base
+	layout=matrix
+	matrix_col=layer
+	matrix_row=flow
+	color_by=layer
+	matrix_tint=14
+	edge_color_by=flow
+	caption="Which layers each flow touches. Every cell is washed by its column colour and its row colour, so the composite names the intersection. Edges join their endpoints inside one row; hide them to read the cells alone. Read the empty cells first, because they say what a flow never needs."
+render:
+	source=render
+	layout=sequence
+	sequence_role=role
+	sequence_phase=phase
+	color_by=layer
+	edge_color_by=role
+	caption="One page render, top to bottom. Row order is the order the edges are written in kg.render.edges. An edge with no step number is a rule that already holds and never takes a turn."
+	slides:
+		route: Steps 1 to 2 — reach the handler
+			nodes=asgi-app,content-route,beforeware,rbac
+			caption="Beforeware carries no step number; it runs on every request. RBAC is the one red row: a denied path ends here and nothing below runs."
+		read: Steps 3 to 8 — find the document
+			nodes=content-route,content-mounts,content-backend,filesystem-backend,git-backend,virtual-path,markdown-file
+			caption="Core asks for a document without knowing where it lives. The backend picks the working tree or a git ref, and a virtual path makes both look the same."
+		render: Steps 9 to 17 — Markdown becomes HTML
+			nodes=markdown-file,frontmatter,from-md,fence-handler,kg-pack,tasks-extension,wikilink-resolver,content-mounts,asset-collector,asset-url,folder-config
+			caption="Watch the from_md lifeline: it is touched four times, once per thing a document can contain. Folder configuration shapes the render without taking a turn."
+		wrap: Steps 18 to 20 — close the page
+			nodes=from-md,page-frame,page-shell,html-response,layout-extension
+			caption="The layout extension shapes the shell as a standing rule, not a step. Boot fails if no layout extension is active."
+startup:
+	source=startup
+	layout=sequence
+	sequence_role=role
+	sequence_phase=phase
+	color_by=layer
+	edge_color_by=role
+	caption="What happens once, before any request. Read it to see why a disabled extension does not exist rather than sitting idle: nothing registers it, so no route, no fence marker, and no bundle is ever claimed."
+	slides:
+		boot: Steps 1 to 4 — decide what loads
+			nodes=root-config,extension-runtime,extension-meta,capability-name,storage-namespace,layout-extension,search-extension,tasks-extension
+			caption="The root file names every extension. Metadata, capability names, and storage namespaces hold throughout and take no step."
+		register: Steps 5 to 11 — claim the seams
+			nodes=extension-runtime,extension-app,route-registrar,markdown-registrar,asset-registrar,core-app,fence-handler,asgi-app
+			caption="An extension never sees the raw application. It registers through three registrars, and start-up catches two extensions claiming one route or one fence marker."

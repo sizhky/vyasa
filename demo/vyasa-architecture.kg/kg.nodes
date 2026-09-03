@@ -1,0 +1,119 @@
+surface: Surface
+	description=What the outside world touches. One ASGI callable, the routes behind it, and the HTML that goes back.
+	asgi-app: ASGI app
+		description=The single callable uvicorn calls. It configures logging once, builds the core app once, then delegates.
+		example=`vyasa/main.py` defines `async def app(scope, receive, send)`.
+	content-route: Content route
+		description=The handler for one document URL. It resolves the path, checks access, reads the file, and renders it.
+		example=`render_post_detail` in `vyasa/content_routes.py` handles `/posts/<slug>`.
+	page-frame: Page frame
+		description=The rendered body plus the chrome it asked for, before the shell wraps it.
+		example=`PageFrame` and `PageFrameDeps` in `vyasa/page_frame.py`.
+	page-shell: Page shell
+		description=The shared outer document: head, navbar, sidebar, footer. Core owns it so every page agrees.
+		example=`PageShellModel` and `StaticShellRenderer` in `vyasa/page_shell.py`.
+	html-response: HTML response
+		description=The finished page the browser receives.
+		example=A full document, or an htmx fragment when the request came from a link inside the site.
+core: Core
+	description=The mandatory runtime layer. It owns routing, the page shell, content mounting, and access control. Core must not depend on any one extension.
+	core-app: Core app
+		description=The FastHTML application core builds at start, before extensions register anything.
+		example=`_build_app` and `_initialize_app` in `vyasa/core.py`.
+	beforeware: Beforeware
+		description=The per-request hook that runs before any handler.
+		example=`_build_beforeware` in `vyasa/core.py`.
+	rbac: RBAC
+		description=Role rules that decide whether this person may see this path. Core-owned, so folder configuration cannot switch it off.
+		example=`is_allowed` against `rbac_rules`; the store lives in `vyasa/rbac_store.py`.
+	content-mounts: Content mounts
+		description=The map from a URL slug to a real directory on disk. More than one root can be mounted.
+		example=`get_content_mounts` and `content_root_and_relative` in `vyasa/helpers.py`.
+	asset-collector: Asset collector
+		description=The per-render object where anything that renders records which asset bundle the page needs. Nothing loads globally.
+		example=`AssetCollector` in `vyasa/extensions.py`.
+	reload-hub: Reload hub
+		description=The watcher and fan-out that tells open pages a file changed.
+		example=`_ReloadHub` and `_live_reload_payload` in `vyasa/core.py`.
+pipeline: Markdown pipeline
+	description=The core-owned contract that turns Markdown into HTML. Extensions add syntax to it; they do not replace it.
+	frontmatter: Frontmatter
+		description=The metadata block at the top of a document. It sets the title and the per-page switches.
+		example=`parse_frontmatter`, called by `render_post_detail` before rendering.
+	from-md: from_md
+		description=The one entry point that renders Markdown text to HTML nodes.
+		example=`from_md` in `vyasa/extensions_builtin/markdown/renderer.py`.
+	fence-handler: Fence handler
+		description=The dispatcher for a fenced block. One syntax marker has exactly one owning extension.
+		example=`split_fence_frontmatter` in `vyasa/markdown_fence.py` splits a fence before its owner reads it.
+	wikilink-resolver: Wikilink resolver
+		description=Turns a double-bracket link into a real URL against the content mounts.
+		note=CONTEXT.md lists wikilinks as core-owned, but the code lives in `extensions_builtin/wikilinks`. The document and the tree disagree.
+		example=`[[some-page]]` becomes `/posts/some-page`.
+	asset-url: Asset URL
+		description=The core-managed URL an extension asset is served from. Extensions never invent their own static route.
+		example=`extension_asset_url` in `vyasa/assets.py`.
+extension: Extensions
+	description=Optional modules that add behavior through core contracts. Each is switched on explicitly and can be switched off.
+	extension-runtime: Extension runtime
+		description=Resolves which extensions are enabled, validates their metadata, and orders them. Runs once at start.
+		example=`ExtensionRuntime` and `refresh_extension_runtime` in `vyasa/extensions.py`.
+	extension-app: Extension app
+		description=The restricted surface an extension registers through. It never sees the raw FastHTML app.
+		example=`VyasaExtensionBase` plus the registrar classes in `vyasa/extensions.py`.
+	route-registrar: Route registrar
+		description=Takes route registrations and declares a prefix, so start-up can catch two extensions claiming one path.
+		example=`_RouteRegistrar` in `vyasa/extensions.py`.
+	markdown-registrar: Markdown registrar
+		description=Claims a fence marker for one extension.
+		example=`_MarkdownRegistrar` in `vyasa/extensions.py`.
+	asset-registrar: Asset registrar
+		description=Declares the CSS and JS bundles an extension can serve, and the directory they come from.
+		example=`_AssetRegistrar` in `vyasa/extensions.py`.
+	tasks-extension: Tasks extension
+		description=Renders a knowledge-graph pack as an interactive canvas. The largest built-in.
+		example=`vyasa/extensions_builtin/tasks`; `tasks.js` alone is over nine thousand lines.
+	search-extension: Search extension
+		description=Indexes the mounted content and answers queries. If it breaks, core disables search rather than failing the site.
+		example=`vyasa/extensions_builtin/default_search`.
+	layout-extension: Layout extension
+		description=Decides page structure and navigation surfaces. At most one is active, and boot fails without one.
+		example=`vyasa/extensions_builtin/default_layout.py`.
+content: Content
+	description=Where documents actually live. Core reads through a backend protocol, so a working tree and a git ref look the same.
+	content-backend: Content backend
+		description=The protocol every source of documents satisfies.
+		example=`ContentBackend` and `backend_for` in `vyasa/content_backend.py`.
+	filesystem-backend: Filesystem backend
+		description=Reads the working tree directly.
+		example=`FilesystemBackend` in `vyasa/content_backend.py`.
+	git-backend: Git backend
+		description=Reads a document out of a git ref instead of the working tree.
+		example=`GitBackend`, reached through `discover_git_backend`.
+	virtual-path: Virtual path
+		description=A path-shaped object over git object storage, so the rest of the code needs no special case.
+		note=This is the seam that lets one render path serve both a live file and a committed one.
+		example=`VirtualPath` and `_VStat` in `vyasa/content_backend.py`.
+	markdown-file: Markdown file
+		description=One document on disk.
+		example=`demo/vyasa-architecture.md`.
+	kg-pack: Knowledge graph pack
+		description=A folder of nodes, edges, attributes, schema, and palette that a fence renders as a graph.
+		example=This pack, `demo/vyasa-architecture.kg`.
+configuration: Configuration
+	description=The declarations that decide what loads and how it behaves. It crosses every layer, which is why it is drawn beside the stack and not inside it.
+	root-config: Root .vyasa
+		description=The root file that decides which extensions load at server start. Nothing is discovered implicitly.
+		example=`[extensions.tasks] enabled = true`.
+	folder-config: Folder .vyasa
+		description=A folder-local file that tunes behavior already loaded, for one subtree. It cannot disable core RBAC.
+		example=A docs folder turning off the sidebar without touching the rest of the site.
+	extension-meta: Extension metadata
+		description=Python-declared capabilities, slots, requirements, and fallbacks. The rules live in code, not in TOML.
+		example=`ExtensionMeta` in `vyasa/extensions.py`.
+	capability-name: Capability name
+		description=A stable string naming a slot, capability, or bundle. Extensions depend on these, not on extension ids.
+		example=`slot:layout`, `cap:search`, `bundle:tasks`.
+	storage-namespace: Storage namespace
+		description=A durable directory core assigns to one extension, so local data cannot collide.
+		example=`StorageNamespace` in `vyasa/extensions.py`.

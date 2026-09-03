@@ -2,6 +2,9 @@ window.__vyasaTasksDebug = window.__vyasaTasksDebug || { events: [] };
 window.__vyasaTasksDebug.enabled = window.__vyasaTasksDebug.enabled === true || new URLSearchParams(window.location.search).has('tasks_debug');
 window.__vyasaTasksDebug.verbose = window.__vyasaTasksDebug.verbose === true || new URLSearchParams(window.location.search).has('tasks_debug_verbose');
 window.__vyasaTasksDebug.edgeLabelRenderCount = Number(window.__vyasaTasksDebug.edgeLabelRenderCount || 0);
+// Its own flag, not tasks_debug. This records every key the page sees, so it stays
+// off during ordinary debugging and is opted into only while chasing a stray key.
+window.__vyasaTasksDebug.keyLog = window.__vyasaTasksDebug.keyLog === true || new URLSearchParams(window.location.search).has('tasks_keylog');
 window.__vyasaTasksPerf = window.__vyasaTasksPerf || {};
 window.__vyasaTasksPerf.enabled = window.__vyasaTasksPerf.enabled === true || new URLSearchParams(window.location.search).has('tasks_perf');
 window.__vyasaTasksPerf.pendingFrames = window.__vyasaTasksPerf.pendingFrames || new Set();
@@ -41,6 +44,32 @@ export function logTasksDebug(label, payload = {}) {
     tasksPostFileLog(label, event.at, payload);
     renderTasksDebugOverlay();
     return event;
+}
+
+// Every keydown, before any handler can claim or reshape it. When a shortcut fires
+// that nobody pressed, this records whether the event came from the OS (isTrusted).
+// A synthetic event runs its listeners on the dispatcher's own stack, so the frames
+// captured here name whatever code dispatched it.
+if (typeof window !== 'undefined' && window.__vyasaTasksDebug.keyLog && !window.__vyasaTasksDebug.keyProbeBound) {
+    window.__vyasaTasksDebug.keyProbeBound = true;
+    window.addEventListener('keydown', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const wasEnabled = window.__vyasaTasksDebug.enabled;
+        window.__vyasaTasksDebug.enabled = true;
+        logTasksDebug('rawKeydown', {
+            key: event.key,
+            code: event.code,
+            trusted: event.isTrusted,
+            repeat: event.repeat,
+            shift: event.shiftKey,
+            meta: event.metaKey,
+            ctrl: event.ctrlKey,
+            alt: event.altKey,
+            target: target ? `${target.tagName}${target.id ? `#${target.id}` : ''}` : '',
+            stack: event.isTrusted ? '' : String(new Error().stack || '').split('\n').slice(2, 9).map((line) => line.trim()).join(' | '),
+        });
+        window.__vyasaTasksDebug.enabled = wasEnabled;
+    }, true);
 }
 
 export function logTasksDebugVerbose(label, payload = {}) {

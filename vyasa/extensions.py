@@ -629,7 +629,7 @@ def default_preset_selection() -> dict[ExtensionCategory, tuple[str, ...]]:
         "search": ("default_search",),
         "home": ("blog_home",),
         "errors": ("default_errors",),
-        "render": ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "mdx", "html_viewer", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon"),
+        "render": ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "mdx", "html_viewer", "pdf_viewer", "tree_table", "visuals", "vega", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon"),
         "route": ("slides", "auth_rbac", "sidebar_routes", "git_refs", "annotations", "bookmarks", "document_edit", "api_catalog", "filesystem_routes", "vscode"),
         "content_source": ("filesystem",),
     }

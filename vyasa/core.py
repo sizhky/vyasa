@@ -265,20 +265,55 @@ hdrs = (
     *([Script(
         """
         (() => {
-            if (!("EventSource" in window) || window.__vyasaLiveReload) return;
+            if (window.__vyasaLiveReload) return;
             window.__vyasaLiveReload = true;
+            // The shared stream has to prove itself: a worker that cannot reach the
+            // network would otherwise leave the tab with no live reload at all.
+            const WORKER_HANDSHAKE_TIMEOUT_MS = 4000;
             const reload = () => window.location.reload();
-            const source = new EventSource("/_vyasa/reload");
-            source.addEventListener("refresh", (event) => {
+            const softRefresh = (raw) => {
                 let detail = {};
-                try { detail = JSON.parse(event.data || "{}"); } catch (error) {}
+                try { detail = JSON.parse(raw || "{}"); } catch (error) {}
                 window.__vyasaSoftRefreshPostsSidebar?.(detail);
                 window.__vyasaSoftRefreshActiveContent?.(detail);
-            });
-            source.addEventListener("reload", reload);
-            source.onerror = () => setTimeout(() => fetch("/", { cache: "no-store" }).then(reload).catch(() => {}), 1000);
+            };
+            // One stream per tab. Over HTTP/1.1 each one holds one of the browser's
+            // six connections per origin for its whole life, so six open tabs stall
+            // every later request to this server. Used only as the fallback.
+            const startOwnStream = () => {
+                if (!("EventSource" in window)) return;
+                const source = new EventSource("/_vyasa/reload");
+                source.addEventListener("refresh", (event) => softRefresh(event.data));
+                source.addEventListener("reload", reload);
+                source.onerror = () => setTimeout(() => fetch("/", { cache: "no-store" }).then(reload).catch(() => {}), 1000);
+            };
+            // One SharedWorker holds a single stream for every tab of this origin.
+            const startSharedStream = () => {
+                if (!("SharedWorker" in window)) return false;
+                try {
+                    const worker = new SharedWorker("__VYASA_RELOAD_WORKER_URL__", "vyasa-live-reload");
+                    let ready = false;
+                    const fallback = setTimeout(() => {
+                        if (ready) return;
+                        worker.port.postMessage("close");
+                        startOwnStream();
+                    }, WORKER_HANDSHAKE_TIMEOUT_MS);
+                    worker.port.onmessage = (event) => {
+                        const message = event.data || {};
+                        if (message.type === "ready") { ready = true; clearTimeout(fallback); }
+                        else if (message.type === "refresh") softRefresh(message.data);
+                        else if (message.type === "reload") reload();
+                    };
+                    worker.port.start();
+                    window.addEventListener("pagehide", () => worker.port.postMessage("close"));
+                    return true;
+                } catch (error) {
+                    return false;
+                }
+            };
+            if (!startSharedStream()) startOwnStream();
         })();
-        """
+        """.replace("__VYASA_RELOAD_WORKER_URL__", _asset_url("/static/live_reload_worker.js"))
     )] if get_config().get_browser_reload_enabled() else []),
     Link(rel="stylesheet", href=_asset_url("/static/header.css")),
     Link(rel="stylesheet", href=_asset_url("/static/kbd.css")),

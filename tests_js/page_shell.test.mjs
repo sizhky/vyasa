@@ -77,3 +77,12 @@ test('Momentum runner accelerates while held and coasts to a stop on release', (
     assert.ok(steps.every((distance) => distance > 0), 'coasting never reverses');
     assert.equal(queue.length, 0, 'friction ends the coast');
 });
+
+test('Quote copy value blockquotes every line and appends the file path', () => {
+    const value = shell.quoteMarkdownCopyValue('  first line\n  second line  ', '/vault/notes/deck.md');
+    assert.equal(value, '> first line\n> second line\n\n/vault/notes/deck.md');
+});
+
+test('Quote copy value drops the trailing blank line when no path is given', () => {
+    assert.equal(shell.quoteMarkdownCopyValue('lone line'), '> lone line');
+});

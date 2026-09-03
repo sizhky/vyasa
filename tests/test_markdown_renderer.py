@@ -126,7 +126,7 @@ Done.
         parse_frontmatter=lambda path: ({}, path.read_text(encoding="utf-8")),
         resolve_markdown_title=lambda path, abbreviations=None: ("Deck", path.read_text(encoding="utf-8")),
         slug_to_title=lambda value, abbreviations=None: value, effective_abbreviations=lambda root: {},
-        from_md=from_md, layout=lambda content, **kwargs: Div(content),
+        from_md=from_md, layout=lambda *content, **kwargs: Div(*content),
     )
 
     rendered = to_xml(content_routes.render_slide_deck("notes/deck/slide-2", **kwargs))

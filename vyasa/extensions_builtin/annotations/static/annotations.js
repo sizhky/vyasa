@@ -1,3 +1,5 @@
+import { documentAbsolutePath, quoteMarkdownCopyValue } from '/static/page_shell.js';
+
 function initAnnotations(root = document) {
     const main = root.getElementById?.('main-content') || document.getElementById('main-content');
     if (!main || main.dataset.annotationsEnabled !== '1' || main.dataset.annotationsBound === '1') return;
@@ -55,7 +57,7 @@ function initAnnotations(root = document) {
         const parent = node.parentElement;
         return !parent
             || annotationHiddenText(node)
-            || parent.closest('.vyasa-comments, .vyasa-comment-anchor, #vyasa-annotation-composer, #vyasa-annotation-trigger');
+            || parent.closest('.vyasa-comments, .vyasa-comment-anchor, #vyasa-annotation-composer, #vyasa-selection-actions');
     };
     const normalizeQuote = (value) => String(value || '').replace(/\s+/g, ' ').trim();
     const rangeToAnchor = (range) => {
@@ -702,7 +704,7 @@ function initAnnotations(root = document) {
         });
     }).catch(() => {});
     const clearUi = () => {
-        document.getElementById('vyasa-annotation-trigger')?.remove();
+        document.getElementById('vyasa-selection-actions')?.remove();
         document.getElementById('vyasa-annotation-composer')?.remove();
     };
     main.addEventListener('mouseup', () => {
@@ -713,14 +715,47 @@ function initAnnotations(root = document) {
         if (!text) return;
         const rect = sel.getRangeAt(0).getBoundingClientRect();
         pending = { quote: text, range: sel.getRangeAt(0).cloneRange(), rect, anchor: rangeToAnchor(sel.getRangeAt(0)) };
-        const trigger = document.createElement('button');
-        trigger.id = 'vyasa-annotation-trigger';
-        trigger.type = 'button';
-        trigger.className = 'fixed z-[1400] flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/96 text-slate-700 shadow-lg backdrop-blur dark:border-slate-700 dark:bg-slate-950/96 dark:text-slate-200';
-        trigger.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" class="h-4 w-4"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg>';
-        trigger.style.top = `${Math.max(12, pending.rect.top - 6)}px`;
-        trigger.style.left = `${Math.min(window.innerWidth - 56, pending.rect.right + 10)}px`;
-        document.body.appendChild(trigger);
+        const actions = document.createElement('div');
+        actions.id = 'vyasa-selection-actions';
+        actions.className = 'fixed z-[1400] flex gap-1.5';
+        actions.style.top = `${Math.max(12, pending.rect.top - 6)}px`;
+        actions.style.left = `${Math.min(window.innerWidth - 94, pending.rect.right + 10)}px`;
+        const bubbleClass = 'flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/96 text-slate-700 shadow-lg backdrop-blur dark:border-slate-700 dark:bg-slate-950/96 dark:text-slate-200';
+        const makeBubble = (id, label, icon) => {
+            const button = document.createElement('button');
+            button.id = id;
+            button.type = 'button';
+            button.className = bubbleClass;
+            button.title = label;
+            button.setAttribute('aria-label', label);
+            button.innerHTML = icon;
+            actions.appendChild(button);
+            return button;
+        };
+        const trigger = makeBubble(
+            'vyasa-annotation-trigger', 'Comment on selection',
+            '<svg viewBox="0 0 24 24" aria-hidden="true" class="h-4 w-4"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg>',
+        );
+        const copyButton = makeBubble(
+            'vyasa-selection-copy', 'Copy selection. Hold Shift for a quote with the file path',
+            '<svg viewBox="0 0 24 24" aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+        );
+        // Shift turns the plain copy into a quote that carries where it came from.
+        copyButton.addEventListener('click', (event) => {
+            const quoted = pending?.quote;
+            if (!quoted) return;
+            const absolutePath = event.shiftKey ? documentAbsolutePath() : '';
+            if (event.shiftKey && !absolutePath) return window.__vyasaToast?.('Absolute file path unavailable', 'error');
+            const value = event.shiftKey ? quoteMarkdownCopyValue(quoted, absolutePath) : quoted;
+            copyAnnotationText(value).then((copied) => {
+                if (!copied) return window.__vyasaToast?.('Copy failed', 'error');
+                window.__vyasaToast?.(event.shiftKey ? 'Quote and file path copied' : 'Selection copied', 'success');
+                window.getSelection()?.removeAllRanges();
+                pending = null;
+                clearUi();
+            }).catch(() => window.__vyasaToast?.('Copy failed', 'error'));
+        });
+        document.body.appendChild(actions);
         trigger.addEventListener('click', () => {
             if (!pending) return;
             document.getElementById('vyasa-annotation-composer')?.remove();
@@ -765,7 +800,7 @@ function initAnnotations(root = document) {
         });
     });
     document.addEventListener('mousedown', (event) => {
-        if (!event.target.closest?.('#vyasa-annotation-trigger, #vyasa-annotation-composer')) clearUi();
+        if (!event.target.closest?.('#vyasa-selection-actions, #vyasa-annotation-composer')) clearUi();
     }, { signal: lifecycle.signal });
 }
 

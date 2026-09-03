@@ -71,7 +71,7 @@ def test_extensions_default_preset_when_section_omitted(tmp_path, monkeypatch):
 
     assert plan.preset == "default"
     assert plan.selected_by_category["layout"] == ("default_layout",)
-    assert plan.selected_by_category["render"] == ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "mdx", "html_viewer", "pdf_viewer", "tree_table", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
+    assert plan.selected_by_category["render"] == ("wikilinks", "link_preview", "tabs", "mermaid", "d2", "cytograph", "cryptograph", "tasks", "mdx", "html_viewer", "pdf_viewer", "tree_table", "visuals", "vega", "document_actions", "table_of_contents", "scoped_custom_css", "code_tools", "default_favicon")
     assert plan.selected_by_category["route"] == ("slides", "auth_rbac", "sidebar_routes", "git_refs", "annotations", "bookmarks", "document_edit", "api_catalog", "filesystem_routes", "vscode")
     assert "feedback" not in plan.enabled_ids
     assert "annotations" in plan.enabled_ids

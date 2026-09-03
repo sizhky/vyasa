@@ -1,3 +1,5 @@
+import { isEditableShortcutEvent, shortcutsSuspended } from '/static/page_shell.js';
+
 const vyasaBookmarks = { mode: null, items: [], loadPromise: null };
 const vyasaBookmarkDebugEnabled = () => {
     try {
@@ -144,9 +146,13 @@ function bindBookmarkLinks(rootElement = document) {
     });
 }
 
-async function toggleBookmarkItem(button) {
-    const item = bookmarkItemFromButton(button);
-    if (!item) return;
+function toggleBookmarkItem(button) {
+    return toggleBookmarkFor(bookmarkItemFromButton(button));
+}
+
+// Returns 'added', 'removed', or null when the write fails.
+async function toggleBookmarkFor(item) {
+    if (!item) return null;
     await ensureBookmarksLoaded();
     const exists = vyasaBookmarks.items.some((entry) => entry.path === item.path);
     vyasaBookmarkDebug('toggle-start', { path: item.path, exists, mode: vyasaBookmarks.mode });
@@ -158,7 +164,7 @@ async function toggleBookmarkItem(button) {
             credentials: 'same-origin',
         });
         vyasaBookmarkDebug('toggle-response', { path: item.path, method: exists ? 'DELETE' : 'PUT', status: response.status, ok: response.ok });
-        if (!response.ok) return;
+        if (!response.ok) return null;
         await ensureBookmarksLoaded(true);
     } else {
         vyasaBookmarks.items = exists
@@ -170,6 +176,7 @@ async function toggleBookmarkItem(button) {
     renderBookmarksBlock(document);
     bindBookmarkButtons(document);
     bindBookmarkLinks(document);
+    return exists ? 'removed' : 'added';
 }
 
 async function deleteBookmarkItem(button) {
@@ -194,7 +201,33 @@ async function deleteBookmarkItem(button) {
     bindBookmarkLinks(document);
 }
 
+// The server writes the slug of the open document on #main-content, so a
+// /posts/ page and a /slides/ page name the same bookmark.
+function currentBookmarkItem() {
+    const path = String(document.getElementById('main-content')?.dataset?.bookmarkCurrentPath || '').replace(/^\/+|\/+$/g, '');
+    return path ? { path, title: path, href: `/posts/${path}` } : null;
+}
+
+function initBookmarkShortcut() {
+    if (window.__vyasaBookmarkShortcutBound) return;
+    window.__vyasaBookmarkShortcutBound = true;
+    document.addEventListener('keydown', async (event) => {
+        if (event.key !== 'b' && event.key !== 'B') return;
+        if (event.metaKey || event.ctrlKey || event.altKey) return;
+        if (event.defaultPrevented || shortcutsSuspended() || isEditableShortcutEvent(event)) return;
+        const item = currentBookmarkItem();
+        if (!item) return;
+        event.preventDefault();
+        const result = await toggleBookmarkFor(item);
+        vyasaBookmarkDebug('shortcut-toggle', { path: item.path, result });
+        if (!result) window.__vyasaToast?.(`Bookmark failed for ${item.path}`, 'error');
+        else window.__vyasaToast?.(result === 'added' ? `Bookmarked ${item.path}` : `Removed ${item.path}`, result === 'added' ? 'success' : 'info');
+    });
+}
+
 function initBookmarks(rootElement = document) {
+    // A page without the sidebar list has nothing to fill, so it waits for `B`.
+    if (!rootElement.querySelector?.('.vyasa-bookmarks-block, [data-bookmark-toggle="true"]')) return;
     ensureBookmarksLoaded().then(() => {
         renderBookmarksBlock(rootElement);
         bindBookmarkButtons(rootElement);
@@ -204,6 +237,8 @@ function initBookmarks(rootElement = document) {
 
 window.__vyasaInitBookmarksButtons = bindBookmarkButtons;
 
+
+initBookmarkShortcut();
 
 document.addEventListener('DOMContentLoaded', () => {
     initBookmarks(document);

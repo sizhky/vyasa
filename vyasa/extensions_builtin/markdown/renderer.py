@@ -25,6 +25,7 @@ from ...helpers import (
     enabled_document_suffixes,
     get_content_mounts,
     content_root_and_relative,
+    parse_frontmatter,
     content_slug_for_path,
     relative_content_directory,
     resolve_heading_anchor,
@@ -404,6 +405,59 @@ def _slug_for_resolved_path(resolved, current_path, strip_suffix=True):
     return rel.with_suffix("").as_posix() if strip_suffix else rel.as_posix()
 
 
+def _code_root_settings(current_file):
+    """Read `code_root` and `code_extensions` from a document's frontmatter.
+
+    Returns `("", set())` when the document sets neither key.
+
+    Pros: one small read, so any document can point its code links at a
+    checkout that lives outside the document folder.
+    Cons: `parse_frontmatter` caches by mtime, so the cost is one stat call
+    per link that misses the document folder.
+    """
+    if current_file is None:
+        return "", set()
+    candidates = [current_file]
+    if current_file.suffix.lower() != ".md":
+        candidates.append(current_file.with_suffix(".md"))
+    for candidate in candidates:
+        try:
+            if not candidate.is_file():
+                continue
+            metadata = parse_frontmatter(candidate)[0] or {}
+        except Exception:
+            continue
+        root = str(metadata.get("code_root") or "").strip()
+        raw = metadata.get("code_extensions") or []
+        if isinstance(raw, str):
+            raw = re.split(r"[\s,]+", raw)
+        extensions = {f".{str(item).strip().lstrip('.').lower()}" for item in raw if str(item).strip()}
+        if root:
+            return root, extensions
+    return "", set()
+
+
+def _code_root_resolved(current_file, current_dir, relative_path):
+    """Resolve `relative_path` against the document's `code_root`.
+
+    Used only as a fallback: the document folder is tried first, so a code
+    file that sits beside the document keeps working.
+
+    Returns None when the document sets no `code_root`, when the link suffix
+    is not listed in `code_extensions`, or when no such file exists.
+    """
+    if current_dir is None:
+        return None
+    suffix = Path(relative_path).suffix.lower()
+    if not suffix:
+        return None
+    root, extensions = _code_root_settings(current_file)
+    if not root or (extensions and suffix not in extensions):
+        return None
+    candidate = (current_dir / root / relative_path).resolve()
+    return candidate if candidate.exists() else None
+
+
 def _resolve_raw_html_url(url, current_path):
     if not current_path or not url:
         return url
@@ -443,7 +497,20 @@ def _rewrite_raw_html_urls(content, current_path):
         else:
             value = _resolve_raw_html_url(value, current_path)
         return f'{name}={quote}{value}{quote}'
-    return re.sub(r'\b(src|href|poster|srcset)=(["\'])(.*?)\2', rewrite_attr, content, flags=re.IGNORECASE)
+    # A fenced block is text, not markup. Rewriting inside one corrupts both a
+    # documented HTML sample and a fence info string such as `bar src="x.json"`,
+    # so stash fences first and put them back untouched.
+    fences = []
+
+    def stash_fence(match):
+        fences.append(match.group(0))
+        return f"__VYASA_URLFENCE_{len(fences) - 1}__"
+
+    content = re.sub(r"(?m)^(`{3,}|~{3,}).*?^\1[ \t]*$", stash_fence, content, flags=re.DOTALL)
+    content = re.sub(r'\b(src|href|poster|srcset)=(["\'])(.*?)\2', rewrite_attr, content, flags=re.IGNORECASE)
+    for index, fence in enumerate(fences):
+        content = content.replace(f"__VYASA_URLFENCE_{index}__", fence)
+    return content
 
 
 class ContentRenderer(FrankenRenderer):
@@ -725,7 +792,10 @@ class ContentRenderer(FrankenRenderer):
         return f"<span{attr_str}>{code}</span>"
 
     def render_block_code(self, token):
-        lang, attrs = _parse_fence_attrs(getattr(token, "language", ""))
+        # mistletoe puts only the first word in `language`; the options live in
+        # `info_string`. Reading `language` here silently dropped every attribute.
+        info = getattr(token, "info_string", None) or getattr(token, "language", "")
+        lang, attrs = _parse_fence_attrs(info)
         code = _normalized_fence_code(token)
         runtime = get_extension_runtime()
         if runtime:
@@ -795,6 +865,8 @@ class ContentRenderer(FrankenRenderer):
                 current_file = _current_content_path(self.current_path)
                 current_dir = relative_content_directory(current_file)
                 resolved = (current_dir / relative_path).resolve() if current_dir else None
+                if resolved is not None and not resolved.exists():
+                    resolved = _code_root_resolved(current_file, current_dir, relative_path) or resolved
                 logger.debug(f"DEBUG: original_href={original_href}, current_path={self.current_path}, current_dir={current_dir}, resolved={resolved}")
                 rel = _slug_for_resolved_path(resolved, self.current_path, strip_suffix=not Path(relative_path).suffix) if resolved else None
                 if rel:

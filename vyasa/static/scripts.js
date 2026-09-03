@@ -1,4 +1,4 @@
-import { createMomentumRunner, ensureFloatingActions, ensureShortcutHelp, headingMarkdownCopyValue, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
+import { createMomentumRunner, documentAbsolutePath, ensureFloatingActions, ensureShortcutHelp, headingMarkdownCopyValue, isEditableShortcutEvent, registerFloatingActionSync, registerMarkdownHydrator, shortcutsSuspended, syncFloatingActions } from '/static/page_shell.js';
 
 function switchTab(tabsId, index) {
     const container = document.querySelector(`.tabs-container[data-tabs-id="${tabsId}"]`);
@@ -167,6 +167,12 @@ function fallbackCopyText(text, done) {
     done();
 }
 
+function copyDocumentAbsolutePath() {
+    const absolutePath = documentAbsolutePath();
+    if (!absolutePath) return showVyasaToast('Absolute file path unavailable', 'error');
+    copyText(absolutePath, () => showVyasaToast('Absolute file path copied', 'success'));
+}
+
 function initHeadingPermalinkCopy(root = document) {
     root.querySelectorAll('.vyasa-heading-permalink').forEach((link) => {
         if (link.dataset.copyBound === 'true') return;
@@ -198,9 +204,7 @@ function initHeadingLevelCopy(root = document) {
                 level: Number(heading.tagName.slice(1)),
                 text: heading.querySelector('.vyasa-heading-text')?.textContent || '',
             }));
-            const pathButton = document.querySelector('[data-copy-alternate-payload]');
-            const encodedPath = event.shiftKey && event.altKey ? pathButton?.dataset.copyAlternatePayload : '';
-            const absolutePath = encodedPath ? new TextDecoder().decode(Uint8Array.from(atob(encodedPath), (char) => char.charCodeAt(0))) : '';
+            const absolutePath = event.shiftKey && event.altKey ? documentAbsolutePath() : '';
             if (event.shiftKey && event.altKey && !absolutePath) return showVyasaToast('Absolute file path unavailable', 'error');
             const value = headingMarkdownCopyValue(
                 headings, headings.findIndex(({ node }) => node === target), event.shiftKey, absolutePath,
@@ -1703,7 +1707,7 @@ function initDocumentShortcutHelp() {
     ensureShortcutHelp({
         title: 'Document shortcuts',
         groups: [
-            ['Document', [['P', 'Slides'], ['J / K', 'Scroll'], ['g g / G', 'Top / Bottom'], ['C', 'Fold / Unfold'], ['?', 'Shortcuts']]],
+            ['Document', [['P', 'Slides'], ['J / K', 'Scroll'], ['g g / G', 'Top / Bottom'], ['C', 'Fold / Unfold'], ['Cmd+Alt+C', 'Copy file path'], ['?', 'Shortcuts']]],
             ['Panels', [['Z', 'Posts'], ['X', 'Contents'], ['Shift+1', 'Expand Posts'], ['R', 'Review']]],
         ],
     });
@@ -1716,6 +1720,13 @@ function initKeyboardShortcuts() {
         if (shortcutsSuspended()) return;
         // composedPath sees editors inside shadow DOM; event.target only sees the shadow host.
         if (isEditableShortcutEvent(e)) return;
+        // Cmd/Ctrl+Alt+C copies the file path. Match on `code`: Alt+C reports `key`
+        // as 'ç' on a Mac layout.
+        if (e.altKey && (e.metaKey || e.ctrlKey) && e.code === 'KeyC') {
+            e.preventDefault();
+            copyDocumentAbsolutePath();
+            return;
+        }
         if (e.metaKey || e.ctrlKey || e.altKey) return;
 
         const mainContent = document.getElementById('main-content');

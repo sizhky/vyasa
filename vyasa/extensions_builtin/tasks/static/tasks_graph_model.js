@@ -9,20 +9,19 @@ const TASKS_SPECIAL_NODE_ATTRS = new Set([
     '__color_levels__',
 ]);
 const TASKS_INTERNAL_NODE_META_KEYS = new Set([
-    'id', 'label', 'kind', '__kind__', 'group_id', 'parent_group_id',
+    'id', 'label', 'kind', 'group_id', 'parent_group_id',
     'handlelayout', 'highlightmode', 'sourcegroupid', 'source_group_id',
-    '__rendered_attrs__', 'width', 'height', 'position', 'parentid',
+    'width', 'height', 'position', 'parentid',
     'parent_id', 'color', 'href', 'image', 'image_by', 'collapsed', 'child_group_ids',
-    'child_task_ids', '__projection_group__', 'projection', '__kg_sources',
-    '__source_node_id', '__source_edge_id',
-    'active_projection', 'graph_x', 'graph_y', '__gantt', '__projection_branch_opacity__',
+    'child_task_ids', 'projection',
+    'active_projection', 'graph_x', 'graph_y',
 ]);
 const TASKS_DERIVED_METRIC_KEYS = new Set(['rank', 'connectivity']);
 const TASKS_INTERNAL_EDGE_META_KEYS = new Set([
     'id', 'source', 'target', 'relation', 'label', 'type', 'kind', 'animated',
     'markerend', 'labelstyle', 'labelbgstyle', 'style', 'data', 'zindex',
     'labelbgpadding', 'labelbgborderradius', 'labelzindex', 'labelmaxwidth',
-    'sourcehandle', 'targethandle', '__kg_sources', '__rendered_attrs__', '__edge_types__', '__reference__',
+    'sourcehandle', 'targethandle',
 ]);
 
 export function normalizeTasksAttrText(value) {
@@ -122,6 +121,47 @@ export function tasksVisibleReferenceEdges(referenceEdges, graphNodes, model) {
     });
 }
 
+// The whole graph is already in memory, so one hop is one pass over the edge list.
+// An adjacency index would only pay off past tens of thousands of edges, and the
+// graphs here are in the hundreds, so the scan stays and the code stays simple.
+export function tasksNeighborHopIds(edges, seedIds, isNodeSelectable) {
+    const seeds = seedIds instanceof Set ? seedIds : new Set(seedIds || []);
+    const grown = new Set(seeds);
+    if (!seeds.size) return grown;
+    const allowed = typeof isNodeSelectable === 'function' ? isNodeSelectable : () => true;
+    for (const edge of edges || []) {
+        const source = String(edge?.source || '');
+        const target = String(edge?.target || '');
+        if (!source || !target) continue;
+        if (seeds.has(source) && !grown.has(target) && allowed(target)) grown.add(target);
+        if (seeds.has(target) && !grown.has(source) && allowed(source)) grown.add(source);
+    }
+    return grown;
+}
+
+// Hover picks the chain the way G picks its EG target, but only while no chain is
+// running. Every hop refits the view, which slides a different node under a still
+// mouse, so a running chain that listened to the pointer would restart itself on the
+// next press. Escape or a click ends the chain and hands the pointer back.
+export function tasksHopSeedIds(selectionIds, hoveredNodeId, isNodeSelectable, chainActive = false) {
+    const selection = selectionIds instanceof Set ? selectionIds : new Set(selectionIds || []);
+    const hovered = String(hoveredNodeId || '');
+    const allowed = typeof isNodeSelectable === 'function' ? isNodeSelectable : () => true;
+    if (!chainActive && hovered && !selection.has(hovered) && allowed(hovered)) {
+        return { seeds: new Set([hovered]), fromHover: true };
+    }
+    return { seeds: selection, fromHover: false };
+}
+
+export function tasksSameIdSet(left, right) {
+    if (!(left instanceof Set) || !(right instanceof Set)) return false;
+    if (left.size !== right.size) return false;
+    for (const id of left) {
+        if (!right.has(id)) return false;
+    }
+    return true;
+}
+
 export function tasksContextDiffSelectionIds(model, graphNodes, diffNodeIds) {
     const changed = diffNodeIds instanceof Set ? diffNodeIds : new Set(diffNodeIds || []);
     const modelNodes = [...(model?.groups || []), ...(model?.tasks || [])];
@@ -153,9 +193,17 @@ export function tasksSelectionClickKey(node) {
         : (node.id || '')).trim();
 }
 
+// Anything the viewer writes onto a node or an edge for its own use is named
+// __like_this__. A rule beats a list: each fixed layout adds several, and a
+// forgotten entry shows up as machinery in the reader's card.
+export function tasksIsInternalMetaKey(key) {
+    return String(key || '').trim().startsWith('__');
+}
+
 export function tasksIsHiddenNodeMetaKey(key) {
     const normalized = String(key || '').trim().toLowerCase();
-    return TASKS_INTERNAL_NODE_META_KEYS.has(normalized)
+    return tasksIsInternalMetaKey(key)
+        || TASKS_INTERNAL_NODE_META_KEYS.has(normalized)
         || TASKS_SPECIAL_NODE_ATTRS.has(String(key))
         || TASKS_DERIVED_METRIC_KEYS.has(normalized);
 }
@@ -193,7 +241,7 @@ export function tasksEdgeMetaEntries(edge, attrOrder = [], hiddenAttrs = []) {
         ['evidence', 100], ['introduced_context', 101], ['introduced_stage', 102], ['definition', 103],
     ]);
     const entries = Object.entries(edge)
-        .filter(([key, value]) => !hidden.has(key) && !TASKS_INTERNAL_EDGE_META_KEYS.has(String(key).toLowerCase()) && tasksAttrValues(value).length)
+        .filter(([key, value]) => !hidden.has(key) && !tasksIsInternalMetaKey(key) && !TASKS_INTERNAL_EDGE_META_KEYS.has(String(key).toLowerCase()) && tasksAttrValues(value).length)
         .map(([key, value], index) => ({
             key,
             label: key.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()),
@@ -644,3 +692,16 @@ export function parseTasksProjectionConfigText(text) {
     }
     return cfg;
 }
+
+
+export function tasksProjectionById(model, projectionId) {
+    const id = String(projectionId || '').trim();
+    if (!id) return null;
+    const list = Array.isArray(model?.view_projections) ? model.view_projections : [];
+    return list.find((entry) => entry && entry.id === id) || null;
+}
+
+export function tasksProjectionLayout(model, projectionId) {
+    return String(tasksProjectionById(model, projectionId)?.layout || '').trim().toLowerCase();
+}
+

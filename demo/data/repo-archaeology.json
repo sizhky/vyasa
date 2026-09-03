@@ -1,0 +1,29 @@
+{
+  "_source": "git log on main, 2025-12-11 to 2026-08-30",
+  "commits_by_month": {
+    "Dec 2025": 60,
+    "Jan 2026": 66,
+    "Feb 2026": 155,
+    "Mar 2026": 42,
+    "Apr 2026": 88,
+    "May 2026": 165,
+    "Jun 2026": 190,
+    "Jul 2026": 139,
+    "Aug 2026": 93
+  },
+  "commits_by_hour_band": {
+    "18:00-23:59": 445,
+    "12:00-17:59": 310,
+    "06:00-11:59": 170,
+    "00:00-05:59": 73
+  },
+  "commits_by_weekday": {
+    "Monday": 97,
+    "Tuesday": 166,
+    "Wednesday": 162,
+    "Thursday": 142,
+    "Friday": 202,
+    "Saturday": 90,
+    "Sunday": 139
+  }
+}

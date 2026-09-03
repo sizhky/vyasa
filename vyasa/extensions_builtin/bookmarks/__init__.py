@@ -14,6 +14,7 @@ class BookmarksExtension(VyasaExtensionBase):
         app.navigation.sidebar_section(_bookmarks_sidebar_section)
         app.navigation.sidebar_row_action(_bookmark_row_action)
         app.navigation.search_result_row_action(_bookmark_row_action)
+        app.layout.main_attrs(_main_attrs)
         app.assets.bundle(
             AssetBundle(
                 "bookmarks.runtime",
@@ -78,8 +79,20 @@ def _bookmarks_sidebar_section(context):
     )
 
 
+# The `B` shortcut needs this bundle on every document page, so a page without
+# the sidebar and a slide page also load it.
 def _page_bundles(context):
-    return ("bookmarks.runtime",) if context.get("show_sidebar") and not context.get("slide_mode") else ()
+    return ("bookmarks.runtime",) if context.get("show_sidebar") or context.get("current_path") else ()
+
+
+def _main_attrs(context):
+    """Give the client the slug of the open document.
+
+    The `/posts/` and `/slides/` routes both pass the same slug as
+    `current_path`, so the client does not parse the URL.
+    """
+    slug = str(context.get("current_path") or "").strip("/")
+    return {"data-bookmark-current-path": slug} if slug else {}
 
 
 _page_bundles.page_asset_priority = 20
@@ -89,7 +102,7 @@ EXTENSION = BookmarksExtension(
     ExtensionMeta(
         "bookmarks",
         "route",
-        ("cap:route:bookmarks", "bundle:bookmarks.runtime"),
+        ("cap:route:bookmarks", "bundle:bookmarks.runtime", "cap:layout:main_attrs"),
         route_prefixes=("/api/bookmarks",),
         storage_namespaces=("bookmarks",),
         scope_disable=True,

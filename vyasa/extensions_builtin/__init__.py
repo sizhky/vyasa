@@ -34,6 +34,8 @@ def load_builtin_extensions():
     from . import tasks
     from . import pdf_viewer
     from . import tree_table
+    from . import vega
+    from . import visuals
     from . import vscode
     from . import wikilinks
 
@@ -55,6 +57,8 @@ def load_builtin_extensions():
         html_viewer.EXTENSION,
         pdf_viewer.EXTENSION,
         tree_table.EXTENSION,
+        visuals.EXTENSION,
+        vega.EXTENSION,
         document_actions.EXTENSION,
         document_edit.EXTENSION,
         table_of_contents.EXTENSION,

@@ -1,0 +1,6 @@
+by_directory:
+  vyasa/: 255
+  demo/: 133
+  .agents/: 57
+  tests + tests_js: 36
+  docs, root, other: 69
