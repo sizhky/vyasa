@@ -16,6 +16,9 @@ PROJECTION_DISPLAY_KEYS = {
     "spacing", "node_spacing", "layer_spacing", "group_padding",
     "layout_direction", "collision_gap", "edge_label_width",
     "layout", "layout_error",
+    # Pairing a call with its reply is a view rule, not a layout rule, so it is
+    # not in all_layout_keys() and has to be named here.
+    "pair_by",
 } | all_layout_keys()
 
 

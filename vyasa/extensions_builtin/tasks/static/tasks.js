@@ -2,7 +2,7 @@ import ELK from 'https://esm.sh/elkjs@0.10.0';
 import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksCenteredViewport, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksInlineLinkPlainText, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
 import { buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksHopSeedIds, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNeighborHopIds, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksProjectionById, tasksProjectionLayout, tasksPruneFilterQueryFields, tasksReferenceEdges, tasksSameIdSet, tasksSelectionClickKey, tasksVisibleReferenceEdges, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
-import { tasksLayoutById, tasksLayoutChromeKinds } from '/static/extensions/tasks/tasks_layouts.js';
+import { TASKS_PAIR_LIFT, tasksEdgePairs, tasksLayoutById, tasksLayoutChromeKinds } from '/static/extensions/tasks/tasks_layouts.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
 import { createMomentumRunner, shortcutsSuspended } from '/static/page_shell.js';
@@ -469,7 +469,7 @@ function tasksTaperedBezierPath(bezierPath, sourceWidth, targetWidth) {
     ].join(' ');
 }
 
-function tasksTaperedArrowHeadPath(bezierPath, size) {
+function tasksTaperedArrowHeadPath(bezierPath, size, side = 0) {
     const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
     if (nums.length < 8) return '';
     const [, , , , x2, y2, x3, y3] = nums;
@@ -484,12 +484,64 @@ function tasksTaperedArrowHeadPath(bezierPath, size) {
     const arrowWidth = arrowLength * 1.18;
     const baseX = x3 - ux * arrowLength;
     const baseY = y3 - uy * arrowLength;
+    // A harpoon keeps one barb. Two of them, mirrored, are how a pair of edges
+    // reads as one exchange rather than two arrows that happen to overlap.
+    if (side) {
+        const sign = side > 0 ? 1 : -1;
+        return [
+            `M ${x3} ${y3}`,
+            `L ${baseX + sign * nx * arrowWidth / 2} ${baseY + sign * ny * arrowWidth / 2}`,
+            `L ${baseX} ${baseY}`,
+            'Z',
+        ].join(' ');
+    }
     return [
         `M ${x3} ${y3}`,
         `L ${baseX + nx * arrowWidth / 2} ${baseY + ny * arrowWidth / 2}`,
         `L ${baseX - nx * arrowWidth / 2} ${baseY - ny * arrowWidth / 2}`,
         'Z',
     ].join(' ');
+}
+
+// Slide the whole curve sideways, along the normal of its own chord. A reply
+// runs the other way, so its normal points the other way, and one signed lift
+// puts the two halves on opposite sides of the same path at any angle.
+function tasksPairShiftedProps(props, lift) {
+    if (!lift) return props;
+    const dx = props.targetX - props.sourceX;
+    const dy = props.targetY - props.sourceY;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = (-dy / len) * lift;
+    const ny = (dx / len) * lift;
+    return {
+        ...props,
+        sourceX: props.sourceX + nx,
+        sourceY: props.sourceY + ny,
+        targetX: props.targetX + nx,
+        targetY: props.targetY + ny,
+    };
+}
+
+// Both halves must be drawn between the same two points, or they bow apart and
+// stop reading as one exchange. The anchor solver gives each edge its own
+// handles, so a reply borrows its call's and simply runs them backwards.
+function tasksApplyEdgePairs(edges, pairAttr, shareHandles = true) {
+    const halves = tasksEdgePairs(edges, pairAttr);
+    if (!halves.size) return edges;
+    const byId = new Map(edges.map((edge) => [edge.id, edge]));
+    return edges.map((edge) => {
+        const half = halves.get(edge.id);
+        if (!half) return edge;
+        const call = half.half === 'reply' ? byId.get(half.mate) : null;
+        return {
+            ...edge,
+            ...(shareHandles && call
+                ? { sourceHandle: call.targetHandle, targetHandle: call.sourceHandle }
+                : {}),
+            __pair_half__: half.half,
+            __pair_lift__: TASKS_PAIR_LIFT,
+        };
+    });
 }
 
 function tasksEdgePath(props) {
@@ -5768,7 +5820,8 @@ async function renderTasksGraphs(rootElement = document) {
                     // A layout that declares authoredHandles has already pinned every
                     // handle itself -- a sequence row puts both ends at the row height --
                     // so the generic anchor solver must not spread them around the node.
-                    const anchored = tasksFixedLayout(mode)?.authoredHandles
+                    const authoredHandles = Boolean(tasksFixedLayout(mode)?.authoredHandles);
+                    const solved = authoredHandles
                         ? {
                             edges: authoredRawEdges,
                             nodeHandles: Object.fromEntries((rawGraph.nodes || [])
@@ -5776,6 +5829,13 @@ async function renderTasksGraphs(rootElement = document) {
                                 .map((node) => [node.id, node.handleLayout])),
                         }
                         : buildTaskEdgeAnchors(nodesWithStyle, authoredRawEdges);
+                    // A layout that authors its own handles has already put both
+                    // halves on the same two points, so only the solved case
+                    // needs the reply to borrow its call's handles.
+                    const anchored = {
+                        ...solved,
+                        edges: tasksApplyEdgePairs(solved.edges, activeProjection?.pair_by, !authoredHandles),
+                    };
                     const visibleReferenceRecords = tasksVisibleReferenceEdges(referenceEdgeRecords, nodesWithStyle, model);
                     const referenceAnchored = buildTaskEdgeAnchors(nodesWithStyle, visibleReferenceRecords, 'reference-');
                     const baseEdges = anchored.edges.map((edge) => {
@@ -5794,7 +5854,13 @@ async function renderTasksGraphs(rootElement = document) {
                             data: {
                                 ...(edge.data || {}),
                                 edgeColor,
-                                __sequence_label_lift__: mode === 'sequence' ? TASKS_SEQUENCE_LABEL_LIFT : 0,
+                                // Both halves of a pair share a row, so their labels
+                                // must not share a side of it.
+                                __sequence_label_lift__: mode === 'sequence'
+                                    ? (edge.__pair_half__ === 'reply' ? -TASKS_SEQUENCE_LABEL_LIFT : TASKS_SEQUENCE_LABEL_LIFT)
+                                    : 0,
+                                __pair_half__: edge.__pair_half__ || '',
+                                __pair_lift__: Number(edge.__pair_lift__) || 0,
                                 // The prominent label is an HTML overlay, so it needs a z of
                                 // its own to clear the ribbon this layout draws over the cards.
                                 __label_z__: rowZ + 1,
@@ -5808,6 +5874,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 opacity: edgeOpacity,
                                 stroke: edgeColor || 'currentColor',
                                 ...(edge.__sequence_standing__ ? { strokeDasharray: '6 5', strokeWidth: 1.8 } : {}),
+                                ...(edge.__pair_half__ ? { strokeWidth: 1.9 } : {}),
                             },
                         };
                     });
@@ -5988,7 +6055,11 @@ async function renderTasksGraphs(rootElement = document) {
                     });
                 }
                 const authoredDerivedEdges = (derived.edges || []).filter((edge) => !edge.__reference__);
-                const anchored = buildTaskEdgeAnchors(baseNodes, authoredDerivedEdges);
+                const solvedAnchors = buildTaskEdgeAnchors(baseNodes, authoredDerivedEdges);
+                const anchored = {
+                    ...solvedAnchors,
+                    edges: tasksApplyEdgePairs(solvedAnchors.edges, activeProjection?.pair_by),
+                };
                 const visibleReferenceRecords = tasksVisibleReferenceEdges(referenceEdgeRecords, baseNodes, model);
                 const referenceAnchored = buildTaskEdgeAnchors(baseNodes, visibleReferenceRecords, 'reference-');
                 const edgeColorPalette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
@@ -6002,7 +6073,13 @@ async function renderTasksGraphs(rootElement = document) {
                         ...edge,
                         label: resolvedLabel,
                         type: 'vyasaEdge',
-                        data: { ...(edge.data || {}), edgeColor, __projection_branch_opacity__: branchOpacity },
+                        data: {
+                            ...(edge.data || {}),
+                            edgeColor,
+                            __projection_branch_opacity__: branchOpacity,
+                            __pair_half__: edge.__pair_half__ || '',
+                            __pair_lift__: Number(edge.__pair_lift__) || 0,
+                        },
                         markerEnd: {
                             type: rf.MarkerType.ArrowClosed,
                             width: 8,
@@ -6705,7 +6782,12 @@ async function renderTasksGraphs(rootElement = document) {
                 );
             };
             const CustomEdge = React.memo((props) => {
-                const [path, labelX, rawLabelY] = tasksEdgePath(props);
+                // A pair draws two lines a few pixels apart, one either side of the
+                // path they share. Shifting the endpoints, not the finished path,
+                // keeps the arrowhead and the label solver working on the line
+                // that is actually drawn.
+                const pairLift = Number(props.data?.__pair_lift__) || 0;
+                const [path, labelX, rawLabelY] = tasksEdgePath(tasksPairShiftedProps(props, pairLift));
                 // A sequence row is a horizontal line, so a centred label sits right on
                 // top of it. Lift it clear of the stroke.
                 const labelY = rawLabelY - (Number(props.data?.__sequence_label_lift__) || 0);
@@ -6726,7 +6808,9 @@ async function renderTasksGraphs(rootElement = document) {
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
                 const strokeMode = props.data?.strokeMode || highlightMode;
-                const taperPath = tasksTaperedBezierPath(
+                // A taper swells the stroke, which would close the gap between the
+                // two halves of a pair. A pair keeps two plain, even lines.
+                const taperPath = props.data?.__pair_half__ ? '' : tasksTaperedBezierPath(
                     path,
                     (Number(props.style?.strokeWidth) || 4) * 2.65,
                     // The tail keeps enough body to read on its own. A taper this
@@ -6741,7 +6825,10 @@ async function renderTasksGraphs(rootElement = document) {
                 const isArcEdge = props.sourcePosition === props.targetPosition;
                 const edgeArrowPath = tasksTaperedArrowHeadPath(
                     path,
-                    isArcEdge ? fullArrow : Math.max(6, Math.min(fullArrow, chord * 0.22))
+                    isArcEdge ? fullArrow : Math.max(6, Math.min(fullArrow, chord * 0.22)),
+                    // The barb sits on the side the line was nudged toward, so a
+                    // pair reads as one double harpoon rather than two arrows.
+                    pairLift ? Math.sign(pairLift) : 0
                 );
                 const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
                 const prominentLabel = showFullLabel;
@@ -6788,7 +6875,9 @@ async function renderTasksGraphs(rootElement = document) {
                         d: path,
                         fill: 'none',
                         stroke: 'transparent',
-                        strokeWidth: 24,
+                        // A wide hit area would swallow the other half of a pair,
+                        // so a paired line claims only the side it is drawn on.
+                        strokeWidth: pairLift ? 9 : 24,
                         vectorEffect: 'non-scaling-stroke',
                         pointerEvents: 'stroke',
                         className: 'react-flow__edge-interaction vyasa-tasks-edge-hit-path',

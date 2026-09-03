@@ -302,3 +302,44 @@ test('card meta: an edge card hides the same machinery', () => {
     }).map((entry) => entry.key);
     assert.deepEqual(shown.sort(), ['flow', 'role']);
 });
+
+// Pairing is a view rule, not a layout rule: it reads edges alone, so every
+// layout gets the same answer from the same authored data.
+const { tasksEdgePairs, TASKS_PAIR_LIFT } = await import('../vyasa/extensions_builtin/tasks/static/tasks_layouts.js');
+
+test('two opposite edges with the same pair value are one call and one reply', () => {
+    const halves = tasksEdgePairs([
+        { id: 'a', source: 'x', target: 'y', pair: 'p' },
+        { id: 'b', source: 'y', target: 'x', pair: 'p' },
+    ], 'pair');
+    assert.equal(halves.get('a').half, 'call');
+    assert.equal(halves.get('b').half, 'reply');
+    assert.equal(halves.get('a').mate, 'b');
+    assert.equal(halves.get('b').mate, 'a');
+});
+
+test('two edges running the same way never pair, whatever they are tagged', () => {
+    const halves = tasksEdgePairs([
+        { id: 'a', source: 'x', target: 'y', pair: 'p' },
+        { id: 'b', source: 'x', target: 'y', pair: 'p' },
+    ], 'pair');
+    assert.equal(halves.size, 0);
+});
+
+test('an unmatched pair value leaves the edge alone', () => {
+    const halves = tasksEdgePairs([{ id: 'a', source: 'x', target: 'y', pair: 'p' }], 'pair');
+    assert.equal(halves.size, 0);
+});
+
+test('no pair attribute means no pairs, so an ordinary pack is untouched', () => {
+    const edges = [
+        { id: 'a', source: 'x', target: 'y', pair: 'p' },
+        { id: 'b', source: 'y', target: 'x', pair: 'p' },
+    ];
+    assert.equal(tasksEdgePairs(edges, '').size, 0);
+    assert.equal(tasksEdgePairs(edges, undefined).size, 0);
+});
+
+test('the lift is one signed value, since each half is offset along its own normal', () => {
+    assert.ok(Number.isFinite(TASKS_PAIR_LIFT) && TASKS_PAIR_LIFT !== 0);
+});

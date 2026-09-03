@@ -1,27 +1,51 @@
 e1: page-file -> content-route resolves
-	note=1 · the route takes the request
+	note=the route takes the request
 	description=post_detail calls render_post_detail, which owns every step below.
 	code=[post_detail](vyasa/core.py){show=symbol symbol=post_detail kind=Function focus="match[return render_post_detail(]" context=2}
 e2: content-route -> path-resolver resolves
-	note=2 · slug to file path
-	description=The route calls content_path_for_slug and gets back a Path under a content root. The helper reads nothing.
+	pair=p-path
+	note=slug to file path
+	description=The route calls content_path_for_slug with the requested slug. The helper reads nothing from disk.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[file_path = content_path_for_slug(path]" context=3}
-e3: content-route -> frontmatter-reader reads
-	note=3 · read and split the file
-	description=The route calls parse_frontmatter with that path. It returns the metadata and the raw Markdown body.
+e3: path-resolver -> content-route returns
+	pair=p-path
+	note=→ Path
+	description=A Path under a content root lands in file_path. The call and the return are the same statement, so this is the same line.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[file_path = content_path_for_slug(path]" context=3}
+e4: content-route -> frontmatter-reader reads
+	pair=p-read
+	note=read and split the file
+	description=The route calls parse_frontmatter with that path.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[metadata, raw_content = parse_frontmatter(file_path]" context=3}
-e4: frontmatter-reader -> filesystem-backend reads
-	note=3b · git-ref pages only
+e5: frontmatter-reader -> content-route returns
+	pair=p-read
+	note=→ metadata + body
+	description=The frontmatter becomes metadata and the rest becomes raw_content, the Markdown body.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[metadata, raw_content = parse_frontmatter(file_path]" context=3}
+e6: frontmatter-reader -> filesystem-backend reads
+	note=git-ref pages only
 	description=A working-tree page is a plain Path and is read directly. A git-ref page arrives as a VirtualPath, so parse_frontmatter reads it through the backend instead.
 	code=[parse_frontmatter](vyasa/helpers.py){show=symbol symbol=parse_frontmatter kind=Function focus="match[if isinstance(file_path, VirtualPath)]" context=5}
-e5: content-route -> markdown-renderer renders
-	note=4 · body to HTML nodes
-	description=The route calls from_md with the Markdown body and gets rendered HTML content.
+e7: content-route -> markdown-renderer renders
+	pair=p-render
+	note=body to HTML nodes
+	description=The route calls from_md with the Markdown body.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[content = from_md(strip_more_marker(render_content]" context=3}
-e6: content-route -> html-response renders
-	note=5 · content into the page
-	description=The route builds DocumentPage from that content and calls render, which returns the HTML response.
+e8: markdown-renderer -> content-route returns
+	pair=p-render
+	note=→ HTML nodes
+	description=Rendered HTML content lands in content, ready to place in a page.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[content = from_md(strip_more_marker(render_content]" context=3}
+e9: content-route -> html-response renders
+	pair=p-page
+	note=content into the page
+	description=The route builds DocumentPage from that content and calls render.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[result = DocumentPage(post_title]" context=3}
-e7: html-response -> browser-ui shows
-	note=6 · the browser displays the response
+e10: html-response -> content-route returns
+	pair=p-page
+	note=→ HTML response
+	description=The finished HTML response lands in result. This is the value the route returns.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[result = DocumentPage(post_title]" context=3}
+e11: html-response -> browser-ui shows
+	note=the browser displays the response
 	description=The HTML response leaves Vyasa. The browser consumes it at the system boundary, so no Vyasa function runs after this point.

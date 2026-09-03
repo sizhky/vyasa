@@ -27,6 +27,7 @@ const TASKS_SEQUENCE_LEFT = 148;
 const TASKS_SEQUENCE_LIFELINE_TOP = 40;
 const TASKS_SEQUENCE_FIRST_ROW = 136;
 const TASKS_SEQUENCE_ROW_HEIGHT = 46;
+
 const TASKS_LAYERED_BAND_PAD = 148;
 const TASKS_LAYERED_NODE_WIDTH = 168;
 const TASKS_LAYERED_NODE_MIN_HEIGHT = 62;
@@ -39,6 +40,34 @@ const TASKS_MATRIX_LEFT = 176;
 const TASKS_MATRIX_TOP = 68;
 const TASKS_MATRIX_CELL_PAD = 12;
 const TASKS_MATRIX_CHIP_HEIGHT = 26;
+
+// A call and its reply are one exchange drawn as one double harpoon. They pair
+// when they carry the same `pair_by` value and run opposite ways; the one
+// written first is the call. This is a view rule, not a layout rule, so every
+// layout uses it and an unmatched value stays an ordinary edge.
+//
+// Both halves get the SAME lift. Each is offset along its own chord normal, and
+// a reply's chord runs the other way, so one signed value puts them on opposite
+// sides whatever direction the edge takes.
+export const TASKS_PAIR_LIFT = -4.5;
+
+export function tasksEdgePairs(edges, pairAttr) {
+    const halves = new Map();
+    if (!String(pairAttr || '').trim()) return halves;
+    const calls = new Map();
+    for (const edge of edges || []) {
+        const key = String(edge?.[pairAttr] ?? '').trim();
+        if (!key) continue;
+        const call = calls.get(key);
+        if (call && call.source === edge.target && call.target === edge.source) {
+            halves.set(edge.id, { half: 'reply', mate: call.id });
+            halves.set(call.id, { half: 'call', mate: edge.id });
+            continue;
+        }
+        if (!call) calls.set(key, edge);
+    }
+    return halves;
+}
 
 function layoutAttrList(value) {
     return String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
@@ -73,6 +102,7 @@ export function buildSequenceTasksGraph(model, projection = {}) {
     const groupLabel = Object.fromEntries(groups.map((group) => [group.id, group.label || group.id]));
     const roleAttr = String(projection.sequence_role || '').trim();
     const phaseAttr = String(projection.sequence_phase || '').trim();
+    const pairAttr = String(projection.pair_by || '').trim();
 
     const stageOf = (nodeId) => {
         let group = byId[nodeId]?.group_id || null;
@@ -90,13 +120,34 @@ export function buildSequenceTasksGraph(model, projection = {}) {
     });
     const laneIndex = Object.fromEntries(lanes.map((id, index) => [id, index]));
 
+    // A pair is one exchange, so it takes one row and one step number: the reply
+    // is the value coming back, not a further step.
+    const halves = tasksEdgePairs(rows, pairAttr);
+    const rowOf = [];
+    const isReply = [];
+    const rowOfEdgeId = new Map();
+    let rowCount = 0;
+    rows.forEach((edge, index) => {
+        const half = halves.get(edge.id);
+        const callRow = half?.half === 'reply' ? rowOfEdgeId.get(half.mate) : undefined;
+        if (callRow !== undefined) {
+            rowOf[index] = callRow;
+            isReply[index] = true;
+            return;
+        }
+        rowOf[index] = rowCount;
+        isReply[index] = false;
+        rowOfEdgeId.set(edge.id, rowCount);
+        rowCount += 1;
+    });
+
     const bodyTop = TASKS_SEQUENCE_LIFELINE_TOP;
     const capWidth = TASKS_SEQUENCE_LANE_WIDTH - TASKS_SEQUENCE_LANE_GAP;
     // The first row starts below the deepest cap, so a three-line participant
     // name never sits on top of step one.
     const capHeight = Math.max(0, ...lanes.map((id) => labelHeight(byId[id].label || id, capWidth, 'groupTitle')));
     const firstRow = Math.max(TASKS_SEQUENCE_FIRST_ROW, bodyTop + capHeight + 34);
-    const bodyHeight = (firstRow - bodyTop) + (rows.length + 1) * TASKS_SEQUENCE_ROW_HEIGHT;
+    const bodyHeight = (firstRow - bodyTop) + (rowCount + 1) * TASKS_SEQUENCE_ROW_HEIGHT;
     const rowY = (index) => firstRow + index * TASKS_SEQUENCE_ROW_HEIGHT;
     const offsetPct = (index) => ((rowY(index) - bodyTop) / bodyHeight) * 100;
 
@@ -113,25 +164,33 @@ export function buildSequenceTasksGraph(model, projection = {}) {
         // A standing edge is a rule that already holds. It never takes a turn,
         // so it carries no step number.
         const standing = role === 'standing';
-        if (!standing) step += 1;
+        const reply = isReply[index];
+        const row = rowOf[index];
+        if (!standing && !reply) step += 1;
         const rightward = (laneIndex[edge.target] ?? 0) > (laneIndex[edge.source] ?? 0);
         const sourceSide = rightward ? 'right' : 'left';
         const targetSide = rightward ? 'left' : 'right';
         const sourceHandle = `seq-source-${sourceSide}-${index}`;
         const targetHandle = `seq-target-${targetSide}-${index}`;
-        addHandle(edge.source, 'source', { id: sourceHandle, side: sourceSide, offsetPct: offsetPct(index) });
-        addHandle(edge.target, 'target', { id: targetHandle, side: targetSide, offsetPct: offsetPct(index) });
-        const phase = phaseAttr ? String(edge[phaseAttr] || '').trim() : '';
-        const open = bands[bands.length - 1];
-        if (open && open.phase === phase) open.bottom = rowY(index);
-        else bands.push({ phase, top: rowY(index), bottom: rowY(index) });
+        addHandle(edge.source, 'source', { id: sourceHandle, side: sourceSide, offsetPct: offsetPct(row) });
+        addHandle(edge.target, 'target', { id: targetHandle, side: targetSide, offsetPct: offsetPct(row) });
+        // A reply sits on a row its call already opened, so it never starts a band.
+        if (!reply) {
+            const phase = phaseAttr ? String(edge[phaseAttr] || '').trim() : '';
+            const open = bands[bands.length - 1];
+            if (open && open.phase === phase) open.bottom = rowY(row);
+            else bands.push({ phase, top: rowY(row), bottom: rowY(row) });
+        }
+        const half = halves.get(edge.id)?.half || '';
         return {
             ...edge,
             id: `seq-${index}`,
             sourceHandle,
             targetHandle,
-            __sequence_step__: standing ? '' : String(step),
+            __sequence_step__: standing || reply ? '' : String(step),
             __sequence_standing__: standing,
+            __pair_half__: half,
+            __pair_lift__: half ? TASKS_PAIR_LIFT : 0,
         };
     });
 
