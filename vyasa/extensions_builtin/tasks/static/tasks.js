@@ -4106,10 +4106,14 @@ async function renderTasksGraphs(rootElement = document) {
             ), [sourceModel]);
             const initialProjectionId = React.useMemo(() => {
                 if (defaultViewMode === 'gantt') return TASKS_GANTT_PROJECTION_ID;
+                // A reader who has chosen a view keeps it, so the pack's
+                // `default_view` only decides the first visit.
                 const saved = String(sourcePrefsRef.current?.projectionId || '').trim();
                 if (projectionOptions.some((option) => option.id === saved)) return saved;
+                const declared = String(sourceModel?.default_projection || '').trim();
+                if (projectionOptions.some((option) => option.id === declared)) return declared;
                 return '';
-            }, [projectionOptions]);
+            }, [projectionOptions, sourceModel]);
             const initialGraphProjectionId = initialProjectionId === TASKS_GANTT_PROJECTION_ID ? '' : initialProjectionId;
             const [activeProjectionId, setActiveProjectionId] = React.useState(initialGraphProjectionId);
             const [viewMode, setViewMode] = React.useState(() => (
