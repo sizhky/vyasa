@@ -458,8 +458,10 @@ function tasksTaperedBezierPath(bezierPath, sourceWidth, targetWidth) {
     };
     const n0 = normal(x0, y0, x1, y1);
     const n3 = normal(x2, y2, x3, y3);
-    const w0 = Math.max(0.5, Number(sourceWidth) || 1) / 2;
-    const w3 = Math.max(0.5, Number(targetWidth) || 1) / 2;
+    // A width of 0 is a real request: it lets an end taper to a point instead of
+    // arriving as a stub. Only a missing width falls back to 1.
+    const w0 = Math.max(0, Number.isFinite(Number(sourceWidth)) ? Number(sourceWidth) : 1) / 2;
+    const w3 = Math.max(0, Number.isFinite(Number(targetWidth)) ? Number(targetWidth) : 1) / 2;
     return [
         `M ${x0 + n0.x * w0} ${y0 + n0.y * w0}`,
         `C ${x1 + n0.x * w0} ${y1 + n0.y * w0} ${x2 + n3.x * w3} ${y2 + n3.y * w3} ${x3 + n3.x * w3} ${y3 + n3.y * w3}`,
@@ -495,12 +497,10 @@ function tasksTaperedArrowHeadPath(bezierPath, size, side = 0) {
     if (side) {
         const sign = side > 0 ? 1 : -1;
         const wing = arrowLength * 0.55;
-        const tailX = x3 - ux * arrowLength * 0.42;
-        const tailY = y3 - uy * arrowLength * 0.42;
         return [
             `M ${x3} ${y3}`,
             `L ${baseX + sign * nx * wing} ${baseY + sign * ny * wing}`,
-            `L ${tailX} ${tailY}`,
+            `L ${baseX} ${baseY}`,
             'Z',
         ].join(' ');
     }
@@ -6830,14 +6830,19 @@ async function renderTasksGraphs(rootElement = document) {
                 const labelLines = fullLabel.split(/\r?\n/);
                 const highlightMode = props.data?.highlightMode || 'none';
                 const strokeMode = props.data?.strokeMode || highlightMode;
-                // A taper swells the stroke, which would close the gap between the
-                // two halves of a pair. A pair keeps two plain, even lines.
-                const taperPath = props.data?.__pair_half__ ? '' : tasksTaperedBezierPath(
+                // A pair half keeps its even width -- swelling it would close the gap
+                // between the two halves -- but it must still taper to nothing at the
+                // tip, or the shaft arrives at full width beside its own barb.
+                const taperPath = props.data?.__pair_half__ ? tasksTaperedBezierPath(
+                    path,
+                    Number(props.style?.strokeWidth) || 1.9,
+                    0
+                ) : tasksTaperedBezierPath(
                     path,
                     (Number(props.style?.strokeWidth) || 4) * 2.65,
-                    // The tail keeps enough body to read on its own. A taper this
-                    // steep used to thin the arrival end down to a hairline.
-                    Math.max(2.6, (Number(props.style?.strokeWidth) || 4) * 0.85)
+                    // The arrival end tapers to nothing. The head sits exactly there,
+                    // so any remaining body would arrive beside its own arrow.
+                    0
                 );
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
                 // A pair's two lanes sit 2x|lift| apart. A casing wider than one lane
