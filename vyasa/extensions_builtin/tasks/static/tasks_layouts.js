@@ -49,7 +49,7 @@ const TASKS_MATRIX_CHIP_HEIGHT = 26;
 // Both halves get the SAME lift. Each is offset along its own chord normal, and
 // a reply's chord runs the other way, so one signed value puts them on opposite
 // sides whatever direction the edge takes.
-export const TASKS_PAIR_LIFT = -4.5;
+export const TASKS_PAIR_LIFT = -2.75;
 
 export function tasksEdgePairs(edges, pairAttr) {
     const halves = new Map();
@@ -67,6 +67,49 @@ export function tasksEdgePairs(edges, pairAttr) {
         if (!call) calls.set(key, edge);
     }
     return halves;
+}
+
+// Both halves must be drawn between the same two points, or they bow apart and
+// stop reading as one exchange. The anchor solver gives each edge its own
+// handles, so a reply is re-anchored onto its call's two points.
+export function tasksApplyEdgePairs(anchors, pairAttr, shareHandles = true) {
+    const halves = tasksEdgePairs(anchors.edges, pairAttr);
+    if (!halves.size) return anchors;
+    const byId = new Map(anchors.edges.map((edge) => [edge.id, edge]));
+    const nodeHandles = { ...(anchors.nodeHandles || {}) };
+    const handleAt = (nodeId, role, id) => (nodeHandles[nodeId]?.[role] || []).find((handle) => handle.id === id);
+    const addHandle = (nodeId, role, handle) => {
+        const current = nodeHandles[nodeId] || { source: [], target: [] };
+        if (current[role].some((item) => item.id === handle.id)) return;
+        nodeHandles[nodeId] = { ...current, [role]: [...current[role], handle] };
+    };
+    const edges = anchors.edges.map((edge) => {
+        const half = halves.get(edge.id);
+        if (!half) return edge;
+        const paired = {
+            ...edge,
+            __pair_half__: half.half,
+            __pair_mate__: half.mate,
+            __pair_lift__: TASKS_PAIR_LIFT,
+        };
+        const call = half.half === 'reply' ? byId.get(half.mate) : null;
+        if (!shareHandles || !call) return paired;
+        // A reply leaves where its call arrived and arrives where its call left.
+        // It cannot reuse the call's handle ids: React Flow resolves a source id
+        // among source handles only, so a borrowed target id finds nothing and
+        // the edge never draws. Mint handles of the right role at the same two
+        // points instead.
+        const from = handleAt(call.target, 'target', call.targetHandle);
+        const to = handleAt(call.source, 'source', call.sourceHandle);
+        if (from) addHandle(call.target, 'source', { ...from, id: `${call.id}-pair-source` });
+        if (to) addHandle(call.source, 'target', { ...to, id: `${call.id}-pair-target` });
+        return {
+            ...paired,
+            ...(from ? { sourceHandle: `${call.id}-pair-source` } : {}),
+            ...(to ? { targetHandle: `${call.id}-pair-target` } : {}),
+        };
+    });
+    return { ...anchors, edges, nodeHandles };
 }
 
 function layoutAttrList(value) {
@@ -102,7 +145,7 @@ export function buildSequenceTasksGraph(model, projection = {}) {
     const groupLabel = Object.fromEntries(groups.map((group) => [group.id, group.label || group.id]));
     const roleAttr = String(projection.sequence_role || '').trim();
     const phaseAttr = String(projection.sequence_phase || '').trim();
-    const pairAttr = String(projection.pair_by || '').trim();
+    const pairAttr = String(projection.pair_by || model.pair_by || '').trim();
 
     const stageOf = (nodeId) => {
         let group = byId[nodeId]?.group_id || null;

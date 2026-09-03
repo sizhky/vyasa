@@ -1,5 +1,6 @@
 @graph id=vyasa-kernel title="From files on disk to the Vyasa UI"
 hover_attrs=description,code
+pair_by=pair
 
 @sources
 nodes=kg.nodes
@@ -22,7 +23,6 @@ flow:
 	layout=sequence
 	sequence_role=role
 	sequence_phase=phase
-	pair_by=pair
 	color_by=layer
 	edge_color_by=role
 	edge_label_from=note

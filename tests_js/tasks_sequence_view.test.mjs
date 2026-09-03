@@ -216,3 +216,11 @@ test('without pair_by a pair attribute means nothing and both rows stand alone',
     assert.deepEqual(graph.edges.map((edge) => edge.__sequence_step__), ['1', '2', '3']);
     assert.deepEqual(graph.edges.map((edge) => edge.__pair_lift__), [0, 0, 0]);
 });
+
+test('pair_by set on the graph works too, so the base view pairs without a projection', () => {
+    const graph = buildSequenceTasksGraph(
+        { ...pairFixture(), pair_by: 'pair' },
+        { sequence_role: 'role', sequence_phase: 'phase' },
+    );
+    assert.deepEqual(graph.edges.map((edge) => edge.__pair_half__), ['call', 'reply', '']);
+});

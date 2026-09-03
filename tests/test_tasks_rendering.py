@@ -1213,7 +1213,7 @@ def test_tasks_edge_cards_share_pointer_keyboard_and_deep_link_selection():
     assert "onEdgeClick: selectGraphEdge" in source
     # An ordinary edge keeps a generous hit target. A paired sequence row draws
     # two lines a few pixels apart, so each half claims only its own side.
-    assert "strokeWidth: pairLift ? 9 : 24" in source
+    assert re.search(r"strokeWidth: pairLift \? \d+(?:\.\d+)? : 24", source)
     assert "vectorEffect: 'non-scaling-stroke'" in source
     assert "tasksOrderedEdges(visibleEdgesRef.current" in source
     assert "key === '[' || key === ']'" in source

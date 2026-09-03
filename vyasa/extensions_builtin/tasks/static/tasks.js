@@ -2,7 +2,7 @@ import ELK from 'https://esm.sh/elkjs@0.10.0';
 import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksCenteredViewport, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksInlineLinkPlainText, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
 import { buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksHopSeedIds, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNeighborHopIds, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksProjectionById, tasksProjectionLayout, tasksPruneFilterQueryFields, tasksReferenceEdges, tasksSameIdSet, tasksSelectionClickKey, tasksVisibleReferenceEdges, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
-import { TASKS_PAIR_LIFT, tasksEdgePairs, tasksLayoutById, tasksLayoutChromeKinds } from '/static/extensions/tasks/tasks_layouts.js';
+import { tasksApplyEdgePairs, tasksLayoutById, tasksLayoutChromeKinds } from '/static/extensions/tasks/tasks_layouts.js';
 import { createTasksFullscreenController } from '/static/extensions/tasks/tasks_fullscreen.js';
 import { ensureTasksQueryBuilder, ensureTasksReactFlow } from '/static/extensions/tasks/tasks_runtime.js';
 import { createMomentumRunner, shortcutsSuspended } from '/static/page_shell.js';
@@ -522,27 +522,6 @@ function tasksPairShiftedProps(props, lift) {
     };
 }
 
-// Both halves must be drawn between the same two points, or they bow apart and
-// stop reading as one exchange. The anchor solver gives each edge its own
-// handles, so a reply borrows its call's and simply runs them backwards.
-function tasksApplyEdgePairs(edges, pairAttr, shareHandles = true) {
-    const halves = tasksEdgePairs(edges, pairAttr);
-    if (!halves.size) return edges;
-    const byId = new Map(edges.map((edge) => [edge.id, edge]));
-    return edges.map((edge) => {
-        const half = halves.get(edge.id);
-        if (!half) return edge;
-        const call = half.half === 'reply' ? byId.get(half.mate) : null;
-        return {
-            ...edge,
-            ...(shareHandles && call
-                ? { sourceHandle: call.targetHandle, targetHandle: call.sourceHandle }
-                : {}),
-            __pair_half__: half.half,
-            __pair_lift__: TASKS_PAIR_LIFT,
-        };
-    });
-}
 
 function tasksEdgePath(props) {
     const distance = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY);
@@ -5832,10 +5811,7 @@ async function renderTasksGraphs(rootElement = document) {
                     // A layout that authors its own handles has already put both
                     // halves on the same two points, so only the solved case
                     // needs the reply to borrow its call's handles.
-                    const anchored = {
-                        ...solved,
-                        edges: tasksApplyEdgePairs(solved.edges, activeProjection?.pair_by, !authoredHandles),
-                    };
+                    const anchored = tasksApplyEdgePairs(solved, activeProjection?.pair_by || model?.pair_by, !authoredHandles);
                     const visibleReferenceRecords = tasksVisibleReferenceEdges(referenceEdgeRecords, nodesWithStyle, model);
                     const referenceAnchored = buildTaskEdgeAnchors(nodesWithStyle, visibleReferenceRecords, 'reference-');
                     const baseEdges = anchored.edges.map((edge) => {
@@ -5860,6 +5836,7 @@ async function renderTasksGraphs(rootElement = document) {
                                     ? (edge.__pair_half__ === 'reply' ? -TASKS_SEQUENCE_LABEL_LIFT : TASKS_SEQUENCE_LABEL_LIFT)
                                     : 0,
                                 __pair_half__: edge.__pair_half__ || '',
+                                __pair_mate__: edge.__pair_mate__ || '',
                                 __pair_lift__: Number(edge.__pair_lift__) || 0,
                                 // The prominent label is an HTML overlay, so it needs a z of
                                 // its own to clear the ribbon this layout draws over the cards.
@@ -6056,10 +6033,7 @@ async function renderTasksGraphs(rootElement = document) {
                 }
                 const authoredDerivedEdges = (derived.edges || []).filter((edge) => !edge.__reference__);
                 const solvedAnchors = buildTaskEdgeAnchors(baseNodes, authoredDerivedEdges);
-                const anchored = {
-                    ...solvedAnchors,
-                    edges: tasksApplyEdgePairs(solvedAnchors.edges, activeProjection?.pair_by),
-                };
+                const anchored = tasksApplyEdgePairs(solvedAnchors, activeProjection?.pair_by || model?.pair_by);
                 const visibleReferenceRecords = tasksVisibleReferenceEdges(referenceEdgeRecords, baseNodes, model);
                 const referenceAnchored = buildTaskEdgeAnchors(baseNodes, visibleReferenceRecords, 'reference-');
                 const edgeColorPalette = tasksEdgeColorPaletteFor(model, model?.edge_color_by);
@@ -6078,6 +6052,7 @@ async function renderTasksGraphs(rootElement = document) {
                             edgeColor,
                             __projection_branch_opacity__: branchOpacity,
                             __pair_half__: edge.__pair_half__ || '',
+                            __pair_mate__: edge.__pair_mate__ || '',
                             __pair_lift__: Number(edge.__pair_lift__) || 0,
                         },
                         markerEnd: {
@@ -6189,6 +6164,12 @@ async function renderTasksGraphs(rootElement = document) {
                 const selectedEdge = edgeId ? baseEdges.find((edge) => tasksEdgeRecordId(edge) === edgeId) : null;
                 if (selectedEdge) {
                     const endpointIds = new Set([selectedEdge.source, selectedEdge.target]);
+                    // A call and its reply are one exchange. Previewing half of a
+                    // double harpoon and leaving the other half dim would cut the
+                    // exchange in two, so the mate lights with it. Only the half
+                    // under the cursor keeps the bloom, so the open card is still
+                    // traceable to the line it came from.
+                    const mateId = String(selectedEdge.data?.__pair_mate__ || '');
                     setNodesReusing(baseNodes.map((node) => {
                         const sourceNodeId = node.data?.__kind__ === 'groupTitle' ? node.data?.sourceGroupId : node.id;
                         const hit = endpointIds.has(sourceNodeId);
@@ -6205,16 +6186,20 @@ async function renderTasksGraphs(rootElement = document) {
                         };
                     }));
                     setEdgesReusing(displayedEdges.map((edge) => {
-                        const hit = edge === selectedEdge;
+                        const focused = edge === selectedEdge;
+                        const hit = focused || (Boolean(mateId) && tasksEdgeRecordId(edge) === mateId);
                         const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
+                        // A focus stroke of 4.5 would close the gap a pair is drawn
+                        // with, turning the two harpoons back into one fat line.
+                        const focusWidth = edge.data?.__pair_half__ ? 2.6 : 4.5;
                         return {
                             ...edge,
                             zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
                             labelZIndex: hit ? TASKS_EDGE_LABEL_FOCUS_Z : TASKS_EDGE_LABEL_Z,
-                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim', strokeMode: hit ? 'selected' : 'dim', edgeCardActive: hit, pinBloomKey: hit && edgePinBloom?.edgeId === tasksEdgeRecordId(edge) ? edgePinBloom.key : '' },
+                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim', strokeMode: hit ? 'selected' : 'dim', edgeCardActive: focused, pinBloomKey: focused && edgePinBloom?.edgeId === tasksEdgeRecordId(edge) ? edgePinBloom.key : '' },
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: hit ? 1 : 0.12 },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.86 : 0.04 },
-                            style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: hit ? 1 : 0.08, strokeWidth: hit ? 4.5 : 2.5 },
+                            style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: hit ? 1 : 0.08, strokeWidth: hit ? focusWidth : (edge.data?.__pair_half__ ? 1.9 : 2.5) },
                         };
                     }));
                     return;
@@ -6289,7 +6274,7 @@ async function renderTasksGraphs(rootElement = document) {
                             },
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.82 : 0.06 },
-                            style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity, strokeWidth: hit ? 4.5 : 2.5, strokeLinecap: hit ? 'round' : undefined, '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s' },
+                            style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: tasksApplyEdgeOpacity(hit ? 0.98 : 0.08, edgeOpacity) * branchOpacity, strokeWidth: edge.data?.__pair_half__ ? (hit ? 2.6 : 1.9) : (hit ? 4.5 : 2.5), strokeLinecap: hit ? 'round' : undefined, '--vyasa-edge-flow-duration': hit ? '0.7s' : '0.6s' },
                         };
                     }));
                     return;
@@ -6877,7 +6862,7 @@ async function renderTasksGraphs(rootElement = document) {
                         stroke: 'transparent',
                         // A wide hit area would swallow the other half of a pair,
                         // so a paired line claims only the side it is drawn on.
-                        strokeWidth: pairLift ? 9 : 24,
+                        strokeWidth: pairLift ? 6 : 24,
                         vectorEffect: 'non-scaling-stroke',
                         pointerEvents: 'stroke',
                         className: 'react-flow__edge-interaction vyasa-tasks-edge-hit-path',
