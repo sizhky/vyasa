@@ -102,6 +102,8 @@ class KgSchema:
     nodes: str = ""
     edges: str = ""
     attrs: str = ""
+    # Where the code files a node links live, relative to the pack folder.
+    code_source: str = ""
 
 
 @dataclass
@@ -840,6 +842,7 @@ def _read_source_line(schema: KgSchema, line: str) -> str:
     schema.nodes = payload.get("nodes", schema.nodes)
     schema.edges = payload.get("edges", schema.edges)
     schema.attrs = payload.get("attrs", schema.attrs)
+    schema.code_source = payload.get("code_source", schema.code_source)
     return ""
 
 

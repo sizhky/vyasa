@@ -5,7 +5,13 @@ import json
 import re
 from itertools import count
 
-from ...markdown_fence import items_link_base_path, normalize_items_model_hrefs, split_fence_frontmatter
+from ...markdown_fence import (
+    items_code_source,
+    items_link_base_path,
+    normalize_items_model_hrefs,
+    resolve_items_inline_links,
+    split_fence_frontmatter,
+)
 from .layout import build_collapsed_graph
 from .model import apply_edge_label_fallbacks, parse_tasks_text
 from ..markdown.renderer import _render_markdown_fragment
@@ -76,7 +82,7 @@ def _prepare_node_references(value: str, node_labels: dict[str, str]) -> str:
     return _NODE_REFERENCE_RE.sub(replace, value)
 
 
-def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
+def _attach_rendered_node_attrs(model: dict, current_path: str | None, code_source: str = "") -> None:
     node_labels = {
         **(model.get("node_reference_labels") or {}),
         **{
@@ -99,7 +105,13 @@ def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
                     continue
                 rendered = []
                 for item in values:
-                    prepared = _prepare_node_attr_markdown(item)
+                    # A pack's `code_source` points at the checkout that holds
+                    # the code files, so a node link stays a short path.
+                    prepared = _prepare_node_attr_markdown(
+                        resolve_items_inline_links(item, current_path, code_source)
+                        if code_source and isinstance(item, str)
+                        else item
+                    )
                     rendered.append(_render_markdown_fragment(
                         _prepare_node_references(prepared, node_labels),
                         current_path=current_path,
@@ -110,11 +122,11 @@ def _attach_rendered_node_attrs(model: dict, current_path: str | None) -> None:
     for entry in (model.get("projection_models") or {}).values():
         projection_model = entry.get("model") if isinstance(entry, dict) else None
         if isinstance(projection_model, dict):
-            _attach_rendered_node_attrs(projection_model, current_path)
+            _attach_rendered_node_attrs(projection_model, current_path, code_source)
     for entry in (model.get("viewer_models") or {}).values():
         viewer_model = entry.get("model") if isinstance(entry, dict) else None
         if isinstance(viewer_model, dict):
-            _attach_rendered_node_attrs(viewer_model, current_path)
+            _attach_rendered_node_attrs(viewer_model, current_path, code_source)
 
 
 def _attach_rendered_slide_attrs(model: dict, current_path: str | None) -> None:
@@ -204,8 +216,9 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
             model["edge_color_palettes"] = {**model.get("edge_color_palettes", {}), model.get("edge_color_by", ""): config["edge_color_palette"]}
         apply_edge_label_fallbacks(model)
         link_path = items_link_base_path(model, current_path)
-        normalize_items_model_hrefs(model, link_path)
-        _attach_rendered_node_attrs(model, link_path)
+        code_source = items_code_source(model)
+        normalize_items_model_hrefs(model, link_path, code_source)
+        _attach_rendered_node_attrs(model, link_path, code_source)
         _attach_rendered_slide_attrs(model, link_path)
         graph = build_collapsed_graph(model)
     except Exception:

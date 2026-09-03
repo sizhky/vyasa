@@ -7,6 +7,7 @@ attrs=kg.attrs
 base:
 	edges=kg.edges
 palette=kg.palette
+code_source=../../
 
 @relations
 reads color=relation.reads
