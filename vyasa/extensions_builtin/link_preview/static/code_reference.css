@@ -7,19 +7,31 @@
 .vyasa-link-preview-body:has(> .vyasa-code-reference) {
     padding: 0;
     background: var(--vyasa-code-bg);
+    /* Names the scroller as the size container, so the chrome below can ask
+       for the visible width with `cqi`. */
+    container-type: inline-size;
 }
 
+/* The reference spans the full scroll width, not the visible width. A sticky
+   child can only slide inside its parent box, so a parent that stops at the
+   visible edge gives the chrome no room to stay put. */
 .vyasa-code-reference {
+    width: max-content;
+    min-width: 100%;
     background: var(--vyasa-code-bg);
 }
 
 /* The header and the controls stick together as one block, so the path and
    the changed-line count stay readable while the file moves. One sticky
-   element means no height to measure and keep in sync. */
+   element means no height to measure and keep in sync. `left` plus a width of
+   one visible pane keeps the same block parked while long lines scroll under
+   it. */
 .vyasa-code-reference-chrome {
     position: sticky;
     top: 0;
+    left: 0;
     z-index: 2;
+    width: 100cqi;
     background: color-mix(in srgb, var(--vyasa-code-bg) 92%, var(--vyasa-link));
 }
 
