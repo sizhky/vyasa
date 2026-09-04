@@ -8,7 +8,7 @@ default_view=flow
 @sources
 nodes=kg.nodes
 attrs=kg.attrs
-base:
+page:
 	edges=kg.edges
 fence:
 	edges=kg.fence.edges
@@ -26,15 +26,16 @@ replies color=relation.replies
 
 @views
 flow:
-	source=base
+	source=page
 	layout=sequence
 	sequence_role=role
 	sequence_phase=phase
+	sequence_activation=true
 	color_by=layer
 	edge_color_by=step
 	edge_label_from=note
 	hover_attrs=description,code
-	caption="Read the rows from top to bottom. One lifeline owns the page, render_post_detail. A row with two lines is one exchange: the solid line is the call, the dashed line under it is the value coming back. Every lane is something that can receive a call, so a document and a response are values on the arrows, not lanes."
+	caption="Read the rows from top to bottom. One lifeline owns the page, render_post_detail. A row with two lines is one exchange: the solid line is the call, the dashed line under it is the value coming back. Every lane is something that can receive a call, so a document and a response are values on the arrows, not lanes. The bar on the frontmatter reader is its frame: the git-ref read sits inside it, because that read happens while parse_frontmatter is still running."
 	slides:
 		route: Steps 1 to 2 — the route takes over
 			nodes=browser-ui,content-route,path-resolver
