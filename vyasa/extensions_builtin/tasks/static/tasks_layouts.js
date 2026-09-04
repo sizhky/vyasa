@@ -27,6 +27,18 @@ const TASKS_SEQUENCE_LEFT = 148;
 const TASKS_SEQUENCE_LIFELINE_TOP = 40;
 const TASKS_SEQUENCE_FIRST_ROW = 136;
 const TASKS_SEQUENCE_ROW_HEIGHT = 46;
+// The bar is as wide as the lane, so an arrow leaving or arriving at that lane
+// lands on the bar's own edge. A hairline bar down the middle touched no arrow
+// and read as an artifact rather than as an open frame.
+// A frame opened while another is still open on the same lane insets by this
+// much per side, which is the only way to nest without leaving the lane.
+const TASKS_SEQUENCE_ACTIVATION_INSET = 7;
+// The bar reaches past both rows, so the arrowheads land on it rather than
+// beside it.
+const TASKS_SEQUENCE_ACTIVATION_OVERHANG = 11;
+// Above the lifeline column, below the arrows: the sequence layout draws edges
+// over nodes, so nothing is hidden.
+const TASKS_SEQUENCE_ACTIVATION_Z = 1001;
 
 const TASKS_LAYERED_BAND_PAD = 148;
 const TASKS_LAYERED_NODE_WIDTH = 168;
@@ -151,6 +163,11 @@ export function buildSequenceTasksGraph(model, projection = {}) {
     const roleAttr = String(projection.sequence_role || '').trim();
     const phaseAttr = String(projection.sequence_phase || '').trim();
     const pairAttr = String(projection.pair_by || model.pair_by || '').trim();
+    // UML carries call nesting in the activation bar, not in the step number.
+    // Opt-in, because a bar needs the reply placed below whatever the call
+    // opened, and a pair drawn on one row is the compact reading every existing
+    // view was authored for.
+    const activation = ['1', 'true', 'yes', 'on'].includes(String(projection.sequence_activation || '').trim().toLowerCase());
 
     const stageOf = (nodeId) => {
         let group = byId[nodeId]?.group_id || null;
@@ -174,13 +191,26 @@ export function buildSequenceTasksGraph(model, projection = {}) {
     const rowOf = [];
     const isReply = [];
     const rowOfEdgeId = new Map();
+    const replyRowOfCallId = new Map();
+    // Both halves of a pair whose reply left the call's row. They stop hugging,
+    // because a lift only reads as one exchange when the two lines are adjacent.
+    const detached = new Set();
     let rowCount = 0;
     rows.forEach((edge, index) => {
         const half = halves.get(edge.id);
         const callRow = half?.half === 'reply' ? rowOfEdgeId.get(half.mate) : undefined;
         if (callRow !== undefined) {
-            rowOf[index] = callRow;
             isReply[index] = true;
+            // A reply that closes over nested rows has to sit below them, or the
+            // bar for the still-open call would have no height to occupy.
+            const nested = activation && rowCount - 1 > callRow;
+            rowOf[index] = nested ? rowCount : callRow;
+            if (nested) {
+                rowCount += 1;
+                detached.add(edge.id);
+                detached.add(half.mate);
+            }
+            replyRowOfCallId.set(half.mate, rowOf[index]);
             return;
         }
         rowOf[index] = rowCount;
@@ -238,7 +268,7 @@ export function buildSequenceTasksGraph(model, projection = {}) {
             __sequence_step__: standing || reply ? '' : String(step),
             __sequence_standing__: standing,
             __pair_half__: half,
-            __pair_lift__: half ? TASKS_PAIR_LIFT : 0,
+            __pair_lift__: half && !detached.has(edge.id) ? TASKS_PAIR_LIFT : 0,
         };
     });
 
@@ -271,6 +301,38 @@ export function buildSequenceTasksGraph(model, projection = {}) {
             height: (band.bottom - band.top) + TASKS_SEQUENCE_ROW_HEIGHT,
         });
     });
+    // A bar is the frame's lifetime on the lane that is executing: it opens on
+    // the row the call arrives and closes on the row its reply leaves. Depth
+    // shifts a bar that opens while another is still open on the same lane, so
+    // recursion stays two bars rather than one.
+    if (activation) {
+        const openByLane = {};
+        rows.forEach((edge, index) => {
+            if (isReply[index] || halves.get(edge.id)?.half !== 'call') return;
+            const replyRow = replyRowOfCallId.get(edge.id);
+            if (replyRow === undefined || replyRow <= rowOf[index]) return;
+            const open = openByLane[edge.target] || [];
+            const depth = open.filter((bar) => bar.bottom >= rowOf[index]).length;
+            const bar = { top: rowOf[index], bottom: replyRow, depth };
+            openByLane[edge.target] = [...open, bar];
+            const laneWidth = TASKS_SEQUENCE_LANE_WIDTH - TASKS_SEQUENCE_LANE_GAP;
+            const laneX = TASKS_SEQUENCE_LEFT + (laneIndex[edge.target] ?? 0) * TASKS_SEQUENCE_LANE_WIDTH;
+            const inset = Math.min(bar.depth * TASKS_SEQUENCE_ACTIVATION_INSET, (laneWidth - 12) / 2);
+            nodes.push({
+                id: `__seq_activation_${index}`,
+                label: '',
+                __kind__: 'sequenceActivation',
+                // The renderer takes the executing lane's own colour from here,
+                // so the frame reads as belonging to that lifeline.
+                __sequence_lane__: edge.target,
+                __fixed_size__: true,
+                __z__: TASKS_SEQUENCE_ACTIVATION_Z,
+                position: { x: laneX + inset, y: rowY(bar.top) - TASKS_SEQUENCE_ACTIVATION_OVERHANG },
+                width: laneWidth - inset * 2,
+                height: rowY(bar.bottom) - rowY(bar.top) + TASKS_SEQUENCE_ACTIVATION_OVERHANG * 2,
+            });
+        });
+    }
     return { nodes, edges };
 }
 
@@ -530,8 +592,8 @@ export const TASKS_LAYOUTS = {
     sequence: {
         id: 'sequence',
         label: 'Sequence',
-        keys: ['sequence_role', 'sequence_phase'],
-        chromeKinds: ['sequencePhase'],
+        keys: ['sequence_role', 'sequence_phase', 'sequence_activation'],
+        chromeKinds: ['sequencePhase', 'sequenceActivation'],
         authoredHandles: true,
         edgesOverNodes: true,
         build: buildSequenceTasksGraph,

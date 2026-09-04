@@ -10,6 +10,8 @@ nodes=kg.nodes
 attrs=kg.attrs
 base:
 	edges=kg.edges
+fence:
+	edges=kg.fence.edges
 palette=kg.palette
 code_source=../../
 
@@ -17,6 +19,7 @@ code_source=../../
 resolves color=relation.resolves
 reads color=relation.reads
 renders color=relation.renders
+registers color=relation.registers
 shows color=relation.shows
 returns color=relation.returns
 replies color=relation.replies
@@ -45,3 +48,30 @@ flow:
 		ui: Step 7 — show the result
 			nodes=content-route,document-page,browser-ui
 			caption="DocumentPage returns the finished HTML response. The route returns it and the browser displays the page."
+fence:
+	source=fence
+	layout=sequence
+	sequence_role=role
+	sequence_phase=phase
+	sequence_activation=true
+	color_by=layer
+	edge_color_by=role
+	edge_label_from=note
+	hover_attrs=description,code
+	caption="The same reading rule as above: solid line is the call, dashed line under it is the value coming back. One lifeline owns the block, render_block_code. It never learns what items means; it only asks the registry who owns the word. The bar on the items handler is its frame: it opens when the call lands and closes when the reply leaves, so the pack read and the graph build are visibly inside step 4, not after it."
+	slides:
+		register: Step 1 — the fence gets an owner
+			nodes=tasks-extension,extension-runtime
+			caption="Before any request, the items extension writes one entry into markdown_fences. This is the only step here that is not part of a request, which is why it stands alone."
+		dispatch: Steps 2 to 3 — find the handler
+			nodes=markdown-renderer,fence-dispatch,extension-runtime
+			caption="from_md reaches a fenced block. The dispatch reads the language off the info string and asks the registry for its owner. A miss falls through to a plain code block."
+		load: Steps 4 to 5 — read the pack
+			nodes=fence-dispatch,items-handler,pack-loader
+			caption="The handler gets the fence body and nothing else. Here the body is frontmatter naming a pack, so the graph is read from disk rather than from the page."
+		build: Step 6 — build the drawable graph
+			nodes=items-handler,graph-builder
+			caption="The model is not what gets drawn. Groups can collapse, so this step flattens the model into a node list and an edge list."
+		emit: Step 7 — hand it to the browser
+			nodes=fence-dispatch,items-widget
+			caption="A div carrying the model as JSON. The Python side is done, and tasks.js draws the picture you are reading."

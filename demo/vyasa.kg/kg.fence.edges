@@ -1,0 +1,52 @@
+f1: tasks-extension -> extension-runtime registers
+	note=→ app.markdown.fence("items", handler)
+	description=At startup the extension writes one entry into markdown_fences. This is the only moment in the story that is not part of a request.
+	code=[TasksExtension.register](vyasa/extensions_builtin/tasks/__init__.py){show=symbol symbol=TasksExtension.register kind=Method focus='match[app.markdown.fence("items", items_handler)]' context=4}
+f2: markdown-renderer -> fence-dispatch renders
+	note=→ render_block_code(token)
+	description=from_md walks the parsed document. Every fenced block reaches render_block_code, which owns every step below.
+	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[lang, attrs = _parse_fence_attrs(info)]" context=4}
+f3: fence-dispatch -> extension-runtime resolves
+	pair=f-lookup
+	note=→ markdown_fences.get(lang)
+	description=The info string gives the language. The dispatch asks the registry who owns it.
+	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[handler = runtime.markdown_fences.get(lang)]" context=2}
+f4: extension-runtime -> fence-dispatch returns
+	pair=f-lookup
+	note=← handler, or nothing
+	description=A hit means an extension owns the fence. A miss falls through to a plain code block, which is what an unclaimed language gets.
+	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[return render_code_shell(]" context=3}
+f5: fence-dispatch -> items-handler renders
+	pair=f-call
+	note=→ handler(code, context, attrs)
+	description=The dispatch calls the handler with the fence body and nothing else. It never learns what items means.
+	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[return handler(code, context, attrs)]" context=2}
+f6: items-handler -> pack-loader reads
+	pair=f-pack
+	note=→ read_kg_pack(kg.schema)
+	description=The fence body is frontmatter only. items_schema names a pack, so the handler reads the graph from disk instead of from the fence.
+	code=[_apply_kg_schema](vyasa/extensions_builtin/tasks/model.py){show=symbol symbol=_apply_kg_schema kind=Function focus="match[compiled = read_kg_pack(schema_path]" context=3}
+f7: pack-loader -> items-handler returns
+	pair=f-pack
+	note=← nodes, edges, attrs, views
+	description=Every file beside kg.schema comes back as one compiled model, including the views and slides this page reads from.
+	code=[read_kg_pack](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=read_kg_pack kind=Function context=4}
+f8: items-handler -> graph-builder renders
+	pair=f-build
+	note=→ build_collapsed_graph(model)
+	description=Groups can be collapsed, so the drawable graph is not the model. This step flattens one into the other.
+	code=[render_tasks_block](vyasa/extensions_builtin/tasks/render.py){show=symbol symbol=render_tasks_block kind=Function focus="match[graph = build_collapsed_graph(model)]" context=3}
+f9: graph-builder -> items-handler returns
+	pair=f-build
+	note=← nodes and edges to draw
+	description=A flat node list and edge list, ready to serialise.
+	code=[build_collapsed_graph](vyasa/extensions_builtin/tasks/layout.py){show=symbol symbol=build_collapsed_graph kind=Function context=4}
+f10: items-handler -> fence-dispatch returns
+	pair=f-call
+	note=← widget HTML
+	description=The handler returns an HTML string. To the markdown pipeline it is no different from a code block.
+	code=[render_tasks_block](vyasa/extensions_builtin/tasks/render.py){show=symbol symbol=render_tasks_block kind=Function focus="match[payload = html.escape(json.dumps(model))]" context=4}
+f11: fence-dispatch -> items-widget shows
+	note=→ div plus JSON payload
+	description=The div carries the model as an escaped JSON attribute. From here the work is the browser's, and tasks.js draws what you see.
+	code=The drawing happens in static/extensions/tasks/tasks.js, outside the Python pipeline.

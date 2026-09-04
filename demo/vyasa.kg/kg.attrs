@@ -1,21 +1,28 @@
 @node_attrs
 layer:
-  core: content-route path-resolver frontmatter-reader filesystem-backend
-  pipeline: markdown-renderer
-  surface: document-page browser-ui
+  core: content-route path-resolver frontmatter-reader filesystem-backend extension-runtime
+  pipeline: markdown-renderer fence-dispatch
+  extension: tasks-extension items-handler pack-loader graph-builder
+  surface: document-page browser-ui items-widget
 
 @edge_attrs
 role:
-  call: e1 e2 e4 e8 e10
-  reply: e3 e5 e9 e11
+  call: e1 e2 e4 e8 e10 f2 f3 f5 f6 f8
+  reply: e3 e5 e9 e11 f4 f7 f9 f10
   branch: e6 e7
-  boundary: e12
+  boundary: e12 f1 f11
 phase:
   request: e1
   resolve: e2 e3
   read: e4 e5 e6 e7
   render: e8 e9 e10 e11
   show: e12
+  register: f1
+  dispatch: f2 f3 f4
+  handle: f5 f10
+  load: f6 f7
+  build: f8 f9
+  emit: f11
 step:
   s1: e1
   s2: e2

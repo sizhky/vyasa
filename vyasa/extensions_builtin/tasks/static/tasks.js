@@ -5870,11 +5870,20 @@ async function renderTasksGraphs(rootElement = document) {
                     const nodesWithStyle = rawGraph.nodes.map((node) => {
                         if (TASKS_PASSIVE_NODE_KINDS.has(node.__kind__)) {
                             const passiveZ = Number.isFinite(node.__z__) ? node.__z__ : 1;
+                            // An activation bar borrows the colour of the lane it
+                            // sits on, so a frame reads as that lifeline executing
+                            // rather than as a grey box laid over it.
+                            const lane = node.__sequence_lane__
+                                ? (model?.tasks || []).find((task) => task.id === node.__sequence_lane__)
+                                : null;
+                            const laneColor = lane
+                                ? (resolveTasksNodeColor(lane, model, activeColorBy, activeColorPalette) || defaultNodeColor)
+                                : '';
                             return {
                                 id: node.id,
                                 type: 'vyasaTask',
                                 position: node.position,
-                                data: node,
+                                data: laneColor ? { ...node, __sequence_color__: laneColor } : node,
                                 style: { width: node.width, height: node.height, zIndex: passiveZ, background: 'transparent', border: 'none', pointerEvents: 'none' },
                                 zIndex: passiveZ,
                                 className: 'vyasa-tasks-node--passive',
@@ -7416,6 +7425,22 @@ async function renderTasksGraphs(rootElement = document) {
                                 : '1px solid color-mix(in srgb, var(--vyasa-ink) 12%, transparent)',
                             opacity: data.__matrix_empty__ ? 0.55 : 1,
                             borderRadius: '8px',
+                        },
+                    });
+                }
+                if (data?.__kind__ === 'sequenceActivation') {
+                    // Stronger than the lifeline column it covers, in the same
+                    // colour, so the frame reads as that lane doing work and an
+                    // arrow meeting the lane meets the bar's own edge.
+                    const accent = data.__sequence_color__ || 'currentColor';
+                    return React.createElement('div', {
+                        style: {
+                            width: '100%',
+                            height: '100%',
+                            boxSizing: 'border-box',
+                            background: `color-mix(in srgb, ${accent} 30%, var(--vyasa-paper))`,
+                            border: `1px solid color-mix(in srgb, ${accent} 62%, transparent)`,
+                            borderRadius: '4px',
                         },
                     });
                 }

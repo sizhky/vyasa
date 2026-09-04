@@ -224,3 +224,95 @@ test('pair_by set on the graph works too, so the base view pairs without a proje
     );
     assert.deepEqual(graph.edges.map((edge) => edge.__pair_half__), ['call', 'reply', '']);
 });
+
+// An outer call that stays open while an inner call runs and returns. This is
+// the shape a flat step counter cannot express: the inner work is not a further
+// step after the outer one, it happens inside it.
+function nestedFixture() {
+    return {
+        tasks: [
+            { id: 'route', label: 'Route' },
+            { id: 'handler', label: 'Handler' },
+            { id: 'store', label: 'Store' },
+        ],
+        dependency_edges: [
+            { id: 'c1', source: 'route', target: 'handler', role: 'call', phase: 'serve', pair: 'outer' },
+            { id: 'c2', source: 'handler', target: 'store', role: 'call', phase: 'serve', pair: 'inner' },
+            { id: 'r2', source: 'store', target: 'handler', role: 'reply', phase: 'serve', pair: 'inner' },
+            { id: 'r1', source: 'handler', target: 'route', role: 'reply', phase: 'serve', pair: 'outer' },
+        ],
+    };
+}
+
+const nestedProjection = { sequence_role: 'role', sequence_phase: 'phase', pair_by: 'pair', sequence_activation: 'true' };
+const bars = (graph) => graph.nodes.filter((node) => node.__kind__ === 'sequenceActivation');
+const rowOffsets = (graph) => graph.edges.map((edge) => handleFor(graph, edge.source, 'source', edge.sourceHandle).offsetPct);
+
+test('activation is off unless the view asks for it, so every existing view is untouched', () => {
+    const graph = buildSequenceTasksGraph(nestedFixture(), { sequence_role: 'role', sequence_phase: 'phase', pair_by: 'pair' });
+    const [outerCall, , , outerReply] = rowOffsets(graph);
+    assert.equal(bars(graph).length, 0);
+    // Without activation the reply rides its call's row, nesting and all.
+    assert.equal(outerCall, outerReply);
+});
+
+test('a reply that closes over nested rows drops below them, so the frame has height', () => {
+    const graph = buildSequenceTasksGraph(nestedFixture(), nestedProjection);
+    const [outerCall, innerCall, , outerReply] = rowOffsets(graph);
+    assert.ok(outerReply > innerCall, 'the outer reply sits below the nested call');
+    assert.ok(innerCall > outerCall);
+});
+
+test('a leaf pair still shares one row, because nothing ran inside it', () => {
+    const graph = buildSequenceTasksGraph(nestedFixture(), nestedProjection);
+    const innerCallOut = handleFor(graph, 'handler', 'source', graph.edges[1].sourceHandle);
+    const innerReplyIn = handleFor(graph, 'handler', 'target', graph.edges[2].targetHandle);
+    assert.equal(innerCallOut.offsetPct, innerReplyIn.offsetPct);
+});
+
+test('only the pair that split rows loses its lift, so a shared row still reads as one exchange', () => {
+    const graph = buildSequenceTasksGraph(nestedFixture(), nestedProjection);
+    const [outerCall, innerCall, innerReply, outerReply] = graph.edges;
+    assert.equal(outerCall.__pair_lift__, 0);
+    assert.equal(outerReply.__pair_lift__, 0);
+    assert.ok(innerCall.__pair_lift__ !== 0);
+    assert.equal(innerCall.__pair_lift__, innerReply.__pair_lift__);
+});
+
+test('one bar per nesting call, filling the lane that is executing', () => {
+    const graph = buildSequenceTasksGraph(nestedFixture(), nestedProjection);
+    const drawn = bars(graph);
+    const handler = graph.nodes.find((node) => node.id === 'handler');
+    assert.equal(drawn.length, 1);
+    // The lane's full width, so an arrow meeting the lane meets the bar's edge.
+    assert.equal(drawn[0].position.x, handler.position.x);
+    assert.equal(drawn[0].width, handler.width);
+    assert.equal(drawn[0].__sequence_lane__, 'handler');
+    assert.ok(drawn[0].height > 46);
+});
+
+test('a nested reply still takes no step number, so nesting never inflates the count', () => {
+    const graph = buildSequenceTasksGraph(nestedFixture(), nestedProjection);
+    assert.deepEqual(graph.edges.map((edge) => edge.__sequence_step__), ['1', '2', '', '']);
+});
+
+test('a recursive call gets its own bar, offset so the two stay legible', () => {
+    const graph = buildSequenceTasksGraph({
+        tasks: [{ id: 'route', label: 'Route' }, { id: 'walk', label: 'Walk' }, { id: 'leaf', label: 'Leaf' }],
+        dependency_edges: [
+            { id: 'c1', source: 'route', target: 'walk', role: 'call', pair: 'a' },
+            { id: 'c2', source: 'route', target: 'walk', role: 'call', pair: 'b' },
+            { id: 'c3', source: 'walk', target: 'leaf', role: 'call', pair: 'c' },
+            { id: 'r3', source: 'leaf', target: 'walk', role: 'reply', pair: 'c' },
+            { id: 'r2', source: 'walk', target: 'route', role: 'reply', pair: 'b' },
+            { id: 'r1', source: 'walk', target: 'route', role: 'reply', pair: 'a' },
+        ],
+    }, nestedProjection);
+    const drawn = bars(graph);
+    const walk = graph.nodes.find((node) => node.id === 'walk');
+    assert.equal(drawn.length, 2);
+    // The inner frame insets rather than leaving the lane, so both stay visible.
+    assert.equal(drawn[0].width, walk.width);
+    assert.ok(drawn[1].position.x > drawn[0].position.x);
+    assert.ok(drawn[1].width < drawn[0].width);
+});
