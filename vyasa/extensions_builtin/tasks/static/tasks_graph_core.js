@@ -220,10 +220,7 @@ export function sizeTaskNode(label, kind = 'task', widthOverride = null, options
 }
 
 export function isTasksGraphNodeSelectable(kind, isExpanded = false) {
-    if (kind === 'task') return true;
-    if (kind === 'group') return true;
-    if (kind === 'groupTitle') return true;
-    return false;
+    return tasksGraphNodeHitArea(kind, isExpanded) !== 'passive';
 }
 
 export function tasksGraphNodeAllowsHover(node, allowDimmed = false) {
@@ -234,6 +231,7 @@ export function tasksGraphNodeHitArea(kind, isExpanded = false) {
     if (kind === 'task') return 'selectable';
     if (kind === 'groupTitle') return 'control';
     if (kind === 'group') return 'selectable';
+    if (kind === 'sequenceFragment' || kind === 'sequenceActivation') return 'selectable';
     return 'passive';
 }
 
@@ -254,7 +252,7 @@ export function tasksExpandedRootRect(baseRect, expandedSize = {}) {
     };
 }
 
-function tasksGraphNodeAbsoluteRect(node, byId) {
+export function tasksGraphNodeAbsoluteRect(node, byId) {
     let x = Number(node?.position?.x) || 0;
     let y = Number(node?.position?.y) || 0;
     let parent = node?.parentId ? byId[node.parentId] : null;
@@ -263,7 +261,9 @@ function tasksGraphNodeAbsoluteRect(node, byId) {
         y += Number(parent?.position?.y) || 0;
         parent = parent?.parentId ? byId[parent.parentId] : null;
     }
-    return { left: x, right: x + (Number(node?.style?.width ?? node?.width) || 0), top: y, bottom: y + (Number(node?.style?.height ?? node?.height) || 0) };
+    const width = Number(node?.style?.width ?? node?.width) || 0;
+    const height = Number(node?.style?.height ?? node?.height) || 0;
+    return { x, y, width, height, left: x, right: x + width, top: y, bottom: y + height };
 }
 
 function tasksGraphSelectionNodeRect(node, byId) {
@@ -1078,4 +1078,27 @@ export function tasksReuseGraphElements(prev, next) {
         return element;
     });
     return unchanged ? prev : merged;
+}
+
+// Hit bounds restrict interaction without changing paint or selection bounds.
+export function tasksGraphNodeHitRect(node, byId) {
+    const rect = tasksGraphNodeAbsoluteRect(node, byId);
+    const hit = node.data?.__hit_rect__;
+    return hit ? { x: rect.x + (hit.dx || 0), y: rect.y + (hit.dy || 0), width: hit.width, height: hit.height } : rect;
+}
+
+// Authored drawing order belongs to layout, including during focus and selection.
+// The node renderer owns its fill; the shared overlay owns its focus outline.
+export function tasksGraphPaint(node) {
+    const zIndex = node.data?.__z__;
+    if (!Number.isFinite(zIndex)) return node;
+    return { ...node, zIndex, style: { ...node.style, zIndex,
+        ...(!node.source && !node.target ? { background: 'transparent', boxShadow: 'none' } : {}),
+    } };
+}
+
+// One closed path paints the corner, including its diagonal border.
+export function tasksGraphCornerPath(width, height, radius = 6) {
+    const cut = height / 2;
+    return `M ${radius} 0 H ${width} V ${height - cut} L ${width - cut} ${height} H 0 V ${radius} Q 0 0 ${radius} 0 Z`;
 }

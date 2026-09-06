@@ -33,12 +33,140 @@ const TASKS_SEQUENCE_ROW_HEIGHT = 46;
 // A frame opened while another is still open on the same lane insets by this
 // much per side, which is the only way to nest without leaving the lane.
 const TASKS_SEQUENCE_ACTIVATION_INSET = 7;
-// The bar reaches past both rows, so the arrowheads land on it rather than
-// beside it.
-const TASKS_SEQUENCE_ACTIVATION_OVERHANG = 11;
+// The bar clears its two rows by the same few pixels top and bottom. Flush on
+// the rows, the opening arrow and the closing reply sat exactly on the borders
+// and read as the frame's edges rather than as arrows inside it. A whole row of
+// slack was worse: the gap then read as time the frame was open for nothing.
+const TASKS_SEQUENCE_ACTIVATION_PAD = 9;
 // Above the lifeline column, below the arrows: the sequence layout draws edges
 // over nodes, so nothing is hidden.
 const TASKS_SEQUENCE_ACTIVATION_Z = 1001;
+
+// A combined fragment is UML's box for anything that is not one straight run of
+// rows: `alt` a branch, `opt` a single guarded branch, `loop`, `par`, `break`,
+// and `ref` a pointer at another interaction drawn elsewhere.
+//
+// The operator is the text before the colon, so `fragment=alt:cache` reads as
+// the alt named cache, and two alts written back to back stay two boxes instead
+// of merging. A box covers a CONTIGUOUS run of rows, which is the same rule the
+// phase bands already use, so no row ever has to name where a box ends.
+//
+// Nesting is a `/` path written outer first, `alt:auth/loop:retry`. Depth insets
+// the box on all four sides, the same trick the activation bars use, so an inner
+// frame is visibly inside its parent rather than merely overlapping it.
+const TASKS_SEQUENCE_FRAGMENT_PAD = 22;
+const TASKS_SEQUENCE_FRAGMENT_INSET = 9;
+// Every box gets a header line of its own above its first arrow, and a row that
+// opens three boxes gets three of them. Sharing the half-row above an arrow was
+// what made a stack of one-row fragments read as a pile of chips: the tag, the
+// guard and the arrow were all fighting for the same 23 pixels.
+const TASKS_SEQUENCE_FRAGMENT_HEADER = 22;
+// Over the activation bars. The box is transparent, so only its border and its
+// corner tag land on a bar, and that tag is the one thing that must stay
+// readable: a bar drawn over it hid which operator the box was.
+const TASKS_SEQUENCE_FRAGMENT_Z = 1002;
+
+// Where the boxes go, worked out BEFORE the rows are placed, because a box needs
+// vertical room that the rows themselves have to make.
+//
+// A box covers a contiguous run of rows. It opens when its path appears and
+// closes when that run ends, so no row states where a box stops. Nesting is a
+// `/` path written outer first, and a header line is claimed per level, ordered
+// outermost first, so a parent's tag always sits above its child's.
+// What each operator promises. A fragment has no node in the pack to hang a
+// description on, so the card states the rule the operator carries in UML rather
+// than leaving the reader to recognise a three-letter tag.
+const TASKS_SEQUENCE_FRAGMENT_MEANING = {
+    alt: 'Exactly one operand runs. The guards decide which, and an unguarded operand is the else.',
+    opt: 'One operand that runs only when its guard holds. Nothing runs otherwise.',
+    loop: 'The rows inside repeat while the guard holds.',
+    par: 'The operands run concurrently. Order between them is not stated.',
+    break: 'The rows inside run instead of the rest of the enclosing interaction, which is abandoned.',
+    ref: 'A pointer at an interaction told in full somewhere else.',
+    critical: 'The rows inside run without interleaving.',
+    neg: 'The rows inside describe a trace that must not happen.',
+    assert: 'The rows inside are the only valid continuation.',
+};
+
+// The corner tag is the only part of a fragment the pointer can hit. Its width
+// has to be known here as well as in the renderer, because the hit rect is
+// geometry and the layout owns geometry.
+const TASKS_SEQUENCE_FRAGMENT_TAG_HEIGHT = 20;
+function sequenceFragmentTagWidth(operator) {
+    return 22 + String(operator || '').length * 7;
+}
+
+function planSequenceFragments(rowCount, rowFragment, rowOperand, rowLanes, rowOperandNote = []) {
+    const boxes = [];
+    const headerRows = Array.from({ length: rowCount }, () => []);
+    let open = [];
+    for (let row = 0; row < rowCount; row += 1) {
+        const path = tasksSequenceFragmentPath(rowFragment[row]);
+        let shared = 0;
+        while (shared < open.length && shared < path.length && open[shared].key === path[shared].key) shared += 1;
+        open = open.slice(0, shared);
+        for (let depth = shared; depth < path.length; depth += 1) {
+            const box = { ...path[depth], depth, top: row, bottom: row, lanes: [], operands: [], header: null };
+            box.header = { box, row, guard: '' };
+            boxes.push(box);
+            open.push(box);
+            headerRows[row].push(box.header);
+        }
+        // A guard that changes inside one box starts the next operand. An `alt`
+        // with no guards is still one operand, so the box draws no separator
+        // rather than a line per row.
+        //
+        // The guard belongs to the OUTERMOST box that carries it. A nested box
+        // sits inside ONE operand of its parent, so repeating the text there
+        // printed the same `[else]` once per level.
+        const guard = rowOperand[row];
+        let claimed = false;
+        for (const box of open) {
+            box.bottom = row;
+            box.lanes.push(...rowLanes[row]);
+            const owns = Boolean(guard) && !claimed;
+            const last = box.operands[box.operands.length - 1];
+            if (last && last.guard === (owns ? guard : '')) {
+                // An operand runs over several rows and the note may be written
+                // on any of them, so the first one that carries it wins.
+                if (owns && !last.note) last.note = rowOperandNote[row] || '';
+                claimed = claimed || owns;
+                continue;
+            }
+            const operand = { guard: owns ? guard : '', note: owns ? (rowOperandNote[row] || '') : '', row, header: null };
+            box.operands.push(operand);
+            claimed = claimed || owns;
+            if (!owns) continue;
+            if (box.top === row) {
+                // The first operand shares the line the box opened on.
+                box.header.guard = guard;
+                operand.header = box.header;
+            } else {
+                operand.header = { box, row, guard };
+                headerRows[row].push(operand.header);
+            }
+        }
+    }
+    // Outermost first, so a parent header never lands under its own child's.
+    headerRows.forEach((list) => {
+        list.sort((left, right) => left.box.depth - right.box.depth);
+        list.forEach((header, index) => { header.slot = index; });
+    });
+    return { boxes, headerCounts: headerRows.map((list) => list.length) };
+}
+
+export function tasksSequenceFragmentPath(value) {
+    return String(value || '')
+        .split('/')
+        .map((segment) => segment.trim())
+        .filter(Boolean)
+        .map((segment) => {
+            const at = segment.indexOf(':');
+            const operator = (at < 0 ? segment : segment.slice(0, at)).trim().toLowerCase();
+            const name = at < 0 ? '' : segment.slice(at + 1).trim();
+            return { key: `${operator}:${name}`, operator, name };
+        });
+}
 
 const TASKS_LAYERED_BAND_PAD = 148;
 const TASKS_LAYERED_NODE_WIDTH = 168;
@@ -153,6 +281,11 @@ function requireLayoutAttr(layoutId, view, key) {
 // written in the view's edge source -- the pack states no step number, so
 // declaration order is the only ordering the author gives.
 export function buildSequenceTasksGraph(model, projection = {}) {
+    // Lane order is otherwise the order nodes are written in the pack, which is
+    // one global fact that two stories can need differently: a node introduced
+    // by an earlier story lands far left in a later one, and every arrow to it
+    // then runs backwards. A view states its own order instead.
+    const authoredLanes = layoutAttrList(projection.sequence_lanes);
     const tasks = model.tasks || [];
     const byId = Object.fromEntries(tasks.map((task) => [task.id, task]));
     const taskOrder = Object.fromEntries(tasks.map((task, index) => [task.id, index]));
@@ -163,6 +296,17 @@ export function buildSequenceTasksGraph(model, projection = {}) {
     const roleAttr = String(projection.sequence_role || '').trim();
     const phaseAttr = String(projection.sequence_phase || '').trim();
     const pairAttr = String(projection.pair_by || model.pair_by || '').trim();
+    // UML message kinds. Declaring the attribute is the opt-in: a view that names
+    // one asks for UML arrowheads, where a reply is dashed with an open head and
+    // `async` gets an open head on a solid line. A view that names none keeps the
+    // double harpoon every existing pack was authored against.
+    const messageAttr = String(projection.sequence_message || '').trim();
+    const fragmentAttr = String(projection.sequence_fragment || '').trim();
+    const operandAttr = String(projection.sequence_operand || '').trim();
+    // A guard is short by design -- it has to fit beside the corner tag. The
+    // sentence saying what this branch actually does in the system has nowhere
+    // to go on the box, so it is authored separately and read on the card.
+    const operandNoteAttr = String(projection.sequence_operand_note || '').trim();
     // UML carries call nesting in the activation bar, not in the step number.
     // Opt-in, because a bar needs the reply placed below whatever the call
     // opened, and a pair drawn on one row is the compact reading every existing
@@ -178,7 +322,20 @@ export function buildSequenceTasksGraph(model, projection = {}) {
     const rows = (model.dependency_edges || []).filter((edge) => byId[edge.source] && byId[edge.target]);
     // One lane per participant, in authored order: stage first, then the order
     // the nodes are written inside that stage.
-    const lanes = Array.from(new Set(rows.flatMap((edge) => [edge.source, edge.target]))).sort((left, right) => {
+    const participants = Array.from(new Set(rows.flatMap((edge) => [edge.source, edge.target])));
+    const strayLanes = authoredLanes.filter((id) => !participants.includes(id));
+    if (strayLanes.length) {
+        throw new Error(`layout=sequence has no lane for sequence_lanes=${strayLanes.join(', ')}`);
+    }
+    // An authored lane keeps its stated position; anything unnamed follows in
+    // the order it was already in, so naming one lane does not reorder the rest.
+    const authoredAt = new Map(authoredLanes.map((id, index) => [id, index]));
+    const lanes = participants.sort((left, right) => {
+        const leftAt = authoredAt.get(left);
+        const rightAt = authoredAt.get(right);
+        if (leftAt !== undefined || rightAt !== undefined) {
+            return (leftAt ?? Number.MAX_SAFE_INTEGER) - (rightAt ?? Number.MAX_SAFE_INTEGER);
+        }
         const leftStage = groupOrder[stageOf(left)] ?? Number.MAX_SAFE_INTEGER;
         const rightStage = groupOrder[stageOf(right)] ?? Number.MAX_SAFE_INTEGER;
         return (leftStage - rightStage) || ((taskOrder[left] || 0) - (taskOrder[right] || 0));
@@ -219,14 +376,48 @@ export function buildSequenceTasksGraph(model, projection = {}) {
         rowCount += 1;
     });
 
+    // A fragment is a property of the ROW, not of one arrow: everything drawn on
+    // that row is inside the same branch or loop. Collect the row's value from
+    // whichever half wrote one, so an author can put `fragment=` on the call and
+    // leave the reply bare.
+    const rowFragment = Array.from({ length: rowCount }, () => '');
+    const rowOperand = Array.from({ length: rowCount }, () => '');
+    const rowOperandNote = Array.from({ length: rowCount }, () => '');
+    const rowLanes = Array.from({ length: rowCount }, () => []);
+    rows.forEach((edge, index) => {
+        const row = rowOf[index];
+        if (fragmentAttr && !rowFragment[row]) rowFragment[row] = String(edge[fragmentAttr] ?? '').trim();
+        if (operandAttr && !rowOperand[row]) rowOperand[row] = String(edge[operandAttr] ?? '').trim();
+        if (operandNoteAttr && !rowOperandNote[row]) rowOperandNote[row] = String(edge[operandNoteAttr] ?? '').trim();
+        rowLanes[row].push(laneIndex[edge.source] ?? 0, laneIndex[edge.target] ?? 0);
+    });
+    const plan = fragmentAttr ? planSequenceFragments(rowCount, rowFragment, rowOperand, rowLanes, rowOperandNote) : null;
+    const headerCounts = plan ? plan.headerCounts : Array.from({ length: rowCount }, () => 0);
+
     const bodyTop = TASKS_SEQUENCE_LIFELINE_TOP;
     const capWidth = TASKS_SEQUENCE_LANE_WIDTH - TASKS_SEQUENCE_LANE_GAP;
     // The first row starts below the deepest cap, so a three-line participant
     // name never sits on top of step one.
     const capHeight = Math.max(0, ...lanes.map((id) => labelHeight(byId[id].label || id, capWidth, 'groupTitle')));
     const firstRow = Math.max(TASKS_SEQUENCE_FIRST_ROW, bodyTop + capHeight + 34);
-    const bodyHeight = (firstRow - bodyTop) + (rowCount + 1) * TASKS_SEQUENCE_ROW_HEIGHT;
-    const rowY = (index) => firstRow + index * TASKS_SEQUENCE_ROW_HEIGHT;
+    // Rows are no longer evenly spaced: one that opens a fragment carries that
+    // box's header band on top of its own height. Everything downstream reads a
+    // row's y through rowY, so the table is the only thing that had to change.
+    const bandTops = [];
+    const arrowYs = [];
+    let cursor = firstRow - TASKS_SEQUENCE_ROW_HEIGHT / 2;
+    for (let row = 0; row < rowCount; row += 1) {
+        bandTops.push(cursor);
+        const header = headerCounts[row] * TASKS_SEQUENCE_FRAGMENT_HEADER;
+        arrowYs.push(cursor + header + TASKS_SEQUENCE_ROW_HEIGHT / 2);
+        cursor = arrowYs[row] + TASKS_SEQUENCE_ROW_HEIGHT / 2;
+    }
+    const rowY = (index) => arrowYs[index] ?? firstRow;
+    const bandTop = (index) => bandTops[index] ?? (firstRow - TASKS_SEQUENCE_ROW_HEIGHT / 2);
+    const slotY = (header) => bandTop(header.row) + header.slot * TASKS_SEQUENCE_FRAGMENT_HEADER;
+    const bodyHeight = rowCount
+        ? (rowY(rowCount - 1) + 2 * TASKS_SEQUENCE_ROW_HEIGHT) - bodyTop
+        : (firstRow - bodyTop) + TASKS_SEQUENCE_ROW_HEIGHT;
     const offsetPct = (index) => ((rowY(index) - bodyTop) / bodyHeight) * 100;
 
     const handles = {};
@@ -269,6 +460,10 @@ export function buildSequenceTasksGraph(model, projection = {}) {
             __sequence_standing__: standing,
             __pair_half__: half,
             __pair_lift__: half && !detached.has(edge.id) ? TASKS_PAIR_LIFT : 0,
+            __sequence_uml__: Boolean(messageAttr),
+            // A reply is already known from the pair, so the attribute only has
+            // to separate a blocking call from a fire-and-forget one.
+            __sequence_message__: messageAttr ? String(edge[messageAttr] ?? '').trim().toLowerCase() : '',
         };
     });
 
@@ -301,6 +496,104 @@ export function buildSequenceTasksGraph(model, projection = {}) {
             height: (band.bottom - band.top) + TASKS_SEQUENCE_ROW_HEIGHT,
         });
     });
+    // The steps a run of rows covers. A fragment card names the steps inside its
+    // box and a bar card names the steps its frame stays open for: one fact, two
+    // readers, so it is derived once here rather than twice below.
+    const stepsByRow = Array.from({ length: rowCount }, () => []);
+    rows.forEach((edge, index) => {
+        const step = edges[index].__sequence_step__;
+        if (step) stepsByRow[rowOf[index]].push(step);
+    });
+    const stepSpan = (fromRow, toRow) => {
+        const covered = stepsByRow.slice(fromRow, toRow + 1).flat();
+        if (!covered.length) return '';
+        const first = covered[0];
+        const last = covered[covered.length - 1];
+        return first === last ? first : `${first} to ${last}`;
+    };
+    // A card names a participant the way the reader sees it on the lane cap, not
+    // by the id the pack happens to use.
+    const laneLabel = (id) => byId[id]?.label || id;
+    // What an arrow says on the page. `edge_label_from` is the pack's own choice
+    // of which attribute is the label, so a card must not hard-code `note`.
+    const labelAttr = String(projection.edge_label_from || model.edge_label_from || '').trim();
+    const edgeById = new Map(rows.map((edge) => [edge.id, edge]));
+    const edgeNote = (edgeId) => {
+        const edge = edgeById.get(edgeId);
+        return (labelAttr && edge ? String(edge[labelAttr] ?? '').trim() : '') || edgeId;
+    };
+    if (plan) {
+        plan.boxes.forEach((box, index) => {
+            // The box covers the lanes its own rows touch. Spanning every lane
+            // would claim participants the branch never speaks to.
+            const minLane = Math.min(...box.lanes);
+            const maxLane = Math.max(...box.lanes);
+            const pad = Math.max(6, TASKS_SEQUENCE_FRAGMENT_PAD - box.depth * TASKS_SEQUENCE_FRAGMENT_INSET);
+            const left = TASKS_SEQUENCE_LEFT + minLane * TASKS_SEQUENCE_LANE_WIDTH - pad;
+            const right = TASKS_SEQUENCE_LEFT + maxLane * TASKS_SEQUENCE_LANE_WIDTH + capWidth + pad;
+            // The top is the box's own header line. The bottom clears its last
+            // arrow, tightening by depth so a child that ends on the same row as
+            // its parent still closes inside it.
+            const top = slotY(box.header);
+            const bottom = rowY(box.bottom) + Math.max(10, (TASKS_SEQUENCE_ROW_HEIGHT / 2) - box.depth * 5);
+            // One card row per operand, because the card collapses newlines and a
+            // joined string would run two branches into one paragraph. The guard
+            // leads, then the sentence saying what that branch does here.
+            const guarded = box.operands.filter((operand) => operand.guard);
+            const operandRows = Object.fromEntries(guarded.map((operand, position) => [
+                `operand_${position + 1}`,
+                operand.note ? `${operand.guard} — ${operand.note}` : operand.guard,
+            ]));
+            const steps = stepSpan(box.top, box.bottom);
+            // The participants the box claims. The border alone says which lanes
+            // it spans; the card says which ones it is actually about.
+            const covers = lanes.slice(minLane, maxLane + 1).map(laneLabel).join(', ');
+            nodes.push({
+                id: `__seq_fragment_${index}`,
+                // The name after the colon, which is what `ref` and a named loop
+                // carry. It is not drawn on the box: `fragment=` sits on every
+                // arrow inside, so the hover and click cards already show it.
+                label: box.name ? `${box.operator} · ${box.name}` : box.operator,
+                __kind__: 'sequenceFragment',
+                __sequence_fragment_op__: box.operator,
+                __sequence_fragment_depth__: box.depth,
+                // Plain keys, so the same card that shows a node's attributes
+                // shows a fragment's without knowing what a fragment is.
+                operator: box.operator,
+                ...(box.name ? { name: box.name } : {}),
+                ...operandRows,
+                ...(steps ? { steps } : {}),
+                ...(covers ? { covers } : {}),
+                description: TASKS_SEQUENCE_FRAGMENT_MEANING[box.operator]
+                    || 'A combined fragment: the rows inside it are read as one unit.',
+                // Only the corner tag answers the pointer. The box covers whole
+                // rows, so a full-area hit rect would shadow every lifeline and
+                // arrow it is drawn around.
+                __hit_rect__: {
+                    dx: 0,
+                    dy: 0,
+                    width: sequenceFragmentTagWidth(box.operator),
+                    height: TASKS_SEQUENCE_FRAGMENT_TAG_HEIGHT,
+                },
+                // Offsets from the box's own top, so the renderer places a rule
+                // and a guard without knowing which row either came from.
+                __sequence_operands__: box.operands.map((operand, position) => ({
+                    guard: operand.guard,
+                    // The first operand needs no rule: the box's top edge is
+                    // already its boundary.
+                    rule: position === 0 ? -1 : bandTop(operand.row) - top,
+                    // An operand with no header of its own carries no guard to
+                    // draw, but never let it resolve above the box it belongs to.
+                    top: Math.max(0, (operand.header ? slotY(operand.header) : bandTop(operand.row)) - top),
+                })),
+                __fixed_size__: true,
+                __z__: TASKS_SEQUENCE_FRAGMENT_Z + box.depth,
+                position: { x: left, y: top },
+                width: right - left,
+                height: bottom - top,
+            });
+        });
+    }
     // A bar is the frame's lifetime on the lane that is executing: it opens on
     // the row the call arrives and closes on the row its reply leaves. Depth
     // shifts a bar that opens while another is still open on the same lane, so
@@ -318,18 +611,34 @@ export function buildSequenceTasksGraph(model, projection = {}) {
             const laneWidth = TASKS_SEQUENCE_LANE_WIDTH - TASKS_SEQUENCE_LANE_GAP;
             const laneX = TASKS_SEQUENCE_LEFT + (laneIndex[edge.target] ?? 0) * TASKS_SEQUENCE_LANE_WIDTH;
             const inset = Math.min(bar.depth * TASKS_SEQUENCE_ACTIVATION_INSET, (laneWidth - 12) / 2);
+            const width = laneWidth - inset * 2;
+            const height = rowY(bar.bottom) - rowY(bar.top) + TASKS_SEQUENCE_ACTIVATION_PAD * 2;
             nodes.push({
                 id: `__seq_activation_${index}`,
-                label: '',
+                // The step the frame opens on. Its closing reply carries no
+                // number of its own, so without this the bottom edge reads as
+                // nothing and the height says only "somewhere below".
+                label: edges[index].__sequence_step__ || '',
                 __kind__: 'sequenceActivation',
                 // The renderer takes the executing lane's own colour from here,
                 // so the frame reads as belonging to that lifeline.
                 __sequence_lane__: edge.target,
+                // What the two edges SAY, not what they are called. An id names
+                // nothing to a reader, and the pack already states which attribute
+                // is an arrow's label.
+                lane: laneLabel(edge.target),
+                call: edgeNote(edge.id),
+                reply: edgeNote(halves.get(edge.id).mate),
+                ...(stepSpan(rowOf[index], replyRow) ? { steps: stepSpan(rowOf[index], replyRow) } : {}),
+                description: 'One frame on this lane. It opens when the call lands and closes when the reply leaves, so every row inside it happened while that call was still running.',
+                // The bar draws its own box, so the whole box answers the pointer.
+                // Nothing smaller would be findable: it carries no text but a step.
+                __hit_rect__: { dx: 0, dy: 0, width, height },
                 __fixed_size__: true,
                 __z__: TASKS_SEQUENCE_ACTIVATION_Z,
-                position: { x: laneX + inset, y: rowY(bar.top) - TASKS_SEQUENCE_ACTIVATION_OVERHANG },
-                width: laneWidth - inset * 2,
-                height: rowY(bar.bottom) - rowY(bar.top) + TASKS_SEQUENCE_ACTIVATION_OVERHANG * 2,
+                position: { x: laneX + inset, y: rowY(bar.top) - TASKS_SEQUENCE_ACTIVATION_PAD },
+                width,
+                height,
             });
         });
     }
@@ -592,8 +901,11 @@ export const TASKS_LAYOUTS = {
     sequence: {
         id: 'sequence',
         label: 'Sequence',
-        keys: ['sequence_role', 'sequence_phase', 'sequence_activation'],
-        chromeKinds: ['sequencePhase', 'sequenceActivation'],
+        keys: [
+            'sequence_role', 'sequence_phase', 'sequence_activation', 'sequence_lanes',
+            'sequence_message', 'sequence_fragment', 'sequence_operand', 'sequence_operand_note',
+        ],
+        chromeKinds: ['sequencePhase', 'sequenceActivation', 'sequenceFragment'],
         authoredHandles: true,
         edgesOverNodes: true,
         build: buildSequenceTasksGraph,

@@ -1,21 +1,37 @@
 f1: tasks-extension -> extension-runtime registers
 	note=→ app.markdown.fence("items", handler)
-	description=At startup the extension writes one entry into markdown_fences. This is the only moment in the story that is not part of a request.
+	description=The extension writes one entry into markdown_fences at startup. This is the only step in this view that runs outside a request.
 	code=[TasksExtension.register](vyasa/extensions_builtin/tasks/__init__.py){show=symbol symbol=TasksExtension.register kind=Method focus='match[app.markdown.fence("items", items_handler)]' context=4}
 f2: markdown-renderer -> fence-dispatch renders
 	note=→ render_block_code(token)
-	description=from_md walks the parsed document. Every fenced block reaches render_block_code, which owns every step below.
+	description=from_md walks the parsed document. Every fenced block reaches render_block_code, which runs every step below.
 	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[lang, attrs = _parse_fence_attrs(info)]" context=4}
 f3: fence-dispatch -> extension-runtime resolves
 	pair=f-lookup
 	note=→ markdown_fences.get(lang)
-	description=The info string gives the language. The dispatch asks the registry who owns it.
+	description=The info string gives the language. render_block_code asks the extension runtime which handler is registered for it.
 	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[handler = runtime.markdown_fences.get(lang)]" context=2}
 f4: extension-runtime -> fence-dispatch returns
 	pair=f-lookup
 	note=← handler, or nothing
-	description=A hit means an extension owns the fence. A miss falls through to a plain code block, which is what an unclaimed language gets.
+	description=A hit means an extension is registered for that language. A miss falls through to a plain code block, which is what an unregistered language gets.
 	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[return render_code_shell(]" context=3}
+f12: fence-dispatch -> code-shell renders
+	pair=f-shell
+	fragment=break:no owner
+	operand=[no handler registered]
+	operand_note=markdown_fences has no entry for that language. render_block_code returns a plain highlighted block, and no extension is called.
+	message=sync
+	note=→ render_code_shell(code, lang)
+	description=render_block_code returns a plain highlighted block for that fence. No step below this box runs.
+	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[return render_code_shell(]" context=4}
+f13: code-shell -> fence-dispatch returns
+	pair=f-shell
+	fragment=break:no owner
+	operand=[no handler registered]
+	note=← plain code HTML
+	description=The same shape of value the handler would have returned. The markdown pipeline cannot tell the two apart, which is why the miss needs no special case downstream.
+	code=[render_code_shell](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=render_code_shell kind=Function context=4}
 f5: fence-dispatch -> items-handler renders
 	pair=f-call
 	note=→ handler(code, context, attrs)
@@ -26,6 +42,53 @@ f6: items-handler -> pack-loader reads
 	note=→ read_kg_pack(kg.schema)
 	description=The fence body is frontmatter only. items_schema names a pack, so the handler reads the graph from disk instead of from the fence.
 	code=[_apply_kg_schema](vyasa/extensions_builtin/tasks/model.py){show=symbol symbol=_apply_kg_schema kind=Function focus="match[compiled = read_kg_pack(schema_path]" context=3}
+f14: pack-loader -> context-pack reads
+	pair=f-context
+	fragment=alt:pack shape/ref:context pack
+	operand=[schema names contexts]
+	operand_note=The schema declares contexts, so the pack is a timeline of stages with edges introduced at each one. read_kg_pack delegates the whole build to _read_context_kg_pack and returns its result.
+	message=sync
+	note=→ _read_context_kg_pack(schema)
+	description=A pack that declares contexts has its own catalog, stages and edge introductions. read_kg_pack delegates the whole build rather than carrying a second shape.
+	code=[read_kg_pack](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=read_kg_pack kind=Function focus="match[return _read_context_kg_pack(schema_path, schema, context_id)]" context=3}
+f15: context-pack -> pack-loader returns
+	pair=f-context
+	fragment=alt:pack shape/ref:context pack
+	operand=[schema names contexts]
+	note=← the compiled model
+	description=read_kg_pack returns that result unchanged. No further step runs in this branch, so the ref box holds the whole of it.
+	code=[_read_context_kg_pack](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=_read_context_kg_pack kind=Function context=4}
+f16: pack-loader -> pack-files reads
+	pair=f-sources
+	fragment=alt:pack shape/loop:every source
+	operand=[else]
+	operand_note=A plain pack. read_kg_pack walks the sources its views name, merges every nodes, edges and attrs file into one model, and may write a cache beside the schema.
+	message=sync
+	note=→ read_nodes, read_edges, apply_attrs
+	description=One pass per source a view names, and inside it one pass per file. Later files merge onto earlier ones, which is how kg.extensions.edges adds to kg.edges without repeating it.
+	code=[read_kg_pack](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=read_kg_pack kind=Function focus="match[for source_name in _source_names_for_views(schema)]" context=8}
+f17: pack-files -> pack-loader returns
+	pair=f-sources
+	fragment=alt:pack shape/loop:every source
+	operand=[else]
+	note=← nodes, edges, attrs merged
+	description=One dict of nodes and one of edges, keyed by id, with every source folded in.
+	code=[read_kg_pack](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=read_kg_pack kind=Function focus="match[graph[\"dependency_edges\"] = list(edges_by_id.values())]" context=4}
+f18: pack-loader -> kg-cache reads
+	pair=f-cache
+	fragment=alt:pack shape/opt:cache
+	operand=[else]
+	message=sync
+	note=→ _write_kg_cache(schema, graph)
+	description=Only when the schema names a cache and that path is a real file. A ref-served pack reads from an object store, so there is nothing to write to and the box is skipped.
+	code=[_write_kg_cache](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=_write_kg_cache kind=Function focus="match[if not cache_name:]" context=6}
+f19: kg-cache -> pack-loader returns
+	pair=f-cache
+	fragment=alt:pack shape/opt:cache
+	operand=[else]
+	note=← written, nothing returned
+	description=The cache is a copy of the model, not the value returned. read_kg_pack returns the model it already built, whether or not this write happened.
+	code=[_write_kg_cache](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=_write_kg_cache kind=Function focus="match[cache_path.write_text(]" context=3}
 f7: pack-loader -> items-handler returns
 	pair=f-pack
 	note=← nodes, edges, attrs, views
@@ -47,6 +110,7 @@ f10: items-handler -> fence-dispatch returns
 	description=The handler returns an HTML string. To the markdown pipeline it is no different from a code block.
 	code=[render_tasks_block](vyasa/extensions_builtin/tasks/render.py){show=symbol symbol=render_tasks_block kind=Function focus="match[payload = html.escape(json.dumps(model))]" context=4}
 f11: fence-dispatch -> items-widget shows
+	message=async
 	note=→ div plus JSON payload
 	description=The div carries the model as an escaped JSON attribute. From here the work is the browser's, and tasks.js draws what you see.
 	code=The drawing happens in static/extensions/tasks/tasks.js, outside the Python pipeline.

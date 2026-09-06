@@ -9,7 +9,7 @@ and the other reads an edge, and one common ``row=`` would hide that.
 Aliases keep packs written against an earlier key working.
 
 >>> sorted(layout_keys("sequence"))
-['sequence_activation', 'sequence_phase', 'sequence_role']
+['sequence_activation', 'sequence_fragment', 'sequence_lanes', 'sequence_message', 'sequence_operand', 'sequence_operand_note', 'sequence_phase', 'sequence_role']
 >>> layout_keys("nope")
 ()
 >>> sorted(all_layout_keys())[:3]
@@ -23,7 +23,18 @@ Aliases keep packs written against an earlier key working.
 from __future__ import annotations
 
 LAYOUT_KEYS: dict[str, tuple[str, ...]] = {
-    "sequence": ("sequence_role", "sequence_phase", "sequence_activation"),
+    "sequence": (
+        "sequence_role",
+        "sequence_phase",
+        "sequence_activation",
+        "sequence_lanes",
+        # UML interaction keys: the message kind on an arrow, and the combined
+        # fragment plus operand guard a row sits in.
+        "sequence_message",
+        "sequence_fragment",
+        "sequence_operand",
+        "sequence_operand_note",
+    ),
     "layered": ("layered_tier", "layered_order", "layered_aside"),
     "matrix": ("matrix_col", "matrix_row", "matrix_col_order", "matrix_tint"),
 }

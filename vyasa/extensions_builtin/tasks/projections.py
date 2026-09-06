@@ -193,11 +193,23 @@ def build_projection_model(base_model: dict, projection: dict) -> dict:
     where = projection.get("where") or {}
     source_attr_filters = _source_attr_filters(base_model, projection.get("source") or "")
     source_names = set(str(projection.get("source") or "").split("+"))
-    edge_source_scoped = bool(source_names and source_names != {"base"})
+    # `all` is the only wildcard. Every other name scopes, `base` included:
+    # `base` used to mean the whole pack, so a story left on it silently
+    # collected the next story's edges -- and its lanes -- the moment a second
+    # source was added beside it.
+    edge_source_scoped = bool(source_names) and "all" not in source_names
+    # Only a name declared under @sources scopes. An edge carries a context id
+    # in the same field, and a context is switched by kg_context_id rather than
+    # by a view, so an edge that names no declared source belongs to every view.
+    declared = set(base_model.get("kg_sources") or {})
+
+    def scoping_tags(edge: dict) -> set[str]:
+        return {tag for tag in (edge.get("__kg_sources") or []) if tag in declared}
+
     source_scoped_edges = [
         copy.deepcopy(edge)
         for edge in base_model.get("dependency_edges", [])
-        if edge_source_scoped and source_names.intersection(edge.get("__kg_sources") or [])
+        if edge_source_scoped and (not scoping_tags(edge) or source_names & scoping_tags(edge))
     ]
     endpoint_node_ids = {
         node_id

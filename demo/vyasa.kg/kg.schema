@@ -12,6 +12,8 @@ page:
 	edges=kg.edges
 fence:
 	edges=kg.fence.edges
+extensions:
+	edges=kg.extensions.edges
 palette=kg.palette
 code_source=../../
 
@@ -31,48 +33,83 @@ flow:
 	sequence_role=role
 	sequence_phase=phase
 	sequence_activation=true
+	sequence_lanes=browser-ui,content-route,content-tree,path-resolver,not-found,frontmatter-reader,filesystem-backend,worktree-reader,markdown-renderer,document-page
+	sequence_message=message
+	sequence_fragment=fragment
+	sequence_operand=operand
+	sequence_operand_note=operand_note
 	color_by=layer
 	edge_color_by=step
 	edge_label_from=note
 	hover_attrs=description,code
-	caption="Read the rows from top to bottom. One lifeline owns the page, render_post_detail. A row with two lines is one exchange: the solid line is the call, the dashed line under it is the value coming back. Every lane is something that can receive a call, so a document and a response are values on the arrows, not lanes. The bar on the frontmatter reader is its frame: the git-ref read sits inside it, because that read happens while parse_frontmatter is still running."
+	caption="Rows run from top to bottom, in the order the steps happen. Every lane is a participant that can receive a call. A document and a response are values carried on arrows, so neither has a lane. A row with two lines is one exchange. The upper line is the call and the lower line is its reply. A vertical bar on a lane marks an execution that has not returned yet. A box drawn around a group of rows is a combined fragment, and the tag in the top-left corner of a box names its operator. render_post_detail is the single function that runs every step in this view. render_post_detail asks the content tree first. content_path_for_slug and the 404 response run only when the content tree returns nothing."
 	slides:
-		route: Steps 1 to 2 — the route takes over
-			nodes=browser-ui,content-route,path-resolver
-			caption="The browser asks for a page. post_detail hands it to render_post_detail, which turns the slug into a file path."
-		read: Steps 3 to 4 — read the file
-			nodes=content-route,frontmatter-reader,filesystem-backend
-			caption="The route reads the file through parse_frontmatter. A git-ref page takes the backend branch instead of a plain Path."
-		render: Steps 5 to 6 — build the page
+		route: Steps 1 to 4 — find the document
+			nodes=browser-ui,content-route,content-tree,path-resolver,not-found
+			caption="The browser requests a page, and render_post_detail handles it. render_post_detail asks the content tree for the document first. The opt box holds the fallback that runs when the content tree does not index that slug. The break box holds the 404 response, which replaces every step below it."
+		read: Steps 5 to 7 — read the file
+			nodes=content-route,frontmatter-reader,filesystem-backend,worktree-reader
+			caption="render_post_detail reads the file through parse_frontmatter. The alt box holds the one branch inside parse_frontmatter. A git-ref page arrives as a VirtualPath and is read through the content backend. Every other page is a plain Path and is read from disk."
+		render: Steps 8 to 9 — build the page
 			nodes=content-route,markdown-renderer,document-page
-			caption="The route renders the Markdown body, then builds DocumentPage and calls render on it."
-		ui: Step 7 — show the result
+			caption="render_post_detail renders the Markdown body with from_md. render_post_detail then builds a DocumentPage and calls its render method."
+		ui: Step 10 — return the response
 			nodes=content-route,document-page,browser-ui
-			caption="DocumentPage returns the finished HTML response. The route returns it and the browser displays the page."
+			caption="DocumentPage returns the finished HTML response. The open arrowhead marks this message as asynchronous. render_post_detail returns the response and does not wait for the browser."
 fence:
 	source=fence
 	layout=sequence
 	sequence_role=role
 	sequence_phase=phase
 	sequence_activation=true
+	sequence_lanes=tasks-extension,extension-runtime,markdown-renderer,fence-dispatch,code-shell,items-handler,pack-loader,context-pack,pack-files,kg-cache,graph-builder,items-widget
+	sequence_message=message
+	sequence_fragment=fragment
+	sequence_operand=operand
+	sequence_operand_note=operand_note
 	color_by=layer
 	edge_color_by=role
 	edge_label_from=note
 	hover_attrs=description,code
-	caption="The same reading rule as above: solid line is the call, dashed line under it is the value coming back. One lifeline owns the block, render_block_code. It never learns what items means; it only asks the registry who owns the word. The bar on the items handler is its frame: it opens when the call lands and closes when the reply leaves, so the pack read and the graph build are visibly inside step 4, not after it."
+	caption="This view uses UML interaction notation. A filled arrowhead marks a synchronous call, and the sender waits for it. The reply to a synchronous call is drawn as a second line on the same row. An open arrowhead marks an asynchronous message, and step 11 is the only one in this view. A vertical bar on a lane marks an execution that has not returned yet. A box drawn around a group of rows is a combined fragment. The tag in the top-left corner of a box names its operator. This view uses five operators. break replaces the remainder of the enclosing interaction. alt runs exactly one operand, chosen by its guard. opt runs its single operand only when the guard holds. loop repeats the rows it encloses. ref refers to an interaction that is defined outside this view. Guards and operand descriptions are not drawn on the box. Hover or click a corner tag to read them."
 	slides:
-		register: Step 1 — the fence gets an owner
+		register: Step 1 — register the fence handler
 			nodes=tasks-extension,extension-runtime
-			caption="Before any request, the items extension writes one entry into markdown_fences. This is the only step here that is not part of a request, which is why it stands alone."
-		dispatch: Steps 2 to 3 — find the handler
-			nodes=markdown-renderer,fence-dispatch,extension-runtime
-			caption="from_md reaches a fenced block. The dispatch reads the language off the info string and asks the registry for its owner. A miss falls through to a plain code block."
-		load: Steps 4 to 5 — read the pack
-			nodes=fence-dispatch,items-handler,pack-loader
-			caption="The handler gets the fence body and nothing else. Here the body is frontmatter naming a pack, so the graph is read from disk rather than from the page."
-		build: Step 6 — build the drawable graph
+			caption="The items extension writes one entry into markdown_fences at startup. This is the only step in this view that runs outside a request."
+		dispatch: Steps 2 to 4 — resolve the handler
+			nodes=markdown-renderer,fence-dispatch,extension-runtime,code-shell
+			caption="from_md reaches a fenced block and calls render_block_code. render_block_code reads the language from the info string and asks the extension runtime which handler is registered for that language. The break box holds the miss. render_block_code returns a plain code block, and no step below the break box runs."
+		load: Steps 5 to 9 — read the pack
+			nodes=fence-dispatch,items-handler,pack-loader,context-pack,pack-files,kg-cache
+			caption="The handler receives the fence body, the render context and the fence attributes. read_kg_pack then branches on the shape of the pack. A pack that declares contexts is delegated to _read_context_kg_pack. A plain pack is built here, by looping over the sources its views name and optionally writing a cache."
+		build: Step 10 — build the drawable graph
 			nodes=items-handler,graph-builder
-			caption="The model is not what gets drawn. Groups can collapse, so this step flattens the model into a node list and an edge list."
-		emit: Step 7 — hand it to the browser
+			caption="The model is not the drawable graph, because a group can be collapsed. build_collapsed_graph flattens the model into one node list and one edge list."
+		emit: Step 11 — return the widget
 			nodes=fence-dispatch,items-widget
-			caption="A div carrying the model as JSON. The Python side is done, and tasks.js draws the picture you are reading."
+			caption="This is the only asynchronous row in this view. render_block_code returns a div that carries the model as an escaped JSON attribute. The open arrowhead marks that no reply is expected. tasks.js reads that attribute in the browser and draws the graph."
+extensions:
+	source=extensions
+	layout=sequence
+	sequence_role=role
+	sequence_phase=phase
+	sequence_activation=true
+	sequence_lanes=extension-boot,extension-catalog,extension-plan,extension-any,extension-app,registration-guard,extension-runtime
+	color_by=layer
+	edge_color_by=role
+	edge_label_from=note
+	hover_attrs=description,code
+	caption="This view shows how an extension registers with Vyasa, using the items fence as the example claim. build_extension_runtime is the single function that runs every step. Two activation bars are nested. The extension bar stays open while the extension makes its claim, and the registrar bar stays open while the guard checks that claim. The capability guard is the reason an undeclared claim cannot reach the runtime. The extension runtime is the last lane because it is written last, and no request reads a slot before boot finishes."
+	slides:
+		catalog: Steps 1 to 2 — list and enable extensions
+			nodes=extension-boot,extension-catalog,extension-plan
+			caption="The catalog and the plan answer two different questions. The catalog lists every extension that is installed, built-in ones first and then any module the config names. The plan states which of those extensions are enabled, from a preset plus per-category overrides."
+		register: Step 3 — call register once per extension
+			nodes=extension-boot,extension-any,extension-app
+			caption="Boot calls register once per enabled extension, in catalog order. Each call carries a registrars object bound to that extension. An extension can claim a slot only during this call."
+		claim: Steps 4 to 5 — check each claim
+			nodes=extension-any,extension-app,registration-guard
+			caption="Every claim passes through a registrar. The registrar asks the capability guard whether the extension declared that capability. An undeclared claim raises an error and boot fails. Extension metadata is therefore a complete list of what an extension can reach."
+		write: Step 6 — write the runtime slot
+			nodes=extension-app,extension-runtime
+			caption="The runtime is written only at this step. The runtime is complete once the last extension returns, and it does not change after that. Every request reads the slots this pass filled."

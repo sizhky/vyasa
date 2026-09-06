@@ -2,7 +2,7 @@ browser-ui: Browser
 	description=The browser asks Vyasa for a page and displays the HTML response it gets back.
 	code=The browser is outside Vyasa; no Vyasa function runs beyond this boundary.
 content-route: Content route
-	description=The request handler that owns the whole page pipeline.
+	description=The request handler that runs every step of the page pipeline.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[def render_post_detail(path, htmx, request]" context=1}
 path-resolver: Path resolver
 	description=The step that turns a page slug into a file path under a content root.
@@ -20,16 +20,16 @@ document-page: DocumentPage
 	description=The page object that holds the rendered content and returns the finished HTML response.
 	code=[DocumentPage](vyasa/document_pages.py){show=symbol symbol=DocumentPage kind=Class focus="match[class DocumentPage]" context=4}
 fence-dispatch: Fence dispatch
-	description=The renderer hook that reads a fence info string and hands the block to whoever owns that language.
+	description=The renderer hook that reads a fence info string and calls the handler registered for that language.
 	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[def render_block_code(self, token]" context=4}
-extension-runtime: Fence registry
-	description=The markdown_fences map on ExtensionRuntime. One entry per fence language, written once at startup and read on every render.
-	code=[_MarkdownRegistrar.fence](vyasa/extensions.py){show=symbol symbol=_MarkdownRegistrar.fence kind=Method focus="match[self.runtime.markdown_fences[name] = handler]" context=3}
+extension-runtime: Extension runtime
+	description=One object with one slot per capability, covering fences, routes, document renderers, asset bundles and the layout. It is written once at startup and read on every request. The Fence view reads the markdown_fences slot.
+	code=[ExtensionRuntime](vyasa/extensions.py){show=symbol symbol=ExtensionRuntime kind=Class focus="match[markdown_fences: dict[str, Callable]]" context=6}
 tasks-extension: Items extension
 	description=The extension that claims the items fence at startup. Nothing else in Vyasa knows the word items.
 	code=[TasksExtension.register](vyasa/extensions_builtin/tasks/__init__.py){show=symbol symbol=TasksExtension.register kind=Method focus='match[app.markdown.fence("items", items_handler)]' context=3}
 items-handler: Items fence handler
-	description=The handler stored under items. It owns everything from fence text to widget HTML.
+	description=The handler registered under the items marker. It runs every step from fence text to widget HTML.
 	code=[render_tasks_block](vyasa/extensions_builtin/tasks/render.py){show=symbol symbol=render_tasks_block kind=Function focus="match[def render_tasks_block(code]" context=3}
 pack-loader: Pack loader
 	description=The step that follows items_schema to a kg.schema file and reads the nodes, edges, attrs and views beside it.
@@ -40,3 +40,42 @@ graph-builder: Graph builder
 items-widget: Items widget
 	description=The container div carrying the model as JSON. The tasks.js runtime finds it and draws the graph.
 	code=[render_tasks_block](vyasa/extensions_builtin/tasks/render.py){show=symbol symbol=render_tasks_block kind=Function focus="match[payload = html.escape(json.dumps(model))]" context=3}
+extension-boot: Boot
+	description=The startup step that builds the runtime once, before any request is served.
+	code=[build_extension_runtime](vyasa/extensions.py){show=symbol symbol=build_extension_runtime kind=Function}
+extension-catalog: Catalog
+	description=The step that loads every extension that exists, built in first and then any module named in the config.
+	code=[load_configured_extensions](vyasa/extensions.py){show=symbol symbol=load_configured_extensions kind=Function}
+extension-plan: Plan
+	description=The step that decides which of those are enabled, from a preset plus the overrides in the config.
+	code=[resolve_extension_plan](vyasa/extensions.py){show=symbol symbol=resolve_extension_plan kind=Function}
+extension-any: Extension
+	description=Any extension. Its one job at startup is register, where it claims the slots it wants.
+	code=[VyasaExtensionBase.register](vyasa/extensions.py){show=symbol symbol=VyasaExtensionBase.register kind=Method context=3}
+extension-app: Registrars
+	description=The object handed to register. Every claim goes through it, which is why no extension writes to the runtime itself.
+	code=[VyasaExtensionApp](vyasa/extensions.py){show=symbol symbol=VyasaExtensionApp kind=Class context=8}
+registration-guard: Capability guard
+	description=The check that a claim was declared in the extension's own metadata. An undeclared claim raises instead of registering.
+	code=[_RegistrationGuard.require_capability](vyasa/extensions.py){show=symbol symbol=_RegistrationGuard.require_capability kind=Method focus="match[raise ExtensionConfigError]" context=3}
+content-tree: Content tree
+	description=The index of every document Vyasa serves. It answers with a document for a slug, and it is the route's first question, not its last.
+	code=[ContentTree.resolve_document](vyasa/content_tree.py){show=symbol symbol=ContentTree.resolve_document kind=Method context=4}
+not-found: Not found
+	description=The 404 response. render_post_detail returns it instead of every step below, which is what a UML break fragment states.
+	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[if not document or document.kind == \"folder\":]" context=3}
+worktree-reader: Working-tree reader
+	description=The reader used for an ordinary page on disk, where the path is a plain Path. It is the other half of the same branch the ref-backed reader takes.
+	code=[parse_frontmatter](vyasa/helpers.py){show=symbol symbol=parse_frontmatter kind=Function focus='match[text = file_path.read_text(encoding=\"utf-8\")]' context=3}
+code-shell: Plain code block
+	description=The fall-through for a fence no extension claimed. render_block_code returns it instead of every step below, which is what a UML break fragment states.
+	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[return render_code_shell(]" context=4}
+context-pack: Context pack reader
+	description=A separate interaction for a pack that declares contexts. read_kg_pack delegates the whole build to this function and returns its result, so the box is a ref rather than a step.
+	code=[_read_context_kg_pack](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=_read_context_kg_pack kind=Function context=6}
+pack-files: Pack files
+	description=The nodes, edges and attrs files beside kg.schema. The loader walks the sources a view names and merges each file into one model.
+	code=[read_kg_pack](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=read_kg_pack kind=Function focus="match[for source_name in _source_names_for_views(schema)]" context=8}
+kg-cache: Pack cache
+	description=A JSON copy of the compiled pack. It is written only when the schema names a cache and the path is a real file, so the write is optional rather than part of every load.
+	code=[_write_kg_cache](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=_write_kg_cache kind=Function focus="match[if not cache_name:]" context=6}

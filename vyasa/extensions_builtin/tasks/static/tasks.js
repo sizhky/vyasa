@@ -1,5 +1,5 @@
 import ELK from 'https://esm.sh/elkjs@0.10.0';
-import { applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksCenteredViewport, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksInlineLinkPlainText, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
+import { tasksGraphNodeAbsoluteRect, tasksGraphNodeHitRect, tasksGraphPaint, tasksGraphCornerPath, applyTasksFilterAttributePolicy, bindPanZoomGestures, buildTaskEdgeAnchors, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, measureTextWidth, nearestTasksIncidentEdge, normalizeTasksNodeImageUrl, packTaskChildRects, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksCenteredViewport, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksIconFilterGroups, tasksInlineLinkPlainText, tasksProjectionGroupByHierarchy, tasksReuseGraphElements, tasksReviewTarget, tasksUngroupModelForGrouping, tasksViewMatchesContext } from '/static/extensions/tasks/tasks_graph_core.js';
 import { logTasksDebug, logTasksDebugVerbose, logTasksPerf, logTasksPerfGraphDomOnce, logTasksPerfPaintState, logTasksPerfScrollOnce, logTasksPerfShellOnce, logTasksPerfSurfaceOnce, markTasksFrameProbe, renderTasksDebugOverlay, startTasksLongTaskObserver, tasksPerfContext, tasksPerfNow, tasksPerfScrollSnapshot, tasksPerfSurfaceSnapshot, tasksPerfWheelPayload, traceTasksInteractionFrame } from '/static/extensions/tasks/tasks_diagnostics.js';
 import { buildTasksProjectionConfigText, normalizeTasksFilterQuery, parseTasksProjectionConfigText, tasksAttrValues, tasksCollectSearchMatches, tasksContextDiffSelectionIds, tasksCountFilterRules, tasksEdgeFilterNodeIds, tasksEdgeMetaEntries, tasksEdgesMatchingTypes, tasksEdgeTypeValues, tasksEmptyFilterQuery, tasksFilterHoverFocus, tasksFilterQueryHasAnyRules, tasksFilterQueryHasRules, tasksFilterQuerySelectedValues, tasksFilterValueEditorType, tasksFilterValueList, tasksHopSeedIds, tasksIsHiddenNodeMetaKey, tasksLogicalNodeId, tasksNeighborHopIds, tasksNodeMatchesAllFilters, tasksNodeMetaEntries, tasksOrderedEdges, tasksProjectionById, tasksProjectionLayout, tasksPruneFilterQueryFields, tasksReferenceEdges, tasksSameIdSet, tasksSelectionClickKey, tasksVisibleReferenceEdges, toggleTasksFilterQueryValue } from '/static/extensions/tasks/tasks_graph_model.js';
 import { tasksApplyEdgePairs, tasksLayoutById, tasksLayoutChromeKinds } from '/static/extensions/tasks/tasks_layouts.js';
@@ -549,6 +549,40 @@ function tasksTaperedArrowHeadPath(bezierPath, size, side = 0) {
         `L ${baseX + nx * arrowWidth / 2} ${baseY + ny * arrowWidth / 2}`,
         `L ${baseX - nx * arrowWidth / 2} ${baseY - ny * arrowWidth / 2}`,
         'Z',
+    ].join(' ');
+}
+
+// UML draws two arrowheads, and the difference is the whole point. A FILLED
+// triangle is a synchronous call: the caller stops until the value comes back.
+// An OPEN head -- two strokes, no fill -- is a reply or an asynchronous message,
+// where nobody is waiting. Same geometry as the filled head, left unclosed so a
+// stroke draws it as a V.
+function tasksOpenArrowHeadPath(bezierPath, size, side = 0) {
+    const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
+    if (nums.length < 8) return '';
+    const [, , , , x2, y2, x3, y3] = nums;
+    const dx = x3 - x2;
+    const dy = y3 - y2;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+    const nx = -uy;
+    const ny = ux;
+    const arrowLength = Math.max(6, Number(size) || 10);
+    const wing = arrowLength * 0.72;
+    const baseX = x3 - ux * arrowLength;
+    const baseY = y3 - uy * arrowLength;
+    // A pair keeps one wing, on the side its own line was nudged toward, for the
+    // same reason the filled head does: two full heads on one row read as two
+    // arrows rather than as one exchange.
+    if (side) {
+        const sign = side > 0 ? 1 : -1;
+        return `M ${baseX + sign * nx * wing} ${baseY + sign * ny * wing} L ${x3} ${y3}`;
+    }
+    return [
+        `M ${baseX + nx * wing} ${baseY + ny * wing}`,
+        `L ${x3} ${y3}`,
+        `L ${baseX - nx * wing} ${baseY - ny * wing}`,
     ].join(' ');
 }
 
@@ -3424,25 +3458,17 @@ function setTasksGroupToggleHover(wrapper, groupId) {
     });
 }
 
-function tasksGraphNodeAbsoluteRect(node, byId) {
-    let x = node.position?.x || 0;
-    let y = node.position?.y || 0;
-    let parent = node.parentId ? byId[node.parentId] : null;
-    while (parent) {
-        x += parent.position?.x || 0;
-        y += parent.position?.y || 0;
-        parent = parent.parentId ? byId[parent.parentId] : null;
-    }
-    return { x, y, width: node.style?.width || node.width || 0, height: node.style?.height || node.height || 0 };
-}
 
 function tasksGraphNodeAtFlowPoint(nodes, point) {
     const byId = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
     return (nodes || [])
         // Chrome is passive: a band or a cell must never become the anchor for
         // an edge preview, because it has no incident edge and kills the hit.
-        .filter((node) => !TASKS_PASSIVE_NODE_KINDS.has(node.data?.__kind__))
-        .map((node) => ({ node, rect: tasksGraphNodeAbsoluteRect(node, byId), z: Number(node.zIndex || node.style?.zIndex || 0) }))
+        // A chrome kind that carries its own card is the exception, and it claims
+        // a hit rect small enough not to shadow what it covers.
+        .filter((node) => !TASKS_PASSIVE_NODE_KINDS.has(node.data?.__kind__)
+            || isTasksGraphNodeSelectable(node.data?.__kind__))
+        .map((node) => ({ node, rect: tasksGraphNodeHitRect(node, byId), z: Number(node.zIndex || node.style?.zIndex || 0) }))
         .filter(({ rect }) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
         .sort((a, b) => b.z - a.z)[0] || null;
 }
@@ -5884,11 +5910,14 @@ async function renderTasksGraphs(rootElement = document) {
                                 type: 'vyasaTask',
                                 position: node.position,
                                 data: laneColor ? { ...node, __sequence_color__: laneColor } : node,
+                                // The wrapper stays transparent to the pointer even when
+                                // the node is selectable: only the small part the
+                                // renderer marks as interactive takes a click.
                                 style: { width: node.width, height: node.height, zIndex: passiveZ, background: 'transparent', border: 'none', pointerEvents: 'none' },
                                 zIndex: passiveZ,
                                 className: 'vyasa-tasks-node--passive',
                                 draggable: false,
-                                selectable: false,
+                                selectable: isTasksGraphNodeSelectable(node.__kind__),
                             };
                         }
                         const logicalNodeId = tasksLogicalNodeId(node, node.id);
@@ -5906,7 +5935,7 @@ async function renderTasksGraphs(rootElement = document) {
                                 id: node.id,
                                 type: 'vyasaTask',
                                 position: node.position,
-                                data: { ...node, __sequence_color__: nodeColor, __checked__: isChecked, __has_note__: hasNote, __card_state__: cardState.label, __card_state_color__: cardState.color },
+                                data: { ...node, __z__: TASKS_TASK_Z, __sequence_color__: nodeColor, __checked__: isChecked, __has_note__: hasNote, __card_state__: cardState.label, __card_state_color__: cardState.color },
                                 style: { width: node.width, height: node.height, zIndex: TASKS_TASK_Z, background: 'transparent', border: 'none', overflow: 'visible' },
                                 zIndex: TASKS_TASK_Z,
                                 className: 'vyasa-tasks-node--selectable',
@@ -5987,9 +6016,12 @@ async function renderTasksGraphs(rootElement = document) {
                                 __pair_mate__: edge.__pair_mate__ || '',
                                 __pair_lift__: Number(edge.__pair_lift__) || 0,
                                 __pair_mate_stroke__: pairMateColors.get(edge.__pair_mate__) || '',
+                                __sequence_uml__: Boolean(edge.__sequence_uml__),
+                                __sequence_message__: edge.__sequence_message__ || '',
                                 // The prominent label is an HTML overlay, so it needs a z of
                                 // its own to clear the ribbon this layout draws over the cards.
                                 __label_z__: rowZ + 1,
+                                ...(tasksFixedLayout(mode)?.edgesOverNodes ? { __z__: rowZ } : {}),
                             },
                             markerEnd: { type: rf.MarkerType.ArrowClosed, width: 8, height: 8, color: edgeColor || 'currentColor' },
                             zIndex: rowZ,
@@ -6208,6 +6240,8 @@ async function renderTasksGraphs(rootElement = document) {
                             __pair_mate__: edge.__pair_mate__ || '',
                             __pair_lift__: Number(edge.__pair_lift__) || 0,
                             __pair_mate_stroke__: pairMateColors.get(edge.__pair_mate__) || '',
+                            __sequence_uml__: Boolean(edge.__sequence_uml__),
+                            __sequence_message__: edge.__sequence_message__ || '',
                         },
                         markerEnd: {
                             type: rf.MarkerType.ArrowClosed,
@@ -6294,10 +6328,10 @@ async function renderTasksGraphs(rootElement = document) {
             // tasksReuseGraphElements so unchanged elements keep their identity
             // (memoized components skip) and a no-op pass skips the update.
             const setNodesReusing = React.useCallback((nextNodes) => {
-                setNodes((prev) => tasksReuseGraphElements(prev, nextNodes));
+                setNodes((prev) => tasksReuseGraphElements(prev, nextNodes.map(tasksGraphPaint)));
             }, []);
             const setEdgesReusing = React.useCallback((nextEdges) => {
-                setEdges((prev) => tasksReuseGraphElements(prev, nextEdges));
+                setEdges((prev) => tasksReuseGraphElements(prev, nextEdges.map(tasksGraphPaint)));
             }, []);
             const applyHighlight = React.useCallback((nodeId, hoveredNodeId = null, selectedIds = new Set(), edgeId = '') => {
                 const baseNodes = graphBaseRef.current.nodes || [];
@@ -7029,6 +7063,16 @@ async function renderTasksGraphs(rootElement = document) {
                 const mateStroke = (edgeUndimmed && props.data?.__pair_mate_stroke__)
                     || props.style?.stroke
                     || 'currentColor';
+                // UML message kinds. An asynchronous message takes the OPEN head
+                // -- two strokes, no fill -- because nobody is waiting on it and
+                // no value comes back. A synchronous call keeps the filled head,
+                // which is what waiting looks like, and a reply keeps its barb so
+                // an exchange still reads as one double harpoon. Only a view that
+                // names `sequence_message` can mark a row async at all.
+                const uml = Boolean(props.data?.__sequence_uml__);
+                const openHead = uml && String(props.data?.__sequence_message__ || '') === 'async';
+                const umlHeadPath = openHead ? tasksOpenArrowHeadPath(path, arrowSize, pairLift ? Math.sign(pairLift) : 0) : '';
+                const umlLineWidth = Math.max(1.4, Number(props.style?.strokeWidth) || 1.9);
                 const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
                 const prominentLabel = showFullLabel;
                 // React Flow forwards only its own edge props, so a top-level
@@ -7106,12 +7150,13 @@ async function renderTasksGraphs(rootElement = document) {
                         strokeLinejoin: 'round',
                         pointerEvents: 'none',
                     }),
-                    !pairReply && edgeArrowPath && React.createElement('path', {
-                        d: edgeArrowPath,
-                        fill: 'var(--vyasa-paper)',
+                    !pairReply && (openHead ? umlHeadPath : edgeArrowPath) && React.createElement('path', {
+                        d: openHead ? umlHeadPath : edgeArrowPath,
+                        fill: openHead ? 'none' : 'var(--vyasa-paper)',
                         stroke: 'var(--vyasa-paper)',
-                        strokeWidth: casingStroke,
+                        strokeWidth: openHead ? casingStroke + 1.5 : casingStroke,
                         strokeLinejoin: 'round',
+                        strokeLinecap: 'round',
                         pointerEvents: 'none',
                     }),
                     mateCasingPath && React.createElement('path', {
@@ -7170,10 +7215,13 @@ async function renderTasksGraphs(rootElement = document) {
                         opacity: props.style?.opacity ?? 1,
                         pointerEvents: 'none',
                     }),
-                    !pairReply && edgeArrowPath && React.createElement('path', {
-                        d: edgeArrowPath,
-                        fill: props.style?.stroke || 'currentColor',
-                        stroke: 'none',
+                    !pairReply && (openHead ? umlHeadPath : edgeArrowPath) && React.createElement('path', {
+                        d: openHead ? umlHeadPath : edgeArrowPath,
+                        fill: openHead ? 'none' : (props.style?.stroke || 'currentColor'),
+                        stroke: openHead ? (props.style?.stroke || 'currentColor') : 'none',
+                        strokeWidth: openHead ? umlLineWidth : undefined,
+                        strokeLinecap: 'round',
+                        strokeLinejoin: 'round',
                         opacity: props.style?.opacity ?? 1,
                         pointerEvents: 'none',
                     }),
@@ -7428,6 +7476,84 @@ async function renderTasksGraphs(rootElement = document) {
                         },
                     });
                 }
+                if (data?.__kind__ === 'sequenceFragment') {
+                    // A frame belongs to the interaction, not to any one lane, so
+                    // it takes plain ink rather than a lifeline colour. Colouring
+                    // it would claim the lane it happens to start on.
+                    const line = 'color-mix(in srgb, var(--vyasa-ink) 34%, transparent)';
+                    const text = 'color-mix(in srgb, var(--vyasa-ink) 68%, var(--vyasa-paper))';
+                    const operands = Array.isArray(data.__sequence_operands__) ? data.__sequence_operands__ : [];
+                    const operator = String(data.__sequence_fragment_op__ || '').toUpperCase();
+                    // Only the operator and the guards are drawn. The fragment's own
+                    // name sits on every arrow inside as `fragment=`, so the hover
+                    // and click cards already have somewhere to put it; printing it
+                    // here as well left three lines of text stacked in one corner.
+                    // The layout owns this size: it is also the box's hit rect, and a
+                    // tag drawn wider than the rect would look clickable where it is not.
+                    const tagWidth = Number(data.__hit_rect__?.width) || (22 + operator.length * 7);
+                    const tagHeight = Number(data.__hit_rect__?.height) || 20;
+                    return React.createElement('div', {
+                        style: {
+                            position: 'relative',
+                            width: '100%',
+                            height: '100%',
+                            boxSizing: 'border-box',
+                            border: `1px solid ${line}`,
+                            borderRadius: '6px',
+                            // Transparent: the rows and the lifelines it covers are
+                            // the content, and a tint over them would dim the very
+                            // thing the frame is pointing at.
+                            background: 'transparent',
+                        },
+                    },
+                        // UML's corner pentagon, on the header line the layout
+                        // reserved for it. The clipped corner is what tells a reader
+                        // this label names an operator and not a step.
+                        React.createElement('svg', {
+                            width: tagWidth, height: tagHeight,
+                            style: { position: 'absolute', left: -1, top: -1, overflow: 'visible' },
+                        },
+                            React.createElement('path', {
+                                d: tasksGraphCornerPath(tagWidth, tagHeight, 6),
+                                fill: 'color-mix(in srgb, var(--vyasa-ink) 12%, var(--vyasa-paper))',
+                                stroke: line, strokeWidth: 1,
+                                style: { pointerEvents: 'visiblePainted', cursor: 'pointer' },
+                            }, React.createElement('title', null, data.label || operator)),
+                            React.createElement('text', {
+                                x: 8, y: tagHeight / 2, dy: '.35em', fill: text,
+                                style: { fontSize: '10px', fontWeight: 800, letterSpacing: '.09em', pointerEvents: 'none' },
+                            }, operator),
+                        ),
+                        // One dashed rule per operand boundary, and the guard that
+                        // operand runs under. The first operand shares the tag's own
+                        // line, so its guard sits beside the pentagon.
+                        ...operands.flatMap((operand, index) => [
+                            operand.rule >= 0 ? React.createElement('div', {
+                                key: `rule-${index}`,
+                                style: {
+                                    position: 'absolute',
+                                    left: 0,
+                                    right: 0,
+                                    top: `${operand.rule}px`,
+                                    borderTop: `1px dashed ${line}`,
+                                },
+                            }) : null,
+                            operand.guard ? React.createElement('div', {
+                                key: `guard-${index}`,
+                                style: {
+                                    position: 'absolute',
+                                    left: `${index === 0 ? tagWidth + 6 : 10}px`,
+                                    top: `${operand.top + 3}px`,
+                                    lineHeight: '14px',
+                                    fontSize: '10px',
+                                    fontWeight: 700,
+                                    color: text,
+                                    whiteSpace: 'nowrap',
+                                },
+                            }, operand.guard) : null,
+                        ]).filter(Boolean)
+                    );
+                }
                 if (data?.__kind__ === 'sequenceActivation') {
                     // Stronger than the lifeline column it covers, in the same
                     // colour, so the frame reads as that lane doing work and an
@@ -7441,8 +7567,22 @@ async function renderTasksGraphs(rootElement = document) {
                             background: `color-mix(in srgb, ${accent} 30%, var(--vyasa-paper))`,
                             border: `1px solid color-mix(in srgb, ${accent} 62%, transparent)`,
                             borderRadius: '4px',
+                            textAlign: 'center',
+                            pointerEvents: 'auto',
+                            cursor: 'pointer',
                         },
-                    });
+                    // The step the frame opens on, just inside the top edge:
+                    // that edge is the opening call's own row, and everything
+                    // below it happened while that step was still running.
+                    }, data?.label ? React.createElement('div', {
+                        style: {
+                            paddingTop: '4px',
+                            lineHeight: '18px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            color: `color-mix(in srgb, ${accent} 70%, var(--vyasa-ink))`,
+                        },
+                    }, data.label) : null);
                 }
                 if (data?.__kind__ === 'sequencePhase') {
                     const phasePalette = model?.edge_color_palettes?.[data.__sequence_phase_attr__ || ''] || {};

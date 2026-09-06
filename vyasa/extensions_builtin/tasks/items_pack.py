@@ -1091,8 +1091,14 @@ def _resolve_source(schema: KgSchema, name: str) -> dict[str, Any]:
 
 
 def _source_names_for_views(schema: KgSchema) -> list[str]:
-    names = [view.source for view in schema.views] or ["base"]
-    return list(dict.fromkeys(names))
+    names: list[str] = []
+    for view in schema.views:
+        for part in str(view.source or "base").split("+"):
+            if part == "all":
+                names.extend(schema.sources)
+            elif part:
+                names.append(part)
+    return list(dict.fromkeys(names or ["base"]))
 
 
 def _path_list(value: str | None) -> list[str]:
