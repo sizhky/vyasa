@@ -37,11 +37,16 @@ f5: fence-dispatch -> items-handler renders
 	note=→ handler(code, context, attrs)
 	description=The dispatch calls the handler with the fence body and nothing else. It never learns what items means.
 	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[return handler(code, context, attrs)]" context=2}
-f6: items-handler -> pack-loader reads
+f5a: items-handler -> fence-parser reads
+	pair=f-parse
+	note=→ parse_tasks_text(fence body)
+	description=The handler parses the fence body first. Here that body is frontmatter only, and items_schema is one of its keys.
+	code=[render_tasks_block](vyasa/extensions_builtin/tasks/render.py){show=symbol symbol=render_tasks_block kind=Function focus="match[model = parse_tasks_text(]" context=3}
+f6: fence-parser -> pack-loader reads
 	pair=f-pack
 	note=→ read_kg_pack(kg.schema)
-	description=The fence body is frontmatter only. items_schema names a pack, so the handler reads the graph from disk instead of from the fence.
-	code=[_apply_kg_schema](vyasa/extensions_builtin/tasks/model.py){show=symbol symbol=_apply_kg_schema kind=Function focus="match[compiled = read_kg_pack(schema_path]" context=3}
+	description=parse_tasks_text hands the parsed graph to _apply_kg_schema, which is where this call is made. items_schema names a pack, so the graph is read from disk instead of from the fence. An empty items_schema returns early and no pack is read.
+	code=[_apply_kg_schema](vyasa/extensions_builtin/tasks/model.py){show=symbol symbol=_apply_kg_schema kind=Function focus="match[schema_source = str(graph.get(\"items_schema\")] match[compiled = read_kg_pack(schema_path]" context=3}
 f14: pack-loader -> context-pack reads
 	pair=f-context
 	fragment=alt:pack shape/ref:context pack
@@ -89,11 +94,16 @@ f19: kg-cache -> pack-loader returns
 	note=← written, nothing returned
 	description=The cache is a copy of the model, not the value returned. read_kg_pack returns the model it already built, whether or not this write happened.
 	code=[_write_kg_cache](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=_write_kg_cache kind=Function focus="match[cache_path.write_text(]" context=3}
-f7: pack-loader -> items-handler returns
+f7: pack-loader -> fence-parser returns
 	pair=f-pack
 	note=← nodes, edges, attrs, views
-	description=Every file beside kg.schema comes back as one compiled model, including the views and slides this page reads from.
+	description=Every file beside kg.schema comes back as one compiled model, including the views and slides this page reads from. _apply_kg_schema merges that model into the graph it was given.
 	code=[read_kg_pack](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=read_kg_pack kind=Function context=4}
+f7a: fence-parser -> items-handler returns
+	pair=f-parse
+	note=← the parsed model
+	description=One model, whether the graph came from the fence text or from a pack. The handler treats both the same way from here on.
+	code=[render_tasks_block](vyasa/extensions_builtin/tasks/render.py){show=symbol symbol=render_tasks_block kind=Function focus="match[model = parse_tasks_text(]" context=3}
 f8: items-handler -> graph-builder renders
 	pair=f-build
 	note=→ build_collapsed_graph(model)

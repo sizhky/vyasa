@@ -17,12 +17,12 @@ g4: extension-plan -> extension-boot returns
 	pair=g-plan
 	note=← the enabled ids
 	description=The plan states, for each extension, whether it is enabled. Every step below runs only for the enabled ones.
-	code=[ExtensionRuntime.enabled](vyasa/extensions.py){show=symbol symbol=ExtensionRuntime.enabled kind=Method context=2}
+	code=[resolve_extension_plan](vyasa/extensions.py){show=symbol symbol=resolve_extension_plan kind=Function focus="match[return ExtensionPlan(]" context=4}
 g5: extension-boot -> extension-any registers
 	pair=g-register
 	note=→ register(app)
-	description=Boot calls register once per enabled extension, in catalog order, and hands it a registrars object bound to that extension.
-	code=[_configure_extensions](vyasa/extensions.py){show=symbol symbol=_configure_extensions kind=Function focus="match[extension.register(VyasaExtensionApp(runtime, extension))]" context=3}
+	description=build_extension_runtime hands the catalog to _configure_extensions, which is the loop shown here. It calls register once per enabled extension, in catalog order, and gives each one a registrars object bound to it. runtime.enabled is the plan being read back.
+	code=[_configure_extensions](vyasa/extensions.py){show=symbol symbol=_configure_extensions kind=Function focus="match[for extension in extensions:] match[extension.register(VyasaExtensionApp(runtime, extension))]" context=3}
 g6: extension-any -> extension-app registers
 	pair=g-claim
 	note=→ app.markdown.fence(name, handler)

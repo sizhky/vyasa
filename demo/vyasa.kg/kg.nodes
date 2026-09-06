@@ -31,6 +31,9 @@ tasks-extension: Items extension
 items-handler: Items fence handler
 	description=The handler registered under the items marker. It runs every step from fence text to widget HTML.
 	code=[render_tasks_block](vyasa/extensions_builtin/tasks/render.py){show=symbol symbol=render_tasks_block kind=Function focus="match[def render_tasks_block(code]" context=3}
+fence-parser: Fence parser
+	description=The step that parses the fence body into a graph model. It reads the items_schema key and calls the pack loader for it, so the handler itself never names a pack file.
+	code=[parse_tasks_text](vyasa/extensions_builtin/tasks/model.py){show=symbol symbol=parse_tasks_text kind=Function focus="match[_apply_kg_schema(graph, current_path)]" context=4}
 pack-loader: Pack loader
 	description=The step that follows items_schema to a kg.schema file and reads the nodes, edges, attrs and views beside it.
 	code=[read_kg_pack](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=read_kg_pack kind=Function}

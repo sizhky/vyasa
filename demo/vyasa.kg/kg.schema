@@ -62,7 +62,7 @@ fence:
 	sequence_role=role
 	sequence_phase=phase
 	sequence_activation=true
-	sequence_lanes=tasks-extension,extension-runtime,markdown-renderer,fence-dispatch,code-shell,items-handler,pack-loader,context-pack,pack-files,kg-cache,graph-builder,items-widget
+	sequence_lanes=tasks-extension,extension-runtime,markdown-renderer,fence-dispatch,code-shell,items-handler,fence-parser,pack-loader,context-pack,pack-files,kg-cache,graph-builder,items-widget
 	sequence_message=message
 	sequence_fragment=fragment
 	sequence_operand=operand
@@ -71,7 +71,7 @@ fence:
 	edge_color_by=role
 	edge_label_from=note
 	hover_attrs=description,code
-	caption="This view uses UML interaction notation. A filled arrowhead marks a synchronous call, and the sender waits for it. The reply to a synchronous call is drawn as a second line on the same row. An open arrowhead marks an asynchronous message, and step 11 is the only one in this view. A vertical bar on a lane marks an execution that has not returned yet. A box drawn around a group of rows is a combined fragment. The tag in the top-left corner of a box names its operator. This view uses five operators. break replaces the remainder of the enclosing interaction. alt runs exactly one operand, chosen by its guard. opt runs its single operand only when the guard holds. loop repeats the rows it encloses. ref refers to an interaction that is defined outside this view. Guards and operand descriptions are not drawn on the box. Hover or click a corner tag to read them."
+	caption="This view uses UML interaction notation. A filled arrowhead marks a synchronous call, and the sender waits for it. The reply to a synchronous call is drawn as a second line on the same row. An open arrowhead marks an asynchronous message, and step 12 is the only one in this view. A vertical bar on a lane marks an execution that has not returned yet. A box drawn around a group of rows is a combined fragment. The tag in the top-left corner of a box names its operator. This view uses five operators. break replaces the remainder of the enclosing interaction. alt runs exactly one operand, chosen by its guard. opt runs its single operand only when the guard holds. loop repeats the rows it encloses. ref refers to an interaction that is defined outside this view. Guards and operand descriptions are not drawn on the box. Hover or click a corner tag to read them."
 	slides:
 		register: Step 1 — register the fence handler
 			nodes=tasks-extension,extension-runtime
@@ -79,13 +79,13 @@ fence:
 		dispatch: Steps 2 to 4 — resolve the handler
 			nodes=markdown-renderer,fence-dispatch,extension-runtime,code-shell
 			caption="from_md reaches a fenced block and calls render_block_code. render_block_code reads the language from the info string and asks the extension runtime which handler is registered for that language. The break box holds the miss. render_block_code returns a plain code block, and no step below the break box runs."
-		load: Steps 5 to 9 — read the pack
-			nodes=fence-dispatch,items-handler,pack-loader,context-pack,pack-files,kg-cache
-			caption="The handler receives the fence body, the render context and the fence attributes. read_kg_pack then branches on the shape of the pack. A pack that declares contexts is delegated to _read_context_kg_pack. A plain pack is built here, by looping over the sources its views name and optionally writing a cache."
-		build: Step 10 — build the drawable graph
+		load: Steps 5 to 10 — read the pack
+			nodes=fence-dispatch,items-handler,fence-parser,pack-loader,context-pack,pack-files,kg-cache
+			caption="The handler receives the fence body, the render context and the fence attributes. It parses that body with parse_tasks_text, and the items_schema key inside it is what reaches the pack loader. read_kg_pack then branches on the shape of the pack. A pack that declares contexts is delegated to _read_context_kg_pack. A plain pack is built here, by looping over the sources its views name and optionally writing a cache."
+		build: Step 11 — build the drawable graph
 			nodes=items-handler,graph-builder
 			caption="The model is not the drawable graph, because a group can be collapsed. build_collapsed_graph flattens the model into one node list and one edge list."
-		emit: Step 11 — return the widget
+		emit: Step 12 — return the widget
 			nodes=fence-dispatch,items-widget
 			caption="This is the only asynchronous row in this view. render_block_code returns a div that carries the model as an escaped JSON attribute. The open arrowhead marks that no reply is expected. tasks.js reads that attribute in the browser and draws the graph."
 extensions:
@@ -99,7 +99,7 @@ extensions:
 	edge_color_by=role
 	edge_label_from=note
 	hover_attrs=description,code
-	caption="This view shows how an extension registers with Vyasa, using the items fence as the example claim. build_extension_runtime is the single function that runs every step. Two activation bars are nested. The extension bar stays open while the extension makes its claim, and the registrar bar stays open while the guard checks that claim. The capability guard is the reason an undeclared claim cannot reach the runtime. The extension runtime is the last lane because it is written last, and no request reads a slot before boot finishes."
+	caption="This view shows how an extension registers with Vyasa, using the items fence as the example claim. build_extension_runtime is the function that drives every step, and it delegates the register loop to _configure_extensions. Two activation bars are nested. The extension bar stays open while the extension makes its claim, and the registrar bar stays open while the guard checks that claim. The capability guard is the reason an undeclared claim cannot reach the runtime. The extension runtime is the last lane because it is written last, and no request reads a slot before boot finishes."
 	slides:
 		catalog: Steps 1 to 2 — list and enable extensions
 			nodes=extension-boot,extension-catalog,extension-plan

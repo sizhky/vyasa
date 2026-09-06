@@ -6424,7 +6424,12 @@ async function renderTasksGraphs(rootElement = document) {
                             ...edge,
                             zIndex: hit ? TASKS_EDGE_FOCUS_Z : TASKS_EDGE_Z,
                             labelZIndex: hit ? TASKS_EDGE_LABEL_FOCUS_Z : TASKS_EDGE_LABEL_Z,
-                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim', strokeMode: hit ? 'selected' : 'dim', edgeCardActive: focused, pinBloomKey: focused && edgePinBloom?.edgeId === tasksEdgeRecordId(edge) ? edgePinBloom.key : '' },
+                            // A pair is ONE exchange, so its two halves answer together. `hit` already
+                            // lights the mate's stroke, colour and z-order. edgeCardActive is what
+                            // keeps an edge's words while Shift+E has the labels off, so leaving it
+                            // on the clicked half alone showed a call with no reply -- and a paired
+                            // half claims only a 3px hit path, so the reader cannot click the other.
+                            data: { ...edge.data, highlightMode: hit ? 'selected' : 'dim', strokeMode: hit ? 'selected' : 'dim', edgeCardActive: hit, pinBloomKey: focused && edgePinBloom?.edgeId === tasksEdgeRecordId(edge) ? edgePinBloom.key : '' },
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: hit ? 1 : 0.12 },
                             labelBgStyle: { ...(edge.labelBgStyle || {}), fill: TASKS_EDGE_LABEL_BG, fillOpacity: hit ? 0.86 : 0.04 },
                             style: { ...edge.style, stroke: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 38%, transparent)', opacity: hit ? 1 : 0.08, strokeWidth: hit ? focusWidth : (edge.data?.__pair_half__ ? 1.9 : 2.5) },
@@ -7030,14 +7035,27 @@ async function renderTasksGraphs(rootElement = document) {
                 // angle. This replaces the sequence view's y-only lift for a pair,
                 // which was both too small and wrong for a diagonal row.
                 const labelChordLen = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY) || 1;
-                const labelLift = pairLift ? Math.sign(pairLift) * TASKS_PAIR_LABEL_LIFT : 0;
-                const labelX = rawLabelX + (-(props.targetY - props.sourceY) / labelChordLen) * labelLift;
+                // The normal is oriented UPWARD first, then the HALF picks the side:
+                // a call above the row, its reply below. Taking each half's own chord
+                // normal instead tied the side to the direction of travel, so a call
+                // that ran right to left put its own words below the line and its
+                // reply's words above -- where they read as part of the row above.
+                // UML draws a reply under its call whichever way the arrow points.
+                const labelNormalX = -(props.targetY - props.sourceY) / labelChordLen;
+                const labelNormalY = (props.targetX - props.sourceX) / labelChordLen;
+                const labelUp = (labelNormalY > 0 || (labelNormalY === 0 && labelNormalX > 0)) ? -1 : 1;
+                const labelLift = pairLift
+                    ? (String(props.data?.__pair_half__ || '') === 'reply' ? -TASKS_PAIR_LABEL_LIFT : TASKS_PAIR_LABEL_LIFT)
+                    : 0;
+                const labelPairOffsetX = labelUp * labelNormalX * labelLift;
+                const labelPairOffsetY = labelUp * labelNormalY * labelLift;
+                const labelX = rawLabelX + labelPairOffsetX;
                 // A reply drawn on a row of its own still reads with its call, so
                 // the layout may move the TEXT back to the call's row. The line
                 // does not move: the frame between them needs that height.
                 const labelBaseY = rawLabelY + (Number(props.data?.__sequence_label_dy__) || 0);
                 const labelY = pairLift
-                    ? labelBaseY + ((props.targetX - props.sourceX) / labelChordLen) * labelLift
+                    ? labelBaseY + labelPairOffsetY
                     : labelBaseY - (Number(props.data?.__sequence_label_lift__) || 0);
                 React.useEffect(() => {
                     traceTasksEdge('render', props, {
