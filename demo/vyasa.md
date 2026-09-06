@@ -32,7 +32,7 @@ An open arrowhead marks an asynchronous message. No reply is expected, so the ro
 
 ### Activation bars
 
-A vertical bar on a lane marks an execution that has not returned yet. The bar opens on the row where the call arrives and closes on the row where the reply leaves. Every row between those two rows runs while that call is still active.
+A vertical bar on a lane is an activation bar. It marks one call that has not returned yet. The bar opens on the row where the call arrives and closes on the row where the reply leaves. Every row between those two rows runs while that call is still active.
 
 The number at the top of a bar is the step that opened it. The closing reply carries no number, because a reply is not a separate step. Step numbers count exchanges rather than nesting depth, so the bar states what is nested and the number does not.
 

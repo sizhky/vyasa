@@ -288,15 +288,15 @@ test('one bar per nesting call, filling the lane that is executing', () => {
     assert.equal(drawn[0].position.x, handler.position.x);
     assert.equal(drawn[0].width, handler.width);
     assert.equal(drawn[0].__sequence_lane__, 'handler');
-    // It clears both rows by the same margin: the opening call and the closing
-    // reply read as arrows inside the frame, not as the frame's own borders.
+    // The top clears the opening call, so that arrow reads as a row inside the
+    // frame. The bottom is flush with the closing reply, which is where UML draws
+    // a return leaving an execution and where the frame stops.
     const rowOf = (edge, side) => handleFor(graph, edge[side], side === 'source' ? 'source' : 'target',
         edge[side === 'source' ? 'sourceHandle' : 'targetHandle']).offsetPct;
     const rowY = (edge, side) => handler.position.y + (rowOf(edge, side) / 100) * handler.height;
-    const topGap = rowY(graph.edges[0], 'target') - drawn[0].position.y;
+    assert.ok(rowY(graph.edges[0], 'target') - drawn[0].position.y > 0, 'the bar opens above its call');
     const bottomGap = (drawn[0].position.y + drawn[0].height) - rowY(graph.edges[3], 'source');
-    assert.ok(topGap > 0, 'the bar opens above the call that lands on it');
-    assert.ok(Math.abs(topGap - bottomGap) < 0.01, 'and closes the same distance below the reply');
+    assert.ok(Math.abs(bottomGap) < 0.01, 'and closes flush on its reply');
 });
 
 test('a nested reply still takes no step number, so nesting never inflates the count', () => {
@@ -635,4 +635,75 @@ test('a nested box repeats neither its parent guard nor its parent note', () => 
     model.dependency_edges[3].operand_note = 'the copy is stale';
     const [, loop] = frames(buildSequenceTasksGraph(model, { ...umlProjection, sequence_operand_note: 'operand_note' }));
     assert.equal(loop.operand_1, undefined);
+});
+
+test('a detached reply keeps its line low, but its label returns to its call', () => {
+    const graph = buildSequenceTasksGraph(nestedFixture(), nestedProjection);
+    const [outerCall, innerCall, innerReply, outerReply] = graph.edges;
+    const handler = graph.nodes.find((node) => node.id === 'handler');
+    const y = (edge, side) => handler.position.y
+        + (handleFor(graph, edge[side], side, edge[`${side}Handle`]).offsetPct / 100) * handler.height;
+    // The line stays where the frame needs it, below every nested row.
+    assert.ok(y(outerReply, 'source') > y(innerCall, 'target'));
+    // The label shifts back by exactly the gap between the two rows, so the pair
+    // reads as one exchange the way a reply sharing its call's row does.
+    const anchored = y(outerReply, 'source') + outerReply.__sequence_label_dy__;
+    assert.ok(Math.abs(anchored - y(outerCall, 'target')) < 0.01);
+    // Nothing else is offset: a pair on one row already has its labels together.
+    assert.equal(outerCall.__sequence_label_dy__, 0);
+    assert.equal(innerCall.__sequence_label_dy__, 0);
+    assert.equal(innerReply.__sequence_label_dy__, 0);
+});
+
+test('a bar names every edge its lane touches while the frame is open', () => {
+    const graph = buildSequenceTasksGraph(nestedFixture(), nestedProjection);
+    const [bar] = graph.nodes.filter((node) => node.__kind__ === 'sequenceActivation');
+    const [outerCall, innerCall, innerReply, outerReply] = graph.edges;
+    // Chrome is never an edge endpoint, so the hover pass reads this list instead
+    // of comparing ids against the bar. The bounding pair alone lit one side of
+    // the bar and dimmed the calls the frame exists to contain.
+    assert.deepEqual(bar.__edge_ids__, [outerCall, innerCall, innerReply, outerReply].map((edge) => edge.id));
+});
+
+test('a bar claims no edge that misses its lane, so a nested frame stays its own', () => {
+    const model = nestedFixture();
+    model.tasks.push({ id: 'aside', label: 'Aside' });
+    // A call between two other lanes, drawn while the outer frame is open.
+    model.dependency_edges.splice(2, 0, { id: 'x1', source: 'store', target: 'aside', role: 'call', phase: 'serve' });
+    const graph = buildSequenceTasksGraph(model, nestedProjection);
+    const [bar] = graph.nodes.filter((node) => node.__kind__ === 'sequenceActivation');
+    const aside = graph.edges.find((edge) => edge.target === 'aside');
+    assert.ok(!bar.__edge_ids__.includes(aside.id));
+});
+
+test('a fragment names every edge drawn inside it', () => {
+    const graph = buildSequenceTasksGraph(fragmentFixture(), umlProjection);
+    const [alt, loop] = frames(graph);
+    assert.deepEqual(alt.__edge_ids__, graph.edges.slice(1, 4).map((edge) => edge.id));
+    assert.deepEqual(loop.__edge_ids__, [graph.edges[3].id]);
+});
+
+test('a closing reply takes a gap rather than a row, so its bar stops near the work', () => {
+    const graph = buildSequenceTasksGraph(nestedFixture(), nestedProjection);
+    const handler = graph.nodes.find((node) => node.id === 'handler');
+    const y = (edge, side) => handler.position.y
+        + (handleFor(graph, edge[side], side, edge[`${side}Handle`]).offsetPct / 100) * handler.height;
+    const [, innerCall, , outerReply] = graph.edges;
+    const [bar] = graph.nodes.filter((node) => node.__kind__ === 'sequenceActivation');
+    const gap = y(outerReply, 'source') - y(innerCall, 'target');
+    assert.ok(gap > 0 && gap < 46, 'the bare line sits closer than a full row');
+    // The frame therefore stops within that gap of the last work it contains.
+    assert.equal(bar.position.y + bar.height, y(outerReply, 'source'));
+});
+
+test('a reply whose label moved back to its call draws no line of its own', () => {
+    const graph = buildSequenceTasksGraph(nestedFixture(), nestedProjection);
+    const [outerCall, innerCall, innerReply, outerReply] = graph.edges;
+    // The frame's own bottom border already marks where the reply leaves, which
+    // is what UML draws, so a second line under it stated the same fact twice.
+    assert.equal(outerReply.__sequence_line_off__, true);
+    assert.ok(outerReply.__sequence_label_dy__ < 0, 'and its label sits back at the call');
+    for (const edge of [outerCall, innerCall, innerReply]) {
+        assert.equal(edge.__sequence_line_off__, false, 'every other row still draws');
+    }
 });

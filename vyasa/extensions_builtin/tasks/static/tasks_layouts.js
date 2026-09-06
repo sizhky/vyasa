@@ -30,16 +30,27 @@ const TASKS_SEQUENCE_ROW_HEIGHT = 46;
 // The bar is as wide as the lane, so an arrow leaving or arriving at that lane
 // lands on the bar's own edge. A hairline bar down the middle touched no arrow
 // and read as an artifact rather than as an open frame.
-// A frame opened while another is still open on the same lane insets by this
-// much per side, which is the only way to nest without leaving the lane.
+// An activation bar opened while another is still open on the same lane insets
+// by this much per side, which is the only way to nest without leaving the lane.
 const TASKS_SEQUENCE_ACTIVATION_INSET = 7;
-// The bar clears its two rows by the same few pixels top and bottom. Flush on
+// An activation bar is UML's ExecutionSpecification: the stretch of a lifeline
+// during which one call is still running. It clears its opening row by this many
+// pixels, so that arrow reads as a row inside the bar rather than as its border. Flush on
 // the rows, the opening arrow and the closing reply sat exactly on the borders
 // and read as the frame's edges rather than as arrows inside it. A whole row of
 // slack was worse: the gap then read as time the frame was open for nothing.
 const TASKS_SEQUENCE_ACTIVATION_PAD = 9;
-// Above the lifeline column, below the arrows: the sequence layout draws edges
-// over nodes, so nothing is hidden.
+// A reply that closes a frame is drawn on a row of its own so the frame has
+// height, but its label now sits back beside its call. The row therefore holds a
+// line and nothing else, and a full row of it pushed every bar far past the last
+// work the frame contains. This gap is what a bare line needs, not a row.
+//
+// It is also the only gap the reader can see under the last labelled arrow,
+// because the bar closes flush on this line. Keep it near twice the top pad so
+// the frame looks evenly inset at both ends.
+const TASKS_SEQUENCE_REPLY_GAP = 18;
+// An activation bar sits above the lifeline column and below the arrows: the
+// sequence layout draws edges over nodes, so nothing is hidden.
 const TASKS_SEQUENCE_ACTIVATION_Z = 1001;
 
 // A combined fragment is UML's box for anything that is not one straight run of
@@ -403,13 +414,24 @@ export function buildSequenceTasksGraph(model, projection = {}) {
     // Rows are no longer evenly spaced: one that opens a fragment carries that
     // box's header band on top of its own height. Everything downstream reads a
     // row's y through rowY, so the table is the only thing that had to change.
+    // A row carrying only detached replies holds no text of its own, so it takes
+    // a gap rather than a row.
+    const rowBare = Array.from({ length: rowCount }, () => true);
+    rows.forEach((edge, index) => {
+        if (!(isReply[index] && detached.has(edge.id))) rowBare[rowOf[index]] = false;
+    });
     const bandTops = [];
     const arrowYs = [];
     let cursor = firstRow - TASKS_SEQUENCE_ROW_HEIGHT / 2;
     for (let row = 0; row < rowCount; row += 1) {
-        bandTops.push(cursor);
         const header = headerCounts[row] * TASKS_SEQUENCE_FRAGMENT_HEADER;
-        arrowYs.push(cursor + header + TASKS_SEQUENCE_ROW_HEIGHT / 2);
+        if (rowBare[row] && row > 0 && !header) {
+            arrowYs.push(arrowYs[row - 1] + TASKS_SEQUENCE_REPLY_GAP);
+            bandTops.push(arrowYs[row] - TASKS_SEQUENCE_REPLY_GAP / 2);
+        } else {
+            bandTops.push(cursor);
+            arrowYs.push(cursor + header + TASKS_SEQUENCE_ROW_HEIGHT / 2);
+        }
         cursor = arrowYs[row] + TASKS_SEQUENCE_ROW_HEIGHT / 2;
     }
     const rowY = (index) => arrowYs[index] ?? firstRow;
@@ -460,6 +482,17 @@ export function buildSequenceTasksGraph(model, projection = {}) {
             __sequence_standing__: standing,
             __pair_half__: half,
             __pair_lift__: half && !detached.has(edge.id) ? TASKS_PAIR_LIFT : 0,
+            // A detached reply keeps its LINE below the rows its frame contains,
+            // because the frame needs that height. Its TEXT belongs beside the
+            // call it answers: left on its own line, the label sat between two
+            // rows and read as belonging to neither of them.
+            // The frame's own bottom border is where the reply leaves, which is
+            // what UML draws. A second line under it stated the same fact twice,
+            // and carried no words of its own to justify the row.
+            __sequence_line_off__: half === 'reply' && detached.has(edge.id),
+            __sequence_label_dy__: half === 'reply' && detached.has(edge.id)
+                ? rowY(rowOfEdgeId.get(halves.get(edge.id).mate) ?? row) - rowY(row)
+                : 0,
             __sequence_uml__: Boolean(messageAttr),
             // A reply is already known from the pair, so the attribute only has
             // to separate a blocking call from a fire-and-forget one.
@@ -522,6 +555,15 @@ export function buildSequenceTasksGraph(model, projection = {}) {
         const edge = edgeById.get(edgeId);
         return (labelAttr && edge ? String(edge[labelAttr] ?? '').trim() : '') || edgeId;
     };
+    // Chrome is never an edge endpoint, so a bar and a box cannot be found by the
+    // usual source/target test. Each names the drawn edges it stands for, and the
+    // hover pass and the edge-preview key read that list instead.
+    const drawnIdOf = new Map(rows.map((edge, index) => [edge.id, edges[index].id]));
+    const drawnIdsInRows = (fromRow, toRow, laneId = '') => rows
+        .filter((edge, index) => rowOf[index] >= fromRow && rowOf[index] <= toRow
+            && (!laneId || edge.source === laneId || edge.target === laneId))
+        .map((edge) => drawnIdOf.get(edge.id))
+        .filter(Boolean);
     if (plan) {
         plan.boxes.forEach((box, index) => {
             // The box covers the lanes its own rows touch. Spanning every lane
@@ -577,6 +619,7 @@ export function buildSequenceTasksGraph(model, projection = {}) {
                 },
                 // Offsets from the box's own top, so the renderer places a rule
                 // and a guard without knowing which row either came from.
+                __edge_ids__: drawnIdsInRows(box.top, box.bottom),
                 __sequence_operands__: box.operands.map((operand, position) => ({
                     guard: operand.guard,
                     // The first operand needs no rule: the box's top edge is
@@ -594,10 +637,10 @@ export function buildSequenceTasksGraph(model, projection = {}) {
             });
         });
     }
-    // A bar is the frame's lifetime on the lane that is executing: it opens on
-    // the row the call arrives and closes on the row its reply leaves. Depth
-    // shifts a bar that opens while another is still open on the same lane, so
-    // recursion stays two bars rather than one.
+    // An activation bar is one call's lifetime on the lane that is executing: it
+    // opens on the row the call arrives and closes on the row its reply leaves.
+    // Depth shifts a bar that opens while another is still open on the same lane,
+    // so recursion stays two bars rather than one.
     if (activation) {
         const openByLane = {};
         rows.forEach((edge, index) => {
@@ -612,7 +655,13 @@ export function buildSequenceTasksGraph(model, projection = {}) {
             const laneX = TASKS_SEQUENCE_LEFT + (laneIndex[edge.target] ?? 0) * TASKS_SEQUENCE_LANE_WIDTH;
             const inset = Math.min(bar.depth * TASKS_SEQUENCE_ACTIVATION_INSET, (laneWidth - 12) / 2);
             const width = laneWidth - inset * 2;
-            const height = rowY(bar.bottom) - rowY(bar.top) + TASKS_SEQUENCE_ACTIVATION_PAD * 2;
+            // The top clears the opening call, so that arrow reads as a row inside
+            // the frame rather than as its border. The bottom is FLUSH with the
+            // closing reply, which is where UML draws a return leaving an
+            // execution. That line carries no label of its own, so nothing is lost
+            // to the border, and the frame stops at the last thing it contains.
+            const top = rowY(bar.top) - TASKS_SEQUENCE_ACTIVATION_PAD;
+            const height = rowY(bar.bottom) - top;
             nodes.push({
                 id: `__seq_activation_${index}`,
                 // The step the frame opens on. Its closing reply carries no
@@ -626,17 +675,23 @@ export function buildSequenceTasksGraph(model, projection = {}) {
                 // What the two edges SAY, not what they are called. An id names
                 // nothing to a reader, and the pack already states which attribute
                 // is an arrow's label.
+                // Every edge this lane touches while the frame is open: the call
+                // that opened it and the reply that closes it, on one side, and
+                // every call the lane makes in between, on the other. Naming only
+                // the bounding pair lit one side of the bar and dimmed the work
+                // the frame exists to contain.
+                __edge_ids__: drawnIdsInRows(bar.top, bar.bottom, edge.target),
                 lane: laneLabel(edge.target),
                 call: edgeNote(edge.id),
                 reply: edgeNote(halves.get(edge.id).mate),
                 ...(stepSpan(rowOf[index], replyRow) ? { steps: stepSpan(rowOf[index], replyRow) } : {}),
-                description: 'One frame on this lane. It opens when the call lands and closes when the reply leaves, so every row inside it happened while that call was still running.',
+                description: 'An activation bar: one call still running on this lane. It opens when the call arrives and closes when the reply leaves, so every row drawn between them ran while that call was active.',
                 // The bar draws its own box, so the whole box answers the pointer.
                 // Nothing smaller would be findable: it carries no text but a step.
                 __hit_rect__: { dx: 0, dy: 0, width, height },
                 __fixed_size__: true,
                 __z__: TASKS_SEQUENCE_ACTIVATION_Z,
-                position: { x: laneX + inset, y: rowY(bar.top) - TASKS_SEQUENCE_ACTIVATION_PAD },
+                position: { x: laneX + inset, y: top },
                 width,
                 height,
             });

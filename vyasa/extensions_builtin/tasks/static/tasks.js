@@ -208,6 +208,7 @@ const TASKS_ZOOM_MOMENTUM_RATE = 0.0007;
 // No document path in the keys: E and C are one setting for every graph on this
 // server, and localStorage is already scoped to the origin.
 const TASKS_EDGES_VISIBLE_KEY = 'vyasa:tasks:edges-visible';
+const TASKS_EDGE_LABELS_VISIBLE_KEY = 'vyasa:tasks:edge-labels-visible';
 const TASKS_HOVER_CARD_MODE_KEY = 'vyasa:tasks:hover-card-mode';
 const TASKS_GROUP_HOVER_CARDS_KEY = 'vyasa:tasks:group-hover-cards';
 const TASKS_HOVER_CARD_SCROLL_KEY = 'vyasa:tasks:hover-card-scroll';
@@ -823,10 +824,14 @@ function clearTasksGlobalToggle(key) {
 
 // Null means the toggle was never pressed on this server, so the graph keeps
 // whatever its own schema and projection prefs asked for.
-function readTasksEdgesVisible() {
-    const raw = readTasksGlobalToggle(TASKS_EDGES_VISIBLE_KEY);
+function readTasksStoredFlag(key) {
+    const raw = readTasksGlobalToggle(key);
     if (raw === 'true') return true;
     return raw === 'false' ? false : null;
+}
+
+function readTasksEdgesVisible() {
+    return readTasksStoredFlag(TASKS_EDGES_VISIBLE_KEY);
 }
 
 function readTasksHoverCardMode() {
@@ -4554,6 +4559,20 @@ async function renderTasksGraphs(rootElement = document) {
                 if (stored !== null) return stored;
                 return typeof projectionPrefs?.edgesVisible === 'boolean' ? projectionPrefs.edgesVisible : true;
             });
+            // Shift+E hides the words on every row and leaves the lines. A dense
+            // view reads as shape once the text is off, and the reader can still
+            // ask for one row's words by hovering it or holding W.
+            const [edgeLabelsVisible, setEdgeLabelsVisible] = React.useState(() => {
+                const stored = readTasksStoredFlag(TASKS_EDGE_LABELS_VISIBLE_KEY);
+                return stored === null ? true : stored;
+            });
+            const setEdgeLabelsVisibleGlobal = React.useCallback((update) => {
+                setEdgeLabelsVisible((current) => {
+                    const next = Boolean(typeof update === 'function' ? update(current) : update);
+                    writeTasksGlobalToggle(TASKS_EDGE_LABELS_VISIBLE_KEY, next);
+                    return next;
+                });
+            }, []);
             const [hoverInactiveNodes, setHoverInactiveNodes] = React.useState(() => (
                 typeof projectionPrefs?.hoverInactiveNodes === 'boolean' ? projectionPrefs.hoverInactiveNodes : true
             ));
@@ -4704,18 +4723,27 @@ async function renderTasksGraphs(rootElement = document) {
                 const point = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
                 const graph = graphBaseRef.current || { nodes: [], edges: [] };
                 let nodeId = selectedNodeIdRef.current || optionEdgeNodeIdRef.current;
+                // Chrome carries no handles, so the nearest search runs on the lane
+                // the chrome sits on and is limited to the edges it names.
+                let onlyEdgeIds = null;
                 if (!nodeId) {
                     const hit = tasksGraphNodeAtFlowPoint(graph.nodes || [], point);
-                    if (hit) nodeId = hit.node.data?.__kind__ === 'groupTitle'
-                        ? (hit.node.data?.sourceGroupId || hit.node.id)
-                        : hit.node.id;
+                    const chromeEdgeIds = hit?.node.data?.__edge_ids__;
+                    if (hit && chromeEdgeIds?.length && hit.node.data?.__sequence_lane__) {
+                        nodeId = hit.node.data.__sequence_lane__;
+                        onlyEdgeIds = new Set(chromeEdgeIds);
+                    } else if (hit) {
+                        nodeId = hit.node.data?.__kind__ === 'groupTitle'
+                            ? (hit.node.data?.sourceGroupId || hit.node.id)
+                            : hit.node.id;
+                    }
                 }
                 if (!nodeId) return null;
                 const edge = nearestTasksIncidentEdge(
                     point,
                     nodeId,
                     graph.nodes || [],
-                    currentGraphEdges(),
+                    onlyEdgeIds ? currentGraphEdges().filter((item) => onlyEdgeIds.has(item.id)) : currentGraphEdges(),
                 );
                 return edge ? { edge, nodeId } : null;
             }, [currentGraphEdges]);
@@ -5784,9 +5812,11 @@ async function renderTasksGraphs(rootElement = document) {
                         : !tasksDefaultFiltersOpen(defaultFiltersOpen)
                 );
                 clearTasksGlobalToggle(TASKS_EDGES_VISIBLE_KEY);
+                clearTasksGlobalToggle(TASKS_EDGE_LABELS_VISIBLE_KEY);
                 clearTasksGlobalToggle(TASKS_HOVER_CARD_MODE_KEY);
                 clearTasksGlobalToggle(TASKS_GROUP_HOVER_CARDS_KEY);
                 setEdgesVisible(typeof defaults.edgesVisible === 'boolean' ? defaults.edgesVisible : true);
+                setEdgeLabelsVisible(true);
                 setGroupHoverCardsEnabled(true);
                 setActivePulseEnabled(true);
                 setContextDiffEnabled(false);
@@ -6018,6 +6048,9 @@ async function renderTasksGraphs(rootElement = document) {
                                 __pair_mate_stroke__: pairMateColors.get(edge.__pair_mate__) || '',
                                 __sequence_uml__: Boolean(edge.__sequence_uml__),
                                 __sequence_message__: edge.__sequence_message__ || '',
+                                __sequence_label_dy__: Number(edge.__sequence_label_dy__) || 0,
+                                __labels_off__: !edgeLabelsVisible,
+                                __line_off__: Boolean(edge.__sequence_line_off__),
                                 // The prominent label is an HTML overlay, so it needs a z of
                                 // its own to clear the ribbon this layout draws over the cards.
                                 __label_z__: rowZ + 1,
@@ -6242,6 +6275,9 @@ async function renderTasksGraphs(rootElement = document) {
                             __pair_mate_stroke__: pairMateColors.get(edge.__pair_mate__) || '',
                             __sequence_uml__: Boolean(edge.__sequence_uml__),
                             __sequence_message__: edge.__sequence_message__ || '',
+                            __sequence_label_dy__: Number(edge.__sequence_label_dy__) || 0,
+                            __labels_off__: !edgeLabelsVisible,
+                            __line_off__: Boolean(edge.__sequence_line_off__),
                         },
                         markerEnd: {
                             type: rf.MarkerType.ArrowClosed,
@@ -6319,7 +6355,7 @@ async function renderTasksGraphs(rootElement = document) {
                     deriveMs: Math.round((derivedDone - groupsDone) * 10) / 10,
                     totalMs: Math.round((tasksPerfNow() - layoutStart) * 10) / 10,
                 });
-            }, [ensureBaseLayout, model, layoutModel, layoutRawGraph, sourceModel, activeColorBy, activeColorPalette, activeColorLevelSpecs, activeProjection, viewMode, edgesVisible, edgeOpacity, projectionUnspecifiedContentOpacity, checkedNodeIdSet, nodeStates, nodeNotes, cardStates, defaultNodeColor, referenceEdgeRecords, edgeNodeLabels]);
+            }, [ensureBaseLayout, model, layoutModel, layoutRawGraph, sourceModel, activeColorBy, activeColorPalette, activeColorLevelSpecs, activeProjection, viewMode, edgesVisible, edgeLabelsVisible, edgeOpacity, projectionUnspecifiedContentOpacity, checkedNodeIdSet, nodeStates, nodeNotes, cardStates, defaultNodeColor, referenceEdgeRecords, edgeNodeLabels]);
             const defaultEdgeOptions = React.useMemo(() => ({
                 zIndex: TASKS_EDGE_Z,
                 style: { strokeWidth: 2.5, opacity: edgeOpacity, stroke: 'currentColor' },
@@ -6396,6 +6432,21 @@ async function renderTasksGraphs(rootElement = document) {
                 // its checkbox. Carry it as a data flag (not the closure) so the
                 // memoized node updates without forcing the per-hover remount.
                 const hoverCheckboxId = !nodeId && hoveredNodeId ? hoveredNodeId : null;
+                // A bar and a fragment box are not edge endpoints, so comparing ids
+                // to them matches nothing and hovering one dimmed the whole view.
+                // Chrome names the edges it stands for; everything else keeps the
+                // endpoint test, so no ordinary node changes behaviour.
+                const hoveredEdgeIds = new Set(
+                    baseNodes.find((node) => node.id === hoveredNodeId)?.data?.__edge_ids__ || []
+                );
+                const touchesHovered = (edge) => (hoveredEdgeIds.size
+                    ? hoveredEdgeIds.has(edge.id)
+                    : (edge.source === hoveredNodeId || edge.target === hoveredNodeId));
+                // Direction still has to be read from a real endpoint: a call
+                // arrives at the lane the bar sits on and its reply leaves it, so
+                // the bar borrows that lane to tell the two apart.
+                const hoverDirectionId = baseNodes.find((node) => node.id === hoveredNodeId)
+                    ?.data?.__sequence_lane__ || hoveredNodeId;
                 const multiSelectedIds = selectedIds instanceof Set ? selectedIds : new Set(selectedIds || []);
                 const multiSelectedHighlightIds = new Set(multiSelectedIds);
                 for (const selectedId of multiSelectedIds) {
@@ -6408,7 +6459,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const multiHoverEndpointIds = new Set(hoveredNodeId ? [hoveredNodeId] : []);
                     if (hoveredNodeId) {
                         for (const edge of baseEdges) {
-                            if (edge.source === hoveredNodeId || edge.target === hoveredNodeId) {
+                            if (touchesHovered(edge)) {
                                 multiHoverEndpointIds.add(edge.source);
                                 multiHoverEndpointIds.add(edge.target);
                             }
@@ -6446,7 +6497,7 @@ async function renderTasksGraphs(rootElement = document) {
                         };
                     }));
                     setEdgesReusing(displayedEdges.map((edge) => {
-                        const touchesHover = Boolean(hoveredNodeId) && (edge.source === hoveredNodeId || edge.target === hoveredNodeId);
+                        const touchesHover = Boolean(hoveredNodeId) && touchesHovered(edge);
                         const hit = touchesHover
                             || (multiSelectedHighlightIds.has(edge.source) && multiSelectedHighlightIds.has(edge.target));
                         const edgeColor = edge.data?.edgeColor || edge.style?.stroke || 'currentColor';
@@ -6457,7 +6508,7 @@ async function renderTasksGraphs(rootElement = document) {
                             data: {
                                 ...edge.data,
                                 highlightMode: hit ? 'selected' : 'dim',
-                                strokeMode: hit && touchesHover ? (edge.source === hoveredNodeId ? 'selected-out' : 'selected-in') : (hit ? 'selected' : 'dim'),
+                                strokeMode: hit && touchesHover ? (edge.source === hoverDirectionId ? 'selected-out' : 'selected-in') : (hit ? 'selected' : 'dim'),
                                 flareKey: `hover:${hoveredNodeId || ''}`,
                             },
                             labelStyle: { ...(edge.labelStyle || {}), fill: hit ? edgeColor : 'color-mix(in srgb, var(--vyasa-ink) 26%, transparent)', opacity: (hit ? tasksProminentEdgeOpacity() : tasksApplyEdgeOpacity(0.12, edgeOpacity)) * branchOpacity },
@@ -6474,7 +6525,7 @@ async function renderTasksGraphs(rootElement = document) {
                         const hoverEndpointIds = new Set(hoveredNodeId ? [hoveredNodeId] : []);
                         if (hoveredNodeId) {
                             for (const edge of baseEdges) {
-                                if (edge.source === hoveredNodeId || edge.target === hoveredNodeId) {
+                                if (touchesHovered(edge)) {
                                     hoverEndpointIds.add(edge.source);
                                     hoverEndpointIds.add(edge.target);
                                 }
@@ -6507,8 +6558,8 @@ async function renderTasksGraphs(rootElement = document) {
                             : baseNodes);
                         setEdgesReusing(hoveredNodeId
                             ? displayedEdges.map((edge) => {
-                                if (edge.source !== hoveredNodeId && edge.target !== hoveredNodeId) return edge;
-                                return tasksHoverFocusEdge(edge, hoveredNodeId);
+                                if (!touchesHovered(edge)) return edge;
+                                return tasksHoverFocusEdge(edge, hoverDirectionId);
                             })
                             : displayedEdges);
                         return;
@@ -6584,8 +6635,14 @@ async function renderTasksGraphs(rootElement = document) {
                 const directEndpointIds = new Set([nodeId, ...descendantIds]);
                 const isFocusedPrimary = hoveredNodeId === nodeId;
                 const isFocusedNeighbor = hoveredNodeId && hoveredNodeId !== nodeId;
+                const selectedNode = baseNodes.find((node) => node.id === nodeId);
+                const selectedEdgeIds = new Set(selectedNode?.data?.__edge_ids__ || []);
+                const touchesSelected = (edge) => (selectedEdgeIds.size
+                    ? selectedEdgeIds.has(edge.id)
+                    : (edge.source === nodeId || edge.target === nodeId));
+                const selectDirectionId = selectedNode?.data?.__sequence_lane__ || nodeId;
                 for (const edge of baseEdges) {
-                    if (edge.source === nodeId || edge.target === nodeId) {
+                    if (touchesSelected(edge)) {
                         highlightedEdgeIds.add(edge.id);
                         directEndpointIds.add(edge.source);
                         directEndpointIds.add(edge.target);
@@ -6604,8 +6661,8 @@ async function renderTasksGraphs(rootElement = document) {
                 const focusedEdgeModes = new Map();
                 if (isFocusedPrimary) {
                     for (const edge of baseEdges) {
-                        if (highlightedEdgeIds.has(edge.id) && (edge.source === nodeId || edge.target === nodeId)) {
-                            focusedEdgeModes.set(edge.id, edge.source === nodeId ? 'focused-out' : 'focused-in');
+                        if (highlightedEdgeIds.has(edge.id) && touchesSelected(edge)) {
+                            focusedEdgeModes.set(edge.id, edge.source === selectDirectionId ? 'focused-out' : 'focused-in');
                         }
                     }
                 } else if (isFocusedNeighbor && directEndpointIds.has(hoveredNodeId)) {
@@ -6613,7 +6670,7 @@ async function renderTasksGraphs(rootElement = document) {
                         const linksSelectedAndHovered =
                             (edge.source === nodeId && edge.target === hoveredNodeId) ||
                             (edge.source === hoveredNodeId && edge.target === nodeId);
-                        if (linksSelectedAndHovered) focusedEdgeModes.set(edge.id, edge.source === nodeId ? 'focused-out' : 'focused-in');
+                        if (linksSelectedAndHovered) focusedEdgeModes.set(edge.id, edge.source === selectDirectionId ? 'focused-out' : 'focused-in');
                     }
                 }
                 const nextNodes = baseNodes.map((node) => {
@@ -6678,7 +6735,7 @@ async function renderTasksGraphs(rootElement = document) {
                     const activeOpacity = highlighted ? 1 : branchOpacity;
                     const hoverDimsLabels = isTasksEdgeLabelHoverDimmingActive(nodeId, hoveredNodeId);
                     const strokeMode = mode === 'selected'
-                        ? (edge.source === nodeId ? 'selected-out' : (edge.target === nodeId ? 'selected-in' : mode))
+                        ? (edge.source === selectDirectionId ? 'selected-out' : (edge.target === selectDirectionId ? 'selected-in' : mode))
                         : mode;
                     return {
                         ...edge,
@@ -6971,9 +7028,13 @@ async function renderTasksGraphs(rootElement = document) {
                 const labelChordLen = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY) || 1;
                 const labelLift = pairLift ? Math.sign(pairLift) * TASKS_PAIR_LABEL_LIFT : 0;
                 const labelX = rawLabelX + (-(props.targetY - props.sourceY) / labelChordLen) * labelLift;
+                // A reply drawn on a row of its own still reads with its call, so
+                // the layout may move the TEXT back to the call's row. The line
+                // does not move: the frame between them needs that height.
+                const labelBaseY = rawLabelY + (Number(props.data?.__sequence_label_dy__) || 0);
                 const labelY = pairLift
-                    ? rawLabelY + ((props.targetX - props.sourceX) / labelChordLen) * labelLift
-                    : rawLabelY - (Number(props.data?.__sequence_label_lift__) || 0);
+                    ? labelBaseY + ((props.targetX - props.sourceX) / labelChordLen) * labelLift
+                    : labelBaseY - (Number(props.data?.__sequence_label_lift__) || 0);
                 React.useEffect(() => {
                     traceTasksEdge('render', props, {
                         sourceX: props.sourceX,
@@ -6994,6 +7055,9 @@ async function renderTasksGraphs(rootElement = document) {
                 // A pair half keeps its even width -- swelling it would close the gap
                 // between the two halves -- but it must still taper to nothing at the
                 // tip, or the shaft arrives at full width beside its own barb.
+                // A reply whose label moved back to its call draws no line: the
+                // frame's bottom border already marks where it leaves.
+                const lineOff = props.data?.__line_off__ === true;
                 const taperPath = props.data?.__pair_half__ ? tasksTaperedBezierPath(
                     path,
                     Number(props.style?.strokeWidth) || 1.9,
@@ -7073,16 +7137,22 @@ async function renderTasksGraphs(rootElement = document) {
                 const openHead = uml && String(props.data?.__sequence_message__ || '') === 'async';
                 const umlHeadPath = openHead ? tasksOpenArrowHeadPath(path, arrowSize, pairLift ? Math.sign(pairLift) : 0) : '';
                 const umlLineWidth = Math.max(1.4, Number(props.style?.strokeWidth) || 1.9);
-                const showFullLabel = isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
+                // Shift+E turns the words off across the view, and only the edge the
+                // reader asked for by name keeps its own. That is the W preview or a
+                // clicked edge, both of which set edgeCardActive. Hovering a NODE
+                // must not bring the words back: it lights a whole neighbourhood,
+                // which is the state the toggle exists to quieten.
+                const labelsOff = props.data?.__labels_off__ === true && !props.data?.edgeCardActive;
+                const showFullLabel = !labelsOff && isTasksEdgeLabelVisible(highlightMode, props.data?.hoverDimsLabels === true);
                 const prominentLabel = showFullLabel;
                 // React Flow forwards only its own edge props, so a top-level
                 // labelZIndex never reaches this component. Take the layout's value
                 // from data, else derive it from the highlight mode.
                 const labelZIndex = Number(props.data?.__label_z__)
                     || tasksEdgeLabelZForMode(highlightMode, TASKS_EDGE_LABEL_Z, TASKS_EDGE_LABEL_SELECTED_Z, TASKS_EDGE_LABEL_FOCUS_Z);
-                const displayLabel = showFullLabel
-                    ? fullLabel
-                    : (labelLines.length > 1 ? `${labelLines[0]}...` : fullLabel);
+                const displayLabel = labelsOff
+                    ? ''
+                    : (showFullLabel ? fullLabel : (labelLines.length > 1 ? `${labelLines[0]}...` : fullLabel));
                 const labelStyle = props.labelStyle || {};
                 const labelBgStyle = props.labelBgStyle || {};
                 const svgLabelLines = String(displayLabel || '').split(/\r?\n/);
@@ -7127,7 +7197,7 @@ async function renderTasksGraphs(rootElement = document) {
                         pointerEvents: 'stroke',
                         className: 'react-flow__edge-interaction vyasa-tasks-edge-hit-path',
                     }),
-                    !taperPath && React.createElement(rf.BaseEdge, {
+                    !taperPath && !lineOff && React.createElement(rf.BaseEdge, {
                         ...props,
                         path,
                         markerEnd: undefined,
@@ -7142,7 +7212,7 @@ async function renderTasksGraphs(rootElement = document) {
                     // line, its taper and its head merge into one silhouette with one
                     // outer border. Casing a head after the line drew its own border
                     // between the two and split the arrow from its shaft.
-                    !pairReply && taperCasingPath && React.createElement('path', {
+                    !pairReply && !lineOff && taperCasingPath && React.createElement('path', {
                         d: taperCasingPath,
                         fill: 'var(--vyasa-paper)',
                         stroke: pairLift ? 'none' : 'var(--vyasa-paper)',
@@ -7150,7 +7220,7 @@ async function renderTasksGraphs(rootElement = document) {
                         strokeLinejoin: 'round',
                         pointerEvents: 'none',
                     }),
-                    !pairReply && (openHead ? umlHeadPath : edgeArrowPath) && React.createElement('path', {
+                    !pairReply && !lineOff && (openHead ? umlHeadPath : edgeArrowPath) && React.createElement('path', {
                         d: openHead ? umlHeadPath : edgeArrowPath,
                         fill: openHead ? 'none' : 'var(--vyasa-paper)',
                         stroke: 'var(--vyasa-paper)',
@@ -7191,7 +7261,7 @@ async function renderTasksGraphs(rootElement = document) {
                             stroke: props.style?.stroke || 'currentColor', strokeLinecap: 'round', vectorEffect: 'non-scaling-stroke',
                         })
                     ),
-                    React.createElement(rf.BaseEdge, {
+                    !lineOff && React.createElement(rf.BaseEdge, {
                         ...props,
                         path,
                         markerEnd: undefined,
@@ -7199,7 +7269,7 @@ async function renderTasksGraphs(rootElement = document) {
                             ? { ...(props.style || {}), strokeWidth: 0.1 }
                             : props.style,
                     }),
-                    !pairReply && taperPath && React.createElement('path', {
+                    !pairReply && !lineOff && taperPath && React.createElement('path', {
                         d: taperPath,
                         fill: props.style?.stroke || 'currentColor',
                         stroke: 'none',
@@ -7215,7 +7285,7 @@ async function renderTasksGraphs(rootElement = document) {
                         opacity: props.style?.opacity ?? 1,
                         pointerEvents: 'none',
                     }),
-                    !pairReply && (openHead ? umlHeadPath : edgeArrowPath) && React.createElement('path', {
+                    !pairReply && !lineOff && (openHead ? umlHeadPath : edgeArrowPath) && React.createElement('path', {
                         d: openHead ? umlHeadPath : edgeArrowPath,
                         fill: openHead ? 'none' : (props.style?.stroke || 'currentColor'),
                         stroke: openHead ? (props.style?.stroke || 'currentColor') : 'none',
@@ -7555,9 +7625,10 @@ async function renderTasksGraphs(rootElement = document) {
                     );
                 }
                 if (data?.__kind__ === 'sequenceActivation') {
-                    // Stronger than the lifeline column it covers, in the same
-                    // colour, so the frame reads as that lane doing work and an
-                    // arrow meeting the lane meets the bar's own edge.
+                    // An activation bar: one call still running on this lane. It is
+                    // stronger than the lifeline column it covers, in the same colour,
+                    // so the bar reads as that lane doing work and an arrow meeting
+                    // the lane meets the bar's own edge.
                     const accent = data.__sequence_color__ || 'currentColor';
                     return React.createElement('div', {
                         style: {
@@ -8118,6 +8189,11 @@ async function renderTasksGraphs(rootElement = document) {
                         if (key === 's') {
                             event.preventDefault();
                             setFiltersCollapsedGuarded((current) => !current, 'shortcut-toggle-filters');
+                            return;
+                        }
+                        if (key === 'e' && event.shiftKey) {
+                            event.preventDefault();
+                            setEdgeLabelsVisibleGlobal((current) => !current);
                             return;
                         }
                         if (key === 'e') {
@@ -10157,6 +10233,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Shift + G', 'open EG+ for hovered or selected node'),
                     row('S', 'toggle filters'),
                     row('E', 'toggle edges'),
+                    row('Shift + E', 'toggle edge labels'),
                     row('C', 'hover cards: off / right side'),
                     row('V', 'toggle hover card scroll mode'),
                     row('Shift + C', 'toggle group hover cards'),
