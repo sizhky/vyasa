@@ -34,21 +34,18 @@ const TASKS_SEQUENCE_ROW_HEIGHT = 46;
 // by this much per side, which is the only way to nest without leaving the lane.
 const TASKS_SEQUENCE_ACTIVATION_INSET = 7;
 // An activation bar is UML's ExecutionSpecification: the stretch of a lifeline
-// during which one call is still running. It clears its opening row by this many
-// pixels, so that arrow reads as a row inside the bar rather than as its border. Flush on
-// the rows, the opening arrow and the closing reply sat exactly on the borders
-// and read as the frame's edges rather than as arrows inside it. A whole row of
-// slack was worse: the gap then read as time the frame was open for nothing.
+// during which one call is still running. It clears its opening arrow by this
+// many pixels, so that arrow reads as a row inside the bar rather than as its
+// border. Flush on the row, the arrow and the border were one line.
 const TASKS_SEQUENCE_ACTIVATION_PAD = 9;
-// A reply that closes a frame is drawn on a row of its own so the frame has
-// height, but its label now sits back beside its call. The row therefore holds a
-// line and nothing else, and a full row of it pushed every bar far past the last
-// work the frame contains. This gap is what a bare line needs, not a row.
+// The reply that closes a bar keeps a row of its own so the bar has height, but
+// it draws no line: its label sits back beside its call and the bar's own bottom
+// border is where the reply leaves.
 //
-// It is also the only gap the reader can see under the last labelled arrow,
-// because the bar closes flush on this line. Keep it near twice the top pad so
-// the frame looks evenly inset at both ends.
-const TASKS_SEQUENCE_REPLY_GAP = 18;
+// So this gap IS the bar's bottom padding, measured from the last arrow the
+// reader can actually see. It has to equal the top pad, or the bar looks
+// bottom-heavy against an edge that is not drawn.
+const TASKS_SEQUENCE_REPLY_GAP = TASKS_SEQUENCE_ACTIVATION_PAD;
 // An activation bar sits above the lifeline column and below the arrows: the
 // sequence layout draws edges over nodes, so nothing is hidden.
 const TASKS_SEQUENCE_ACTIVATION_Z = 1001;

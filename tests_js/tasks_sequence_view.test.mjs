@@ -691,9 +691,14 @@ test('a closing reply takes a gap rather than a row, so its bar stops near the w
     const [, innerCall, , outerReply] = graph.edges;
     const [bar] = graph.nodes.filter((node) => node.__kind__ === 'sequenceActivation');
     const gap = y(outerReply, 'source') - y(innerCall, 'target');
-    assert.ok(gap > 0 && gap < 46, 'the bare line sits closer than a full row');
-    // The frame therefore stops within that gap of the last work it contains.
-    assert.equal(bar.position.y + bar.height, y(outerReply, 'source'));
+    assert.ok(gap > 0 && gap < 46, 'the bare row sits closer than a full row');
+    // The reply draws no line, so the bar's bottom border is measured against the
+    // last arrow the reader can see. It has to clear that arrow by the same margin
+    // the top clears the opening call, or the bar looks bottom-heavy.
+    const topPad = y(graph.edges[0], 'target') - bar.position.y;
+    const bottomPad = (bar.position.y + bar.height) - y(innerCall, 'target');
+    assert.ok(topPad > 0);
+    assert.ok(Math.abs(topPad - bottomPad) < 0.01, 'both margins clear a drawn arrow equally');
 });
 
 test('a reply whose label moved back to its call draws no line of its own', () => {

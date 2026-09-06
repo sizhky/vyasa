@@ -4739,11 +4739,15 @@ async function renderTasksGraphs(rootElement = document) {
                     }
                 }
                 if (!nodeId) return null;
+                // A row that draws no line is never a useful preview target: there is
+                // nothing under the pointer to light up.
+                const previewable = currentGraphEdges().filter((item) => !item.data?.__line_off__
+                    && (!onlyEdgeIds || onlyEdgeIds.has(item.id)));
                 const edge = nearestTasksIncidentEdge(
                     point,
                     nodeId,
                     graph.nodes || [],
-                    onlyEdgeIds ? currentGraphEdges().filter((item) => onlyEdgeIds.has(item.id)) : currentGraphEdges(),
+                    previewable,
                 );
                 return edge ? { edge, nodeId } : null;
             }, [currentGraphEdges]);
@@ -7184,7 +7188,7 @@ async function renderTasksGraphs(rootElement = document) {
                     });
                 }, [displayLabel, fullLabel, highlightMode, prominentLabel, labelStyle.fill, labelStyle.opacity, labelBgStyle.fill, labelBgStyle.fillOpacity]);
                 return React.createElement(React.Fragment, null,
-                    React.createElement('path', {
+                    !lineOff && React.createElement('path', {
                         d: path,
                         fill: 'none',
                         stroke: 'transparent',
@@ -7243,7 +7247,7 @@ async function renderTasksGraphs(rootElement = document) {
                         strokeLinejoin: 'round',
                         pointerEvents: 'none',
                     }),
-                    props.data?.edgeCardActive && React.createElement('path', {
+                    !lineOff && props.data?.edgeCardActive && React.createElement('path', {
                         d: path,
                         fill: 'none',
                         stroke: props.style?.stroke || 'currentColor',
@@ -7255,7 +7259,7 @@ async function renderTasksGraphs(rootElement = document) {
                         pointerEvents: 'none',
                         style: { filter: 'blur(14px)' },
                     }),
-                    props.data?.pinBloomKey && React.createElement('g', { key: props.data.pinBloomKey, pointerEvents: 'none' },
+                    !lineOff && props.data?.pinBloomKey && React.createElement('g', { key: props.data.pinBloomKey, pointerEvents: 'none' },
                         React.createElement('path', {
                             className: 'vyasa-tasks-edge-pin-bloom', d: path, pathLength: 1, fill: 'none',
                             stroke: props.style?.stroke || 'currentColor', strokeLinecap: 'round', vectorEffect: 'non-scaling-stroke',
