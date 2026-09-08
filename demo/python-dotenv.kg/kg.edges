@@ -1,0 +1,70 @@
+e1: caller -> loader calls
+	step=s1
+	note=→ load_dotenv()
+	message=sync
+	pair=p-load
+	description=The application starts the interaction with the public API.
+e2: loader -> path-finder checks
+	step=s2
+	fragment=opt:default path
+	operand=[dotenv_path is None and stream is None]
+	operand_note=With no explicit source, load_dotenv calls find_dotenv. An explicit path or stream skips this call.
+	note=→ find_dotenv()
+	message=sync
+	pair=p-find
+	description=The default source is discovered only when the caller supplies neither a path nor a stream.
+e3: path-finder -> loader returns
+	step=s2
+	fragment=opt:default path
+	operand=[dotenv_path is None and stream is None]
+	note=← .env path
+	pair=p-find
+	description=find_dotenv returns the path that DotEnv will read.
+e4: loader -> parser calls
+	step=s3
+	note=→ DotEnv.dict()
+	message=sync
+	pair=p-parse
+	description=DotEnv reads the selected file or stream and parses assignments.
+e5: parser -> loader returns
+	step=s3
+	note=← parsed mapping
+	pair=p-parse
+	description=The parser returns key-value pairs without changing os.environ.
+e6: loader -> environment writes
+	step=s4
+	fragment=alt:existing key
+	operand=[key absent or override=True]
+	operand_note=The value is written when the key is absent, or when override=True allows the file to replace it.
+	note=→ os.environ[key] = value
+	message=sync
+	pair=p-write
+	description=This branch changes process state.
+e7: environment -> loader returns
+	step=s4
+	fragment=alt:existing key
+	operand=[key absent or override=True]
+	note=← written
+	pair=p-write
+	description=The application can now read the value from os.environ.
+e8: loader -> caller returns
+	step=s5
+	note=← True or False
+	message=async
+	description=load_dotenv reports whether at least one variable was set.
+e9: loader -> environment checks
+	step=s4
+	fragment=alt:existing key
+	operand=[key exists and override=False]
+	operand_note=The existing process value is preserved. The parsed value is ignored for this key.
+	note=→ key in os.environ
+	message=sync
+	pair=p-skip
+	description=This branch reads process state and performs no write.
+e10: environment -> loader returns
+	step=s4
+	fragment=alt:existing key
+	operand=[key exists and override=False]
+	note=← unchanged
+	pair=p-skip
+	description=The existing environment value remains visible to the application.

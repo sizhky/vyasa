@@ -1,0 +1,59 @@
+@graph id=python-dotenv title="How load_dotenv loads values"
+hover_attrs=description,code
+pair_by=pair
+default_view=load
+
+@sources
+nodes=kg.nodes
+attrs=kg.attrs
+load:
+	edges=kg.edges
+
+@relations
+calls color=relation.calls
+returns color=relation.returns
+checks color=relation.checks
+writes color=relation.writes
+
+@views
+load:
+	source=load
+	layout=sequence
+	sequence_role=role
+	sequence_phase=phase
+	sequence_activation=true
+	sequence_lanes=caller,loader,path-finder,parser,environment
+	sequence_message=message
+	sequence_fragment=fragment
+	sequence_operand=operand
+	sequence_operand_note=operand_note
+	edge_color_by=step
+	edge_label_from=note
+	hover_attrs=description,code
+	caption="One call moves through path selection, parsing, and environment writes. The opt branch uses find_dotenv when the caller gives no path. The alt branch preserves an existing environment value unless override=True."
+	slides:
+		start: Steps 1 to 2 — choose the file
+			nodes=caller,loader,path-finder
+			caption="load_dotenv builds a DotEnv object. With no path or stream, it asks find_dotenv for the nearest .env file."
+			read: Steps 3 to 5 — parse values
+			nodes=loader,parser,environment
+			caption="DotEnv reads the stream and turns each assignment into a key and value. The parser does not write process state."
+			write: Steps 6 to 8 — apply the rule
+			nodes=loader,environment,caller
+			caption="set_as_environment_variables checks each parsed key. An existing key is skipped when override is false; otherwise the value is written."
+
+caller: Application
+	description=The application calls load_dotenv and later reads os.environ.
+	code=Example call: load_dotenv(override=False).
+loader: load_dotenv
+	description=The public function that chooses a source, creates DotEnv, and asks it to set variables.
+	code=dotenv/main.py:383 — load_dotenv
+path-finder: find_dotenv
+	description=The default path lookup used only when both dotenv_path and stream are missing.
+	code=dotenv/main.py:332 — find_dotenv
+parser: DotEnv parser
+	description=DotEnv.dict reads the stream through parse_stream and returns parsed key-value pairs.
+	code=dotenv/main.py:75 — DotEnv.dict; dotenv/main.py:179 — parse_stream
+environment: Process environment
+	description=os.environ is the process-wide mapping that the application reads after loading.
+	code=dotenv/main.py:97 — DotEnv.set_as_environment_variables
