@@ -1,30 +1,30 @@
 stream-parser: parse_stream
-	description=Yield one Binding per advance until the reader reaches the end of the text.
+	description=Yield one [Binding](src/dotenv/parser.py){show=symbol symbol=Binding kind=class} per advance until the [Reader](src/dotenv/parser.py){show=symbol symbol=Reader kind=class} reaches the end of the text.
 	code=[parse_stream](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=Function}
 stream-reader: Reader
-	description=Read the whole stream once and track the current character position.
+	description=The [Reader](src/dotenv/parser.py){show=symbol symbol=Reader kind=class} reads the whole stream once and tracks the current character position.
 	code=[Reader](src/dotenv/parser.py){show=symbol symbol=Reader kind=Class}
 binding-parser: parse_binding
-	description=Parse one binding in grammar order, then return its key, value, original source span, and error flag.
+	description=[parse_binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=function} parses one binding in grammar order, then returns its key, value, original source span, and error flag.
 	code=[parse_binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function}
 binding-reader: Reader cursor
-	description=The cursor that parse_binding advances with regular expressions, peeks, and the mark used for original source text.
+	description=The [Reader cursor](src/dotenv/parser.py){show=symbol symbol=Reader kind=class} that [parse_binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=function} advances with regular expressions, peeks, and the mark used for original source text.
 	code=[Reader methods](src/dotenv/parser.py){show=symbol symbol=Reader.read_regex kind=Method}
 key-parser: parse_key
-	description=Read a comment-only line, a single-quoted key, or an unquoted key from the current cursor.
+	description=[parse_key](src/dotenv/parser.py){show=symbol symbol=parse_key kind=function} reads a comment-only line, a single-quoted key, or an unquoted key from the current cursor.
 	code=[parse_key](src/dotenv/parser.py){show=symbol symbol=parse_key kind=Function}
 value-parser: parse_value
-	description=Choose the value grammar from the next character: single quote, double quote, empty line, or unquoted text.
+	description=[parse_value](src/dotenv/parser.py){show=symbol symbol=parse_value kind=function} chooses the value grammar from the next character: single quote, double quote, empty line, or unquoted text.
 	code=[parse_value](src/dotenv/parser.py){show=symbol symbol=parse_value kind=Function}
 unquoted-value-parser: parse_unquoted_value
-	description=Read the rest of an unquoted value, remove an inline comment, and trim trailing whitespace.
+	description=[parse_unquoted_value](src/dotenv/parser.py){show=symbol symbol=parse_unquoted_value kind=function} reads the rest of an unquoted value, removes an inline comment, and trims trailing whitespace.
 	code=[parse_unquoted_value](src/dotenv/parser.py){show=symbol symbol=parse_unquoted_value kind=Function}
 escape-decoder: decode_escapes
-	description=Decode only the escape sequences allowed by the selected quote style.
+	description=[decode_escapes](src/dotenv/parser.py){show=symbol symbol=decode_escapes kind=function} decodes only the escape sequences allowed by the selected quote style.
 	code=[decode_escapes](src/dotenv/parser.py){show=symbol symbol=decode_escapes kind=Function}
 binding-record: Binding
-	description=The immutable record carrying key, value, original source text, source line, and error status.
+	description=The immutable [Binding](src/dotenv/parser.py){show=symbol symbol=Binding kind=class} record carrying key, value, original source text, source line, and error status.
 	code=[Binding](src/dotenv/parser.py){show=symbol symbol=Binding kind=Class}
 error-recovery: line recovery
-	description=The except branch consumes the remaining line and returns an error Binding instead of raising to parse_stream.
+	description=The [parse_binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=function} exception branch consumes the remaining line and returns an error [Binding](src/dotenv/parser.py){show=symbol symbol=Binding kind=class} instead of raising to [parse_stream](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=function}.
 	code=[parse_binding recovery](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function focus="match[reader.read_regex(_rest_of_line)]" context=4}

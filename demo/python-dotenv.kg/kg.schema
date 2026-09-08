@@ -34,17 +34,17 @@ load:
 	edge_color_by=step
 	edge_label_from=note
 	hover_attrs=description,code
-	caption="One call moves through path selection, parsing, and environment writes. The opt branch uses find_dotenv when the caller gives no path. The alt branch preserves an existing environment value unless override=True."
+	caption="One call moves through path selection, parsing, and environment writes. The opt branch uses [find_dotenv](src/dotenv/main.py){show=symbol symbol=find_dotenv kind=function} when the caller gives no path. The alt branch preserves an existing environment value unless override=True."
 	slides:
 		start: Steps 1 to 2 — choose the file
 			nodes=caller,loader,path-finder
-			caption="load_dotenv builds a DotEnv object. With no path or stream, it asks find_dotenv for the nearest .env file."
+			caption="[load_dotenv](src/dotenv/main.py){show=symbol symbol=load_dotenv kind=function} builds a [DotEnv](src/dotenv/main.py){show=symbol symbol=DotEnv kind=class} object. With no path or stream, it asks [find_dotenv](src/dotenv/main.py){show=symbol symbol=find_dotenv kind=function} for the nearest .env file."
 			read: Steps 3 to 5 — parse values
 			nodes=loader,parser,environment
-			caption="DotEnv reads the stream and turns each assignment into a key and value. The parser does not write process state."
+			caption="[DotEnv.dict](src/dotenv/main.py){show=symbol symbol=dict kind=method} reads the stream and turns each assignment into a key and value. The parser does not write process state."
 			write: Steps 6 to 8 — apply the rule
 			nodes=loader,environment,caller
-			caption="set_as_environment_variables checks each parsed key. An existing key is skipped when override is false; otherwise the value is written."
+			caption="[set_as_environment_variables](src/dotenv/main.py){show=symbol symbol=set_as_environment_variables kind=method} checks each parsed key. An existing key is skipped when override is false; otherwise the value is written."
 parse_stream:
 	source=parse_stream
 	layout=sequence
@@ -56,11 +56,11 @@ parse_stream:
 	sequence_operand=operand
 	edge_label_from=note
 	hover_attrs=description,code
-	caption="Iteration starts this generator. Reader reads the whole input once and tracks a character position. Each advance checks for remaining text. If text remains, parse_binding marks the start, consumes whitespace and an optional export prefix, parses a key, selects a value parser, consumes comments and the line ending, then returns a Binding. parse_stream yields that record and pauses until the consumer resumes. A false check ends iteration. Empty input yields nothing. A parser error consumes the rest of the line and returns an error Binding, so one malformed line does not stop the stream."
+	caption="Iteration starts this [parse_stream](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=function} generator. [Reader](src/dotenv/parser.py){show=symbol symbol=Reader kind=class} reads the whole input once and tracks a character position. Each advance checks for remaining text. If text remains, [parse_binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=function} marks the start, consumes whitespace and an optional export prefix, parses a key, selects a value parser, consumes comments and the line ending, then returns a [Binding](src/dotenv/parser.py){show=symbol symbol=Binding kind=class}. [parse_stream](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=function} yields that record and pauses until the consumer resumes. A false check ends iteration. Empty input yields nothing. A parser error consumes the rest of the line and returns an error [Binding](src/dotenv/parser.py){show=symbol symbol=Binding kind=class}, so one malformed line does not stop the stream."
 	slides:
 		iterate: Steps 1 to 6 — walk the stream
 			nodes=stream-parser,stream-reader,binding-parser
-			caption="parse_stream owns iteration. It constructs one Reader, checks has_next before each binding, delegates one record to parse_binding, yields that record, and resumes at the loop check."
+			caption="[parse_stream](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=function} owns iteration. It constructs one [Reader](src/dotenv/parser.py){show=symbol symbol=Reader kind=class}, checks has_next before each binding, delegates one record to [parse_binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=function}, yields that record, and resumes at the loop check."
 		binding: Steps 7 to 25 — parse one binding
 			nodes=binding-parser,binding-reader,key-parser,value-parser,unquoted-value-parser,escape-decoder,binding-record,error-recovery
-			caption="parse_binding owns one record. It marks the start so the returned Binding can preserve original text and line number. It then consumes the grammar in order. parse_key handles quoted and unquoted keys. parse_value chooses quoted, unquoted, or empty values. Quoted values pass through decode_escapes. A failed read enters recovery, consumes the rest of the line, and returns error=True."
+			caption="[parse_binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=function} owns one record. It marks the start so the returned [Binding](src/dotenv/parser.py){show=symbol symbol=Binding kind=class} can preserve original text and line number. It then consumes the grammar in order. [parse_key](src/dotenv/parser.py){show=symbol symbol=parse_key kind=function} handles quoted and unquoted keys. [parse_value](src/dotenv/parser.py){show=symbol symbol=parse_value kind=function} chooses quoted, unquoted, or empty values. Quoted values pass through [decode_escapes](src/dotenv/parser.py){show=symbol symbol=decode_escapes kind=function}. A failed read enters recovery, consumes the rest of the line, and returns error=True."

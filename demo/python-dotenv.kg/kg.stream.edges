@@ -1,78 +1,78 @@
-ps1: stream-parser -> stream-reader calls pair=ps-init role=call message=sync note="→ Reader(stream)"
-	description=The first advance creates the reader. Its constructor reads the stream and sets the starting position.
+ps1: stream-parser -> stream-reader calls pair=ps-init role=call message=sync note="→ [Reader](src/dotenv/parser.py){show=symbol symbol=Reader kind=class}(stream)"
+	description=The first advance creates the [Reader](src/dotenv/parser.py){show=symbol symbol=Reader kind=class}. Its constructor reads the stream and sets the starting position.
 	code=[create reader](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=Function focus="match[reader = Reader(stream)]" context=1}
 ps2: stream-reader -> stream-parser returns pair=ps-init role=reply note="← reader at the start"
-	description=The reader now holds the complete input, including an empty string when the stream is empty.
+	description=The [Reader](src/dotenv/parser.py){show=symbol symbol=Reader kind=class} now holds the complete input, including an empty string when the stream is empty.
 	code=[initialize reader](src/dotenv/parser.py){show=symbol symbol=Reader.__init__ kind=Method focus="match[self.string = stream.read()]" context=3}
-ps3: stream-parser -> stream-reader checks pair=ps-check role=call message=sync fragment="loop:each advance" operand="[consumer advances the generator]" note="→ reader.has_next()"
+ps3: stream-parser -> stream-reader checks pair=ps-check role=call message=sync fragment="loop:each advance" operand="[consumer advances the generator]" note="→ [Reader.has_next](src/dotenv/parser.py){show=symbol symbol=has_next kind=method}()"
 	description=Check before each binding. A false result ends the generator without another yield.
 	code=[check remaining text](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=Function focus="match[while reader.has_next():]" context=1}
 ps4: stream-reader -> stream-parser returns pair=ps-check role=reply fragment="loop:each advance" operand="[consumer advances the generator]" note="← True or False"
-	description=Compare the current character position with the input length.
+	description=[Reader.has_next](src/dotenv/parser.py){show=symbol symbol=has_next kind=method} compares the current character position with the input length.
 	code=[check position](src/dotenv/parser.py){show=symbol symbol=Reader.has_next kind=Method focus="match[return self.position.chars < len(self.string)]" context=1}
-ps5: stream-parser -> binding-parser calls pair=ps-binding role=call message=sync fragment="loop:each advance/opt:text remains" operand="[has_next returned True]" note="→ parse_binding(reader)"
-	description=Pass the same reader to parse_binding. That function advances its position and handles syntax errors.
+ps5: stream-parser -> binding-parser calls pair=ps-binding role=call message=sync fragment="loop:each advance/opt:text remains" operand="[has_next returned True]" note="→ [parse_binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=function}(reader)"
+	description=Pass the same [Reader](src/dotenv/parser.py){show=symbol symbol=Reader kind=class} to [parse_binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=function}. That function advances its position and handles syntax errors.
 	code=[parse the next binding](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=Function focus="match[yield parse_binding(reader)]" context=1}
-ps6: binding-parser -> stream-parser returns pair=ps-binding role=reply fragment="loop:each advance/opt:text remains" operand="[has_next returned True]" note="← Binding; yield it to the consumer"
-	description=Yield the returned Binding unchanged, including comments and error records. Resume at the while check on the next advance.
+ps6: binding-parser -> stream-parser returns pair=ps-binding role=reply fragment="loop:each advance/opt:text remains" operand="[has_next returned True]" note="← [Binding](src/dotenv/parser.py){show=symbol symbol=Binding kind=class}; yield it to the consumer"
+	description=Yield the returned [Binding](src/dotenv/parser.py){show=symbol symbol=Binding kind=class} unchanged, including comments and error records. Resume at the while check on the next advance.
 	code=[yield the binding](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=Function focus="match[yield parse_binding(reader)]" context=1}
-ps7: binding-parser -> binding-reader calls pair=pb-mark role=call fragment="ref:parse_binding" operand="[one binding]" message=sync note="→ set_mark()"
-	description=Mark the cursor before consuming anything. The mark anchors Binding.original and Binding.original.line.
+ps7: binding-parser -> binding-reader calls pair=pb-mark role=call fragment="ref:parse_binding" operand="[one binding]" message=sync note="→ [Reader.set_mark](src/dotenv/parser.py){show=symbol symbol=set_mark kind=method}()"
+	description=Mark the cursor before consuming anything. The mark anchors [Binding.original](src/dotenv/parser.py){show=symbol symbol=Binding kind=class focus="ln[36]" context=2} and [Binding.original.line](src/dotenv/parser.py){show=symbol symbol=Original kind=class focus="ln[30]" context=2}.
 	code=[mark the binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function focus="match[reader.set_mark()]" context=2}
 ps8: binding-reader -> binding-parser returns pair=pb-mark role=reply fragment="ref:parse_binding" operand="[one binding]" note="← start position"
-	description=The reader keeps both the character offset and the one-based source line.
+	description=The [Reader](src/dotenv/parser.py){show=symbol symbol=Reader kind=class} keeps both the character offset and the one-based source line.
 	code=[save mark](src/dotenv/parser.py){show=symbol symbol=Reader.set_mark kind=Method context=3}
 ps9: binding-parser -> binding-reader reads pair=pb-prefix role=call fragment="ref:parse_binding" operand="[one binding]" message=sync note="→ whitespace, then optional export"
-	description=The first reads consume multiline whitespace and the optional export prefix. They advance the same cursor.
+	description=The first [Reader.read_regex](src/dotenv/parser.py){show=symbol symbol=read_regex kind=method} calls consume multiline whitespace and the optional export prefix. They advance the same cursor.
 	code=[consume prefix](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function focus="match[reader.read_regex(_multiline_whitespace)] match[reader.read_regex(_export)]" context=2}
 ps10: binding-reader -> binding-parser returns pair=pb-prefix role=reply fragment="ref:parse_binding" operand="[one binding]" note="← cursor after prefix"
 	description=The parser is positioned at the key or at a comment-only line.
 	code=[advance cursor](src/dotenv/parser.py){show=symbol symbol=Reader.read_regex kind=Method context=2}
-ps11: binding-parser -> key-parser calls pair=pb-key role=call fragment="ref:parse_binding" operand="[one binding]" message=sync note="→ parse_key(reader)"
-	description=parse_key chooses comment-only, single-quoted, or unquoted key syntax by peeking at the cursor.
+ps11: binding-parser -> key-parser calls pair=pb-key role=call fragment="ref:parse_binding" operand="[one binding]" message=sync note="→ [parse_key](src/dotenv/parser.py){show=symbol symbol=parse_key kind=function}(reader)"
+	description=[parse_key](src/dotenv/parser.py){show=symbol symbol=parse_key kind=function} chooses comment-only, single-quoted, or unquoted key syntax by peeking at the cursor.
 	code=[parse key](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function focus="match[key = parse_key(reader)]" context=2}
 ps12: key-parser -> binding-parser returns pair=pb-key role=reply fragment="ref:parse_binding" operand="[one binding]" note="← key or None"
-	description=A comment-only line returns key=None; otherwise the key text is returned without its quotes.
+	description=A comment-only line returns key=None; otherwise [parse_key](src/dotenv/parser.py){show=symbol symbol=parse_key kind=function} returns the key text without its quotes.
 	code=[return key](src/dotenv/parser.py){show=symbol symbol=parse_key kind=Function context=3}
-ps13: binding-parser -> binding-reader checks pair=pb-equal role=call fragment="ref:parse_binding" operand="[one binding]" message=sync note="→ peek(1) == '='"
+ps13: binding-parser -> binding-reader checks pair=pb-equal role=call fragment="ref:parse_binding" operand="[one binding]" message=sync note="→ [Reader.peek](src/dotenv/parser.py){show=symbol symbol=peek kind=method}(1) == '='"
 	description=Whitespace after the key is consumed, then one character decides whether a value follows.
 	code=[check equals](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function focus="match[if reader.peek(1) == \"=\"]" context=3}
 ps14: binding-reader -> binding-parser returns pair=pb-equal role=reply fragment="ref:parse_binding" operand="[one binding]" note="← '=' or another character"
 	description=Without an equals sign, the binding has a key and a None value.
 	code=[peek cursor](src/dotenv/parser.py){show=symbol symbol=Reader.peek kind=Method context=2}
-ps15: binding-parser -> value-parser calls pair=pb-value role=call fragment="alt:value form" operand="[equals sign present]" message=sync note="→ parse_value(reader)"
-	description=The equals branch delegates value syntax to parse_value.
+ps15: binding-parser -> value-parser calls pair=pb-value role=call fragment="alt:value form" operand="[equals sign present]" message=sync note="→ [parse_value](src/dotenv/parser.py){show=symbol symbol=parse_value kind=function}(reader)"
+	description=The equals branch delegates value syntax to [parse_value](src/dotenv/parser.py){show=symbol symbol=parse_value kind=function}.
 	code=[parse value](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function focus="match[parse_value(reader)]" context=2}
 ps16: value-parser -> binding-reader checks pair=pb-value-kind role=call fragment="alt:value form" operand="[equals sign present]" message=sync note="→ peek quote or newline"
-	description=parse_value selects single-quoted, double-quoted, empty, or unquoted parsing from the next character.
+	description=[parse_value](src/dotenv/parser.py){show=symbol symbol=parse_value kind=function} selects single-quoted, double-quoted, empty, or unquoted parsing from the next character.
 	code=[choose value form](src/dotenv/parser.py){show=symbol symbol=parse_value kind=Function focus="match[char = reader.peek(1)]" context=3}
 ps17: binding-reader -> value-parser returns pair=pb-value-kind role=reply fragment="alt:value form" operand="[equals sign present]" note="← quote, newline, or text"
 	description=The next character selects the value operand.
 	code=[read next character](src/dotenv/parser.py){show=symbol symbol=Reader.peek kind=Method context=2}
-ps18: value-parser -> unquoted-value-parser calls pair=pb-unquoted role=call fragment="alt:value form" operand="[unquoted text]" message=sync note="→ parse_unquoted_value(reader)"
-	description=An unquoted value reads until the line ending, removes an inline comment, and strips trailing whitespace.
+ps18: value-parser -> unquoted-value-parser calls pair=pb-unquoted role=call fragment="alt:value form" operand="[unquoted text]" message=sync note="→ [parse_unquoted_value](src/dotenv/parser.py){show=symbol symbol=parse_unquoted_value kind=function}(reader)"
+	description=[parse_unquoted_value](src/dotenv/parser.py){show=symbol symbol=parse_unquoted_value kind=function} reads until the line ending, removes an inline comment, and strips trailing whitespace.
 	code=[unquoted branch](src/dotenv/parser.py){show=symbol symbol=parse_value kind=Function focus="match[return parse_unquoted_value(reader)]" context=2}
 ps19: unquoted-value-parser -> value-parser returns pair=pb-unquoted role=reply fragment="alt:value form" operand="[unquoted text]" note="← cleaned text"
-	description=The cleaned unquoted value returns to parse_value.
+	description=The cleaned unquoted value returns to [parse_value](src/dotenv/parser.py){show=symbol symbol=parse_value kind=function}.
 	code=[clean unquoted value](src/dotenv/parser.py){show=symbol symbol=parse_unquoted_value kind=Function context=3}
-ps20: value-parser -> escape-decoder calls pair=pb-escape role=call fragment="alt:value form" operand="[quoted text]" message=sync note="→ decode_escapes(...)"
-	description=Quoted values decode only the escapes allowed by their quote style.
+ps20: value-parser -> escape-decoder calls pair=pb-escape role=call fragment="alt:value form" operand="[quoted text]" message=sync note="→ [decode_escapes](src/dotenv/parser.py){show=symbol symbol=decode_escapes kind=function}(...)"
+	description=Quoted values pass through [decode_escapes](src/dotenv/parser.py){show=symbol symbol=decode_escapes kind=function}, which decodes only the escapes allowed by their quote style.
 	code=[decode quoted value](src/dotenv/parser.py){show=symbol symbol=decode_escapes kind=Function context=3}
 ps21: escape-decoder -> value-parser returns pair=pb-escape role=reply fragment="alt:value form" operand="[quoted text]" note="← decoded text"
-	description=The decoded quoted value returns to parse_value.
+	description=The decoded quoted value returns to [parse_value](src/dotenv/parser.py){show=symbol symbol=parse_value kind=function}.
 	code=[return decoded value](src/dotenv/parser.py){show=symbol symbol=decode_escapes kind=Function context=2}
 ps22: value-parser -> binding-parser returns pair=pb-value role=reply fragment="alt:value form" operand="[equals sign present]" note="← value or empty string"
-	description=parse_value returns the selected result to parse_binding.
+	description=[parse_value](src/dotenv/parser.py){show=symbol symbol=parse_value kind=function} returns the selected result to [parse_binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=function}.
 	code=[return value](src/dotenv/parser.py){show=symbol symbol=parse_value kind=Function context=2}
 ps23: binding-parser -> binding-reader reads pair=pb-end role=call fragment="ref:parse_binding" operand="[one binding]" message=sync note="→ comment, then line ending"
-	description=After the key and optional value, parse_binding consumes an optional comment and the line ending.
+	description=After the key and optional value, [parse_binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=function} consumes an optional comment and the line ending.
 	code=[finish valid binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function focus="match[reader.read_regex(_comment)] match[reader.read_regex(_end_of_line)]" context=2}
-ps24: binding-reader -> binding-record returns pair=pb-valid role=reply fragment="alt:parse outcome" operand="[all reads succeeded]" note="← Binding(error=False)"
-	description=Successful parsing returns the marked original source together with key, value, and error=False.
+ps24: binding-reader -> binding-record returns pair=pb-valid role=reply fragment="alt:parse outcome" operand="[all reads succeeded]" note="← [Binding](src/dotenv/parser.py){show=symbol symbol=Binding kind=class}(error=False)"
+	description=Successful parsing returns [Binding.original](src/dotenv/parser.py){show=symbol symbol=Binding kind=class focus="ln[36]" context=2} together with key, value, and error=False.
 	code=[build valid Binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function focus="match[return Binding(]" context=9}
 ps25: binding-parser -> error-recovery calls pair=pb-error role=call fragment="alt:parse outcome" operand="[any read raises Error]" message=sync note="→ read rest of line"
 	description=Any failed read enters the exception branch. Recovery consumes the remaining line so iteration can continue.
 	code=[recover malformed line](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function focus="match[except Error:]" context=7}
-ps26: error-recovery -> binding-record returns pair=pb-error role=reply fragment="alt:parse outcome" operand="[any read raises Error]" note="← Binding(error=True)"
-	description=The malformed line becomes an error Binding with no key or value and its original source span.
+ps26: error-recovery -> binding-record returns pair=pb-error role=reply fragment="alt:parse outcome" operand="[any read raises Error]" note="← [Binding](src/dotenv/parser.py){show=symbol symbol=Binding kind=class}(error=True)"
+	description=The malformed line becomes an error [Binding](src/dotenv/parser.py){show=symbol symbol=Binding kind=class} with no key or value and its original source span.
 	code=[build error Binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function focus="match[error=True]" context=5}
