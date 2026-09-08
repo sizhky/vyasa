@@ -4,7 +4,7 @@ f1: tasks-extension -> extension-runtime registers
 	code=[TasksExtension.register](vyasa/extensions_builtin/tasks/__init__.py){show=symbol symbol=TasksExtension.register kind=Method focus='match[app.markdown.fence("items", items_handler)]' context=4}
 f2: markdown-renderer -> fence-dispatch renders
 	note=→ render_block_code(token)
-	description=from_md walks the parsed document. Every fenced block reaches render_block_code, which runs every step below.
+	description=from_md walks the parsed document. Every fenced block reaches render_block_code.
 	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[lang, attrs = _parse_fence_attrs(info)]" context=4}
 f3: fence-dispatch -> extension-runtime resolves
 	pair=f-lookup
@@ -23,7 +23,7 @@ f12: fence-dispatch -> code-shell renders
 	operand_note=markdown_fences has no entry for that language. render_block_code returns a plain highlighted block, and no extension is called.
 	message=sync
 	note=→ render_code_shell(code, lang)
-	description=render_block_code returns a plain highlighted block for that fence. No step below this box runs.
+	description=render_block_code returns a plain highlighted block for that fence.
 	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[return render_code_shell(]" context=4}
 f13: code-shell -> fence-dispatch returns
 	pair=f-shell
@@ -61,7 +61,7 @@ f15: context-pack -> pack-loader returns
 	fragment=alt:pack shape/ref:context pack
 	operand=[schema names contexts]
 	note=← the compiled model
-	description=read_kg_pack returns that result unchanged. No further step runs in this branch, so the ref box holds the whole of it.
+	description=read_kg_pack returns that compiled context model unchanged.
 	code=[_read_context_kg_pack](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=_read_context_kg_pack kind=Function context=4}
 f16: pack-loader -> pack-files reads
 	pair=f-sources
@@ -122,5 +122,5 @@ f10: items-handler -> fence-dispatch returns
 f11: fence-dispatch -> items-widget shows
 	message=async
 	note=→ div plus JSON payload
-	description=The div carries the model as an escaped JSON attribute. From here the work is the browser's, and tasks.js draws what you see.
+	description=The div carries the model as an escaped JSON attribute. From here the browser uses tasks.js to draw the graph.
 	code=The drawing happens in static/extensions/tasks/tasks.js, outside the Python pipeline.

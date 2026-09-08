@@ -16,7 +16,7 @@ g3: extension-boot -> extension-plan resolves
 g4: extension-plan -> extension-boot returns
 	pair=g-plan
 	note=← the enabled ids
-	description=The plan states, for each extension, whether it is enabled. Every step below runs only for the enabled ones.
+	description=The plan states, for each extension, whether it is enabled. Only enabled extensions enter registration.
 	code=[resolve_extension_plan](vyasa/extensions.py){show=symbol symbol=resolve_extension_plan kind=Function focus="match[return ExtensionPlan(]" context=4}
 g5: extension-boot -> extension-any registers
 	pair=g-register

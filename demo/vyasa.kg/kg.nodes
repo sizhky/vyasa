@@ -65,16 +65,16 @@ content-tree: Content tree
 	description=The index of every document Vyasa serves. It answers with a document for a slug, and it is the route's first question, not its last.
 	code=[ContentTree.resolve_document](vyasa/content_tree.py){show=symbol symbol=ContentTree.resolve_document kind=Method context=4}
 not-found: Not found
-	description=The 404 response. render_post_detail returns it instead of every step below, which is what a UML break fragment states.
+	description=The 404 response returned when render_post_detail finds no document or a folder.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[if not document or document.kind == \"folder\":]" context=3}
 worktree-reader: Working-tree reader
 	description=The reader used for an ordinary page on disk, where the path is a plain Path. It is the other half of the same branch the ref-backed reader takes.
 	code=[parse_frontmatter](vyasa/helpers.py){show=symbol symbol=parse_frontmatter kind=Function focus='match[text = file_path.read_text(encoding=\"utf-8\")]' context=3}
 code-shell: Plain code block
-	description=The fall-through for a fence no extension claimed. render_block_code returns it instead of every step below, which is what a UML break fragment states.
+	description=The fall-through for a fence no extension claimed. render_block_code returns a plain highlighted block.
 	code=[ContentRenderer.render_block_code](vyasa/extensions_builtin/markdown/renderer.py){show=symbol symbol=ContentRenderer.render_block_code kind=Method focus="match[return render_code_shell(]" context=4}
 context-pack: Context pack reader
-	description=A separate interaction for a pack that declares contexts. read_kg_pack delegates the whole build to this function and returns its result, so the box is a ref rather than a step.
+	description=For a pack that declares contexts, read_kg_pack delegates the whole build to this function and returns its result.
 	code=[_read_context_kg_pack](vyasa/extensions_builtin/tasks/items_pack.py){show=symbol symbol=_read_context_kg_pack kind=Function context=6}
 pack-files: Pack files
 	description=The nodes, edges and attrs files beside kg.schema. The loader walks the sources a view names and merges each file into one model.

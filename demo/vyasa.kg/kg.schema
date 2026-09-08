@@ -42,20 +42,20 @@ flow:
 	edge_color_by=step
 	edge_label_from=note
 	hover_attrs=description,code
-	caption="Rows run from top to bottom, in the order the steps happen. Every lane is a participant that can receive a call. A document and a response are values carried on arrows, so neither has a lane. A row with two lines is one exchange. The upper line is the call and the lower line is its reply. A vertical bar on a lane marks an execution that has not returned yet. A box drawn around a group of rows is a combined fragment, and the tag in the top-left corner of a box names its operator. render_post_detail is the single function that runs every step in this view. render_post_detail asks the content tree first. content_path_for_slug and the 404 response run only when the content tree returns nothing."
+	caption="render_post_detail is the single function that runs every step in this view. render_post_detail asks the content tree first. content_path_for_slug and the 404 response run only when the content tree returns nothing."
 	slides:
 		route: Steps 1 to 4 — find the document
 			nodes=browser-ui,content-route,content-tree,path-resolver,not-found
-			caption="The browser requests a page, and render_post_detail handles it. render_post_detail asks the content tree for the document first. The opt box holds the fallback that runs when the content tree does not index that slug. The break box holds the 404 response, which replaces every step below it."
+			caption="The browser requests a page, and render_post_detail handles it. render_post_detail asks the content tree for the document first. A missing tree entry falls back to content_path_for_slug. A missing page returns 404."
 		read: Steps 5 to 7 — read the file
 			nodes=content-route,frontmatter-reader,filesystem-backend,worktree-reader
-			caption="render_post_detail reads the file through parse_frontmatter. The alt box holds the one branch inside parse_frontmatter. A git-ref page arrives as a VirtualPath and is read through the content backend. Every other page is a plain Path and is read from disk."
+			caption="render_post_detail reads the file through parse_frontmatter. A git-ref page arrives as a VirtualPath and is read through the content backend. Every other page is a plain Path and is read from disk."
 		render: Steps 8 to 9 — build the page
 			nodes=content-route,markdown-renderer,document-page
 			caption="render_post_detail renders the Markdown body with from_md. render_post_detail then builds a DocumentPage and calls its render method."
 		ui: Step 10 — return the response
 			nodes=content-route,document-page,browser-ui
-			caption="DocumentPage returns the finished HTML response. The open arrowhead marks this message as asynchronous. render_post_detail returns the response and does not wait for the browser."
+			caption="DocumentPage returns the finished HTML response. render_post_detail returns the response to the browser."
 fence:
 	source=fence
 	layout=sequence
@@ -71,14 +71,14 @@ fence:
 	edge_color_by=role
 	edge_label_from=note
 	hover_attrs=description,code
-	caption="This view uses UML interaction notation. A filled arrowhead marks a synchronous call, and the sender waits for it. The reply to a synchronous call is drawn as a second line on the same row. An open arrowhead marks an asynchronous message, and step 12 is the only one in this view. A vertical bar on a lane marks an execution that has not returned yet. A box drawn around a group of rows is a combined fragment. The tag in the top-left corner of a box names its operator. This view uses five operators. break replaces the remainder of the enclosing interaction. alt runs exactly one operand, chosen by its guard. opt runs its single operand only when the guard holds. loop repeats the rows it encloses. ref refers to an interaction that is defined outside this view. Guards and operand descriptions are not drawn on the box. Hover or click a corner tag to read them."
+	caption="from_md reaches a fenced block and calls render_block_code. The handler resolves the registered language, loads the selected pack, builds the drawable graph, and returns the widget model."
 	slides:
 		register: Step 1 — register the fence handler
 			nodes=tasks-extension,extension-runtime
 			caption="The items extension writes one entry into markdown_fences at startup. This is the only step in this view that runs outside a request."
 		dispatch: Steps 2 to 4 — resolve the handler
 			nodes=markdown-renderer,fence-dispatch,extension-runtime,code-shell
-			caption="from_md reaches a fenced block and calls render_block_code. render_block_code reads the language from the info string and asks the extension runtime which handler is registered for that language. The break box holds the miss. render_block_code returns a plain code block, and no step below the break box runs."
+			caption="from_md reaches a fenced block and calls render_block_code. render_block_code reads the language from the info string and asks the extension runtime which handler is registered for that language. An unregistered language returns a plain code block."
 		load: Steps 5 to 10 — read the pack
 			nodes=fence-dispatch,items-handler,fence-parser,pack-loader,context-pack,pack-files,kg-cache
 			caption="The handler receives the fence body, the render context and the fence attributes. It parses that body with parse_tasks_text, and the items_schema key inside it is what reaches the pack loader. read_kg_pack then branches on the shape of the pack. A pack that declares contexts is delegated to _read_context_kg_pack. A plain pack is built here, by looping over the sources its views name and optionally writing a cache."
@@ -87,7 +87,7 @@ fence:
 			caption="The model is not the drawable graph, because a group can be collapsed. build_collapsed_graph flattens the model into one node list and one edge list."
 		emit: Step 12 — return the widget
 			nodes=fence-dispatch,items-widget
-			caption="This is the only asynchronous row in this view. render_block_code returns a div that carries the model as an escaped JSON attribute. The open arrowhead marks that no reply is expected. tasks.js reads that attribute in the browser and draws the graph."
+			caption="render_block_code returns a div that carries the model as an escaped JSON attribute. tasks.js reads that attribute in the browser and draws the graph."
 extensions:
 	source=extensions
 	layout=sequence
@@ -99,7 +99,7 @@ extensions:
 	edge_color_by=role
 	edge_label_from=note
 	hover_attrs=description,code
-	caption="This view shows how an extension registers with Vyasa, using the items fence as the example claim. build_extension_runtime is the function that drives every step, and it delegates the register loop to _configure_extensions. Two activation bars are nested. The extension bar stays open while the extension makes its claim, and the registrar bar stays open while the guard checks that claim. The capability guard is the reason an undeclared claim cannot reach the runtime. The extension runtime is the last lane because it is written last, and no request reads a slot before boot finishes."
+	caption="This view shows how an extension registers with Vyasa, using the items fence as the example claim. build_extension_runtime drives every step and delegates the register loop to _configure_extensions. The capability guard prevents an undeclared claim from reaching the runtime. The runtime is complete before any request reads its slots."
 	slides:
 		catalog: Steps 1 to 2 — list and enable extensions
 			nodes=extension-boot,extension-catalog,extension-plan

@@ -1,6 +1,6 @@
 e1: browser-ui -> content-route resolves
 	note=→ GET the page
-	description=post_detail receives the request and calls render_post_detail. render_post_detail runs every step below.
+	description=post_detail receives the request and calls render_post_detail.
 	code=[post_detail](vyasa/core.py){show=symbol symbol=post_detail kind=Function focus="match[return render_post_detail(]" context=2}
 e13: content-route -> content-tree resolves
 	pair=p-tree
@@ -36,7 +36,7 @@ e15: content-route -> not-found renders
 	operand_note=Neither the content tree nor the disk held a markdown page, or the slug named a folder. render_post_detail returns 404 and no file is opened.
 	message=sync
 	note=→ not_found(htmx)
-	description=No document, or a folder rather than a page. render_post_detail returns 404 here, and no step below this box runs.
+	description=No document, or a folder rather than a page. render_post_detail returns 404 here.
 	code=[render_post_detail](vyasa/content_routes.py){show=symbol symbol=render_post_detail kind=Function focus="match[if not document or document.kind == \"folder\":]" context=3}
 e16: not-found -> content-route returns
 	pair=p-404
