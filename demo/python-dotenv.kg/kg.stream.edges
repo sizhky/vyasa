@@ -1,0 +1,18 @@
+ps1: stream-parser -> stream-reader calls pair=ps-init role=call message=sync note="→ Reader(stream)"
+	description=The first advance creates the reader. Its constructor reads the stream and sets the starting position.
+	code=[create reader](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=Function focus="match[reader = Reader(stream)]" context=1}
+ps2: stream-reader -> stream-parser returns pair=ps-init role=reply note="← reader at the start"
+	description=The reader now holds the complete input, including an empty string when the stream is empty.
+	code=[initialize reader](src/dotenv/parser.py){show=symbol symbol=Reader.__init__ kind=Method focus="match[self.string = stream.read()]" context=3}
+ps3: stream-parser -> stream-reader checks pair=ps-check role=call message=sync fragment="loop:each advance" operand="[consumer advances the generator]" note="→ reader.has_next()"
+	description=Check before each binding. A false result ends the generator without another yield.
+	code=[check remaining text](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=Function focus="match[while reader.has_next():]" context=1}
+ps4: stream-reader -> stream-parser returns pair=ps-check role=reply fragment="loop:each advance" operand="[consumer advances the generator]" note="← True or False"
+	description=Compare the current character position with the input length.
+	code=[check position](src/dotenv/parser.py){show=symbol symbol=Reader.has_next kind=Method focus="match[return self.position.chars < len(self.string)]" context=1}
+ps5: stream-parser -> binding-parser calls pair=ps-binding role=call message=sync fragment="loop:each advance/opt:text remains" operand="[has_next returned True]" note="→ parse_binding(reader)"
+	description=Pass the same reader to parse_binding. That function advances its position and handles syntax errors.
+	code=[parse the next binding](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=Function focus="match[yield parse_binding(reader)]" context=1}
+ps6: binding-parser -> stream-parser returns pair=ps-binding role=reply fragment="loop:each advance/opt:text remains" operand="[has_next returned True]" note="← Binding; yield it to the consumer"
+	description=Yield the returned Binding unchanged, including comments and error records. Resume at the while check on the next advance.
+	code=[yield the binding](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=Function focus="match[yield parse_binding(reader)]" context=1}

@@ -8,6 +8,9 @@ nodes=kg.nodes
 attrs=kg.attrs
 load:
 	edges=kg.edges
+parse_stream:
+	nodes=kg.stream.nodes
+	edges=kg.stream.edges
 code_source=git+https://github.com/theskumar/python-dotenv@v1.0.1
 
 @relations
@@ -42,3 +45,15 @@ load:
 			write: Steps 6 to 8 — apply the rule
 			nodes=loader,environment,caller
 			caption="set_as_environment_variables checks each parsed key. An existing key is skipped when override is false; otherwise the value is written."
+parse_stream:
+	source=parse_stream
+	layout=sequence
+	sequence_role=role
+	sequence_activation=true
+	sequence_lanes=stream-parser,stream-reader,binding-parser
+	sequence_message=message
+	sequence_fragment=fragment
+	sequence_operand=operand
+	edge_label_from=note
+	hover_attrs=description,code
+	caption="Iteration starts this generator. Reader reads the whole input once and tracks a character position. Each advance checks for remaining text. If text remains, parse_binding advances the reader and returns one Binding. parse_stream yields that record and pauses until the consumer resumes. A false check ends iteration. Empty input yields nothing. Error records pass through unchanged; parse_binding owns recovery."

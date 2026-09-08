@@ -1,0 +1,9 @@
+stream-parser: parse_stream
+	description=Yield one Binding per advance until the reader reaches the end of the text.
+	code=[parse_stream](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=Function}
+stream-reader: Reader
+	description=Read the whole stream once and track the current character position.
+	code=[Reader](src/dotenv/parser.py){show=symbol symbol=Reader kind=Class}
+binding-parser: parse_binding
+	description=Consume one binding, which can span lines, and return its key, value, source text, and error flag.
+	code=[parse_binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function}
