@@ -5,5 +5,26 @@ stream-reader: Reader
 	description=Read the whole stream once and track the current character position.
 	code=[Reader](src/dotenv/parser.py){show=symbol symbol=Reader kind=Class}
 binding-parser: parse_binding
-	description=Consume one binding, which can span lines, and return its key, value, source text, and error flag.
+	description=Parse one binding in grammar order, then return its key, value, original source span, and error flag.
 	code=[parse_binding](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function}
+binding-reader: Reader cursor
+	description=The cursor that parse_binding advances with regular expressions, peeks, and the mark used for original source text.
+	code=[Reader methods](src/dotenv/parser.py){show=symbol symbol=Reader.read_regex kind=Method}
+key-parser: parse_key
+	description=Read a comment-only line, a single-quoted key, or an unquoted key from the current cursor.
+	code=[parse_key](src/dotenv/parser.py){show=symbol symbol=parse_key kind=Function}
+value-parser: parse_value
+	description=Choose the value grammar from the next character: single quote, double quote, empty line, or unquoted text.
+	code=[parse_value](src/dotenv/parser.py){show=symbol symbol=parse_value kind=Function}
+unquoted-value-parser: parse_unquoted_value
+	description=Read the rest of an unquoted value, remove an inline comment, and trim trailing whitespace.
+	code=[parse_unquoted_value](src/dotenv/parser.py){show=symbol symbol=parse_unquoted_value kind=Function}
+escape-decoder: decode_escapes
+	description=Decode only the escape sequences allowed by the selected quote style.
+	code=[decode_escapes](src/dotenv/parser.py){show=symbol symbol=decode_escapes kind=Function}
+binding-record: Binding
+	description=The immutable record carrying key, value, original source text, source line, and error status.
+	code=[Binding](src/dotenv/parser.py){show=symbol symbol=Binding kind=Class}
+error-recovery: line recovery
+	description=The except branch consumes the remaining line and returns an error Binding instead of raising to parse_stream.
+	code=[parse_binding recovery](src/dotenv/parser.py){show=symbol symbol=parse_binding kind=Function focus="match[reader.read_regex(_rest_of_line)]" context=4}

@@ -50,10 +50,17 @@ parse_stream:
 	layout=sequence
 	sequence_role=role
 	sequence_activation=true
-	sequence_lanes=stream-parser,stream-reader,binding-parser
+	sequence_lanes=stream-parser,stream-reader,binding-parser,binding-reader,key-parser,value-parser,unquoted-value-parser,escape-decoder,binding-record,error-recovery
 	sequence_message=message
 	sequence_fragment=fragment
 	sequence_operand=operand
 	edge_label_from=note
 	hover_attrs=description,code
-	caption="Iteration starts this generator. Reader reads the whole input once and tracks a character position. Each advance checks for remaining text. If text remains, parse_binding advances the reader and returns one Binding. parse_stream yields that record and pauses until the consumer resumes. A false check ends iteration. Empty input yields nothing. Error records pass through unchanged; parse_binding owns recovery."
+	caption="Iteration starts this generator. Reader reads the whole input once and tracks a character position. Each advance checks for remaining text. If text remains, parse_binding marks the start, consumes whitespace and an optional export prefix, parses a key, selects a value parser, consumes comments and the line ending, then returns a Binding. parse_stream yields that record and pauses until the consumer resumes. A false check ends iteration. Empty input yields nothing. A parser error consumes the rest of the line and returns an error Binding, so one malformed line does not stop the stream."
+	slides:
+		iterate: Steps 1 to 6 — walk the stream
+			nodes=stream-parser,stream-reader,binding-parser
+			caption="parse_stream owns iteration. It constructs one Reader, checks has_next before each binding, delegates one record to parse_binding, yields that record, and resumes at the loop check."
+		binding: Steps 7 to 25 — parse one binding
+			nodes=binding-parser,binding-reader,key-parser,value-parser,unquoted-value-parser,escape-decoder,binding-record,error-recovery
+			caption="parse_binding owns one record. It marks the start so the returned Binding can preserve original text and line number. It then consumes the grammar in order. parse_key handles quoted and unquoted keys. parse_value chooses quoted, unquoted, or empty values. Quoted values pass through decode_escapes. A failed read enters recovery, consumes the rest of the line, and returns error=True."
