@@ -8,6 +8,7 @@ nodes=kg.nodes
 attrs=kg.attrs
 load:
 	edges=kg.edges
+code_source=git+https://github.com/theskumar/python-dotenv@v1.0.1
 
 @relations
 calls color=relation.calls
@@ -41,19 +42,3 @@ load:
 			write: Steps 6 to 8 — apply the rule
 			nodes=loader,environment,caller
 			caption="set_as_environment_variables checks each parsed key. An existing key is skipped when override is false; otherwise the value is written."
-
-caller: Application
-	description=The application calls load_dotenv and later reads os.environ.
-	code=Example call: load_dotenv(override=False).
-loader: load_dotenv
-	description=The public function that chooses a source, creates DotEnv, and asks it to set variables.
-	code=dotenv/main.py:383 — load_dotenv
-path-finder: find_dotenv
-	description=The default path lookup used only when both dotenv_path and stream are missing.
-	code=dotenv/main.py:332 — find_dotenv
-parser: DotEnv parser
-	description=DotEnv.dict reads the stream through parse_stream and returns parsed key-value pairs.
-	code=dotenv/main.py:75 — DotEnv.dict; dotenv/main.py:179 — parse_stream
-environment: Process environment
-	description=os.environ is the process-wide mapping that the application reads after loading.
-	code=dotenv/main.py:97 — DotEnv.set_as_environment_variables

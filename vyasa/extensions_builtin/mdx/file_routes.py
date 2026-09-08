@@ -8,7 +8,11 @@ from starlette.responses import FileResponse, Response
 
 from ...runtime_services import get_runtime_services
 from ...api_catalog import publish_api
-from ...helpers import atomic_write_bytes as _atomic_write_bytes, is_local_request as _is_local_request
+from ...helpers import (
+    addressable_content_roots,
+    atomic_write_bytes as _atomic_write_bytes,
+    is_local_request as _is_local_request,
+)
 
 
 _REF_QUERY = ({"name": "ref", "required": True, "description": "Content-root-safe sidecar path"},)
@@ -96,7 +100,10 @@ def _resolve_ref(path: str, request, runtime) -> Path | None:
         if candidate is None:
             return None
         candidate = candidate.resolve()
-    return candidate if _inside_content_roots(candidate, services.get_content_mounts()) else None
+    # Addressable, not listed: `content_path_for_slug` resolves unlisted
+    # roots such as the `code_source` cache, so the guard must accept the
+    # same set or it refuses paths the resolver just handed it.
+    return candidate if _inside_content_roots(candidate, addressable_content_roots()) else None
 
 
 def _inside_content_roots(path: Path, mounts) -> bool:

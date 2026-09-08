@@ -291,7 +291,10 @@ def test_link_preview_shadow_is_on_unclipped_outer_popup():
     assert ".vyasa-link-preview-plain-text.vyasa-code-wrap" in css
     assert ".vyasa-link-preview-body > .code-block:only-child pre.vyasa-code-wrap { width: 100%;" in css
     assert "event.shiftKey ? shell?.dataset.absolutePath : shell?.dataset.relativePath" in source
-    assert "sourceLabel.title = relativePath;" in source
+    # A cached source shows its origin separately, so the label holds the
+    # short path and the tooltip rejoins the two.
+    assert "sourceLabel.textContent = shown;" in source
+    assert "sourceLabel.title = origin ? `${origin}/${shown}` : shown;" in source
     assert "sourceLabel.href = link.getAttribute('href')" in source
     assert "event.target.closest('button,a')" in source
     assert "cursor: pointer;" in css.split("[data-vyasa-link-preview-origin]", 1)[1].split("}", 1)[0]

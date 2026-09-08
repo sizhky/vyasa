@@ -63,8 +63,17 @@ def _post_href(relative_path: str, line: int = 0) -> str:
 
 
 def _header(resolved: ResolvedCodeReference, relative_path: str) -> str:
+    from ...code_source import split_origin_slug
+
     reference = resolved.reference
-    path_html = _escape(relative_path)
+    # The origin repeats on every reference in a pack, so it reads as its own
+    # label and leaves the path short. `relative_path` stays the address.
+    split = split_origin_slug(relative_path)
+    origin_html = (
+        f'<span class="vyasa-code-reference-origin" title="{_escape(split[0])}">{_escape(split[0])}</span>'
+        if split else ""
+    )
+    path_html = _escape(split[1] if split else relative_path)
     if resolved.renamed:
         path_html = (
             f'<span class="vyasa-code-reference-rename">{_escape(resolved.path_before)}'
@@ -89,6 +98,7 @@ def _header(resolved: ResolvedCodeReference, relative_path: str) -> str:
     )
     return (
         '<header class="vyasa-code-reference-header">'
+        f'{origin_html}'
         f'<span class="vyasa-code-reference-path">{path_html}</span>'
         f'<span class="vyasa-code-reference-selection">{_escape(reference.label())}</span>'
         f'<span class="vyasa-code-reference-badges">{"".join(badges)}</span>'

@@ -128,6 +128,15 @@
     cursor: grabbing;
 }
 
+.vyasa-link-preview-bar .vyasa-link-preview-source {
+    flex: 0 1 auto;
+    min-width: 0;
+    font-size: 0.85em;
+    opacity: 0.65;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+}
+
 .vyasa-link-preview-bar [data-vyasa-link-preview-origin] {
     flex: 0 1 auto;
     min-width: 0;

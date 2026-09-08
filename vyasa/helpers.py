@@ -168,6 +168,38 @@ def get_ref_content_mounts() -> list[tuple[str, Path]]:
     return mounts
 
 
+def unlisted_content_roots() -> list[tuple[str, Path]]:
+    """Roots a path can be addressed against but that must never be listed.
+
+    A content mount does two jobs: it makes paths addressable, and it feeds
+    navigation, the content tree, and the static build. The `code_source`
+    clone cache needs the first job only, because a clone of someone else's
+    repository is not this site's content. So it lives here, and every caller
+    that addresses a path uses `addressable_content_roots` instead of
+    `get_content_mounts`.
+
+    This is the one place that knows the cache is reachable.
+    """
+    from .code_source import CACHE_ROOT, CACHE_SLUG_PREFIX
+
+    if not CACHE_ROOT.is_dir():
+        return []
+    return [(CACHE_SLUG_PREFIX, CACHE_ROOT.resolve())]
+
+
+def addressable_content_roots() -> list[tuple[str, Path]]:
+    """Every root that can appear in a slug. Listed mounts win over unlisted."""
+    return [*get_content_mounts(), *unlisted_content_roots()]
+
+
+def code_source_cache_root(slug_first_part: str) -> Path | None:
+    """The unlisted root that one slug's first part names, if any."""
+    return next(
+        (root for alias, root in unlisted_content_roots() if alias == slug_first_part),
+        None,
+    )
+
+
 def get_content_mounts() -> list[tuple[str, Path]]:
     cli_root = os.getenv("VYASA_CLI_ROOT")
     if cli_root:
@@ -188,6 +220,9 @@ def get_content_mounts() -> list[tuple[str, Path]]:
 @traced("content_resolve")
 def content_root_and_relative(slug: str | Path) -> tuple[Path | None, Path]:
     parts = Path(str(slug).strip("/")).parts
+    cache_root = code_source_cache_root(parts[0]) if parts else None
+    if cache_root is not None:
+        return cache_root, Path(*parts[1:]) if len(parts) > 1 else Path()
     try:
         from .extensions import ContentRootRequest, get_extension_runtime
 
@@ -249,7 +284,13 @@ def content_location(slug: str | Path, *, ref_override: str = "") -> tuple[str, 
         # so a ref like 'tmp/testing-vyasa' survives the path-segment split.
         ref = ref.replace(":", "/")
         body = [alias, *parts[1:]]
-    mounts = get_ref_content_mounts() if ref else get_content_mounts()
+    # Unlisted roots are addressable, so a code link into the `code_source`
+    # cache resolves here too. Without them the preview loads but the page
+    # route behind the same link answers 404.
+    mounts = [
+        *(get_ref_content_mounts() if ref else get_content_mounts()),
+        *unlisted_content_roots(),
+    ]
     for alias, root in mounts:
         if alias and body and body[0] == alias:
             rel = Path(*body[1:]) if len(body) > 1 else Path()
@@ -285,7 +326,7 @@ def content_slug_for_path(path: Path, strip_suffix: bool = True) -> str | None:
         return slug
     absolute = Path(os.path.abspath(path))
     resolved = absolute.resolve()
-    for alias, root in get_content_mounts():
+    for alias, root in addressable_content_roots():
         root = root.resolve()
         candidate = absolute if absolute.is_relative_to(root) else resolved
         if not candidate.is_relative_to(root):

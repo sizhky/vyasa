@@ -13,6 +13,7 @@ from ...helpers import (
     content_slug_for_path,
     find_folder_note_file,
 )
+from ...code_source import split_origin_slug
 from ..markdown.renderer import from_md, infer_code_language, render_code_shell
 from .code_reference import CodeReferenceError, resolve_code_reference
 from .code_reference_markdown import parse_code_reference_json
@@ -111,6 +112,21 @@ def _render_code_reference_preview(
     return render_resolved_code_reference(resolved, relative_path, full=full)
 
 
+def _source_label_attrs(relative_path: str) -> str:
+    """Display attributes for the preview chrome, beside the address.
+
+    A cached source shows its origin once and its file path short. A file in
+    the site's own content has no origin, so it keeps the plain path.
+    """
+    split = split_origin_slug(relative_path)
+    if not split:
+        return ""
+    return (
+        f'data-source-origin="{html.escape(split[0], quote=True)}" '
+        f'data-source-path="{html.escape(split[1], quote=True)}" '
+    )
+
+
 def render_link_preview_html(
     *, href: str, current_path: str | None = None, code_ref: str = "", full: bool = False
 ) -> str | None:
@@ -130,6 +146,7 @@ def render_link_preview_html(
         )
         return (
             f'<div class="vyasa-link-preview-shell" data-relative-path="{html.escape(relative_path, quote=True)}" '
+            f'{_source_label_attrs(relative_path)}'
             f'data-absolute-path="{html.escape(str(file_path.resolve()), quote=True)}">'
             f'<div class="vyasa-link-preview-body">{preview_html}</div>'
             '</div>'
@@ -163,6 +180,7 @@ def render_link_preview_html(
     relative_path = content_slug_for_path(file_path, strip_suffix=False) or file_path.name
     return (
         f'<div class="vyasa-link-preview-shell" data-relative-path="{html.escape(relative_path, quote=True)}" '
+        f'{_source_label_attrs(relative_path)}'
         f'{f"data-target-line={target_line!r} " if target_line else ""}'
         f'data-absolute-path="{html.escape(str(file_path.resolve()), quote=True)}">'
         f'<div class="vyasa-link-preview-body">{preview_html}</div>'

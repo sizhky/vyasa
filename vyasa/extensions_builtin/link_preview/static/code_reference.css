@@ -47,6 +47,14 @@
     font-size: 0.78em;
 }
 
+.vyasa-code-reference-origin {
+    font-family: var(--vyasa-font-mono, monospace);
+    font-size: 0.85em;
+    color: var(--vyasa-code-fg);
+    opacity: 0.65;
+    overflow-wrap: anywhere;
+}
+
 .vyasa-code-reference-path {
     font-family: var(--vyasa-font-mono, monospace);
     font-weight: 600;

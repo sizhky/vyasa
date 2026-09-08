@@ -147,6 +147,7 @@ function createPreviewView({ point, link, onClose }) {
     popover.innerHTML = [
         '<div class="vyasa-link-preview-card">',
         '<div class="vyasa-link-preview-bar">',
+        '<span class="vyasa-link-preview-source" data-vyasa-link-preview-source hidden></span>',
         '<a data-vyasa-link-preview-origin></a>',
         '<span class="vyasa-link-preview-actions">',
         '<button type="button" data-vyasa-link-preview-wrap aria-label="Toggle word wrap" aria-pressed="false">↵</button>',
@@ -166,6 +167,7 @@ function createPreviewView({ point, link, onClose }) {
     const content = popover.querySelector('[data-vyasa-link-preview-content]');
     const bar = popover.querySelector('.vyasa-link-preview-bar');
     const sourceLabel = popover.querySelector('[data-vyasa-link-preview-origin]');
+    const sourceOrigin = popover.querySelector('[data-vyasa-link-preview-source]');
     const wrapButton = popover.querySelector('[data-vyasa-link-preview-wrap]');
     let wordWrap = false;
     try { wordWrap = localStorage.getItem(WORD_WRAP_KEY) === '1'; } catch (_) {}
@@ -296,10 +298,18 @@ function createPreviewView({ point, link, onClose }) {
                     announceSwap(content);
                 },
             });
-            const relativePath = content.querySelector('.vyasa-link-preview-shell')?.dataset.relativePath;
+            const shellData = content.querySelector('.vyasa-link-preview-shell')?.dataset;
+            const relativePath = shellData?.relativePath;
             if (relativePath) {
-                sourceLabel.textContent = relativePath;
-                sourceLabel.title = relativePath;
+                // A cached source names its origin once, so the path stays
+                // short. The href keeps the whole address either way.
+                const origin = shellData?.sourceOrigin || '';
+                sourceOrigin.textContent = origin;
+                sourceOrigin.title = origin;
+                sourceOrigin.hidden = !origin;
+                const shown = shellData?.sourcePath || relativePath;
+                sourceLabel.textContent = shown;
+                sourceLabel.title = origin ? `${origin}/${shown}` : shown;
                 sourceLabel.href = link.getAttribute('href')
                     || `/posts/${relativePath.split('/').map(encodeURIComponent).join('/')}`;
             }

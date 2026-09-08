@@ -1,10 +1,15 @@
 caller: Application
 	description=The application calls load_dotenv and later reads os.environ.
+	code=Example call: load_dotenv(override=False).
 loader: load_dotenv
 	description=The public function that chooses a source, creates DotEnv, and asks it to set variables.
+	code=[load_dotenv](src/dotenv/main.py){show=symbol symbol=load_dotenv kind=Function}
 path-finder: find_dotenv
 	description=The default path lookup used only when both dotenv_path and stream are missing.
+	code=[find_dotenv](src/dotenv/main.py){show=symbol symbol=find_dotenv kind=Function}
 parser: DotEnv parser
 	description=DotEnv.dict reads the stream through parse_stream and returns parsed key-value pairs.
+	code=[DotEnv.dict](src/dotenv/main.py){show=symbol symbol=DotEnv.dict kind=Method}; [parse_stream](src/dotenv/parser.py){show=symbol symbol=parse_stream kind=Function}
 environment: Process environment
 	description=os.environ is the process-wide mapping that the application reads after loading.
+	code=[DotEnv.set_as_environment_variables](src/dotenv/main.py){show=symbol symbol=DotEnv.set_as_environment_variables kind=Method}

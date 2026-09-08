@@ -833,8 +833,26 @@ def read_palette(path: PathLike) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _names_a_source_block(line: str) -> bool:
+    """True when one `@sources` line opens a named block rather than sets a key.
+
+    A block name ends at its colon, so the colon comes first. A key holds its
+    colon inside the value, as a URL does, and its `=` comes first.
+
+    >>> [_names_a_source_block(line) for line in ("load:", "load: edges=kg.edges")]
+    [True, True]
+    >>> [_names_a_source_block(line) for line in ("nodes=kg.nodes", "code_source=git+https://h/r@v1")]
+    [False, False]
+    """
+    colon = line.find(":")
+    equals = line.find("=")
+    if colon < 0:
+        return False
+    return equals < 0 or colon < equals
+
+
 def _read_source_line(schema: KgSchema, line: str) -> str:
-    if ":" in line:
+    if _names_a_source_block(line):
         name, values = line.split(":", 1)
         schema.sources[name.strip()] = _assignments(shlex.split(values))
         return name.strip()

@@ -4,6 +4,7 @@ e1: caller -> loader calls
 	message=sync
 	pair=p-load
 	description=The application starts the interaction with the public API.
+	code=[load_dotenv](src/dotenv/main.py){show=symbol symbol=load_dotenv kind=Function focus="match[def load_dotenv(]" context=6}
 e2: loader -> path-finder checks
 	step=s2
 	fragment=opt:default path
@@ -13,6 +14,7 @@ e2: loader -> path-finder checks
 	message=sync
 	pair=p-find
 	description=The default source is discovered only when the caller supplies neither a path nor a stream.
+	code=[find_dotenv call](src/dotenv/main.py){show=symbol symbol=load_dotenv kind=Function focus="match[dotenv_path = find_dotenv()]" context=2}
 e3: path-finder -> loader returns
 	step=s2
 	fragment=opt:default path
@@ -20,17 +22,20 @@ e3: path-finder -> loader returns
 	note=← .env path
 	pair=p-find
 	description=find_dotenv returns the path that DotEnv will read.
+	code=[find_dotenv returns](src/dotenv/main.py){show=symbol symbol=find_dotenv kind=Function focus="match[return check_path]" context=3}
 e4: loader -> parser calls
 	step=s3
 	note=→ DotEnv.dict()
 	message=sync
 	pair=p-parse
 	description=DotEnv reads the selected file or stream and parses assignments.
+	code=[dict call](src/dotenv/main.py){show=symbol symbol=DotEnv.set_as_environment_variables kind=Method focus="match[if not self.dict():]" context=2}
 e5: parser -> loader returns
 	step=s3
 	note=← parsed mapping
 	pair=p-parse
 	description=The parser returns key-value pairs without changing os.environ.
+	code=[dict returns](src/dotenv/main.py){show=symbol symbol=DotEnv.dict kind=Method focus="match[return self._dict]" context=3}
 e6: loader -> environment writes
 	step=s4
 	fragment=alt:existing key
@@ -40,6 +45,7 @@ e6: loader -> environment writes
 	message=sync
 	pair=p-write
 	description=This branch changes process state.
+	code=[the write](src/dotenv/main.py){show=symbol symbol=DotEnv.set_as_environment_variables kind=Method focus="match[os.environ[k] = v]" context=2}
 e7: environment -> loader returns
 	step=s4
 	fragment=alt:existing key
@@ -47,11 +53,13 @@ e7: environment -> loader returns
 	note=← written
 	pair=p-write
 	description=The application can now read the value from os.environ.
+	code=[reports success](src/dotenv/main.py){show=symbol symbol=DotEnv.set_as_environment_variables kind=Method focus="match[return True]" context=2}
 e8: loader -> caller returns
 	step=s5
 	note=← True or False
 	message=async
 	description=load_dotenv reports whether at least one variable was set.
+	code=[load_dotenv returns](src/dotenv/main.py){show=symbol symbol=load_dotenv kind=Function focus="match[return dotenv.set_as_environment_variables()]" context=2}
 e9: loader -> environment checks
 	step=s4
 	fragment=alt:existing key
@@ -61,6 +69,7 @@ e9: loader -> environment checks
 	message=sync
 	pair=p-skip
 	description=This branch reads process state and performs no write.
+	code=[the override rule](src/dotenv/main.py){show=symbol symbol=DotEnv.set_as_environment_variables kind=Method focus="match[if k in os.environ and not self.override:]" context=2}
 e10: environment -> loader returns
 	step=s4
 	fragment=alt:existing key
@@ -68,3 +77,4 @@ e10: environment -> loader returns
 	note=← unchanged
 	pair=p-skip
 	description=The existing environment value remains visible to the application.
+	code=[the skip](src/dotenv/main.py){show=symbol symbol=DotEnv.set_as_environment_variables kind=Method focus="match[continue]" context=3}
