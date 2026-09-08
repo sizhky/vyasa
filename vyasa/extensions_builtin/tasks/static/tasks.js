@@ -512,6 +512,26 @@ function tasksSideWeightedRibbonPath(bezierPath, sourceWidth, targetWidth, outer
     ].join(' ');
 }
 
+// A tapered ribbon used to end in a point at the tip, because the arrowhead is
+// zero-wide exactly there: any ribbon width at the tip shows as two shoulders
+// beside the arrow. Trimming the ribbon back to the head's base lets the
+// arrival end keep body instead, since the blunt end then lands inside the
+// head silhouette where it cannot show.
+function tasksTrimBezierEnd(bezierPath, backOff) {
+    const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
+    if (nums.length < 8) return String(bezierPath || '');
+    const [x0, y0, x1, y1, x2, y2, x3, y3] = nums;
+    const plain = `M ${x0} ${y0} C ${x1} ${y1} ${x2} ${y2} ${x3} ${y3}`;
+    const dx = x3 - x2;
+    const dy = y3 - y2;
+    const len = Math.hypot(dx, dy);
+    // Pulling the endpoint past its own control point reverses the end tangent,
+    // which turns the ribbon inside out. Keep the last leg pointing forward.
+    const back = Math.min(Math.max(0, Number(backOff) || 0), len * 0.9);
+    if (!len || !back) return plain;
+    return `M ${x0} ${y0} C ${x1} ${y1} ${x2} ${y2} ${x3 - (dx / len) * back} ${y3 - (dy / len) * back}`;
+}
+
 function tasksTaperedArrowHeadPath(bezierPath, size, side = 0) {
     const nums = String(bezierPath || '').match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
     if (nums.length < 8) return '';
@@ -7080,36 +7100,41 @@ async function renderTasksGraphs(rootElement = document) {
                 // A reply whose label moved back to its call draws no line: the
                 // frame's bottom border already marks where it leaves.
                 const lineOff = props.data?.__line_off__ === true;
-                const taperPath = props.data?.__pair_half__ ? tasksTaperedBezierPath(
-                    path,
-                    Number(props.style?.strokeWidth) || 1.9,
-                    0
-                ) : tasksTaperedBezierPath(
-                    path,
-                    (Number(props.style?.strokeWidth) || 4) * 2.65,
-                    // The arrival end tapers to nothing. The head sits exactly there,
-                    // so any remaining body would arrive beside its own arrow.
-                    0
-                );
                 const strokeWidth = Number(props.style?.strokeWidth) || 1.25;
-                // A pair's two lanes sit 2x|lift| apart. A casing wider than one lane
-                // crosses the centerline and clips the other half's line, which is why
-                // a pair used to read as one fat cased blob. Fit the casing to the lane.
-                const casingWidth = pairLift
-                    ? Math.max(strokeWidth + 0.6, Math.abs(pairLift) * 2)
-                    : strokeWidth + 8;
-                const casingStroke = pairLift ? 2 : 8;
-                // A pair cases only its outer flank; every other edge keeps the plain
-                // stroked casing around its whole ribbon.
-                const taperCasingPath = pairLift
-                    ? tasksSideWeightedRibbonPath(path, Number(props.style?.strokeWidth) || 1.9, 0, casingStroke, Math.sign(pairLift))
-                    : taperPath;
                 const fullArrow = Math.max(10, strokeWidth * 3.0);
                 const chord = Math.hypot(props.targetX - props.sourceX, props.targetY - props.sourceY);
                 // Both ends on one side means the path arcs away and comes back,
                 // so its chord says nothing about how long it is drawn.
                 const isArcEdge = props.sourcePosition === props.targetPosition;
                 const arrowSize = isArcEdge ? fullArrow : Math.max(6, Math.min(fullArrow, chord * 0.22));
+                // A plain edge arrives with body: the ribbon stops at the head's base
+                // and keeps a share of its departure width there, so the line reads
+                // as one shape with the arrow instead of fading out before it.
+                // The width stays under the head's base width, or the blunt end
+                // would widen the silhouette where the head should be widest.
+                const taperSourceWidth = (Number(props.style?.strokeWidth) || 4) * 2.65;
+                const taperTargetWidth = Math.min(taperSourceWidth * 0.1, arrowSize * 1.18 * 0.5);
+                const taperPath = props.data?.__pair_half__ ? tasksTaperedBezierPath(
+                    path,
+                    Number(props.style?.strokeWidth) || 1.9,
+                    0
+                ) : tasksTaperedBezierPath(
+                    tasksTrimBezierEnd(path, arrowSize * 0.85),
+                    taperSourceWidth,
+                    taperTargetWidth
+                );
+                // A pair's two lanes sit 2x|lift| apart. A casing wider than one lane
+                // crosses the centerline and clips the other half's line, which is why
+                // a pair used to read as one fat cased blob. Fit the casing to the lane.
+                const casingWidth = pairLift
+                    ? Math.max(strokeWidth + 0.6, Math.abs(pairLift) * 2)
+                    : strokeWidth + 4;
+                const casingStroke = pairLift ? 2 : 4;
+                // A pair cases only its outer flank; every other edge keeps the plain
+                // stroked casing around its whole ribbon.
+                const taperCasingPath = pairLift
+                    ? tasksSideWeightedRibbonPath(path, Number(props.style?.strokeWidth) || 1.9, 0, casingStroke, Math.sign(pairLift))
+                    : taperPath;
                 const edgeArrowPath = tasksTaperedArrowHeadPath(
                     path,
                     arrowSize,
