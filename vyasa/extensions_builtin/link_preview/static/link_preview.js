@@ -277,6 +277,17 @@ function createPreviewView({ point, link, onClose }) {
         raise,
         updatePointer,
         scrollBy: (deltaX, deltaY) => scrollPreviewBody(popover, deltaX, deltaY),
+        // Walk the reference's marked blocks. The Prev and Next buttons already
+        // own that walk, so drive them instead of repeating the block maths.
+        // A preview with no marked blocks carries no buttons and reports false.
+        stepCodeBlock: (delta) => {
+            const button = popover.querySelector(delta > 0
+                ? '[data-code-reference-next]'
+                : '[data-code-reference-previous]');
+            if (!button) return false;
+            button.click();
+            return true;
+        },
         remove: () => {
             resizeObserver.disconnect();
             forgetPositionAnchor(popover);
@@ -427,6 +438,7 @@ window.vyasaLinkPreview = {
     open: (link, point) => previews.open(link, point),
     close: (entry) => previews.close(entry),
     scrollBy: (entry, deltaX, deltaY) => entry?.view?.scrollBy?.(deltaX, deltaY) === true,
+    stepCodeBlock: (entry, delta) => entry?.view?.stepCodeBlock?.(delta) === true,
 };
 
 // `innerHTML` runs no `<script>` tag, so a preview built from a document with

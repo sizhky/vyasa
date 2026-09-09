@@ -4938,6 +4938,7 @@ async function renderTasksGraphs(rootElement = document) {
             // preview instead of the graph. Releasing A closes it, so the preview
             // never outlives the key. Same shape as the W edge preview above.
             React.useEffect(() => {
+                const CODE_BLOCK_STEP = { ArrowRight: 1, ArrowLeft: -1 };
                 let pointerAt = null;
                 const trackPointer = (event) => {
                     pointerAt = { clientX: event.clientX, clientY: event.clientY };
@@ -5028,6 +5029,18 @@ async function renderTasksGraphs(rootElement = document) {
                     if (event.key === 'Enter' && pinCodePreview()) {
                         event.preventDefault();
                         event.stopImmediatePropagation();
+                        return;
+                    }
+                    // Left and right walk the blocks the reference marks, so the
+                    // reader steps through the code the author pointed at instead
+                    // of panning the graph they cannot see.
+                    const blockStep = CODE_BLOCK_STEP[event.key] || 0;
+                    if (blockStep && codeModeEntryRef.current) {
+                        if (!window.vyasaLinkPreview?.stepCodeBlock?.(codeModeEntryRef.current, blockStep)) {
+                            setEdgeStatus('This preview marks no code blocks.');
+                        }
+                        event.preventDefault();
+                        event.stopPropagation();
                         return;
                     }
                     if (event.code !== 'KeyA' || event.repeat) return;
@@ -10523,6 +10536,7 @@ async function renderTasksGraphs(rootElement = document) {
                     row('A', 'hold code preview of the Code attribute; wheel scrolls it'),
                     row('W + A', 'hold code preview of the held edge'),
                     row('A + Enter', 'pin the code preview'),
+                    row('A + ← / →', 'previous / next marked code block'),
                     row('Shift + F', 'toggle fullscreen'),
                     row('G', 'open EG for hovered or selected node'),
                     row('Shift + G', 'open EG+ for hovered or selected node'),
