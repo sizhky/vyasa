@@ -8,7 +8,7 @@ reference the code no longer supports.
 The join key is the order number at the start of a docstring. A node whose
 label starts with the same number owns that symbol.
 
-Node references land in `kg.code.nodes` under the attribute `Code`.
+Node references land in `kg.code.nodes` under the attribute `code`.
 
 An edge names the one line that bridges its two actors, and the code declares
 that line with a marker comment:
@@ -24,7 +24,7 @@ List the generated file first in `@sources`, so an authored key always wins:
     nodes=kg.code.nodes+kg.nodes
     edges=kg.code.move.edges+move.kg.edges
 
-The script also strips `Code` and `code` from the authored files, because one
+The script also strips `code` from the authored files, because one
 fact needs one owner.
 """
 
@@ -212,7 +212,7 @@ def build_node_file(
     out: list[str] = []
     for node_id in sorted(by_node, key=lambda i: labels[i]):
         out.append(f"{node_id}: {labels[node_id]}")
-        out.append("\tCode=|")
+        out.append("\tcode=|")
         for symbol in by_node[node_id]:
             out.append(f"\t\t- {link(symbol.name, symbol, depth, None)}")
     return "\n".join(out) + "\n" if out else ""
@@ -339,12 +339,11 @@ def main() -> int:
         _print_report(report)
         return 1 if stale or report.ambiguous or report.missing or report.orphans else 0
 
-    for key, target in (("Code", "kg.nodes"), ("code", None)):
-        paths = [pack / target] if target else [p for p in pack.glob("*.edges") if ".code." not in p.name]
-        for path in paths:
-            removed = strip_attr(path, key)
-            if removed:
-                report.stripped.append(f"{path.name}: removed {removed} {key} block(s)")
+    authored = [pack / "kg.nodes"] + [p for p in pack.glob("*.edges") if ".code." not in p.name]
+    for path in authored:
+        removed = strip_attr(path, "code")
+        if removed:
+            report.stripped.append(f"{path.name}: removed {removed} code block(s)")
 
     for path, text in planned.items():
         if text:
