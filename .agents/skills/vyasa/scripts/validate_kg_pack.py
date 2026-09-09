@@ -525,8 +525,10 @@ def main():
 
     for key in ("nodes", "edges", "attrs", "palette"):
         ref = sources.get(key)
-        if ref and not (pack / ref).exists():
-            errors.append(f"kg.schema points {key}={ref} but that file is missing")
+        # A source composes several files with `+`, the same way the runtime reads it.
+        for part in [p for p in str(ref or "").split("+") if p]:
+            if not (pack / part).exists():
+                errors.append(f"kg.schema points {key}={part} but that file is missing")
     if "cache" in sources and not (pack / sources["cache"]).exists():
         warnings.append("kg.schema references a cache file; it is generated at render and may be absent")
 

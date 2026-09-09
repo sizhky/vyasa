@@ -130,3 +130,22 @@ test('an existing pending script is awaited', async () => {
     script.dispatchEvent(new Event('load'));
     await pending;
 });
+
+test('a settled script tag resolves once its runtime appears', async () => {
+    globalThis.document = assetDocument();
+    // A tag the page shipped: it settled before any loader watched it, so no
+    // further load or error event ever arrives.
+    const script = document.createElement('script');
+    script.src = '/shipped.js';
+    document.head.appendChild(script);
+    script.dispatchEvent(new Event('load'));
+
+    let ready = false;
+    const pending = loadScript('/shipped.js', () => ready);
+    let finished = false;
+    pending.then(() => { finished = true; });
+    await settle();
+    assert.equal(finished, false);
+    ready = true;
+    await pending;
+});

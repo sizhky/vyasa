@@ -3,6 +3,8 @@ let floatingActionSync = () => {};
 let markdownHydrator = () => {};
 
 const loadedScripts = new Map();
+const SCRIPT_PROBE_MS = 50;
+const SCRIPT_PROBE_LIMIT_MS = 10000;
 
 // One promise per URL keeps independent widgets on the same pending load.
 export function loadScript(src, isReady) {
@@ -21,14 +23,31 @@ export function loadScript(src, isReady) {
             cleanup();
             reject(new Error(`Failed to load ${src}`));
         };
+        let probe = null;
         const cleanup = () => {
             script.removeEventListener('load', finish);
             script.removeEventListener('error', fail);
+            if (probe !== null) clearInterval(probe);
         };
         if (script.dataset.vyasaLoaded === 'true') return finish();
         script.addEventListener('load', finish);
         script.addEventListener('error', fail);
-        if (existing) return;
+        if (existing) {
+            // A tag the page shipped fires no load or error event for a listener that
+            // arrives after it settled, so watch for its runtime instead of waiting on
+            // an event that already passed. Give up rather than wait forever.
+            if (!isReady) return;
+            let waited = 0;
+            probe = setInterval(() => {
+                if (isReady()) return finish();
+                waited += SCRIPT_PROBE_MS;
+                if (waited >= SCRIPT_PROBE_LIMIT_MS) {
+                    cleanup();
+                    reject(new Error(`Missing runtime after loading ${src}`));
+                }
+            }, SCRIPT_PROBE_MS);
+            return;
+        }
         script.src = src;
         document.head.appendChild(script);
     }).catch((error) => {
