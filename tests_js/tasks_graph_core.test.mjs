@@ -2,6 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
+import { tasksModelBooleanSetting, tasksProjectionSchemaPrefs } from '../vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+import { averageTasksHexColors, resolveTasksCollapsedGroupColor, tasksCompositeSweep, tasksEdgeStrokeWidthForMode, tasksGroupBackground, tasksNodeBackground, tasksProminentEdgeLabelScale, tasksTaperedArrowHeadPath, tasksTaperedBezierPath } from '../vyasa/extensions_builtin/tasks/static/tasks_paint.js';
+
+// Older wiring checks inspect all owners; value checks call the real exports.
+const taskSources = ['tasks', 'tasks_cards', 'tasks_edges', 'tasks_nodes', 'tasks_panels', 'tasks_paint', 'tasks_layouts', 'tasks_graph_model']
+    .map(name => fs.readFileSync(new URL(`../vyasa/extensions_builtin/tasks/static/${name}.js`, import.meta.url), 'utf8')).join('\n');
+
 globalThis.window = { innerWidth: 1000, innerHeight: 800 };
 
 const { applyTasksFilterAttributePolicy, buildTaskEdgeAnchors, clampScale, collectTasksStoredNotes, importTasksStoredNotes, isTasksEdgeInternalToSelection, isTasksEdgeLabelHoverDimmingActive, isTasksEdgeLabelVisible, isTasksGraphNodeSelectable, isTasksUnspecifiedProjectionGroup, layoutDisconnectedTaskNodes, nearestTasksIncidentEdge, nextWheelState, normalizeTasksNodeImageUrl, resolveTasksNodeImage, selectTasksGraphNodeIdsInPolygon, selectTasksGraphNodeIdsInRect, sizeTaskNode, tasksEdgeLabelZForMode, tasksExpandedRootRect, tasksGraphDynamicMinZoom, tasksGraphNodeAllowsHover, tasksGraphNodeHitArea, tasksGraphStatsLabel, tasksIconFilterGroups, tasksProjectionGroupByHierarchy, tasksReviewTarget, toggleMultiValueFilter } = await import('../vyasa/extensions_builtin/tasks/static/tasks_graph_core.js');
@@ -43,7 +50,7 @@ test('Option edge preview chooses the connection point closest to the cursor', (
 });
 
 test('Knowledge Graph wires Option preview and the selected edge halo', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const source = taskSources;
     assert.ok(source.includes('const match = edgeForOptionPointer(event);'));
     assert.ok(source.includes('previewOptionEdge(match.edge, match.nodeId);'));
     assert.ok(source.includes('props.data?.edgeCardActive'));
@@ -105,11 +112,7 @@ test('context diff selects visible projected nodes or their collapsed group', ()
 });
 
 test('Knowledge Graph boolean settings parse hover card placement flag', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const start = source.indexOf('function tasksModelSetting');
-    const end = source.indexOf('function readTasksLayoutConfigForModel');
-    const factory = new Function(source.slice(start, end) + '\nreturn tasksModelBooleanSetting;');
-    const read = factory();
+    const read = tasksModelBooleanSetting;
     assert.equal(read({ 'hover-card-right-rail': false }, 'hover-card-right-rail', true), false);
     assert.equal(read({ 'hover-card-right-rail': 'off' }, 'hover-card-right-rail', true), false);
     assert.equal(read({ 'hover-card-right-rail': 'yes' }, 'hover-card-right-rail', false), true);
@@ -117,20 +120,7 @@ test('Knowledge Graph boolean settings parse hover card placement flag', () => {
 });
 
 test('projection reset defaults include all authored sidebar parameters', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const start = source.indexOf('function tasksProjectionSchemaPrefs');
-    const end = source.indexOf('function readTasksProjectionPrefsForModel');
-    const factory = new Function(
-        'const normalizeTasksFilterQuery = value => value;\n'
-        + 'const clampTasksEdgeOpacity = value => Number(value);\n'
-        + 'const clampTasksProjectionContentOpacity = value => Number(value);\n'
-        + 'const normalizeTasksEdgeAnimationMode = (mode, enabled = true) => mode || (enabled === false ? "none" : "smooth");\n'
-        + 'const clampTasksEdgeAnimationSteps = value => Number(value);\n'
-        + 'const clampTasksEdgeAnimationDuration = value => Number(value);\n'
-        + source.slice(start, end)
-        + '\nreturn tasksProjectionSchemaPrefs;'
-    );
-    const defaults = factory()({ view_projections: [{
+    const defaults = tasksProjectionSchemaPrefs({ view_projections: [{
         id: 'focus', filter_query: { combinator: 'and', rules: [] }, query_builder_enabled: false,
         search: 'missing', default_color_by: 'phase', default_secondary_color_by: 'owner',
         filters_collapsed: false, edges_visible: false, edge_animation_enabled: false,
@@ -356,7 +346,7 @@ test('double click key treats expanded group title and body as same node', () =>
 });
 
 test('edge toggle header button warns when edges are hidden', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const source = taskSources;
     const renderSource = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/render.py', import.meta.url), 'utf8');
     const stylesheetSource = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.css', import.meta.url), 'utf8');
     assert.ok(renderSource.includes('data-vyasa-tasks-action="toggleEdges"'), 'edge header button carries action data');
@@ -368,7 +358,7 @@ test('edge toggle header button warns when edges are hidden', () => {
 });
 
 test('Knowledge Graph styles node references without changing inline code', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const source = taskSources;
     const stylesheet = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.css', import.meta.url), 'utf8');
     assert.ok(source.includes('vyasa-tasks-node-reference'));
     assert.ok(!stylesheet.includes('.vyasa-task-node-card-value :not(pre) > code'));
@@ -379,12 +369,12 @@ test('Knowledge Graph styles node references without changing inline code', () =
 });
 
 test('Knowledge Graph node card keeps styled title fragments in one flex child', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const source = taskSources;
     assert.match(source, /React\.createElement\('span', \{ style: \{ minWidth: 0 \} \},\s+renderTasksInlineLinks\(selectedNode\.label/);
 });
 
 test('Knowledge Graph edge card renders both endpoint titles with node references', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const source = taskSources;
     assert.ok(source.includes('renderTasksInlineLinks(sourceLabel'));
     assert.ok(source.includes('renderTasksInlineLinks(targetLabel'));
     assert.ok(!source.includes("React.createElement('span', null, sourceLabel)"));
@@ -392,7 +382,7 @@ test('Knowledge Graph edge card renders both endpoint titles with node reference
 });
 
 test('Knowledge Graph fallback cards render node references safely', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const source = taskSources;
     assert.ok(source.includes('tasksInlineReferenceHtml(n.label, nodeLabels)'));
     assert.ok(!source.includes('<span>${n.label}</span>'));
 });
@@ -438,7 +428,7 @@ test('Knowledge Graph maps references and reverse edges through projected node i
 });
 
 test('Knowledge Graph reference edges use primary tapered styling and drive layouts', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const source = taskSources;
     assert.match(source, /tasksReferenceFlowEdge[\s\S]*?var\(--vyasa-primary\)/);
     assert.ok(!source.includes("const taperPath = props.data?.__reference__ ? ''"));
     assert.ok(source.includes('dependency_edges: [...(model?.dependency_edges || []), ...referenceEdgeRecords]'));
@@ -462,17 +452,6 @@ test('Knowledge Graph reference edges use primary tapered styling and drive layo
 });
 
 test('collapsed groups average both primary and secondary colors', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const start = source.indexOf('function collectTasksGroupDescendants');
-    const end = source.indexOf('window.runTasksHeaderAction');
-    const factory = new Function(
-        "const TASKS_HAS_NOTE_ATTR = 'has_note';\n"
-        + "const TASKS_HAS_NOTE_PALETTE = { yes: '#22c55e', no: 'rgba(220, 38, 38, 0.28)' };\n"
-        + "const tasksAttrValues = value => (Array.isArray(value) ? value : [value]).map(entry => String(entry ?? '').trim()).filter(Boolean);\n"
-        + source.slice(start, end)
-        + "\nreturn { resolveTasksCollapsedGroupColor, tasksGroupBackground };"
-    );
-    const { resolveTasksCollapsedGroupColor, tasksGroupBackground } = factory();
     const model = {
         groups: [{ id: 'g1' }],
         tasks: [{ id: 'a', group_id: 'g1', kind: 'alpha', energy: 'hot' }, { id: 'b', group_id: 'g1', kind: 'beta', energy: 'cold' }],
@@ -490,7 +469,7 @@ test('collapsed groups average both primary and secondary colors', () => {
 });
 
 test('collapsed grouped containers prefer child average over grouping dimension tone', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const source = taskSources;
     assert.ok(source.includes("? (projectionGroupTone || nodeColor)\n                        : (collapsedGroupColor || projectionGroupTone || nodeColor);"));
 });
 
@@ -565,7 +544,7 @@ test('dimmed Knowledge Graph nodes do not accept hover behavior', () => {
 });
 
 test('Knowledge Graph hover highlights connected endpoint nodes', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const source = taskSources;
     assert.ok(source.includes('const hoverEndpointIds = new Set(hoveredNodeId ? [hoveredNodeId] : []);'));
     assert.ok(source.includes('hoverEndpointIds.add(edge.source);'));
     assert.ok(source.includes("highlightMode: isHoveredNode ? 'selected-focus' : 'neighbor'"));
@@ -573,7 +552,7 @@ test('Knowledge Graph hover highlights connected endpoint nodes', () => {
 });
 
 test('Knowledge Graph hover edges override faint global opacity', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const source = taskSources;
     assert.ok(source.includes('opacity: tasksProminentEdgeOpacity() * branchOpacity, fontWeight: 800'));
     assert.ok(source.includes('fillOpacity: 0.9'));
     assert.ok(source.includes('strokeWidth: Math.max(4.75, tasksEdgeStrokeWidthForMode'));
@@ -581,11 +560,8 @@ test('Knowledge Graph hover edges override faint global opacity', () => {
 });
 
 test('Knowledge Graph prominent edge labels stop counter-scaling below node text size', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const start = source.indexOf('function tasksCssFontSize');
-    const end = source.indexOf('async function copyTasksText');
-    const factory = new Function('const TASKS_NODE_LABEL_FONT_SIZE = 16;\nconst TASKS_EDGE_LABEL_NODE_SIZE_RATIO = 1.35;\n' + source.slice(start, end) + '\nreturn tasksProminentEdgeLabelScale;');
-    const scale = factory();
+    const scale = tasksProminentEdgeLabelScale;
+    const source = taskSources;
     assert.equal(scale(2, '12px'), 0.5);
     assert.equal(scale(1, '12px'), 1);
     assert.equal(scale(0.75, '12px'), 1 / 0.75);
@@ -596,7 +572,7 @@ test('Knowledge Graph prominent edge labels stop counter-scaling below node text
 });
 
 test('Knowledge Graph fit includes highlighted neighbors for selected node', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const source = taskSources;
     assert.ok(source.includes('const fitEdgeEndpointIds = new Set(selectedScopeIds);'));
     assert.ok(source.includes('if (selectedScopeIds.has(edge.source) || selectedScopeIds.has(edge.target))'));
     assert.ok(source.includes('fitEdgeEndpointIds.add(edge.source);'));
@@ -604,14 +580,14 @@ test('Knowledge Graph fit includes highlighted neighbors for selected node', () 
 });
 
 test('Knowledge Graph right-rail hover card gets stronger shadow', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const source = taskSources;
     assert.ok(source.includes("tasksModelBooleanSetting(model, 'hover-card-right-rail', false)"));
     assert.ok(source.includes('boxShadow: rightRailPlacement'));
     assert.ok(source.includes('-18px 20px 50px rgba(0,0,0,0.24)'));
 });
 
 test('Knowledge Graph right-rail hover card suppresses selected card', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
+    const source = taskSources;
     assert.ok(source.includes("setGroupHoverTooltip({ ...hoverCard, placement: 'rightRail' });"));
     assert.ok(source.includes("if (hoverCardRightRail && groupHoverTooltip?.placement === 'rightRail') return null;"));
 });
@@ -637,25 +613,14 @@ test('note special filter uses derived yes/no value', async () => {
 });
 
 test('composite palette colors mix once in OKLab', async () => {
-    const source = await fs.promises.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const start = source.indexOf('function parseTasksHexColor');
-    const end = source.indexOf('function parseTasksNumericValue');
-    const factory = new Function(`${source.slice(start, end)}; return averageTasksHexColors;`);
-    const mix = factory();
+    const mix = averageTasksHexColors;
     assert.equal(mix(['#2563eb']), '#2563eb');
     assert.match(mix(['#2563eb', '#7c3aed']), /^#[0-9a-f]{6}$/);
     assert.equal(mix(['#2563eb', '#7c3aed']), mix(['#7c3aed', '#2563eb']));
 });
 
 test('composite palette sweep cycles actual member colors', async () => {
-    const source = await fs.promises.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const start = source.indexOf('function tasksMixedFill');
-    const end = source.indexOf('function tasksNodeBackground');
-    const factory = new Function(
-        'const tasksAttrValues = value => Array.isArray(value) ? value : [value];\n'
-        + `${source.slice(start, end)}; return tasksCompositeSweep;`
-    );
-    const sweep = factory()({ owner: ['Yeshwanth', 'Satyasri'] }, 'owner', { Yeshwanth: '#2563eb', Satyasri: '#7c3aed' }, '', {}, { enabled: false });
+    const sweep = tasksCompositeSweep({ owner: ['Yeshwanth', 'Satyasri'] }, 'owner', { Yeshwanth: '#2563eb', Satyasri: '#7c3aed' }, '', {}, { enabled: false });
     assert.equal(sweep, 'linear-gradient(90deg, #2563eb 0%, #7c3aed 50%, #2563eb 100%)');
 });
 
@@ -798,10 +763,7 @@ test('active hover only shows labels for focused edges', () => {
 });
 
 test('non-animated selected edges keep uniform stroke width before taper', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const helper = source.match(/function tasksEdgeStrokeWidthForMode\(mode, animated\) \{[\s\S]*?\n\}/)?.[0];
-    assert.ok(helper, 'edge stroke helper should exist');
-    const strokeWidth = new Function(`${helper}; return tasksEdgeStrokeWidthForMode;`)();
+    const strokeWidth = tasksEdgeStrokeWidthForMode;
     assert.equal(strokeWidth('focused-out', false), 3.5);
     assert.equal(strokeWidth('focused-in', false), 3.5);
     assert.equal(strokeWidth('selected-out', false), 3.5);
@@ -812,11 +774,8 @@ test('non-animated selected edges keep uniform stroke width before taper', () =>
 });
 
 test('tapered edge path builds a closed bezier ribbon', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const start = source.indexOf('function tasksTaperedBezierPath');
-    const end = source.indexOf('function tasksIsIconifyImage');
-    assert.ok(start > 0 && end > start, 'taper helper should exist');
-    const tapered = new Function(`${source.slice(start, end)}; return tasksTaperedBezierPath;`)();
+    const tapered = tasksTaperedBezierPath;
+    const source = taskSources;
     const path = tapered('M 0 0 C 20 0 80 100 100 100', 6, 2);
     assert.ok(path.startsWith('M 0 3'), 'source starts wide');
     assert.ok(path.includes('L 100 99'), 'target closes narrow');
@@ -825,10 +784,7 @@ test('tapered edge path builds a closed bezier ribbon', () => {
 });
 
 test('tapered edge arrowhead builds a target triangle', () => {
-    const source = fs.readFileSync(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const start = source.indexOf('function tasksTaperedBezierPath');
-    const end = source.indexOf('function tasksIsIconifyImage');
-    const helpers = new Function(`${source.slice(start, end)}; return { tasksTaperedArrowHeadPath };`)();
+    const helpers = { tasksTaperedArrowHeadPath };
     const path = helpers.tasksTaperedArrowHeadPath('M 0 0 C 20 0 80 100 100 100', 10);
     assert.ok(path.startsWith('M 100 100'), 'arrow tip sits on edge target');
     assert.ok(path.includes('L '), 'arrow has base corners');
@@ -985,14 +941,6 @@ test('disconnected group children use packed layout for downward direction too',
 });
 
 test('split-fill background composes a diagonal gradient from two colors', async () => {
-    const fs = await import('node:fs/promises');
-    const source = await fs.readFile(new URL('../vyasa/extensions_builtin/tasks/static/tasks.js', import.meta.url), 'utf8');
-    const mixMatch = source.match(/function tasksMixedFill\(color, colorMix\) \{[\s\S]*?\n\}/);
-    const bgMatch = source.match(/function tasksNodeBackground\(primaryColor, secondaryColor, colorMix, fallback, composite = false\) \{[\s\S]*?\n\}/);
-    assert.ok(mixMatch, 'tasksMixedFill should exist');
-    assert.ok(bgMatch, 'tasksNodeBackground should exist');
-    const factory = new Function(`${mixMatch[0]}; ${bgMatch[0]}; return tasksNodeBackground;`);
-    const tasksNodeBackground = factory();
     const noMix = { enabled: false };
 
     // Two distinct colors -> diagonal split gradient.

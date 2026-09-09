@@ -1,3 +1,15 @@
+import { logTasksDebug, logTasksDebugVerbose, rectSummary } from './tasks_diagnostics.js';
+import {
+    layoutDisconnectedTaskNodes, packTaskChildRects, resolveTasksNodeImage, sizeTaskNode,
+    tasksExpandedRootRect,
+} from './tasks_graph_core.js';
+import {
+    TASKS_LAYOUT_ERROR_MODE, appendProjectedEdge, buildGanttTasksGraph, buildLayoutErrorGraph,
+    buildTasksGroupedState, buildTasksUngroupedState, buildVisibleTasksGraph, reduceTransitiveEdges,
+    selectTasksProjectionState, tasksGroupByPrefsDifferFromSchema, tasksModelNodeLabels, tasksProjectionById,
+    tasksProjectionLayout, tasksReferenceEdges,
+} from './tasks_graph_model.js';
+
 // Fixed layouts. A layout places every node itself and skips ELK entirely.
 //
 // Each layout owns its own keys and validates them. There is deliberately no
@@ -11,7 +23,6 @@
 // working on the logical node. The matrix layout relies on this.
 
 // Relative, so the same specifier resolves in the browser and under node --test.
-import { sizeTaskNode } from './tasks_graph_core.js';
 
 // A fixed layout still has to make room for the words. Rather than guess, ask
 // the same sizer the ordinary graph uses, pinning the width the layout owns and
@@ -989,4 +1000,740 @@ export function tasksLayoutById(layoutId) {
 
 export function tasksLayoutChromeKinds() {
     return new Set(Object.values(TASKS_LAYOUTS).flatMap((layout) => layout.chromeKinds));
+}
+
+let tasksElk;
+async function layoutWithElk(graph) {
+    tasksElk ||= import('https://esm.sh/elkjs@0.10.0').then(({ default: ELK }) => new ELK());
+    return (await tasksElk).layout(graph);
+}
+
+const TASKS_GROUP_PADDING = { top: 68, right: 40, bottom: 40, left: 40 };
+
+const TASKS_ROOT_SPACING = { node: 44, layer: 96 };
+
+const TASKS_ROOT_COLLISION_GAP = 96;
+
+// A fixed layout places every node itself, so ELK never runs for it.
+export const tasksFixedLayout = (mode) => tasksLayoutById(mode);
+
+export const tasksIsFixedMode = (mode) => mode === 'gantt' || mode === TASKS_LAYOUT_ERROR_MODE || Boolean(tasksLayoutById(mode));
+
+export function readTasksDirection(value) {
+    const raw = String(value || 'TD').trim().toUpperCase();
+    if (raw === 'LR' || raw === 'RIGHT') return 'RIGHT';
+    return 'DOWN';
+}
+
+export function tasksMergeHandleLayouts(primary = {}, secondary = {}) {
+    return {
+        source: [...(primary.source || []), ...(secondary.source || [])],
+        target: [...(primary.target || []), ...(secondary.target || [])],
+    };
+}
+
+function stableTaskJitter(id, amplitudeX = 16, amplitudeY = 8) {
+    const text = String(id || '');
+    let hashA = 0;
+    let hashB = 0;
+    for (let i = 0; i < text.length; i += 1) {
+        const code = text.charCodeAt(i);
+        hashA = (hashA * 33 + code) % 1000003;
+        hashB = (hashB * 97 + code) % 1000033;
+    }
+    return {
+        x: ((hashA % 1000) / 999 - 0.5) * amplitudeX,
+        y: ((hashB % 1000) / 999 - 0.5) * amplitudeY,
+    };
+}
+
+async function layoutTasksGraph(graph, model, expanded, jitterConfig = {}, layoutConfig = {}) {
+    const nodeLabels = tasksModelNodeLabels(model);
+    const nodeMap = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+    const layoutEdges = reduceTransitiveEdges(graph.edges || []);
+    const parentOf = {};
+    const expandedGroupSizes = {};
+    const groupPadding = layoutConfig.groupPadding || 40;
+    const groupTopPadding = (groupNode, widthOverride = null) => {
+        const width = Math.max(80, Number(widthOverride || groupNode?.width || 250) - 16);
+        const titleHeight = sizeTaskNode(groupNode?.label || groupNode?.id || '', 'groupTitle', width, {
+            hasImage: Boolean(resolveTasksNodeImage(groupNode, model)),
+            nodeLabels,
+        }).height;
+        return groupPadding + titleHeight;
+    };
+
+    for (const n of graph.nodes) {
+        if (n.__kind__ === 'group' && expanded.has(n.id)) {
+            const childGroups = (model.group_tree?.[n.id] || []).filter((cg) => graph.nodes.some((gn) => gn.id === cg));
+            const childTasks = (model.task_children?.[n.id] || []).filter((ct) => graph.nodes.some((tn) => tn.id === ct));
+            [...childGroups, ...childTasks].forEach((cid) => { parentOf[cid] = n.id; });
+        }
+    }
+
+    const buildElkNode = (nid) => {
+        const n = nodeMap[nid];
+        const node = { id: nid, width: n?.width || 250, height: n?.height || 80 };
+        const children = graph.nodes.filter((cn) => parentOf[cn.id] === nid);
+        if (children.length > 0) {
+            node.children = children.map((c) => buildElkNode(c.id));
+            node.layoutOptions = {
+                'elk.algorithm': 'layered',
+                'elk.direction': layoutConfig.elkDirection || 'DOWN',
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
+                'elk.padding': `[top=${groupTopPadding(n)},left=${groupPadding},bottom=${groupPadding},right=${groupPadding}]`
+            };
+        }
+        return node;
+    };
+
+    for (const gid of expanded) {
+        if (!graph.nodes.some((n) => n.id === gid && n.__kind__ === 'group')) continue;
+        const childGroups = (model.group_tree?.[gid] || []).filter((cg) => graph.nodes.some((gn) => gn.id === cg));
+        const childTasks = (model.task_children?.[gid] || []).filter((ct) => graph.nodes.some((tn) => tn.id === ct));
+        const allChildren = [...childGroups, ...childTasks];
+        if (allChildren.length === 0) continue;
+        const childGraph = {
+            id: `sub-${gid}`,
+            layoutOptions: {
+                'elk.algorithm': 'layered',
+                'elk.direction': layoutConfig.elkDirection || 'DOWN',
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
+                'elk.padding': `[top=${groupTopPadding(nodeMap[gid])},left=${groupPadding},bottom=${groupPadding},right=${groupPadding}]`
+            },
+            children: allChildren.map((cid) => {
+                const cn = nodeMap[cid];
+                return { id: cid, width: cn?.width || 250, height: cn?.height || 80 };
+            }),
+            edges: reduceTransitiveEdges((graph.edges || [])
+                .filter((e) => allChildren.includes(e.source) && allChildren.includes(e.target))
+            ).map((e, i) => ({ id: `e${i}`, sources: [e.source], targets: [e.target] })),
+        };
+        const subLayout = await layoutWithElk(childGraph);
+        if (subLayout.children && subLayout.children.length > 0) {
+            expandedGroupSizes[gid] = {
+                width: Math.max(subLayout.width || 0, 250),
+                height: Math.max(subLayout.height || 0, 80),
+            };
+        }
+    }
+
+    const adjustedNodes = graph.nodes.map((n) => {
+        if (expandedGroupSizes[n.id]) {
+            return { ...n, width: expandedGroupSizes[n.id].width, height: expandedGroupSizes[n.id].height };
+        }
+        return n;
+    });
+    const adjustedNodeMap = Object.fromEntries(adjustedNodes.map((n) => [n.id, n]));
+
+    const buildElkNodeAdjusted = (nid) => {
+        const n = adjustedNodeMap[nid];
+        const node = { id: nid, width: n?.width || 250, height: n?.height || 80 };
+        const children = adjustedNodes.filter((cn) => parentOf[cn.id] === nid);
+        if (children.length > 0) {
+            node.children = children.map((c) => buildElkNodeAdjusted(c.id));
+            node.layoutOptions = {
+                'elk.algorithm': 'layered',
+                'elk.direction': layoutConfig.elkDirection || 'DOWN',
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
+                'elk.padding': `[top=${groupTopPadding(n, n?.width)},left=${groupPadding},bottom=${groupPadding},right=${groupPadding}]`
+            };
+        }
+        return node;
+    };
+
+    const topLevel = adjustedNodes.filter((n) => !parentOf[n.id]);
+    const rootLayoutOptions = {
+        'elk.algorithm': 'layered',
+        'elk.direction': layoutConfig.elkDirection || 'DOWN',
+        'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || TASKS_ROOT_SPACING.node}`,
+        'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || TASKS_ROOT_SPACING.layer}`,
+    };
+    const laidOut = await layoutWithElk({
+        id: 'root',
+        layoutOptions: rootLayoutOptions,
+        children: topLevel.map((n) => buildElkNodeAdjusted(n.id)),
+        edges: layoutEdges.map((e, i) => ({ id: `e${i}`, sources: [e.source], targets: [e.target] })),
+    });
+    const absPosMap = {};
+    const relPosMap = {};
+    const collectPos = (node, offsetX = 0, offsetY = 0) => {
+        const jitter = stableTaskJitter(node.id, jitterConfig.x ?? 18, jitterConfig.y ?? 10);
+        const localX = (node.x || 0) + jitter.x;
+        const localY = (node.y || 0) + jitter.y;
+        relPosMap[node.id] = { x: localX, y: localY };
+        absPosMap[node.id] = { x: localX + offsetX, y: localY + offsetY };
+        if (node.children) {
+            node.children.forEach((c) => collectPos(c, absPosMap[node.id].x, absPosMap[node.id].y));
+        }
+    };
+    laidOut.children?.forEach((c) => collectPos(c));
+    laidOut.absoluteChildPositions = absPosMap;
+    laidOut.relativeChildPositions = relPosMap;
+    laidOut.parentOf = parentOf;
+    laidOut.expandedGroupSizes = expandedGroupSizes;
+    return laidOut;
+}
+
+export async function layoutBaseTasksGraph(graph, model, jitterConfig = {}, layoutConfig = {}) {
+    const rootGroupIds = new Set(model.group_tree?.["null"] || []);
+    const rootTaskIds = new Set(model.task_children?.["null"] || []);
+    const rootNodeIds = new Set([...rootGroupIds, ...rootTaskIds]);
+    const taskToGroup = Object.fromEntries((model.tasks || []).map((t) => [t.id, t.group_id || null]));
+    const groupParent = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
+
+    const getRoot = (id) => {
+        let cur = id;
+        while (groupParent[cur]) {
+            cur = groupParent[cur];
+        }
+        return cur;
+    };
+
+    const rootEdges = [];
+    const seenRootEdges = new Map();
+    for (const edge of (model.dependency_edges || [])) {
+        const srcGroup = taskToGroup[edge.source] || edge.source;
+        const dstGroup = taskToGroup[edge.target] || edge.target;
+        const srcRoot = getRoot(srcGroup);
+        const dstRoot = getRoot(dstGroup);
+        if (srcRoot !== dstRoot && rootNodeIds.has(srcRoot) && rootNodeIds.has(dstRoot)) {
+            appendProjectedEdge(rootEdges, seenRootEdges, srcRoot, dstRoot, edge.label || '', edge);
+        }
+    }
+
+    const rootGraph = {
+        nodes: graph.nodes.filter((n) => rootNodeIds.has(n.id)),
+        edges: rootEdges,
+    };
+    logTasksDebugVerbose('rootGraph', {
+        nodes: rootGraph.nodes.map(n => n.id),
+        edges: rootGraph.edges,
+        edgeCount: rootGraph.edges.length,
+    });
+    const laidOut = await layoutTasksGraph(rootGraph, model, new Set(), jitterConfig, layoutConfig);
+    logTasksDebugVerbose('baseLayout', {
+        width: Math.round(laidOut.width || 0),
+        height: Math.round(laidOut.height || 0),
+        positions: Object.fromEntries(Object.entries(laidOut.absoluteChildPositions || {}).map(([id, rect]) => [id, rectSummary(rect)])),
+    });
+    const positions = {};
+    for (const node of rootGraph.nodes) {
+        const pos = laidOut.absoluteChildPositions?.[node.id] || { x: 0, y: 0 };
+        positions[node.id] = {
+            x: pos.x,
+            y: pos.y,
+            width: node.width || 250,
+            height: node.height || 80,
+        };
+    }
+    return { positions, width: laidOut.width || 0, height: laidOut.height || 0 };
+}
+
+export function buildProjectedRootTasksGraph(rawGraph, model) {
+    const rootGroupIds = new Set(model.group_tree?.["null"] || []);
+    const rootTaskIds = new Set(model.task_children?.["null"] || []);
+    const rootNodeIds = new Set([...rootGroupIds, ...rootTaskIds]);
+    const taskToGroup = Object.fromEntries((model.tasks || []).map((task) => [task.id, task.group_id || null]));
+    const groupParent = Object.fromEntries((model.groups || []).map((group) => [group.id, group.parent_group_id || null]));
+    const getRoot = (id) => {
+        let cur = taskToGroup[id] || id;
+        while (groupParent[cur]) cur = groupParent[cur];
+        return cur;
+    };
+    const edges = [];
+    const seen = new Map();
+    for (const edge of (model.dependency_edges || [])) {
+        const source = getRoot(edge.source);
+        const target = getRoot(edge.target);
+        if (source !== target && rootNodeIds.has(source) && rootNodeIds.has(target)) {
+            appendProjectedEdge(edges, seen, source, target, edge.label || '', edge);
+        }
+    }
+    return {
+        nodes: rawGraph.nodes.filter((node) => rootNodeIds.has(node.id)),
+        edges,
+    };
+}
+
+// Read the layering ELK already worked out, rather than re-deriving ranks from
+// the edges. ELK breaks cycles as part of laying out; a longest-path rank of our
+// own cuts a cycle wherever its walk happens to enter it, which can drop a group
+// far from the one edge that placed it. A band is a set of children that overlap
+// vertically, which is exactly what one ELK layer looks like.
+function tasksWaterfallBands(ids, edges, direction, positions = {}) {
+    if (direction !== 'DOWN' || !edges.length) return null;
+    const placed = ids.filter((id) => positions[id]);
+    if (!placed.length) return null;
+    const bands = [];
+    let bandBottom = -Infinity;
+    for (const id of placed.sort((left, right) => positions[left].y - positions[right].y)) {
+        const rect = positions[id];
+        if (!bands.length || rect.y >= bandBottom) {
+            bands.push([]);
+            bandBottom = -Infinity;
+        }
+        bands[bands.length - 1].push(id);
+        bandBottom = Math.max(bandBottom, rect.y + (rect.height || 0));
+    }
+    for (const band of bands) band.sort((left, right) => positions[left].x - positions[right].x);
+    return bands;
+}
+
+async function layoutGroupInternal(groupId, model, childSizes = {}, jitterConfig = {}, layoutConfig = {}, useElkForGroups = true) {
+    const nodeLabels = tasksModelNodeLabels(model);
+    const groupsById = Object.fromEntries((model.groups || []).map((group) => [group.id, group]));
+    const tasksById = Object.fromEntries((model.tasks || []).map((task) => [task.id, task]));
+    const groupDirection = readTasksDirection(groupsById[groupId]?.layout_direction || groupsById[groupId]?.direction || layoutConfig.elkDirection);
+    const groupPadding = layoutConfig.groupPadding || 40;
+    const groupTitleWidth = Math.max(80, (childSizes[groupId]?.width || groupsById[groupId]?.width || 250) - 16);
+    const groupTitleHeight = sizeTaskNode(groupsById[groupId]?.label || groupId, 'groupTitle', groupTitleWidth, {
+        hasImage: Boolean(resolveTasksNodeImage(groupsById[groupId], model)),
+        nodeLabels,
+    }).height;
+    const groupPadTop = groupPadding + groupTitleHeight;
+    const groupChildren = [
+        ...(model.task_children?.[groupId] || []).map((id) => {
+            const source = tasksById[id] || {};
+            const label = source.label || id;
+            return { id, __kind__: 'task', label, ...sizeTaskNode(label, 'task', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels }) };
+        }),
+        ...(model.group_tree?.[groupId] || []).map((id) => {
+            const source = groupsById[id] || {};
+            const label = source.label || id;
+            return { id, __kind__: 'group', label, ...sizeTaskNode(label, 'group', null, { hasImage: Boolean(resolveTasksNodeImage(source, model)), nodeLabels }) };
+        }),
+    ].map((child) => childSizes[child.id] ? { ...child, ...childSizes[child.id] } : child);
+    if (groupChildren.length === 0) {
+        return {
+            positions: {},
+            bbox: { width: 250, height: 80 },
+        };
+    }
+    const compactGroupChildren = (positions, beforeBbox) => {
+        const order = [...groupChildren]
+            .sort((left, right) => (
+                ((positions[left.id]?.y || 0) - (positions[right.id]?.y || 0))
+                || ((positions[left.id]?.x || 0) - (positions[right.id]?.x || 0))
+                || (left.__kind__ === right.__kind__ ? 0 : (left.__kind__ === 'task' ? -1 : 1))
+            ))
+            .map((child) => child.id);
+        const bands = tasksWaterfallBands(order, childEdges, groupDirection, positions);
+        const compacted = packTaskChildRects(positions, {
+            gap: Math.max(12, Math.min(layoutConfig.nodeSpacing || 72, 36)),
+            padX: groupPadding,
+            padTop: groupPadTop,
+            padBottom: groupPadding,
+            minWidth: 250,
+            minHeight: 80,
+            targetAspectRatio: 1.05,
+            order,
+            bands: bands || undefined,
+        });
+        logTasksDebugVerbose('groupPacking', {
+            groupId,
+            before: rectSummary(beforeBbox),
+            after: rectSummary(compacted.bbox),
+            rows: compacted.rows,
+            positions: Object.fromEntries(Object.entries(compacted.positions).map(([id, rect]) => [id, rectSummary(rect)])),
+        });
+        return compacted;
+    };
+    const childIds = new Set(groupChildren.map((child) => child.id));
+    const parentOf = Object.fromEntries([
+        ...(model.tasks || []).map((task) => [task.id, task.group_id || null]),
+        ...(model.groups || []).map((group) => [group.id, group.parent_group_id || null]),
+    ]);
+    const liftToChild = (id) => {
+        let current = id;
+        while (current && !childIds.has(current)) current = parentOf[current] ?? null;
+        return current;
+    };
+    const liftedEdges = new Map();
+    for (const edge of (model.dependency_edges || [])) {
+        const source = liftToChild(edge.source);
+        const target = liftToChild(edge.target);
+        if (!source || !target || source === target) continue;
+        const key = `${source}->${target}`;
+        if (!liftedEdges.has(key)) liftedEdges.set(key, { ...edge, source, target });
+    }
+    const childEdges = reduceTransitiveEdges([...liftedEdges.values()]);
+    if (useElkForGroups && childEdges.length > 0) {
+        const elkLayout = await layoutWithElk({
+            id: `group-${groupId}`,
+            layoutOptions: {
+                'elk.algorithm': 'layered',
+                'elk.direction': groupDirection,
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || 72}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || 112}`,
+                'elk.padding': `[top=${groupPadTop},left=${groupPadding},bottom=${groupPadding},right=${groupPadding}]`,
+            },
+            children: groupChildren.map((child) => ({
+                id: child.id,
+                width: child.width || 250,
+                height: child.height || 80,
+            })),
+            edges: childEdges.map((edge, index) => ({ id: `e${index}`, sources: [edge.source], targets: [edge.target] })),
+        });
+        const positions = {};
+        for (const child of elkLayout.children || []) {
+            const jitter = stableTaskJitter(child.id, jitterConfig.x ?? 14, jitterConfig.y ?? 8);
+            positions[child.id] = {
+                x: (child.x || 0) + jitter.x,
+                y: (child.y || 0) + jitter.y,
+                width: child.width || 0,
+                height: child.height || 0,
+            };
+        }
+        return compactGroupChildren(positions, {
+            width: Math.max(elkLayout.width || 0, 250),
+            height: Math.max(elkLayout.height || 0, 80),
+        });
+    }
+    const packedLayout = layoutDisconnectedTaskNodes(groupChildren, groupDirection, {
+        gap: Math.max(layoutConfig.nodeSpacing || 72, layoutConfig.layerSpacing || 112),
+        padX: groupPadding,
+        padTop: groupPadTop,
+        padBottom: groupPadding,
+    });
+    const positions = {};
+    for (const child of groupChildren) {
+        const base = packedLayout.positions[child.id];
+        const jitter = stableTaskJitter(child.id, jitterConfig.x ?? 14, jitterConfig.y ?? 8);
+        positions[child.id] = {
+            x: (base?.x || 0) + jitter.x,
+            y: (base?.y || 0) + jitter.y,
+            width: child.width || 0,
+            height: child.height || 0,
+        };
+    }
+    return compactGroupChildren(positions, {
+        width: Math.max(packedLayout.bbox.width || 0, 250),
+        height: Math.max(packedLayout.bbox.height || 0, 80),
+    });
+}
+
+export async function layoutExpandedGroups(model, expandedSet, jitterConfig = {}, layoutConfig = {}, useElkForGroups = true) {
+    const expandedIds = Array.from(expandedSet);
+    const groupParent = Object.fromEntries((model.groups || []).map((g) => [g.id, g.parent_group_id || null]));
+    const depthOf = (id) => {
+        let depth = 0;
+        let cur = groupParent[id];
+        while (cur) {
+            depth += 1;
+            cur = groupParent[cur];
+        }
+        return depth;
+    };
+    const layouts = {};
+    for (const groupId of expandedIds.sort((a, b) => depthOf(b) - depthOf(a))) {
+        const childSizes = {};
+        for (const childId of (model.group_tree?.[groupId] || [])) {
+            if (layouts[childId]) childSizes[childId] = layouts[childId].bbox;
+        }
+        layouts[groupId] = await layoutGroupInternal(groupId, model, childSizes, jitterConfig, layoutConfig, useElkForGroups);
+    }
+    return layouts;
+}
+
+export async function deriveSquishedExpandedLayout(baseGraph, model, expandedSet, baseLayout, groupLayouts, layoutConfig = {}) {
+    const visible = buildVisibleTasksGraph(model, expandedSet);
+    logTasksDebugVerbose('visibleGraph', {
+        expanded: Array.from(expandedSet),
+        nodes: visible.nodes.map(n => n.id),
+        edges: visible.edges,
+    });
+    const visibleNodeMap = Object.fromEntries(visible.nodes.map((node) => [node.id, node]));
+    const parentOf = {};
+    for (const groupId of expandedSet) {
+        (model.group_tree?.[groupId] || []).forEach((id) => { parentOf[id] = groupId; });
+        (model.task_children?.[groupId] || []).forEach((id) => { parentOf[id] = groupId; });
+    }
+
+    const topLevelIds = baseGraph.nodes.map((node) => node.id);
+    const expandedTopLevelIds = topLevelIds.filter((id) => expandedSet.has(id));
+    const topLevelRects = {};
+    for (const id of topLevelIds) {
+        const baseRect = baseLayout.positions[id];
+        if (!baseRect) continue;
+        const groupLayout = expandedSet.has(id) ? groupLayouts[id] : null;
+        topLevelRects[id] = groupLayout ? tasksExpandedRootRect(baseRect, groupLayout.bbox) : {
+            x: baseRect.x,
+            y: baseRect.y,
+            width: baseRect.width,
+            height: baseRect.height,
+            baseWidth: baseRect.width,
+            baseHeight: baseRect.height,
+        };
+    }
+    const layoutTrace = {
+        expandedTopLevelIds,
+        visibleNodeIds: visible.nodes.map((node) => node.id),
+        baseRects: Object.fromEntries(topLevelIds.map((id) => [id, rectSummary(baseLayout.positions[id])]).filter(([, rect]) => rect)),
+        expandedRects: Object.fromEntries(Object.entries(topLevelRects).map(([id, rect]) => [id, rectSummary(rect)])),
+        collisionPasses: [],
+        finalRects: {},
+    };
+
+    const nodes = [];
+    let rootPositions = null;
+    if (expandedTopLevelIds.length > 0) {
+        const rootLayout = await layoutWithElk({
+            id: 'expanded-root',
+            layoutOptions: {
+                'elk.algorithm': 'layered',
+                'elk.direction': layoutConfig.elkDirection || 'DOWN',
+                'elk.spacing.nodeNode': `${layoutConfig.nodeSpacing || TASKS_ROOT_SPACING.node}`,
+                'elk.layered.spacing.nodeNodeBetweenLayers': `${layoutConfig.layerSpacing || TASKS_ROOT_SPACING.layer}`,
+            },
+            children: topLevelIds
+                .filter((id) => topLevelRects[id])
+                .map((id) => ({
+                    id,
+                    width: topLevelRects[id].width,
+                    height: topLevelRects[id].height,
+                })),
+            edges: (baseGraph.edges || []).map((edge, index) => ({ id: `root-${index}`, sources: [edge.source], targets: [edge.target] })),
+        });
+        rootPositions = Object.fromEntries((rootLayout.children || []).map((node) => [node.id, { x: node.x || 0, y: node.y || 0 }]));
+        logTasksDebugVerbose('expandedRootLayout', {
+            edges: (baseGraph.edges || []).map((edge) => ({ source: edge.source, target: edge.target, reference: edge.__reference__ === true })),
+            positions: Object.fromEntries((rootLayout.children || []).map((node) => [node.id, {
+                x: Math.round(node.x || 0), y: Math.round(node.y || 0),
+                width: Math.round(node.width || 0), height: Math.round(node.height || 0),
+            }])),
+        });
+        layoutTrace.rootElk = {
+            width: Math.round(rootLayout.width || 0),
+            height: Math.round(rootLayout.height || 0),
+            positions: Object.fromEntries(Object.entries(rootPositions).map(([id, position]) => [id, rectSummary({ ...position, width: topLevelRects[id]?.width, height: topLevelRects[id]?.height })])),
+        };
+    }
+    for (const id of topLevelIds) {
+        const visibleNode = visibleNodeMap[id];
+        if (!visibleNode) continue;
+        const rect = topLevelRects[id];
+        const rootPosition = rootPositions?.[id] || rect;
+        nodes.push({
+            ...visibleNode,
+            position: { x: rootPosition.x, y: rootPosition.y },
+            width: rect.width,
+            height: rect.height,
+            parentId: null,
+        });
+    }
+
+    const addExpandedChildren = (groupId) => {
+        const groupLayout = groupLayouts[groupId];
+        if (!groupLayout) return;
+        const groupChildren = [...(model.group_tree?.[groupId] || []), ...(model.task_children?.[groupId] || [])];
+        for (const childId of groupChildren) {
+            const childVisible = visibleNodeMap[childId];
+            const childRect = groupLayout.positions[childId];
+            if (!childVisible || !childRect) continue;
+            const nestedLayout = expandedSet.has(childId) ? groupLayouts[childId] : null;
+            nodes.push({
+                ...childVisible,
+                position: { x: childRect.x, y: childRect.y },
+                width: nestedLayout?.bbox.width || childRect.width,
+                height: nestedLayout?.bbox.height || childRect.height,
+                parentId: groupId,
+            });
+            if (nestedLayout) addExpandedChildren(childId);
+        }
+    };
+    for (const groupId of expandedTopLevelIds) addExpandedChildren(groupId);
+
+    if (expandedTopLevelIds.length > 0 && !rootPositions) {
+        const topLevelState = {};
+        for (const id of topLevelIds) {
+            const baseRect = baseLayout.positions[id];
+            const rect = topLevelRects[id];
+            if (!baseRect || !rect) continue;
+            topLevelState[id] = {
+                x: rect.x || 0,
+                y: rect.y || 0,
+                width: rect.baseWidth,
+                height: rect.baseHeight,
+                expandedWidth: rect.width,
+                expandedHeight: rect.height,
+            };
+        }
+
+        for (const expandedId of expandedTopLevelIds) {
+            const expandedState = topLevelState[expandedId];
+            if (!expandedState) continue;
+            expandedState.width = expandedState.expandedWidth;
+            expandedState.height = expandedState.expandedHeight;
+        }
+
+        const topLevelStateList = topLevelIds
+            .map((id) => topLevelState[id])
+            .filter(Boolean)
+            .sort((a, b) => (a.y - b.y) || (a.x - b.x));
+        logTasksDebugVerbose('unwarpBeforeCollisions', {
+            expandedTopLevelIds,
+            topLevelState: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
+        });
+        for (let pass = 0; pass < 4; pass += 1) {
+            const collisionMoves = [];
+            for (let i = 0; i < topLevelStateList.length; i += 1) {
+                const a = topLevelStateList[i];
+                for (let j = i + 1; j < topLevelStateList.length; j += 1) {
+                    const b = topLevelStateList[j];
+                    const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+                    const overlapY = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+                    if (overlapX <= -(layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP) || overlapY <= -(layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP)) continue;
+                    if (Math.abs((a.x + a.width / 2) - (b.x + b.width / 2)) < Math.abs((a.y + a.height / 2) - (b.y + b.height / 2))) {
+                        const nextY = a.y + a.height + (layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP);
+                        if (nextY !== b.y) collisionMoves.push({ pass, axis: 'y', fromY: Math.round(b.y), toY: Math.round(nextY) });
+                        b.y = nextY;
+                    } else {
+                        const nextX = a.x + a.width + (layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP);
+                        if (nextX !== b.x) collisionMoves.push({ pass, axis: 'x', fromX: Math.round(b.x), toX: Math.round(nextX) });
+                        b.x = nextX;
+                    }
+                }
+            }
+            logTasksDebugVerbose('unwarpPass', {
+                pass,
+                collisionMoves,
+                topLevelState: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
+            });
+            layoutTrace.collisionPasses.push({
+                pass,
+                collisionMoves,
+                state: Object.fromEntries(Object.entries(topLevelState).map(([id, rect]) => [id, rectSummary(rect)])),
+            });
+        }
+
+        if (baseGraph.enforceRootRank) {
+            const rankGap = Math.min(layoutConfig.collisionGap || TASKS_ROOT_COLLISION_GAP, 40);
+            const rankAxis = (layoutConfig.elkDirection || 'DOWN') === 'RIGHT' ? 'x' : 'y';
+            for (let pass = 0; pass < topLevelIds.length; pass += 1) {
+                let moved = false;
+                for (const edge of baseGraph.edges || []) {
+                    const source = topLevelState[edge.source];
+                    const target = topLevelState[edge.target];
+                    if (!source || !target) continue;
+                    const minTarget = rankAxis === 'x'
+                        ? source.x + source.width + rankGap
+                        : source.y + source.height + rankGap;
+                    if (rankAxis === 'x' && target.x < minTarget) {
+                        target.x = minTarget;
+                        moved = true;
+                    } else if (rankAxis === 'y' && target.y < minTarget) {
+                        target.y = minTarget;
+                        moved = true;
+                    }
+                }
+                if (!moved) break;
+            }
+            const orderedTopLevelIds = topLevelIds
+                .filter((id) => topLevelState[id])
+                .sort((a, b) => {
+                    const left = topLevelState[a];
+                    const right = topLevelState[b];
+                    return rankAxis === 'x' ? ((left.x - right.x) || (left.y - right.y)) : ((left.y - right.y) || (left.x - right.x));
+                });
+            for (const id of orderedTopLevelIds) {
+                const incoming = (baseGraph.edges || [])
+                    .filter((edge) => edge.target === id)
+                    .map((edge) => topLevelState[edge.source])
+                    .filter(Boolean);
+                if (!incoming.length) continue;
+                const minPosition = Math.max(...incoming.map((source) => (
+                    rankAxis === 'x'
+                        ? source.x + source.width + rankGap
+                        : source.y + source.height + rankGap
+                )));
+                if (rankAxis === 'x' && topLevelState[id].x > minPosition) topLevelState[id].x = minPosition;
+                if (rankAxis === 'y' && topLevelState[id].y > minPosition) topLevelState[id].y = minPosition;
+            }
+        }
+
+        for (const node of nodes.filter((n) => !n.parentId)) {
+            const state = topLevelState[node.id];
+            if (!state) continue;
+            node.position = { x: state.x, y: state.y };
+        }
+        logTasksDebugVerbose('unwarpFinal', {
+            topLevelNodes: nodes.filter(n => !n.parentId).map(n => ({
+                id: n.id,
+                x: Math.round(n.position.x),
+                y: Math.round(n.position.y),
+                width: Math.round(n.width || 0),
+                height: Math.round(n.height || 0),
+            })),
+        });
+    }
+    layoutTrace.finalRects = Object.fromEntries(nodes.filter((node) => !node.parentId).map((node) => [
+        node.id,
+        rectSummary({ ...node.position, width: node.width, height: node.height }),
+    ]));
+    window.__vyasaTasksDebug.latestLayout = layoutTrace;
+    logTasksDebug('layoutTrace', layoutTrace);
+
+    const finalEdges = visible.edges.map((e, i) => ({
+        ...e,
+        id: `${e.source}-${e.target}-${i}`,
+        source: e.source,
+        target: e.target,
+        label: e.label || undefined,
+    }));
+    logTasksDebugVerbose('deriveResult', { visibleEdges: visible.edges, finalEdges });
+    return {
+        nodes,
+        edges: finalEdges,
+    };
+}
+
+export function buildTasksViewState(sourceModel, sourceGraph, projectionId, viewMode, groupByEnabled = false, groupByHierarchy = [], preserveGrouping = false) {
+    const projectionState = selectTasksProjectionState(sourceModel, sourceGraph, projectionId);
+    const projection = tasksProjectionById(sourceModel, projectionId) || {};
+    const fixedLayout = tasksLayoutById(tasksProjectionLayout(sourceModel, projectionId));
+    // Two ways a view can be unusable: a key the schema reader rejected, or a
+    // build that throws on the pack's own data. Both end up on screen.
+    const declaredError = String(projection.layout_error || '');
+    if (declaredError) {
+        return { ...projectionState, graph: buildLayoutErrorGraph(declaredError, projectionId), viewMode: TASKS_LAYOUT_ERROR_MODE };
+    }
+    if (fixedLayout) {
+        try {
+            return {
+                ...projectionState,
+                graph: fixedLayout.build(projectionState.model, projection),
+                viewMode: fixedLayout.id,
+            };
+        } catch (error) {
+            logTasksDebug('layoutError', { projectionId, layout: fixedLayout.id, message: String(error?.message || error) });
+            return {
+                ...projectionState,
+                graph: buildLayoutErrorGraph(String(error?.message || error), projectionId),
+                viewMode: TASKS_LAYOUT_ERROR_MODE,
+            };
+        }
+    }
+    if (preserveGrouping) return projectionState;
+    if (viewMode !== 'gantt') {
+        if (!tasksGroupByPrefsDifferFromSchema(sourceModel, projectionId, groupByEnabled, groupByHierarchy)) return projectionState;
+        const overrideState = (
+            groupByEnabled ? buildTasksGroupedState(projectionState.model, groupByHierarchy) : null
+        ) || buildTasksUngroupedState(projectionState.model);
+        return { ...overrideState, projectionId: projectionState.projectionId };
+    }
+    return {
+        ...projectionState,
+        graph: buildGanttTasksGraph({
+            ...projectionState.model,
+            dependency_edges: [
+                ...(projectionState.model.dependency_edges || []),
+                ...tasksReferenceEdges(projectionState.model),
+            ],
+        }),
+        viewMode: 'gantt',
+    };
 }

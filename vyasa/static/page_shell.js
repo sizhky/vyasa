@@ -2,6 +2,49 @@ const shortcutOwners = new Set();
 let floatingActionSync = () => {};
 let markdownHydrator = () => {};
 
+const loadedScripts = new Map();
+
+// One promise per URL keeps independent widgets on the same pending load.
+export function loadScript(src, isReady) {
+    if (isReady?.()) return Promise.resolve();
+    if (loadedScripts.has(src)) return loadedScripts.get(src);
+    const existing = document.querySelector(`script[src="${src}"]`);
+    const script = existing || document.createElement('script');
+    const promise = new Promise((resolve, reject) => {
+        const finish = () => {
+            cleanup();
+            script.dataset.vyasaLoaded = 'true';
+            if (isReady && !isReady()) return reject(new Error(`Missing runtime after loading ${src}`));
+            resolve();
+        };
+        const fail = () => {
+            cleanup();
+            reject(new Error(`Failed to load ${src}`));
+        };
+        const cleanup = () => {
+            script.removeEventListener('load', finish);
+            script.removeEventListener('error', fail);
+        };
+        if (script.dataset.vyasaLoaded === 'true') return finish();
+        script.addEventListener('load', finish);
+        script.addEventListener('error', fail);
+        if (existing) return;
+        script.src = src;
+        document.head.appendChild(script);
+    }).catch((error) => {
+        loadedScripts.delete(src);
+        script.remove();
+        throw error;
+    });
+    loadedScripts.set(src, promise);
+    return promise;
+}
+
+export async function ensureReact() {
+    await loadScript('https://unpkg.com/react@18/umd/react.production.min.js', () => Boolean(window.React));
+    await loadScript('https://unpkg.com/react-dom@18/umd/react-dom.production.min.js', () => Boolean(window.ReactDOM));
+}
+
 export function setShortcutsSuspended(owner, suspended) {
     if (suspended) shortcutOwners.add(owner);
     else shortcutOwners.delete(owner);
@@ -192,4 +235,25 @@ export function registerMarkdownHydrator(handler) {
 
 export function hydrateMarkdown(root) {
     markdownHydrator(root);
+}
+
+
+export function showVyasaToast(message, tone = 'info') {
+    let toast = document.getElementById('vyasa-ui-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'vyasa-ui-toast';
+        toast.className = 'fixed top-6 right-6 z-[10000] text-xs text-white px-3 py-2 rounded shadow-lg opacity-0 transition-opacity duration-300';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.remove('bg-slate-900', 'bg-emerald-700', 'bg-red-700');
+    toast.classList.add(tone === 'error' ? 'bg-red-700' : tone === 'success' ? 'bg-emerald-700' : 'bg-slate-900');
+    toast.classList.remove('opacity-0');
+    toast.classList.add('opacity-100');
+    clearTimeout(toast._vyasaTimer);
+    toast._vyasaTimer = setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+    }, 1600);
 }

@@ -1,3 +1,5 @@
+import { ensureReact, loadScript } from '../../../static/page_shell.js';
+
 let tasksReactFlowReady = null;
 let tasksQueryBuilderReady = null;
 
@@ -16,34 +18,22 @@ export function ensureTasksReactFlow() {
         if (tasksCssLink) {
             document.head.appendChild(tasksCssLink);
         }
-        for (const src of [
-            'https://unpkg.com/react@18/umd/react.production.min.js',
-            'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-            'https://unpkg.com/@xyflow/react@12.8.4/dist/umd/index.js',
-        ]) {
-            if (document.querySelector(`script[src="${src}"]`)) continue;
-            await new Promise((resolve, reject) => {
-                const s = document.createElement('script');
-                s.src = src;
-                s.onload = resolve;
-                s.onerror = (event) => {
-                    console.error('[tasks] script load failed', src, event);
-                    reject(event);
-                };
-                document.head.appendChild(s);
-            });
-            if (src.includes('react-dom.production.min.js') && window.React && !window.jsxRuntime) {
-                window.jsxRuntime = {
-                    Fragment: window.React.Fragment,
-                    jsx: (type, props, key) => window.React.createElement(type, { ...props, key }),
-                    jsxs: (type, props, key) => window.React.createElement(type, { ...props, key }),
-                };
-            }
+        await ensureReact();
+        if (!window.jsxRuntime) {
+            window.jsxRuntime = {
+                Fragment: window.React.Fragment,
+                jsx: (type, props, key) => window.React.createElement(type, { ...props, key }),
+                jsxs: (type, props, key) => window.React.createElement(type, { ...props, key }),
+            };
         }
+        await loadScript('https://unpkg.com/@xyflow/react@12.8.4/dist/umd/index.js', () => Boolean(window.ReactFlow));
         return window.React && window.ReactDOM && window.ReactFlow
             ? window.ReactFlow
             : null;
-    })();
+    })().catch((error) => {
+        tasksReactFlowReady = null;
+        throw error;
+    });
     return tasksReactFlowReady;
 }
 
@@ -59,19 +49,11 @@ export function ensureTasksQueryBuilder() {
             document.head.appendChild(link);
         }
         const src = '/static/extensions/tasks/vendor/react-querybuilder.global.js';
-        if (!document.querySelector(`script[src="${src}"]`)) {
-            await new Promise((resolve, reject) => {
-                const s = document.createElement('script');
-                s.src = src;
-                s.onload = resolve;
-                s.onerror = (event) => {
-                    console.error('[tasks] script load failed', src, event);
-                    reject(event);
-                };
-                document.head.appendChild(s);
-            });
-        }
+        await loadScript(src, () => Boolean(window.VyasaTasksQueryBuilder?.QueryBuilder));
         return window.VyasaTasksQueryBuilder || null;
-    })();
+    })().catch((error) => {
+        tasksQueryBuilderReady = null;
+        throw error;
+    });
     return tasksQueryBuilderReady;
 }

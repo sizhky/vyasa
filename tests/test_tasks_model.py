@@ -702,3 +702,17 @@ a1 -> b1
     collapsed = build_collapsed_graph(model)
 
     assert {"source": "alpha", "target": "beta", "kind": "collapsed-proxy"} in collapsed["edges"]
+
+
+def test_collapsed_graph_shared_contract() -> None:
+    """Python and JavaScript use the same collapsed-graph fixtures."""
+    from pathlib import Path
+
+    fixtures = json.loads((Path(__file__).parent / "fixtures/tasks_collapsed_graph.json").read_text())
+    for fixture in fixtures:
+        model = fixture["model"]
+        model["group_tree"] = {
+            None if key == "null" else key: value
+            for key, value in model["group_tree"].items()
+        }
+        assert build_collapsed_graph(model) == fixture["expected"], fixture["name"]
