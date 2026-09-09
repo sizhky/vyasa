@@ -108,6 +108,19 @@ const TASKS_GANTT_PROJECTION_ID = '__gantt__';
 // Chrome kinds are whatever the layouts declare. Adding a layout must not
 // mean remembering to edit a set over here.
 const TASKS_PASSIVE_NODE_KINDS = new Set(['ganttHeader', 'layoutError', ...tasksLayoutChromeKinds()]);
+// A pack caption carries code references and [[node]] links, so the server
+// renders it to HTML and parks that under `__rendered_attrs__`. A caption holder
+// is anything that owns one: a slide, a view option, a context. An inline graph
+// has no rendered copy, so the plain string stays the fallback.
+const tasksCaptionElement = (holder, style, attr = 'caption') => {
+    const rendered = holder?.__rendered_attrs__?.[attr] || '';
+    const plain = String(holder?.[attr] || '');
+    if (!rendered && !plain) return null;
+    const props = { className: 'vyasa-task-slide-description', style };
+    return rendered
+        ? window.React.createElement('div', { ...props, dangerouslySetInnerHTML: { __html: rendered } })
+        : window.React.createElement('div', props, plain);
+};
 // A fixed layout places every node itself, so ELK never runs for it.
 const tasksFixedLayout = (mode) => tasksLayoutById(mode);
 // A view that cannot be laid out still occupies the dropdown and still draws
@@ -3917,6 +3930,7 @@ function tasksProjectionOptions(model, ganttEnabled = false, activeContextId = '
                 id: String(projection.id),
                 label: String(projection.label || projection.id),
                 caption: String(projection.caption || '').trim(),
+                __rendered_attrs__: projection.__rendered_attrs__ || null,
             })),
     ];
     if (ganttEnabled) options.push({ id: TASKS_GANTT_PROJECTION_ID, label: 'Gantt', caption: '' });
@@ -7396,6 +7410,33 @@ async function renderTasksGraphs(rootElement = document) {
             // component below can stay ONE identity forever - React Flow
             // remounts every node whenever a nodeTypes entry changes identity,
             // while a re-rendered node still reads current closures here.
+            // A lane cap names the actor a lifeline column stands for. The pinned
+            // copy on the top edge must be the same cap, not a lookalike, so both
+            // the node and the pinned overlay draw it from here.
+            const tasksSequenceLaneCap = (accent, stage, label) => React.createElement('div', {
+                style: {
+                    boxSizing: 'border-box',
+                    padding: '6px 6px 7px',
+                    borderRadius: '8px 8px 0 0',
+                    background: `color-mix(in srgb, ${accent} 24%, transparent)`,
+                    border: `1px solid color-mix(in srgb, ${accent} 55%, transparent)`,
+                    textAlign: 'center',
+                    lineHeight: 1.22,
+                    overflowWrap: 'anywhere',
+                },
+            },
+                stage ? React.createElement('div', {
+                    style: {
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        letterSpacing: '.07em',
+                        textTransform: 'uppercase',
+                        opacity: 0.6,
+                        marginBottom: '2px',
+                    },
+                }, stage) : null,
+                React.createElement('div', { style: { fontSize: '11px', fontWeight: 700 } }, label)
+            );
             const renderTasksCustomNode = ({ data, id }) => {
                 const handlePosition = (side) => ({
                     top: Position?.Top || 'top',
@@ -7738,30 +7779,7 @@ async function renderTasksGraphs(rootElement = document) {
                     },
                         ...renderHandles('target'),
                         ...renderHandles('source'),
-                        React.createElement('div', {
-                            style: {
-                                boxSizing: 'border-box',
-                                padding: '6px 6px 7px',
-                                borderRadius: '8px 8px 0 0',
-                                background: `color-mix(in srgb, ${accent} 24%, transparent)`,
-                                border: `1px solid color-mix(in srgb, ${accent} 55%, transparent)`,
-                                textAlign: 'center',
-                                lineHeight: 1.22,
-                                overflowWrap: 'anywhere',
-                            },
-                        },
-                            data.__sequence_stage__ ? React.createElement('div', {
-                                style: {
-                                    fontSize: '9px',
-                                    fontWeight: 700,
-                                    letterSpacing: '.07em',
-                                    textTransform: 'uppercase',
-                                    opacity: 0.6,
-                                    marginBottom: '2px',
-                                },
-                            }, data.__sequence_stage__) : null,
-                            React.createElement('div', { style: { fontSize: '11px', fontWeight: 700 } }, data?.label || '')
-                        ),
+                        tasksSequenceLaneCap(accent, data.__sequence_stage__, data?.label || ''),
                         // The lifeline body is a tinted column, not a hairline, so it
                         // still reads when the whole diagram is zoomed to fit.
                         React.createElement('div', {
@@ -8957,17 +8975,15 @@ async function renderTasksGraphs(rootElement = document) {
                                     React.createElement('button', { type: 'button', 'aria-label': 'Next context', onClick: () => goContext(1), disabled: nextDisabled, style: ctxNavBtn(nextDisabled) }, '›')
                                 );
                             })(),
-                            sourceModel?.kg_context?.caption ? React.createElement('div', {
-                                style: {
-                                    padding: '9px 10px',
-                                    borderRadius: '8px',
-                                    border: '1px solid color-mix(in srgb, currentColor 10%, transparent)',
-                                    background: 'color-mix(in srgb, var(--vyasa-paper) 97%, transparent)',
-                                    fontSize: '11px',
-                                    lineHeight: 1.45,
-                                    opacity: 0.82,
-                                },
-                            }, sourceModel.kg_context.caption) : null
+                            tasksCaptionElement(sourceModel?.kg_context, {
+                                padding: '9px 10px',
+                                borderRadius: '8px',
+                                border: '1px solid color-mix(in srgb, currentColor 10%, transparent)',
+                                background: 'color-mix(in srgb, var(--vyasa-paper) 97%, transparent)',
+                                fontSize: '11px',
+                                lineHeight: 1.45,
+                                opacity: 0.82,
+                            })
                         ) : null,
                         aclViewerOptions.length ? React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                             React.createElement('span', { style: filterKeyStyle }, 'Viewer'),
@@ -9057,20 +9073,16 @@ async function renderTasksGraphs(rootElement = document) {
                                     }, '⧉')
                                     : React.createElement('span', { style: { width: '30px', height: '1px' } })
                             ),
-                            activeProjectionOption && activeProjectionOption.caption
-                                ? React.createElement('div', {
-                                    style: {
-                                        padding: '9px 10px',
-                                        borderRadius: '8px',
-                                        border: '1px solid color-mix(in srgb, currentColor 10%, transparent)',
-                                        background: 'color-mix(in srgb, var(--vyasa-paper) 97%, transparent)',
-                                        fontSize: '11px',
-                                        lineHeight: 1.45,
-                                        opacity: 0.82,
-                                        boxSizing: 'border-box',
-                                    },
-                                }, activeProjectionOption.caption)
-                                : null
+                            tasksCaptionElement(activeProjectionOption, {
+                                padding: '9px 10px',
+                                borderRadius: '8px',
+                                border: '1px solid color-mix(in srgb, currentColor 10%, transparent)',
+                                background: 'color-mix(in srgb, var(--vyasa-paper) 97%, transparent)',
+                                fontSize: '11px',
+                                lineHeight: 1.45,
+                                opacity: 0.82,
+                                boxSizing: 'border-box',
+                            })
                         ) : null,
                         React.createElement('div', { style: { ...filterSectionStyle, marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid color-mix(in srgb, currentColor 12%, transparent)' } },
                             React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' } },
@@ -10091,6 +10103,69 @@ async function renderTasksGraphs(rootElement = document) {
                     }));
                 }));
             };
+            // Excel freezes its header row. A diagram with axis headers freezes
+            // them the same way: once a header's own node pans off its edge, an
+            // identical copy holds that edge, so a reader panned deep into the
+            // body still knows which column or row they are reading. A header
+            // SCALES with the viewport instead of counter-scaling, so it keeps
+            // the exact width of the column it names.
+            //
+            // A full-height column node (a lifeline, a gantt unit) shows only
+            // capHeight of itself when pinned, or it would repaint the whole pane.
+            // A lifeline draws its cap through tasksSequenceLaneCap rather than
+            // through the node renderer, because a lifeline node also carries
+            // handles and review attributes that must not exist twice.
+            const tasksPinnedHeaderSpecs = [
+                {
+                    axis: 'top',
+                    match: (data) => Boolean(data.__sequence_lifeline__),
+                    render: (node) => tasksSequenceLaneCap(
+                        node.data?.__sequence_color__ || 'currentColor',
+                        node.data?.__sequence_stage__,
+                        node.data?.label || '',
+                    ),
+                },
+                { axis: 'top', capHeight: 22, match: (data) => data.__kind__ === 'ganttHeader' },
+                { axis: 'top', capHeight: 40, match: (data) => data.__kind__ === 'matrixHeader' && !data.__matrix_row_header__ },
+                { axis: 'left', capHeight: 40, match: (data) => data.__kind__ === 'matrixHeader' && Boolean(data.__matrix_row_header__) },
+            ];
+            // Subscribing to the viewport here, not inside each node, keeps a pan
+            // frame from re-rendering every header.
+            const TasksPinnedHeaders = () => {
+                const viewport = typeof rf.useViewport === 'function' ? rf.useViewport() : null;
+                if (!viewport) return null;
+                const pinned = [];
+                for (const node of nodes) {
+                    const spec = node.data ? tasksPinnedHeaderSpecs.find((item) => item.match(node.data)) : null;
+                    if (!spec) continue;
+                    const screen = spec.axis === 'left'
+                        ? viewport.x + node.position.x * viewport.zoom
+                        : viewport.y + node.position.y * viewport.zoom;
+                    if (screen < 0) pinned.push({ node, spec });
+                }
+                if (!pinned.length) return null;
+                // Headers outside the pane are clipped rather than measured: the
+                // pane owns its own size, and this overlay covers exactly the pane.
+                return React.createElement('div', {
+                    style: { position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: TASKS_TASK_Z + 20 },
+                }, pinned.map(({ node, spec }) => React.createElement('div', {
+                    key: node.id,
+                    style: {
+                        position: 'absolute',
+                        top: spec.axis === 'left' ? viewport.y + node.position.y * viewport.zoom : 0,
+                        left: spec.axis === 'left' ? 0 : viewport.x + node.position.x * viewport.zoom,
+                        width: node.style?.width,
+                        height: spec.capHeight,
+                        overflow: 'hidden',
+                        transform: `scale(${viewport.zoom})`,
+                        transformOrigin: 'top left',
+                        // Every header wash is translucent, so it needs paper under
+                        // it to stop the body it covers from reading through.
+                        background: 'var(--vyasa-paper)',
+                        borderRadius: '8px 8px 0 0',
+                    },
+                }, spec.render ? spec.render(node) : renderTasksCustomNode({ data: node.data, id: node.id }))));
+            };
             const flowWrapperClassName = [
                 hoveredNodeId || selectedEdgeId ? 'vyasa-tasks-hovering-edge-labels' : '',
                 'vyasa-tasks-active-pulse',
@@ -10337,7 +10412,7 @@ async function renderTasksGraphs(rootElement = document) {
                         window.React.createElement('button', { type: 'button', onClick: close, style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: '18px', lineHeight: 1, opacity: 0.6 } }, '×')
                     ),
                     window.React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' } },
-                        slide.caption ? window.React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, opacity: 0.85, marginBottom: '10px' } }, slide.caption) : null,
+                        tasksCaptionElement(slide, { fontSize: '13px', fontWeight: 600, opacity: 0.85, marginBottom: '10px' }),
                         slideDescriptionHtml
                             ? window.React.createElement('div', { className: 'vyasa-task-slide-description', style: { fontSize: '13.5px', lineHeight: 1.55, opacity: 0.92, marginBottom: '12px' }, dangerouslySetInnerHTML: { __html: slideDescriptionHtml } })
                             : (slideDescriptionText ? window.React.createElement('div', { className: 'vyasa-task-slide-description', style: { fontSize: '13.5px', lineHeight: 1.55, opacity: 0.92, marginBottom: '12px' } }, slideDescriptionText) : null),
@@ -10586,6 +10661,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onEdgeClick: selectGraphEdge, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                     window.React.createElement(TasksNodeHighlightBorders),
+                    window.React.createElement(TasksPinnedHeaders),
                     window.React.createElement(EgoCloseControl),
                     window.React.createElement(SlideLauncher),
                     window.React.createElement(FitViewHotkey),
@@ -10605,6 +10681,7 @@ async function renderTasksGraphs(rootElement = document) {
                     window.React.createElement(rf.ReactFlow, { nodes, edges, nodeTypes, edgeTypes, defaultEdgeOptions, fitView: true, minZoom: graphMinZoom, nodesDraggable: nodeConnectionExperiment, onNodesChange: moveExperimentNodes, elementsSelectable: false, zoomOnDoubleClick: false, zIndexMode: 'manual', style: { width: '100%', height: '100%' }, onNodeClick: selectGraphNode, onEdgeClick: selectGraphEdge, onNodeDoubleClick: doubleClickGraphNode, onPaneClick: paneClick, onPaneContextMenu: clearSelection },
                     window.React.createElement(rf.Background, backgroundProps),
                         window.React.createElement(TasksNodeHighlightBorders),
+                        window.React.createElement(TasksPinnedHeaders),
                     window.React.createElement(EgoCloseControl),
                     window.React.createElement(SlideLauncher),
                         window.React.createElement(FitViewHotkey),

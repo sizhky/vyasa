@@ -2119,7 +2119,9 @@ def test_context_graphs_have_day_switch_contract():
     assert "onChange: (event) => handleSwitchContext(event.target.value)" in source
     assert "`${context.seq}. ${context.label || context.caption || context.id}`" in source
     assert "const renderColorLevel = (colorBy, index) => {" in source
-    assert "sourceModel?.kg_context?.caption ? React.createElement('div', {" in source
+    # A context caption carries code references, so it renders through the shared
+    # caption helper rather than as a plain string.
+    assert "tasksCaptionElement(sourceModel?.kg_context, {" in source
     assert "React.createElement('span', { style: filterKeyStyle }, 'Intensity')" in source
     assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Edge Intensity')" in source
     assert "React.createElement('span', { style: { opacity: 0.82 } }, 'Null Intensity')" in source

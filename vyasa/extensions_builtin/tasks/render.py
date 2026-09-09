@@ -6,6 +6,7 @@ import re
 from itertools import count
 
 from ...markdown_fence import (
+    content_url_for_slug,
     items_code_source,
     items_link_base_path,
     normalize_items_model_hrefs,
@@ -82,14 +83,37 @@ def _prepare_node_references(value: str, node_labels: dict[str, str]) -> str:
     return _NODE_REFERENCE_RE.sub(replace, value)
 
 
-def _attach_rendered_node_attrs(model: dict, current_path: str | None, code_source: str = "") -> None:
-    node_labels = {
+def _model_node_labels(model: dict) -> dict[str, str]:
+    return {
         **(model.get("node_reference_labels") or {}),
         **{
             str(node.get("id") or ""): str(node.get("label") or node.get("id") or "")
             for bucket in ("groups", "tasks") for node in model.get(bucket, [])
         },
     }
+
+
+def _render_pack_prose(value, current_path: str | None, code_source: str, node_labels: dict[str, str]) -> str:
+    """Pack prose rendered the way a node attribute is.
+
+    A caption carries the same code references and ``[[node]]`` links as a node
+    attribute, so it needs the same pipeline. A pack's ``code_source`` points at
+    the checkout that holds the code files, which is what lets a short path in a
+    caption resolve; without that step a code reference stays plain text.
+    """
+    prepared = _prepare_node_attr_markdown(
+        resolve_items_inline_links(value, current_path, code_source)
+        if code_source and isinstance(value, str)
+        else value
+    )
+    return _render_markdown_fragment(
+        _prepare_node_references(prepared, node_labels),
+        current_path=current_path,
+    )
+
+
+def _attach_rendered_node_attrs(model: dict, current_path: str | None, code_source: str = "") -> None:
+    node_labels = _model_node_labels(model)
     for bucket in ("groups", "tasks", "dependency_edges"):
         reserved = _RENDERABLE_EDGE_KEYS if bucket == "dependency_edges" else _RENDERABLE_NODE_KEYS
         for node in model.get(bucket, []):
@@ -103,19 +127,10 @@ def _attach_rendered_node_attrs(model: dict, current_path: str | None, code_sour
                 values = value if isinstance(value, list) else [value]
                 if not all(isinstance(item, (str, int, float, bool)) for item in values):
                     continue
-                rendered = []
-                for item in values:
-                    # A pack's `code_source` points at the checkout that holds
-                    # the code files, so a node link stays a short path.
-                    prepared = _prepare_node_attr_markdown(
-                        resolve_items_inline_links(item, current_path, code_source)
-                        if code_source and isinstance(item, str)
-                        else item
-                    )
-                    rendered.append(_render_markdown_fragment(
-                        _prepare_node_references(prepared, node_labels),
-                        current_path=current_path,
-                    ))
+                rendered = [
+                    _render_pack_prose(item, current_path, code_source, node_labels)
+                    for item in values
+                ]
                 rendered_attrs[key] = rendered if isinstance(value, list) else rendered[0]
             if rendered_attrs:
                 node["__rendered_attrs__"] = rendered_attrs
@@ -129,26 +144,35 @@ def _attach_rendered_node_attrs(model: dict, current_path: str | None, code_sour
             _attach_rendered_node_attrs(viewer_model, current_path, code_source)
 
 
-def _attach_rendered_slide_attrs(model: dict, current_path: str | None) -> None:
-    for slide in model.get("slides", []):
-        rendered_attrs = {}
-        for key in ("desc", "description"):
-            value = slide.get(key)
-            if isinstance(value, str) and value.strip():
-                rendered_attrs[key] = _render_markdown_fragment(
-                    _prepare_node_attr_markdown(value),
-                    current_path=current_path,
-                )
+# Prose a pack author writes outside a node: slide captions, view captions,
+# context captions. `caption` was missing here, so a pack that captions its
+# slides showed the raw `{show=symbol ...}` text instead of a code preview.
+_PROSE_ATTR_KEYS = ("caption", "desc", "description")
+
+
+def _attach_rendered_prose_attrs(model: dict, current_path: str | None, code_source: str = "") -> None:
+    node_labels = _model_node_labels(model)
+    containers = [
+        *model.get("slides", []),
+        *model.get("view_projections", []),
+        *model.get("kg_contexts", []),
+        model.get("kg_context"),
+    ]
+    for container in containers:
+        if not isinstance(container, dict):
+            continue
+        rendered_attrs = {
+            key: _render_pack_prose(container[key], current_path, code_source, node_labels)
+            for key in _PROSE_ATTR_KEYS
+            if isinstance(container.get(key), str) and container[key].strip()
+        }
         if rendered_attrs:
-            slide["__rendered_attrs__"] = rendered_attrs
-    for entry in (model.get("projection_models") or {}).values():
-        projection_model = entry.get("model") if isinstance(entry, dict) else None
-        if isinstance(projection_model, dict):
-            _attach_rendered_slide_attrs(projection_model, current_path)
-    for entry in (model.get("viewer_models") or {}).values():
-        viewer_model = entry.get("model") if isinstance(entry, dict) else None
-        if isinstance(viewer_model, dict):
-            _attach_rendered_slide_attrs(viewer_model, current_path)
+            container["__rendered_attrs__"] = {**(container.get("__rendered_attrs__") or {}), **rendered_attrs}
+    for bucket in ("projection_models", "viewer_models"):
+        for entry in (model.get(bucket) or {}).values():
+            nested = entry.get("model") if isinstance(entry, dict) else None
+            if isinstance(nested, dict):
+                _attach_rendered_prose_attrs(nested, current_path, code_source)
 
 
 def _should_open_filters_by_default(width_value) -> bool:
@@ -219,7 +243,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         code_source = items_code_source(model)
         normalize_items_model_hrefs(model, link_path, code_source)
         _attach_rendered_node_attrs(model, link_path, code_source)
-        _attach_rendered_slide_attrs(model, link_path)
+        _attach_rendered_prose_attrs(model, link_path, code_source)
         graph = build_collapsed_graph(model)
     except Exception:
         model = {
@@ -246,6 +270,16 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
     payload = html.escape(json.dumps(model))
     graph_payload = html.escape(json.dumps(graph))
     title = html.escape(config.get("title") or model.get("title") or "Items")
+    # A sidecar pack is itself a document, so the widget title can open it.
+    # `items_link_base_path` is asked with no referring path here, because the
+    # question is which pack this widget reads: a model with no pack has no file
+    # to open, so the title stays plain text.
+    pack_slug = items_link_base_path(model, None)
+    title_html = (
+        f'<a href="{content_url_for_slug(pack_slug)}" class="hover:underline" title="Open this knowledge graph pack">{title}</a>'
+        if pack_slug
+        else title
+    )
     default_open_depth = html.escape(str(config.get("default_open_depth") or 0))
     gantt_enabled = str(config.get("gantt") or "").strip().lower() in {"1", "true", "yes", "on"}
     default_view = str(config.get("default_view") or config.get("view") or "graph").strip().lower()
@@ -326,7 +360,7 @@ def render_tasks_block(code: str, current_path: str | None = None, fence_name: s
         f'<div class="px-4 py-3 pr-14 border-b border-slate-200 dark:border-slate-800 flex items-start gap-3">'
         f'<button type="button" title="Toggle filters" aria-label="Toggle task filters" onclick="runTasksHeaderAction(\'{widget_id}\', \'toggleFilters\')" class="relative z-40 mt-0.5 rounded border border-slate-300 dark:border-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-2 py-1 font-mono text-xs leading-none text-slate-700 dark:text-slate-300">☰</button>'
         f'<div class="min-w-0 flex-1">'
-        f'<div class="text-sm font-semibold">{title}</div>'
+        f'<div class="text-sm font-semibold">{title_html}</div>'
         f'<div data-tasks-stats class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">{stats_label}</div>'
         f'</div>'
         f'</div>'
