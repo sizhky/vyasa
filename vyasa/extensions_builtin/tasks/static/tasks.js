@@ -3650,6 +3650,41 @@ function tasksExtractUrls(value) {
     return urls;
 }
 
+// A held-key graph mode claims its key only while the reader points at the
+// graph and is not typing. `active` keeps the mode alive after the pointer
+// leaves the graph, so releasing the key still reaches the mode that opened.
+function tasksHeldKeyApplies(event, flowWrapper, active) {
+    const target = event.target instanceof Element ? event.target : null;
+    const editable = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName));
+    return !editable && Boolean(flowWrapper?.matches(':hover') || active);
+}
+
+// Code mode reads the `code` attribute of a node or an edge and hands the link
+// preview an anchor for its first URL. The server already rendered that
+// attribute to HTML under `__rendered_attrs__`, and only that anchor carries the
+// `{show=symbol ...}` payload as `data-vyasa-code-reference`. Re-parsing the
+// Markdown here would drop it and preview the whole file, so read the rendered
+// anchor first and fall back to the raw text only when the render step is off.
+function tasksCodeAttributeLink(record) {
+    if (!record) return null;
+    const key = Object.keys(record).find((name) => String(name).toLowerCase() === 'code');
+    if (!key) return null;
+    const rendered = record.__rendered_attrs__?.[key];
+    const html = Array.isArray(rendered) ? rendered[0] : rendered;
+    if (typeof html === 'string' && html.trim()) {
+        const holder = document.createElement('div');
+        holder.innerHTML = html;
+        const anchor = holder.querySelector('a[href]');
+        if (anchor) return anchor;
+    }
+    const value = Array.isArray(record[key]) ? record[key][0] : record[key];
+    const href = tasksExtractUrls(value)[0] || '';
+    if (!href) return null;
+    const anchor = document.createElement('a');
+    anchor.setAttribute('href', href);
+    return anchor;
+}
+
 function tasksHrefKind(href) {
     const text = String(href || '').trim();
     if (!text) return '';
@@ -4384,6 +4419,10 @@ async function renderTasksGraphs(rootElement = document) {
             const optionEdgeNodeCardHeldRef = React.useRef(false);
             const [optionEdgeNodeCardId, setOptionEdgeNodeCardId] = React.useState(null);
             const optionEdgePinnedRef = React.useRef(false);
+            // The live code-mode preview, owned by the A effect below. The W edge
+            // mode reads it so that W + A + Enter pins the code preview instead of
+            // the edge: A is the newer hold, so it claims Enter.
+            const codeModeEntryRef = React.useRef(null);
             const edgePinBloomIdRef = React.useRef(0);
             const [edgePinBloom, setEdgePinBloom] = React.useState(null);
             const contextDiffSelectionRef = React.useRef({ key: '', ids: new Set() });
@@ -4834,18 +4873,18 @@ async function renderTasksGraphs(rootElement = document) {
                     focusDetailCard();
                     return true;
                 };
-                const edgeKeyApplies = (event) => {
-                    const target = event.target instanceof Element ? event.target : null;
-                    const editable = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName));
-                    return !editable && Boolean(flowWrapperRef.current?.matches(':hover') || optionEdgeNodeIdRef.current);
-                };
+                const edgeKeyApplies = (event) => tasksHeldKeyApplies(
+                    event,
+                    flowWrapperRef.current,
+                    optionEdgeNodeIdRef.current,
+                );
                 const onKeyDown = (event) => {
                     if (event.repeat || !edgeKeyApplies(event)) return;
                     if (event.code === 'KeyW') {
                         optionEdgePreviewHeldRef.current = true;
                         event.preventDefault();
                         event.stopPropagation();
-                    } else if (event.key === 'Enter' && optionEdgePreviewHeldRef.current) {
+                    } else if (event.key === 'Enter' && optionEdgePreviewHeldRef.current && !codeModeEntryRef.current) {
                         const oppositeNodeId = optionEdgeNodeCardHeldRef.current ? optionEdgeOtherNodeIdRef.current : '';
                         if (oppositeNodeId) {
                             optionEdgePreviewHeldRef.current = false;
@@ -4894,6 +4933,137 @@ async function renderTasksGraphs(rootElement = document) {
                     window.removeEventListener('blur', clearKeys);
                 };
             }, [clearOptionEdgePreview, focusDetailCard, selectNodeCard, widgetId]);
+            // Code mode. Holding A over a node or an edge shows the first link in
+            // its `code` attribute as a link preview, and sends the wheel to that
+            // preview instead of the graph. Releasing A closes it, so the preview
+            // never outlives the key. Same shape as the W edge preview above.
+            React.useEffect(() => {
+                let pointerAt = null;
+                const trackPointer = (event) => {
+                    pointerAt = { clientX: event.clientX, clientY: event.clientY };
+                };
+                const edgeIdUnderPointer = () => {
+                    if (!pointerAt) return '';
+                    const group = document.elementFromPoint(pointerAt.clientX, pointerAt.clientY)
+                        ?.closest?.('.react-flow__edge');
+                    return String(group?.dataset?.id
+                        || String(group?.dataset?.testid || '').replace(/^rf__edge-/, ''));
+                };
+                const edgeRecordById = (edgeId) => {
+                    if (!edgeId) return null;
+                    const edge = currentGraphEdges().find((item) => tasksEdgeRecordId(item) === edgeId
+                        || String(item.id || '') === edgeId);
+                    return edge ? resolveEdgeRecord(edge) : null;
+                };
+                // W holds an edge preview while the pointer still rests on a node,
+                // so the hovered node is not what the reader is looking at. The held
+                // edge wins. Without W, the pointer names one element and is the
+                // newer gesture, so hover beats a lingering selection.
+                const codeModeRecord = () => {
+                    if (optionEdgePreviewHeldRef.current) {
+                        return edgeRecordById(String(selectedEdgeIdRef.current || ''));
+                    }
+                    const hoveredId = String(hoveredNodeIdRef.current || '');
+                    if (hoveredId) return edgeNodesById.get(hoveredId) || null;
+                    const edgeId = edgeIdUnderPointer() || String(selectedEdgeIdRef.current || '');
+                    if (edgeId) return edgeRecordById(edgeId);
+                    const selectedId = String(selectedNodeIdRef.current || '');
+                    return selectedId ? edgeNodesById.get(selectedId) || null : null;
+                };
+                // Open where a Cmd-hover on the card's Code link would have opened
+                // it. That link lives on the right rail, so the popup lands clear
+                // of the node under the pointer instead of covering it. A place the
+                // reader dragged a popup to still wins over all of this: the link
+                // preview reads that from storage before it reads this point.
+                const codeModeOpenPoint = () => {
+                    const wrapper = flowWrapperRef.current;
+                    const card = wrapper?.querySelector('[data-vyasa-node-card], [data-vyasa-edge-card]');
+                    if (card) {
+                        const rect = card.getBoundingClientRect();
+                        return { clientX: rect.left, clientY: rect.top };
+                    }
+                    // No card open, so aim at the rail the card would have used.
+                    const rect = wrapper?.getBoundingClientRect();
+                    if (rect) return { clientX: rect.right, clientY: rect.top + 12 };
+                    return pointerAt || { clientX: 24, clientY: 24 };
+                };
+                const openCodePreview = () => {
+                    if (codeModeEntryRef.current) return;
+                    const link = tasksCodeAttributeLink(codeModeRecord());
+                    if (!link) {
+                        setEdgeStatus('No code link here. Point at a node or edge that has a Code attribute.');
+                        return;
+                    }
+                    const entry = window.vyasaLinkPreview?.open?.(link, codeModeOpenPoint()) || null;
+                    codeModeEntryRef.current = entry;
+                    logTasksDebug('codeModeOpen', {
+                        widgetId,
+                        href: link.getAttribute('href') || '',
+                        opened: Boolean(entry),
+                    });
+                    setEdgeStatus(entry
+                        ? 'Code preview open. Hold A and scroll to read it, Enter to pin it.'
+                        : 'Link preview is not available on this page.');
+                };
+                const closeCodePreview = () => {
+                    if (!codeModeEntryRef.current) return;
+                    window.vyasaLinkPreview?.close?.(codeModeEntryRef.current);
+                    codeModeEntryRef.current = null;
+                    setEdgeStatus('Code preview closed.');
+                };
+                // Pinning hands the popup over to the reader. Code mode stops owning
+                // it, so releasing A leaves it up and the next A opens a fresh one
+                // that steps clear of the pinned popup. Close a pinned one with
+                // Escape or its × button, the same as any other preview.
+                const pinCodePreview = () => {
+                    if (!codeModeEntryRef.current) return false;
+                    codeModeEntryRef.current = null;
+                    logTasksDebug('codeModePinned', { widgetId });
+                    setEdgeStatus('Code preview pinned.');
+                    return true;
+                };
+                const onKeyDown = (event) => {
+                    if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+                    if (!tasksHeldKeyApplies(event, flowWrapperRef.current, codeModeEntryRef.current)) return;
+                    if (event.key === 'Enter' && pinCodePreview()) {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        return;
+                    }
+                    if (event.code !== 'KeyA' || event.repeat) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    openCodePreview();
+                };
+                const onKeyUp = (event) => {
+                    if (event.code === 'KeyA') closeCodePreview();
+                };
+                // Capture beats the graph's own wheel gesture, so the wheel scrolls
+                // the code the reader is looking at instead of zooming underneath it.
+                const onWheel = (event) => {
+                    const entry = codeModeEntryRef.current;
+                    if (!entry) return;
+                    // Swallow the wheel even before the preview body arrives.
+                    // Otherwise the first turns zoom the graph out from under a
+                    // popover that is still loading.
+                    window.vyasaLinkPreview?.scrollBy?.(entry, event.deltaX, event.deltaY);
+                    event.preventDefault();
+                    event.stopPropagation();
+                };
+                window.addEventListener('pointermove', trackPointer, true);
+                window.addEventListener('keydown', onKeyDown, true);
+                window.addEventListener('keyup', onKeyUp, true);
+                window.addEventListener('wheel', onWheel, { capture: true, passive: false });
+                window.addEventListener('blur', closeCodePreview);
+                return () => {
+                    closeCodePreview();
+                    window.removeEventListener('pointermove', trackPointer, true);
+                    window.removeEventListener('keydown', onKeyDown, true);
+                    window.removeEventListener('keyup', onKeyUp, true);
+                    window.removeEventListener('wheel', onWheel, { capture: true });
+                    window.removeEventListener('blur', closeCodePreview);
+                };
+            }, [currentGraphEdges, edgeNodesById, resolveEdgeRecord, widgetId]);
             const selectGraphEdge = React.useCallback((event, edge) => {
                 event?.preventDefault?.();
                 event?.stopPropagation?.();
@@ -10350,6 +10520,9 @@ async function renderTasksGraphs(rootElement = document) {
                     row('Option + F', 'fit highlighted edge'),
                     row('W / Q', 'hold edge preview / opposite node card'),
                     row('W + Enter', 'pin edge details'),
+                    row('A', 'hold code preview of the Code attribute; wheel scrolls it'),
+                    row('W + A', 'hold code preview of the held edge'),
+                    row('A + Enter', 'pin the code preview'),
                     row('Shift + F', 'toggle fullscreen'),
                     row('G', 'open EG for hovered or selected node'),
                     row('Shift + G', 'open EG+ for hovered or selected node'),
