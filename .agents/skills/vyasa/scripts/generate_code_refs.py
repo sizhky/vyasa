@@ -393,7 +393,12 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    planned: dict[Path, str] = {pack / (overlay or "kg.code.nodes"): build_node_file(by_node, labels, depth)}
+    # A context may list a generated file and an authored one, as
+    # `nodes=c2.code.nodes+c2.nodes`. This run owns only the generated member.
+    generated = next((part for part in overlay.split("+") if ".code." in part), "")
+    if overlay and not generated:
+        raise SystemExit(f"{pack}: context nodes={overlay} names no generated file; one member must hold `.code.`")
+    planned: dict[Path, str] = {pack / (generated or "kg.code.nodes"): build_node_file(by_node, labels, depth)}
     for authored in sorted(pack.glob("*.edges")):
         if ".code." in authored.name:
             continue

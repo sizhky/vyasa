@@ -292,7 +292,27 @@ def _merge_node_files(schema_path: PathLike, paths: str, nodes_by_id: dict[str, 
     while the pool keeps identity and nesting.
     """
     for node_path in _path_list(paths):
-        _merge_nodes(nodes_by_id, read_nodes(_resolve(schema_path, node_path)))
+        resolved = _resolve(schema_path, node_path)
+        if _awaits_generation(resolved):
+            continue
+        _merge_nodes(nodes_by_id, read_nodes(resolved))
+
+
+def _awaits_generation(path: PathLike) -> bool:
+    """True for a generated source that no run has written yet.
+
+    A generator writes its own file and removes it when the code holds nothing
+    to bind, so a pack may name a generated source before any run exists. Every
+    generated name carries `.code.`, and an authored name never does, so a
+    missing authored file still fails loudly.
+
+    >>> from pathlib import Path
+    >>> _awaits_generation(Path("/nowhere/v1.0.0.code.nodes"))
+    True
+    >>> _awaits_generation(Path("/nowhere/v1.0.0.nodes"))
+    False
+    """
+    return ".code." in _as_pathlike(path).name and not _as_pathlike(path).is_file()
 
 
 def _merge_nodes(nodes_by_id: dict[str, dict[str, Any]], nodes) -> None:
@@ -803,7 +823,10 @@ def _read_edge_definitions(schema_path: PathLike, schema: KgSchema) -> dict[str,
         tagged_paths.extend((alias, path) for path in _path_list(source.get("edges")))
     definitions: dict[str, dict[str, Any]] = {}
     for alias, edge_path in tagged_paths:
-        for edge in read_edges(_resolve(schema_path, edge_path)):
+        resolved = _resolve(schema_path, edge_path)
+        if _awaits_generation(resolved):
+            continue
+        for edge in read_edges(resolved):
             edge_id = str(edge["id"])
             known = definitions.get(edge_id, {})
             for key in ("source", "target", "relation"):

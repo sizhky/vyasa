@@ -484,6 +484,7 @@ export function buildSequenceTasksGraph(model, projection = {}) {
         return {
             ...edge,
             id: `seq-${index}`,
+            __source_edge_id: edge.__source_edge_id || edge.id,
             sourceHandle,
             targetHandle,
             __sequence_step__: standing || reply ? '' : String(step),

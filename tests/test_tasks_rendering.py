@@ -1225,6 +1225,24 @@ def test_tasks_edge_cards_keep_field_order_lists_and_stable_cycle_order():
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
 
 
+def test_sequence_edge_card_resolves_the_authored_edge_record():
+    """A drawn row keeps its authored identity when sequence gives it a layout ID."""
+    script = """
+        import { buildSequenceTasksGraph } from './vyasa/extensions_builtin/tasks/static/tasks_layouts.js';
+        import { tasksEdgeRecordId } from './vyasa/extensions_builtin/tasks/static/tasks_paint.js';
+        const authored = { id: 'm20', source: 'loop', target: 'frame', code: '<a>redraw</a>' };
+        const graph = buildSequenceTasksGraph({ tasks: [
+            { id: 'loop', label: 'Turn loop' }, { id: 'frame', label: 'Screen frame' },
+        ], groups: [], dependency_edges: [authored] });
+        const drawn = graph.edges[0];
+        if (drawn.id !== 'seq-0') throw new Error('sequence layout ID changed');
+        if (tasksEdgeRecordId(drawn) !== authored.id) throw new Error('authored edge identity was lost');
+        const record = [authored].find((edge) => tasksEdgeRecordId(edge) === tasksEdgeRecordId(drawn));
+        if (record?.code !== '<a>redraw</a>') throw new Error('edge card metadata did not resolve');
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
 def test_tasks_card_attr_config_orders_and_hides_attrs():
     script = """
         import { tasksEdgeMetaEntries, tasksNodeMetaEntries } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';

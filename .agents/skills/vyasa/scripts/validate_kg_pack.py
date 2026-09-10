@@ -532,7 +532,14 @@ def main():
         ref = sources.get(key)
         # A source composes several files with `+`, the same way the runtime reads it.
         for part in [p for p in str(ref or "").split("+") if p]:
-            if not (pack / part).exists():
+            if (pack / part).exists():
+                continue
+            # A generator writes its own file, so a pack authored before the
+            # first code round names one that does not exist yet. Say so, and
+            # keep an authored name an error.
+            if ".code." in part:
+                warnings.append(f"kg.schema points {key}={part}, which no generator run has written yet")
+            else:
                 errors.append(f"kg.schema points {key}={part} but that file is missing")
     if "cache" in sources and not (pack / sources["cache"]).exists():
         warnings.append("kg.schema references a cache file; it is generated at render and may be absent")
