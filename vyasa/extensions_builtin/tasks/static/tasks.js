@@ -2198,8 +2198,14 @@ async function renderTasksGraphs(rootElement = document) {
                 const wanted = projectionId === null ? activeProjectionId : String(projectionId || '');
                 const nextContextId = String(nextModel?.kg_context?.id || '').trim();
                 const available = tasksProjectionOptions(nextModel, ganttEnabled, nextContextId).some((option) => option.id === wanted);
-                setActiveProjectionId(available ? wanted : '');
-                setViewMode('graph');
+                const nextProjectionId = available ? wanted : '';
+                setActiveProjectionId(nextProjectionId);
+                // Read the mode off the view the way the first load and the view
+                // picker both do. Forcing 'graph' sends a fixed layout, such as a
+                // sequence, down the ELK path, where the graph-level group_by
+                // builds container shapes the fixed layout never places, and ELK
+                // throws on the dangling reference.
+                setViewMode(tasksLayoutById(tasksProjectionLayout(nextModel, nextProjectionId))?.id || 'graph');
                 setSelectedNodeId(null);
                 setSelectedNodeIds(new Set());
                 setDragSelection(null);
@@ -3493,7 +3499,11 @@ async function renderTasksGraphs(rootElement = document) {
                 if (lastGraphRevisionCauseRef.current === 'visual') return;
                 const fitAction = pendingFitActionRef.current;
                 if (!fitAction) return;
-                if (!shouldAutoFitTasksOnExpand() && fitAction !== 'shortcut') return;
+                // `mode` says the layout was replaced: a projection swap, a context
+                // swap, or a new group-by. The camera then points at geometry that is
+                // gone, and the graph reads as blank until a reload. The expand
+                // preference governs expanding a node, not replacing the layout.
+                if (!shouldAutoFitTasksOnExpand() && fitAction !== 'shortcut' && fitAction !== 'mode') return;
                 let rafId = null;
                 let framesLeft = 25;
                 const step = () => {

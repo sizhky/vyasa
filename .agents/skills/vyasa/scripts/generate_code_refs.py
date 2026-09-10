@@ -8,7 +8,14 @@ reference the code no longer supports.
 The join key is the order number at the start of a docstring. A node whose
 label starts with the same number owns that symbol.
 
-Node references land in `kg.code.nodes` under the attribute `code`.
+Node references land under the attribute `code`, in a separate `*.code.nodes`
+file named by the newest context:
+
+    @context id=v1.0.1 seq=2 stage=planned nodes=v1.0.1.code.nodes+v1.0.1.nodes
+
+Each context therefore keeps its own references, and a past snapshot keeps
+links to the code it really had. The other overlay files hold authored facts
+such as `changes`. A pack with no contexts still gets `kg.code.nodes`.
 
 An edge names the one line that bridges its two actors, and the code declares
 that line with a marker comment:
@@ -37,9 +44,9 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-MARKER = re.compile(r"kg:([A-Za-z0-9_-]+)(?:\s+([\d.]+)\s*->\s*([\d.]+))?")
+MARKER = re.compile(r"kg:([A-Za-z0-9][A-Za-z0-9._-]*)(?:\s+([\d.]+)\s*->\s*([\d.]+))?")
 NODE_LINE = re.compile(r"^(\s*)([A-Za-z0-9_-]+):\s+(.*)$")
-EDGE_HEAD = re.compile(r"^([A-Za-z0-9_-]+):\s+([A-Za-z0-9_-]+)\s+->\s+([A-Za-z0-9_-]+)\s+(\S+)(.*)$")
+EDGE_HEAD = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*):\s+([A-Za-z0-9_-]+)\s+->\s+([A-Za-z0-9_-]+)\s+(\S+)(.*)$")
 ORDER = re.compile(r"^(\d+(?:\.\d+)*)\b")
 ATTR = re.compile(r"(\w+)=(?:\"([^\"]*)\"|(\S+))")
 # A quote closes `focus="`, and a bracket closes `match[` early. Nothing else breaks an anchor.
@@ -251,6 +258,59 @@ def edge_rows(path: Path) -> list[tuple[str, str, str, str, dict[str, str]]]:
     return rows
 
 
+@dataclass
+class Context:
+    """The newest context in a pack: what it asserts, and where its code goes."""
+
+    id: str
+    live: set[str]
+    code_file: str
+
+
+def newest_context(pack: Path) -> Context | None:
+    """Return the newest context by seq, or None when the pack has none.
+
+    The code on disk is the newest context's code, so that context owns every
+    reference this run writes. An older context keeps the file it was given,
+    which is how a past snapshot keeps its own links.
+    """
+    newest: int | None = None
+    found: Context | None = None
+    for path in sorted(pack.glob("*.context")):
+        text = path.read_text(encoding="utf-8")
+        header = re.search(r"^@context\b.*$", text, re.MULTILINE)
+        seq = re.search(r"\bseq=(\d+)", header.group(0)) if header else None
+        if not seq:
+            raise SystemExit(f"{path}: @context needs a seq")
+        if newest is not None and int(seq.group(1)) <= newest:
+            continue
+        newest = int(seq.group(1))
+        block = re.search(r"^@edges\n((?:[ \t]+.*\n?)+)", text, re.MULTILINE)
+        nodes = re.search(r"^\s*nodes=(\S+)\s*$", text, re.MULTILINE) or re.search(r"\bnodes=(\S+)", header.group(0))
+        files = nodes.group(1).split("+") if nodes else []
+        code_files = [item for item in files if item.endswith(".code.nodes")]
+        if len(code_files) > 1:
+            raise SystemExit(f"{path}: `nodes=` names more than one *.code.nodes file")
+        named = re.search(r"\bid=(\S+)", header.group(0))
+        found = Context(
+            id=named.group(1) if named else path.stem,
+            live=set(re.findall(r"^[ \t]+([A-Za-z0-9][A-Za-z0-9._-]*):", block.group(1), re.MULTILINE)) if block else set(),
+            code_file=code_files[0] if code_files else "",
+        )
+    return found
+
+
+def live_edge_ids(pack: Path) -> set[str] | None:
+    """Return the edge ids the newest context asserts, or None when the pack has none.
+
+    A retired edge describes a state the code left behind, so it carries no
+    marker and needs no reference. Reporting it as missing names a fault that
+    nobody can fix.
+    """
+    context = newest_context(pack)
+    return context.live if context else None
+
+
 def build_edge_file(
     path: Path,
     markers: dict[str, tuple[str, int, str, str]],
@@ -261,8 +321,11 @@ def build_edge_file(
 ) -> str:
     """Return the generated edge file, one reference per marked exchange."""
     out: list[str] = []
+    live = live_edge_ids(path.parent)
     for edge_id, source, target, relation, attrs in edge_rows(path):
         if attrs.get("role", "") not in {"call", "reply", "standing"}:
+            continue
+        if live is not None and edge_id not in live:
             continue
         marker = markers.get(edge_id)
         if not marker:
@@ -322,7 +385,15 @@ def main() -> int:
     for symbols in by_node.values():
         symbols.sort(key=lambda s: (s.path, s.node.lineno))
 
-    planned: dict[Path, str] = {pack / "kg.code.nodes": build_node_file(by_node, labels, depth)}
+    context = newest_context(pack)
+    overlay = context.code_file if context else ""
+    if context and not overlay:
+        print(
+            f"ERROR: context {context.id} names no `*.code.nodes` overlay",
+            file=sys.stderr,
+        )
+        return 1
+    planned: dict[Path, str] = {pack / (overlay or "kg.code.nodes"): build_node_file(by_node, labels, depth)}
     for authored in sorted(pack.glob("*.edges")):
         if ".code." in authored.name:
             continue

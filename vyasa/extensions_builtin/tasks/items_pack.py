@@ -38,13 +38,21 @@ def _referenced_node_ids(node: dict[str, Any]) -> set[str]:
 
 
 def _reference_closure(nodes_by_id: dict[str, dict[str, Any]], roots: set[str]) -> set[str]:
+    """Add every node the roots point at, and every group that holds one of them.
+
+    A context lists edges only, so a node with no edge is absent. A group node
+    holds no edge of its own, so close over `group_id` as well. A group then
+    stays present while one node under it is present, and it leaves with the
+    last of them.
+    """
     included = set(roots)
     pending = list(roots)
     while pending:
         node = nodes_by_id.get(pending.pop())
         if not node:
             continue
-        for target in _referenced_node_ids(node):
+        parent = str(node.get("group_id") or "").strip()
+        for target in _referenced_node_ids(node) | ({parent} if parent else set()):
             if target in nodes_by_id and target not in included:
                 included.add(target)
                 pending.append(target)
@@ -113,7 +121,9 @@ class KgContext:
     label: str = ""
     stage: str = ""
     caption: str = ""
-    attrs_path: str = ""
+    attrs_key: str = ""
+    attrs_file: str = ""
+    nodes_file: str = ""
     palette: str = ""
     node_attrs: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     edges: list[dict[str, Any]] = field(default_factory=list)
@@ -214,7 +224,9 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
         for context in contexts
     }
     edges = resolved_edges[active.id]
-    nodes_by_id = {node["id"]: node for node in read_nodes(_resolve(schema_path, schema.nodes))}
+    nodes_by_id: dict[str, dict[str, Any]] = {}
+    _merge_node_files(schema_path, schema.nodes, nodes_by_id)
+    _merge_node_files(schema_path, active.nodes_file, nodes_by_id)
     edges_by_id = {edge["id"]: edge for edge in edges}
     index_attributes: list[str] = []
     if schema.attrs:
@@ -223,15 +235,20 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
         edge_index_attributes = list(indexed.get("edge", []))
     else:
         edge_index_attributes = []
+    if active.attrs_file:
+        context_indexed = apply_attrs(_resolve(schema_path, active.attrs_file), nodes_by_id, edges_by_id)
+        index_attributes.extend(context_indexed.get("node", []))
+        edge_index_attributes.extend(context_indexed.get("edge", []))
     _apply_context_attrs(active, nodes_by_id)
     _apply_status_defaults(schema, nodes_by_id, edges)
     present = {node_id for edge in edges for node_id in (edge.get("source"), edge.get("target")) if node_id}
     present = _reference_closure(nodes_by_id, present)
+    groups, tasks = _split_present_nodes(nodes_by_id, present)
     graph = {
         "id": schema.graph.get("id", ""),
         "title": schema.graph.get("title", ""),
-        "groups": [],
-        "tasks": [node for node_id, node in nodes_by_id.items() if node_id in present],
+        "groups": groups,
+        "tasks": tasks,
         "node_reference_labels": {
             node_id: str(node.get("label") or node_id)
             for node_id, node in nodes_by_id.items()
@@ -265,6 +282,61 @@ def _read_context_kg_pack(schema_path: PathLike, schema: KgSchema, context_id: s
     graph["edge_index_attributes"] = list(dict.fromkeys(edge_index_attributes + _edge_attribute_keys(edges)))
     graph["filter_attributes"] = graph["index_attributes"]
     return graph
+
+
+def _merge_node_files(schema_path: PathLike, paths: str, nodes_by_id: dict[str, dict[str, Any]]) -> None:
+    """Merge each node file over the pool, one key at a time.
+
+    A later file wins on every key it names and leaves the rest alone. That is
+    how a context carries the facts that churn - code links, `changes`, prose -
+    while the pool keeps identity and nesting.
+    """
+    for node_path in _path_list(paths):
+        _merge_nodes(nodes_by_id, read_nodes(_resolve(schema_path, node_path)))
+
+
+def _merge_nodes(nodes_by_id: dict[str, dict[str, Any]], nodes) -> None:
+    """Merge one file's nodes over what earlier files said, key by key.
+
+    A later file drops an empty value rather than writing it, because
+    `_read_node_line` gives EVERY node line `group_id=None` and a file that
+    lists a node flat means "here are more facts", never "this node left its
+    group". Without the guard, a flat file silently unparents a nested node.
+
+    >>> pool = {"n41": {"id": "n41", "label": "Frame text", "group_id": "n4", "code": "old"}}
+    >>> _merge_nodes(pool, [{"id": "n41", "label": "Frame text", "group_id": None, "code": "new"}])
+    >>> pool["n41"]["code"], pool["n41"]["group_id"]
+    ('new', 'n4')
+
+    A node nobody has nested still reports no group.
+
+    >>> fresh = {}
+    >>> _merge_nodes(fresh, [{"id": "s1", "label": "Rules", "group_id": None}])
+    >>> fresh["s1"]["group_id"] is None
+    True
+    """
+    for node in nodes:
+        known = nodes_by_id.get(node["id"], {})
+        told = {key: value for key, value in node.items() if value is not None or key not in known}
+        nodes_by_id[node["id"]] = {**known, **told}
+
+
+def _split_present_nodes(
+    nodes_by_id: dict[str, dict[str, Any]], present: set[str]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return visible group containers and leaf tasks in renderer form."""
+    groups: list[dict[str, Any]] = []
+    tasks: list[dict[str, Any]] = []
+    for node_id, node in nodes_by_id.items():
+        if node_id not in present:
+            continue
+        clean = {key: value for key, value in node.items() if key not in {"__is_group__", "__inherit_keys__"}}
+        if node.get("__is_group__"):
+            clean["parent_group_id"] = clean.pop("group_id", None)
+            groups.append(clean)
+        else:
+            tasks.append(clean)
+    return groups, tasks
 
 
 def _discover_contexts(schema_path: PathLike, pattern: str) -> list[KgContext]:
@@ -318,6 +390,8 @@ def _read_context(path: PathLike) -> KgContext:
             context.seq = int(payload.get("seq", "0") or 0)
             context.label = payload.get("label", "")
             context.stage = payload.get("stage", "")
+            context.attrs_file = payload.get("attrs", "")
+            context.nodes_file = payload.get("nodes", "")
             section = "@context"
             continue
         if line.startswith("@"):
@@ -343,6 +417,8 @@ def _read_context(path: PathLike) -> KgContext:
                 context.caption = payload["caption"]
             context.palette = payload.get("palette", context.palette)
             context.stage = payload.get("stage", context.stage)
+            context.attrs_file = payload.get("attrs", context.attrs_file)
+            context.nodes_file = payload.get("nodes", context.nodes_file)
         elif section == "@attrs":
             _read_context_attr_line(context, raw)
         elif section == "@edges":
@@ -408,13 +484,13 @@ def _read_views(raw_lines: list[str], start: int = 0) -> tuple[list[KgView], int
 def _read_context_attr_line(context: KgContext, raw: str) -> None:
     stripped = raw.strip()
     if not raw.startswith((" ", "\t")) and stripped.endswith(":"):
-        context.attrs_path = stripped[:-1].strip()
-        context.node_attrs.setdefault(context.attrs_path, {})
+        context.attrs_key = stripped[:-1].strip()
+        context.node_attrs.setdefault(context.attrs_key, {})
         return
-    if not context.attrs_path or ":" not in stripped:
+    if not context.attrs_key or ":" not in stripped:
         return
     value, ids_text = stripped.split(":", 1)
-    bucket = context.node_attrs.setdefault(context.attrs_path, {})
+    bucket = context.node_attrs.setdefault(context.attrs_key, {})
     bucket.setdefault(value.strip(), []).extend(shlex.split(ids_text))
 
 
@@ -716,15 +792,25 @@ def _edge_attribute_keys(edges) -> list[str]:
 
 
 def _read_edge_definitions(schema_path: PathLike, schema: KgSchema) -> dict[str, dict[str, Any]]:
-    if not schema.edges:
-        return {}
+    """Read every edge a context may assert, tagged by the source that holds it.
+
+    A view picks its edges by source alias, so the alias has to reach the
+    context. Without it a pack that carries two topologies, such as a behavior
+    graph and a sequence walkthrough, draws both of them in every view.
+    """
+    tagged_paths = [("base", path) for path in _path_list(schema.edges)]
+    for alias, source in (schema.sources or {}).items():
+        tagged_paths.extend((alias, path) for path in _path_list(source.get("edges")))
     definitions: dict[str, dict[str, Any]] = {}
-    for edge_path in _path_list(schema.edges):
+    for alias, edge_path in tagged_paths:
         for edge in read_edges(_resolve(schema_path, edge_path)):
             edge_id = str(edge["id"])
-            if edge_id in definitions:
-                raise ValueError(f"{schema_path}: duplicate edge id {edge_id!r}")
-            definitions[edge_id] = edge
+            known = definitions.get(edge_id, {})
+            for key in ("source", "target", "relation"):
+                if known and str(known.get(key) or "") != str(edge.get(key) or ""):
+                    raise ValueError(f"{schema_path}: edge {edge_id!r} has conflicting {key}")
+            tags = _source_tags(known.get("__kg_sources"), alias)
+            definitions[edge_id] = {**known, **edge, "__kg_sources": tags}
     return definitions
 
 
@@ -777,7 +863,7 @@ def _resolve_context_edges(
             **definition,
             "introduced_context": introduced_context,
             "introduced_stage": introduced_stage,
-            "__kg_sources": [context.id],
+            "__kg_sources": _source_tags(definition.get("__kg_sources"), context.id),
         })
     return resolved
 

@@ -19,7 +19,7 @@ The command returns JSON with `context` and `rows`.
 - Use `diff <A> <B>` to calculate changes between resolved snapshots.
 
 ```text
-@context id=delivery-12 seq=12 label="Delivery review"
+@context id=delivery-12 seq=12 label="Delivery review" nodes=delivery-12.code.nodes+delivery-12.nodes
 caption="Ready for review"
 
 @attrs
@@ -31,6 +31,25 @@ status:
 ```
 
 List every edge true in that snapshot. Nodes without an edge are absent.
+
+### A Context May Carry Its Own Node Facts
+
+`nodes=` names one node file, or several joined by `+`, in the same format as
+`kg.nodes`. The pool loads first, then each file in listed order, and a later
+file wins on every key it names. Use it for a fact that changes from one
+snapshot to the next: code links, a change record, or prose that no longer
+describes the code.
+
+Give generated links their own `*.code.nodes` file. List it with the authored
+overlay, such as `nodes=delivery-12.code.nodes+delivery-12.nodes`. The
+generator owns the first file. The second holds `changes` and other authored
+facts, so regeneration cannot erase them.
+
+A file may list a node flat even when the pool nests it. An empty value never
+replaces a known one, so an overlay adds facts and never unparents a node.
+
+The pool still owns identity: a node absent from `kg.nodes` is not created by
+an overlay, and presence still comes from the context's edges alone.
 
 ## Sources And Stages
 

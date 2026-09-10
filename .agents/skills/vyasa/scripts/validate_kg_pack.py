@@ -196,6 +196,11 @@ def parse_contexts(pack):
                 continue
             if section == "@edges" and "->" in s:
                 left, right = s.split("->", 1)
+                # A pack that declares `edges=` asserts an edge by its authored
+                # id: `e1: n11 -> n12 feeds`. A pure-context pack writes the
+                # triple alone. Drop the id so both forms read the same.
+                if ":" in left:
+                    left = left.split(":", 1)[1]
                 parts = right.split()
                 src, tgt = left.strip(), parts[0]
                 rel = parts[1] if len(parts) > 1 and "=" not in parts[1] else "rel"
