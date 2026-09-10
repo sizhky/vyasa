@@ -779,9 +779,10 @@ export function tasksMatchedSlideNodes(slides, slideIndex, graphNodes) {
     return (graphNodes || []).filter((node) => node?.id && ids.has(node.id));
 }
 
-export function tasksProjectionPrefsKey(projectionId) {
+export function tasksProjectionPrefsKey(projectionId, contextId = '') {
     const id = String(projectionId || '').trim();
-    return id || '__base__';
+    const context = String(contextId || '').trim();
+    return context ? `${context}::${id || '__base__'}` : (id || '__base__');
 }
 
 function readTasksProjectionPrefs(prefs, projectionId) {
@@ -839,7 +840,7 @@ export function normalizeTasksGroupByDisabledKeys(value) {
 
 export function readTasksProjectionPrefsForModel(model, prefs, projectionId) {
     const schemaPrefs = tasksProjectionSchemaPrefs(model, projectionId);
-    const key = tasksProjectionPrefsKey(projectionId);
+    const key = tasksProjectionPrefsKey(projectionId, model?.kg_context?.id);
     const scoped = prefs?.projectionPrefs?.[key];
     if (scoped && typeof scoped === 'object') return { ...schemaPrefs, ...scoped };
     if (!String(projectionId || '').trim() && prefs && typeof prefs === 'object') return { ...schemaPrefs, ...prefs };

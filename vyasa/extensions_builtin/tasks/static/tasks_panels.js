@@ -36,6 +36,13 @@ export function createTasksPanels(getState) {
         const panelNodeId = sourceNodeId || selectedNode.id || '';
         const openDecisionEntry = tasksOpenDecisionEntry(selectedNode);
         const entries = openDecisionEntry ? [openDecisionEntry, ...baseEntries] : baseEntries;
+        logTasksDebug('nodeCardAttrOrder', {
+            contextId: String(sourceModel?.kg_context?.id || ''),
+            viewId: String(model?.active_projection || ''),
+            nodeId: panelNodeId,
+            configured: Array.isArray(model?.node_attr_order) ? model.node_attr_order : [],
+            shown: entries.map((entry) => entry.key),
+        });
         const panelLinkKinds = Array.from(tasksNodeLinkKinds(selectedNode));
         const panelHref = String(selectedNode?.href || '').trim();
         const copyPanelTitle = async (event) => {

@@ -507,6 +507,21 @@ def test_tasks_source_uses_projection_scoped_prefs():
     assert "buildTasksViewState" in source
 
 
+def test_tasks_context_and_view_preferences_have_separate_keys():
+    script = """
+        import { readTasksProjectionPrefsForModel, tasksProjectionPrefsKey } from './vyasa/extensions_builtin/tasks/static/tasks_graph_model.js';
+        if (tasksProjectionPrefsKey('', 'day-1') !== 'day-1::__base__') throw new Error('base context key');
+        if (tasksProjectionPrefsKey('flow', 'day-1') !== 'day-1::flow') throw new Error('view context key');
+        if (tasksProjectionPrefsKey('flow', 'day-2') === tasksProjectionPrefsKey('flow', 'day-1')) throw new Error('shared context key');
+        if (tasksProjectionPrefsKey('flow') !== 'flow') throw new Error('plain graph key');
+        const prefs = { projectionPrefs: { 'day-1::flow': { colorBy: 'state', groupByEnabled: true }, 'day-2::flow': { colorBy: 'owner', groupByEnabled: false } } };
+        if (readTasksProjectionPrefsForModel({ kg_context: { id: 'day-1' } }, prefs, 'flow').colorBy !== 'state') throw new Error('day one color');
+        if (readTasksProjectionPrefsForModel({ kg_context: { id: 'day-2' } }, prefs, 'flow').groupByEnabled !== false) throw new Error('day two grouping');
+    """
+
+    subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
 def test_tasks_source_persists_checked_nodes_per_graph():
     source = tasks_static_source("tasks_graph_model.js", "tasks_preferences.js", "tasks_nodes.js", "tasks.js")
 

@@ -1545,7 +1545,7 @@ async function renderTasksGraphs(rootElement = document) {
                 if (statsEl) statsEl.textContent = graphStatsLabel;
             }, [graphStatsLabel]);
             const backgroundProps = React.useMemo(() => tasksBackgroundProps(widgetId), []);
-            const lastPersistedProjectionIdRef = React.useRef(activeProjectionId);
+            const lastPersistedPrefsScopeRef = React.useRef(tasksProjectionPrefsKey(activeProjectionId, activeContextId));
             const pendingFitActionRef = React.useRef(null);
             const lastLayoutRevisionKeyRef = React.useRef('');
             const lastGraphRevisionCauseRef = React.useRef('layout');
@@ -2075,11 +2075,12 @@ async function renderTasksGraphs(rootElement = document) {
             }, [activeColorHierarchy, baseProjectionState.model]);
             React.useEffect(() => {
                 if (egoState) return;
-                if (lastPersistedProjectionIdRef.current !== activeProjectionId) {
-                    lastPersistedProjectionIdRef.current = activeProjectionId;
+                const prefsScope = tasksProjectionPrefsKey(activeProjectionId, activeContextId);
+                if (lastPersistedPrefsScopeRef.current !== prefsScope) {
+                    lastPersistedPrefsScopeRef.current = prefsScope;
                     return;
                 }
-                const projectionKey = tasksProjectionPrefsKey(activeProjectionId);
+                const projectionKey = prefsScope;
                 const groupingOverridden = tasksGroupByPrefsDifferFromSchema(
                     sourceModel,
                     activeProjectionId,
@@ -2143,7 +2144,7 @@ async function renderTasksGraphs(rootElement = document) {
                     slideNotes,
                 });
                 writeTasksCheckedNodeIds(sourceModel, checkedNodeIdsFromStates(nodeStates));
-            }, [egoState, sourceModel, activeFilters, activeSwatchFilters, activeEdgeTypes, edgeTypeFilterEnabled, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, hoverCardMode, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, edgeNotes, slideNotes]);
+            }, [egoState, sourceModel, activeFilters, activeSwatchFilters, activeEdgeTypes, edgeTypeFilterEnabled, queryBuilderEnabled, searchEnabled, searchQuery, activeColorHierarchy, activeColorBy, activeContextId, activeProjectionId, filtersCollapsed, edgesVisible, hoverInactiveNodes, hoverCardsEnabled, hoverCardMode, edgeOpacity, projectionUnspecifiedContentOpacity, groupByEnabled, groupByHierarchy, groupByDisabledKeys, expanded, nodeStates, nodeNotes, edgeNotes, slideNotes]);
             const applyProjectionConfigToSidebar = React.useCallback((cfg) => {
                 if (!tasksProjectionConfigHasSidebarState(cfg)) return false;
                 if (cfg.filterQuery) setActiveFilters(normalizeTasksFilterQuery(cfg.filterQuery));
