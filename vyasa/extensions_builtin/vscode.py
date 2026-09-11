@@ -18,6 +18,7 @@ CODE_SUFFIXES = frozenset({
     ".rs", ".scss", ".sh", ".sql", ".svelte", ".swift", ".toml", ".ts",
     ".tsx", ".vue", ".yaml", ".yml", ".zsh",
 })
+EDITOR_SUFFIXES = CODE_SUFFIXES | {".md"}
 
 
 def open_in_vscode(
@@ -31,7 +32,7 @@ def open_in_vscode(
     path = resolver(slug)
     if path is None or not path.is_file():
         raise FileNotFoundError(slug)
-    if path.suffix.lower() not in CODE_SUFFIXES:
+    if path.suffix.lower() not in EDITOR_SUFFIXES:
         raise ValueError(f"Unsupported code file: {path.name}")
     if line is not None and line < 1:
         raise ValueError("Line must be a positive integer")

@@ -109,6 +109,7 @@ def test_link_preview_renders_code_reference_metadata(tmp_path, monkeypatch):
     assert result is not None
     assert 'data-code-reference-role="test"' in result
     assert 'data-code-highlight-lines="1-2"' in result
+    assert "Open full file" not in result
 
 
 def test_markdown_code_reference_uses_document_rendering(tmp_path, monkeypatch):
@@ -156,6 +157,9 @@ def test_markdown_code_reference_renders_revision_diff_as_documents(tmp_path, mo
     assert "<strong>" in result and "<ul" in result
     assert 'class="language-markdown"' not in result
     assert "name: daksh" not in result
+    assert 'data-vyasa-open-editor="true"' in result
+    assert 'href="/posts/skills/daksh/SKILL"' in result
+    assert "Open full file" in result
     assert "Unchanged content omitted" in result
 
 
@@ -760,7 +764,7 @@ def test_link_preview_pin_uses_the_edge_pin_bloom_timing():
     assert "pin: (entry) => previews.pin(entry)" in source
     assert "popover.classList.add('vyasa-link-preview-pin-bloom')" in source
     assert "@keyframes vyasa-link-preview-pin-bloom" in css
-    assert "3440ms cubic-bezier(0.16, 1, 0.3, 1)" in css
+    assert "7440ms cubic-bezier(0.16, 1, 0.3, 1)" in css
     assert "0 0 0 54px" not in css
     assert "0 0 192px 84px" in css
     assert "prefers-reduced-motion: reduce" in css
@@ -1056,7 +1060,7 @@ def test_code_reference_render_carries_header_badges_and_line_states(tmp_path, m
     assert 'data-code-line-states="1-1:context,2-2:added"' in result
     assert 'data-code-source-start="1"' in result
     assert 'data-code-reference-blocks="2-2"' in result
-    assert "Open in editor" in result and "Open full file" in result
+    assert "Open in editor" in result and "Open full file" not in result
 
 
 def test_code_reference_render_escapes_source_and_diagnostics(tmp_path, monkeypatch):

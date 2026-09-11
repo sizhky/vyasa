@@ -72,6 +72,11 @@ def _post_href(relative_path: str, line: int = 0) -> str:
     return f"/posts/{encoded}%3A{line}" if line else f"/posts/{encoded}"
 
 
+def _markdown_page_href(relative_path: str) -> str:
+    path = str(relative_path)
+    return _post_href(path[:-3] if path.lower().endswith(".md") else path)
+
+
 def _header(resolved: ResolvedCodeReference, relative_path: str) -> str:
     from ...code_source import split_origin_slug
 
@@ -102,10 +107,15 @@ def _header(resolved: ResolvedCodeReference, relative_path: str) -> str:
     for diagnostic in resolved.diagnostics:
         badges.append(_badge(diagnostic.code, diagnostic.message, diagnostic.severity))
     actions = (
-        f'<a class="vyasa-code-reference-action" href="{_escape(_post_href(relative_path, resolved.selected.start))}">'
+        f'<a class="vyasa-code-reference-action" data-vyasa-open-editor="true" '
+        f'href="{_escape(_post_href(relative_path, resolved.selected.start))}">'
         "Open in editor</a>"
-        f'<a class="vyasa-code-reference-action" href="{_escape(_post_href(relative_path))}">Open full file</a>'
     )
+    if relative_path.lower().endswith(".md"):
+        actions += (
+            f'<a class="vyasa-code-reference-action" href="{_escape(_markdown_page_href(relative_path))}">'
+            "Open full file</a>"
+        )
     return (
         '<header class="vyasa-code-reference-header">'
         f'{origin_html}'

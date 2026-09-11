@@ -37,7 +37,17 @@ def test_open_in_vscode_launches_requested_line(tmp_path):
     assert calls == [["code", "--goto", f"{code_file.resolve()}:7"]]
 
 
-@pytest.mark.parametrize("name", ["notes.md", "photo.png", "README"])
+def test_open_in_vscode_launches_markdown_from_an_editor_action(tmp_path):
+    document = tmp_path / "notes.md"
+    document.write_text("# Notes\n", encoding="utf-8")
+    calls = []
+
+    open_in_vscode("notes.md", line=1, resolve=lambda _slug: document, launch=lambda command, **_options: calls.append(command))
+
+    assert calls == [["code", "--goto", f"{document.resolve()}:1"]]
+
+
+@pytest.mark.parametrize("name", ["photo.png", "README"])
 def test_open_in_vscode_rejects_non_code_files(tmp_path, name):
     file_path = tmp_path / name
     file_path.write_text("content", encoding="utf-8")
@@ -122,6 +132,13 @@ def test_vscode_link_detection():
         if (JSON.stringify(line) !== JSON.stringify({{path: 'src/app.py', symbol: '', kind: '', line: 32}})) process.exit(6);
         if (module.codePathFromHref('/src/kitchen/models.py', base, suffixes) !== 'src/kitchen/models.py') process.exit(4);
         if (module.codePathFromHref('/posts/notes.md', base, suffixes) !== null) process.exit(2);
+        const markdown = {{
+            dataset: {{ vyasaOpenEditor: 'true' }},
+            hasAttribute: () => false,
+            getAttribute: () => '/posts/notes.md%3A4',
+        }};
+        const editor = module.editorReferenceFromAnchor(markdown, base, suffixes);
+        if (JSON.stringify(editor) !== JSON.stringify({{path: 'notes.md', symbol: '', kind: '', line: 4}})) process.exit(7);
         if (module.codePathFromHref('https://example.com/app.py', base, suffixes) !== null) process.exit(3);
     """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
