@@ -332,7 +332,7 @@ name = "contourpy"
 version = "1.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/58/01/1253e6698a07380cd31a736d248a3f2a50a7c88779a1813da27503cadc2a/contourpy-1.3.3.tar.gz", hash = "sha256:083e12155b210502d0bca491432bb04d56dc3432f95a979b429f2848c3dbe880", size = 13466174, upload-time = "2025-07-26T12:03:12.549Z" }
 wheels = [
@@ -536,7 +536,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -548,7 +548,7 @@ name = "fastaudit"
 version = "0.2.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "fastcore", version = "2.2.23", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "fastcore", version = "2.2.23", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/2e/fc/e26b26f389198a7c01b5312c457bef60a2d1e539871908509815c37684f7/fastaudit-0.2.10.tar.gz", hash = "sha256:01e811073910fc66462d5ea835bdb27f66efaaf65646c9f7ea9a876de513b42a", size = 28100, upload-time = "2026-09-09T12:01:03.839Z" }
 wheels = [
@@ -564,7 +564,7 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 dependencies = [
-    { name = "packaging", marker = "python_full_version < '3.12'" },
+    { name = "packaging" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/8d/9f/10ba070937da0ddab01b23dc01f64f521e3632d5ff1897bc3d73a02ba29f/fastcore-1.12.2.tar.gz", hash = "sha256:01c0c9e19cd0c3cb7a208311d2826da3f0269babc32bd9aa21c7b7976ad5626e", size = 91650, upload-time = "2026-01-18T00:52:35.387Z" }
 wheels = [
@@ -1261,15 +1261,15 @@ name = "matplotlib"
 version = "3.11.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "contourpy", marker = "python_full_version >= '3.12'" },
-    { name = "cycler", marker = "python_full_version >= '3.12'" },
-    { name = "fonttools", marker = "python_full_version >= '3.12'" },
-    { name = "kiwisolver", marker = "python_full_version >= '3.12'" },
-    { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "packaging", marker = "python_full_version >= '3.12'" },
-    { name = "pillow", marker = "python_full_version >= '3.12'" },
-    { name = "pyparsing", marker = "python_full_version >= '3.12'" },
-    { name = "python-dateutil", marker = "python_full_version >= '3.12'" },
+    { name = "contourpy" },
+    { name = "cycler" },
+    { name = "fonttools" },
+    { name = "kiwisolver" },
+    { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "packaging" },
+    { name = "pillow" },
+    { name = "pyparsing" },
+    { name = "python-dateutil" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/49/64/f9a391af28f518b11ad45a8a712353c94a0aefce09d3703200e5c54b610a/matplotlib-3.11.1.tar.gz", hash = "sha256:69647db5746941c793d6e445a4cd349323ffb87d9cc958c2ad84a659b4832d30", size = 32612045, upload-time = "2026-07-18T03:39:46.63Z" }
 wheels = [
@@ -1735,8 +1735,8 @@ name = "pyskills"
 version = "0.0.31"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "fastaudit", marker = "python_full_version >= '3.12'" },
-    { name = "fastcore", version = "2.2.23", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "fastaudit" },
+    { name = "fastcore", version = "2.2.23", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/61/b8/10f4165b1c6db0f3b78aba898732f1888fdbbaba1e181e276c1c5813c0da/pyskills-0.0.31.tar.gz", hash = "sha256:c71d6564eae95f23794f3907e21b064896442f1358258bbc69fd1718556301b0", size = 33961, upload-time = "2026-09-09T12:02:52.483Z" }
 wheels = [
@@ -2196,11 +2196,11 @@ name = "safepyrun"
 version = "0.2.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "fastaudit", marker = "python_full_version >= '3.12'" },
-    { name = "fastcore", version = "2.2.23", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "httpx", marker = "python_full_version >= '3.12'" },
-    { name = "matplotlib", marker = "python_full_version >= '3.12'" },
-    { name = "pyskills", marker = "python_full_version >= '3.12'" },
+    { name = "fastaudit" },
+    { name = "fastcore", version = "2.2.23", source = { registry = "https://pypi.org/simple" } },
+    { name = "httpx" },
+    { name = "matplotlib" },
+    { name = "pyskills" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b1/ff/7650bebe5fed23b00862953f914b305280b3a5a72429cf58bfdce558a1b8/safepyrun-0.2.9.tar.gz", hash = "sha256:e08bed8e92aa01ca4acfa7fbc9bceacd0fd35c77998df4ce74512d942046f641", size = 24046, upload-time = "2026-09-09T12:04:12.629Z" }
 wheels = [
@@ -2584,7 +2584,7 @@ wheels = [
 
 [[package]]
 name = "vyasa"
-version = "0.5.20"
+version = "0.6.115"
 source = { editable = "." }
 dependencies = [
     { name = "dulwich" },
@@ -2602,7 +2602,6 @@ dependencies = [
     { name = "tree-sitter" },
     { name = "tree-sitter-language-pack" },
     { name = "uvicorn" },
-    { name = "watchfiles" },
 ]
 
 [package.optional-dependencies]
@@ -2640,7 +2639,6 @@ requires-dist = [
     { name = "tree-sitter", specifier = ">=0.26.0" },
     { name = "tree-sitter-language-pack", specifier = ">=1.15.8" },
     { name = "uvicorn", specifier = ">=0.30.0" },
-    { name = "watchfiles", specifier = ">=1.0.0" },
 ]
 provides-extras = ["dev", "auth", "altair"]
 
