@@ -56,6 +56,16 @@ matrix:
 	matrix_tint=14
 	edge_color_by=flow
 	caption="Which layers each flow touches. Every cell is washed by its column colour and its row colour, so the composite names the intersection. Edges join their endpoints inside one row; hide them to read the cells alone. Read the empty cells first, because they say what a flow never needs."
+grid-prototype:
+	source=base
+	layout=grid
+	grid_col=layer
+	grid_row=grid_track
+	grid_col_order=surface,core,pipeline,extension,content,configuration
+	grid_row_order=entry,control,dispatch,work,result
+	color_by=layer
+	edge_color_by=flow
+	caption="PROTOTYPE: Columns and tracks control placement without coordinates. Existing nodes and edges remain unchanged."
 render:
 	source=render
 	layout=sequence

@@ -37,6 +37,7 @@ LAYOUT_KEYS: dict[str, tuple[str, ...]] = {
     ),
     "layered": ("layered_tier", "layered_order", "layered_aside"),
     "matrix": ("matrix_col", "matrix_row", "matrix_col_order", "matrix_tint"),
+    "grid": ("grid_col", "grid_row", "grid_col_order", "grid_row_order"),
 }
 
 # Old name -> current name. A pack written before a rename keeps working.

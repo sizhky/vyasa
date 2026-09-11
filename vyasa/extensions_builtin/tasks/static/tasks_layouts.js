@@ -961,6 +961,33 @@ export function buildMatrixTasksGraph(model, projection = {}) {
     return { nodes, edges };
 }
 
+// PROTOTYPE: Place semantic nodes on relative tracks; keep edges unchanged.
+export function buildGridTasksGraph(model, projection = {}) {
+    const colAttr = requireLayoutAttr('grid', projection, 'grid_col');
+    const rowAttr = requireLayoutAttr('grid', projection, 'grid_row');
+    const tasks = model.tasks || [];
+    const values = (key) => [...new Set(tasks.map((task) => layoutAttrOf(task, key)).filter(Boolean))];
+    const cols = layoutAttrList(projection.grid_col_order);
+    const rows = layoutAttrList(projection.grid_row_order);
+    const colValues = cols.length ? cols : values(colAttr);
+    const rowValues = rows.length ? rows : values(rowAttr);
+    const occupied = new Map();
+    const nodes = tasks.map((task) => {
+        const col = colValues.indexOf(layoutAttrOf(task, colAttr));
+        const row = rowValues.indexOf(layoutAttrOf(task, rowAttr));
+        if (col < 0 || row < 0) throw new Error(`grid cannot place node ${task.id}`);
+        const cell = `${col}:${row}`;
+        const slot = occupied.get(cell) || 0;
+        occupied.set(cell, slot + 1);
+        return {
+            ...task, __kind__: 'task', __fixed_size__: true,
+            position: { x: 80 + col * 250, y: 60 + row * 190 + slot * 70 },
+            width: 190, height: labelHeight(task.label, 190),
+        };
+    });
+    return { nodes, edges: model.dependency_edges || [] };
+}
+
 export const TASKS_LAYOUTS = {
     sequence: {
         id: 'sequence',
@@ -992,6 +1019,13 @@ export const TASKS_LAYOUTS = {
         authoredHandles: false,
         edgesOverNodes: false,
         build: buildMatrixTasksGraph,
+    },
+    grid: {
+        id: 'grid',
+        label: 'Grid',
+        keys: ['grid_col', 'grid_row', 'grid_col_order', 'grid_row_order'],
+        chromeKinds: [], authoredHandles: false, edgesOverNodes: false,
+        build: buildGridTasksGraph,
     },
 };
 

@@ -6,6 +6,12 @@ layer:
   extension: extension-runtime extension-app route-registrar markdown-registrar asset-registrar tasks-extension search-extension layout-extension
   content: content-backend filesystem-backend git-backend virtual-path markdown-file kg-pack
   configuration: root-config folder-config extension-meta capability-name storage-namespace
+grid_track:
+  entry: asgi-app root-config markdown-file extension-meta content-backend
+  control: content-route core-app frontmatter extension-runtime filesystem-backend folder-config
+  dispatch: page-frame beforeware from-md extension-app git-backend capability-name
+  work: page-shell rbac fence-handler route-registrar markdown-registrar asset-registrar virtual-path storage-namespace
+  result: html-response content-mounts asset-collector reload-hub wikilink-resolver asset-url tasks-extension search-extension layout-extension kg-pack
 
 @edge_attrs
 flow:
